@@ -1,15 +1,16 @@
-// Remote User client — stream rendering, pinch zoom + region streaming,
-// modifier-button input (tap = left click; hold RIGHT/DRAG/SCROLL + finger).
+// Remote User client — stream rendering (base layer + sharp region), pinch zoom,
+// two configurable D-pad groups with a tap-based category wheel, and mouse modes
+// (right / drag / scroll / hover) held as modifier buttons.
 
 "use strict";
 
 // --- Tunables -------------------------------------------------------------
 const ZOOM_MAX = 6;
-const TAP_MAX_MOVE = 12;        // CSS px of finger travel before a tap stops being a tap
-const SCROLL_PX_PER_TICK = 40;  // CSS px of finger travel per wheel tick
+const TAP_MAX_MOVE = 12;          // CSS px of finger travel before a tap stops being a tap
+const SCROLL_PX_PER_TICK = 40;    // CSS px of finger travel per wheel tick
 const SCROLL_FLING_MIN = 0.35;    // canvas px/ms — below this a release adds no momentum
-const SCROLL_FLING_DECAY = 0.004; // exponential velocity decay per ms (higher = stops sooner)
-const VIEWPORT_MARGIN = 0.15;   // extra region requested around the visible area
+const SCROLL_FLING_DECAY = 0.004; // exponential velocity decay per ms
+const VIEWPORT_MARGIN = 0.15;     // extra region requested around the visible area
 const VIEWPORT_THROTTLE_MS = 150;
 const RECONNECT_MS = 2000;
 
@@ -20,26 +21,29 @@ const statusEl = document.getElementById("status");
 
 const token = new URLSearchParams(location.search).get("token");
 
-let monitor = { w: 0, h: 0 };                // real monitor size (server `config` message)
+let monitor = { w: 0, h: 0 };                // real monitor size (server `config`)
 let baseRect = { x: 0, y: 0, w: 1, h: 1 };   // where the full monitor sits at zoom 1
 let view = { scale: 1, tx: 0, ty: 0 };       // zoom/pan on top of baseRect
-let lastBitmap = null;
-let lastRegion = { x: 0, y: 0, w: 1, h: 1 }; // monitor region the last frame covers
+
+// Two-layer image: a full-monitor base (kept in memory so pan/zoom never flashes
+// blank) plus the sharp region crop drawn on top when zoomed.
+let baseBitmap = null;
+let detailBitmap = null;
+let detailRegion = { x: 0, y: 0, w: 1, h: 1 };
 let ws = null;
 
 // Gesture state
-const pointers = new Map(); // pointerId -> {x, y} in canvas px (tap/pinch flow only)
-let tap = null;             // {startX, startY, moved}
-let pinch = null;           // {startDist, startScale, qx, qy}
+const pointers = new Map();
+let tap = null;
+let pinch = null;
 let gestureHadPinch = false;
-let dragState = null;       // {id, pos} while the DRAG modifier drives a mouse drag
-let scrollState = null;     // {id, lastY, acc, pos} while the SCROLL modifier is held
-const modifiers = { right: false, drag: false, scroll: false };
-let panMode = false;        // PAN toggle: one finger moves the view, clicks are blocked
+let dragState = null;   // {id, pos} — DRAG modifier holds the left button down
+let hoverState = null;  // {id} — HOVER modifier moves the cursor, no button
+let scrollState = null; // {id, lastY, acc, vel, lastT, pos}
+const modifiers = { right: false, drag: false, scroll: false, hover: false };
+let panMode = false;    // Move toggle: one finger moves the view, clicks blocked
 
-// Region-streaming state — MUST be declared before the initial resizeCanvas()
-// call below, which reaches scheduleViewport() (a let in the TDZ here kills
-// the whole script on load).
+// Region-streaming state — declared before the first updateViewport() call.
 let lastSentViewport = { x: 0, y: 0, w: 1, h: 1 };
 let viewportTimer = null;
 
@@ -48,14 +52,16 @@ function setStatus(cls, text) {
   statusEl.textContent = text;
 }
 
-// The user must never stare at a silent "Connecting…" — any failure surfaces
-// its actual reason on the status pill.
 window.addEventListener("error", (e) => setStatus("disconnected", `Page error: ${e.message}`));
 window.addEventListener("unhandledrejection", (e) =>
   setStatus("disconnected", `Page error: ${e.reason}`));
 
 function toCanvasPx(e) {
   return { x: e.clientX * devicePixelRatio, y: e.clientY * devicePixelRatio };
+}
+
+function send(msg) {
+  if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg));
 }
 
 // --- View transform -------------------------------------------------------
@@ -83,7 +89,6 @@ function clampView() {
     return;
   }
   view.scale = Math.min(view.scale, ZOOM_MAX);
-  // The zoomed frame must always cover its zoom-1 area — no drifting off-screen.
   const s = view.scale;
   view.tx = Math.min(Math.max(view.tx, (baseRect.x + baseRect.w) * (1 - s)), baseRect.x * (1 - s));
   view.ty = Math.min(Math.max(view.ty, (baseRect.y + baseRect.h) * (1 - s)), baseRect.y * (1 - s));
@@ -92,26 +97,31 @@ function clampView() {
 function redraw() {
   ctx.fillStyle = "#0f172a";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
-  if (!lastBitmap) return;
   const D = drawnRect();
-  ctx.drawImage(
-    lastBitmap,
-    D.x + lastRegion.x * D.w,
-    D.y + lastRegion.y * D.h,
-    lastRegion.w * D.w,
-    lastRegion.h * D.h
-  );
+  // Base layer: the whole monitor, always available so motion never goes blank.
+  if (baseBitmap) ctx.drawImage(baseBitmap, D.x, D.y, D.w, D.h);
+  // Sharp layer: the zoomed region's native pixels, on top of the base.
+  if (view.scale > 1 && detailBitmap) {
+    ctx.drawImage(
+      detailBitmap,
+      D.x + detailRegion.x * D.w,
+      D.y + detailRegion.y * D.h,
+      detailRegion.w * D.w,
+      detailRegion.h * D.h
+    );
+  }
 }
 
-// Sizes the canvas to the VISIBLE area. visualViewport shrinks the moment the
-// soft keyboard appears, so the remote screen re-fits above the keyboard with
-// no delay — and `--kb` lifts the control pad above the keyboard too.
+// Sizes the canvas to the visible area (shrinks the instant the soft keyboard
+// appears) and publishes keyboard height / top offset for the controls.
 function updateViewport() {
   const vv = window.visualViewport;
   const w = vv ? vv.width : window.innerWidth;
   const h = vv ? vv.height : window.innerHeight;
   const kb = vv ? Math.max(0, window.innerHeight - vv.height - vv.offsetTop) : 0;
-  document.documentElement.style.setProperty("--kb", `${kb}px`);
+  const root = document.documentElement.style;
+  root.setProperty("--kb", `${kb}px`);
+  root.setProperty("--vtop", `${vv ? vv.offsetTop : 0}px`);
   canvas.style.width = `${w}px`;
   canvas.style.height = `${h}px`;
   canvas.width = Math.round(w * devicePixelRatio);
@@ -128,9 +138,7 @@ if (window.visualViewport) {
 }
 updateViewport();
 
-// --- Region streaming (sharp zoom) ---------------------------------------
-// When zoomed, tell the server which monitor region is visible — it then
-// streams only that region, so zoom gets native pixels at constant bandwidth.
+// --- Region streaming -----------------------------------------------------
 
 function currentViewport() {
   if (view.scale <= 1) return { x: 0, y: 0, w: 1, h: 1 };
@@ -165,17 +173,22 @@ function scheduleViewport() {
 }
 
 async function onFrame(buffer) {
-  const region = new Float32Array(buffer, 0, 4);
+  const r = new Float32Array(buffer, 0, 4);
   const bitmap = await createImageBitmap(new Blob([new Uint8Array(buffer, 16)]));
-  if (lastBitmap) lastBitmap.close();
-  lastBitmap = bitmap;
-  lastRegion = { x: region[0], y: region[1], w: region[2], h: region[3] };
+  const isFull = r[0] <= 0.001 && r[1] <= 0.001 && r[2] >= 0.999 && r[3] >= 0.999;
+  if (isFull) {
+    if (baseBitmap) baseBitmap.close();
+    baseBitmap = bitmap;
+  } else {
+    if (detailBitmap) detailBitmap.close();
+    detailBitmap = bitmap;
+    detailRegion = { x: r[0], y: r[1], w: r[2], h: r[3] };
+  }
   redraw();
 }
 
 // --- Coordinate mapping ---------------------------------------------------
 
-// Canvas point -> 0-1 within the remote monitor, null on the letterbox padding.
 function toRemote(px, py) {
   const D = drawnRect();
   const x = (px - D.x) / D.w;
@@ -184,7 +197,6 @@ function toRemote(px, py) {
   return { x, y };
 }
 
-// Same, but clamped — drags may travel over the padding without breaking.
 function toRemoteClamped(px, py) {
   const D = drawnRect();
   return {
@@ -193,37 +205,8 @@ function toRemoteClamped(px, py) {
   };
 }
 
-function send(msg) {
-  if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg));
-}
+// --- Scroll momentum ------------------------------------------------------
 
-// --- Modifier buttons -----------------------------------------------------
-
-for (const name of ["right", "drag", "scroll"]) {
-  const el = document.getElementById(`btn-${name}`);
-  el.addEventListener("pointerdown", (e) => {
-    e.preventDefault();
-    el.setPointerCapture(e.pointerId);
-    modifiers[name] = true;
-    el.classList.add("active");
-  });
-  const release = () => {
-    modifiers[name] = false;
-    el.classList.remove("active");
-    if (name === "drag") finishDrag(); // releasing the button mid-drag ends the drag
-  };
-  el.addEventListener("pointerup", release);
-  el.addEventListener("pointercancel", release);
-}
-
-function finishDrag() {
-  if (!dragState) return;
-  send({ type: "pointer_up", x: dragState.pos.x, y: dragState.pos.y, button: "left" });
-  dragState = null;
-}
-
-// Momentum scrolling: a fast flick keeps spinning the wheel after release,
-// decaying over time — the way a phone flings a list. A new touch stops it.
 let scrollInertia = null;
 
 function startScrollInertia(vel, pos) {
@@ -254,14 +237,41 @@ function cancelScrollInertia() {
   }
 }
 
-// --- Keyboard -------------------------------------------------------------
-// Toggle button focuses a hidden input, which summons the tablet's native
-// keyboard. Printable characters are captured by DIFFING the field value
-// (IME/autocorrect-proof — never trust keydown.key for printables, project
-// CLAUDE.md rule); structural keys are captured via keydown.
+// --- Icons (Lucide-style, inline) -----------------------------------------
+
+const ICONS = {
+  mouse: '<rect x="6" y="3" width="12" height="18" rx="6"/><path d="M12 7v4"/>',
+  right: '<rect x="6" y="3" width="12" height="18" rx="6"/><path d="M12 3v7"/><path d="M12 3h2a4 4 0 0 1 4 4v3h-6z" fill="currentColor" stroke="none"/>',
+  drag: '<polyline points="5 9 2 12 5 15"/><polyline points="9 5 12 2 15 5"/><polyline points="15 19 12 22 9 19"/><polyline points="19 9 22 12 19 15"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="12" y1="2" x2="12" y2="22"/>',
+  scroll: '<path d="m7 15 5 5 5-5"/><path d="m7 9 5-5 5 5"/>',
+  hover: '<path d="M3 3l7.4 18 2.3-7.3L20 11.4z"/>',
+  keyboard: '<rect x="2" y="5" width="20" height="14" rx="2"/><path d="M6 9h.01M10 9h.01M14 9h.01M18 9h.01M6 13h.01M18 13h.01M9 13h6"/>',
+  monitor: '<rect x="2" y="4" width="14" height="10" rx="2"/><path d="M9 18h7"/><path d="M9 14v4"/><path d="m17 9 4 3-4 3"/>',
+  snap: '<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/>',
+  edit: '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>',
+  grid: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
+  x: '<line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/>',
+};
+
+function svg(name) {
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICONS[name] || ""}</svg>`;
+}
+
+// --- Built-in group actions (modes + functions) ---------------------------
+
+const BUILTINS = {
+  right:    { label: "Right",  icon: "right",    kind: "mod" },
+  drag:     { label: "Drag",   icon: "drag",     kind: "mod" },
+  scroll:   { label: "Scroll", icon: "scroll",   kind: "mod" },
+  hover:    { label: "Hover",  icon: "hover",    kind: "mod" },
+  keyboard: { label: "Keys",   icon: "keyboard", kind: "kb" },
+  monitor:  { label: "Monitor", icon: "monitor", kind: "send", msg: { type: "monitor_switch" } },
+  snap:     { label: "Snap",   icon: "snap",     kind: "send", msg: { type: "screenshot" } },
+};
+
+// --- Keyboard capture -----------------------------------------------------
 
 const kbInput = document.getElementById("kb");
-const kbBtn = document.getElementById("btn-kb");
 let kbPrev = "";
 
 const SPECIAL_KEYS = {
@@ -270,69 +280,31 @@ const SPECIAL_KEYS = {
   ArrowLeft: "left", ArrowUp: "up", ArrowRight: "right", ArrowDown: "down",
 };
 
-kbBtn.addEventListener("pointerdown", (e) => e.preventDefault()); // focus is handled manually
-kbBtn.addEventListener("pointerup", (e) => {
-  e.preventDefault();
-  if (document.activeElement === kbInput) kbInput.blur();
+function keyboardOpen() {
+  return document.activeElement === kbInput;
+}
+
+function toggleKeyboard() {
+  if (keyboardOpen()) kbInput.blur();
   else kbInput.focus({ preventScroll: true });
-});
-
-kbInput.addEventListener("focus", () => kbBtn.classList.add("active"));
-kbInput.addEventListener("blur", () => kbBtn.classList.remove("active"));
-
-// --- Action buttons (single tap, no modifier state) -----------------------
-// preventDefault on pointerdown keeps focus on the hidden input — pressing
-// these must not close an open keyboard.
-
-for (const [id, msg] of [["btn-monitor", "monitor_switch"], ["btn-snap", "screenshot"]]) {
-  const el = document.getElementById(id);
-  el.addEventListener("pointerdown", (e) => e.preventDefault());
-  el.addEventListener("pointerup", (e) => {
-    e.preventDefault();
-    send({ type: msg });
-  });
 }
 
-// NEW LINE — the phone keyboard's own action key already sends Enter; there is
-// no newline key there, so Shift+Enter gets a dedicated button. Reachable while
-// typing because the whole control pad rides above the keyboard (see --kb).
-const newlineBtn = document.getElementById("btn-newline");
-newlineBtn.addEventListener("pointerdown", (e) => e.preventDefault());
-newlineBtn.addEventListener("pointerup", (e) => {
-  e.preventDefault();
-  send({ type: "chord", chord: "shift+enter" });
-});
-
-// PAN toggle (top-left) — while on, one finger moves the view and no click
-// can reach the PC. Made for browsing while zoomed.
-const panBtn = document.getElementById("btn-pan");
-panBtn.addEventListener("pointerdown", (e) => e.preventDefault());
-panBtn.addEventListener("pointerup", (e) => {
-  e.preventDefault();
-  panMode = !panMode;
-  panBtn.classList.toggle("active", panMode);
-});
-
-let toastTimer = null;
-
-function showToast(text) {
-  setStatus("connecting", text); // amber pill doubles as the toast surface
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => {
-    if (ws && ws.readyState === WebSocket.OPEN) setStatus("connected", "Connected");
-  }, 2500);
+function reflectKeyboardState() {
+  const on = keyboardOpen();
+  document.querySelectorAll('[data-action="keyboard"]').forEach((el) => el.classList.toggle("active", on));
 }
+kbInput.addEventListener("focus", reflectKeyboardState);
+kbInput.addEventListener("blur", reflectKeyboardState);
 
 kbInput.addEventListener("keydown", (e) => {
   const special = SPECIAL_KEYS[e.key];
-  if (!special) return; // printable characters flow through the input event
-  e.preventDefault();   // keep the field unchanged — no double handling via the diff
+  if (!special) return;
+  e.preventDefault();
   send({ type: "key_special", key: special });
 });
 
 kbInput.addEventListener("input", (e) => {
   const value = kbInput.value;
-  // Diff previous vs current value: common prefix + suffix, the middle changed.
   const minLen = Math.min(kbPrev.length, value.length);
   let p = 0;
   while (p < minLen && kbPrev[p] === value[p]) p++;
@@ -343,19 +315,179 @@ kbInput.addEventListener("input", (e) => {
   for (let i = 0; i < removed; i++) send({ type: "key_special", key: "backspace" });
   if (inserted) send({ type: "key_text", text: inserted });
   kbPrev = value;
-  // Trim the buffer once it grows, outside IME composition (programmatic reset is silent).
   if (!e.isComposing && value.length > 200) {
     kbInput.value = "";
     kbPrev = "";
   }
 });
 
+// --- D-pad groups ---------------------------------------------------------
+
+const groupEls = {
+  left: document.getElementById("group-left"),
+  right: document.getElementById("group-right"),
+};
+const POSITIONS = ["up", "left", "right", "down"];
+
+let categories = [];
+const groups = { left: 0, right: 0 };
+
+// Keeps focus on the hidden input so control taps never dismiss the keyboard.
+function keepFocus(el, onTap) {
+  el.addEventListener("pointerdown", (e) => e.preventDefault());
+  el.addEventListener("pointerup", (e) => {
+    e.preventDefault();
+    onTap(e);
+  });
+}
+
+function makeButton(cls, iconName, label) {
+  const el = document.createElement("button");
+  el.type = "button";
+  el.className = cls;
+  el.innerHTML = (iconName ? svg(iconName) : "") + `<span class="lbl">${label}</span>`;
+  return el;
+}
+
+function wireModifier(el, name) {
+  el.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    el.setPointerCapture(e.pointerId);
+    modifiers[name] = true;
+    el.classList.add("active");
+  });
+  const release = () => {
+    modifiers[name] = false;
+    el.classList.remove("active");
+    if (name === "drag") finishDrag();
+    if (name === "hover") hoverState = null;
+  };
+  el.addEventListener("pointerup", release);
+  el.addEventListener("pointercancel", release);
+}
+
+function makeActionButton(btn, pos) {
+  let el;
+  if (btn.action && BUILTINS[btn.action]) {
+    const b = BUILTINS[btn.action];
+    el = makeButton("ctl", b.icon, b.label);
+    el.dataset.action = btn.action;
+    if (b.kind === "mod") {
+      wireModifier(el, btn.action);
+    } else if (b.kind === "kb") {
+      keepFocus(el, toggleKeyboard);
+    } else if (b.kind === "send") {
+      keepFocus(el, () => send(b.msg));
+    }
+  } else if (btn.chord) {
+    el = makeButton("ctl text", null, btn.label || btn.chord);
+    keepFocus(el, () => send({ type: "chord", chord: btn.chord }));
+  } else if (btn.key) {
+    el = makeButton("ctl text", null, btn.label || btn.key);
+    keepFocus(el, () => send({ type: "key_special", key: btn.key }));
+  } else {
+    el = makeButton("ctl text", null, btn.label || "?");
+  }
+  el.style.gridArea = POSITIONS[pos];
+  return el;
+}
+
+function renderGroup(side) {
+  const host = groupEls[side];
+  host.innerHTML = "";
+  const cat = categories[groups[side]];
+  if (!cat) return;
+
+  const center = makeButton("ctl cat", cat.icon, cat.name);
+  center.style.gridArea = "center";
+  keepFocus(center, () => openWheel(side));
+  host.appendChild(center);
+
+  (cat.buttons || []).slice(0, 4).forEach((btn, i) => host.appendChild(makeActionButton(btn, i)));
+  reflectKeyboardState();
+}
+
+// --- Category wheel (tap to open, tap an item, X to cancel) ---------------
+
+const wheelEl = document.getElementById("wheel");
+const WHEEL_RADIUS = 118; // CSS px
+
+function openWheel(side) {
+  wheelEl.innerHTML = "";
+  const cx = window.innerWidth / 2;
+  const cy = window.innerHeight / 2;
+  const n = categories.length;
+  categories.forEach((cat, i) => {
+    const angle = -Math.PI / 2 + (i * 2 * Math.PI) / Math.max(1, n);
+    const item = document.createElement("div");
+    item.className = "wheel-item" + (i === groups[side] ? " current" : "");
+    item.innerHTML = svg(cat.icon) + `<span>${cat.name}</span>`;
+    item.style.left = `${cx + WHEEL_RADIUS * Math.cos(angle)}px`;
+    item.style.top = `${cy + WHEEL_RADIUS * Math.sin(angle)}px`;
+    keepFocus(item, () => {
+      groups[side] = i;
+      renderGroup(side);
+      closeWheel();
+    });
+    wheelEl.appendChild(item);
+  });
+
+  const x = document.createElement("div");
+  x.className = "wheel-x";
+  x.innerHTML = svg("x");
+  keepFocus(x, closeWheel);
+  wheelEl.appendChild(x);
+
+  // Tapping the dim backdrop (outside any item) also cancels.
+  wheelEl.addEventListener("pointerdown", backdropCancel);
+  wheelEl.classList.add("open");
+}
+
+function backdropCancel(e) {
+  if (e.target === wheelEl) {
+    e.preventDefault();
+    closeWheel();
+  }
+}
+
+function closeWheel() {
+  wheelEl.classList.remove("open");
+  wheelEl.removeEventListener("pointerdown", backdropCancel);
+  wheelEl.innerHTML = "";
+}
+
+// --- Corner buttons: Move (pan) + Hide ------------------------------------
+
+const panBtn = document.getElementById("btn-pan");
+keepFocus(panBtn, () => {
+  panMode = !panMode;
+  panBtn.classList.toggle("active", panMode);
+});
+
+const hideBtn = document.getElementById("btn-hide");
+keepFocus(hideBtn, () => {
+  const hidden = document.body.classList.toggle("hidden-controls");
+  hideBtn.classList.toggle("active", hidden);
+});
+
+// --- Toast ----------------------------------------------------------------
+
+let toastTimer = null;
+function showToast(text) {
+  setStatus("connecting", text);
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => {
+    if (ws && ws.readyState === WebSocket.OPEN) setStatus("connected", "Connected");
+  }, 2500);
+}
+
 // --- Canvas gestures ------------------------------------------------------
-// tap (no travel)            -> left click on release
-// RIGHT held + tap           -> right click on release
-// DRAG held + finger         -> mouse down / move / up (real drag)
-// SCROLL held + finger       -> wheel ticks (content follows the finger)
-// two fingers on the canvas  -> pinch zoom + pan (never sends clicks)
+
+function finishDrag() {
+  if (!dragState) return;
+  send({ type: "pointer_up", x: dragState.pos.x, y: dragState.pos.y, button: "left" });
+  dragState = null;
+}
 
 function firstTwoPointers() {
   const it = pointers.values();
@@ -363,16 +495,19 @@ function firstTwoPointers() {
 }
 
 canvas.addEventListener("pointerdown", (e) => {
-  // While the keyboard is open, tapping the screen must NOT steal focus from
-  // the hidden input — you click a field on the PC and keep typing.
-  if (document.activeElement === kbInput) e.preventDefault();
+  if (keyboardOpen()) e.preventDefault(); // tapping the screen must not close the keyboard
   canvas.setPointerCapture(e.pointerId);
-  cancelScrollInertia(); // a new touch stops any ongoing fling, like on a phone
+  cancelScrollInertia();
   const p = toCanvasPx(e);
 
   if (modifiers.drag && !dragState) {
     dragState = { id: e.pointerId, pos: toRemoteClamped(p.x, p.y) };
     send({ type: "pointer_down", x: dragState.pos.x, y: dragState.pos.y, button: "left" });
+    return;
+  }
+  if (modifiers.hover && !hoverState) {
+    hoverState = { id: e.pointerId };
+    send({ type: "pointer_move", ...toRemoteClamped(p.x, p.y) });
     return;
   }
   if (modifiers.scroll && !scrollState) {
@@ -396,7 +531,7 @@ canvas.addEventListener("pointerdown", (e) => {
     pinch = {
       startDist: Math.hypot(p1.x - p2.x, p1.y - p2.y),
       startScale: view.scale,
-      qx: (mid.x - D.x) / D.w, // frame point under the midpoint stays anchored
+      qx: (mid.x - D.x) / D.w,
       qy: (mid.y - D.y) / D.h,
     };
   }
@@ -410,10 +545,14 @@ canvas.addEventListener("pointermove", (e) => {
     send({ type: "pointer_move", x: dragState.pos.x, y: dragState.pos.y });
     return;
   }
+  if (hoverState && hoverState.id === e.pointerId) {
+    send({ type: "pointer_move", ...toRemoteClamped(p.x, p.y) });
+    return;
+  }
   if (scrollState && scrollState.id === e.pointerId) {
     const now = performance.now();
     const dy = p.y - scrollState.lastY;
-    scrollState.vel = dy / Math.max(1, now - scrollState.lastT); // canvas px/ms
+    scrollState.vel = dy / Math.max(1, now - scrollState.lastT);
     scrollState.lastY = p.y;
     scrollState.lastT = now;
     scrollState.acc += dy;
@@ -459,6 +598,10 @@ function endPointer(e) {
     finishDrag();
     return;
   }
+  if (hoverState && hoverState.id === e.pointerId) {
+    hoverState = null;
+    return;
+  }
   if (scrollState && scrollState.id === e.pointerId) {
     const { vel, pos } = scrollState;
     scrollState = null;
@@ -488,112 +631,7 @@ canvas.addEventListener("pointerup", endPointer);
 canvas.addEventListener("pointercancel", endPointer);
 window.addEventListener("contextmenu", (e) => e.preventDefault());
 
-// --- Action sets: launcher pills + radial wheel ---------------------------
-// Hold a set launcher -> a wheel of that set's chords fans out. Drag toward
-// one (joystick-style: direction from the press point) -> release fires it.
-// Release in the centre / without a selection cancels — same safety as a tap.
-
-const setsEl = document.getElementById("sets");
-const wheelEl = document.getElementById("wheel");
-const wheelCenterEl = document.getElementById("wheel-center");
-
-const WHEEL_RADIUS = 128;   // CSS px from centre to each item
-const WHEEL_DEADZONE = 40;  // CSS px of drag before a selection commits
-let wheel = null;           // {set, items:[{chord,angle,el}], start:{x,y}, selected}
-
-function buildLaunchers(sets) {
-  setsEl.innerHTML = "";
-  for (const set of sets) {
-    if (!set.buttons || !set.buttons.length) continue;
-    const btn = document.createElement("button");
-    btn.className = "set-launcher";
-    btn.type = "button";
-    btn.textContent = set.name;
-    btn.addEventListener("pointerdown", (e) => {
-      e.preventDefault();
-      btn.setPointerCapture(e.pointerId);
-      btn.classList.add("active");
-      openWheel(set, e);
-    });
-    btn.addEventListener("pointermove", updateWheel);
-    btn.addEventListener("pointerup", (e) => {
-      btn.classList.remove("active");
-      closeWheel();
-    });
-    btn.addEventListener("pointercancel", () => {
-      btn.classList.remove("active");
-      cancelWheel();
-    });
-    setsEl.appendChild(btn);
-  }
-}
-
-function openWheel(set, e) {
-  const cx = window.innerWidth / 2;
-  const cy = window.innerHeight / 2;
-  wheelEl.querySelectorAll(".wheel-item").forEach((el) => el.remove());
-  const n = set.buttons.length;
-  const items = set.buttons.map((b, i) => {
-    const angle = -Math.PI / 2 + (i * 2 * Math.PI) / n; // first item at top
-    const el = document.createElement("div");
-    el.className = "wheel-item";
-    el.textContent = b.label;
-    el.style.left = `${cx + WHEEL_RADIUS * Math.cos(angle)}px`;
-    el.style.top = `${cy + WHEEL_RADIUS * Math.sin(angle)}px`;
-    wheelEl.appendChild(el);
-    return { chord: b.chord, label: b.label, angle, el };
-  });
-  wheel = { set, items, start: { x: e.clientX, y: e.clientY }, selected: -1 };
-  wheelCenterEl.textContent = set.name;
-  wheelEl.classList.add("open");
-}
-
-function updateWheel(e) {
-  if (!wheel) return;
-  const dx = e.clientX - wheel.start.x;
-  const dy = e.clientY - wheel.start.y;
-  let sel = -1;
-  if (Math.hypot(dx, dy) >= WHEEL_DEADZONE) {
-    const a = Math.atan2(dy, dx);
-    let best = Infinity;
-    wheel.items.forEach((it, i) => {
-      const d = Math.abs(angleDiff(a, it.angle));
-      if (d < best) {
-        best = d;
-        sel = i;
-      }
-    });
-  }
-  if (sel !== wheel.selected) {
-    wheel.items.forEach((it, i) => it.el.classList.toggle("sel", i === sel));
-    wheelCenterEl.textContent = sel >= 0 ? wheel.items[sel].label : wheel.set.name;
-    wheel.selected = sel;
-  }
-}
-
-function closeWheel() {
-  if (!wheel) return;
-  if (wheel.selected >= 0) send({ type: "chord", chord: wheel.items[wheel.selected].chord });
-  cancelWheel();
-}
-
-function cancelWheel() {
-  wheelEl.classList.remove("open");
-  wheelEl.querySelectorAll(".wheel-item").forEach((el) => el.remove());
-  wheel = null;
-}
-
-function angleDiff(a, b) {
-  let d = a - b;
-  while (d > Math.PI) d -= 2 * Math.PI;
-  while (d < -Math.PI) d += 2 * Math.PI;
-  return d;
-}
-
 // --- Connection -----------------------------------------------------------
-// Security decision (owner): the session lives only while the owner is looking
-// at this page. Backgrounding the tab or locking the tablet closes the socket;
-// returning to the page reconnects automatically.
 
 function connect() {
   setStatus("connecting", `Connecting to ${location.host}…`);
@@ -603,7 +641,7 @@ function connect() {
   ws.onopen = () => {
     ws.send(JSON.stringify({ type: "auth", token }));
     lastSentViewport = { x: 0, y: 0, w: 1, h: 1 };
-    scheduleViewport(); // restore the zoomed region after a reconnect
+    scheduleViewport();
     setStatus("connected", "Connected");
   };
 
@@ -611,19 +649,20 @@ function connect() {
     if (typeof e.data === "string") {
       const msg = JSON.parse(e.data);
       if (msg.type === "config") {
-        // Fresh monitor (connect or switch): reset the view completely.
         monitor = { w: msg.monitor_width, h: msg.monitor_height };
         view = { scale: 1, tx: 0, ty: 0 };
-        lastRegion = { x: 0, y: 0, w: 1, h: 1 };
-        if (lastBitmap) {
-          lastBitmap.close();
-          lastBitmap = null;
-        }
+        detailRegion = { x: 0, y: 0, w: 1, h: 1 };
+        if (baseBitmap) { baseBitmap.close(); baseBitmap = null; }
+        if (detailBitmap) { detailBitmap.close(); detailBitmap = null; }
         lastSentViewport = { x: 0, y: 0, w: 1, h: 1 };
         computeBaseRect();
         redraw();
       } else if (msg.type === "actions") {
-        buildLaunchers(msg.sets);
+        categories = msg.categories || [];
+        groups.left = Math.min(msg.left ?? 0, categories.length - 1);
+        groups.right = Math.min(msg.right ?? 0, categories.length - 1);
+        renderGroup("left");
+        renderGroup("right");
       } else if (msg.type === "toast") {
         showToast(msg.text);
       }
@@ -635,7 +674,7 @@ function connect() {
   ws.onclose = (e) => {
     if (e.code === 4401) {
       setStatus("disconnected", "Invalid token — scan the fresh QR on the PC");
-      return; // retrying with a dead token is pointless
+      return;
     }
     setStatus(
       "disconnected",
@@ -644,14 +683,10 @@ function connect() {
   };
 }
 
-// Pause while the page is hidden (owner security decision); the watchdog
-// below reconnects when it is visible again.
 document.addEventListener("visibilitychange", () => {
   if (document.hidden && ws) ws.close();
 });
 
-// Single reconnect authority: whenever the page is visible and the socket is
-// not alive, try again. No state machine to get stuck in.
 setInterval(() => {
   if (document.hidden) return;
   if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;

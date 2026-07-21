@@ -19,6 +19,7 @@ function stubElement() {
     remove() {},
     querySelectorAll: () => [],
     style: {},
+    dataset: {},
     value: "",
     width: 0,
     height: 0,
@@ -32,7 +33,9 @@ function stubElement() {
 global.document = {
   getElementById: () => stubElement(),
   createElement: () => stubElement(),
+  querySelectorAll: () => [],
   documentElement: { style: { setProperty() {} } },
+  body: { classList: { toggle: () => false } },
   addEventListener() {},
   hidden: false,
   activeElement: null,

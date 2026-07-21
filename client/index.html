@@ -11,77 +11,33 @@
   <div id="status" class="connecting">Connecting…</div>
   <canvas id="screen"></canvas>
 
-  <div id="sets"></div>
-  <div id="wheel"><div id="wheel-center"></div></div>
+  <!-- Top-left: move the view without clicking (pinned above the keyboard) -->
+  <button id="btn-pan" class="ctl corner corner-tl" type="button" aria-label="Move view (no click)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M18 11V6a2 2 0 0 0-2-2 2 2 0 0 0-2 2"/>
+      <path d="M14 10V4a2 2 0 0 0-2-2 2 2 0 0 0-2 2v2"/>
+      <path d="M10 10.5V6a2 2 0 0 0-2-2 2 2 0 0 0-2 2v8"/>
+      <path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/>
+    </svg>
+    <span class="lbl">Move</span>
+  </button>
 
-  <div id="controls-left">
-    <button id="btn-pan" class="ctl" type="button" aria-label="Pan view (blocks clicks)">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M18 11V6a2 2 0 0 0-2-2 2 2 0 0 0-2 2"/>
-        <path d="M14 10V4a2 2 0 0 0-2-2 2 2 0 0 0-2 2v2"/>
-        <path d="M10 10.5V6a2 2 0 0 0-2-2 2 2 0 0 0-2 2v8"/>
-        <path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/>
-      </svg>
-      <span class="lbl">Pan</span>
-    </button>
-  </div>
+  <!-- Top-right: hide every control, leaving only the screen -->
+  <button id="btn-hide" class="ctl corner corner-tr" type="button" aria-label="Hide controls">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M9.9 4.24A9 9 0 0 1 12 4c7 0 10 8 10 8a13 13 0 0 1-1.67 2.68"/>
+      <path d="M6.1 6.1A13 13 0 0 0 2 12s3 8 10 8a9 9 0 0 0 5.9-2.1"/>
+      <line x1="2" y1="2" x2="22" y2="22"/>
+    </svg>
+    <span class="lbl">Hide</span>
+  </button>
 
-  <div id="controls">
-    <button id="btn-right" class="ctl" type="button" aria-label="Right click (hold + tap)">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <rect x="6" y="3" width="12" height="18" rx="6"/>
-        <path d="M12 3v7"/>
-        <path d="M12 3h2a4 4 0 0 1 4 4v3h-6z" fill="currentColor" stroke="none"/>
-      </svg>
-      <span class="lbl">Right</span>
-    </button>
-    <button id="btn-drag" class="ctl" type="button" aria-label="Drag (hold + move)">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <polyline points="5 9 2 12 5 15"/><polyline points="9 5 12 2 15 5"/>
-        <polyline points="15 19 12 22 9 19"/><polyline points="19 9 22 12 19 15"/>
-        <line x1="2" y1="12" x2="22" y2="12"/><line x1="12" y1="2" x2="12" y2="22"/>
-      </svg>
-      <span class="lbl">Drag</span>
-    </button>
-    <button id="btn-scroll" class="ctl" type="button" aria-label="Scroll (hold + move)">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="m7 15 5 5 5-5"/><path d="m7 9 5-5 5 5"/>
-      </svg>
-      <span class="lbl">Scroll</span>
-    </button>
-    <button id="btn-kb" class="ctl" type="button" aria-label="Keyboard (toggle)">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <rect x="2" y="5" width="20" height="14" rx="2"/>
-        <path d="M6 9h.01"/><path d="M10 9h.01"/><path d="M14 9h.01"/><path d="M18 9h.01"/>
-        <path d="M6 13h.01"/><path d="M18 13h.01"/><path d="M9 13h6"/>
-      </svg>
-      <span class="lbl">Keys</span>
-    </button>
-    <button id="btn-monitor" class="ctl" type="button" aria-label="Switch monitor">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <rect x="2" y="4" width="14" height="10" rx="2"/>
-        <path d="M9 18h7"/><path d="M9 14v4"/>
-        <path d="m17 9 4 3-4 3"/>
-      </svg>
-      <span class="lbl">Monitor</span>
-    </button>
-    <button id="btn-snap" class="ctl" type="button" aria-label="Screenshot to PC clipboard">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/>
-        <circle cx="12" cy="13" r="3"/>
-      </svg>
-      <span class="lbl">Snap</span>
-    </button>
-    <button id="btn-newline" class="ctl accent wide" type="button" aria-label="New line (Shift+Enter)">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <line x1="3" y1="6" x2="21" y2="6"/>
-        <path d="M3 12h15a3 3 0 1 1 0 6h-4"/>
-        <polyline points="16 16 14 18 16 20"/>
-        <line x1="3" y1="18" x2="10" y2="18"/>
-      </svg>
-      <span class="lbl">New line</span>
-    </button>
-  </div>
+  <!-- Two D-pad groups, filled from actions.json (categories) -->
+  <div id="group-left" class="group left"></div>
+  <div id="group-right" class="group right"></div>
+
+  <!-- Category picker (tap to open, tap an item to choose, X to cancel) -->
+  <div id="wheel"></div>
 
   <input id="kb" type="text" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" aria-hidden="true" tabindex="-1">
 

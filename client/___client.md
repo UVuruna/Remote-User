@@ -5,7 +5,7 @@ The tablet side of Remote User — a plain web page served by the PC server and 
 ## Files
 
 ### `index.html` — Page Shell
-Canvas + status pill + the bottom-right control cluster (RIGHT / DRAG / SCROLL / ⌨ / MON / SNAP / ENTER) + PAN (top-left) + action-set launchers and the radial-wheel overlay (bottom-left) + the hidden keyboard-capture input. Viewport locked (no browser zoom/scroll — pinch drives the local zoom).
+Canvas + status pill + Move (top-left) and Hide (top-right) corner buttons + two D-pad groups (bottom-left/right, filled from config) + the category-wheel overlay + the hidden keyboard-capture input. Viewport locked (no browser zoom/scroll — pinch drives the local zoom).
 
 ### `app.js` — Client Logic
 WebSocket connection, frame rendering, tap-to-click. See [Client App](app.md).

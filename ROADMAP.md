@@ -66,8 +66,10 @@ Goal: daily-usable control of the PC.
 - [x] Instant keyboard fit (owner: view lifted late) — `visualViewport` resizes the canvas and lifts the pad the moment the keyboard opens
 - [x] Momentum scrolling (owner: mouse wheel felt nothing like a phone flick) — velocity-based fling with decay
 - [ ] Keyboard tuning on real devices (Gboard/Samsung IME quirks — swipe typing, autocorrect)
-- [ ] Radial menu redesign → D-pad + category dial (owner redesign, pending answer): center switches related sets, four directional buttons become persistent/tappable like the right-side cluster
-- [ ] Wheel/D-pad tuning on real device
+- [x] Control redesign → two configurable D-pad groups (owner design): each group = one category of 4, D-pad cross (landscape) / column (portrait), small dashed centre opens a **tap-based** category wheel (tap-open, tap-select, ✕ cancel — no hold/drag, smaller centre button). All old fixed buttons became category actions in `actions.json`. Top-left Move, top-right Hide (hide all controls)
+- [x] HOVER mouse mode (owner: "show more" only appears on hover) — move the cursor with no button held
+- [x] Two-layer rendering (owner: pan/zoom felt slow) — persistent full-monitor base + sharp region overlay, so motion never flashes blank
+- [ ] Wheel/D-pad tuning on real device (sizes, positions, portrait vs landscape feel)
 
 <a id="phase-3"></a>
 

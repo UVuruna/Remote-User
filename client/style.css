@@ -2,7 +2,8 @@
   --surface-0: #0f172a;
   --glass-fill: rgb(30 41 59 / 0.20);
   --border: rgb(255 255 255 / 0.20);
-  --kb: 0px; /* soft-keyboard height, kept live from visualViewport */
+  --kb: 0px;   /* soft-keyboard height, kept live from visualViewport */
+  --vtop: 0px; /* visualViewport top offset, so top corners stay visible */
   --text-primary: #f5f5f5;
   --text-secondary: #a8b3c5;
   --accent: #38bdf8;
@@ -48,182 +49,13 @@ html, body {
   border-radius: var(--radius-pill);
   font: 600 14px system-ui, sans-serif;
   color: var(--text-primary);
-  z-index: 10;
+  z-index: 40;
   transition: opacity 0.4s;
 }
 
-#status.connecting {
-  background: linear-gradient(90deg, var(--warning), #d97706);
-}
-
-#status.connected {
-  background: linear-gradient(90deg, var(--accent), var(--accent-2));
-  opacity: 0;
-  pointer-events: none;
-}
-
-#status.disconnected {
-  background: linear-gradient(90deg, var(--error), #b91c1c);
-}
-
-#controls {
-  position: fixed;
-  right: var(--space-m);
-  bottom: calc(var(--space-m) + var(--kb));
-  display: grid;
-  grid-template-columns: repeat(2, 60px);
-  gap: 10px;
-  z-index: 20;
-  transition: bottom 0.1s ease-out;
-}
-
-#controls-left {
-  position: fixed;
-  left: var(--space-m);
-  top: var(--space-m);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-m);
-  z-index: 20;
-}
-
-/* The always-useful key — visually promoted */
-.ctl.accent {
-  color: var(--text-primary);
-  border-color: var(--accent-glow);
-  background: linear-gradient(135deg, rgb(56 189 248 / 0.35), rgb(139 92 246 / 0.35));
-}
-
-/* A button that fills the full two-column width of the pad */
-.ctl.wide {
-  width: auto;
-  grid-column: 1 / -1;
-  flex-direction: row;
-  gap: 8px;
-}
-
-/* Action-set launchers — bottom-left, hold to open a radial wheel */
-#sets {
-  position: fixed;
-  left: var(--space-m);
-  bottom: calc(96px + var(--kb));
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-s);
-  z-index: 20;
-}
-
-.set-launcher {
-  padding: 10px 18px;
-  border-radius: var(--radius-pill);
-  background: var(--glass-fill);
-  border: 1px solid var(--border);
-  color: var(--text-primary);
-  font: 600 14px system-ui, sans-serif;
-  text-shadow: 0 1px 2px rgb(0 0 0 / 0.85);
-  touch-action: none;
-  -webkit-tap-highlight-color: transparent;
-}
-
-.set-launcher.active {
-  color: var(--accent);
-  border-color: var(--accent-glow);
-}
-
-/* Radial wheel overlay */
-#wheel {
-  position: fixed;
-  inset: 0;
-  z-index: 30;
-  pointer-events: none;
-  opacity: 0;
-  background: rgb(15 23 42 / 0.45);
-  -webkit-backdrop-filter: blur(2px);
-  backdrop-filter: blur(2px);
-  transition: opacity 0.12s ease-out;
-}
-
-#wheel.open {
-  opacity: 1;
-}
-
-#wheel-center {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  min-width: 84px;
-  min-height: 84px;
-  border-radius: 50%;
-  border: 1px dashed var(--border);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-secondary);
-  font: 600 13px system-ui, sans-serif;
-  text-align: center;
-  padding: 8px;
-}
-
-.wheel-item {
-  position: absolute;
-  transform: translate(-50%, -50%);
-  padding: 12px 16px;
-  border-radius: var(--radius-pill);
-  background: var(--glass-fill);
-  -webkit-backdrop-filter: blur(24px);
-  backdrop-filter: blur(24px);
-  border: 1px solid var(--border);
-  color: var(--text-primary);
-  font: 600 15px system-ui, sans-serif;
-  white-space: nowrap;
-}
-
-.wheel-item.sel {
-  background: linear-gradient(135deg, var(--accent), var(--accent-2));
-  color: #fff;
-  border-color: transparent;
-  box-shadow: 0 0 28px var(--accent-glow);
-  transform: translate(-50%, -50%) scale(1.15);
-}
-
-.ctl {
-  width: 60px;
-  height: 60px;
-  border-radius: 16px;
-  background: var(--glass-fill);
-  border: 1px solid var(--border);
-  color: var(--text-primary);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 3px;
-  touch-action: none;
-  -webkit-tap-highlight-color: transparent;
-  transition: box-shadow 0.15s ease-out, color 0.15s ease-out, transform 0.15s ease-out;
-}
-
-.ctl svg {
-  width: 24px;
-  height: 24px;
-  pointer-events: none;
-  filter: drop-shadow(0 1px 2px rgb(0 0 0 / 0.7));
-}
-
-.ctl .lbl {
-  font: 600 9px/1 system-ui, sans-serif;
-  letter-spacing: 0.02em;
-  color: var(--text-primary);
-  text-shadow: 0 1px 2px rgb(0 0 0 / 0.85);
-  pointer-events: none;
-}
-
-.ctl.active {
-  color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-glow), 0 0 24px var(--accent-glow);
-  transform: scale(1.06);
-}
+#status.connecting { background: linear-gradient(90deg, var(--warning), #d97706); }
+#status.connected  { background: linear-gradient(90deg, var(--accent), var(--accent-2)); opacity: 0; pointer-events: none; }
+#status.disconnected { background: linear-gradient(90deg, var(--error), #b91c1c); }
 
 /* Keyboard capture field — must stay focusable, so opacity, never display:none */
 #kb {
@@ -239,3 +71,161 @@ html, body {
   color: transparent;
   caret-color: transparent;
 }
+
+/* --- Buttons ------------------------------------------------------------- */
+/* See-through (low-opacity fill, no backdrop blur — the screen stays visible),
+   icon + label kept legible by shadows. */
+
+.ctl {
+  width: 58px;
+  height: 58px;
+  border-radius: 16px;
+  background: var(--glass-fill);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: box-shadow 0.15s ease-out, color 0.15s ease-out, transform 0.15s ease-out;
+}
+
+.ctl svg {
+  width: 23px;
+  height: 23px;
+  pointer-events: none;
+  filter: drop-shadow(0 1px 2px rgb(0 0 0 / 0.7));
+}
+
+.ctl .lbl {
+  font: 600 9px/1 system-ui, sans-serif;
+  letter-spacing: 0.02em;
+  color: var(--text-primary);
+  text-shadow: 0 1px 2px rgb(0 0 0 / 0.85);
+  pointer-events: none;
+  max-width: 54px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Chord buttons carry no icon — the label is the whole face */
+.ctl.text .lbl { font-size: 13px; }
+
+.ctl.active {
+  color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-glow), 0 0 22px var(--accent-glow);
+  transform: scale(1.06);
+}
+
+/* The category button is smaller — used only when switching presets */
+.ctl.cat {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  border-style: dashed;
+  opacity: 0.85;
+}
+.ctl.cat svg { width: 18px; height: 18px; }
+.ctl.cat .lbl { font-size: 8px; }
+
+/* Corners — pinned to the visible top, above the keyboard */
+.corner {
+  position: fixed;
+  top: calc(var(--space-m) + var(--vtop));
+  z-index: 30;
+}
+.corner-tl { left: var(--space-m); }
+.corner-tr { right: var(--space-m); }
+
+/* --- D-pad groups -------------------------------------------------------- */
+
+.group {
+  position: fixed;
+  bottom: calc(var(--space-m) + var(--kb));
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(3, auto);
+  grid-template-areas:
+    ".    up     ."
+    "left center right"
+    ".    down   .";
+  align-items: center;
+  justify-items: center;
+  z-index: 20;
+  transition: bottom 0.1s ease-out;
+}
+.group.left  { left: var(--space-m); }
+.group.right { right: var(--space-m); }
+
+/* Portrait: the four buttons stack in a column, category in the middle */
+@media (orientation: portrait) {
+  .group {
+    grid-template-columns: auto;
+    grid-template-areas:
+      "up"
+      "left"
+      "center"
+      "right"
+      "down";
+  }
+}
+
+/* --- Category wheel (tap to open, tap an item, X to cancel) --------------- */
+
+#wheel {
+  position: fixed;
+  inset: 0;
+  z-index: 35;
+  display: none;
+  background: rgb(15 23 42 / 0.55);
+}
+#wheel.open { display: block; }
+
+.wheel-item {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  width: 74px;
+  height: 74px;
+  border-radius: 50%;
+  background: rgb(30 41 59 / 0.85);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  font: 600 12px system-ui, sans-serif;
+}
+.wheel-item svg { width: 22px; height: 22px; }
+.wheel-item.current {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-glow), 0 0 22px var(--accent-glow);
+  color: var(--accent);
+}
+
+.wheel-x {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: rgb(30 41 59 / 0.9);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.wheel-x svg { width: 26px; height: 26px; }
+
+/* --- Hide-all mode ------------------------------------------------------- */
+body.hidden-controls .group,
+body.hidden-controls #wheel,
+body.hidden-controls .corner-tl { display: none; }

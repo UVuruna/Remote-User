@@ -1,32 +1,50 @@
 {
-  "sets": [
+  "left": 0,
+  "right": 2,
+  "categories": [
+    {
+      "name": "Mouse",
+      "icon": "mouse",
+      "buttons": [
+        { "action": "right" },
+        { "action": "drag" },
+        { "action": "scroll" },
+        { "action": "hover" }
+      ]
+    },
     {
       "name": "Edit",
+      "icon": "edit",
       "buttons": [
         { "label": "Copy",  "chord": "ctrl+c" },
         { "label": "Paste", "chord": "ctrl+v" },
         { "label": "Cut",   "chord": "ctrl+x" },
-        { "label": "All",   "chord": "ctrl+a" },
-        { "label": "Undo",  "chord": "ctrl+z" },
-        { "label": "Redo",  "chord": "ctrl+y" },
-        { "label": "Save",  "chord": "ctrl+s" },
-        { "label": "Find",  "chord": "ctrl+f" }
+        { "label": "All",   "chord": "ctrl+a" }
       ]
     },
     {
-      "name": "Nav",
+      "name": "Keys",
+      "icon": "keyboard",
       "buttons": [
-        { "label": "Esc",     "chord": "escape" },
+        { "action": "keyboard" },
+        { "label": "New line", "chord": "shift+enter" },
+        { "label": "Esc",      "chord": "escape" },
+        { "label": "Tab",      "chord": "tab" }
+      ]
+    },
+    {
+      "name": "View",
+      "icon": "monitor",
+      "buttons": [
+        { "action": "monitor" },
+        { "action": "snap" },
         { "label": "Alt+Tab", "chord": "alt+tab" },
-        { "label": "Win",     "chord": "win" },
-        { "label": "Home",    "chord": "home" },
-        { "label": "End",     "chord": "end" },
-        { "label": "Del",     "chord": "delete" },
-        { "label": "Close",   "chord": "alt+f4" }
+        { "label": "Win",     "chord": "win" }
       ]
     },
     {
       "name": "Zones",
+      "icon": "grid",
       "buttons": [
         { "label": "Z1", "chord": "ctrl+win+alt+1" },
         { "label": "Z2", "chord": "ctrl+win+alt+2" },

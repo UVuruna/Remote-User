@@ -3,22 +3,35 @@
 **Script:** [Client App (script)](app.js)
 
 ## Purpose
-The entire client behavior: connect + authenticate, render incoming JPEG frames to the canvas (letterboxed), pinch zoom + two-finger pan of the local view, and translate clean taps into `pointer_down`/`pointer_up` messages with coordinates normalized 0–1 within the remote monitor.
+All tablet behavior: connect + authenticate, render the stream, gestures, the two configurable D-pad control groups, and keyboard capture.
 
-Gesture map (modifier-button mechanics — owner decision):
-- **One finger, no travel** → left click on release
-- **Hold RIGHT button + tap** → right click at the tap point
-- **Hold DRAG button + finger** → real mouse drag (down / move / up)
-- **Hold SCROLL button + finger** → wheel ticks, content follows the finger; a fast flick keeps spinning after release with decaying momentum (phone-like), any new touch stops it
-- **⌨ button (toggle)** → opens/closes the tablet's native keyboard; typing goes to whatever is focused on the PC. Tapping the screen while the keyboard is open does NOT close it — click a field, keep typing, exactly like a physical keyboard
-- **MON button (tap)** → cycles to the next monitor (server swaps capture + injection rect, client resets the view)
-- **SNAP button (tap)** → native-resolution screenshot of the streamed monitor lands in the **PC clipboard**, paste-ready; server confirms via toast
-- **NEW LINE button (tap, accent-styled)** → sends Shift+Enter; the phone keyboard's own action key already covers plain Enter, so only the newline needs a button. Reachable while typing because the control pad rides above the keyboard
-- **PAN button (top-left, toggle)** → while on, one-finger drag moves the local zoomed view and NO click reaches the PC; for browsing a zoomed screen without clicking by accident. Pinch zoom still works; tap the button again to leave pan mode
-- **Set launchers (bottom-left) + radial wheel** → hold a set pill to fan its chords out in a wheel; drag toward one (joystick-style — direction from the press point) and release to fire; release in the centre cancels. Sets come from the server's [actions.json](../ACTIONS.md); the client only renders them
-- **Two fingers on the canvas** → pinch zoom around the midpoint + pan; no clicks are ever sent during/after a pinch
-- Zoom view transform is client-side (max 6×), but the visible region is reported to the server (`viewport`) so zoomed frames arrive at native sharpness
-- The session pauses whenever the page is hidden (tab background / screen lock) and reconnects on return — owner security decision
+## Rendering (two layers)
+Motion never flashes blank: a **base** bitmap (the last full-monitor frame) is kept in memory and drawn under everything; when zoomed, the **detail** bitmap (the sharp region crop) is drawn on top. Full native resolution is never streamed live — that would be ~200 Mbps; the base is the last whole-screen frame, the region refreshes while zoomed. `onFrame` sorts each incoming frame into base vs detail by its region header.
+
+## Gestures (canvas)
+- **Tap** (no travel) → left click on release; with the `right` mode held → right click
+- **Two fingers** → pinch zoom + pan of the local view (never sends clicks)
+- **Mouse modes** (held modifier buttons in a group): `drag` (left held), `hover` (cursor moves, no button), `scroll` (wheel + momentum fling)
+- **Move** toggle (top-left) → one finger pans the view, clicks blocked
+
+## Control groups
+Two groups (bottom-left/right), each showing one category from the server's [actions.json](../ACTIONS.md). Landscape = D-pad cross via CSS grid areas (`up/left/right/down/center`), portrait = column (media query). The small dashed **centre** button opens the category wheel.
+
+- `renderGroup(side)` builds a group's buttons from its current category
+- `makeActionButton(btn, pos)` dispatches on button kind: built-in mode (`BUILTINS`), chord, or special key
+- `keepFocus(el, onTap)` — every control uses this so a tap never steals focus from the hidden keyboard input
+
+## Category wheel (tap-based)
+`openWheel(side)` lays the categories on a circle in screen centre; **tap** an item to select (no hold, no drag), the centre **✕** or a backdrop tap cancels. `closeWheel` tears it down.
+
+## Keyboard
+Hidden input (`opacity:0`, never `display:none`); printable characters via value **diffing** (IME/autocorrect-proof), structural keys via `keydown`. The `keyboard` built-in toggles focus; `reflectKeyboardState` mirrors the open/closed state onto every `[data-action="keyboard"]` button.
+
+## Viewport / keyboard fit
+`updateViewport()` sizes the canvas to `visualViewport` (fits the screen above the keyboard instantly) and publishes `--kb` (keyboard height, lifts the groups) and `--vtop` (top offset, keeps the corners visible).
+
+## Connection
+`auth` on open; handles `config` (monitor size — resets view + bitmaps), `actions` (categories + default group indices), `toast`. Socket closes when the page hides (owner security decision); a watchdog interval reconnects when visible.
 
 ## Connections
 
@@ -26,18 +39,4 @@ Gesture map (modifier-button mechanics — owner decision):
 - [Web Layer](../server/web.md) — WebSocket `/ws`
 
 ### Used by
-- [index.html](index.html) — loaded as the page's only script
-
-## Functions
-- `onFrame(buffer)`: parses the 16-byte region header + JPEG, draws the bitmap at the region's place under the current transform
-- `updateViewport()`: sizes the canvas to `visualViewport` (fits the remote screen above the soft keyboard instantly) and publishes the keyboard height as the `--kb` CSS var so the control pad lifts above it
-- `startScrollInertia(vel, pos)` / `cancelScrollInertia()`: momentum fling after a scroll release, cancelled by any new touch
-- `computeBaseRect()`: letterbox rect from the real monitor aspect (server `config` message), independent of frame size
-- `drawnRect()` / `clampView()`: the view transform (`scale`, `tx`, `ty`) applied over the letterbox rect; clamped so the zoomed frame always covers its zoom-1 area
-- `currentViewport()` / `scheduleViewport()`: computes the visible monitor region (+15 % margin) and reports it to the server, throttled to 150 ms and >1 % change
-- `toRemote(px, py)` / `toRemoteClamped(...)`: canvas point → 0–1 within the monitor; strict variant ignores the letterbox padding, clamped variant keeps drags alive over it
-- Modifier buttons: pointer capture per button sets `modifiers.*`; releasing DRAG mid-drag finishes the drag safely
-- Keyboard capture: hidden input (`opacity: 0`, never `display: none`) + value diffing for printable characters (IME/autocorrect-proof), `keydown` for structural keys with `preventDefault` so nothing is handled twice; the buffer is trimmed outside IME composition
-- Canvas handlers: modifier branches (drag / scroll) short-circuit before the tap/pinch flow, so pinch never fights the buttons
-- Action wheel: `buildLaunchers(sets)` renders one pill per set; `openWheel/updateWheel/closeWheel` implement the joystick selection (drag angle from the press point → nearest item, deadzone before commit, centre = cancel)
-- `connect()`: WebSocket lifecycle — `auth` on open, `config`/`actions`/`toast` handling, reconnect (2 s) on close, and visibility gating (socket closes when the page hides, reconnects when it returns)
+- [index.html](index.html) — the page's only script

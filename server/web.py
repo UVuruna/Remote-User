@@ -83,7 +83,7 @@ def create_app(
             return
         logger.info("Client authenticated: %s", ws.client)
         await _send_config(ws, streamer)
-        await ws.send_text(json.dumps({"type": "actions", "sets": _load_actions()}))
+        await ws.send_text(json.dumps({"type": "actions", **_load_actions()}))
         queue = hub.subscribe()
         sender = asyncio.create_task(_send_frames(ws, queue))
         try:
@@ -115,18 +115,24 @@ async def _send_frames(ws: WebSocket, queue: asyncio.Queue) -> None:
         await ws.send_bytes(await queue.get())
 
 
-def _load_actions() -> list:
-    """Reads the owner's action sets fresh (edits apply on the next connect).
-    A missing or invalid file is logged and yields no sets — never a crash."""
+def _load_actions() -> dict:
+    """Reads the owner's action categories fresh (edits apply on the next
+    connect). A missing or invalid file is logged and yields no categories —
+    never a crash."""
+    empty = {"categories": [], "left": 0, "right": 0}
     try:
         data = json.loads(SETTINGS.actions_path.read_text(encoding="utf-8"))
-        return data.get("sets", [])
+        return {
+            "categories": data.get("categories", []),
+            "left": data.get("left", 0),
+            "right": data.get("right", 0),
+        }
     except FileNotFoundError:
-        logger.warning("actions.json not found at %s — no action sets", SETTINGS.actions_path)
-        return []
+        logger.warning("actions.json not found at %s — no action categories", SETTINGS.actions_path)
+        return empty
     except (json.JSONDecodeError, OSError) as e:
         logger.error("actions.json could not be loaded: %s", e)
-        return []
+        return empty
 
 
 async def _send_config(ws: WebSocket, streamer: ScreenStreamer) -> None:

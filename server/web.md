@@ -7,7 +7,7 @@ The FastAPI application: serves the client page and static files, authenticates 
 
 Protocol (project [CLAUDE.md](../CLAUDE.md) is the authority):
 - client → server (JSON text): `auth`, `pointer_down`, `pointer_up`, `pointer_move`, `scroll`, `viewport`, `key_text`, `key_special`, `chord`, `monitor_switch`, `screenshot`
-- server → client: `config` JSON text (after auth and after a monitor switch), `actions` JSON text (the owner's shortcut sets from [actions.json](../ACTIONS.md), sent after auth), `toast` JSON text (user-facing notices), and binary frames — 16-byte region header (4 × float32 LE) + JPEG
+- server → client: `config` JSON text (after auth and after a monitor switch), `actions` JSON text (the owner's control categories + default group indices from [actions.json](../ACTIONS.md), sent after auth), `toast` JSON text (user-facing notices), and binary frames — 16-byte region header (4 × float32 LE) + JPEG
 
 **Security rule:** the first message must be a valid `auth` within 5 seconds, otherwise the socket closes with code 4401. Nothing is processed before it.
 
