@@ -1,0 +1,48 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #0f172a;
+  touch-action: none;
+  overscroll-behavior: none;
+}
+
+#screen {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+
+#status {
+  position: fixed;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 8px 20px;
+  border-radius: 999px;
+  font: 600 14px system-ui, sans-serif;
+  color: #f8fafc;
+  z-index: 10;
+  transition: opacity 0.4s;
+}
+
+#status.connecting {
+  background: linear-gradient(90deg, #f59e0b, #d97706);
+}
+
+#status.connected {
+  background: linear-gradient(90deg, #38bdf8, #8b5cf6);
+  opacity: 0;
+  pointer-events: none;
+}
+
+#status.disconnected {
+  background: linear-gradient(90deg, #ef4444, #b91c1c);
+}

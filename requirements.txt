@@ -1,0 +1,6 @@
+fastapi
+uvicorn[standard]
+dxcam
+opencv-python-headless
+numpy
+qrcode[pil]

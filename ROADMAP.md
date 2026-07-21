@@ -25,16 +25,20 @@ Development phases for the remote-control system. See [Remote User](README.md) f
 
 <a id="phase-1"></a>
 
-## 🔨 Phase 1 — Prototype: See & Click
+## 🔨 Phase 1 — First Working Loop: See & Click
 
-Goal: live screen on the tablet, tap lands a click on the PC. Ugly is fine — the loop must work end to end.
+Goal: live screen on the tablet, tap lands a click on the PC — the complete loop on real code that Phase 2 builds on.
 
-- [ ] FastAPI server: serves the client page + WebSocket endpoint
-- [ ] `dxcam` capture loop (primary monitor) → JPEG → push over WebSocket
-- [ ] Client page: canvas rendering of incoming frames
-- [ ] Tap → `pointer_down`/`pointer_up` → `SendInput` left click at absolute position
-- [ ] DPI awareness declaration (`PER_MONITOR_AWARE_V2`) from day one
-- [ ] QR code in server console/window encoding `http://<lan-ip>:<port>/?token=…`
+- [x] FastAPI server: serves the client page + WebSocket endpoint
+- [x] `dxcam` capture loop (primary monitor) → JPEG → push over WebSocket
+- [x] Stream downscaling (`max_stream_width`) — 4K native was ~216 Mbps, capped to ~48 Mbps
+- [x] Client page: canvas rendering of incoming frames (letterbox-aware)
+- [x] Tap → `pointer_down`/`pointer_up` → `SendInput` left click at absolute position
+- [x] DPI awareness declaration (`PER_MONITOR_AWARE_V2`) from day one
+- [x] Token auth gate on the WebSocket (moved up from Phase 2 — security is not optional)
+- [x] QR code encoding `http://<lan-ip>:<port>/?token=…` (console ASCII + PNG)
+- [x] Smoke test passed on the dev machine (real 4K frame captured, encoded, injector mapping verified)
+- [ ] **Owner test on a real tablet** — the Phase 1 exit criterion
 
 <a id="phase-2"></a>
 
@@ -42,7 +46,6 @@ Goal: live screen on the tablet, tap lands a click on the PC. Ugly is fine — t
 
 Goal: daily-usable control of the PC.
 
-- [ ] Token auth on WebSocket handshake (reject all input before `auth`)
 - [ ] Gesture disambiguation: tap / hold-then-drag / two-finger scroll
 - [ ] Floating right-click icon (arms next tap as right click, auto-reverts)
 - [ ] Pinch zoom of the local view (client-side only) for precise targeting

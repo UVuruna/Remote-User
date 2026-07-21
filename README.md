@@ -9,6 +9,7 @@ Control your Windows PC from an Android tablet or phone — see the screen, tap 
 - [Architecture](#architecture)
 - [Design Decisions](#design-decisions)
 - [Security Model](#security-model)
+- [Quick Start](#quick-start)
 - [Project Structure](#project-structure)
 - [Documentation](#documentation)
 
@@ -86,6 +87,18 @@ flowchart LR
 - **Token-gated input** — the WebSocket accepts no commands before a valid pairing token (delivered via QR code / account login) is presented. This is the lesson of Remote Mouse's unauthenticated-input CVEs.
 - **Known limitation:** UAC-elevated windows (admin Task Manager, installers, UAC prompts) silently ignore injected input unless the server itself runs elevated — a planned run-as-administrator option.
 
+<a id="quick-start"></a>
+
+## 🚀 Quick Start
+
+```
+python -m venv .venv
+.venv\Scripts\pip install -r requirements.txt
+.venv\Scripts\python server\main.py
+```
+
+The server prints the pairing URL, shows a QR code (console + image viewer), and starts streaming. Scan the QR with the tablet camera — Chrome opens the client and connects.
+
 <a id="project-structure"></a>
 
 ## 📁 Project Structure
@@ -95,10 +108,22 @@ flowchart LR
   📝 README.md         ← You are here
   📝 ROADMAP.md        ← Development phases and status
   📝 CLAUDE.md         ← AI session guidance
+  ⚙️ requirements.txt
   📁 assets/
     🖼️ logo.svg
-  📁 server/           ← (planned) Python PC server
-  📁 client/           ← (planned) web client served to the tablet
+  📁 server/           ← Python PC server
+    📝 ___server.md    ← Server documentation entry point
+    🐍 main.py
+    🐍 config.py
+    🐍 capture.py
+    🐍 input_injector.py
+    🐍 web.py
+    🐍 pairing.py
+  📁 client/           ← Web client served to the tablet
+    📝 ___client.md    ← Client documentation entry point
+    📄 index.html
+    📄 app.js
+    📄 style.css
 ```
 
 <a id="documentation"></a>
@@ -107,3 +132,5 @@ flowchart LR
 
 - [Roadmap](ROADMAP.md) — development phases, current status, future ideas
 - [AI Guidance](CLAUDE.md) — architecture constraints and pitfalls for coding sessions
+- [Server (folder)](server/___server.md) — PC-side components
+- [Client (folder)](client/___client.md) — tablet-side web client
