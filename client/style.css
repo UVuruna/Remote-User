@@ -1,7 +1,8 @@
 :root {
   --surface-0: #0f172a;
-  --glass-fill: rgb(30 41 59 / 0.60);
-  --border: rgb(255 255 255 / 0.12);
+  --glass-fill: rgb(30 41 59 / 0.20);
+  --border: rgb(255 255 255 / 0.20);
+  --kb: 0px; /* soft-keyboard height, kept live from visualViewport */
   --text-primary: #f5f5f5;
   --text-secondary: #a8b3c5;
   --accent: #38bdf8;
@@ -68,11 +69,12 @@ html, body {
 #controls {
   position: fixed;
   right: var(--space-m);
-  bottom: var(--space-m);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-m);
+  bottom: calc(var(--space-m) + var(--kb));
+  display: grid;
+  grid-template-columns: repeat(2, 60px);
+  gap: 10px;
   z-index: 20;
+  transition: bottom 0.1s ease-out;
 }
 
 #controls-left {
@@ -89,14 +91,22 @@ html, body {
 .ctl.accent {
   color: var(--text-primary);
   border-color: var(--accent-glow);
-  background: linear-gradient(135deg, rgb(56 189 248 / 0.30), rgb(139 92 246 / 0.30));
+  background: linear-gradient(135deg, rgb(56 189 248 / 0.35), rgb(139 92 246 / 0.35));
+}
+
+/* A button that fills the full two-column width of the pad */
+.ctl.wide {
+  width: auto;
+  grid-column: 1 / -1;
+  flex-direction: row;
+  gap: 8px;
 }
 
 /* Action-set launchers — bottom-left, hold to open a radial wheel */
 #sets {
   position: fixed;
   left: var(--space-m);
-  bottom: 96px;
+  bottom: calc(96px + var(--kb));
   display: flex;
   flex-direction: column;
   gap: var(--space-s);
@@ -107,11 +117,10 @@ html, body {
   padding: 10px 18px;
   border-radius: var(--radius-pill);
   background: var(--glass-fill);
-  -webkit-backdrop-filter: blur(24px);
-  backdrop-filter: blur(24px);
   border: 1px solid var(--border);
-  color: var(--text-secondary);
+  color: var(--text-primary);
   font: 600 14px system-ui, sans-serif;
+  text-shadow: 0 1px 2px rgb(0 0 0 / 0.85);
   touch-action: none;
   -webkit-tap-highlight-color: transparent;
 }
@@ -179,25 +188,34 @@ html, body {
 }
 
 .ctl {
-  width: 64px;
-  height: 64px;
-  border-radius: var(--radius-pill);
+  width: 60px;
+  height: 60px;
+  border-radius: 16px;
   background: var(--glass-fill);
-  -webkit-backdrop-filter: blur(24px);
-  backdrop-filter: blur(24px);
   border: 1px solid var(--border);
-  color: var(--text-secondary);
+  color: var(--text-primary);
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 3px;
   touch-action: none;
   -webkit-tap-highlight-color: transparent;
   transition: box-shadow 0.15s ease-out, color 0.15s ease-out, transform 0.15s ease-out;
 }
 
 .ctl svg {
-  width: 28px;
-  height: 28px;
+  width: 24px;
+  height: 24px;
+  pointer-events: none;
+  filter: drop-shadow(0 1px 2px rgb(0 0 0 / 0.7));
+}
+
+.ctl .lbl {
+  font: 600 9px/1 system-ui, sans-serif;
+  letter-spacing: 0.02em;
+  color: var(--text-primary);
+  text-shadow: 0 1px 2px rgb(0 0 0 / 0.85);
   pointer-events: none;
 }
 

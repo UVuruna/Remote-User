@@ -9,11 +9,11 @@ Gesture map (modifier-button mechanics — owner decision):
 - **One finger, no travel** → left click on release
 - **Hold RIGHT button + tap** → right click at the tap point
 - **Hold DRAG button + finger** → real mouse drag (down / move / up)
-- **Hold SCROLL button + finger** → wheel ticks, content follows the finger
+- **Hold SCROLL button + finger** → wheel ticks, content follows the finger; a fast flick keeps spinning after release with decaying momentum (phone-like), any new touch stops it
 - **⌨ button (toggle)** → opens/closes the tablet's native keyboard; typing goes to whatever is focused on the PC. Tapping the screen while the keyboard is open does NOT close it — click a field, keep typing, exactly like a physical keyboard
 - **MON button (tap)** → cycles to the next monitor (server swaps capture + injection rect, client resets the view)
 - **SNAP button (tap)** → native-resolution screenshot of the streamed monitor lands in the **PC clipboard**, paste-ready; server confirms via toast
-- **ENTER button (tap, accent-styled)** → sends Enter to the PC; always reachable, works with or without the keyboard open
+- **NEW LINE button (tap, accent-styled)** → sends Shift+Enter; the phone keyboard's own action key already covers plain Enter, so only the newline needs a button. Reachable while typing because the control pad rides above the keyboard
 - **PAN button (top-left, toggle)** → while on, one-finger drag moves the local zoomed view and NO click reaches the PC; for browsing a zoomed screen without clicking by accident. Pinch zoom still works; tap the button again to leave pan mode
 - **Set launchers (bottom-left) + radial wheel** → hold a set pill to fan its chords out in a wheel; drag toward one (joystick-style — direction from the press point) and release to fire; release in the centre cancels. Sets come from the server's [actions.json](../ACTIONS.md); the client only renders them
 - **Two fingers on the canvas** → pinch zoom around the midpoint + pan; no clicks are ever sent during/after a pinch
@@ -30,6 +30,8 @@ Gesture map (modifier-button mechanics — owner decision):
 
 ## Functions
 - `onFrame(buffer)`: parses the 16-byte region header + JPEG, draws the bitmap at the region's place under the current transform
+- `updateViewport()`: sizes the canvas to `visualViewport` (fits the remote screen above the soft keyboard instantly) and publishes the keyboard height as the `--kb` CSS var so the control pad lifts above it
+- `startScrollInertia(vel, pos)` / `cancelScrollInertia()`: momentum fling after a scroll release, cancelled by any new touch
 - `computeBaseRect()`: letterbox rect from the real monitor aspect (server `config` message), independent of frame size
 - `drawnRect()` / `clampView()`: the view transform (`scale`, `tx`, `ty`) applied over the letterbox rect; clamped so the zoomed frame always covers its zoom-1 area
 - `currentViewport()` / `scheduleViewport()`: computes the visible monitor region (+15 % margin) and reports it to the server, throttled to 150 ms and >1 % change

@@ -61,8 +61,13 @@ Goal: daily-usable control of the PC.
 - [x] PAN toggle (owner request): one-finger view panning while zoomed, clicks blocked — top-left, opposite the action cluster
 - [x] ENTER button (owner request): promoted accent button so Send/Enter is never hunted for
 - [x] Chord engine + action sets + radial wheel (owner design): server `press_chord` (`ctrl+win+alt+1`), owner-edited `actions.json` (Edit / Nav / Zones), hold-a-pill → joystick wheel → release fires. Custom-set editor + login deferred to the desktop GUI phase (owner)
+- [x] See-through buttons + text labels (owner: buttons were opaque "film" and unlabelled) — low-opacity fill, no blur, icon+label
+- [x] Newline button replaces Enter (owner: phone keyboard's action key already = Enter; needed Shift+Enter for newline)
+- [x] Instant keyboard fit (owner: view lifted late) — `visualViewport` resizes the canvas and lifts the pad the moment the keyboard opens
+- [x] Momentum scrolling (owner: mouse wheel felt nothing like a phone flick) — velocity-based fling with decay
 - [ ] Keyboard tuning on real devices (Gboard/Samsung IME quirks — swipe typing, autocorrect)
-- [ ] Wheel tuning on real device (radius, deadzone, sector feel)
+- [ ] Radial menu redesign → D-pad + category dial (owner redesign, pending answer): center switches related sets, four directional buttons become persistent/tappable like the right-side cluster
+- [ ] Wheel/D-pad tuning on real device
 
 <a id="phase-3"></a>
 

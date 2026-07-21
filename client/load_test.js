@@ -32,6 +32,7 @@ function stubElement() {
 global.document = {
   getElementById: () => stubElement(),
   createElement: () => stubElement(),
+  documentElement: { style: { setProperty() {} } },
   addEventListener() {},
   hidden: false,
   activeElement: null,

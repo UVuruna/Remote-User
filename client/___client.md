@@ -14,7 +14,7 @@ WebSocket connection, frame rendering, tap-to-click. See [Client App](app.md).
 Node harness that executes `app.js` top-to-bottom with DOM stubs — catches script-killing load-time errors (TDZ, missing elements) that a syntax check cannot. **Run `node client/load_test.js` before every client commit.** Born from a real failure: a `let` declared below its first load-time use killed the page before it ever connected.
 
 ### `style.css` — Styling
-Design tokens per root DESIGN.md (dark surface, one accent, glass), gradient status pill (connecting / connected / disconnected), glass modifier buttons with accent glow when held, `touch-action: none` everywhere.
+Design tokens per root DESIGN.md (dark surface, one accent), gradient status pill (connecting / connected / disconnected). Buttons are **see-through** (low-opacity fill, no backdrop blur — the screen stays visible behind them) with an icon + text label each, kept legible by icon/text shadows. Control pad is a 2-column grid that lifts above the soft keyboard via the `--kb` variable. `touch-action: none` everywhere.
 
 ## Connections
 

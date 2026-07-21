@@ -7,6 +7,8 @@
 const ZOOM_MAX = 6;
 const TAP_MAX_MOVE = 12;        // CSS px of finger travel before a tap stops being a tap
 const SCROLL_PX_PER_TICK = 40;  // CSS px of finger travel per wheel tick
+const SCROLL_FLING_MIN = 0.35;    // canvas px/ms — below this a release adds no momentum
+const SCROLL_FLING_DECAY = 0.004; // exponential velocity decay per ms (higher = stops sooner)
 const VIEWPORT_MARGIN = 0.15;   // extra region requested around the visible area
 const VIEWPORT_THROTTLE_MS = 150;
 const RECONNECT_MS = 2000;
@@ -101,16 +103,30 @@ function redraw() {
   );
 }
 
-function resizeCanvas() {
-  canvas.width = window.innerWidth * devicePixelRatio;
-  canvas.height = window.innerHeight * devicePixelRatio;
+// Sizes the canvas to the VISIBLE area. visualViewport shrinks the moment the
+// soft keyboard appears, so the remote screen re-fits above the keyboard with
+// no delay — and `--kb` lifts the control pad above the keyboard too.
+function updateViewport() {
+  const vv = window.visualViewport;
+  const w = vv ? vv.width : window.innerWidth;
+  const h = vv ? vv.height : window.innerHeight;
+  const kb = vv ? Math.max(0, window.innerHeight - vv.height - vv.offsetTop) : 0;
+  document.documentElement.style.setProperty("--kb", `${kb}px`);
+  canvas.style.width = `${w}px`;
+  canvas.style.height = `${h}px`;
+  canvas.width = Math.round(w * devicePixelRatio);
+  canvas.height = Math.round(h * devicePixelRatio);
   computeBaseRect();
   clampView();
   redraw();
   scheduleViewport();
 }
-window.addEventListener("resize", resizeCanvas);
-resizeCanvas();
+window.addEventListener("resize", updateViewport);
+if (window.visualViewport) {
+  window.visualViewport.addEventListener("resize", updateViewport);
+  window.visualViewport.addEventListener("scroll", updateViewport);
+}
+updateViewport();
 
 // --- Region streaming (sharp zoom) ---------------------------------------
 // When zoomed, tell the server which monitor region is visible — it then
@@ -206,6 +222,38 @@ function finishDrag() {
   dragState = null;
 }
 
+// Momentum scrolling: a fast flick keeps spinning the wheel after release,
+// decaying over time — the way a phone flings a list. A new touch stops it.
+let scrollInertia = null;
+
+function startScrollInertia(vel, pos) {
+  if (Math.abs(vel) < SCROLL_FLING_MIN) return;
+  let v = vel;
+  let carry = 0;
+  let last = performance.now();
+  const tickPx = SCROLL_PX_PER_TICK * devicePixelRatio;
+  function step(now) {
+    const dt = now - last;
+    last = now;
+    carry += v * dt;
+    const ticks = Math.trunc(carry / tickPx);
+    if (ticks) {
+      carry -= ticks * tickPx;
+      send({ type: "scroll", x: pos.x, y: pos.y, ticks });
+    }
+    v *= Math.exp(-SCROLL_FLING_DECAY * dt);
+    scrollInertia = Math.abs(v) > 0.02 ? requestAnimationFrame(step) : null;
+  }
+  scrollInertia = requestAnimationFrame(step);
+}
+
+function cancelScrollInertia() {
+  if (scrollInertia) {
+    cancelAnimationFrame(scrollInertia);
+    scrollInertia = null;
+  }
+}
+
 // --- Keyboard -------------------------------------------------------------
 // Toggle button focuses a hidden input, which summons the tablet's native
 // keyboard. Printable characters are captured by DIFFING the field value
@@ -245,12 +293,14 @@ for (const [id, msg] of [["btn-monitor", "monitor_switch"], ["btn-snap", "screen
   });
 }
 
-// ENTER — always at hand, works with or without the keyboard open.
-const enterBtn = document.getElementById("btn-enter");
-enterBtn.addEventListener("pointerdown", (e) => e.preventDefault());
-enterBtn.addEventListener("pointerup", (e) => {
+// NEW LINE — the phone keyboard's own action key already sends Enter; there is
+// no newline key there, so Shift+Enter gets a dedicated button. Reachable while
+// typing because the whole control pad rides above the keyboard (see --kb).
+const newlineBtn = document.getElementById("btn-newline");
+newlineBtn.addEventListener("pointerdown", (e) => e.preventDefault());
+newlineBtn.addEventListener("pointerup", (e) => {
   e.preventDefault();
-  send({ type: "key_special", key: "enter" });
+  send({ type: "chord", chord: "shift+enter" });
 });
 
 // PAN toggle (top-left) — while on, one finger moves the view and no click
@@ -317,6 +367,7 @@ canvas.addEventListener("pointerdown", (e) => {
   // the hidden input — you click a field on the PC and keep typing.
   if (document.activeElement === kbInput) e.preventDefault();
   canvas.setPointerCapture(e.pointerId);
+  cancelScrollInertia(); // a new touch stops any ongoing fling, like on a phone
   const p = toCanvasPx(e);
 
   if (modifiers.drag && !dragState) {
@@ -325,7 +376,10 @@ canvas.addEventListener("pointerdown", (e) => {
     return;
   }
   if (modifiers.scroll && !scrollState) {
-    scrollState = { id: e.pointerId, lastY: p.y, acc: 0, pos: toRemoteClamped(p.x, p.y) };
+    scrollState = {
+      id: e.pointerId, lastY: p.y, acc: 0, vel: 0,
+      lastT: performance.now(), pos: toRemoteClamped(p.x, p.y),
+    };
     return;
   }
 
@@ -357,8 +411,12 @@ canvas.addEventListener("pointermove", (e) => {
     return;
   }
   if (scrollState && scrollState.id === e.pointerId) {
-    scrollState.acc += p.y - scrollState.lastY;
+    const now = performance.now();
+    const dy = p.y - scrollState.lastY;
+    scrollState.vel = dy / Math.max(1, now - scrollState.lastT); // canvas px/ms
     scrollState.lastY = p.y;
+    scrollState.lastT = now;
+    scrollState.acc += dy;
     const tickPx = SCROLL_PX_PER_TICK * devicePixelRatio;
     const ticks = Math.trunc(scrollState.acc / tickPx);
     if (ticks) {
@@ -402,7 +460,9 @@ function endPointer(e) {
     return;
   }
   if (scrollState && scrollState.id === e.pointerId) {
+    const { vel, pos } = scrollState;
     scrollState = null;
+    startScrollInertia(vel, pos);
     return;
   }
 
