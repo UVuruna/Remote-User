@@ -47,23 +47,23 @@ One monitor is shown at a time; a switch button changes which monitor is display
 %%{init: {'flowchart': {'subGraphTitleMargin': {'top': 0, 'bottom': 35}}}}%%
 flowchart LR
     subgraph PC["PC Server (Python)"]
-        CAP[Screen Capture<br>dxcam / DXGI] --> ENC[JPEG Encoder]
+        CAP[Screen Capture<br>dxcam / DXGI] --> ENC[H.264 Encoder<br>ffmpeg — NVENC/QSV/AMF/x264<br>JPEG fallback]
         ENC --> WS[WebSocket Server<br>FastAPI]
         WS --> INJ[Input Injector<br>SendInput via ctypes]
     end
 
     subgraph TAB["Tablet (Chrome / PWA)"]
-        VIEW[Screen View<br>canvas]
+        VIEW[Screen View<br>canvas + MSE video]
         TOUCH[Touch + Keyboard<br>capture]
     end
 
-    WS == JPEG frames ==> VIEW
+    WS == "fMP4 (H.264) or JPEG frames" ==> VIEW
     TOUCH -- input events (JSON) --> WS
 ```
 
 **Input protocol (client → server, JSON):** `pointer_move`, `pointer_down`/`pointer_up` (with button), `scroll`, `key_text` (Unicode string), `key_special` (Enter, Backspace, arrows…), `monitor_switch`, `auth`.
 
-**Frame channel (server → client, binary):** one JPEG per WebSocket message.
+**Frame channel (server → client, binary):** a live **H.264** stream as fragmented MP4, decoded by the browser via Media Source Extensions — one ffmpeg process per client, hardware-encoded when available (measured ~1.5 Mbps for a static screen vs ~37 Mbps as JPEG). When no encoder/ffmpeg exists, the server falls back to one JPEG per message. The PC pointer is not part of the frames — the server streams its position (`cursor` JSON) and the client draws a virtual cursor.
 
 <a id="design-decisions"></a>
 
@@ -73,12 +73,13 @@ flowchart LR
 |----------|--------|-----|
 | Client platform | Web page in Chrome (PWA) | Zero Android toolchain; iterate by refreshing the page. Proven by Weylus (Rust) using the same pattern |
 | Screen capture | `dxcam` (DXGI Desktop Duplication) | Near-instant GPU-composited capture (~240fps capable), pip-installable |
-| Streaming | JPEG-per-frame over WebSocket | No codec/container complexity, trivially debuggable; H.264+MSE is the documented upgrade path if bandwidth demands it |
+| Streaming | **H.264 (fMP4 + MSE)**, hardware encoder auto-detected (NVENC → QuickSync → AMF → libx264), JPEG fallback | Inter-frame compression: ~25× less bandwidth than JPEG on a static screen; runs on any PC, and the JPEG path remains when ffmpeg is absent |
 | Transport | Plain WebSocket on LAN | WebRTC's machinery (NAT traversal, adaptive bitrate) solves WAN problems we don't have |
 | Input injection | Win32 `SendInput` via `ctypes` | Direct control; `KEYEVENTF_UNICODE` covers all scripts and emoji |
 | Monitor handling | **One monitor per view**, explicit switch | Owner decision — eliminates mixed-DPI/multi-monitor coordinate math; client sends 0–1 coordinates within the displayed monitor only |
 | Input mechanics | **Modifier buttons** (hold RIGHT/DRAG/SCROLL + finger), not timed gestures | Owner decision — zero ambiguity, no long-press tuning, never conflicts with pinch zoom |
-| Sharp zoom | **Region streaming** — client reports its visible region, server crops before downscaling | Native-pixel sharpness when zoomed at constant bandwidth; full 4K streaming would be ~216 Mbps |
+| Sharp zoom | **Region streaming** (JPEG mode) — client reports its visible region, server crops before downscaling | Native-pixel sharpness when zoomed at constant bandwidth. Dropped on the H.264 path: inter-frame compression already makes the full frame cheap |
+| Virtual cursor | Server streams `GetCursorPos`, client draws the arrow | DXGI capture never contains the pointer — without this you cannot see where the mouse is |
 | Rejected: Kivy/BeeWare | — | Slow brittle APK builds, weak video and soft-keyboard support |
 | Rejected (for now): Flutter | — | Only justified if background operation across tablet screen-lock ever becomes a requirement |
 
@@ -113,6 +114,8 @@ python -m venv .venv
 ```
 
 The server prints the pairing URL, shows a QR code (console + image viewer), and starts streaming. Scan the QR with the tablet camera — Chrome opens the client and connects.
+
+**H.264 needs `ffmpeg` on PATH** (dev setup — the future installer bundles it). The server auto-detects a working encoder at startup and logs the choice; without ffmpeg it falls back to JPEG streaming automatically.
 
 <a id="project-structure"></a>
 

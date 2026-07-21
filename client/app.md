@@ -3,10 +3,25 @@
 **Script:** [Client App (script)](app.js)
 
 ## Purpose
-All tablet behavior: connect + authenticate, render the stream, gestures, the two configurable D-pad control groups, and keyboard capture.
+All tablet behavior: connect + authenticate, render the stream (H.264 via MSE, or JPEG), draw the virtual cursor, gestures, the two configurable D-pad control groups, and keyboard capture.
 
-## Rendering (two layers)
-Motion never flashes blank: a **base** bitmap (the last full-monitor frame) is kept in memory and drawn under everything; when zoomed, the **detail** bitmap (the sharp region crop) is drawn on top. Full native resolution is never streamed live — that would be ~200 Mbps; the base is the last whole-screen frame, the region refreshes while zoomed. `onFrame` sorts each incoming frame into base vs detail by its region header.
+## Rendering
+`streamMode` comes from the server's `config` and picks the pixel source; everything else (view transform, gestures, coordinates) is shared.
+
+**H.264 (primary):** binary WebSocket chunks are one continuous fragmented-MP4 stream, appended in order into a MediaSource `SourceBuffer` (codec string supplied by the server, parsed from the live init segment). The offscreen `<video>` decodes; a `requestAnimationFrame` loop draws it onto the canvas through the view transform. Staying live:
+
+```
+ON each append completed:
+    IF buffered end − currentTime > 0.5 s  → jump currentTime to just behind the end
+    IF buffered history > 16 s             → remove all but the last 8 s
+```
+
+An append failure (quota, codec hiccup) never freezes silently — the socket closes and auto-reconnect brings a fresh stream.
+
+**JPEG (fallback, two layers):** a **base** bitmap (the last full-monitor frame) is drawn under everything; when zoomed, the **detail** bitmap (the sharp region crop) is drawn on top, so motion never flashes blank. `onFrame` sorts each frame into base vs detail by its region header. Only this mode sends `viewport` requests.
+
+## Virtual cursor
+`cursor` messages carry the PC pointer position (monitor-normalized) — capture frames never include it. `drawCursor` renders a classic arrow at a fixed screen size (independent of zoom) through the same drawn-rect transform as the image; positions outside 0–1 (cursor on another monitor) draw nothing.
 
 ## Touch modes (toggles)
 A single `touchMode` decides what one finger does; tapping a mode button toggles it, only one is active, two fingers always pinch-zoom:
@@ -39,7 +54,7 @@ The `upload` built-in opens a hidden `<input type="file" accept="image/*">` (gal
 `updateViewport()` sizes the canvas to `visualViewport` (fits the screen above the keyboard instantly) and publishes `--kb` (keyboard height, lifts the groups) and `--vtop` (top offset, keeps the corners visible).
 
 ## Connection
-`auth` on open; handles `config` (monitor size — resets view + bitmaps), `actions` (categories + default group indices), `toast`. Socket closes when the page hides (owner security decision); a watchdog interval reconnects when visible.
+`auth` on open; handles `config` (monitor size + stream mode + codec — full reset of view, bitmaps and the MSE pipeline; arrives after auth and after every stream restart), `cursor` (virtual-cursor position), `actions` (categories + default group indices), `toast`. Socket closes when the page hides (owner security decision); a watchdog interval reconnects when visible; MSE is torn down on every close and rebuilt from the next `config`.
 
 ## Connections
 

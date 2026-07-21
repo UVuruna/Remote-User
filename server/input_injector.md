@@ -33,5 +33,6 @@ Injects mouse input with Win32 `SendInput` through raw ctypes structs. Client co
 - `type_text(text)`: arbitrary Unicode via `KEYEVENTF_UNICODE` (VK_PACKET) — one down+up per UTF-16 code unit, so surrogate pairs (emoji) work
 - `press_key(name)`: structural keys (Enter, Backspace, Tab, Escape, Delete, Home, End, arrows) by VK code from the `VK_CODES` map; unknown names are logged, never guessed
 - `press_chord(chord)`: a combination like `ctrl+c` or `ctrl+win+alt+1` — all tokens but the last are modifiers held while the final key is tapped, released in reverse; an unknown modifier/key logs and emits nothing (no half-pressed keys)
+- `cursor_norm()`: the inverse mapping — current `GetCursorPos` normalized to the captured monitor, for the client-drawn virtual cursor (capture frames never contain the pointer). Values fall outside 0–1 when the cursor is on another monitor; `None` when Windows refuses the read (secure desktop / UAC prompt)
 
 Module helpers: `MODIFIER_VKS` (ctrl/alt/shift/win aliases), `vk_for_key(token)` (letter/digit/F-key/named key → VK), used by both the chord engine and `actions.json` validation.

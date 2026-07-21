@@ -1,9 +1,9 @@
-# Screen Streamer
+# Screen Capture
 
-**Script:** [Screen Streamer (script)](capture.py)
+**Script:** [Screen Capture (script)](capture.py)
 
 ## Purpose
-Owns the capture thread: grabs frames from the selected monitor via dxcam (DXGI Desktop Duplication), crops to the client's current viewport (region-of-interest streaming — sharp zoom at constant bandwidth), downscales when the result is wider than `max_stream_width`, encodes to JPEG (OpenCV), and hands bytes + covered region to a callback. This is a hot path — no per-frame allocations beyond what cropping/encoding requires.
+Owns dxcam (DXGI Desktop Duplication) — the one place that touches the camera. A shared base class carries everything every streaming path needs (camera lifecycle, capture thread, screenshots, monitor switching, downscale math); two front-ends specialize it. Exactly one front-end exists per process (dxcam allows one camera per output) — [Main](main.md) picks JPEG or H.264 at startup.
 
 ## Connections
 
@@ -11,20 +11,39 @@ Owns the capture thread: grabs frames from the selected monitor via dxcam (DXGI 
 - [Config](config.md) — monitor index, fps, quality, downscale cap
 
 ### Used by
-- [Main](main.md) — constructs it with `FrameHub.push_threadsafe` as the callback
+- [Main](main.md) — constructs `JpegStreamer` when no H.264 encoder exists
+- [H.264 Streamer](h264_streamer.md) — `H264Manager` owns a `RawFrameSource`; sessions consume `FrameSink`s
 
 ## Classes
 
-### ScreenStreamer
+### BaseCapture
+Camera lifecycle + the capture thread + the screenshot service. Subclasses implement `_process(frame)`, called from the capture thread for every grabbed frame.
 
-#### Attributes
-- `width`, `height`: native pixel size of the captured monitor (used by the injector for coordinate mapping — always the real size, never the downscaled stream size)
-
-#### Methods
-- `start()`: begins dxcam video-mode capture and the encode loop thread
-- `stop()`: joins the thread and releases the camera
-- `set_viewport(x, y, w, h)`: monitor-normalized region the client wants; clamped; tuple write is atomic (single writer, no lock)
-- `switch_monitor(index)`: swaps the capture source (call while stopped); `output_count()` reports how many outputs dxcam sees
+- `width`, `height`, `monitor_index`: native pixel size of the captured monitor (the injector maps coordinates against this — never the stream size)
+- `start()` / `stop()`: dxcam video-mode capture + the `_loop` thread (stop tolerates dxcam's bare raise on double-stop)
+- `switch_monitor(index)`: swaps the camera (call while stopped); failure keeps the old camera
+- `output_count()`: how many outputs dxcam sees
 - `take_screenshot()`: full-monitor native-resolution copy of the next frame (blocking — worker threads only)
-- `_crop(frame)`: applies the viewport with a minimum-size guard; returns the frame slice + the actual normalized region
-- `_loop()`: capture → crop → optional `cv2.resize` (INTER_AREA) → `cv2.imencode` → callback(jpeg, region)
+- `stream_size()`: monitor size capped at `max_stream_width`, even-rounded (H.264 yuv420 requires even dimensions)
+
+### JpegStreamer
+The fallback path (used when no H.264 encoder/ffmpeg exists): crop to the client viewport → downscale → JPEG encode → `on_frame(jpeg, region)` callback. This is a hot path — no per-frame allocations beyond what cropping/encoding requires.
+
+- `set_viewport(x, y, w, h)`: monitor-normalized region the client wants (region-of-interest streaming — sharp zoom at constant bandwidth); clamped; tuple write is atomic (single writer, no lock)
+- `switch_to(index)`: stop → swap monitor → start as one blocking operation (what the web layer calls)
+- `mode = "jpeg"` — the duck-interface discriminator the web layer branches on
+
+### FrameSink
+Latest-frame handoff to one encoder session: the capture thread `offer()`s every frame; the consumer `take()`s the newest and misses the rest. Drops happen **before** encoding, so the encoded stream stays valid — this is what lets a slow encoder lag without corrupting its output.
+
+### RawFrameSource
+The H.264 front-end: downscales each captured frame once (shared by all sessions) and offers it to every registered sink.
+
+```
+capture thread:  grab frame → resize once to stream_w×stream_h (or copy —
+                 the dxcam ring buffer must not be read asynchronously)
+                 → FOR EACH sink: offer(frame)
+```
+
+- `add_sink(sink)` / `remove_sink(sink)`: session registration (lock-guarded list)
+- `stream_w`, `stream_h`: the encoded size — recomputed on monitor switch

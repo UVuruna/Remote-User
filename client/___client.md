@@ -5,10 +5,10 @@ The tablet side of Remote User — a plain web page served by the PC server and 
 ## Files
 
 ### `index.html` — Page Shell
-Canvas + status pill + Move (top-left) and Hide (top-right) corner buttons + two D-pad groups (bottom-left/right, filled from config) + the category-wheel overlay + the hidden keyboard-capture input. Viewport locked (no browser zoom/scroll — pinch drives the local zoom).
+Canvas + offscreen `<video>` (the H.264/MSE decode surface) + status pill + Move (top-left) and Hide (top-right) corner buttons + two D-pad groups (bottom-left/right, filled from config) + the category-wheel overlay + the hidden keyboard-capture input. Viewport locked (no browser zoom/scroll — pinch drives the local zoom).
 
 ### `app.js` — Client Logic
-WebSocket connection, frame rendering, tap-to-click. See [Client App](app.md).
+WebSocket connection, H.264 (MSE) or JPEG rendering, virtual cursor, tap-to-click. See [Client App](app.md).
 
 ### `load_test.js` — Load-Order Test
 Node harness that executes `app.js` top-to-bottom with DOM stubs — catches script-killing load-time errors (TDZ, missing elements) that a syntax check cannot. **Run `node client/load_test.js` before every client commit.** Born from a real failure: a `let` declared below its first load-time use killed the page before it ever connected.
@@ -29,7 +29,9 @@ Design tokens per root DESIGN.md (dark surface, one accent), gradient status pil
 - **Letterbox-aware coordinate mapping** — taps are mapped through the drawn image rect (including the zoom/pan transform), so normalized coordinates stay correct regardless of tablet aspect ratio; taps on the padding are ignored.
 - **Clicks fire on release, not on press** — a clean single-finger tap sends down+up together; any finger travel or a second finger cancels the click. This is what makes pinch zoom safe: zooming can never leak a click to the PC.
 - **Modifier buttons over timed gestures** (owner decision) — game-style corner buttons held with one finger change what the other finger means (right click / drag / scroll). No long-press timers, no ambiguity with pinch.
-- **Region streaming** — when zoomed, the client reports its visible region and receives native-resolution crops instead of upscaled downsampled frames; bandwidth stays constant, zoom stays sharp.
+- **The stream mode is the server's call** — `config` says `h264` (fMP4 chunks appended into MSE, the video drawn onto the canvas every animation frame) or `jpeg` (bitmap per message). All gesture/zoom/coordinate logic is mode-independent; only the pixels' source differs.
+- **Virtual cursor** — capture never contains the PC pointer; the server streams its position and the client draws a fixed-size arrow through the same view transform as the image.
+- **Region streaming (JPEG mode only)** — when zoomed, the client reports its visible region and receives native-resolution crops instead of upscaled downsampled frames; bandwidth stays constant, zoom stays sharp. In H.264 mode inter-frame compression already makes the full frame cheap, so the client never sends `viewport`.
 - **Visibility-gated session** (owner security decision) — the socket closes the moment the page is hidden (tab switch, screen lock) and reconnects on return; the PC is never controllable while the owner isn't looking.
 - **Token from the URL** (`?token=…`, delivered by the QR code) is sent as the first WebSocket message — the server accepts nothing before it.
 - **Auto-reconnect** every 2 s on close; the status pill is the only UI chrome.
