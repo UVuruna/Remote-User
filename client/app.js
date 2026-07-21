@@ -34,6 +34,12 @@ let dragState = null;       // {id, pos} while the DRAG modifier drives a mouse 
 let scrollState = null;     // {id, lastY, acc, pos} while the SCROLL modifier is held
 const modifiers = { right: false, drag: false, scroll: false };
 
+// Region-streaming state — MUST be declared before the initial resizeCanvas()
+// call below, which reaches scheduleViewport() (a let in the TDZ here kills
+// the whole script on load).
+let lastSentViewport = { x: 0, y: 0, w: 1, h: 1 };
+let viewportTimer = null;
+
 function setStatus(cls, text) {
   statusEl.className = cls;
   statusEl.textContent = text;
@@ -108,9 +114,6 @@ resizeCanvas();
 // --- Region streaming (sharp zoom) ---------------------------------------
 // When zoomed, tell the server which monitor region is visible — it then
 // streams only that region, so zoom gets native pixels at constant bandwidth.
-
-let lastSentViewport = { x: 0, y: 0, w: 1, h: 1 };
-let viewportTimer = null;
 
 function currentViewport() {
   if (view.scale <= 1) return { x: 0, y: 0, w: 1, h: 1 };

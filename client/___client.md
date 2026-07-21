@@ -10,6 +10,9 @@ Canvas + status pill + the corner control cluster (RIGHT / DRAG / SCROLL / ⌨ b
 ### `app.js` — Client Logic
 WebSocket connection, frame rendering, tap-to-click. See [Client App](app.md).
 
+### `load_test.js` — Load-Order Test
+Node harness that executes `app.js` top-to-bottom with DOM stubs — catches script-killing load-time errors (TDZ, missing elements) that a syntax check cannot. **Run `node client/load_test.js` before every client commit.** Born from a real failure: a `let` declared below its first load-time use killed the page before it ever connected.
+
 ### `style.css` — Styling
 Design tokens per root DESIGN.md (dark surface, one accent, glass), gradient status pill (connecting / connected / disconnected), glass modifier buttons with accent glow when held, `touch-action: none` everywhere.
 
