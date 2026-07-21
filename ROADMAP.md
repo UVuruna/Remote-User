@@ -25,7 +25,7 @@ Development phases for the remote-control system. See [Remote User](README.md) f
 
 <a id="phase-1"></a>
 
-## 🔨 Phase 1 — First Working Loop: See & Click
+## ✅ Phase 1 — First Working Loop: See & Click
 
 Goal: live screen on the tablet, tap lands a click on the PC — the complete loop on real code that Phase 2 builds on.
 
@@ -38,7 +38,7 @@ Goal: live screen on the tablet, tap lands a click on the PC — the complete lo
 - [x] Token auth gate on the WebSocket (moved up from Phase 2 — security is not optional)
 - [x] QR code encoding `http://<lan-ip>:<port>/?token=…` (console ASCII + PNG)
 - [x] Smoke test passed on the dev machine (real 4K frame captured, encoded, injector mapping verified)
-- [ ] **Owner test on a real tablet** — the Phase 1 exit criterion
+- [x] **Owner test on a real device** — passed 2026-07-21: click lands precisely, stream smooth, no perceptible lag
 
 <a id="phase-2"></a>
 
@@ -48,7 +48,7 @@ Goal: daily-usable control of the PC.
 
 - [ ] Gesture disambiguation: tap / hold-then-drag / two-finger scroll
 - [ ] Floating right-click icon (arms next tap as right click, auto-reverts)
-- [ ] Pinch zoom of the local view (client-side only) for precise targeting
+- [x] Pinch zoom of the local view (client-side only) for precise targeting — pulled forward after the first device test (owner: small targets need it); includes two-finger pan, clicks fire only on clean tap release
 - [ ] Keyboard: hidden input field + text diffing (`key_text`), `keydown` for special keys (`key_special`)
 - [ ] Monitor switch button (capture source + coordinate rect swap)
 - [ ] Auto-reconnect (network blip, tablet sleep/wake)

@@ -23,6 +23,7 @@ Dark fullscreen canvas, gradient status pill (connecting / connected / disconnec
 
 ## Design Decisions
 
-- **Letterbox-aware coordinate mapping** — taps are mapped through the drawn image rect, so normalized coordinates stay correct regardless of tablet aspect ratio; taps on the padding are ignored.
+- **Letterbox-aware coordinate mapping** — taps are mapped through the drawn image rect (including the zoom/pan transform), so normalized coordinates stay correct regardless of tablet aspect ratio; taps on the padding are ignored.
+- **Clicks fire on release, not on press** — a clean single-finger tap sends down+up together; any finger travel or a second finger cancels the click. This is what makes pinch zoom safe: zooming can never leak a click to the PC.
 - **Token from the URL** (`?token=…`, delivered by the QR code) is sent as the first WebSocket message — the server accepts nothing before it.
 - **Auto-reconnect** every 2 s on close; the status pill is the only UI chrome.
