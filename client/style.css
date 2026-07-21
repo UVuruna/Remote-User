@@ -75,6 +75,23 @@ html, body {
   z-index: 20;
 }
 
+#controls-left {
+  position: fixed;
+  left: var(--space-m);
+  top: var(--space-m);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-m);
+  z-index: 20;
+}
+
+/* The always-useful key — visually promoted */
+.ctl.accent {
+  color: var(--text-primary);
+  border-color: var(--accent-glow);
+  background: linear-gradient(135deg, rgb(56 189 248 / 0.30), rgb(139 92 246 / 0.30));
+}
+
 .ctl {
   width: 64px;
   height: 64px;

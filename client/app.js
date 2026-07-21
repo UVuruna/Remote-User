@@ -33,6 +33,7 @@ let gestureHadPinch = false;
 let dragState = null;       // {id, pos} while the DRAG modifier drives a mouse drag
 let scrollState = null;     // {id, lastY, acc, pos} while the SCROLL modifier is held
 const modifiers = { right: false, drag: false, scroll: false };
+let panMode = false;        // PAN toggle: one finger moves the view, clicks are blocked
 
 // Region-streaming state — MUST be declared before the initial resizeCanvas()
 // call below, which reaches scheduleViewport() (a let in the TDZ here kills
@@ -244,6 +245,24 @@ for (const [id, msg] of [["btn-monitor", "monitor_switch"], ["btn-snap", "screen
   });
 }
 
+// ENTER — always at hand, works with or without the keyboard open.
+const enterBtn = document.getElementById("btn-enter");
+enterBtn.addEventListener("pointerdown", (e) => e.preventDefault());
+enterBtn.addEventListener("pointerup", (e) => {
+  e.preventDefault();
+  send({ type: "key_special", key: "enter" });
+});
+
+// PAN toggle (top-left) — while on, one finger moves the view and no click
+// can reach the PC. Made for browsing while zoomed.
+const panBtn = document.getElementById("btn-pan");
+panBtn.addEventListener("pointerdown", (e) => e.preventDefault());
+panBtn.addEventListener("pointerup", (e) => {
+  e.preventDefault();
+  panMode = !panMode;
+  panBtn.classList.toggle("active", panMode);
+});
+
 let toastTimer = null;
 
 function showToast(text) {
@@ -349,8 +368,17 @@ canvas.addEventListener("pointermove", (e) => {
     return;
   }
   if (!pointers.has(e.pointerId)) return;
+  const prev = pointers.get(e.pointerId);
   pointers.set(e.pointerId, p);
 
+  if (panMode && pointers.size === 1 && !pinch) {
+    view.tx += p.x - prev.x;
+    view.ty += p.y - prev.y;
+    clampView();
+    redraw();
+    scheduleViewport();
+    return;
+  }
   if (pinch && pointers.size >= 2) {
     const [p1, p2] = firstTwoPointers();
     const dist = Math.hypot(p1.x - p2.x, p1.y - p2.y);
@@ -382,7 +410,7 @@ function endPointer(e) {
   if (pinch && pointers.size < 2) pinch = null;
   if (pointers.size > 0) return;
 
-  if (tap && !tap.moved && !gestureHadPinch && e.type === "pointerup") {
+  if (tap && !tap.moved && !gestureHadPinch && !panMode && e.type === "pointerup") {
     const p = toCanvasPx(e);
     const pos = toRemote(p.x, p.y);
     if (pos) {

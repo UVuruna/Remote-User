@@ -58,6 +58,8 @@ Goal: daily-usable control of the PC.
 - [x] Screenshot to PC clipboard (SNAP, owner request): native-res frame → CF_DIB in the Windows clipboard, paste-ready on the PC; toast confirmation
 - [x] Persistent pairing token across restarts (`logs/token.txt`) — no re-scan after server updates
 - [x] DPI declaration hardened: pointer-sized context + checked return (bare-int ctypes call failed silently; dxcam's own declaration was masking it)
+- [x] PAN toggle (owner request): one-finger view panning while zoomed, clicks blocked — top-left, opposite the action cluster
+- [x] ENTER button (owner request): promoted accent button so Send/Enter is never hunted for
 - [ ] Keyboard tuning on real devices (Gboard/Samsung IME quirks — swipe typing, autocorrect)
 
 <a id="phase-3"></a>

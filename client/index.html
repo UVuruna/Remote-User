@@ -11,6 +11,17 @@
   <div id="status" class="connecting">Connecting…</div>
   <canvas id="screen"></canvas>
 
+  <div id="controls-left">
+    <button id="btn-pan" class="ctl" type="button" aria-label="Pan view (blocks clicks)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M18 11V6a2 2 0 0 0-2-2 2 2 0 0 0-2 2"/>
+        <path d="M14 10V4a2 2 0 0 0-2-2 2 2 0 0 0-2 2v2"/>
+        <path d="M10 10.5V6a2 2 0 0 0-2-2 2 2 0 0 0-2 2v8"/>
+        <path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/>
+      </svg>
+    </button>
+  </div>
+
   <div id="controls">
     <button id="btn-right" class="ctl" type="button" aria-label="Right click (hold + tap)">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -49,6 +60,12 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/>
         <circle cx="12" cy="13" r="3"/>
+      </svg>
+    </button>
+    <button id="btn-enter" class="ctl accent" type="button" aria-label="Enter key">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="9 10 4 15 9 20"/>
+        <path d="M20 4v7a4 4 0 0 1-4 4H4"/>
       </svg>
     </button>
   </div>
