@@ -29,6 +29,15 @@ class Settings:
     h264_encoder_order: tuple[str, ...] = ("h264_nvenc", "h264_qsv", "h264_amf", "libx264")
     h264_bitrate: str = "8M"        # target video bitrate
     h264_gop: int = 60              # keyframe every N frames (reconnect/seek granularity)
+    h264_fragment_us: int = 16000   # fMP4 fragment target (µs) — below one frame interval,
+                                    # so every encoded frame ships in its own fragment
+    h264_head_timeout: float = 5.0  # seconds to wait for ffmpeg's init segment (ftyp+moov)
+    h264_queue_chunks: int = 64     # per-client outbound chunk queue; a full queue means the
+                                    # client cannot keep up — its session is reset, not delayed
+
+    # Virtual cursor — DXGI capture never includes the mouse pointer, so the
+    # server streams the cursor position and the client draws it.
+    cursor_hz: int = 30             # position polls per second (sent only on change)
 
     # Pairing
     token_bytes: int = 16           # entropy of the pairing token

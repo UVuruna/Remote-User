@@ -51,24 +51,38 @@ async def main() -> None:
     setup_logging()
 
     # Imports that touch the GPU/screen come after DPI awareness is declared.
+    import encoders
     import monitors
-    from capture import ScreenStreamer
     from input_injector import InputInjector
     from pairing import generate_token, show_pairing
     from web import FrameHub, create_app
 
     loop = asyncio.get_running_loop()
-    hub = FrameHub(loop)
-    streamer = ScreenStreamer(on_frame=hub.push_threadsafe)
+
+    # Stream mode is decided once, at startup: H.264 when a verified encoder
+    # exists (capture then runs on demand, per client), JPEG otherwise.
+    encoder = encoders.detect_encoder() if SETTINGS.use_h264 else None
+    hub = None
+    if encoder:
+        from h264_streamer import H264Manager
+        stream = H264Manager(encoder)
+    else:
+        from capture import JpegStreamer
+        if SETTINGS.use_h264:
+            logger.warning("No working H.264 encoder/ffmpeg — falling back to JPEG streaming")
+        hub = FrameHub(loop)
+        stream = JpegStreamer(on_frame=hub.push_threadsafe)
+
     injector = InputInjector(
-        monitor_rect=monitors.rect_for_size(streamer.width, streamer.height, streamer.monitor_index)
+        monitor_rect=monitors.rect_for_size(stream.width, stream.height, stream.monitor_index)
     )
 
     token = generate_token()
-    app = create_app(hub, injector, streamer, token)
+    app = create_app(stream, hub, injector, token)
     show_pairing(token)
 
-    streamer.start()
+    if stream.mode == "jpeg":
+        stream.start()  # H.264 capture starts when the first client connects
     try:
         # log_level info so every HTTP/WS access is visible — with "warning" a
         # failing client is invisible in the log, which already cost us a debug
@@ -78,7 +92,10 @@ async def main() -> None:
         )
         await server.serve()
     finally:
-        streamer.stop()
+        if stream.mode == "jpeg":
+            stream.stop()
+        else:
+            stream.shutdown()
 
 
 if __name__ == "__main__":

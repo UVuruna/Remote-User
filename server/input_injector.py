@@ -141,6 +141,18 @@ class InputInjector:
         self.monitor_rect = rect
         logger.info("Injector now targeting monitor rect %s", rect)
 
+    def cursor_norm(self) -> tuple[float, float] | None:
+        """Current cursor position normalized to the captured monitor — the
+        inverse of the injection mapping, used for the client-drawn virtual
+        cursor (DXGI frames never contain the pointer). Values fall outside
+        0-1 when the cursor is on another monitor. None when Windows refuses
+        the read (e.g. secure desktop during a UAC prompt)."""
+        pt = wintypes.POINT()
+        if not user32.GetCursorPos(ctypes.byref(pt)):
+            return None
+        left, top, w, h = self.monitor_rect
+        return ((pt.x - left) / w, (pt.y - top) / h)
+
     def _to_absolute(self, x_norm: float, y_norm: float) -> tuple[int, int]:
         mon_left, mon_top, mon_w, mon_h = self.monitor_rect
         virt_left, virt_top, virt_w, virt_h = self.virtual_rect
