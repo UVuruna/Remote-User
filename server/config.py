@@ -22,7 +22,9 @@ class Settings:
     # Pairing
     token_bytes: int = 16           # entropy of the pairing token
     open_qr_image: bool = True      # open the QR PNG in the default viewer on startup
-    qr_image_path: Path = PROJECT_ROOT / "logs" / "pairing_qr.png"
+    # Kept in the project root so the owner can reopen it anytime; regenerated on
+    # every server start (the token rotates per run, old QR stops working).
+    qr_image_path: Path = PROJECT_ROOT / "PAIRING_QR.png"
 
     # Logging
     log_dir: Path = PROJECT_ROOT / "logs"

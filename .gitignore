@@ -9,6 +9,9 @@ __pycache__/
 # Logs
 logs/
 
+# Regenerated on every server start (contains the live pairing token)
+PAIRING_QR.png
+
 # Build output
 dist/
 build/
