@@ -11,6 +11,9 @@
   <div id="status" class="connecting">Connecting…</div>
   <canvas id="screen"></canvas>
 
+  <!-- Offscreen H.264 decode surface (MSE) — frames are drawn onto the canvas -->
+  <video id="vid" muted playsinline></video>
+
   <!-- Top-left: move the view without clicking (pinned above the keyboard) -->
   <button id="btn-pan" class="ctl corner corner-tl" type="button" aria-label="Move view (no click)">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">

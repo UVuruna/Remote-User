@@ -1,6 +1,6 @@
-// Remote User client — stream rendering (base layer + sharp region), pinch zoom,
-// two configurable D-pad groups, and a single toggle "touch mode" that decides
-// what one finger on the screen does.
+// Remote User client — H.264 (MSE) or JPEG stream rendering, virtual cursor,
+// pinch zoom, two configurable D-pad groups, and a single toggle "touch mode"
+// that decides what one finger on the screen does.
 
 "use strict";
 
@@ -13,6 +13,9 @@ const SCROLL_FLING_DECAY = 0.004;
 const VIEWPORT_MARGIN = 0.15;
 const VIEWPORT_THROTTLE_MS = 150;
 const RECONNECT_MS = 2000;
+const LIVE_MAX_BEHIND_S = 0.5;   // jump to the live edge when this far behind
+const LIVE_TARGET_BEHIND_S = 0.1;
+const BUFFER_KEEP_S = 8;         // decoded history kept in MSE before trimming
 
 // --- State ----------------------------------------------------------------
 const canvas = document.getElementById("screen");
@@ -29,6 +32,11 @@ let baseBitmap = null;
 let detailBitmap = null;
 let detailRegion = { x: 0, y: 0, w: 1, h: 1 };
 let ws = null;
+
+// Stream mode comes from the server's `config`: "h264" (fMP4 via MSE, drawn
+// from the offscreen <video>) or "jpeg" (bitmaps, region streaming).
+let streamMode = "jpeg";
+let cursorPos = null; // PC cursor, monitor-normalized — capture never includes it
 
 // One finger's meaning is set by a single toggle mode. Only one is ever active.
 //   click (default) · right · drag · scroll · hover · pan
@@ -95,16 +103,47 @@ function redraw() {
   ctx.fillStyle = "#0f172a";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   const D = drawnRect();
-  if (baseBitmap) ctx.drawImage(baseBitmap, D.x, D.y, D.w, D.h);
-  if (view.scale > 1 && detailBitmap) {
-    ctx.drawImage(
-      detailBitmap,
-      D.x + detailRegion.x * D.w,
-      D.y + detailRegion.y * D.h,
-      detailRegion.w * D.w,
-      detailRegion.h * D.h
-    );
+  if (streamMode === "h264") {
+    if (video.readyState >= 2) ctx.drawImage(video, D.x, D.y, D.w, D.h);
+  } else {
+    if (baseBitmap) ctx.drawImage(baseBitmap, D.x, D.y, D.w, D.h);
+    if (view.scale > 1 && detailBitmap) {
+      ctx.drawImage(
+        detailBitmap,
+        D.x + detailRegion.x * D.w,
+        D.y + detailRegion.y * D.h,
+        detailRegion.w * D.w,
+        detailRegion.h * D.h
+      );
+    }
   }
+  drawCursor(D);
+}
+
+// The PC pointer, drawn client-side (screen capture never contains it).
+// Classic arrow outline; screen-fixed size, independent of zoom.
+const CURSOR_PATH = [
+  [0, 0], [0, 16.5], [3.6, 13.3], [6, 19], [8.7, 17.9], [6.3, 12.4], [11.2, 11.9],
+];
+
+function drawCursor(D) {
+  if (!cursorPos) return;
+  if (cursorPos.x < 0 || cursorPos.x > 1 || cursorPos.y < 0 || cursorPos.y > 1) return;
+  ctx.save();
+  ctx.translate(D.x + cursorPos.x * D.w, D.y + cursorPos.y * D.h);
+  ctx.scale(devicePixelRatio, devicePixelRatio);
+  ctx.beginPath();
+  CURSOR_PATH.forEach(([px, py], i) => (i ? ctx.lineTo(px, py) : ctx.moveTo(px, py)));
+  ctx.closePath();
+  ctx.shadowColor = "rgba(0, 0, 0, 0.55)";
+  ctx.shadowBlur = 3;
+  ctx.fillStyle = "#fff";
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = "#000";
+  ctx.lineWidth = 1.25;
+  ctx.stroke();
+  ctx.restore();
 }
 
 function updateViewport() {
@@ -150,6 +189,7 @@ function currentViewport() {
 }
 
 function scheduleViewport() {
+  if (streamMode !== "jpeg") return; // region streaming is a JPEG-path concept
   if (viewportTimer) return;
   viewportTimer = setTimeout(() => {
     viewportTimer = null;
@@ -178,6 +218,85 @@ async function onFrame(buffer) {
     detailRegion = { x: r[0], y: r[1], w: r[2], h: r[3] };
   }
   redraw();
+}
+
+// --- H.264 decode (MSE) ---------------------------------------------------
+// The server sends one continuous fragmented-MP4 byte stream; chunks are
+// appended in arrival order. currentTime chases the buffered end to stay
+// live, and played-out history is trimmed so memory stays flat.
+
+const video = document.getElementById("vid");
+let mediaSource = null;
+let sourceBuffer = null;
+let mseQueue = [];
+let rafId = null;
+
+function initMse(codec) {
+  teardownMse();
+  const ms = new MediaSource();
+  mediaSource = ms;
+  video.src = URL.createObjectURL(ms);
+  ms.addEventListener("sourceopen", () => {
+    if (ms !== mediaSource) return; // torn down before it opened (fast reconnect)
+    URL.revokeObjectURL(video.src);
+    sourceBuffer = ms.addSourceBuffer(`video/mp4; codecs="${codec}"`);
+    sourceBuffer.addEventListener("updateend", onMseUpdateEnd);
+    pumpMse();
+  }, { once: true });
+  video.play().catch(() => {}); // muted+playsinline is allowed; retried on touch
+  renderLoop();
+}
+
+function teardownMse() {
+  mseQueue = [];
+  if (rafId) {
+    cancelAnimationFrame(rafId);
+    rafId = null;
+  }
+  if (sourceBuffer) {
+    sourceBuffer.removeEventListener("updateend", onMseUpdateEnd);
+    sourceBuffer = null;
+  }
+  mediaSource = null;
+  video.removeAttribute("src");
+  video.load();
+}
+
+function pumpMse() {
+  if (!sourceBuffer || sourceBuffer.updating || !mseQueue.length) return;
+  try {
+    sourceBuffer.appendBuffer(mseQueue.shift());
+  } catch (err) {
+    // Decoder/buffer wedged (e.g. quota, codec hiccup) — never freeze
+    // silently: drop the connection, auto-reconnect brings a fresh stream.
+    console.error("MSE append failed:", err);
+    setStatus("disconnected", `Stream error: ${err.name} — reconnecting…`);
+    if (ws) ws.close();
+  }
+}
+
+function onMseUpdateEnd() {
+  const b = video.buffered;
+  if (b.length) {
+    const end = b.end(b.length - 1);
+    if (end - video.currentTime > LIVE_MAX_BEHIND_S) {
+      video.currentTime = end - LIVE_TARGET_BEHIND_S; // fell behind (jank, slow link) — jump
+    }
+    if (end - b.start(0) > BUFFER_KEEP_S * 2 && sourceBuffer && !sourceBuffer.updating) {
+      sourceBuffer.remove(0, end - BUFFER_KEEP_S);
+    }
+    if (video.paused) video.play().catch(() => {});
+  }
+  pumpMse();
+}
+
+function renderLoop() {
+  if (rafId) return;
+  const step = () => {
+    rafId = requestAnimationFrame(step);
+    redraw();
+  };
+  rafId = requestAnimationFrame(step);
 }
 
 // --- Coordinate mapping ---------------------------------------------------
@@ -522,6 +641,7 @@ function beginPinch() {
 
 canvas.addEventListener("pointerdown", (e) => {
   if (keyboardOpen()) e.preventDefault(); // a tap must not blur the keyboard bar
+  if (streamMode === "h264" && video.paused) video.play().catch(() => {}); // autoplay unlock
   canvas.setPointerCapture(e.pointerId);
   cancelScrollInertia();
   const p = toCanvasPx(e);
@@ -642,14 +762,25 @@ function connect() {
     if (typeof e.data === "string") {
       const msg = JSON.parse(e.data);
       if (msg.type === "config") {
+        // Full view reset — sent after auth and after every stream (re)start
+        // (monitor switch, H.264 session reset).
         monitor = { w: msg.monitor_width, h: msg.monitor_height };
+        const newMode = msg.stream || "jpeg";
+        if (newMode !== streamMode) showToast(newMode === "h264" ? "H.264 stream" : "JPEG stream");
+        streamMode = newMode;
         view = { scale: 1, tx: 0, ty: 0 };
         detailRegion = { x: 0, y: 0, w: 1, h: 1 };
         if (baseBitmap) { baseBitmap.close(); baseBitmap = null; }
         if (detailBitmap) { detailBitmap.close(); detailBitmap = null; }
         lastSentViewport = { x: 0, y: 0, w: 1, h: 1 };
+        cursorPos = null;
+        if (streamMode === "h264") initMse(msg.codec);
+        else teardownMse();
         computeBaseRect();
         redraw();
+      } else if (msg.type === "cursor") {
+        cursorPos = { x: msg.x, y: msg.y };
+        if (streamMode !== "h264") redraw(); // h264 redraws every rAF anyway
       } else if (msg.type === "actions") {
         categories = msg.categories || [];
         groups.left = Math.min(msg.left ?? 0, categories.length - 1);
@@ -659,12 +790,16 @@ function connect() {
       } else if (msg.type === "toast") {
         showToast(msg.text);
       }
+    } else if (streamMode === "h264") {
+      mseQueue.push(e.data);
+      pumpMse();
     } else {
       onFrame(e.data);
     }
   };
 
   ws.onclose = (e) => {
+    teardownMse(); // free the decoder; reconnect starts a fresh stream
     if (e.code === 4401) {
       setStatus("disconnected", "Invalid token — scan the fresh QR on the PC");
       return;

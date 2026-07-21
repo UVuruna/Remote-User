@@ -92,6 +92,18 @@ html, body {
 
 #filepick { display: none; }
 
+/* Offscreen H.264 decode surface — its frames are drawn onto the canvas.
+   Positioned offscreen instead of display:none so the browser keeps decoding. */
+#vid {
+  position: fixed;
+  left: -9999px;
+  top: 0;
+  width: 2px;
+  height: 2px;
+  opacity: 0;
+  pointer-events: none;
+}
+
 /* --- Buttons ------------------------------------------------------------- */
 /* See-through (low-opacity fill, no backdrop blur — the screen stays visible),
    icon + label kept legible by shadows. */
