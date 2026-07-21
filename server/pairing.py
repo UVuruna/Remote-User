@@ -13,7 +13,19 @@ logger = logging.getLogger(__name__)
 
 
 def generate_token() -> str:
-    return secrets.token_urlsafe(SETTINGS.token_bytes)
+    """Returns the pairing token — persisted across restarts so the owner's
+    saved page keeps working through server updates. Delete the token file
+    (or set persist_token=False) to force a rotation."""
+    if SETTINGS.persist_token and SETTINGS.token_path.exists():
+        token = SETTINGS.token_path.read_text(encoding="utf-8").strip()
+        if token:
+            logger.info("Reusing persisted pairing token from %s", SETTINGS.token_path)
+            return token
+    token = secrets.token_urlsafe(SETTINGS.token_bytes)
+    if SETTINGS.persist_token:
+        SETTINGS.token_path.parent.mkdir(exist_ok=True)
+        SETTINGS.token_path.write_text(token, encoding="utf-8")
+    return token
 
 
 def get_lan_ip() -> str:

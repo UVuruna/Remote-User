@@ -16,6 +16,6 @@ The token doubles as the authentication credential — scanning the QR both open
 - [Main](main.md) — at startup, before serving
 
 ## Functions
-- `generate_token()`: `secrets.token_urlsafe`
+- `generate_token()`: `secrets.token_urlsafe`, **persisted** to `logs/token.txt` and reused across restarts so the owner's saved page survives server updates without re-scanning; delete the file (or set `persist_token=False`) to rotate
 - `get_lan_ip()`: the IP the tablet must reach
 - `show_pairing(token)`: prints/saves/opens the QR; returns the URL

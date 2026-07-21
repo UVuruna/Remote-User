@@ -21,6 +21,9 @@ class Settings:
 
     # Pairing
     token_bytes: int = 16           # entropy of the pairing token
+    persist_token: bool = True      # reuse the token across restarts (no re-scan after
+                                    # every server update); delete token_path to rotate
+    token_path: Path = PROJECT_ROOT / "logs" / "token.txt"
     open_qr_image: bool = True      # open the QR PNG in the default viewer on startup
     # Kept in the project root so the owner can reopen it anytime; regenerated on
     # every server start (the token rotates per run, old QR stops working).
