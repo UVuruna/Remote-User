@@ -58,6 +58,15 @@ def create_app(
 ) -> FastAPI:
     app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
 
+    @app.middleware("http")
+    async def no_cache(request, call_next):
+        # Client files are served straight from disk and change with every
+        # update — a cached index.html mixed with a fresh app.js crashes the
+        # page before it ever connects. Never let the browser cache anything.
+        response = await call_next(request)
+        response.headers["Cache-Control"] = "no-store"
+        return response
+
     @app.get("/")
     async def index():
         return FileResponse(SETTINGS.client_dir / "index.html")
