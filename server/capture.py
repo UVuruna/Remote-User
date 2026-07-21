@@ -101,15 +101,6 @@ class BaseCapture:
         except Exception as e:  # dxcam raises bare on double-stop; log, don't crash shutdown
             logger.warning("Camera stop: %s", e)
 
-    def stream_size(self) -> tuple[int, int]:
-        """Monitor size capped at max_stream_width, even-rounded (H.264 yuv420
-        requires even dimensions; irrelevant but harmless for JPEG)."""
-        w, h = self.width, self.height
-        if w > SETTINGS.max_stream_width:
-            scale = SETTINGS.max_stream_width / w
-            w, h = SETTINGS.max_stream_width, round(h * scale)
-        return _even(w), _even(h)
-
     def _loop(self) -> None:
         while self._running:
             frame = self._camera.get_latest_frame()  # blocks until a new frame
@@ -198,43 +189,55 @@ class JpegStreamer(BaseCapture):
 
 class FrameSink:
     """Latest-frame handoff to one encoder session. The capture thread offers
-    every frame; the consumer takes the newest and misses the rest — drops
-    happen before encoding, so the encoded stream stays intact."""
+    every frame (as raw BGR bytes); the consumer takes the newest and misses
+    the rest — drops happen before encoding, so the encoded stream stays intact."""
 
     def __init__(self):
         self._lock = threading.Lock()
         self._event = threading.Event()
-        self._frame = None
+        self._data: bytes | None = None
 
-    def offer(self, frame) -> None:
+    def offer(self, data: bytes) -> None:
         with self._lock:
-            self._frame = frame
+            self._data = data
         self._event.set()
 
-    def take(self, timeout: float):
-        """Newest offered frame, or None when nothing arrived within timeout."""
+    def take(self, timeout: float) -> bytes | None:
+        """Newest offered frame bytes, or None when nothing arrived within timeout."""
         if not self._event.wait(timeout):
             return None
         with self._lock:
-            frame, self._frame = self._frame, None
+            data, self._data = self._data, None
             self._event.clear()
-        return frame
+        return data
 
 
 class RawFrameSource(BaseCapture):
-    """H.264 front-end: downscales each captured frame once and offers it to
-    every registered sink (one per encoder session)."""
+    """H.264 front-end: downscales each captured frame once and offers its raw
+    BGR bytes to every registered sink (one per encoder session). One snapshot
+    per frame total — the bytes are immutable and shared by all sinks, and the
+    dxcam ring buffer is never read asynchronously."""
 
     def __init__(self):
         super().__init__()
         self._sinks: list[FrameSink] = []
         self._sinks_lock = threading.Lock()
-        self.stream_w, self.stream_h = self.stream_size()
+        self.stream_w, self.stream_h = self._stream_size()
+
+    def _stream_size(self) -> tuple[int, int]:
+        """Monitor size capped at h264_max_width, even-rounded (yuv420 needs
+        even dimensions). Default cap streams native 4K — inter-frame
+        compression keeps it cheap and zoom stays sharp."""
+        w, h = self.width, self.height
+        if w > SETTINGS.h264_max_width:
+            scale = SETTINGS.h264_max_width / w
+            w, h = SETTINGS.h264_max_width, round(h * scale)
+        return _even(w), _even(h)
 
     def switch_monitor(self, index: int) -> bool:
         ok = super().switch_monitor(index)
         if ok:
-            self.stream_w, self.stream_h = self.stream_size()
+            self.stream_w, self.stream_h = self._stream_size()
         return ok
 
     def add_sink(self, sink: FrameSink) -> None:
@@ -250,8 +253,9 @@ class RawFrameSource(BaseCapture):
         target = (self.stream_w, self.stream_h)
         if (frame.shape[1], frame.shape[0]) != target:
             frame = cv2.resize(frame, target, interpolation=cv2.INTER_AREA)
-        else:
-            frame = frame.copy()  # detach from dxcam's ring buffer — encoders read it async
+        elif frame.shape[1] % 2 or frame.shape[0] % 2:
+            frame = frame[:self.stream_h, :self.stream_w]  # odd-sized monitor — trim to even
+        data = frame.tobytes()  # the one copy: detaches from dxcam's ring buffer
         with self._sinks_lock:
             for sink in self._sinks:
-                sink.offer(frame)
+                sink.offer(data)

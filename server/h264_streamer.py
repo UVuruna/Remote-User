@@ -133,11 +133,11 @@ class H264Session:
 
     def _feed_loop(self) -> None:
         while self._running:
-            frame = self._sink.take(FEED_POLL_S)
-            if frame is None:
+            data = self._sink.take(FEED_POLL_S)
+            if data is None:
                 continue  # frames stalled (e.g. monitor switching) — re-check _running
             try:
-                self._proc.stdin.write(frame.tobytes())
+                self._proc.stdin.write(data)
             except (BrokenPipeError, OSError, ValueError):
                 break  # pipe closed by stop() mid-write — normal shutdown
 

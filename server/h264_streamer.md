@@ -3,7 +3,7 @@
 **Script:** [H.264 Streamer (script)](h264_streamer.py)
 
 ## Purpose
-The primary streaming path: a live **H.264** stream encoded by ffmpeg (hardware when available), output as **fragmented MP4 (fMP4)** that the browser/WebView decodes with Media Source Extensions. Inter-frame compression makes a static screen nearly free — measured **~1.5 Mbps** live (mostly-static 1600×900) versus **~37 Mbps** for the JPEG path on the same screen.
+The primary streaming path: a live **H.264** stream encoded by ffmpeg (hardware when available), output as **fragmented MP4 (fMP4)** that the browser/WebView decodes with Media Source Extensions. Inter-frame compression makes a static screen nearly free — measured live on the same mostly-static screen: **~3.6 Mbps at native 4K** (3840×2160) and ~1.5 Mbps at 1600×900, versus **~37 Mbps** for JPEG at 1600×900. Native resolution is the default (`h264_max_width`) — zoom stays sharp with no region streaming.
 
 **One ffmpeg process per client.** One [Screen Capture](capture.md) `RawFrameSource` grabs and downscales each frame once; every connected client runs its own `H264Session`. That gives each stream a fresh init segment and keyframe at connect time — no mid-stream joining problem — and a slow client resets alone without disturbing others. Hardware encoder sessions are cheap; the encoder itself is verified once at startup by [Encoders](encoders.md).
 

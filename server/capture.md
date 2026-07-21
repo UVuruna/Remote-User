@@ -24,7 +24,6 @@ Camera lifecycle + the capture thread + the screenshot service. Subclasses imple
 - `switch_monitor(index)`: swaps the camera (call while stopped); failure keeps the old camera
 - `output_count()`: how many outputs dxcam sees
 - `take_screenshot()`: full-monitor native-resolution copy of the next frame (blocking — worker threads only)
-- `stream_size()`: monitor size capped at `max_stream_width`, even-rounded (H.264 yuv420 requires even dimensions)
 
 ### JpegStreamer
 The fallback path (used when no H.264 encoder/ffmpeg exists): crop to the client viewport → downscale → JPEG encode → `on_frame(jpeg, region)` callback. This is a hot path — no per-frame allocations beyond what cropping/encoding requires.
@@ -34,16 +33,19 @@ The fallback path (used when no H.264 encoder/ffmpeg exists): crop to the client
 - `mode = "jpeg"` — the duck-interface discriminator the web layer branches on
 
 ### FrameSink
-Latest-frame handoff to one encoder session: the capture thread `offer()`s every frame; the consumer `take()`s the newest and misses the rest. Drops happen **before** encoding, so the encoded stream stays valid — this is what lets a slow encoder lag without corrupting its output.
+Latest-frame handoff to one encoder session: the capture thread `offer()`s every frame's raw BGR bytes; the consumer `take()`s the newest and misses the rest. Drops happen **before** encoding, so the encoded stream stays valid — this is what lets a slow encoder lag without corrupting its output.
 
 ### RawFrameSource
-The H.264 front-end: downscales each captured frame once (shared by all sessions) and offers it to every registered sink.
+The H.264 front-end: prepares each captured frame once and offers its bytes to every registered sink.
 
 ```
-capture thread:  grab frame → resize once to stream_w×stream_h (or copy —
-                 the dxcam ring buffer must not be read asynchronously)
-                 → FOR EACH sink: offer(frame)
+capture thread:  grab frame
+                 → resize to stream_w×stream_h if capped (default: native)
+                 → ONE tobytes() snapshot (detaches from the dxcam ring buffer;
+                   immutable, shared by all sinks — one copy total per frame)
+                 → FOR EACH sink: offer(bytes)
 ```
 
+- `_stream_size()`: monitor size capped at `h264_max_width` (default 3840 — native 4K; H.264 inter-frame compression keeps it cheap and zoom stays sharp), even-rounded for yuv420
 - `add_sink(sink)` / `remove_sink(sink)`: session registration (lock-guarded list)
 - `stream_w`, `stream_h`: the encoded size — recomputed on monitor switch

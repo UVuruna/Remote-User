@@ -16,8 +16,8 @@ class Settings:
     monitor_index: int = 0          # which monitor to capture (0 = primary)
     target_fps: int = 30
     jpeg_quality: int = 70          # 1-100, higher = sharper + more bandwidth (JPEG fallback path)
-    max_stream_width: int = 1600    # frames wider than this are downscaled before encoding
-                                    # (a 4K monitor at native res is ~216 Mbps — too much for Wi-Fi)
+    max_stream_width: int = 1600    # JPEG path: frames wider than this are downscaled before
+                                    # encoding (a 4K monitor as JPEG at native res is ~216 Mbps)
 
     # H.264 streaming (hardware-encoded, inter-frame compressed — the responsive path).
     # The encoder is auto-detected at startup from a preference order (see below);
@@ -27,13 +27,18 @@ class Settings:
     # Preference order tried at startup — first one that actually encodes on THIS machine wins.
     # Covers NVIDIA, Intel iGPU, AMD, then pure-software (works on any CPU, no GPU needed).
     h264_encoder_order: tuple[str, ...] = ("h264_nvenc", "h264_qsv", "h264_amf", "libx264")
-    h264_bitrate: str = "8M"        # target video bitrate
+    h264_max_width: int = 3840      # H.264 path cap — native 4K streams fine (inter-frame
+                                    # compression keeps a static screen at a few Mbps) and zoom
+                                    # stays sharp; lower it only for weak decoders/links
+    h264_bitrate: str = "12M"       # target bitrate cap — reached only on heavy motion; static
+                                    # screens use a fraction of it regardless of resolution
     h264_gop: int = 60              # keyframe every N frames (reconnect/seek granularity)
     h264_fragment_us: int = 16000   # fMP4 fragment target (µs) — below one frame interval,
                                     # so every encoded frame ships in its own fragment
     h264_head_timeout: float = 5.0  # seconds to wait for ffmpeg's init segment (ftyp+moov)
-    h264_queue_chunks: int = 64     # per-client outbound chunk queue; a full queue means the
-                                    # client cannot keep up — its session is reset, not delayed
+    h264_queue_chunks: int = 256    # per-client outbound chunk queue (~4 s at full bitrate); a
+                                    # full queue means the client cannot keep up — its session
+                                    # is reset instead of building latency
 
     # Virtual cursor — DXGI capture never includes the mouse pointer, so the
     # server streams the cursor position and the client draws it.
