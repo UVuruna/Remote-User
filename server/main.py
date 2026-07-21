@@ -50,7 +50,7 @@ async def main() -> None:
     injector = InputInjector(monitor_rect=(0, 0, streamer.width, streamer.height))
 
     token = generate_token()
-    app = create_app(hub, injector, token)
+    app = create_app(hub, injector, streamer, token)
     show_pairing(token)
 
     streamer.start()

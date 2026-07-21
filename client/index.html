@@ -10,6 +10,29 @@
 <body>
   <div id="status" class="connecting">Connecting…</div>
   <canvas id="screen"></canvas>
+
+  <div id="controls">
+    <button id="btn-right" class="ctl" aria-label="Right click (hold + tap)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="6" y="3" width="12" height="18" rx="6"/>
+        <path d="M12 3v7"/>
+        <path d="M12 3h2a4 4 0 0 1 4 4v3h-6z" fill="currentColor" stroke="none"/>
+      </svg>
+    </button>
+    <button id="btn-drag" class="ctl" aria-label="Drag (hold + move)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="5 9 2 12 5 15"/><polyline points="9 5 12 2 15 5"/>
+        <polyline points="15 19 12 22 9 19"/><polyline points="19 9 22 12 19 15"/>
+        <line x1="2" y1="12" x2="22" y2="12"/><line x1="12" y1="2" x2="12" y2="22"/>
+      </svg>
+    </button>
+    <button id="btn-scroll" class="ctl" aria-label="Scroll (hold + move)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="m7 15 5 5 5-5"/><path d="m7 9 5-5 5 5"/>
+      </svg>
+    </button>
+  </div>
+
   <script src="/static/app.js"></script>
 </body>
 </html>

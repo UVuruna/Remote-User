@@ -1,8 +1,11 @@
 """FastAPI application: serves the client page, streams frames, receives input.
 
 Protocol (see project CLAUDE.md):
-- client -> server, JSON text: auth, pointer_down, pointer_up, pointer_move
-- server -> client, binary: one JPEG per message
+- client -> server, JSON text: auth, pointer_down, pointer_up, pointer_move,
+  scroll, viewport
+- server -> client: one JSON text `config` message after auth (monitor size),
+  then binary frames: 16-byte header (4 x float32 LE — the monitor-normalized
+  x, y, w, h region the frame covers) followed by the JPEG bytes
 
 No message is processed before a valid `auth` — hard security rule.
 """
@@ -10,11 +13,13 @@ No message is processed before a valid `auth` — hard security rule.
 import asyncio
 import json
 import logging
+import struct
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
+from capture import ScreenStreamer
 from config import SETTINGS
 from input_injector import BUTTON_FLAGS, InputInjector
 
@@ -36,18 +41,21 @@ class FrameHub:
     def unsubscribe(self, q: asyncio.Queue) -> None:
         self._queues.discard(q)
 
-    def push_threadsafe(self, jpeg: bytes) -> None:
+    def push_threadsafe(self, jpeg: bytes, region: tuple[float, float, float, float]) -> None:
         """Called from the capture thread. A slow client keeps only the newest frame."""
-        self._loop.call_soon_threadsafe(self._push, jpeg)
+        packet = struct.pack("<4f", *region) + jpeg
+        self._loop.call_soon_threadsafe(self._push, packet)
 
-    def _push(self, jpeg: bytes) -> None:
+    def _push(self, packet: bytes) -> None:
         for q in self._queues:
             if q.full():
                 q.get_nowait()
-            q.put_nowait(jpeg)
+            q.put_nowait(packet)
 
 
-def create_app(hub: FrameHub, injector: InputInjector, token: str) -> FastAPI:
+def create_app(
+    hub: FrameHub, injector: InputInjector, streamer: ScreenStreamer, token: str
+) -> FastAPI:
     app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
 
     @app.get("/")
@@ -63,15 +71,21 @@ def create_app(hub: FrameHub, injector: InputInjector, token: str) -> FastAPI:
             await ws.close(code=4401)
             return
         logger.info("Client authenticated: %s", ws.client)
+        await ws.send_text(json.dumps({
+            "type": "config",
+            "monitor_width": streamer.width,
+            "monitor_height": streamer.height,
+        }))
         queue = hub.subscribe()
         sender = asyncio.create_task(_send_frames(ws, queue))
         try:
-            await _receive_input(ws, injector)
+            await _receive_input(ws, injector, streamer)
         except WebSocketDisconnect:
             logger.info("Client disconnected: %s", ws.client)
         finally:
             sender.cancel()
             hub.unsubscribe(queue)
+            streamer.set_viewport(0.0, 0.0, 1.0, 1.0)
 
     return app
 
@@ -93,7 +107,7 @@ async def _send_frames(ws: WebSocket, queue: asyncio.Queue) -> None:
         await ws.send_bytes(await queue.get())
 
 
-async def _receive_input(ws: WebSocket, injector: InputInjector) -> None:
+async def _receive_input(ws: WebSocket, injector: InputInjector, streamer: ScreenStreamer) -> None:
     while True:
         msg = json.loads(await ws.receive_text())
         kind = msg.get("type")
@@ -109,5 +123,11 @@ async def _receive_input(ws: WebSocket, injector: InputInjector) -> None:
                 injector.button_up(x, y, button)
         elif kind == "pointer_move":
             injector.move(float(msg["x"]), float(msg["y"]))
+        elif kind == "scroll":
+            injector.wheel(float(msg["x"]), float(msg["y"]), float(msg["ticks"]))
+        elif kind == "viewport":
+            streamer.set_viewport(
+                float(msg["x"]), float(msg["y"]), float(msg["w"]), float(msg["h"])
+            )
         else:
             logger.warning("Unknown message type %r from client", kind)

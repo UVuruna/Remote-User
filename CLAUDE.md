@@ -21,7 +21,14 @@ Remote control of the Windows PC from an Android tablet/phone over LAN. The PC r
 3. **No input before auth.** The WebSocket handler rejects every message until a valid token arrives. This is a hard security rule (Remote Mouse CVE class), not a nice-to-have.
 4. **Unicode text goes through `KEYEVENTF_UNICODE`** (VK_PACKET), never through virtual-key mapping. Special keys (Enter, Backspace, arrows, Tab, Esc) go through VK codes. Two distinct protocol messages: `key_text` vs `key_special`.
 5. **Client keyboard capture:** hidden focusable `<input>` (`opacity:0`, NOT `display:none`) with `autocapitalize/autocorrect/autocomplete/spellcheck` disabled; printable characters via input-event diffing, structural keys via `keydown`. Never trust `keydown.key` for printable characters (Android IME).
-6. **Known accepted limitations (v1):** UAC-elevated windows ignore injected input unless the server runs elevated (silent failure — UIPI); the browser session does not survive tablet screen lock.
+6. **Input mechanics are modifier buttons, not timed gestures** (owner decision, 2026-07-21): tap = left click on clean release; corner buttons held with one finger modify what the other finger does (RIGHT → right click, DRAG → mouse drag, SCROLL → wheel). Two fingers on the canvas = local pinch zoom/pan, which never sends clicks. Do not reintroduce long-press/timer gestures.
+7. **Session lives only while the owner is looking** (owner security decision): the client closes the WebSocket when the page is hidden (tab backgrounded / screen locked) and reconnects on return. UAC-elevated windows still ignore injected input unless the server runs elevated (silent failure — UIPI).
+
+## Protocol
+
+- Client → server (JSON text): `auth {token}`, `pointer_down/pointer_up {x, y, button}`, `pointer_move {x, y}`, `scroll {x, y, ticks}`, `viewport {x, y, w, h}`. Coordinates are always 0–1 within the displayed monitor.
+- Server → client: one `config {monitor_width, monitor_height}` JSON text after successful auth, then binary frames: **16-byte header (4 × float32 LE — monitor-normalized x, y, w, h of the region the frame covers) + JPEG bytes**.
+- Region streaming: when zoomed, the client requests its visible region (`viewport`); the server crops the 4K frame to it before downscaling — zoom stays sharp at constant bandwidth. Full frame = region (0, 0, 1, 1).
 
 ## Testing Notes
 

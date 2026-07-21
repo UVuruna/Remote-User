@@ -3,7 +3,7 @@
 **Script:** [Screen Streamer (script)](capture.py)
 
 ## Purpose
-Owns the capture thread: grabs frames from the selected monitor via dxcam (DXGI Desktop Duplication), downscales when the monitor is wider than `max_stream_width`, encodes to JPEG (OpenCV), and hands bytes to a callback. This is a hot path — no per-frame allocations beyond what encoding requires.
+Owns the capture thread: grabs frames from the selected monitor via dxcam (DXGI Desktop Duplication), crops to the client's current viewport (region-of-interest streaming — sharp zoom at constant bandwidth), downscales when the result is wider than `max_stream_width`, encodes to JPEG (OpenCV), and hands bytes + covered region to a callback. This is a hot path — no per-frame allocations beyond what cropping/encoding requires.
 
 ## Connections
 
@@ -23,4 +23,6 @@ Owns the capture thread: grabs frames from the selected monitor via dxcam (DXGI 
 #### Methods
 - `start()`: begins dxcam video-mode capture and the encode loop thread
 - `stop()`: joins the thread and releases the camera
-- `_loop()`: capture → optional `cv2.resize` (INTER_AREA) → `cv2.imencode` → callback
+- `set_viewport(x, y, w, h)`: monitor-normalized region the client wants; clamped; tuple write is atomic (single writer, no lock)
+- `_crop(frame)`: applies the viewport with a minimum-size guard; returns the frame slice + the actual normalized region
+- `_loop()`: capture → crop → optional `cv2.resize` (INTER_AREA) → `cv2.imencode` → callback(jpeg, region)

@@ -1,8 +1,11 @@
 """Screen capture and JPEG encoding.
 
 A dedicated thread grabs frames from the selected monitor via dxcam (DXGI
-Desktop Duplication), encodes each to JPEG with OpenCV, and hands the bytes to
-a callback. The callback must be cheap and thread-safe — the web layer uses it
+Desktop Duplication), optionally crops to the client's current viewport
+(region-of-interest streaming — this is what keeps zoom sharp without raising
+bandwidth), downscales when the result is wider than `max_stream_width`,
+encodes to JPEG with OpenCV, and hands the bytes plus the covered region to a
+callback. The callback must be cheap and thread-safe — the web layer uses it
 to fan frames out to connected clients.
 """
 
@@ -16,27 +19,37 @@ from config import SETTINGS
 
 logger = logging.getLogger(__name__)
 
+FULL_REGION = (0.0, 0.0, 1.0, 1.0)
+MIN_REGION_PX = 64  # never crop below this many pixels per axis
+
 
 class ScreenStreamer:
     def __init__(self, on_frame):
-        """on_frame: callable(bytes) invoked from the capture thread for every JPEG."""
+        """on_frame: callable(jpeg: bytes, region: tuple[float, float, float, float])
+        invoked from the capture thread; region is the monitor-normalized
+        (x, y, w, h) rectangle the frame covers."""
         self._on_frame = on_frame
         self._camera = dxcam.create(output_idx=SETTINGS.monitor_index, output_color="BGR")
         if self._camera is None:
             raise RuntimeError(f"dxcam could not open monitor {SETTINGS.monitor_index}")
         self.width, self.height = self._camera.width, self._camera.height
-        self._stream_size: tuple[int, int] | None = None
-        if self.width > SETTINGS.max_stream_width:
-            scale = SETTINGS.max_stream_width / self.width
-            self._stream_size = (SETTINGS.max_stream_width, round(self.height * scale))
+        self._viewport = FULL_REGION  # written by the web layer, read by the capture thread
         self._encode_params = [cv2.IMWRITE_JPEG_QUALITY, SETTINGS.jpeg_quality]
         self._thread: threading.Thread | None = None
         self._running = False
-        logger.info(
-            "Capture ready — monitor %d (%dx%d), stream %s",
-            SETTINGS.monitor_index, self.width, self.height,
-            f"{self._stream_size[0]}x{self._stream_size[1]}" if self._stream_size else "native",
-        )
+        logger.info("Capture ready — monitor %d (%dx%d)", SETTINGS.monitor_index, self.width, self.height)
+
+    def set_viewport(self, x: float, y: float, w: float, h: float) -> None:
+        """Called from the web layer when the client's visible region changes.
+        Tuple assignment is atomic — no lock needed for this single writer."""
+        x = min(max(x, 0.0), 1.0)
+        y = min(max(y, 0.0), 1.0)
+        w = min(max(w, 0.0), 1.0 - x)
+        h = min(max(h, 0.0), 1.0 - y)
+        if w == 0.0 or h == 0.0:
+            logger.warning("Ignoring empty viewport request (%s, %s, %s, %s)", x, y, w, h)
+            return
+        self._viewport = (x, y, w, h)
 
     def start(self) -> None:
         self._camera.start(target_fps=SETTINGS.target_fps, video_mode=True)
@@ -50,13 +63,35 @@ class ScreenStreamer:
             self._thread.join(timeout=2)
         self._camera.stop()
 
+    def _crop(self, frame):
+        """Crops the frame to the current viewport; returns (frame, actual region)."""
+        vx, vy, vw, vh = self._viewport
+        if (vx, vy, vw, vh) == FULL_REGION:
+            return frame, FULL_REGION
+        x1 = int(vx * self.width)
+        y1 = int(vy * self.height)
+        x2 = min(self.width, max(x1 + MIN_REGION_PX, int((vx + vw) * self.width)))
+        y2 = min(self.height, max(y1 + MIN_REGION_PX, int((vy + vh) * self.height)))
+        region = (
+            x1 / self.width,
+            y1 / self.height,
+            (x2 - x1) / self.width,
+            (y2 - y1) / self.height,
+        )
+        return frame[y1:y2, x1:x2], region
+
     def _loop(self) -> None:
         while self._running:
             frame = self._camera.get_latest_frame()  # blocks until a new frame
-            if self._stream_size:
-                frame = cv2.resize(frame, self._stream_size, interpolation=cv2.INTER_AREA)
+            frame, region = self._crop(frame)
+            h, w = frame.shape[:2]
+            if w > SETTINGS.max_stream_width:
+                scale = SETTINGS.max_stream_width / w
+                frame = cv2.resize(
+                    frame, (SETTINGS.max_stream_width, round(h * scale)), interpolation=cv2.INTER_AREA
+                )
             ok, jpeg = cv2.imencode(".jpg", frame, self._encode_params)
             if not ok:
-                logger.error("JPEG encode failed for a %sx%s frame", self.width, self.height)
+                logger.error("JPEG encode failed for a %sx%s frame", w, h)
                 continue
-            self._on_frame(jpeg.tobytes())
+            self._on_frame(jpeg.tobytes(), region)

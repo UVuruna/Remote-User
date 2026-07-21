@@ -5,13 +5,13 @@ The tablet side of Remote User — a plain web page served by the PC server and 
 ## Files
 
 ### `index.html` — Page Shell
-Canvas + status pill, viewport locked (no browser zoom/scroll — pinch is reserved for the future local-zoom gesture).
+Canvas + status pill + the corner control cluster (RIGHT / DRAG / SCROLL buttons with inline stroke SVG icons), viewport locked (no browser zoom/scroll — pinch drives the local zoom).
 
 ### `app.js` — Client Logic
 WebSocket connection, frame rendering, tap-to-click. See [Client App](app.md).
 
 ### `style.css` — Styling
-Dark fullscreen canvas, gradient status pill (connecting / connected / disconnected), `touch-action: none` everywhere.
+Design tokens per root DESIGN.md (dark surface, one accent, glass), gradient status pill (connecting / connected / disconnected), glass modifier buttons with accent glow when held, `touch-action: none` everywhere.
 
 ## Connections
 
@@ -25,5 +25,8 @@ Dark fullscreen canvas, gradient status pill (connecting / connected / disconnec
 
 - **Letterbox-aware coordinate mapping** — taps are mapped through the drawn image rect (including the zoom/pan transform), so normalized coordinates stay correct regardless of tablet aspect ratio; taps on the padding are ignored.
 - **Clicks fire on release, not on press** — a clean single-finger tap sends down+up together; any finger travel or a second finger cancels the click. This is what makes pinch zoom safe: zooming can never leak a click to the PC.
+- **Modifier buttons over timed gestures** (owner decision) — game-style corner buttons held with one finger change what the other finger means (right click / drag / scroll). No long-press timers, no ambiguity with pinch.
+- **Region streaming** — when zoomed, the client reports its visible region and receives native-resolution crops instead of upscaled downsampled frames; bandwidth stays constant, zoom stays sharp.
+- **Visibility-gated session** (owner security decision) — the socket closes the moment the page is hidden (tab switch, screen lock) and reconnects on return; the PC is never controllable while the owner isn't looking.
 - **Token from the URL** (`?token=…`, delivered by the QR code) is sent as the first WebSocket message — the server accepts nothing before it.
 - **Auto-reconnect** every 2 s on close; the status pill is the only UI chrome.

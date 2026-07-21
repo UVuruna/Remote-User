@@ -46,13 +46,14 @@ Goal: live screen on the tablet, tap lands a click on the PC — the complete lo
 
 Goal: daily-usable control of the PC.
 
-- [ ] Gesture disambiguation: tap / hold-then-drag / two-finger scroll
-- [ ] Floating right-click icon (arms next tap as right click, auto-reverts)
-- [x] Pinch zoom of the local view (client-side only) for precise targeting — pulled forward after the first device test (owner: small targets need it); includes two-finger pan, clicks fire only on clean tap release
+- [x] Input mechanics — **modifier buttons** (owner decision, replaces timed-gesture plan): glass corner buttons per DESIGN.md; hold RIGHT + tap = right click, hold DRAG + finger = real mouse drag, hold SCROLL + finger = wheel
+- [x] Pinch zoom of the local view for precise targeting — pulled forward after the first device test (owner: small targets need it); includes two-finger pan, clicks fire only on clean tap release
+- [x] **Region streaming — sharp zoom** (owner report: downscaled stream pixelated when zoomed): client reports its visible region, server crops the native frame to it; constant bandwidth, native pixels from ~2.4× zoom
+- [x] Visibility-gated session (owner security decision): socket closes when the page hides (tab switch / screen lock), reconnects on return
+- [x] Auto-reconnect (network blip, tablet sleep/wake) — shipped with Phase 1 client
+- [x] Frame backpressure: per-client queue of size 1 drops stale frames when the client lags — shipped with Phase 1 server
 - [ ] Keyboard: hidden input field + text diffing (`key_text`), `keydown` for special keys (`key_special`)
 - [ ] Monitor switch button (capture source + coordinate rect swap)
-- [ ] Auto-reconnect (network blip, tablet sleep/wake)
-- [ ] Frame backpressure: drop stale frames when the client lags
 
 <a id="phase-3"></a>
 

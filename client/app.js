@@ -1,27 +1,38 @@
-// Remote User client — stream rendering, tap = click, pinch zoom + two-finger pan.
+// Remote User client — stream rendering, pinch zoom + region streaming,
+// modifier-button input (tap = left click; hold RIGHT/DRAG/SCROLL + finger).
 
 "use strict";
 
+// --- Tunables -------------------------------------------------------------
+const ZOOM_MAX = 6;
+const TAP_MAX_MOVE = 12;        // CSS px of finger travel before a tap stops being a tap
+const SCROLL_PX_PER_TICK = 40;  // CSS px of finger travel per wheel tick
+const VIEWPORT_MARGIN = 0.15;   // extra region requested around the visible area
+const VIEWPORT_THROTTLE_MS = 150;
+const RECONNECT_MS = 2000;
+
+// --- State ----------------------------------------------------------------
 const canvas = document.getElementById("screen");
 const ctx = canvas.getContext("2d");
 const statusEl = document.getElementById("status");
 
 const token = new URLSearchParams(location.search).get("token");
 
-const ZOOM_MAX = 6;
-const TAP_MAX_MOVE = 12; // CSS px of finger travel before a tap stops being a tap
-
-// baseRect: where the frame sits at zoom 1 (letterboxed). view: zoom/pan on top of it.
-let baseRect = { x: 0, y: 0, w: 1, h: 1 };
-let view = { scale: 1, tx: 0, ty: 0 };
+let monitor = { w: 0, h: 0 };                // real monitor size (server `config` message)
+let baseRect = { x: 0, y: 0, w: 1, h: 1 };   // where the full monitor sits at zoom 1
+let view = { scale: 1, tx: 0, ty: 0 };       // zoom/pan on top of baseRect
 let lastBitmap = null;
+let lastRegion = { x: 0, y: 0, w: 1, h: 1 }; // monitor region the last frame covers
 let ws = null;
 
 // Gesture state
-const pointers = new Map(); // pointerId -> {x, y} in canvas px
-let tap = null;             // {startX, startY, moved} for the single-finger click
-let pinch = null;           // {startDist, startScale, qx, qy} anchor in frame-normalized coords
+const pointers = new Map(); // pointerId -> {x, y} in canvas px (tap/pinch flow only)
+let tap = null;             // {startX, startY, moved}
+let pinch = null;           // {startDist, startScale, qx, qy}
 let gestureHadPinch = false;
+let dragState = null;       // {id, pos} while the DRAG modifier drives a mouse drag
+let scrollState = null;     // {id, lastY, acc, pos} while the SCROLL modifier is held
+const modifiers = { right: false, drag: false, scroll: false };
 
 function setStatus(cls, text) {
   statusEl.className = cls;
@@ -30,6 +41,16 @@ function setStatus(cls, text) {
 
 function toCanvasPx(e) {
   return { x: e.clientX * devicePixelRatio, y: e.clientY * devicePixelRatio };
+}
+
+// --- View transform -------------------------------------------------------
+
+function computeBaseRect() {
+  if (!monitor.w) return;
+  const aspect = monitor.w / monitor.h;
+  const w = Math.min(canvas.width, canvas.height * aspect);
+  const h = w / aspect;
+  baseRect = { x: (canvas.width - w) / 2, y: (canvas.height - h) / 2, w, h };
 }
 
 function drawnRect() {
@@ -57,16 +78,14 @@ function redraw() {
   ctx.fillStyle = "#0f172a";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   if (!lastBitmap) return;
-  const r = drawnRect();
-  ctx.drawImage(lastBitmap, r.x, r.y, r.w, r.h);
-}
-
-function computeBaseRect() {
-  if (!lastBitmap) return;
-  const scale = Math.min(canvas.width / lastBitmap.width, canvas.height / lastBitmap.height);
-  const w = lastBitmap.width * scale;
-  const h = lastBitmap.height * scale;
-  baseRect = { x: (canvas.width - w) / 2, y: (canvas.height - h) / 2, w, h };
+  const D = drawnRect();
+  ctx.drawImage(
+    lastBitmap,
+    D.x + lastRegion.x * D.w,
+    D.y + lastRegion.y * D.h,
+    lastRegion.w * D.w,
+    lastRegion.h * D.h
+  );
 }
 
 function resizeCanvas() {
@@ -75,35 +94,114 @@ function resizeCanvas() {
   computeBaseRect();
   clampView();
   redraw();
+  scheduleViewport();
 }
 window.addEventListener("resize", resizeCanvas);
 resizeCanvas();
 
-async function drawFrame(blob) {
-  const bitmap = await createImageBitmap(blob);
+// --- Region streaming (sharp zoom) ---------------------------------------
+// When zoomed, tell the server which monitor region is visible — it then
+// streams only that region, so zoom gets native pixels at constant bandwidth.
+
+let lastSentViewport = { x: 0, y: 0, w: 1, h: 1 };
+let viewportTimer = null;
+
+function currentViewport() {
+  if (view.scale <= 1) return { x: 0, y: 0, w: 1, h: 1 };
+  const D = drawnRect();
+  let x1 = Math.max(0, -D.x / D.w);
+  let y1 = Math.max(0, -D.y / D.h);
+  let x2 = Math.min(1, (canvas.width - D.x) / D.w);
+  let y2 = Math.min(1, (canvas.height - D.y) / D.h);
+  const mx = (x2 - x1) * VIEWPORT_MARGIN;
+  const my = (y2 - y1) * VIEWPORT_MARGIN;
+  x1 = Math.max(0, x1 - mx);
+  y1 = Math.max(0, y1 - my);
+  x2 = Math.min(1, x2 + mx);
+  y2 = Math.min(1, y2 + my);
+  return { x: x1, y: y1, w: x2 - x1, h: y2 - y1 };
+}
+
+function scheduleViewport() {
+  if (viewportTimer) return;
+  viewportTimer = setTimeout(() => {
+    viewportTimer = null;
+    const vp = currentViewport();
+    const d = Math.max(
+      Math.abs(vp.x - lastSentViewport.x), Math.abs(vp.y - lastSentViewport.y),
+      Math.abs(vp.w - lastSentViewport.w), Math.abs(vp.h - lastSentViewport.h)
+    );
+    if (d > 0.01) {
+      lastSentViewport = vp;
+      send({ type: "viewport", ...vp });
+    }
+  }, VIEWPORT_THROTTLE_MS);
+}
+
+async function onFrame(buffer) {
+  const region = new Float32Array(buffer, 0, 4);
+  const bitmap = await createImageBitmap(new Blob([new Uint8Array(buffer, 16)]));
   if (lastBitmap) lastBitmap.close();
   lastBitmap = bitmap;
-  computeBaseRect();
+  lastRegion = { x: region[0], y: region[1], w: region[2], h: region[3] };
   redraw();
 }
 
-// Maps a canvas-px point to 0-1 coordinates within the remote monitor,
-// or null on the letterbox padding.
+// --- Coordinate mapping ---------------------------------------------------
+
+// Canvas point -> 0-1 within the remote monitor, null on the letterbox padding.
 function toRemote(px, py) {
-  const r = drawnRect();
-  const x = (px - r.x) / r.w;
-  const y = (py - r.y) / r.h;
+  const D = drawnRect();
+  const x = (px - D.x) / D.w;
+  const y = (py - D.y) / D.h;
   if (x < 0 || x > 1 || y < 0 || y > 1) return null;
   return { x, y };
+}
+
+// Same, but clamped — drags may travel over the padding without breaking.
+function toRemoteClamped(px, py) {
+  const D = drawnRect();
+  return {
+    x: Math.min(Math.max((px - D.x) / D.w, 0), 1),
+    y: Math.min(Math.max((py - D.y) / D.h, 0), 1),
+  };
 }
 
 function send(msg) {
   if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg));
 }
 
-// --- Gestures -------------------------------------------------------------
-// One finger, no travel  -> click on release (down + up at that point)
-// Two fingers            -> pinch zoom around the midpoint + pan (no clicks sent)
+// --- Modifier buttons -----------------------------------------------------
+
+for (const name of ["right", "drag", "scroll"]) {
+  const el = document.getElementById(`btn-${name}`);
+  el.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    el.setPointerCapture(e.pointerId);
+    modifiers[name] = true;
+    el.classList.add("active");
+  });
+  const release = () => {
+    modifiers[name] = false;
+    el.classList.remove("active");
+    if (name === "drag") finishDrag(); // releasing the button mid-drag ends the drag
+  };
+  el.addEventListener("pointerup", release);
+  el.addEventListener("pointercancel", release);
+}
+
+function finishDrag() {
+  if (!dragState) return;
+  send({ type: "pointer_up", x: dragState.pos.x, y: dragState.pos.y, button: "left" });
+  dragState = null;
+}
+
+// --- Canvas gestures ------------------------------------------------------
+// tap (no travel)            -> left click on release
+// RIGHT held + tap           -> right click on release
+// DRAG held + finger         -> mouse down / move / up (real drag)
+// SCROLL held + finger       -> wheel ticks (content follows the finger)
+// two fingers on the canvas  -> pinch zoom + pan (never sends clicks)
 
 function firstTwoPointers() {
   const it = pointers.values();
@@ -113,8 +211,18 @@ function firstTwoPointers() {
 canvas.addEventListener("pointerdown", (e) => {
   canvas.setPointerCapture(e.pointerId);
   const p = toCanvasPx(e);
-  pointers.set(e.pointerId, p);
 
+  if (modifiers.drag && !dragState) {
+    dragState = { id: e.pointerId, pos: toRemoteClamped(p.x, p.y) };
+    send({ type: "pointer_down", x: dragState.pos.x, y: dragState.pos.y, button: "left" });
+    return;
+  }
+  if (modifiers.scroll && !scrollState) {
+    scrollState = { id: e.pointerId, lastY: p.y, acc: 0, pos: toRemoteClamped(p.x, p.y) };
+    return;
+  }
+
+  pointers.set(e.pointerId, p);
   if (pointers.size === 1) {
     tap = { startX: p.x, startY: p.y, moved: false };
     gestureHadPinch = false;
@@ -123,19 +231,36 @@ canvas.addEventListener("pointerdown", (e) => {
     gestureHadPinch = true;
     const [p1, p2] = firstTwoPointers();
     const mid = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
-    const r = drawnRect();
+    const D = drawnRect();
     pinch = {
       startDist: Math.hypot(p1.x - p2.x, p1.y - p2.y),
       startScale: view.scale,
-      qx: (mid.x - r.x) / r.w, // frame point under the midpoint stays anchored
-      qy: (mid.y - r.y) / r.h,
+      qx: (mid.x - D.x) / D.w, // frame point under the midpoint stays anchored
+      qy: (mid.y - D.y) / D.h,
     };
   }
 });
 
 canvas.addEventListener("pointermove", (e) => {
-  if (!pointers.has(e.pointerId)) return;
   const p = toCanvasPx(e);
+
+  if (dragState && dragState.id === e.pointerId) {
+    dragState.pos = toRemoteClamped(p.x, p.y);
+    send({ type: "pointer_move", x: dragState.pos.x, y: dragState.pos.y });
+    return;
+  }
+  if (scrollState && scrollState.id === e.pointerId) {
+    scrollState.acc += p.y - scrollState.lastY;
+    scrollState.lastY = p.y;
+    const tickPx = SCROLL_PX_PER_TICK * devicePixelRatio;
+    const ticks = Math.trunc(scrollState.acc / tickPx);
+    if (ticks) {
+      scrollState.acc -= ticks * tickPx;
+      send({ type: "scroll", x: scrollState.pos.x, y: scrollState.pos.y, ticks });
+    }
+    return;
+  }
+  if (!pointers.has(e.pointerId)) return;
   pointers.set(e.pointerId, p);
 
   if (pinch && pointers.size >= 2) {
@@ -148,6 +273,7 @@ canvas.addEventListener("pointermove", (e) => {
     view.ty = mid.y - (baseRect.y + pinch.qy * baseRect.h) * s;
     clampView();
     redraw();
+    scheduleViewport();
   } else if (tap && pointers.size === 1) {
     const travel = Math.hypot(p.x - tap.startX, p.y - tap.startY);
     if (travel > TAP_MAX_MOVE * devicePixelRatio) tap.moved = true;
@@ -155,6 +281,15 @@ canvas.addEventListener("pointermove", (e) => {
 });
 
 function endPointer(e) {
+  if (dragState && dragState.id === e.pointerId) {
+    finishDrag();
+    return;
+  }
+  if (scrollState && scrollState.id === e.pointerId) {
+    scrollState = null;
+    return;
+  }
+
   pointers.delete(e.pointerId);
   if (pinch && pointers.size < 2) pinch = null;
   if (pointers.size > 0) return;
@@ -163,37 +298,64 @@ function endPointer(e) {
     const p = toCanvasPx(e);
     const pos = toRemote(p.x, p.y);
     if (pos) {
-      send({ type: "pointer_down", x: pos.x, y: pos.y, button: "left" });
-      send({ type: "pointer_up", x: pos.x, y: pos.y, button: "left" });
+      const button = modifiers.right ? "right" : "left";
+      send({ type: "pointer_down", x: pos.x, y: pos.y, button });
+      send({ type: "pointer_up", x: pos.x, y: pos.y, button });
     }
   }
   tap = null;
   gestureHadPinch = false;
+  scheduleViewport();
 }
 
 canvas.addEventListener("pointerup", endPointer);
 canvas.addEventListener("pointercancel", endPointer);
+window.addEventListener("contextmenu", (e) => e.preventDefault());
 
 // --- Connection -----------------------------------------------------------
+// Security decision (owner): the session lives only while the owner is looking
+// at this page. Backgrounding the tab or locking the tablet closes the socket;
+// returning to the page reconnects automatically.
 
 function connect() {
+  if (document.hidden) return;
   setStatus("connecting", "Connecting…");
   ws = new WebSocket(`ws://${location.host}/ws`);
-  ws.binaryType = "blob";
+  ws.binaryType = "arraybuffer";
 
   ws.onopen = () => {
     ws.send(JSON.stringify({ type: "auth", token }));
+    lastSentViewport = { x: 0, y: 0, w: 1, h: 1 };
+    scheduleViewport(); // restore the zoomed region after a reconnect
     setStatus("connected", "Connected");
   };
 
   ws.onmessage = (e) => {
-    if (e.data instanceof Blob) drawFrame(e.data);
+    if (typeof e.data === "string") {
+      const msg = JSON.parse(e.data);
+      if (msg.type === "config") {
+        monitor = { w: msg.monitor_width, h: msg.monitor_height };
+        computeBaseRect();
+        clampView();
+        redraw();
+      }
+    } else {
+      onFrame(e.data);
+    }
   };
 
   ws.onclose = () => {
-    setStatus("disconnected", "Disconnected — retrying…");
-    setTimeout(connect, 2000);
+    setStatus("disconnected", document.hidden ? "Paused — screen away" : "Disconnected — retrying…");
+    if (!document.hidden) setTimeout(connect, RECONNECT_MS);
   };
 }
+
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) {
+    if (ws) ws.close();
+  } else if (!ws || ws.readyState === WebSocket.CLOSED) {
+    connect();
+  }
+});
 
 connect();

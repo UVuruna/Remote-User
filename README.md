@@ -33,10 +33,10 @@ Phase 1 delivers the most primitive remote loop: see the screen, tap to click, r
 1. Start the PC app — it shows a **QR code** containing its LAN address and a pairing token.
 2. Scan the QR code with the tablet camera — Chrome opens the client page.
 3. The page connects over **WebSocket** and live screen frames start flowing.
-4. **Tap** anywhere → the PC mouse moves to that exact position and left-clicks. A floating side icon arms the **right click**. Hold-then-drag drags, two fingers scroll, pinch zooms the local view for precise targeting.
-5. Tap the keyboard icon → the tablet's native keyboard opens and types directly on the PC (full Unicode).
+4. **Tap** anywhere → the PC mouse moves to that exact position and left-clicks. Game-style corner buttons modify what your finger does while held: **RIGHT** (tap = right click), **DRAG** (finger = real mouse drag), **SCROLL** (finger = mouse wheel). Two fingers pinch-zoom the local view — and the server streams the zoomed region at native sharpness.
+5. Tap the keyboard icon → the tablet's native keyboard opens and types directly on the PC (full Unicode). *(Phase 2, in progress)*
 
-One monitor is shown at a time; a switch button changes which monitor is displayed and controlled.
+One monitor is shown at a time; a switch button changes which monitor is displayed and controlled. The session lives only while you're looking at the page — backgrounding it or locking the tablet pauses control instantly.
 
 <a id="architecture"></a>
 
@@ -76,6 +76,8 @@ flowchart LR
 | Transport | Plain WebSocket on LAN | WebRTC's machinery (NAT traversal, adaptive bitrate) solves WAN problems we don't have |
 | Input injection | Win32 `SendInput` via `ctypes` | Direct control; `KEYEVENTF_UNICODE` covers all scripts and emoji |
 | Monitor handling | **One monitor per view**, explicit switch | Owner decision — eliminates mixed-DPI/multi-monitor coordinate math; client sends 0–1 coordinates within the displayed monitor only |
+| Input mechanics | **Modifier buttons** (hold RIGHT/DRAG/SCROLL + finger), not timed gestures | Owner decision — zero ambiguity, no long-press tuning, never conflicts with pinch zoom |
+| Sharp zoom | **Region streaming** — client reports its visible region, server crops before downscaling | Native-pixel sharpness when zoomed at constant bandwidth; full 4K streaming would be ~216 Mbps |
 | Rejected: Kivy/BeeWare | — | Slow brittle APK builds, weak video and soft-keyboard support |
 | Rejected (for now): Flutter | — | Only justified if background operation across tablet screen-lock ever becomes a requirement |
 
@@ -85,6 +87,7 @@ flowchart LR
 
 - **No internet communication** — the server binds to the LAN; only devices on the same Wi-Fi can reach it.
 - **Token-gated input** — the WebSocket accepts no commands before a valid pairing token (delivered via QR code / account login) is presented. This is the lesson of Remote Mouse's unauthenticated-input CVEs.
+- **Session only while watching** — the client closes the connection the moment the page is hidden (tab switch, screen lock) and reconnects when you return. The PC is never controllable while nobody is looking.
 - **Known limitation:** UAC-elevated windows (admin Task Manager, installers, UAC prompts) silently ignore injected input unless the server itself runs elevated — a planned run-as-administrator option.
 
 <a id="quick-start"></a>

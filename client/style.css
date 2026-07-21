@@ -1,3 +1,19 @@
+:root {
+  --surface-0: #0f172a;
+  --glass-fill: rgb(30 41 59 / 0.60);
+  --border: rgb(255 255 255 / 0.12);
+  --text-primary: #f5f5f5;
+  --text-secondary: #a8b3c5;
+  --accent: #38bdf8;
+  --accent-2: #8b5cf6;
+  --accent-glow: rgb(56 189 248 / 0.25);
+  --warning: #f59e0b;
+  --error: #ef4444;
+  --radius-pill: 999px;
+  --space-s: 8px;
+  --space-m: 16px;
+}
+
 * {
   margin: 0;
   padding: 0;
@@ -8,9 +24,11 @@ html, body {
   width: 100%;
   height: 100%;
   overflow: hidden;
-  background: #0f172a;
+  background: var(--surface-0);
   touch-action: none;
   overscroll-behavior: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 #screen {
@@ -25,24 +43,63 @@ html, body {
   top: 12px;
   left: 50%;
   transform: translateX(-50%);
-  padding: 8px 20px;
-  border-radius: 999px;
+  padding: var(--space-s) 20px;
+  border-radius: var(--radius-pill);
   font: 600 14px system-ui, sans-serif;
-  color: #f8fafc;
+  color: var(--text-primary);
   z-index: 10;
   transition: opacity 0.4s;
 }
 
 #status.connecting {
-  background: linear-gradient(90deg, #f59e0b, #d97706);
+  background: linear-gradient(90deg, var(--warning), #d97706);
 }
 
 #status.connected {
-  background: linear-gradient(90deg, #38bdf8, #8b5cf6);
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
   opacity: 0;
   pointer-events: none;
 }
 
 #status.disconnected {
-  background: linear-gradient(90deg, #ef4444, #b91c1c);
+  background: linear-gradient(90deg, var(--error), #b91c1c);
+}
+
+#controls {
+  position: fixed;
+  right: var(--space-m);
+  bottom: var(--space-m);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-m);
+  z-index: 20;
+}
+
+.ctl {
+  width: 64px;
+  height: 64px;
+  border-radius: var(--radius-pill);
+  background: var(--glass-fill);
+  -webkit-backdrop-filter: blur(24px);
+  backdrop-filter: blur(24px);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: box-shadow 0.15s ease-out, color 0.15s ease-out, transform 0.15s ease-out;
+}
+
+.ctl svg {
+  width: 28px;
+  height: 28px;
+  pointer-events: none;
+}
+
+.ctl.active {
+  color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-glow), 0 0 24px var(--accent-glow);
+  transform: scale(1.06);
 }

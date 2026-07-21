@@ -29,3 +29,4 @@ Injects mouse input with Win32 `SendInput` through raw ctypes structs. Client co
 #### Methods
 - `move(x_norm, y_norm)`: absolute cursor move
 - `button_down(x_norm, y_norm, button)` / `button_up(...)`: move + press/release in one injected event (`left` / `right` / `middle`)
+- `wheel(x_norm, y_norm, ticks)`: moves the cursor to the gesture point (the wheel targets the window under the cursor), then scrolls by `ticks` × `WHEEL_DELTA` (positive = up)

@@ -23,8 +23,10 @@ MOUSEEVENTF_RIGHTDOWN = 0x0008
 MOUSEEVENTF_RIGHTUP = 0x0010
 MOUSEEVENTF_MIDDLEDOWN = 0x0020
 MOUSEEVENTF_MIDDLEUP = 0x0040
+MOUSEEVENTF_WHEEL = 0x0800
 MOUSEEVENTF_ABSOLUTE = 0x8000
 MOUSEEVENTF_VIRTUALDESK = 0x4000
+WHEEL_DELTA = 120
 
 # GetSystemMetrics indices
 SM_XVIRTUALSCREEN = 76
@@ -81,9 +83,10 @@ class InputInjector:
         abs_y = round((py - virt_top) / virt_h * 65535)
         return abs_x, abs_y
 
-    def _send(self, flags: int, abs_x: int = 0, abs_y: int = 0) -> None:
+    def _send(self, flags: int, abs_x: int = 0, abs_y: int = 0, mouse_data: int = 0) -> None:
         inp = INPUT(type=INPUT_MOUSE)
-        inp.mi = MOUSEINPUT(abs_x, abs_y, 0, flags, 0, None)
+        # mouseData is a DWORD but Windows reads it as signed for wheel deltas.
+        inp.mi = MOUSEINPUT(abs_x, abs_y, mouse_data & 0xFFFFFFFF, flags, 0, None)
         sent = user32.SendInput(1, ctypes.byref(inp), ctypes.sizeof(INPUT))
         if sent != 1:
             logger.error("SendInput failed: %s", ctypes.get_last_error())
@@ -105,3 +108,9 @@ class InputInjector:
         self._send(
             MOUSEEVENTF_MOVE | MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_VIRTUALDESK | up, abs_x, abs_y
         )
+
+    def wheel(self, x_norm: float, y_norm: float, ticks: float) -> None:
+        """Moves the cursor to the gesture point (the wheel targets the window
+        under the cursor), then scrolls by the given number of wheel ticks."""
+        self.move(x_norm, y_norm)
+        self._send(MOUSEEVENTF_WHEEL, mouse_data=round(ticks * WHEEL_DELTA))
