@@ -26,8 +26,9 @@ Remote control of the Windows PC from an Android tablet/phone over LAN. The PC r
 
 ## Protocol
 
-- Client → server (JSON text): `auth {token}`, `pointer_down/pointer_up {x, y, button}`, `pointer_move {x, y}`, `scroll {x, y, ticks}`, `viewport {x, y, w, h}`, `key_text {text}`, `key_special {key}`, `monitor_switch {}`, `screenshot {}`. Coordinates are always 0–1 within the displayed monitor.
-- Server → client: `config {monitor_width, monitor_height}` JSON text (after auth and after a monitor switch — client must fully reset its view), `toast {text}` (user-facing notice shown on the status pill), then binary frames: **16-byte header (4 × float32 LE — monitor-normalized x, y, w, h of the region the frame covers) + JPEG bytes**.
+- Client → server (JSON text): `auth {token}`, `pointer_down/pointer_up {x, y, button}`, `pointer_move {x, y}`, `scroll {x, y, ticks}`, `viewport {x, y, w, h}`, `key_text {text}`, `key_special {key}`, `chord {chord}`, `monitor_switch {}`, `screenshot {}`. Coordinates are always 0–1 within the displayed monitor.
+- Server → client: `config {monitor_width, monitor_height}` JSON text (after auth and after a monitor switch — client must fully reset its view), `actions {sets}` (radial-wheel shortcut sets from `actions.json`, after auth), `toast {text}` (user-facing notice shown on the status pill), then binary frames: **16-byte header (4 × float32 LE — monitor-normalized x, y, w, h of the region the frame covers) + JPEG bytes**.
+- **Chord shortcuts** (`ctrl+c`, `ctrl+win+alt+1`): sets live in the owner-edited `actions.json` (see [ACTIONS.md](ACTIONS.md)), re-read on every connection. The client renders launcher pills + radial wheels; it never hardcodes shortcuts. Custom-set editing UI and login/setup belong to the future desktop GUI, not the web client (owner decision).
 - Region streaming: when zoomed, the client requests its visible region (`viewport`); the server crops the 4K frame to it before downscaling — zoom stays sharp at constant bandwidth. Full frame = region (0, 0, 1, 1).
 
 ## Testing Notes

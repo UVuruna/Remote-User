@@ -428,6 +428,108 @@ canvas.addEventListener("pointerup", endPointer);
 canvas.addEventListener("pointercancel", endPointer);
 window.addEventListener("contextmenu", (e) => e.preventDefault());
 
+// --- Action sets: launcher pills + radial wheel ---------------------------
+// Hold a set launcher -> a wheel of that set's chords fans out. Drag toward
+// one (joystick-style: direction from the press point) -> release fires it.
+// Release in the centre / without a selection cancels — same safety as a tap.
+
+const setsEl = document.getElementById("sets");
+const wheelEl = document.getElementById("wheel");
+const wheelCenterEl = document.getElementById("wheel-center");
+
+const WHEEL_RADIUS = 128;   // CSS px from centre to each item
+const WHEEL_DEADZONE = 40;  // CSS px of drag before a selection commits
+let wheel = null;           // {set, items:[{chord,angle,el}], start:{x,y}, selected}
+
+function buildLaunchers(sets) {
+  setsEl.innerHTML = "";
+  for (const set of sets) {
+    if (!set.buttons || !set.buttons.length) continue;
+    const btn = document.createElement("button");
+    btn.className = "set-launcher";
+    btn.type = "button";
+    btn.textContent = set.name;
+    btn.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      btn.setPointerCapture(e.pointerId);
+      btn.classList.add("active");
+      openWheel(set, e);
+    });
+    btn.addEventListener("pointermove", updateWheel);
+    btn.addEventListener("pointerup", (e) => {
+      btn.classList.remove("active");
+      closeWheel();
+    });
+    btn.addEventListener("pointercancel", () => {
+      btn.classList.remove("active");
+      cancelWheel();
+    });
+    setsEl.appendChild(btn);
+  }
+}
+
+function openWheel(set, e) {
+  const cx = window.innerWidth / 2;
+  const cy = window.innerHeight / 2;
+  wheelEl.querySelectorAll(".wheel-item").forEach((el) => el.remove());
+  const n = set.buttons.length;
+  const items = set.buttons.map((b, i) => {
+    const angle = -Math.PI / 2 + (i * 2 * Math.PI) / n; // first item at top
+    const el = document.createElement("div");
+    el.className = "wheel-item";
+    el.textContent = b.label;
+    el.style.left = `${cx + WHEEL_RADIUS * Math.cos(angle)}px`;
+    el.style.top = `${cy + WHEEL_RADIUS * Math.sin(angle)}px`;
+    wheelEl.appendChild(el);
+    return { chord: b.chord, label: b.label, angle, el };
+  });
+  wheel = { set, items, start: { x: e.clientX, y: e.clientY }, selected: -1 };
+  wheelCenterEl.textContent = set.name;
+  wheelEl.classList.add("open");
+}
+
+function updateWheel(e) {
+  if (!wheel) return;
+  const dx = e.clientX - wheel.start.x;
+  const dy = e.clientY - wheel.start.y;
+  let sel = -1;
+  if (Math.hypot(dx, dy) >= WHEEL_DEADZONE) {
+    const a = Math.atan2(dy, dx);
+    let best = Infinity;
+    wheel.items.forEach((it, i) => {
+      const d = Math.abs(angleDiff(a, it.angle));
+      if (d < best) {
+        best = d;
+        sel = i;
+      }
+    });
+  }
+  if (sel !== wheel.selected) {
+    wheel.items.forEach((it, i) => it.el.classList.toggle("sel", i === sel));
+    wheelCenterEl.textContent = sel >= 0 ? wheel.items[sel].label : wheel.set.name;
+    wheel.selected = sel;
+  }
+}
+
+function closeWheel() {
+  if (!wheel) return;
+  if (wheel.selected >= 0) send({ type: "chord", chord: wheel.items[wheel.selected].chord });
+  cancelWheel();
+}
+
+function cancelWheel() {
+  wheelEl.classList.remove("open");
+  wheelEl.querySelectorAll(".wheel-item").forEach((el) => el.remove());
+  wheel = null;
+}
+
+function angleDiff(a, b) {
+  let d = a - b;
+  while (d > Math.PI) d -= 2 * Math.PI;
+  while (d < -Math.PI) d += 2 * Math.PI;
+  return d;
+}
+
 // --- Connection -----------------------------------------------------------
 // Security decision (owner): the session lives only while the owner is looking
 // at this page. Backgrounding the tab or locking the tablet closes the socket;
@@ -460,6 +562,8 @@ function connect() {
         lastSentViewport = { x: 0, y: 0, w: 1, h: 1 };
         computeBaseRect();
         redraw();
+      } else if (msg.type === "actions") {
+        buildLaunchers(msg.sets);
       } else if (msg.type === "toast") {
         showToast(msg.text);
       }

@@ -92,6 +92,92 @@ html, body {
   background: linear-gradient(135deg, rgb(56 189 248 / 0.30), rgb(139 92 246 / 0.30));
 }
 
+/* Action-set launchers — bottom-left, hold to open a radial wheel */
+#sets {
+  position: fixed;
+  left: var(--space-m);
+  bottom: 96px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-s);
+  z-index: 20;
+}
+
+.set-launcher {
+  padding: 10px 18px;
+  border-radius: var(--radius-pill);
+  background: var(--glass-fill);
+  -webkit-backdrop-filter: blur(24px);
+  backdrop-filter: blur(24px);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  font: 600 14px system-ui, sans-serif;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.set-launcher.active {
+  color: var(--accent);
+  border-color: var(--accent-glow);
+}
+
+/* Radial wheel overlay */
+#wheel {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  pointer-events: none;
+  opacity: 0;
+  background: rgb(15 23 42 / 0.45);
+  -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
+  transition: opacity 0.12s ease-out;
+}
+
+#wheel.open {
+  opacity: 1;
+}
+
+#wheel-center {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  min-width: 84px;
+  min-height: 84px;
+  border-radius: 50%;
+  border: 1px dashed var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  font: 600 13px system-ui, sans-serif;
+  text-align: center;
+  padding: 8px;
+}
+
+.wheel-item {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  padding: 12px 16px;
+  border-radius: var(--radius-pill);
+  background: var(--glass-fill);
+  -webkit-backdrop-filter: blur(24px);
+  backdrop-filter: blur(24px);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  font: 600 15px system-ui, sans-serif;
+  white-space: nowrap;
+}
+
+.wheel-item.sel {
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  color: #fff;
+  border-color: transparent;
+  box-shadow: 0 0 28px var(--accent-glow);
+  transform: translate(-50%, -50%) scale(1.15);
+}
+
 .ctl {
   width: 64px;
   height: 64px;

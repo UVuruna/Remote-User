@@ -1,0 +1,38 @@
+{
+  "sets": [
+    {
+      "name": "Edit",
+      "buttons": [
+        { "label": "Copy",  "chord": "ctrl+c" },
+        { "label": "Paste", "chord": "ctrl+v" },
+        { "label": "Cut",   "chord": "ctrl+x" },
+        { "label": "All",   "chord": "ctrl+a" },
+        { "label": "Undo",  "chord": "ctrl+z" },
+        { "label": "Redo",  "chord": "ctrl+y" },
+        { "label": "Save",  "chord": "ctrl+s" },
+        { "label": "Find",  "chord": "ctrl+f" }
+      ]
+    },
+    {
+      "name": "Nav",
+      "buttons": [
+        { "label": "Esc",     "chord": "escape" },
+        { "label": "Alt+Tab", "chord": "alt+tab" },
+        { "label": "Win",     "chord": "win" },
+        { "label": "Home",    "chord": "home" },
+        { "label": "End",     "chord": "end" },
+        { "label": "Del",     "chord": "delete" },
+        { "label": "Close",   "chord": "alt+f4" }
+      ]
+    },
+    {
+      "name": "Zones",
+      "buttons": [
+        { "label": "Z1", "chord": "ctrl+win+alt+1" },
+        { "label": "Z2", "chord": "ctrl+win+alt+2" },
+        { "label": "Z3", "chord": "ctrl+win+alt+3" },
+        { "label": "Z4", "chord": "ctrl+win+alt+4" }
+      ]
+    }
+  ]
+}

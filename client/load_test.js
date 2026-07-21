@@ -12,20 +12,26 @@ function stubElement() {
   return {
     addEventListener() {},
     setPointerCapture() {},
-    classList: { add() {}, remove() {} },
+    classList: { add() {}, remove() {}, toggle() {} },
     focus() {},
     blur() {},
+    appendChild() {},
+    remove() {},
+    querySelectorAll: () => [],
+    style: {},
     value: "",
     width: 0,
     height: 0,
     className: "",
     textContent: "",
+    innerHTML: "",
     getContext: () => ({ fillRect() {}, drawImage() {}, fillStyle: "" }),
   };
 }
 
 global.document = {
   getElementById: () => stubElement(),
+  createElement: () => stubElement(),
   addEventListener() {},
   hidden: false,
   activeElement: null,

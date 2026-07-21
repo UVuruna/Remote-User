@@ -28,6 +28,8 @@ Physical monitor rects in virtual-desktop coordinates; matches dxcam outputs to 
 ### `clipboard.py` — Clipboard
 Screenshot frames into the Windows clipboard as CF_DIB. See [Clipboard](clipboard.md).
 
+Action sets for the radial wheels are defined in [actions.json](../ACTIONS.md) at the project root (hand-edited by the owner) and served by [web.py](web.md).
+
 ## Connections
 
 ### Uses

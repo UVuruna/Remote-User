@@ -38,5 +38,9 @@ class Settings:
     # Client files
     client_dir: Path = PROJECT_ROOT / "client"
 
+    # Action sets (chord shortcuts shown in the radial wheels) — hand-edited by
+    # the owner; re-read on every client connection, so edits show on refresh.
+    actions_path: Path = PROJECT_ROOT / "actions.json"
+
 
 SETTINGS = Settings()

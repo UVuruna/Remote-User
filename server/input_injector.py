@@ -44,20 +44,53 @@ BUTTON_FLAGS = {
 KEYEVENTF_KEYUP = 0x0002
 KEYEVENTF_UNICODE = 0x0004
 
-# Structural keys the client may send as `key_special`.
+# Structural keys the client may send as `key_special` or inside a chord.
 VK_CODES = {
     "enter": 0x0D,
+    "return": 0x0D,
     "backspace": 0x08,
     "tab": 0x09,
     "escape": 0x1B,
+    "esc": 0x1B,
     "delete": 0x2E,
+    "del": 0x2E,
+    "insert": 0x2D,
     "home": 0x24,
     "end": 0x23,
+    "pageup": 0x21,
+    "pagedown": 0x22,
+    "space": 0x20,
     "left": 0x25,
     "up": 0x26,
     "right": 0x27,
     "down": 0x28,
 }
+
+# Modifiers usable in a chord ("ctrl+win+alt+1").
+MODIFIER_VKS = {
+    "ctrl": 0x11, "control": 0x11,
+    "alt": 0x12,
+    "shift": 0x10,
+    "win": 0x5B, "meta": 0x5B, "super": 0x5B,
+}
+
+
+def vk_for_key(token: str) -> int | None:
+    """Virtual-key code for a single chord token (letter, digit, F-key, or name)."""
+    token = token.lower()
+    if len(token) == 1:
+        ch = token.upper()
+        if "A" <= ch <= "Z" or "0" <= ch <= "9":
+            return ord(ch)
+    if token in VK_CODES:
+        return VK_CODES[token]
+    if token in MODIFIER_VKS:  # a modifier used alone, e.g. "win"
+        return MODIFIER_VKS[token]
+    if token.startswith("f") and token[1:].isdigit():
+        n = int(token[1:])
+        if 1 <= n <= 24:
+            return 0x6F + n  # F1 = 0x70
+    return None
 
 
 class MOUSEINPUT(ctypes.Structure):
@@ -173,3 +206,31 @@ class InputInjector:
             return
         self._send_key(vk, 0, 0)
         self._send_key(vk, 0, KEYEVENTF_KEYUP)
+
+    def press_chord(self, chord: str) -> None:
+        """Presses a key combination like 'ctrl+c' or 'ctrl+win+alt+1': all but
+        the last token are modifiers, held down while the final key is tapped,
+        then released in reverse order."""
+        tokens = [t.strip() for t in chord.split("+") if t.strip()]
+        if not tokens:
+            logger.error("Empty chord from client")
+            return
+        *mod_names, main_name = tokens
+        mod_vks = []
+        for name in mod_names:
+            vk = MODIFIER_VKS.get(name.lower())
+            if vk is None:
+                logger.error("Unknown modifier %r in chord %r", name, chord)
+                return
+            mod_vks.append(vk)
+        main_vk = vk_for_key(main_name)
+        if main_vk is None:
+            logger.error("Unknown key %r in chord %r", main_name, chord)
+            return
+        for vk in mod_vks:
+            self._send_key(vk, 0, 0)
+        self._send_key(main_vk, 0, 0)
+        self._send_key(main_vk, 0, KEYEVENTF_KEYUP)
+        for vk in reversed(mod_vks):
+            self._send_key(vk, 0, KEYEVENTF_KEYUP)
+        logger.info("Chord fired: %s", chord)

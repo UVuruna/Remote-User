@@ -83,6 +83,7 @@ def create_app(
             return
         logger.info("Client authenticated: %s", ws.client)
         await _send_config(ws, streamer)
+        await ws.send_text(json.dumps({"type": "actions", "sets": _load_actions()}))
         queue = hub.subscribe()
         sender = asyncio.create_task(_send_frames(ws, queue))
         try:
@@ -112,6 +113,20 @@ async def _authenticate(ws: WebSocket, token: str) -> bool:
 async def _send_frames(ws: WebSocket, queue: asyncio.Queue) -> None:
     while True:
         await ws.send_bytes(await queue.get())
+
+
+def _load_actions() -> list:
+    """Reads the owner's action sets fresh (edits apply on the next connect).
+    A missing or invalid file is logged and yields no sets — never a crash."""
+    try:
+        data = json.loads(SETTINGS.actions_path.read_text(encoding="utf-8"))
+        return data.get("sets", [])
+    except FileNotFoundError:
+        logger.warning("actions.json not found at %s — no action sets", SETTINGS.actions_path)
+        return []
+    except (json.JSONDecodeError, OSError) as e:
+        logger.error("actions.json could not be loaded: %s", e)
+        return []
 
 
 async def _send_config(ws: WebSocket, streamer: ScreenStreamer) -> None:
@@ -176,6 +191,8 @@ async def _receive_input(ws: WebSocket, injector: InputInjector, streamer: Scree
             streamer.set_viewport(
                 float(msg["x"]), float(msg["y"]), float(msg["w"]), float(msg["h"])
             )
+        elif kind == "chord":
+            injector.press_chord(str(msg["chord"]))
         elif kind == "monitor_switch":
             await _switch_monitor(ws, injector, streamer)
         elif kind == "screenshot":

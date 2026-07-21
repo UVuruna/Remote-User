@@ -15,6 +15,7 @@ Gesture map (modifier-button mechanics — owner decision):
 - **SNAP button (tap)** → native-resolution screenshot of the streamed monitor lands in the **PC clipboard**, paste-ready; server confirms via toast
 - **ENTER button (tap, accent-styled)** → sends Enter to the PC; always reachable, works with or without the keyboard open
 - **PAN button (top-left, toggle)** → while on, one-finger drag moves the local zoomed view and NO click reaches the PC; for browsing a zoomed screen without clicking by accident. Pinch zoom still works; tap the button again to leave pan mode
+- **Set launchers (bottom-left) + radial wheel** → hold a set pill to fan its chords out in a wheel; drag toward one (joystick-style — direction from the press point) and release to fire; release in the centre cancels. Sets come from the server's [actions.json](../ACTIONS.md); the client only renders them
 - **Two fingers on the canvas** → pinch zoom around the midpoint + pan; no clicks are ever sent during/after a pinch
 - Zoom view transform is client-side (max 6×), but the visible region is reported to the server (`viewport`) so zoomed frames arrive at native sharpness
 - The session pauses whenever the page is hidden (tab background / screen lock) and reconnects on return — owner security decision
@@ -36,4 +37,5 @@ Gesture map (modifier-button mechanics — owner decision):
 - Modifier buttons: pointer capture per button sets `modifiers.*`; releasing DRAG mid-drag finishes the drag safely
 - Keyboard capture: hidden input (`opacity: 0`, never `display: none`) + value diffing for printable characters (IME/autocorrect-proof), `keydown` for structural keys with `preventDefault` so nothing is handled twice; the buffer is trimmed outside IME composition
 - Canvas handlers: modifier branches (drag / scroll) short-circuit before the tap/pinch flow, so pinch never fights the buttons
-- `connect()`: WebSocket lifecycle — `auth` on open, `config` handling, reconnect (2 s) on close, and visibility gating (socket closes when the page hides, reconnects when it returns)
+- Action wheel: `buildLaunchers(sets)` renders one pill per set; `openWheel/updateWheel/closeWheel` implement the joystick selection (drag angle from the press point → nearest item, deadzone before commit, centre = cancel)
+- `connect()`: WebSocket lifecycle — `auth` on open, `config`/`actions`/`toast` handling, reconnect (2 s) on close, and visibility gating (socket closes when the page hides, reconnects when it returns)
