@@ -9,6 +9,7 @@ Control your Windows PC from an Android tablet or phone — see the screen, tap 
 - [Architecture](#architecture)
 - [Design Decisions](#design-decisions)
 - [Security Model](#security-model)
+- [Remote Access](#remote-access)
 - [Quick Start](#quick-start)
 - [Project Structure](#project-structure)
 - [Documentation](#documentation)
@@ -85,10 +86,21 @@ flowchart LR
 
 ## 🔐 Security Model
 
-- **No internet communication** — the server binds to the LAN; only devices on the same Wi-Fi can reach it.
-- **Token-gated input** — the WebSocket accepts no commands before a valid pairing token (delivered via QR code / account login) is presented. This is the lesson of Remote Mouse's unauthenticated-input CVEs.
+- **No public internet exposure** — the server never opens a port to the public internet. On the LAN, only devices on the same Wi-Fi can reach it. For use away from home, see [Remote Access](#remote-access) — a private encrypted network, not an open port.
+- **Token-gated input** — the WebSocket (and the `/upload` endpoint) accept nothing before a valid pairing token (delivered via QR code / account login) is presented. This is the lesson of Remote Mouse's unauthenticated-input CVEs.
 - **Session only while watching** — the client closes the connection the moment the page is hidden (tab switch, screen lock) and reconnects when you return. The PC is never controllable while nobody is looking.
 - **Known limitation:** UAC-elevated windows (admin Task Manager, installers, UAC prompts) silently ignore injected input unless the server itself runs elevated — a planned run-as-administrator option.
+
+<a id="remote-access"></a>
+
+## 🌍 Remote Access (away from home)
+
+The server is LAN-only by design. To reach the PC from anywhere — another Wi-Fi, mobile data — **without** opening a port to the public internet, put both devices on a **Tailscale** (WireGuard) private mesh:
+
+1. Install [Tailscale](https://tailscale.com/) on the PC and the phone, sign in to the same account on both (free for personal use).
+2. Start the server as usual. If Tailscale is up, the pairing screen prints and encodes the **Tailscale URL** in the QR — scan it once; it works both at home and away.
+
+This keeps the exact security model: end-to-end encrypted, no ports forwarded, and your screen is never relayed through a third-party cloud. Rejected alternatives: **port forwarding** (exposes the server publicly — the CVE class we avoid) and **cloud tunnels** (route your screen through someone else's server).
 
 <a id="quick-start"></a>
 
