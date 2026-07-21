@@ -10,9 +10,15 @@ Remote control of the Windows PC from an Android tablet/phone over LAN. The PC r
 
 ## Tech Stack (decided — do not relitigate without owner approval)
 
-- **Server:** Python 3.13, FastAPI + uvicorn (HTTP page + WebSocket), `dxcam` (DXGI screen capture), `ctypes` → Win32 `SendInput` (input injection), `qrcode` (pairing)
-- **Client:** vanilla HTML/CSS/JS (PWA), Pointer Events, canvas rendering — no framework, no build step
-- **Streaming v1:** JPEG per frame over WebSocket binary messages; H.264+MSE is the upgrade path, not the starting point
+**The authoritative record of the product direction and build plan is [ROADMAP.md](ROADMAP.md#direction) (Product Direction, decided 2026-07-22). Read it before proposing architecture changes.** Summary:
+
+- **Server:** Python 3.13, FastAPI + uvicorn, `dxcam` (DXGI capture), `ctypes` → Win32 `SendInput` (injection), `qrcode` (pairing).
+- **Streaming:** **H.264** via ffmpeg, hardware-encoded with auto-detection (NVENC → QuickSync → AMF) and a **libx264 software fallback** so it runs on any PC; output is fragmented MP4 decoded by the client via MSE. JPEG-per-frame is the fallback when no ffmpeg/encoder exists. (Measured ~2 Mbps static vs ~48 Mbps JPEG.)
+- **Product = two installable apps:** a Windows desktop app (server + GUI + tray, `.exe`) and an Android **hybrid** app (native shell + WebView reusing the web client, shipped as an APK). Not "open a URL in a browser".
+- **Connection:** a mesh VPN installed on both devices (Tailscale recommended), one-time, wizard-guided; works anywhere incl. mobile data via the mesh's free relay. Server already binds all interfaces + pairing detects the Tailscale address, so this is code-ready.
+- **Client UI:** vanilla HTML/CSS/JS in the WebView, Pointer Events, canvas rendering — no framework, no build step.
+- **Hard constraints (owner):** no payment for any required part; third-party services/installs OK if best; not over-indexing on privacy/security. Don't fight mature remote-desktop tools on latency — the unique value is the **app-aware companion layer** (Windows UI Automation state reading, notifications, per-app controls).
+- **Open decisions** (see ROADMAP): login mechanism (Tailscale-login-as-account vs own Hostinger account), mesh provider, distribution, build order.
 
 ## Architecture Constraints
 

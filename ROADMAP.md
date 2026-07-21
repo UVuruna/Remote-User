@@ -1,106 +1,93 @@
 # Remote User — Roadmap
 
-Development phases for the remote-control system. See [Remote User](README.md) for architecture and design decisions.
+Development plan for the remote-control system. See [Remote User](README.md) for architecture and design decisions.
 
 ## Table of Contents
 
-- [Phase 0 — Research & Foundation](#phase-0)
-- [Phase 1 — Prototype: See & Click](#phase-1)
-- [Phase 2 — Core Remote v1](#phase-2)
-- [Phase 3 — Usability & Polish](#phase-3)
-- [Phase 4 — App-Aware Layer](#phase-4)
+- [Product Direction (decided 2026-07-22)](#direction)
+- [Open Decisions](#open)
+- [Build Plan](#build-plan)
+- [Foundation — LAN Prototype (done)](#foundation)
 - [Future Ideas](#future)
 
 ---
 
-<a id="phase-0"></a>
+<a id="direction"></a>
 
-## ✅ Phase 0 — Research & Foundation
+## 🧭 Product Direction — decided 2026-07-22
 
-- [x] Feasibility research (PC side: capture/streaming/injection; client side: stack comparison, touch UX, keyboard capture)
-- [x] Architecture decided: Python server + browser PWA client, WebSocket, JPEG streaming, `SendInput` injection
-- [x] Single-monitor-per-view policy (owner decision) — simplifies all coordinate math
-- [x] Project documentation: README, ROADMAP, CLAUDE, logo
-- [x] Registered in root PROJECTS.md / README.md
+After the LAN prototype proved the control loop and touch UX on real code, the product direction was set in discussion with the owner. **This section is the authoritative record of what was accepted** (the code history is under [Foundation](#foundation)).
 
-<a id="phase-1"></a>
+### Decided (confirmed with owner)
 
-## ✅ Phase 1 — First Working Loop: See & Click
+- **A real product = two installable apps**, not "open a URL in a browser":
+  - **Windows desktop app** — the Python server + a GUI (login, settings, status, monitor/quality) + tray, packaged as a signed `.exe`.
+  - **Android app** — a **hybrid**: a native shell (login, device list, Connect, settings) wrapping a **WebView that reuses the existing web client**. The browser holds the communication logic; the user sees a real app with its own interface (no browser chrome, no URL/QR copying).
+- **Distribution:** APK first (e.g. GitHub Releases); Play Store only later, for wide public distribution.
+- **Connection across the internet:** a **mesh VPN installed on both devices** (Tailscale recommended; ZeroTier equivalent), set up **once**, guided by an in-app wizard. Works anywhere including mobile data via the mesh's **free relay fallback**. The server already binds all interfaces and pairing already detects/prefers the Tailscale address (`0.0.017`), so the connection layer is **code-ready** — going off-LAN needs the install, not new code.
+- **One account, one-time login** (exact mechanism still open — see below).
+- **Media: H.264**, hardware-encoded with **auto-detection** (NVENC → QuickSync → AMF) and a **software fallback** (libx264) so it runs on any PC — NVIDIA, Intel iGPU, AMD, or no GPU. Replaces JPEG-per-frame. Region-of-interest streaming dropped: inter-frame compression makes the full-frame stream cheap (measured **~2 Mbps static vs ~48 Mbps JPEG**).
+- **Virtual cursor + trackpad (relative) mode** — learned from the pro tools, for precision on small targets.
+- **Hard constraint: NO payment** for any required part. Third-party services/installs are acceptable if they are genuinely the best option; the owner does **not** over-index on privacy/security — this is a personal productivity tool, not a security product.
+- **Strategy — don't fight a lost battle.** Do NOT try to beat mature free remote-desktop tools (RustDesk, Moonlight/Sunshine, Chrome Remote Desktop) on raw latency. Get streaming **"good enough"** (hardware H.264) and put the real, unique value into the **app-aware companion layer**: read PC application state via **Windows UI Automation** (the accessibility tree — structured, cheap, reliable, no OCR/AI), send notifications, and offer per-app controls. Canonical use case: **watch how far an AI coding agent has gotten while away from the PC.** Specific companion features to be specified by the owner.
+- **Learn/borrow techniques** (not code) from the pros: hardware encoder, inter-frame compression, trackpad relative cursor, adaptive quality, bidirectional clipboard sync.
 
-Goal: live screen on the tablet, tap lands a click on the PC — the complete loop on real code that Phase 2 builds on.
+<a id="open"></a>
 
-- [x] FastAPI server: serves the client page + WebSocket endpoint
-- [x] `dxcam` capture loop (primary monitor) → JPEG → push over WebSocket
-- [x] Stream downscaling (`max_stream_width`) — 4K native was ~216 Mbps, capped to ~48 Mbps
-- [x] Client page: canvas rendering of incoming frames (letterbox-aware)
-- [x] Tap → `pointer_down`/`pointer_up` → `SendInput` left click at absolute position
-- [x] DPI awareness declaration (`PER_MONITOR_AWARE_V2`) from day one
-- [x] Token auth gate on the WebSocket (moved up from Phase 2 — security is not optional)
-- [x] QR code encoding `http://<lan-ip>:<port>/?token=…` (console ASCII + PNG)
-- [x] Smoke test passed on the dev machine (real 4K frame captured, encoded, injector mapping verified)
-- [x] **Owner test on a real device** — passed 2026-07-21: click lands precisely, stream smooth, no perceptible lag
+### ❓ Open Decisions (not yet settled)
 
-<a id="phase-2"></a>
+- **Login mechanism:** (a) the mesh/Tailscale login **is** the account — one login, no custom backend, the app finds the PC via the mesh device list (**recommended, simplest**); vs (b) our own account on Hostinger with the mesh underneath (own brand, but a second login or federation). *Owner to confirm.*
+- **Mesh provider:** Tailscale (recommended) vs ZeroTier (equivalent).
+- **Distribution:** APK-only vs eventual Play Store.
+- **Build order:** the plan below is proposed; owner to confirm the sequence.
 
-## 📋 Phase 2 — Core Remote v1
+<a id="build-plan"></a>
 
-Goal: daily-usable control of the PC.
+### 🔨 Build Plan (phases)
 
-- [x] Input mechanics — **modifier buttons** (owner decision, replaces timed-gesture plan): glass corner buttons per DESIGN.md; hold RIGHT + tap = right click, hold DRAG + finger = real mouse drag, hold SCROLL + finger = wheel
-- [x] Pinch zoom of the local view for precise targeting — pulled forward after the first device test (owner: small targets need it); includes two-finger pan, clicks fire only on clean tap release
-- [x] **Region streaming — sharp zoom** (owner report: downscaled stream pixelated when zoomed): client reports its visible region, server crops the native frame to it; constant bandwidth, native pixels from ~2.4× zoom
-- [x] Visibility-gated session (owner security decision): socket closes when the page hides (tab switch / screen lock), reconnects on return
-- [x] Auto-reconnect (network blip, tablet sleep/wake) — shipped with Phase 1 client
-- [x] Frame backpressure: per-client queue of size 1 drops stale frames when the client lags — shipped with Phase 1 server
-- [x] Keyboard: ⌨ toggle button → hidden input field + value diffing (`key_text`), `keydown` for special keys (`key_special`); `KEYEVENTF_UNICODE` injection incl. surrogate pairs; tapping the screen keeps the keyboard open
-- [x] Invalid-token UX: close code 4401 shows "scan the fresh QR" instead of retrying forever
-- [x] Monitor switch button (MON): cycles dxcam outputs, swaps injector rect via monitor enumeration, client view reset through a fresh `config`
-- [x] Screenshot to PC clipboard (SNAP, owner request): native-res frame → CF_DIB in the Windows clipboard, paste-ready on the PC; toast confirmation
-- [x] Persistent pairing token across restarts (`logs/token.txt`) — no re-scan after server updates
-- [x] DPI declaration hardened: pointer-sized context + checked return (bare-int ctypes call failed silently; dxcam's own declaration was masking it)
-- [x] PAN toggle (owner request): one-finger view panning while zoomed, clicks blocked — top-left, opposite the action cluster
-- [x] ENTER button (owner request): promoted accent button so Send/Enter is never hunted for
-- [x] Chord engine + action sets + radial wheel (owner design): server `press_chord` (`ctrl+win+alt+1`), owner-edited `actions.json` (Edit / Nav / Zones), hold-a-pill → joystick wheel → release fires. Custom-set editor + login deferred to the desktop GUI phase (owner)
-- [x] See-through buttons + text labels (owner: buttons were opaque "film" and unlabelled) — low-opacity fill, no blur, icon+label
-- [x] Newline button replaces Enter (owner: phone keyboard's action key already = Enter; needed Shift+Enter for newline)
-- [x] Instant keyboard fit (owner: view lifted late) — `visualViewport` resizes the canvas and lifts the pad the moment the keyboard opens
-- [x] Momentum scrolling (owner: mouse wheel felt nothing like a phone flick) — velocity-based fling with decay
-- [ ] Keyboard tuning on real devices (Gboard/Samsung IME quirks — swipe typing, autocorrect)
-- [x] Control redesign → two configurable D-pad groups (owner design): each group = one category of 4, D-pad cross (landscape) / column (portrait), small dashed centre opens a **tap-based** category wheel (tap-open, tap-select, ✕ cancel — no hold/drag, smaller centre button). All old fixed buttons became category actions in `actions.json`. Top-left Move, top-right Hide (hide all controls)
-- [x] HOVER mouse mode (owner: "show more" only appears on hover) — move the cursor with no button held
-- [x] Two-layer rendering (owner: pan/zoom felt slow) — persistent full-monitor base + sharp region overlay, so motion never flashes blank
-- [x] Mouse modes are toggles, not holds (owner correction) — single active `touchMode`, one-at-a-time, Move included
-- [x] Visible keyboard bar (owner: hidden field caused a blank banner + couldn't see typed/dictated text) — capture input shown at top while focused
-- [x] Phone → PC image (owner request): file-picker (gallery/camera) → `/upload` → PC clipboard, paste-ready; replaces PC `snap` in the default layout
-- [ ] Wheel/D-pad tuning on real device (sizes, positions, portrait vs landscape feel)
+- **Phase A — H.264 end-to-end** *(in progress)*: encoder core + auto-detect **done** (`0.0.019`, verified NVENC + software fallback). Remaining: wire the server to send H.264, client decodes via MSE into the canvas, add the virtual cursor. Biggest responsiveness lever; testable on LAN.
+- **Phase B — Off-LAN validation** via the mesh: install Tailscale on both, test from mobile data. Connection code already ready — mostly an install + measure step.
+- **Phase C — Desktop app:** server wrapped in a GUI (login, settings, status, monitor/quality) + tray, packaged as a signed `.exe` installer (monorepo build pipeline), with the Tailscale setup wizard.
+- **Phase D — Phone app (APK):** native shell + WebView + login + device list + Connect + Tailscale wizard.
+- **Phase E — Login / pairing:** the "click Connect and my PC appears" flow tying the account to finding the PC.
+- **Phase F+ — App-aware companion layer** (the differentiator): focused-window/process detection, Windows UI Automation state reading, notifications, per-app controls. Owner specs the features.
 
-<a id="phase-3"></a>
+---
 
-## 📋 Phase 3 — Usability & Polish
+<a id="foundation"></a>
 
-- [ ] PWA manifest — installable, fullscreen, stable icon
-- [ ] Quality/FPS settings (JPEG quality, capture rate, downscale)
-- [ ] PC-side GUI per root DESIGN.md: tray icon, status window, QR display
-- [ ] Run-as-administrator option (control over elevated windows)
-- [ ] Wake Lock integration + documented one-time Chrome flag setup
-- [ ] Account login on both sides (shared credential replacing the raw token)
+## ✅ Foundation — LAN Prototype (done)
 
-<a id="phase-4"></a>
+The prototype that proved the control loop and UX on real code — now the foundation the product is built on. Runs on LAN with a browser client, JPEG streaming, and token pairing.
 
-## 📋 Phase 4 — App-Aware Layer
+### Research & Foundation
+- [x] Feasibility research (capture/streaming/injection; client stack, touch UX, keyboard capture)
+- [x] Single-monitor-per-view policy (owner) — simplifies coordinate math
+- [x] Project docs (README, ROADMAP, CLAUDE, logo); registered in root PROJECTS.md / README.md
 
-The long-term goal: the server knows which application is focused and adapts.
+### First working loop — See & Click
+- [x] FastAPI server serving the client + WebSocket; `dxcam` capture → JPEG → WebSocket
+- [x] Tap → `SendInput` absolute click; DPI awareness (`PER_MONITOR_AWARE_V2`, hardened)
+- [x] Token auth gate; QR pairing (persistent token across restarts)
+- [x] Verified on a real device 2026-07-21 (precise click, smooth, no perceptible lag)
 
-- [ ] Focused-window/process detection on the PC
-- [ ] Per-app profiles: extra buttons and shortcuts per application
-- [ ] State watching: app-specific conditions trigger notifications on the tablet
-- [ ] First target: VSCode / agent workflow (send instruction, watch for completion)
+### Core controls & UX (all owner-driven)
+- [x] Two configurable **D-pad groups** from `actions.json`: D-pad cross (landscape) / column (portrait), small dashed centre opens a **tap-based** category wheel (tap-select, ✕ cancel)
+- [x] **Touch modes as toggles** (single active): left click (default) / right / drag / scroll / hover / pan (Move). Two fingers pinch-zoom
+- [x] Chord engine (`ctrl+win+alt+1`) + owner-edited categories (Mouse / Edit / Keys / View / Zones)
+- [x] Keyboard: visible top bar + value-diffing capture, `KEYEVENTF_UNICODE` (emoji), special keys; instant fit above the soft keyboard via `visualViewport`
+- [x] Momentum scrolling; pinch zoom + two-layer base+region rendering (no blank flashes)
+- [x] Monitor switch; PC→clipboard screenshot; **phone→PC image upload** (`/upload`)
+- [x] See-through labelled buttons; Move (top-left) + Hide-all (top-right); visibility-gated session; auto-reconnect
+- [ ] On-device tuning (gesture feel, Gboard/Samsung IME quirks) — ongoing
+
+---
 
 <a id="future"></a>
 
 ## 💡 Future Ideas
 
-- H.264 + MSE streaming upgrade (Weylus pattern) if JPEG bandwidth becomes limiting on high-res monitors
-- Flutter client — only if background operation across tablet screen-lock becomes a requirement
-- Audio streaming
-- File drop (tablet → PC)
+- Adaptive bitrate/quality on the H.264 stream (drop quality on a slow/relayed link)
+- Hardware zero-copy capture→encode (Desktop Duplication → NVENC) for lowest latency
+- Audio streaming; file drop (phone → PC)
+- Run-as-administrator option (control over UAC-elevated windows)
