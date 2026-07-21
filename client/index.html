@@ -39,7 +39,11 @@
   <!-- Category picker (tap to open, tap an item to choose, X to cancel) -->
   <div id="wheel"></div>
 
-  <input id="kb" type="text" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" aria-hidden="true" tabindex="-1">
+  <!-- Visible while typing: shows what is being typed / dictated -->
+  <input id="kb" type="text" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" placeholder="Type / dictate — goes to the PC">
+
+  <!-- Phone → PC image upload (gallery or camera) -->
+  <input id="filepick" type="file" accept="image/*" hidden>
 
   <script src="/static/app.js"></script>
 </body>

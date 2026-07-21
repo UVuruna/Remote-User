@@ -37,7 +37,7 @@
       "icon": "monitor",
       "buttons": [
         { "action": "monitor" },
-        { "action": "snap" },
+        { "action": "upload" },
         { "label": "Alt+Tab", "chord": "alt+tab" },
         { "label": "Win",     "chord": "win" }
       ]

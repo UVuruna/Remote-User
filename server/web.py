@@ -15,8 +15,10 @@ import json
 import logging
 import struct
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse
+import cv2
+import numpy as np
+from fastapi import FastAPI, File, Request, UploadFile, WebSocket, WebSocketDisconnect
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 import clipboard
@@ -72,6 +74,22 @@ def create_app(
     @app.get("/")
     async def index():
         return FileResponse(SETTINGS.client_dir / "index.html")
+
+    @app.post("/upload")
+    async def upload(request: Request, file: UploadFile = File(...)):
+        """Phone → PC: decode an image the tablet sent and put it in the PC
+        clipboard, ready to paste. Token-gated like the WebSocket."""
+        if request.query_params.get("token") != token:
+            return JSONResponse({"ok": False, "error": "unauthorized"}, status_code=401)
+        data = await file.read()
+        img = await asyncio.to_thread(
+            cv2.imdecode, np.frombuffer(data, np.uint8), cv2.IMREAD_COLOR
+        )
+        if img is None:
+            logger.error("Upload could not be decoded as an image (%d bytes)", len(data))
+            return JSONResponse({"ok": False, "error": "not an image"}, status_code=400)
+        ok = await asyncio.to_thread(clipboard.copy_image, img)
+        return {"ok": ok}
 
     app.mount("/static", StaticFiles(directory=SETTINGS.client_dir), name="static")
 

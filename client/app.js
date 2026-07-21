@@ -1,16 +1,16 @@
 // Remote User client — stream rendering (base layer + sharp region), pinch zoom,
-// two configurable D-pad groups with a tap-based category wheel, and mouse modes
-// (right / drag / scroll / hover) held as modifier buttons.
+// two configurable D-pad groups, and a single toggle "touch mode" that decides
+// what one finger on the screen does.
 
 "use strict";
 
 // --- Tunables -------------------------------------------------------------
 const ZOOM_MAX = 6;
-const TAP_MAX_MOVE = 12;          // CSS px of finger travel before a tap stops being a tap
-const SCROLL_PX_PER_TICK = 40;    // CSS px of finger travel per wheel tick
-const SCROLL_FLING_MIN = 0.35;    // canvas px/ms — below this a release adds no momentum
-const SCROLL_FLING_DECAY = 0.004; // exponential velocity decay per ms
-const VIEWPORT_MARGIN = 0.15;     // extra region requested around the visible area
+const TAP_MAX_MOVE = 12;
+const SCROLL_PX_PER_TICK = 40;
+const SCROLL_FLING_MIN = 0.35;
+const SCROLL_FLING_DECAY = 0.004;
+const VIEWPORT_MARGIN = 0.15;
 const VIEWPORT_THROTTLE_MS = 150;
 const RECONNECT_MS = 2000;
 
@@ -21,27 +21,24 @@ const statusEl = document.getElementById("status");
 
 const token = new URLSearchParams(location.search).get("token");
 
-let monitor = { w: 0, h: 0 };                // real monitor size (server `config`)
-let baseRect = { x: 0, y: 0, w: 1, h: 1 };   // where the full monitor sits at zoom 1
-let view = { scale: 1, tx: 0, ty: 0 };       // zoom/pan on top of baseRect
+let monitor = { w: 0, h: 0 };
+let baseRect = { x: 0, y: 0, w: 1, h: 1 };
+let view = { scale: 1, tx: 0, ty: 0 };
 
-// Two-layer image: a full-monitor base (kept in memory so pan/zoom never flashes
-// blank) plus the sharp region crop drawn on top when zoomed.
 let baseBitmap = null;
 let detailBitmap = null;
 let detailRegion = { x: 0, y: 0, w: 1, h: 1 };
 let ws = null;
 
-// Gesture state
+// One finger's meaning is set by a single toggle mode. Only one is ever active.
+//   click (default) · right · drag · scroll · hover · pan
+// pan moves the local view; the rest act on the PC. Two fingers always pinch.
+let touchMode = "click";
+const MODES = new Set(["right", "drag", "scroll", "hover", "pan"]);
+
 const pointers = new Map();
-let tap = null;
 let pinch = null;
-let gestureHadPinch = false;
-let dragState = null;   // {id, pos} — DRAG modifier holds the left button down
-let hoverState = null;  // {id} — HOVER modifier moves the cursor, no button
-let scrollState = null; // {id, lastY, acc, vel, lastT, pos}
-const modifiers = { right: false, drag: false, scroll: false, hover: false };
-let panMode = false;    // Move toggle: one finger moves the view, clicks blocked
+let primary = null; // the first finger: {id, type, startX, startY, moved, ...}
 
 // Region-streaming state — declared before the first updateViewport() call.
 let lastSentViewport = { x: 0, y: 0, w: 1, h: 1 };
@@ -98,9 +95,7 @@ function redraw() {
   ctx.fillStyle = "#0f172a";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   const D = drawnRect();
-  // Base layer: the whole monitor, always available so motion never goes blank.
   if (baseBitmap) ctx.drawImage(baseBitmap, D.x, D.y, D.w, D.h);
-  // Sharp layer: the zoomed region's native pixels, on top of the base.
   if (view.scale > 1 && detailBitmap) {
     ctx.drawImage(
       detailBitmap,
@@ -112,8 +107,6 @@ function redraw() {
   }
 }
 
-// Sizes the canvas to the visible area (shrinks the instant the soft keyboard
-// appears) and publishes keyboard height / top offset for the controls.
 function updateViewport() {
   const vv = window.visualViewport;
   const w = vv ? vv.width : window.innerWidth;
@@ -237,7 +230,7 @@ function cancelScrollInertia() {
   }
 }
 
-// --- Icons (Lucide-style, inline) -----------------------------------------
+// --- Icons ----------------------------------------------------------------
 
 const ICONS = {
   mouse: '<rect x="6" y="3" width="12" height="18" rx="6"/><path d="M12 7v4"/>',
@@ -247,6 +240,7 @@ const ICONS = {
   hover: '<path d="M3 3l7.4 18 2.3-7.3L20 11.4z"/>',
   keyboard: '<rect x="2" y="5" width="20" height="14" rx="2"/><path d="M6 9h.01M10 9h.01M14 9h.01M18 9h.01M6 13h.01M18 13h.01M9 13h6"/>',
   monitor: '<rect x="2" y="4" width="14" height="10" rx="2"/><path d="M9 18h7"/><path d="M9 14v4"/><path d="m17 9 4 3-4 3"/>',
+  image: '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-4.5-4.5L5 21"/>',
   snap: '<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/>',
   edit: '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>',
   grid: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
@@ -257,19 +251,32 @@ function svg(name) {
   return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICONS[name] || ""}</svg>`;
 }
 
-// --- Built-in group actions (modes + functions) ---------------------------
+// --- Built-in group actions -----------------------------------------------
 
 const BUILTINS = {
-  right:    { label: "Right",  icon: "right",    kind: "mod" },
-  drag:     { label: "Drag",   icon: "drag",     kind: "mod" },
-  scroll:   { label: "Scroll", icon: "scroll",   kind: "mod" },
-  hover:    { label: "Hover",  icon: "hover",    kind: "mod" },
+  right:    { label: "Right",  icon: "right",    kind: "mode" },
+  drag:     { label: "Drag",   icon: "drag",     kind: "mode" },
+  scroll:   { label: "Scroll", icon: "scroll",   kind: "mode" },
+  hover:    { label: "Hover",  icon: "hover",    kind: "mode" },
   keyboard: { label: "Keys",   icon: "keyboard", kind: "kb" },
   monitor:  { label: "Monitor", icon: "monitor", kind: "send", msg: { type: "monitor_switch" } },
   snap:     { label: "Snap",   icon: "snap",     kind: "send", msg: { type: "screenshot" } },
+  upload:   { label: "Image",  icon: "image",    kind: "upload" },
 };
 
-// --- Keyboard capture -----------------------------------------------------
+// --- Touch-mode toggles ---------------------------------------------------
+
+function setMode(mode) {
+  touchMode = touchMode === mode ? "click" : mode;
+  refreshModeButtons();
+}
+
+function refreshModeButtons() {
+  document.querySelectorAll("[data-mode]").forEach((el) =>
+    el.classList.toggle("active", el.dataset.mode === touchMode));
+}
+
+// --- Keyboard capture (visible bar at the top) ----------------------------
 
 const kbInput = document.getElementById("kb");
 let kbPrev = "";
@@ -289,12 +296,16 @@ function toggleKeyboard() {
   else kbInput.focus({ preventScroll: true });
 }
 
-function reflectKeyboardState() {
-  const on = keyboardOpen();
-  document.querySelectorAll('[data-action="keyboard"]').forEach((el) => el.classList.toggle("active", on));
-}
-kbInput.addEventListener("focus", reflectKeyboardState);
-kbInput.addEventListener("blur", reflectKeyboardState);
+kbInput.addEventListener("focus", () => {
+  kbInput.classList.add("on");
+  document.querySelectorAll('[data-action="keyboard"]').forEach((el) => el.classList.add("active"));
+});
+kbInput.addEventListener("blur", () => {
+  kbInput.classList.remove("on");
+  kbInput.value = "";
+  kbPrev = "";
+  document.querySelectorAll('[data-action="keyboard"]').forEach((el) => el.classList.remove("active"));
+});
 
 kbInput.addEventListener("keydown", (e) => {
   const special = SPECIAL_KEYS[e.key];
@@ -321,6 +332,25 @@ kbInput.addEventListener("input", (e) => {
   }
 });
 
+// --- Phone → PC image upload ----------------------------------------------
+
+const filePick = document.getElementById("filepick");
+filePick.addEventListener("change", async () => {
+  const file = filePick.files && filePick.files[0];
+  if (!file) return;
+  showToast("Uploading image…");
+  try {
+    const body = new FormData();
+    body.append("file", file);
+    const res = await fetch(`/upload?token=${encodeURIComponent(token)}`, { method: "POST", body });
+    const j = await res.json();
+    showToast(j.ok ? "Image in PC clipboard — paste with Ctrl+V" : "Upload failed");
+  } catch (err) {
+    showToast(`Upload failed: ${err.message}`);
+  }
+  filePick.value = "";
+});
+
 // --- D-pad groups ---------------------------------------------------------
 
 const groupEls = {
@@ -332,7 +362,6 @@ const POSITIONS = ["up", "left", "right", "down"];
 let categories = [];
 const groups = { left: 0, right: 0 };
 
-// Keeps focus on the hidden input so control taps never dismiss the keyboard.
 function keepFocus(el, onTap) {
   el.addEventListener("pointerdown", (e) => e.preventDefault());
   el.addEventListener("pointerup", (e) => {
@@ -349,35 +378,21 @@ function makeButton(cls, iconName, label) {
   return el;
 }
 
-function wireModifier(el, name) {
-  el.addEventListener("pointerdown", (e) => {
-    e.preventDefault();
-    el.setPointerCapture(e.pointerId);
-    modifiers[name] = true;
-    el.classList.add("active");
-  });
-  const release = () => {
-    modifiers[name] = false;
-    el.classList.remove("active");
-    if (name === "drag") finishDrag();
-    if (name === "hover") hoverState = null;
-  };
-  el.addEventListener("pointerup", release);
-  el.addEventListener("pointercancel", release);
-}
-
 function makeActionButton(btn, pos) {
   let el;
   if (btn.action && BUILTINS[btn.action]) {
     const b = BUILTINS[btn.action];
     el = makeButton("ctl", b.icon, b.label);
     el.dataset.action = btn.action;
-    if (b.kind === "mod") {
-      wireModifier(el, btn.action);
+    if (b.kind === "mode") {
+      el.dataset.mode = btn.action;
+      keepFocus(el, () => setMode(btn.action));
     } else if (b.kind === "kb") {
       keepFocus(el, toggleKeyboard);
     } else if (b.kind === "send") {
       keepFocus(el, () => send(b.msg));
+    } else if (b.kind === "upload") {
+      keepFocus(el, () => filePick.click());
     }
   } else if (btn.chord) {
     el = makeButton("ctl text", null, btn.label || btn.chord);
@@ -404,13 +419,16 @@ function renderGroup(side) {
   host.appendChild(center);
 
   (cat.buttons || []).slice(0, 4).forEach((btn, i) => host.appendChild(makeActionButton(btn, i)));
-  reflectKeyboardState();
+  refreshModeButtons();
+  if (keyboardOpen()) {
+    host.querySelectorAll('[data-action="keyboard"]').forEach((el) => el.classList.add("active"));
+  }
 }
 
 // --- Category wheel (tap to open, tap an item, X to cancel) ---------------
 
 const wheelEl = document.getElementById("wheel");
-const WHEEL_RADIUS = 118; // CSS px
+const WHEEL_RADIUS = 118;
 
 function openWheel(side) {
   wheelEl.innerHTML = "";
@@ -438,7 +456,6 @@ function openWheel(side) {
   keepFocus(x, closeWheel);
   wheelEl.appendChild(x);
 
-  // Tapping the dim backdrop (outside any item) also cancels.
   wheelEl.addEventListener("pointerdown", backdropCancel);
   wheelEl.classList.add("open");
 }
@@ -456,13 +473,11 @@ function closeWheel() {
   wheelEl.innerHTML = "";
 }
 
-// --- Corner buttons: Move (pan) + Hide ------------------------------------
+// --- Corner buttons -------------------------------------------------------
 
 const panBtn = document.getElementById("btn-pan");
-keepFocus(panBtn, () => {
-  panMode = !panMode;
-  panBtn.classList.toggle("active", panMode);
-});
+panBtn.dataset.mode = "pan";
+keepFocus(panBtn, () => setMode("pan"));
 
 const hideBtn = document.getElementById("btn-hide");
 keepFocus(hideBtn, () => {
@@ -482,100 +497,56 @@ function showToast(text) {
 }
 
 // --- Canvas gestures ------------------------------------------------------
-
-function finishDrag() {
-  if (!dragState) return;
-  send({ type: "pointer_up", x: dragState.pos.x, y: dragState.pos.y, button: "left" });
-  dragState = null;
-}
+// One finger acts per `touchMode`; two fingers always pinch-zoom.
 
 function firstTwoPointers() {
   const it = pointers.values();
   return [it.next().value, it.next().value];
 }
 
+function beginPinch() {
+  if (primary && primary.type === "drag") {
+    send({ type: "pointer_up", x: primary.pos.x, y: primary.pos.y, button: "left" });
+  }
+  primary = null;
+  const [p1, p2] = firstTwoPointers();
+  const mid = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
+  const D = drawnRect();
+  pinch = {
+    startDist: Math.hypot(p1.x - p2.x, p1.y - p2.y),
+    startScale: view.scale,
+    qx: (mid.x - D.x) / D.w,
+    qy: (mid.y - D.y) / D.h,
+  };
+}
+
 canvas.addEventListener("pointerdown", (e) => {
-  if (keyboardOpen()) e.preventDefault(); // tapping the screen must not close the keyboard
+  if (keyboardOpen()) e.preventDefault(); // a tap must not blur the keyboard bar
   canvas.setPointerCapture(e.pointerId);
   cancelScrollInertia();
   const p = toCanvasPx(e);
-
-  if (modifiers.drag && !dragState) {
-    dragState = { id: e.pointerId, pos: toRemoteClamped(p.x, p.y) };
-    send({ type: "pointer_down", x: dragState.pos.x, y: dragState.pos.y, button: "left" });
-    return;
-  }
-  if (modifiers.hover && !hoverState) {
-    hoverState = { id: e.pointerId };
-    send({ type: "pointer_move", ...toRemoteClamped(p.x, p.y) });
-    return;
-  }
-  if (modifiers.scroll && !scrollState) {
-    scrollState = {
-      id: e.pointerId, lastY: p.y, acc: 0, vel: 0,
-      lastT: performance.now(), pos: toRemoteClamped(p.x, p.y),
-    };
-    return;
-  }
-
   pointers.set(e.pointerId, p);
-  if (pointers.size === 1) {
-    tap = { startX: p.x, startY: p.y, moved: false };
-    gestureHadPinch = false;
-  } else if (pointers.size === 2) {
-    tap = null;
-    gestureHadPinch = true;
-    const [p1, p2] = firstTwoPointers();
-    const mid = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
-    const D = drawnRect();
-    pinch = {
-      startDist: Math.hypot(p1.x - p2.x, p1.y - p2.y),
-      startScale: view.scale,
-      qx: (mid.x - D.x) / D.w,
-      qy: (mid.y - D.y) / D.h,
-    };
+
+  if (pointers.size >= 2) {
+    beginPinch();
+    return;
+  }
+
+  primary = { id: e.pointerId, startX: p.x, startY: p.y, moved: false, type: touchMode };
+  if (touchMode === "drag") {
+    primary.pos = toRemoteClamped(p.x, p.y);
+    send({ type: "pointer_down", x: primary.pos.x, y: primary.pos.y, button: "left" });
+  } else if (touchMode === "hover") {
+    send({ type: "pointer_move", ...toRemoteClamped(p.x, p.y) });
+  } else if (touchMode === "scroll") {
+    Object.assign(primary, { lastY: p.y, acc: 0, vel: 0, lastT: performance.now(), pos: toRemoteClamped(p.x, p.y) });
   }
 });
 
 canvas.addEventListener("pointermove", (e) => {
   const p = toCanvasPx(e);
+  if (pointers.has(e.pointerId)) pointers.set(e.pointerId, p);
 
-  if (dragState && dragState.id === e.pointerId) {
-    dragState.pos = toRemoteClamped(p.x, p.y);
-    send({ type: "pointer_move", x: dragState.pos.x, y: dragState.pos.y });
-    return;
-  }
-  if (hoverState && hoverState.id === e.pointerId) {
-    send({ type: "pointer_move", ...toRemoteClamped(p.x, p.y) });
-    return;
-  }
-  if (scrollState && scrollState.id === e.pointerId) {
-    const now = performance.now();
-    const dy = p.y - scrollState.lastY;
-    scrollState.vel = dy / Math.max(1, now - scrollState.lastT);
-    scrollState.lastY = p.y;
-    scrollState.lastT = now;
-    scrollState.acc += dy;
-    const tickPx = SCROLL_PX_PER_TICK * devicePixelRatio;
-    const ticks = Math.trunc(scrollState.acc / tickPx);
-    if (ticks) {
-      scrollState.acc -= ticks * tickPx;
-      send({ type: "scroll", x: scrollState.pos.x, y: scrollState.pos.y, ticks });
-    }
-    return;
-  }
-  if (!pointers.has(e.pointerId)) return;
-  const prev = pointers.get(e.pointerId);
-  pointers.set(e.pointerId, p);
-
-  if (panMode && pointers.size === 1 && !pinch) {
-    view.tx += p.x - prev.x;
-    view.ty += p.y - prev.y;
-    clampView();
-    redraw();
-    scheduleViewport();
-    return;
-  }
   if (pinch && pointers.size >= 2) {
     const [p1, p2] = firstTwoPointers();
     const dist = Math.hypot(p1.x - p2.x, p1.y - p2.y);
@@ -587,44 +558,66 @@ canvas.addEventListener("pointermove", (e) => {
     clampView();
     redraw();
     scheduleViewport();
-  } else if (tap && pointers.size === 1) {
-    const travel = Math.hypot(p.x - tap.startX, p.y - tap.startY);
-    if (travel > TAP_MAX_MOVE * devicePixelRatio) tap.moved = true;
+    return;
+  }
+
+  if (!primary || primary.id !== e.pointerId) return;
+
+  if (primary.type === "drag") {
+    primary.pos = toRemoteClamped(p.x, p.y);
+    send({ type: "pointer_move", x: primary.pos.x, y: primary.pos.y });
+  } else if (primary.type === "hover") {
+    send({ type: "pointer_move", ...toRemoteClamped(p.x, p.y) });
+  } else if (primary.type === "scroll") {
+    const now = performance.now();
+    const dy = p.y - primary.lastY;
+    primary.vel = dy / Math.max(1, now - primary.lastT);
+    primary.lastY = p.y;
+    primary.lastT = now;
+    primary.acc += dy;
+    const tickPx = SCROLL_PX_PER_TICK * devicePixelRatio;
+    const ticks = Math.trunc(primary.acc / tickPx);
+    if (ticks) {
+      primary.acc -= ticks * tickPx;
+      send({ type: "scroll", x: primary.pos.x, y: primary.pos.y, ticks });
+    }
+  } else if (primary.type === "pan") {
+    view.tx += p.x - primary.startX;
+    view.ty += p.y - primary.startY;
+    primary.startX = p.x;
+    primary.startY = p.y;
+    clampView();
+    redraw();
+    scheduleViewport();
+  } else {
+    // click / right: track travel so an accidental swipe doesn't click
+    if (Math.hypot(p.x - primary.startX, p.y - primary.startY) > TAP_MAX_MOVE * devicePixelRatio) {
+      primary.moved = true;
+    }
   }
 });
 
 function endPointer(e) {
-  if (dragState && dragState.id === e.pointerId) {
-    finishDrag();
-    return;
-  }
-  if (hoverState && hoverState.id === e.pointerId) {
-    hoverState = null;
-    return;
-  }
-  if (scrollState && scrollState.id === e.pointerId) {
-    const { vel, pos } = scrollState;
-    scrollState = null;
-    startScrollInertia(vel, pos);
-    return;
-  }
-
   pointers.delete(e.pointerId);
   if (pinch && pointers.size < 2) pinch = null;
-  if (pointers.size > 0) return;
 
-  if (tap && !tap.moved && !gestureHadPinch && !panMode && e.type === "pointerup") {
-    const p = toCanvasPx(e);
-    const pos = toRemote(p.x, p.y);
-    if (pos) {
-      const button = modifiers.right ? "right" : "left";
-      send({ type: "pointer_down", x: pos.x, y: pos.y, button });
-      send({ type: "pointer_up", x: pos.x, y: pos.y, button });
+  if (primary && primary.id === e.pointerId) {
+    if (primary.type === "drag") {
+      send({ type: "pointer_up", x: primary.pos.x, y: primary.pos.y, button: "left" });
+    } else if (primary.type === "scroll") {
+      startScrollInertia(primary.vel, primary.pos);
+    } else if ((primary.type === "click" || primary.type === "right") &&
+               !primary.moved && e.type === "pointerup") {
+      const pos = toRemote(primary.startX, primary.startY);
+      if (pos) {
+        const button = primary.type === "right" ? "right" : "left";
+        send({ type: "pointer_down", x: pos.x, y: pos.y, button });
+        send({ type: "pointer_up", x: pos.x, y: pos.y, button });
+      }
     }
+    primary = null;
   }
-  tap = null;
-  gestureHadPinch = false;
-  scheduleViewport();
+  if (pointers.size === 0) scheduleViewport();
 }
 
 canvas.addEventListener("pointerup", endPointer);

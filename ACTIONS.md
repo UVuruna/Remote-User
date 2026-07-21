@@ -48,10 +48,11 @@ The two D-pad groups on the tablet are defined entirely by [actions.json](action
 A button is one of:
 
 - **Built-in action** — `{ "action": "<name>" }`, where `<name>` is:
-  - `right`, `drag`, `scroll`, `hover` — **mouse modes**: hold the button and move a finger on the screen (right-click on tap / drag with left held / wheel / move-cursor-only for hover).
-  - `keyboard` — toggle the tablet keyboard.
+  - `right`, `drag`, `scroll`, `hover` — **mouse modes** (toggle on/off, only one active at a time, together with `Move`): the mode decides what one finger on the screen does — tap → right-click / drag with left held / wheel / move-cursor-only (for triggering hover UI). Default (no mode) = left click. Two fingers always pinch-zoom.
+  - `keyboard` — toggle the tablet keyboard (shows a visible text bar of what you type/dictate).
+  - `upload` — pick an image from the phone (gallery/camera) and send it to the **PC clipboard**, ready to paste.
   - `monitor` — switch the streamed monitor.
-  - `snap` — screenshot the monitor into the PC clipboard.
+  - `snap` — screenshot the PC monitor into the PC clipboard (available in config; not in the default layout).
 - **Chord** — `{ "label": "Copy", "chord": "ctrl+c" }` — fires a key combination (see below).
 - **Special key** — `{ "label": "Esc", "key": "escape" }` — a single structural key.
 

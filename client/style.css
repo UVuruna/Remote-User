@@ -57,20 +57,27 @@ html, body {
 #status.connected  { background: linear-gradient(90deg, var(--accent), var(--accent-2)); opacity: 0; pointer-events: none; }
 #status.disconnected { background: linear-gradient(90deg, var(--error), #b91c1c); }
 
-/* Keyboard capture field — must stay focusable, so opacity, never display:none */
+/* Keyboard capture field — a visible bar at the top while typing, so you can
+   see what you type / dictate. Hidden (but present) when the keyboard is closed. */
 #kb {
   position: fixed;
-  bottom: 0;
-  left: 0;
-  width: 1px;
-  height: 1px;
-  opacity: 0;
-  border: 0;
-  padding: 0;
-  background: transparent;
-  color: transparent;
-  caret-color: transparent;
+  top: calc(var(--space-m) + var(--vtop));
+  left: 80px;
+  right: 80px;
+  height: 44px;
+  padding: 0 14px;
+  border-radius: 12px;
+  background: rgb(15 23 42 / 0.88);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  font: 500 15px system-ui, sans-serif;
+  z-index: 32;
+  display: none;
 }
+#kb.on { display: block; }
+#kb::placeholder { color: var(--text-secondary); }
+
+#filepick { display: none; }
 
 /* --- Buttons ------------------------------------------------------------- */
 /* See-through (low-opacity fill, no backdrop blur — the screen stays visible),

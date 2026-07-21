@@ -5,6 +5,8 @@
 ## Purpose
 The FastAPI application: serves the client page and static files, authenticates the WebSocket, streams frames out, and routes input messages to the injector. API docs endpoints are disabled — nothing is exposed beyond `/`, `/static`, `/ws`.
 
+HTTP: `GET /` (client page), `GET /static/*` (client assets), `POST /upload?token=…` (phone → PC image: decodes the uploaded image and puts it in the Windows clipboard via [Clipboard](clipboard.md), token-gated).
+
 Protocol (project [CLAUDE.md](../CLAUDE.md) is the authority):
 - client → server (JSON text): `auth`, `pointer_down`, `pointer_up`, `pointer_move`, `scroll`, `viewport`, `key_text`, `key_special`, `chord`, `monitor_switch`, `screenshot`
 - server → client: `config` JSON text (after auth and after a monitor switch), `actions` JSON text (the owner's control categories + default group indices from [actions.json](../ACTIONS.md), sent after auth), `toast` JSON text (user-facing notices), and binary frames — 16-byte region header (4 × float32 LE) + JPEG
