@@ -103,6 +103,11 @@ class InputInjector:
         )
         logger.info("Injector ready — monitor=%s virtual=%s", monitor_rect, self.virtual_rect)
 
+    def set_monitor_rect(self, rect: tuple[int, int, int, int]) -> None:
+        """Called when the streamed monitor changes."""
+        self.monitor_rect = rect
+        logger.info("Injector now targeting monitor rect %s", rect)
+
     def _to_absolute(self, x_norm: float, y_norm: float) -> tuple[int, int]:
         mon_left, mon_top, mon_w, mon_h = self.monitor_rect
         virt_left, virt_top, virt_w, virt_h = self.virtual_rect

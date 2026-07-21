@@ -32,11 +32,15 @@ class ScreenStreamer:
         self._camera = dxcam.create(output_idx=SETTINGS.monitor_index, output_color="BGR")
         if self._camera is None:
             raise RuntimeError(f"dxcam could not open monitor {SETTINGS.monitor_index}")
+        self.monitor_index = SETTINGS.monitor_index
         self.width, self.height = self._camera.width, self._camera.height
         self._viewport = FULL_REGION  # written by the web layer, read by the capture thread
         self._encode_params = [cv2.IMWRITE_JPEG_QUALITY, SETTINGS.jpeg_quality]
         self._thread: threading.Thread | None = None
         self._running = False
+        self._shot_request = threading.Event()
+        self._shot_ready = threading.Event()
+        self._shot_frame = None
         logger.info("Capture ready — monitor %d (%dx%d)", SETTINGS.monitor_index, self.width, self.height)
 
     def set_viewport(self, x: float, y: float, w: float, h: float) -> None:
@@ -50,6 +54,34 @@ class ScreenStreamer:
             logger.warning("Ignoring empty viewport request (%s, %s, %s, %s)", x, y, w, h)
             return
         self._viewport = (x, y, w, h)
+
+    @staticmethod
+    def output_count() -> int:
+        """Number of dxcam-visible outputs (info lines like 'Device[0] Output[0]: …')."""
+        return dxcam.output_info().count("Output[")
+
+    def switch_monitor(self, index: int) -> bool:
+        """Swaps the capture source. Must be called while stopped."""
+        camera = dxcam.create(output_idx=index, output_color="BGR")
+        if camera is None:
+            logger.error("dxcam could not open monitor %d", index)
+            return False
+        self._camera = camera
+        self.monitor_index = index
+        self.width, self.height = camera.width, camera.height
+        self._viewport = FULL_REGION
+        logger.info("Switched capture to monitor %d (%dx%d)", index, self.width, self.height)
+        return True
+
+    def take_screenshot(self, timeout: float = 2.0):
+        """Full-monitor, native-resolution copy of the next captured frame.
+        Blocking — call from a worker thread, never the event loop."""
+        self._shot_ready.clear()
+        self._shot_request.set()
+        if not self._shot_ready.wait(timeout):
+            logger.error("Screenshot timed out after %.1fs", timeout)
+            return None
+        return self._shot_frame
 
     def start(self) -> None:
         self._camera.start(target_fps=SETTINGS.target_fps, video_mode=True)
@@ -83,6 +115,10 @@ class ScreenStreamer:
     def _loop(self) -> None:
         while self._running:
             frame = self._camera.get_latest_frame()  # blocks until a new frame
+            if self._shot_request.is_set():
+                self._shot_request.clear()
+                self._shot_frame = frame.copy()  # dxcam reuses its ring buffer
+                self._shot_ready.set()
             frame, region = self._crop(frame)
             h, w = frame.shape[:2]
             if w > SETTINGS.max_stream_width:

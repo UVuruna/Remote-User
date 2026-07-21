@@ -19,6 +19,8 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
+import clipboard
+import monitors
 from capture import ScreenStreamer
 from config import SETTINGS
 from input_injector import BUTTON_FLAGS, InputInjector
@@ -80,11 +82,7 @@ def create_app(
             await ws.close(code=4401)
             return
         logger.info("Client authenticated: %s", ws.client)
-        await ws.send_text(json.dumps({
-            "type": "config",
-            "monitor_width": streamer.width,
-            "monitor_height": streamer.height,
-        }))
+        await _send_config(ws, streamer)
         queue = hub.subscribe()
         sender = asyncio.create_task(_send_frames(ws, queue))
         try:
@@ -116,6 +114,42 @@ async def _send_frames(ws: WebSocket, queue: asyncio.Queue) -> None:
         await ws.send_bytes(await queue.get())
 
 
+async def _send_config(ws: WebSocket, streamer: ScreenStreamer) -> None:
+    await ws.send_text(json.dumps({
+        "type": "config",
+        "monitor_width": streamer.width,
+        "monitor_height": streamer.height,
+    }))
+
+
+async def _toast(ws: WebSocket, text: str) -> None:
+    await ws.send_text(json.dumps({"type": "toast", "text": text}))
+
+
+async def _switch_monitor(ws: WebSocket, injector: InputInjector, streamer: ScreenStreamer) -> None:
+    count = ScreenStreamer.output_count()
+    if count < 2:
+        await _toast(ws, "Only one active monitor")
+        return
+    new_index = (streamer.monitor_index + 1) % count
+    streamer.stop()
+    if streamer.switch_monitor(new_index):
+        injector.set_monitor_rect(monitors.rect_for_size(streamer.width, streamer.height, new_index))
+    streamer.start()
+    await _send_config(ws, streamer)
+    await _toast(ws, f"Monitor {streamer.monitor_index + 1}/{count}")
+
+
+async def _screenshot(ws: WebSocket, streamer: ScreenStreamer) -> None:
+    frame = await asyncio.to_thread(streamer.take_screenshot)
+    if frame is None:
+        await _toast(ws, "Screenshot failed — see server log")
+        return
+    ok = await asyncio.to_thread(clipboard.copy_image, frame)
+    await _toast(ws, "Screenshot in PC clipboard — paste with right-click" if ok
+                 else "Clipboard busy — try again")
+
+
 async def _receive_input(ws: WebSocket, injector: InputInjector, streamer: ScreenStreamer) -> None:
     while True:
         msg = json.loads(await ws.receive_text())
@@ -142,5 +176,9 @@ async def _receive_input(ws: WebSocket, injector: InputInjector, streamer: Scree
             streamer.set_viewport(
                 float(msg["x"]), float(msg["y"]), float(msg["w"]), float(msg["h"])
             )
+        elif kind == "monitor_switch":
+            await _switch_monitor(ws, injector, streamer)
+        elif kind == "screenshot":
+            await _screenshot(ws, streamer)
         else:
             logger.warning("Unknown message type %r from client", kind)

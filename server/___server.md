@@ -20,7 +20,13 @@ Win32 `SendInput` via ctypes. Maps 0–1 monitor-normalized coordinates to virtu
 FastAPI app: serves the client page, authenticates the WebSocket, fans frames out (dropping stale ones), dispatches input messages to the injector. See [Web Layer](web.md).
 
 ### `pairing.py` — Pairing
-Token generation, LAN IP discovery, QR code (console ASCII + PNG). See [Pairing](pairing.md).
+Token generation (persisted across restarts), LAN IP discovery, QR code (console ASCII + PNG in the project root). See [Pairing](pairing.md).
+
+### `monitors.py` — Monitors
+Physical monitor rects in virtual-desktop coordinates; matches dxcam outputs to positions. See [Monitors](monitors.md).
+
+### `clipboard.py` — Clipboard
+Screenshot frames into the Windows clipboard as CF_DIB. See [Clipboard](clipboard.md).
 
 ## Connections
 

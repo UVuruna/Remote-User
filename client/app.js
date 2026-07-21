@@ -231,6 +231,29 @@ kbBtn.addEventListener("pointerup", (e) => {
 kbInput.addEventListener("focus", () => kbBtn.classList.add("active"));
 kbInput.addEventListener("blur", () => kbBtn.classList.remove("active"));
 
+// --- Action buttons (single tap, no modifier state) -----------------------
+// preventDefault on pointerdown keeps focus on the hidden input — pressing
+// these must not close an open keyboard.
+
+for (const [id, msg] of [["btn-monitor", "monitor_switch"], ["btn-snap", "screenshot"]]) {
+  const el = document.getElementById(id);
+  el.addEventListener("pointerdown", (e) => e.preventDefault());
+  el.addEventListener("pointerup", (e) => {
+    e.preventDefault();
+    send({ type: msg });
+  });
+}
+
+let toastTimer = null;
+
+function showToast(text) {
+  setStatus("connecting", text); // amber pill doubles as the toast surface
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => {
+    if (ws && ws.readyState === WebSocket.OPEN) setStatus("connected", "Connected");
+  }, 2500);
+}
+
 kbInput.addEventListener("keydown", (e) => {
   const special = SPECIAL_KEYS[e.key];
   if (!special) return; // printable characters flow through the input event
@@ -398,10 +421,19 @@ function connect() {
     if (typeof e.data === "string") {
       const msg = JSON.parse(e.data);
       if (msg.type === "config") {
+        // Fresh monitor (connect or switch): reset the view completely.
         monitor = { w: msg.monitor_width, h: msg.monitor_height };
+        view = { scale: 1, tx: 0, ty: 0 };
+        lastRegion = { x: 0, y: 0, w: 1, h: 1 };
+        if (lastBitmap) {
+          lastBitmap.close();
+          lastBitmap = null;
+        }
+        lastSentViewport = { x: 0, y: 0, w: 1, h: 1 };
         computeBaseRect();
-        clampView();
         redraw();
+      } else if (msg.type === "toast") {
+        showToast(msg.text);
       }
     } else {
       onFrame(e.data);

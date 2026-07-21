@@ -11,6 +11,8 @@ Gesture map (modifier-button mechanics — owner decision):
 - **Hold DRAG button + finger** → real mouse drag (down / move / up)
 - **Hold SCROLL button + finger** → wheel ticks, content follows the finger
 - **⌨ button (toggle)** → opens/closes the tablet's native keyboard; typing goes to whatever is focused on the PC. Tapping the screen while the keyboard is open does NOT close it — click a field, keep typing, exactly like a physical keyboard
+- **MON button (tap)** → cycles to the next monitor (server swaps capture + injection rect, client resets the view)
+- **SNAP button (tap)** → native-resolution screenshot of the streamed monitor lands in the **PC clipboard**, paste-ready; server confirms via toast
 - **Two fingers on the canvas** → pinch zoom around the midpoint + pan; no clicks are ever sent during/after a pinch
 - Zoom view transform is client-side (max 6×), but the visible region is reported to the server (`viewport`) so zoomed frames arrive at native sharpness
 - The session pauses whenever the page is hidden (tab background / screen lock) and reconnects on return — owner security decision

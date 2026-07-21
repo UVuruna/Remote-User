@@ -2,6 +2,7 @@
 
 import asyncio
 import ctypes
+import ctypes.wintypes as wintypes
 import logging
 from logging.handlers import RotatingFileHandler
 
@@ -14,6 +15,20 @@ logger = logging.getLogger(__name__)
 # Must run before any capture or injection (root CLAUDE constraint):
 # without PER_MONITOR_AWARE_V2, Windows silently rescales coordinates.
 DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 = -4
+
+
+def declare_dpi_awareness() -> None:
+    """The context handle is pointer-sized — passing a bare int truncates on
+    64-bit and the call fails SILENTLY (found by a monitor-enumeration test
+    returning DPI-scaled sizes). c_void_p + checked return, or we refuse to run."""
+    user32 = ctypes.windll.user32
+    user32.SetProcessDpiAwarenessContext.restype = wintypes.BOOL
+    user32.SetProcessDpiAwarenessContext.argtypes = [ctypes.c_void_p]
+    if not user32.SetProcessDpiAwarenessContext(
+        ctypes.c_void_p(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2)
+    ):
+        raise RuntimeError("Failed to declare per-monitor DPI awareness — refusing to run, "
+                           "clicks would land at wrong coordinates")
 
 
 def setup_logging() -> None:
@@ -32,12 +47,11 @@ def setup_logging() -> None:
 
 
 async def main() -> None:
-    ctypes.windll.user32.SetProcessDpiAwarenessContext(
-        DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2
-    )
+    declare_dpi_awareness()
     setup_logging()
 
     # Imports that touch the GPU/screen come after DPI awareness is declared.
+    import monitors
     from capture import ScreenStreamer
     from input_injector import InputInjector
     from pairing import generate_token, show_pairing
@@ -46,8 +60,9 @@ async def main() -> None:
     loop = asyncio.get_running_loop()
     hub = FrameHub(loop)
     streamer = ScreenStreamer(on_frame=hub.push_threadsafe)
-    # Phase 1: the captured monitor starts at the primary origin (0, 0).
-    injector = InputInjector(monitor_rect=(0, 0, streamer.width, streamer.height))
+    injector = InputInjector(
+        monitor_rect=monitors.rect_for_size(streamer.width, streamer.height, streamer.monitor_index)
+    )
 
     token = generate_token()
     app = create_app(hub, injector, streamer, token)

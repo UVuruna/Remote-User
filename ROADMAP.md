@@ -54,7 +54,10 @@ Goal: daily-usable control of the PC.
 - [x] Frame backpressure: per-client queue of size 1 drops stale frames when the client lags — shipped with Phase 1 server
 - [x] Keyboard: ⌨ toggle button → hidden input field + value diffing (`key_text`), `keydown` for special keys (`key_special`); `KEYEVENTF_UNICODE` injection incl. surrogate pairs; tapping the screen keeps the keyboard open
 - [x] Invalid-token UX: close code 4401 shows "scan the fresh QR" instead of retrying forever
-- [ ] Monitor switch button (capture source + coordinate rect swap)
+- [x] Monitor switch button (MON): cycles dxcam outputs, swaps injector rect via monitor enumeration, client view reset through a fresh `config`
+- [x] Screenshot to PC clipboard (SNAP, owner request): native-res frame → CF_DIB in the Windows clipboard, paste-ready on the PC; toast confirmation
+- [x] Persistent pairing token across restarts (`logs/token.txt`) — no re-scan after server updates
+- [x] DPI declaration hardened: pointer-sized context + checked return (bare-int ctypes call failed silently; dxcam's own declaration was masking it)
 - [ ] Keyboard tuning on real devices (Gboard/Samsung IME quirks — swipe typing, autocorrect)
 
 <a id="phase-3"></a>
