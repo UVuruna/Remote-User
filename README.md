@@ -34,7 +34,7 @@ Phase 1 delivers the most primitive remote loop: see the screen, tap to click, r
 2. Scan the QR code with the tablet camera — Chrome opens the client page.
 3. The page connects over **WebSocket** and live screen frames start flowing.
 4. **Tap** anywhere → the PC mouse moves to that exact position and left-clicks. Game-style corner buttons modify what your finger does while held: **RIGHT** (tap = right click), **DRAG** (finger = real mouse drag), **SCROLL** (finger = mouse wheel). Two fingers pinch-zoom the local view — and the server streams the zoomed region at native sharpness.
-5. Tap the keyboard icon → the tablet's native keyboard opens and types directly on the PC (full Unicode). *(Phase 2, in progress)*
+5. Tap the **⌨** button → the tablet's native keyboard opens and types into whatever is focused on the PC (full Unicode, emoji included). Tapping around the screen doesn't close it — click a field, keep typing.
 
 One monitor is shown at a time; a switch button changes which monitor is displayed and controlled. The session lives only while you're looking at the page — backgrounding it or locking the tablet pauses control instantly.
 

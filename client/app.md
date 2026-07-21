@@ -10,6 +10,7 @@ Gesture map (modifier-button mechanics — owner decision):
 - **Hold RIGHT button + tap** → right click at the tap point
 - **Hold DRAG button + finger** → real mouse drag (down / move / up)
 - **Hold SCROLL button + finger** → wheel ticks, content follows the finger
+- **⌨ button (toggle)** → opens/closes the tablet's native keyboard; typing goes to whatever is focused on the PC. Tapping the screen while the keyboard is open does NOT close it — click a field, keep typing, exactly like a physical keyboard
 - **Two fingers on the canvas** → pinch zoom around the midpoint + pan; no clicks are ever sent during/after a pinch
 - Zoom view transform is client-side (max 6×), but the visible region is reported to the server (`viewport`) so zoomed frames arrive at native sharpness
 - The session pauses whenever the page is hidden (tab background / screen lock) and reconnects on return — owner security decision
@@ -29,5 +30,6 @@ Gesture map (modifier-button mechanics — owner decision):
 - `currentViewport()` / `scheduleViewport()`: computes the visible monitor region (+15 % margin) and reports it to the server, throttled to 150 ms and >1 % change
 - `toRemote(px, py)` / `toRemoteClamped(...)`: canvas point → 0–1 within the monitor; strict variant ignores the letterbox padding, clamped variant keeps drags alive over it
 - Modifier buttons: pointer capture per button sets `modifiers.*`; releasing DRAG mid-drag finishes the drag safely
+- Keyboard capture: hidden input (`opacity: 0`, never `display: none`) + value diffing for printable characters (IME/autocorrect-proof), `keydown` for structural keys with `preventDefault` so nothing is handled twice; the buffer is trimmed outside IME composition
 - Canvas handlers: modifier branches (drag / scroll) short-circuit before the tap/pinch flow, so pinch never fights the buttons
 - `connect()`: WebSocket lifecycle — `auth` on open, `config` handling, reconnect (2 s) on close, and visibility gating (socket closes when the page hides, reconnects when it returns)

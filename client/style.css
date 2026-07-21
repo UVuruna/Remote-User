@@ -103,3 +103,18 @@ html, body {
   box-shadow: 0 0 0 3px var(--accent-glow), 0 0 24px var(--accent-glow);
   transform: scale(1.06);
 }
+
+/* Keyboard capture field — must stay focusable, so opacity, never display:none */
+#kb {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: transparent;
+  caret-color: transparent;
+}

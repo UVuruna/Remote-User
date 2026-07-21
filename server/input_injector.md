@@ -30,3 +30,5 @@ Injects mouse input with Win32 `SendInput` through raw ctypes structs. Client co
 - `move(x_norm, y_norm)`: absolute cursor move
 - `button_down(x_norm, y_norm, button)` / `button_up(...)`: move + press/release in one injected event (`left` / `right` / `middle`)
 - `wheel(x_norm, y_norm, ticks)`: moves the cursor to the gesture point (the wheel targets the window under the cursor), then scrolls by `ticks` × `WHEEL_DELTA` (positive = up)
+- `type_text(text)`: arbitrary Unicode via `KEYEVENTF_UNICODE` (VK_PACKET) — one down+up per UTF-16 code unit, so surrogate pairs (emoji) work
+- `press_key(name)`: structural keys (Enter, Backspace, Tab, Escape, Delete, Home, End, arrows) by VK code from the `VK_CODES` map; unknown names are logged, never guessed

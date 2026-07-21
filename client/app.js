@@ -196,6 +196,59 @@ function finishDrag() {
   dragState = null;
 }
 
+// --- Keyboard -------------------------------------------------------------
+// Toggle button focuses a hidden input, which summons the tablet's native
+// keyboard. Printable characters are captured by DIFFING the field value
+// (IME/autocorrect-proof — never trust keydown.key for printables, project
+// CLAUDE.md rule); structural keys are captured via keydown.
+
+const kbInput = document.getElementById("kb");
+const kbBtn = document.getElementById("btn-kb");
+let kbPrev = "";
+
+const SPECIAL_KEYS = {
+  Enter: "enter", Backspace: "backspace", Tab: "tab", Escape: "escape",
+  Delete: "delete", Home: "home", End: "end",
+  ArrowLeft: "left", ArrowUp: "up", ArrowRight: "right", ArrowDown: "down",
+};
+
+kbBtn.addEventListener("pointerdown", (e) => e.preventDefault()); // focus is handled manually
+kbBtn.addEventListener("pointerup", (e) => {
+  e.preventDefault();
+  if (document.activeElement === kbInput) kbInput.blur();
+  else kbInput.focus({ preventScroll: true });
+});
+
+kbInput.addEventListener("focus", () => kbBtn.classList.add("active"));
+kbInput.addEventListener("blur", () => kbBtn.classList.remove("active"));
+
+kbInput.addEventListener("keydown", (e) => {
+  const special = SPECIAL_KEYS[e.key];
+  if (!special) return; // printable characters flow through the input event
+  e.preventDefault();   // keep the field unchanged — no double handling via the diff
+  send({ type: "key_special", key: special });
+});
+
+kbInput.addEventListener("input", (e) => {
+  const value = kbInput.value;
+  // Diff previous vs current value: common prefix + suffix, the middle changed.
+  const minLen = Math.min(kbPrev.length, value.length);
+  let p = 0;
+  while (p < minLen && kbPrev[p] === value[p]) p++;
+  let s = 0;
+  while (s < minLen - p && kbPrev[kbPrev.length - 1 - s] === value[value.length - 1 - s]) s++;
+  const removed = kbPrev.length - p - s;
+  const inserted = value.slice(p, value.length - s);
+  for (let i = 0; i < removed; i++) send({ type: "key_special", key: "backspace" });
+  if (inserted) send({ type: "key_text", text: inserted });
+  kbPrev = value;
+  // Trim the buffer once it grows, outside IME composition (programmatic reset is silent).
+  if (!e.isComposing && value.length > 200) {
+    kbInput.value = "";
+    kbPrev = "";
+  }
+});
+
 // --- Canvas gestures ------------------------------------------------------
 // tap (no travel)            -> left click on release
 // RIGHT held + tap           -> right click on release
@@ -209,6 +262,9 @@ function firstTwoPointers() {
 }
 
 canvas.addEventListener("pointerdown", (e) => {
+  // While the keyboard is open, tapping the screen must NOT steal focus from
+  // the hidden input — you click a field on the PC and keep typing.
+  if (document.activeElement === kbInput) e.preventDefault();
   canvas.setPointerCapture(e.pointerId);
   const p = toCanvasPx(e);
 
@@ -344,7 +400,11 @@ function connect() {
     }
   };
 
-  ws.onclose = () => {
+  ws.onclose = (e) => {
+    if (e.code === 4401) {
+      setStatus("disconnected", "Invalid token — scan the fresh QR on the PC");
+      return; // retrying with a dead token is pointless
+    }
     setStatus("disconnected", document.hidden ? "Paused — screen away" : "Disconnected — retrying…");
     if (!document.hidden) setTimeout(connect, RECONNECT_MS);
   };

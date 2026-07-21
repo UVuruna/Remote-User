@@ -125,6 +125,10 @@ async def _receive_input(ws: WebSocket, injector: InputInjector, streamer: Scree
             injector.move(float(msg["x"]), float(msg["y"]))
         elif kind == "scroll":
             injector.wheel(float(msg["x"]), float(msg["y"]), float(msg["ticks"]))
+        elif kind == "key_text":
+            injector.type_text(str(msg["text"]))
+        elif kind == "key_special":
+            injector.press_key(str(msg["key"]))
         elif kind == "viewport":
             streamer.set_viewport(
                 float(msg["x"]), float(msg["y"]), float(msg["w"]), float(msg["h"])

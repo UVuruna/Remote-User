@@ -16,6 +16,7 @@ user32 = ctypes.windll.user32
 
 # SendInput constants
 INPUT_MOUSE = 0
+INPUT_KEYBOARD = 1
 MOUSEEVENTF_MOVE = 0x0001
 MOUSEEVENTF_LEFTDOWN = 0x0002
 MOUSEEVENTF_LEFTUP = 0x0004
@@ -40,6 +41,24 @@ BUTTON_FLAGS = {
     "middle": (MOUSEEVENTF_MIDDLEDOWN, MOUSEEVENTF_MIDDLEUP),
 }
 
+KEYEVENTF_KEYUP = 0x0002
+KEYEVENTF_UNICODE = 0x0004
+
+# Structural keys the client may send as `key_special`.
+VK_CODES = {
+    "enter": 0x0D,
+    "backspace": 0x08,
+    "tab": 0x09,
+    "escape": 0x1B,
+    "delete": 0x2E,
+    "home": 0x24,
+    "end": 0x23,
+    "left": 0x25,
+    "up": 0x26,
+    "right": 0x27,
+    "down": 0x28,
+}
+
 
 class MOUSEINPUT(ctypes.Structure):
     _fields_ = [
@@ -52,9 +71,19 @@ class MOUSEINPUT(ctypes.Structure):
     ]
 
 
+class KEYBDINPUT(ctypes.Structure):
+    _fields_ = [
+        ("wVk", wintypes.WORD),
+        ("wScan", wintypes.WORD),
+        ("dwFlags", wintypes.DWORD),
+        ("time", wintypes.DWORD),
+        ("dwExtraInfo", ctypes.POINTER(wintypes.ULONG)),
+    ]
+
+
 class INPUT(ctypes.Structure):
     class _U(ctypes.Union):
-        _fields_ = [("mi", MOUSEINPUT)]
+        _fields_ = [("mi", MOUSEINPUT), ("ki", KEYBDINPUT)]
 
     _anonymous_ = ("u",)
     _fields_ = [("type", wintypes.DWORD), ("u", _U)]
@@ -114,3 +143,28 @@ class InputInjector:
         under the cursor), then scrolls by the given number of wheel ticks."""
         self.move(x_norm, y_norm)
         self._send(MOUSEEVENTF_WHEEL, mouse_data=round(ticks * WHEEL_DELTA))
+
+    def _send_key(self, vk: int, scan: int, flags: int) -> None:
+        inp = INPUT(type=INPUT_KEYBOARD)
+        inp.ki = KEYBDINPUT(vk, scan, flags, 0, None)
+        sent = user32.SendInput(1, ctypes.byref(inp), ctypes.sizeof(INPUT))
+        if sent != 1:
+            logger.error("SendInput (key) failed: %s", ctypes.get_last_error())
+
+    def type_text(self, text: str) -> None:
+        """Injects arbitrary Unicode text via VK_PACKET. Surrogate pairs work —
+        each UTF-16 code unit is sent as its own down+up event."""
+        data = text.encode("utf-16-le")
+        for i in range(0, len(data), 2):
+            unit = int.from_bytes(data[i:i + 2], "little")
+            self._send_key(0, unit, KEYEVENTF_UNICODE)
+            self._send_key(0, unit, KEYEVENTF_UNICODE | KEYEVENTF_KEYUP)
+
+    def press_key(self, name: str) -> None:
+        """Presses a structural key (Enter, Backspace, arrows…) by VK code."""
+        vk = VK_CODES.get(name.lower())
+        if vk is None:
+            logger.error("Unknown special key %r from client", name)
+            return
+        self._send_key(vk, 0, 0)
+        self._send_key(vk, 0, KEYEVENTF_KEYUP)

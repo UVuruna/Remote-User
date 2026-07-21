@@ -52,8 +52,10 @@ Goal: daily-usable control of the PC.
 - [x] Visibility-gated session (owner security decision): socket closes when the page hides (tab switch / screen lock), reconnects on return
 - [x] Auto-reconnect (network blip, tablet sleep/wake) — shipped with Phase 1 client
 - [x] Frame backpressure: per-client queue of size 1 drops stale frames when the client lags — shipped with Phase 1 server
-- [ ] Keyboard: hidden input field + text diffing (`key_text`), `keydown` for special keys (`key_special`)
+- [x] Keyboard: ⌨ toggle button → hidden input field + value diffing (`key_text`), `keydown` for special keys (`key_special`); `KEYEVENTF_UNICODE` injection incl. surrogate pairs; tapping the screen keeps the keyboard open
+- [x] Invalid-token UX: close code 4401 shows "scan the fresh QR" instead of retrying forever
 - [ ] Monitor switch button (capture source + coordinate rect swap)
+- [ ] Keyboard tuning on real devices (Gboard/Samsung IME quirks — swipe typing, autocorrect)
 
 <a id="phase-3"></a>
 
