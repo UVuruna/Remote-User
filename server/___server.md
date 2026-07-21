@@ -10,8 +10,14 @@ Declares per-monitor DPI awareness (before anything touches the screen), configu
 ### `config.py` — Settings
 Single source for every tunable value (port, fps, JPEG quality, stream downscale width, paths). No other file hardcodes these. See [Config](config.md).
 
-### `capture.py` — Screen Streamer
-Capture thread: dxcam (DXGI Desktop Duplication) → optional downscale → JPEG encode → callback. See [Screen Streamer](capture.md).
+### `capture.py` — Screen Streamer (JPEG fallback)
+Capture thread: dxcam (DXGI Desktop Duplication) → optional downscale → JPEG encode → callback. The fallback path when no H.264 encoder/ffmpeg is available. See [Screen Streamer](capture.md).
+
+### `h264_streamer.py` — H.264 Streamer (primary)
+dxcam → ffmpeg (hardware/software H.264) → fragmented MP4 stream. The responsive path (~2 Mbps for a static screen vs ~48 Mbps JPEG). See [H.264 Streamer](h264_streamer.md).
+
+### `encoders.py` — Encoder Detection
+Picks a working H.264 encoder for this machine (NVENC/QuickSync/AMF/software) by test-encoding. See [Encoders](encoders.md).
 
 ### `input_injector.py` — Input Injector
 Win32 `SendInput` via ctypes. Maps 0–1 monitor-normalized coordinates to virtual-desktop absolutes. See [Input Injector](input_injector.md).
