@@ -16,9 +16,11 @@ Remote control of the Windows PC from an Android tablet/phone over LAN. The PC r
 - **Streaming:** **H.264** via ffmpeg, hardware-encoded with auto-detection (NVENC → QuickSync → AMF) and a **libx264 software fallback** so it runs on any PC; output is fragmented MP4 decoded by the client via MSE. JPEG-per-frame is the fallback when no ffmpeg/encoder exists. (Measured ~2 Mbps static vs ~48 Mbps JPEG.)
 - **Product = two installable apps:** a Windows desktop app (server + GUI + tray, `.exe`) and an Android **hybrid** app (native shell + WebView reusing the web client, shipped as an APK). Not "open a URL in a browser".
 - **Connection:** a mesh VPN installed on both devices (Tailscale recommended), one-time, wizard-guided; works anywhere incl. mobile data via the mesh's free relay. Server already binds all interfaces + pairing detects the Tailscale address, so this is code-ready.
+- **Login = the Tailscale login** (owner decision, option a): the mesh identity IS the account; one login per device, no custom account backend.
+- **The app installs/drives all dependencies — the user never side-installs anything** (hard owner requirement). Wizard in the `.exe` AND the APK: ffmpeg bundled; Tailscale chain-installed on desktop / store-deep-linked-and-detected on Android; user only follows in-app prompts. Never tell the *end user* to download/copy/configure anything (telling the *owner* to install a dep for dev-time testing is fine, but say so explicitly).
 - **Client UI:** vanilla HTML/CSS/JS in the WebView, Pointer Events, canvas rendering — no framework, no build step.
 - **Hard constraints (owner):** no payment for any required part; third-party services/installs OK if best; not over-indexing on privacy/security. Don't fight mature remote-desktop tools on latency — the unique value is the **app-aware companion layer** (Windows UI Automation state reading, notifications, per-app controls).
-- **Open decisions** (see ROADMAP): login mechanism (Tailscale-login-as-account vs own Hostinger account), mesh provider, distribution, build order.
+- **Open decisions** (see ROADMAP): mesh provider (Tailscale vs ZeroTier), distribution (APK vs later Play Store), build order.
 
 ## Architecture Constraints
 

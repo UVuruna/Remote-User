@@ -25,7 +25,12 @@ After the LAN prototype proved the control loop and touch UX on real code, the p
   - **Android app** — a **hybrid**: a native shell (login, device list, Connect, settings) wrapping a **WebView that reuses the existing web client**. The browser holds the communication logic; the user sees a real app with its own interface (no browser chrome, no URL/QR copying).
 - **Distribution:** APK first (e.g. GitHub Releases); Play Store only later, for wide public distribution.
 - **Connection across the internet:** a **mesh VPN installed on both devices** (Tailscale recommended; ZeroTier equivalent), set up **once**, guided by an in-app wizard. Works anywhere including mobile data via the mesh's **free relay fallback**. The server already binds all interfaces and pairing already detects/prefers the Tailscale address (`0.0.017`), so the connection layer is **code-ready** — going off-LAN needs the install, not new code.
-- **One account, one-time login** (exact mechanism still open — see below).
+- **One account, one-time login = the mesh (Tailscale) login** (owner decision 2026-07-22, option **a**): the Tailscale identity **is** the account — a single login on each device, no custom account backend; the app finds the PC via the mesh device list.
+- **The app installs and drives its own dependencies — the user NEVER does a side-install** (hard owner requirement, restated firmly 2026-07-22). The setup wizard in **both** the desktop `.exe` installer **and** the Android APK drives every dependent component:
+  - **ffmpeg** is **bundled** inside the desktop installer — zero user action.
+  - **Tailscale** is **chain-installed by the desktop installer**; the wizard then guides the one-time login.
+  - On **Android**, an app cannot silently install another (OS security), so the wizard **deep-links to the store, detects when Tailscale is installed, then continues** — as automated as Android allows.
+  - In every case the user only follows in-app prompts; "go download X / copy this / configure Y" is forbidden.
 - **Media: H.264**, hardware-encoded with **auto-detection** (NVENC → QuickSync → AMF) and a **software fallback** (libx264) so it runs on any PC — NVIDIA, Intel iGPU, AMD, or no GPU. Replaces JPEG-per-frame. Region-of-interest streaming dropped: inter-frame compression makes the full-frame stream cheap (measured **~2 Mbps static vs ~48 Mbps JPEG**).
 - **Virtual cursor + trackpad (relative) mode** — learned from the pro tools, for precision on small targets.
 - **Hard constraint: NO payment** for any required part. Third-party services/installs are acceptable if they are genuinely the best option; the owner does **not** over-index on privacy/security — this is a personal productivity tool, not a security product.
@@ -36,7 +41,6 @@ After the LAN prototype proved the control loop and touch UX on real code, the p
 
 ### ❓ Open Decisions (not yet settled)
 
-- **Login mechanism:** (a) the mesh/Tailscale login **is** the account — one login, no custom backend, the app finds the PC via the mesh device list (**recommended, simplest**); vs (b) our own account on Hostinger with the mesh underneath (own brand, but a second login or federation). *Owner to confirm.*
 - **Mesh provider:** Tailscale (recommended) vs ZeroTier (equivalent).
 - **Distribution:** APK-only vs eventual Play Store.
 - **Build order:** the plan below is proposed; owner to confirm the sequence.
@@ -47,8 +51,8 @@ After the LAN prototype proved the control loop and touch UX on real code, the p
 
 - **Phase A — H.264 end-to-end** *(in progress)*: encoder core + auto-detect **done** (`0.0.019`, verified NVENC + software fallback). Remaining: wire the server to send H.264, client decodes via MSE into the canvas, add the virtual cursor. Biggest responsiveness lever; testable on LAN.
 - **Phase B — Off-LAN validation** via the mesh: install Tailscale on both, test from mobile data. Connection code already ready — mostly an install + measure step.
-- **Phase C — Desktop app:** server wrapped in a GUI (login, settings, status, monitor/quality) + tray, packaged as a signed `.exe` installer (monorepo build pipeline), with the Tailscale setup wizard.
-- **Phase D — Phone app (APK):** native shell + WebView + login + device list + Connect + Tailscale wizard.
+- **Phase C — Desktop app:** server wrapped in a GUI (login, settings, status, monitor/quality) + tray, packaged as a signed `.exe` installer (monorepo build pipeline). The installer/wizard **bundles ffmpeg** and **chain-installs Tailscale**, then guides the one-time Tailscale login — the user does nothing on the side.
+- **Phase D — Phone app (APK):** native shell + WebView + login + device list + Connect. The wizard **drives** the Tailscale setup (deep-links to the store, detects install, continues, guides login) — as automated as Android permits (no silent third-app install).
 - **Phase E — Login / pairing:** the "click Connect and my PC appears" flow tying the account to finding the PC.
 - **Phase F+ — App-aware companion layer** (the differentiator): focused-window/process detection, Windows UI Automation state reading, notifications, per-app controls. Owner specs the features.
 
