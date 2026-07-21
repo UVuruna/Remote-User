@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Logs
+logs/
+
+# Build output
+dist/
+build/
+*.spec
+setup/cert/
+setup/icon*.ico
+version_info.txt

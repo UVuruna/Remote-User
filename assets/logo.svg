@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000">
+  <defs>
+    <linearGradient id="uv-frame" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#38bdf8"/>
+      <stop offset="1" stop-color="#8b5cf6"/>
+    </linearGradient>
+    <linearGradient id="uv-screen" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0c4a6e"/>
+      <stop offset="1" stop-color="#312e81"/>
+    </linearGradient>
+    <linearGradient id="uv-screen2" x1="1" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#312e81"/>
+      <stop offset="1" stop-color="#0c4a6e"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Monitor -->
+  <rect x="60" y="130" width="640" height="440" rx="36" fill="#0f172a" stroke="url(#uv-frame)" stroke-width="18"/>
+  <rect x="104" y="174" width="552" height="352" rx="18" fill="url(#uv-screen)"/>
+  <!-- Monitor stand -->
+  <rect x="330" y="570" width="100" height="52" fill="#0f172a" stroke="url(#uv-frame)" stroke-width="14"/>
+  <rect x="240" y="622" width="280" height="30" rx="15" fill="url(#uv-frame)"/>
+
+  <!-- Cursor on the monitor screen -->
+  <path d="M 360 300 L 360 432 L 393 400 L 415 448 L 442 436 L 420 388 L 464 384 Z"
+        fill="#f8fafc" stroke="#0f172a" stroke-width="10" stroke-linejoin="round"/>
+
+  <!-- Wi-Fi link between devices -->
+  <circle cx="810" cy="300" r="20" fill="url(#uv-frame)"/>
+  <path d="M 752 250 A 82 82 0 0 1 868 250" fill="none" stroke="url(#uv-frame)" stroke-width="26" stroke-linecap="round"/>
+  <path d="M 706 200 A 148 148 0 0 1 914 200" fill="none" stroke="url(#uv-frame)" stroke-width="26" stroke-linecap="round"/>
+
+  <!-- Phone -->
+  <rect x="620" y="410" width="310" height="530" rx="52" fill="#0f172a" stroke="url(#uv-frame)" stroke-width="18"/>
+  <rect x="656" y="470" width="238" height="382" rx="20" fill="url(#uv-screen2)"/>
+  <!-- Speaker + home indicator -->
+  <rect x="725" y="434" width="100" height="14" rx="7" fill="#334155"/>
+  <rect x="715" y="884" width="120" height="16" rx="8" fill="#334155"/>
+
+  <!-- Tap ripple on the phone screen -->
+  <circle cx="775" cy="660" r="34" fill="#f8fafc"/>
+  <circle cx="775" cy="660" r="74" fill="none" stroke="#f8fafc" stroke-width="14" opacity="0.55"/>
+  <circle cx="775" cy="660" r="116" fill="none" stroke="#f8fafc" stroke-width="12" opacity="0.28"/>
+</svg>
