@@ -12,6 +12,9 @@ logs/
 # Regenerated on every server start (contains the live pairing token)
 PAIRING_QR.png
 
+# Downloaded tunnel binary
+bin/
+
 # Build output
 dist/
 build/
