@@ -39,6 +39,12 @@ function setStatus(cls, text) {
   statusEl.textContent = text;
 }
 
+// The user must never stare at a silent "Connecting…" — any failure surfaces
+// its actual reason on the status pill.
+window.addEventListener("error", (e) => setStatus("disconnected", `Page error: ${e.message}`));
+window.addEventListener("unhandledrejection", (e) =>
+  setStatus("disconnected", `Page error: ${e.reason}`));
+
 function toCanvasPx(e) {
   return { x: e.clientX * devicePixelRatio, y: e.clientY * devicePixelRatio };
 }
@@ -374,8 +380,7 @@ window.addEventListener("contextmenu", (e) => e.preventDefault());
 // returning to the page reconnects automatically.
 
 function connect() {
-  if (document.hidden) return;
-  setStatus("connecting", "Connecting…");
+  setStatus("connecting", `Connecting to ${location.host}…`);
   ws = new WebSocket(`ws://${location.host}/ws`);
   ws.binaryType = "arraybuffer";
 
@@ -405,17 +410,25 @@ function connect() {
       setStatus("disconnected", "Invalid token — scan the fresh QR on the PC");
       return; // retrying with a dead token is pointless
     }
-    setStatus("disconnected", document.hidden ? "Paused — screen away" : "Disconnected — retrying…");
-    if (!document.hidden) setTimeout(connect, RECONNECT_MS);
+    setStatus(
+      "disconnected",
+      document.hidden ? "Paused — screen away" : `Disconnected (code ${e.code}) — retrying…`
+    );
   };
 }
 
+// Pause while the page is hidden (owner security decision); the watchdog
+// below reconnects when it is visible again.
 document.addEventListener("visibilitychange", () => {
-  if (document.hidden) {
-    if (ws) ws.close();
-  } else if (!ws || ws.readyState === WebSocket.CLOSED) {
-    connect();
-  }
+  if (document.hidden && ws) ws.close();
 });
+
+// Single reconnect authority: whenever the page is visible and the socket is
+// not alive, try again. No state machine to get stuck in.
+setInterval(() => {
+  if (document.hidden) return;
+  if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
+  connect();
+}, RECONNECT_MS);
 
 connect();

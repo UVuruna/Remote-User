@@ -55,8 +55,11 @@ async def main() -> None:
 
     streamer.start()
     try:
+        # log_level info so every HTTP/WS access is visible — with "warning" a
+        # failing client is invisible in the log, which already cost us a debug
+        # session (the phone WAS reaching the server while the log showed nothing).
         server = uvicorn.Server(
-            uvicorn.Config(app, host=SETTINGS.host, port=SETTINGS.port, log_level="warning")
+            uvicorn.Config(app, host=SETTINGS.host, port=SETTINGS.port, log_level="info")
         )
         await server.serve()
     finally:
