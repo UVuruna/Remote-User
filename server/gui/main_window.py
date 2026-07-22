@@ -7,6 +7,7 @@ window hides to the tray — the server keeps running until Quit.
 """
 
 import logging
+import os
 import subprocess
 import tempfile
 import threading
@@ -359,10 +360,15 @@ class MainWindow(QMainWindow):
 
     def _download_update(self, upd) -> None:
         """Worker: fetch the installer to %TEMP%; the refresh timer launches
-        it (Qt work stays on the UI thread)."""
+        it (Qt work stays on the UI thread). Chunked with a socket timeout —
+        urlretrieve has none, and a mid-transfer stall (Wi-Fi drop, CDN hang)
+        would leave the button on "Downloading…" forever with no retry."""
         try:
             path = Path(tempfile.gettempdir()) / f"RemoteUser_Setup_v{upd.version}.exe"
-            urllib.request.urlretrieve(upd.installer_url, path)
+            with urllib.request.urlopen(upd.installer_url, timeout=30) as response, \
+                    open(path, "wb") as out:
+                while chunk := response.read(256 * 1024):
+                    out.write(chunk)
         except Exception as e:
             logger.error("Update download failed: %s", e)
             self._update_state = "failed"
@@ -375,8 +381,20 @@ class MainWindow(QMainWindow):
         if state in (None, "launched") or self._update is None:
             return
         if state == "ready":
+            # os.startfile = ShellExecute, which raises the UAC prompt the
+            # installer's admin manifest requires — Popen/CreateProcess from
+            # this unelevated app fails with WinError 740 and would wedge
+            # the whole flow. "launched" only after the call succeeds.
+            try:
+                os.startfile(str(self._update_path))
+            except OSError as e:
+                logger.error("Installer launch failed: %s", e)
+                self._update_state = "failed"
+                self.update_btn.setText("Update launch failed — retry")
+                self.update_btn.setEnabled(True)
+                self.update_btn.show()
+                return
             self._update_state = "launched"
-            subprocess.Popen([str(self._update_path)])
             self._quit()  # free our files; the installer takes over
             return
         if state == "found":
