@@ -450,9 +450,11 @@ class MainWindow(QMainWindow):
             # screens; we say exactly what happens next).
             if info.tailscale_ip:
                 self.reach_label.setText(
-                    "Anywhere-access is ON. First pairing: the phone must be on "
-                    "THIS Wi-Fi, then scan the QR once — install, tap Open the "
-                    "app, done. After that the app works from anywhere, no QR.")
+                    "On the phone, first time only:\n"
+                    "1.  Join THIS same Wi-Fi\n"
+                    "2.  Scan this QR with the camera\n"
+                    "3.  Tap Install, then Open the app\n"
+                    "Done — after that it works from anywhere, no QR.")
                 self.tailscale_btn.hide()
             elif pairing.tailscale_exe():
                 self.reach_label.setText(
@@ -464,9 +466,11 @@ class MainWindow(QMainWindow):
                 self.tailscale_btn.show()
             else:
                 self.reach_label.setText(
-                    "Works on home Wi-Fi now (the phone must be on THIS Wi-Fi "
-                    "to scan the QR). For access from anywhere, add Tailscale "
-                    "(free, one-time, guided).")
+                    "On the phone, first time only:\n"
+                    "1.  Join THIS same Wi-Fi\n"
+                    "2.  Scan this QR with the camera\n"
+                    "3.  Tap Install, then Open the app\n"
+                    "For use away from home too, add Tailscale (free, guided).")
                 self.tailscale_btn.setText("Install Tailscale")
                 self.tailscale_btn.show()
             mode = "H.264 · " + (info.encoder or "?") if info.mode == "h264" else "JPEG fallback"

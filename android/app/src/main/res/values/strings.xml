@@ -5,8 +5,8 @@
     <!-- Onboarding -->
     <string name="onboarding_title">Remote User</string>
     <string name="onboarding_subtitle">Control your PC from this phone</string>
-    <string name="connect_card_title">Connect to your PC</string>
-    <string name="connect_card_body">On the PC, open the Remote User app — it shows a QR code. Scan it and you are in. Everything else is guided on screen.</string>
+    <string name="connect_card_title">Last step — scan the QR</string>
+    <string name="connect_card_body">Point the camera at the QR code in the Remote User window on your PC (both on the same Wi-Fi). That connects you — nothing else to do.</string>
     <string name="scan_qr">Scan the QR code</string>
     <string name="or_divider">or paste the link from the PC window</string>
     <string name="link_hint">http://…?token=…</string>
