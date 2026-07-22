@@ -1,9 +1,9 @@
 """FastAPI application: serves the client page, streams frames, receives input.
 
 Protocol (see project CLAUDE.md):
-- client → server, JSON text: auth, pointer_down, pointer_up, pointer_move,
-  scroll, viewport (JPEG mode only), key_text, key_special, chord,
-  monitor_switch, screenshot
+- client → server, JSON text: auth, pointer_down, pointer_up, click (at the
+  current cursor, no coordinates), pointer_move, scroll, viewport (JPEG mode
+  only), key_text, key_special, chord, monitor_switch, screenshot
 - server → client, JSON text: `config` after auth and after every stream
   (re)start — monitor size plus `stream` ("h264" | "jpeg") and, in H.264 mode,
   the MSE `codec` string parsed from the live init segment; `actions` (radial
@@ -198,7 +198,7 @@ def create_app(stream, hub: FrameHub | None, injector: InputInjector, token: str
         else:
             tasks.append(asyncio.create_task(_stream_h264(ws, stream, token)))
         try:
-            await _receive_input(ws, injector, stream)
+            await _receive_input(ws, injector, stream, token)
         except WebSocketDisconnect:
             logger.info("Client disconnected: %s", ws.client)
         finally:
@@ -343,7 +343,7 @@ async def _toast(ws: WebSocket, text: str) -> None:
     await ws.send_text(json.dumps({"type": "toast", "text": text}))
 
 
-async def _switch_monitor(ws: WebSocket, injector: InputInjector, stream) -> None:
+async def _switch_monitor(ws: WebSocket, injector: InputInjector, stream, token: str) -> None:
     count = stream.output_count()
     if count < 2:
         await _toast(ws, "Only one active monitor")
@@ -357,7 +357,7 @@ async def _switch_monitor(ws: WebSocket, injector: InputInjector, stream) -> Non
         monitors.rect_for_size(stream.width, stream.height, stream.monitor_index)
     )
     if stream.mode == "jpeg":
-        await _send_config(ws, stream)  # H.264 clients get config from their fresh session
+        await _send_config(ws, stream, token)  # H.264 clients get config from their fresh session
     await _toast(ws, f"Monitor {stream.monitor_index + 1}/{count}")
 
 
@@ -371,7 +371,7 @@ async def _screenshot(ws: WebSocket, stream) -> None:
                  else "Clipboard busy — try again")
 
 
-async def _receive_input(ws: WebSocket, injector: InputInjector, stream) -> None:
+async def _receive_input(ws: WebSocket, injector: InputInjector, stream, token: str) -> None:
     while True:
         msg = json.loads(await ws.receive_text())
         kind = msg.get("type")
@@ -405,7 +405,7 @@ async def _receive_input(ws: WebSocket, injector: InputInjector, stream) -> None
         elif kind == "chord":
             injector.press_chord(str(msg["chord"]))
         elif kind == "monitor_switch":
-            await _switch_monitor(ws, injector, stream)
+            await _switch_monitor(ws, injector, stream, token)
         elif kind == "screenshot":
             await _screenshot(ws, stream)
         else:
