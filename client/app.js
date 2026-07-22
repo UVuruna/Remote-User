@@ -148,21 +148,15 @@ function drawCursor(D) {
   ctx.restore();
 }
 
-let lastKbPx = 0;
-
 function updateViewport() {
   const vv = window.visualViewport;
   const w = vv ? vv.width : window.innerWidth;
   const h = vv ? vv.height : window.innerHeight;
   const kb = vv ? Math.max(0, window.innerHeight - vv.height - vv.offsetTop) : 0;
-  if (kb < 60 && lastKbPx > 100) {
-    // The IME was dismissed natively (system back) — that hides it WITHOUT
-    // blurring the field, leaving the Keys toggle lying (active + dead first
-    // tap). Drop focus so open-state always means "keyboard on screen".
-    const ae = document.activeElement;
-    if (ae && ae.id === "kb") ae.blur();
-  }
-  lastKbPx = kb;
+  // NOTE: do NOT blur the keyboard field on a keyboard-height drop. Switching
+  // to the IME's voice/mic input transiently shrinks the keyboard, and a blur
+  // there tore down the field mid-dictation (had to re-tap Keys to get back —
+  // owner report 2026-07-22). Focus is only released by the Keys toggle now.
   const root = document.documentElement.style;
   root.setProperty("--kb", `${kb}px`);
   root.setProperty("--vtop", `${vv ? vv.offsetTop : 0}px`);
