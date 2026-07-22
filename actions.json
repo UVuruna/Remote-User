@@ -6,10 +6,10 @@
       "name": "Mouse",
       "icon": "mouse",
       "buttons": [
+        { "action": "click" },
         { "action": "right" },
         { "action": "drag" },
-        { "action": "scroll" },
-        { "action": "hover" }
+        { "action": "scroll" }
       ]
     },
     {
@@ -27,9 +27,9 @@
       "icon": "keyboard",
       "buttons": [
         { "action": "keyboard" },
-        { "label": "New line", "chord": "shift+enter" },
-        { "label": "Esc",      "chord": "escape" },
-        { "label": "Tab",      "chord": "tab" }
+        { "label": "Enter", "key": "enter" },
+        { "label": "Esc",   "chord": "escape" },
+        { "label": "Tab",   "chord": "tab" }
       ]
     },
     {

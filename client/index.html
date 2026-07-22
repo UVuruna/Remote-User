@@ -42,8 +42,10 @@
   <!-- Category picker (tap to open, tap an item to choose, X to cancel) -->
   <div id="wheel"></div>
 
-  <!-- Visible while typing: shows what is being typed / dictated -->
-  <input id="kb" type="text" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" placeholder="Type / dictate — goes to the PC">
+  <!-- Invisible keyboard capture — typed/dictated text lands in the focused
+       box on the PC (visible right there on the stream). A textarea so the
+       phone IME offers ↵ (new row), never a Send/Go key. -->
+  <textarea id="kb" rows="1" enterkeyhint="enter" aria-label="Type — goes to the PC" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false"></textarea>
 
   <!-- Phone → PC image upload (gallery or camera) -->
   <input id="filepick" type="file" accept="image/*" hidden>

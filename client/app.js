@@ -39,10 +39,11 @@ let streamMode = "jpeg";
 let cursorPos = null; // PC cursor, monitor-normalized — capture never includes it
 
 // One finger's meaning is set by a single toggle mode. Only one is ever active.
-//   click (default) · right · drag · scroll · hover · pan
-// pan moves the local view; the rest act on the PC. Two fingers always pinch.
-let touchMode = "click";
-const MODES = new Set(["right", "drag", "scroll", "hover", "pan"]);
+//   move (default — the finger only steers the PC cursor, never clicks)
+//   · right · drag · scroll · pan
+// Clicks come from the explicit Click button (press again fast = double
+// click). pan moves the local view; two fingers always pinch.
+let touchMode = "move";
 
 const pointers = new Map();
 let pinch = null;
@@ -67,6 +68,7 @@ function toCanvasPx(e) {
 
 function send(msg) {
   if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg));
+  else ensureConnected(); // a tap on a dead socket revives the link right away
 }
 
 // --- View transform -------------------------------------------------------
@@ -356,7 +358,7 @@ const ICONS = {
   right: '<rect x="6" y="3" width="12" height="18" rx="6"/><path d="M12 3v7"/><path d="M12 3h2a4 4 0 0 1 4 4v3h-6z" fill="currentColor" stroke="none"/>',
   drag: '<polyline points="5 9 2 12 5 15"/><polyline points="9 5 12 2 15 5"/><polyline points="15 19 12 22 9 19"/><polyline points="19 9 22 12 19 15"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="12" y1="2" x2="12" y2="22"/>',
   scroll: '<path d="m7 15 5 5 5-5"/><path d="m7 9 5-5 5 5"/>',
-  hover: '<path d="M3 3l7.4 18 2.3-7.3L20 11.4z"/>',
+  click: '<path d="M3 3l7.4 18 2.3-7.3L20 11.4z"/><path d="M14 6.5a7 7 0 0 0-8-2.4"/>',
   keyboard: '<rect x="2" y="5" width="20" height="14" rx="2"/><path d="M6 9h.01M10 9h.01M14 9h.01M18 9h.01M6 13h.01M18 13h.01M9 13h6"/>',
   monitor: '<rect x="2" y="4" width="14" height="10" rx="2"/><path d="M9 18h7"/><path d="M9 14v4"/><path d="m17 9 4 3-4 3"/>',
   image: '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-4.5-4.5L5 21"/>',
@@ -373,10 +375,12 @@ function svg(name) {
 // --- Built-in group actions -----------------------------------------------
 
 const BUILTINS = {
+  // The finger itself only steers the cursor — Click is the explicit left
+  // click at the CURRENT cursor position; press it twice for a double click.
+  click:    { label: "Click",  icon: "click",    kind: "send", msg: { type: "click", button: "left" } },
   right:    { label: "Right",  icon: "right",    kind: "mode" },
   drag:     { label: "Drag",   icon: "drag",     kind: "mode" },
   scroll:   { label: "Scroll", icon: "scroll",   kind: "mode" },
-  hover:    { label: "Hover",  icon: "hover",    kind: "mode" },
   keyboard: { label: "Keys",   icon: "keyboard", kind: "kb" },
   monitor:  { label: "Monitor", icon: "monitor", kind: "send", msg: { type: "monitor_switch" } },
   snap:     { label: "Snap",   icon: "snap",     kind: "send", msg: { type: "screenshot" } },
@@ -386,7 +390,7 @@ const BUILTINS = {
 // --- Touch-mode toggles ---------------------------------------------------
 
 function setMode(mode) {
-  touchMode = touchMode === mode ? "click" : mode;
+  touchMode = touchMode === mode ? "move" : mode;
   refreshModeButtons();
 }
 
@@ -395,13 +399,18 @@ function refreshModeButtons() {
     el.classList.toggle("active", el.dataset.mode === touchMode));
 }
 
-// --- Keyboard capture (visible bar at the top) ----------------------------
+// --- Keyboard capture (invisible textarea) --------------------------------
+// The field never shows — what you type appears in the focused box on the PC
+// screen itself (owner decision 2026-07-22: a mirror bar duplicated it). A
+// textarea, so the phone IME offers ↵ (new row) instead of a Send/Go key:
+// ↵ makes a new row on the PC (Shift+Enter — messengers keep typing instead
+// of sending); the D-pad Enter button sends the real Enter.
 
 const kbInput = document.getElementById("kb");
 let kbPrev = "";
 
 const SPECIAL_KEYS = {
-  Enter: "enter", Backspace: "backspace", Tab: "tab", Escape: "escape",
+  Backspace: "backspace", Tab: "tab", Escape: "escape",
   Delete: "delete", Home: "home", End: "end",
   ArrowLeft: "left", ArrowUp: "up", ArrowRight: "right", ArrowDown: "down",
 };
@@ -416,22 +425,35 @@ function toggleKeyboard() {
 }
 
 kbInput.addEventListener("focus", () => {
-  kbInput.classList.add("on");
   document.querySelectorAll('[data-action="keyboard"]').forEach((el) => el.classList.add("active"));
 });
 kbInput.addEventListener("blur", () => {
-  kbInput.classList.remove("on");
   kbInput.value = "";
   kbPrev = "";
   document.querySelectorAll('[data-action="keyboard"]').forEach((el) => el.classList.remove("active"));
 });
 
 kbInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    send({ type: "chord", chord: "shift+enter" }); // new row, never "send"
+    return;
+  }
   const special = SPECIAL_KEYS[e.key];
   if (!special) return;
   e.preventDefault();
   send({ type: "key_special", key: special });
 });
+
+function sendTyped(text) {
+  // Some IMEs commit "\n" without any keydown — those newlines become the
+  // same Shift+Enter new row as the ↵ key.
+  const parts = text.split("\n");
+  parts.forEach((part, i) => {
+    if (i) send({ type: "chord", chord: "shift+enter" });
+    if (part) send({ type: "key_text", text: part });
+  });
+}
 
 kbInput.addEventListener("input", (e) => {
   const value = kbInput.value;
@@ -443,7 +465,7 @@ kbInput.addEventListener("input", (e) => {
   const removed = kbPrev.length - p - s;
   const inserted = value.slice(p, value.length - s);
   for (let i = 0; i < removed; i++) send({ type: "key_special", key: "backspace" });
-  if (inserted) send({ type: "key_text", text: inserted });
+  if (inserted) sendTyped(inserted);
   kbPrev = value;
   if (!e.isComposing && value.length > 200) {
     kbInput.value = "";
@@ -547,7 +569,9 @@ filePick.addEventListener("change", async () => {
     body.append("file", file);
     const res = await fetch(`/upload?token=${encodeURIComponent(token)}`, { method: "POST", body });
     const j = await res.json();
-    showToast(j.ok ? "Image in PC clipboard — paste with Ctrl+V" : "Upload failed");
+    // The server pastes it into the focused box by itself (Ctrl+V injected) —
+    // picking the image was the whole gesture.
+    showToast(j.ok ? "Image pasted on the PC" : "Upload failed");
   } catch (err) {
     showToast(`Upload failed: ${err.message}`);
   }
@@ -724,8 +748,17 @@ function beginPinch() {
 }
 
 canvas.addEventListener("pointerdown", (e) => {
-  if (keyboardOpen()) e.preventDefault(); // a tap must not blur the keyboard bar
+  if (keyboardOpen()) e.preventDefault(); // a tap must not blur the keyboard field
   if (streamMode === "h264" && video.paused) video.play().catch(() => {}); // autoplay unlock
+  if (e.isPrimary) {
+    // Self-heal: Android WebView loses the occasional pointerup/cancel
+    // (system edge gestures, palm) — a ghost entry would turn EVERY later
+    // tap into a "pinch" until refresh. A new primary pointer is the
+    // browser's guarantee that no other finger is really down.
+    pointers.clear();
+    pinch = null;
+    primary = null;
+  }
   canvas.setPointerCapture(e.pointerId);
   cancelScrollInertia();
   const p = toCanvasPx(e);
@@ -740,7 +773,7 @@ canvas.addEventListener("pointerdown", (e) => {
   if (touchMode === "drag") {
     primary.pos = toRemoteClamped(p.x, p.y);
     send({ type: "pointer_down", x: primary.pos.x, y: primary.pos.y, button: "left" });
-  } else if (touchMode === "hover") {
+  } else if (touchMode === "move") {
     send({ type: "pointer_move", ...toRemoteClamped(p.x, p.y) });
   } else if (touchMode === "scroll") {
     Object.assign(primary, { lastY: p.y, acc: 0, vel: 0, lastT: performance.now(), pos: toRemoteClamped(p.x, p.y) });
@@ -770,7 +803,7 @@ canvas.addEventListener("pointermove", (e) => {
   if (primary.type === "drag") {
     primary.pos = toRemoteClamped(p.x, p.y);
     send({ type: "pointer_move", x: primary.pos.x, y: primary.pos.y });
-  } else if (primary.type === "hover") {
+  } else if (primary.type === "move") {
     send({ type: "pointer_move", ...toRemoteClamped(p.x, p.y) });
   } else if (primary.type === "scroll") {
     const now = performance.now();
@@ -794,7 +827,7 @@ canvas.addEventListener("pointermove", (e) => {
     redraw();
     scheduleViewport();
   } else {
-    // click / right: track travel so an accidental swipe doesn't click
+    // right: track travel so an accidental swipe doesn't context-click
     if (Math.hypot(p.x - primary.startX, p.y - primary.startY) > TAP_MAX_MOVE * devicePixelRatio) {
       primary.moved = true;
     }
@@ -810,13 +843,11 @@ function endPointer(e) {
       send({ type: "pointer_up", x: primary.pos.x, y: primary.pos.y, button: "left" });
     } else if (primary.type === "scroll") {
       startScrollInertia(primary.vel, primary.pos);
-    } else if ((primary.type === "click" || primary.type === "right") &&
-               !primary.moved && e.type === "pointerup") {
+    } else if (primary.type === "right" && !primary.moved && e.type === "pointerup") {
       const pos = toRemote(primary.startX, primary.startY);
       if (pos) {
-        const button = primary.type === "right" ? "right" : "left";
-        send({ type: "pointer_down", x: pos.x, y: pos.y, button });
-        send({ type: "pointer_up", x: pos.x, y: pos.y, button });
+        send({ type: "pointer_down", x: pos.x, y: pos.y, button: "right" });
+        send({ type: "pointer_up", x: pos.x, y: pos.y, button: "right" });
       }
     }
     primary = null;
@@ -853,6 +884,12 @@ function connect() {
         if (newMode !== streamMode) showToast(newMode === "h264" ? "H.264 stream" : "JPEG stream");
         streamMode = newMode;
         tailscaleUrl = msg.tailscale_url || null;
+        if (IN_APP && window.Android.setTailscaleUrl) {
+          // The shell stores the works-anywhere address (fresh token included)
+          // and probes it on every start — the app then connects on mobile
+          // data too, not only on the home Wi-Fi.
+          window.Android.setTailscaleUrl(tailscaleUrl || "");
+        }
         updateAnywhereBanner();
         updateGetApp(msg.apk_available === true);
         view = { scale: 1, tx: 0, ty: 0 };
@@ -904,14 +941,24 @@ function connect() {
   };
 }
 
-document.addEventListener("visibilitychange", () => {
-  if (document.hidden && ws) ws.close();
-});
-
-setInterval(() => {
+function ensureConnected() {
   if (document.hidden) return;
   if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
   connect();
-}, RECONNECT_MS);
+}
+
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) {
+    if (ws) ws.close();
+  } else {
+    // Reconnect the moment the user comes back (app switch, image picker,
+    // screen unlock) — waiting out the retry interval swallowed the first
+    // taps and read as "input randomly dies".
+    ensureConnected();
+  }
+});
+window.addEventListener("pageshow", ensureConnected);
+
+setInterval(ensureConnected, RECONNECT_MS);
 
 connect();

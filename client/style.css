@@ -58,37 +58,26 @@ html, body {
 #status.disconnected { background: linear-gradient(90deg, var(--error), #b91c1c); }
 
 /* Keyboard capture field — always present and focusable (mobile browsers cannot
-   focus a display:none element, so it must never be display:none). Collapsed to
-   an invisible sliver when closed; expands into a visible top bar while typing so
-   you can see what you type / dictate. */
+   focus a display:none element, so it must never be display:none), but NEVER
+   visible: what you type appears in the focused box on the PC screen itself
+   (owner decision 2026-07-22 — a mirror bar just duplicated it). */
 #kb {
   position: fixed;
-  top: calc(var(--space-m) + var(--vtop));
-  left: 80px;
-  right: 80px;
+  top: 0;
+  left: 0;
+  width: 1px;
   height: 1px;
   padding: 0;
   border: 0;
-  border-radius: 12px;
   background: transparent;
   color: transparent;
   caret-color: transparent;
-  font: 500 15px system-ui, sans-serif;
   opacity: 0;
+  resize: none;
+  overflow: hidden;
   pointer-events: none;
-  z-index: 32;
+  z-index: 0;
 }
-#kb.on {
-  height: 44px;
-  padding: 0 14px;
-  background: rgb(15 23 42 / 0.88);
-  border: 1px solid var(--border);
-  color: var(--text-primary);
-  caret-color: var(--accent);
-  opacity: 1;
-  pointer-events: auto;
-}
-#kb::placeholder { color: var(--text-secondary); }
 
 #filepick { display: none; }
 
