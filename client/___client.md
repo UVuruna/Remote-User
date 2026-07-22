@@ -8,7 +8,7 @@ The phone side of Remote User — a plain web page served by the PC server, load
 Canvas + offscreen `<video>` (the H.264/MSE decode surface) + status pill + Move (top-left) and Hide (top-right) corner buttons + two D-pad groups (bottom-left/right, filled from config) + the category-wheel overlay + the invisible keyboard-capture textarea. Viewport locked (no browser zoom/scroll — pinch drives the local zoom).
 
 ### `install.html` — Android Install Funnel
-The ONLY page an Android browser ever sees (served at `/` by User-Agent when the APK exists). Full-screen, two steps: **Install** (downloads `/app.apk`) and **Open the app** — an `intent://pair?url=…` link that launches the app with THIS page's tokened URL, so pairing is one tap (nothing typed, nothing scanned; falls back to this same page when the app is missing). Self-contained (own inline styles).
+The ONLY page an Android browser ever sees (served at `/` by User-Agent when the APK exists). **"Open the app" is the first, primary button** — every scan after the first install is one tap into the app (an `intent://pair?url=…` link hands over THIS page's tokened URL, so the app pairs itself; falls back to this same page when the app is missing). Below it, "First time on this phone?" offers the one-time **Install** (`/app.apk`). Self-contained (own style block).
 
 ### `app.js` — Client Logic
 WebSocket connection, H.264 (MSE) or JPEG rendering, virtual cursor, cursor-steering gestures + the Click button. See [Client App](app.md).

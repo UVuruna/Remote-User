@@ -79,33 +79,27 @@
       color: #06212E;
     }
     .note { color: #a8b3c5; font-size: 12px; margin-top: 18px; }
+    .note.tight { margin: 10px 0 0; }
+    .step.first-time { margin-top: 22px; }
   </style>
 </head>
 <body>
   <div class="card">
     <img class="logo" src="/favicon.ico" alt="Remote User logo">
     <h1>Remote User</h1>
-    <p class="sub">Control this PC from your phone — everything happens in the app.</p>
+    <p class="sub">Everything runs in the app — this page only takes you there.</p>
 
-    <div class="step">
-      <span class="num">1</span>
+    <a class="btn primary" id="open" href="#">Open the app</a>
+    <p class="note tight">One tap — the app connects to this PC by itself.</p>
+
+    <div class="step first-time">
+      <span class="num">!</span>
       <div>
-        <b>Install the app</b>
-        <p>Tap Install. Your phone will ask to allow it — allow, then open the downloaded file.</p>
-        <a class="btn primary" href="/app.apk">Install</a>
+        <b>First time on this phone?</b>
+        <p>Install once: tap Install, allow the download, open the downloaded file — then come back and tap <b>Open the app</b> above.</p>
+        <a class="btn" href="/app.apk">Install the app</a>
       </div>
     </div>
-
-    <div class="step">
-      <span class="num">2</span>
-      <div>
-        <b>Open the app</b>
-        <p>The app connects to this PC by itself — nothing to type, nothing to scan.</p>
-        <a class="btn" id="open" href="#">Open the app</a>
-      </div>
-    </div>
-
-    <p class="note">Already have the app? Just tap <b>Open the app</b>.</p>
   </div>
 
   <script>
