@@ -2,18 +2,30 @@ package com.uvuruna.remoteuser
 
 import android.content.Context
 
-/** One stored value: the pairing URL (with token). The WebView keeps it
- *  fresh — when the in-page wizard hands the phone the works-anywhere link,
- *  the shell persists that as the new home. */
+/** Two stored addresses, both tokened page URLs:
+ *  - LAN: written by pairing (the QR always encodes the home address)
+ *  - Tailscale: learned from the page itself — the client receives
+ *    `tailscale_url` in every `config` and hands it over via the JS bridge
+ *  MainActivity probes both and loads whichever is reachable, so the app
+ *  works at home (LAN) and anywhere (mesh) without the user knowing why. */
 object Prefs {
     private const val FILE = "remoteuser"
-    private const val KEY_URL = "pairing_url"
+    private const val KEY_LAN = "pairing_url"
+    private const val KEY_TS = "tailscale_url"
 
-    fun url(context: Context): String? =
-        context.getSharedPreferences(FILE, Context.MODE_PRIVATE).getString(KEY_URL, null)
+    fun lanUrl(context: Context): String? =
+        context.getSharedPreferences(FILE, Context.MODE_PRIVATE).getString(KEY_LAN, null)
 
-    fun setUrl(context: Context, url: String?) {
+    fun setLanUrl(context: Context, url: String?) {
         context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
-            .edit().putString(KEY_URL, url).apply()
+            .edit().putString(KEY_LAN, url).apply()
+    }
+
+    fun tsUrl(context: Context): String? =
+        context.getSharedPreferences(FILE, Context.MODE_PRIVATE).getString(KEY_TS, null)
+
+    fun setTsUrl(context: Context, url: String?) {
+        context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
+            .edit().putString(KEY_TS, url).apply()
     }
 }

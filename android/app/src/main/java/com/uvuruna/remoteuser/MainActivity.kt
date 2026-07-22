@@ -18,17 +18,23 @@ import android.widget.Button
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import java.net.HttpURLConnection
+import java.net.URL
+import java.util.concurrent.FutureTask
+import java.util.concurrent.TimeUnit
 
-/** The client shell: a full-screen WebView on the stored pairing URL.
+/** The client shell: a full-screen WebView on the reachable pairing URL.
  *
  *  The page carries ALL the product UI and guidance; the shell adds only
  *  what a browser tab cannot:
+ *  - two stored addresses (LAN from the QR, Tailscale learned from the page)
+ *    are probed on every start and the reachable one is loaded — the app
+ *    works at home AND on mobile data without the user picking anything
  *  - external links (Google Play from the in-page Tailscale wizard) open as
  *    real apps, not inside the WebView
  *  - the file chooser (phone → PC image upload) is wired up
- *  - a native error card when the PC is unreachable (retry / re-pair)
- *  - `Android.rescan()` JS bridge — the page offers re-pairing when the
- *    token is rejected
+ *  - a native error card when no address answers (retry / re-pair)
+ *  - `Android.rescan()` / `Android.setTailscaleUrl()` JS bridge
  *  - the screen stays on; rotation never recreates the session; leaving the
  *    app pauses the page (its visibility rule closes the stream — owner
  *    security decision)
@@ -48,8 +54,7 @@ class MainActivity : AppCompatActivity() {
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val url = Prefs.url(this)
-        if (url == null) {
+        if (Prefs.lanUrl(this) == null) {
             repair()
             return
         }
@@ -57,10 +62,7 @@ class MainActivity : AppCompatActivity() {
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
         errorView = findViewById(R.id.error_view)
-        findViewById<Button>(R.id.btn_retry).setOnClickListener {
-            errorView.visibility = View.GONE
-            web.loadUrl(Prefs.url(this) ?: url)
-        }
+        findViewById<Button>(R.id.btn_retry).setOnClickListener { resolveAndLoad() }
         findViewById<Button>(R.id.btn_repair).setOnClickListener { repair() }
 
         web = findViewById(R.id.web)
@@ -79,11 +81,60 @@ class MainActivity : AppCompatActivity() {
             }
         })
 
-        web.loadUrl(url)
+        resolveAndLoad()
+    }
+
+    /** Probes /ping on every stored address in parallel and loads the first
+     *  reachable one — LAN preferred (lower latency), Tailscale the fallback
+     *  (mobile data, away from home). Waiting on the WebView's own timeout
+     *  (~2 min of blank screen) is exactly the failure this replaces; no
+     *  probe answering shows the native card within ~3 s instead. */
+    private fun resolveAndLoad() {
+        errorView.visibility = View.GONE
+        val candidates = listOfNotNull(Prefs.lanUrl(this), Prefs.tsUrl(this)).distinct()
+        if (candidates.isEmpty()) {
+            repair()
+            return
+        }
+        Thread {
+            val probes = candidates.map { url ->
+                val probe = FutureTask { pingOk(url) }
+                Thread(probe).start()
+                url to probe
+            }
+            val chosen = probes.firstOrNull { (_, probe) ->
+                try {
+                    probe.get(PING_TIMEOUT_MS + 500L, TimeUnit.MILLISECONDS)
+                } catch (e: Exception) {
+                    false
+                }
+            }?.first
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                if (chosen != null) web.loadUrl(chosen)
+                else errorView.visibility = View.VISIBLE
+            }
+        }.start()
+    }
+
+    /** True when the server answers the auth-free reachability probe. */
+    private fun pingOk(pageUrl: String): Boolean = try {
+        val u = Uri.parse(pageUrl)
+        val conn = URL("${u.scheme}://${u.host}:${u.port}/ping").openConnection() as HttpURLConnection
+        conn.connectTimeout = PING_TIMEOUT_MS
+        conn.readTimeout = PING_TIMEOUT_MS
+        try {
+            conn.responseCode in 200..299
+        } finally {
+            conn.disconnect()
+        }
+    } catch (e: Exception) {
+        false
     }
 
     private fun repair() {
-        Prefs.setUrl(this, null)
+        Prefs.setLanUrl(this, null)
+        Prefs.setTsUrl(this, null) // a new pairing may be a different PC/token
         startActivity(Intent(this, OnboardingActivity::class.java))
         finish()
     }
@@ -105,6 +156,13 @@ class MainActivity : AppCompatActivity() {
         fun rescan() {
             runOnUiThread { repair() }
         }
+
+        /** The page calls this on every `config` — the works-anywhere address
+         *  (fresh token included) persists here. Blank = the PC lost Tailscale. */
+        @JavascriptInterface
+        fun setTailscaleUrl(url: String) {
+            Prefs.setTsUrl(this@MainActivity, url.ifBlank { null })
+        }
     }
 
     private inner class Client : WebViewClient() {
@@ -112,10 +170,10 @@ class MainActivity : AppCompatActivity() {
             view: WebView, request: WebResourceRequest
         ): Boolean {
             val target = request.url
-            val home = Uri.parse(Prefs.url(this@MainActivity) ?: return false)
+            val homePort = Uri.parse(Prefs.lanUrl(this@MainActivity) ?: return false).port
             // Our server (any of its addresses shares the port) stays inside;
             // everything else (Google Play, tailscale.com) opens as a real app.
-            if (target.scheme?.startsWith("http") == true && target.port == home.port) {
+            if (target.scheme?.startsWith("http") == true && target.port == homePort) {
                 return false
             }
             return try {
@@ -123,14 +181,6 @@ class MainActivity : AppCompatActivity() {
                 true
             } catch (e: Exception) {
                 true // no handler for the link — swallow rather than break the page
-            }
-        }
-
-        override fun doUpdateVisitedHistory(view: WebView, url: String?, isReload: Boolean) {
-            // The in-page wizard navigates to the works-anywhere link — persist
-            // whatever tokened URL we end up on as the new home.
-            if (url != null && url.startsWith("http") && url.contains("token=")) {
-                Prefs.setUrl(this@MainActivity, url)
             }
         }
 
@@ -158,5 +208,9 @@ class MainActivity : AppCompatActivity() {
             filePicker.launch("image/*")
             return true
         }
+    }
+
+    private companion object {
+        const val PING_TIMEOUT_MS = 3000
     }
 }

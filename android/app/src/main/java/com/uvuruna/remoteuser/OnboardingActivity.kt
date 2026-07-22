@@ -22,7 +22,7 @@ class OnboardingActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        Prefs.url(this)?.let {
+        Prefs.lanUrl(this)?.let {
             openClient()
             return
         }
@@ -46,7 +46,7 @@ class OnboardingActivity : AppCompatActivity() {
             Toast.makeText(this, R.string.bad_link, Toast.LENGTH_LONG).show()
             return
         }
-        Prefs.setUrl(this, url)
+        Prefs.setLanUrl(this, url)
         openClient()
     }
 
