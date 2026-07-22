@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- One product, one palette — mirrors client/style.css and the desktop theme. -->
+<resources>
+    <color name="surface0">#0F172A</color>
+    <color name="surface1">#1E293B</color>
+    <color name="surface2">#273449</color>
+    <color name="border">#1AFFFFFF</color>
+    <color name="text_primary">#F5F5F5</color>
+    <color name="text_secondary">#A8B3C5</color>
+    <color name="accent">#38BDF8</color>
+    <color name="accent_dark">#0EA5E9</color>
+    <color name="accent_on">#06212E</color>
+    <color name="error">#EF4444</color>
+</resources>

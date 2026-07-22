@@ -23,3 +23,9 @@ setup/cert/
 setup/icon*.ico
 setup/vendor/
 version_info.txt
+
+# Android build artifacts (the APK lands in dist/)
+android/.gradle/
+android/local.properties
+android/keystore/
+android/app/build/

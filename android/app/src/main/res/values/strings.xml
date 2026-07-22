@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Remote User</string>
+
+    <!-- Onboarding -->
+    <string name="onboarding_title">Remote User</string>
+    <string name="onboarding_subtitle">Control your PC from this phone</string>
+    <string name="connect_card_title">Connect to your PC</string>
+    <string name="connect_card_body">On the PC, open the Remote User app — it shows a QR code. Scan it and you are in. Everything else is guided on screen.</string>
+    <string name="scan_qr">Scan the QR code</string>
+    <string name="or_divider">or paste the link from the PC window</string>
+    <string name="link_hint">http://…?token=…</string>
+    <string name="connect">Connect</string>
+    <string name="bad_link">That link does not look right — it should start with http and contain a token. Easiest: just scan the QR.</string>
+
+    <!-- Main / error view -->
+    <string name="error_title">Cannot reach the PC</string>
+    <string name="error_body">Make sure the Remote User app on the PC is running, and that this phone is on the same Wi-Fi (or Tailscale is ON in its app). Then try again.</string>
+    <string name="try_again">Try again</string>
+    <string name="repair">Scan a new QR</string>
+</resources>
