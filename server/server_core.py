@@ -165,9 +165,12 @@ class ServerController:
             # log_config=None: uvicorn's own dictConfig calls sys.stdout.isatty(),
             # which crashes in a windowed (no-console) PyInstaller app where stdout
             # is None; without it uvicorn's loggers propagate to our root handlers.
+            # lifespan="off": we use no startup/shutdown hooks, and force_exit
+            # cancels the lifespan task mid-wait — every stop would log a
+            # scary (but harmless) CancelledError traceback.
             self._uvicorn = uvicorn.Server(uvicorn.Config(
                 app, host=SETTINGS.host, port=SETTINGS.port,
-                log_level="info", log_config=None,
+                log_level="info", log_config=None, lifespan="off",
             ))
             self.state = "running"
             await self._uvicorn.serve()
