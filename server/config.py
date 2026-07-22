@@ -128,6 +128,7 @@ class Settings:
 
     # Client files (bundled read-only in the installed app)
     client_dir: Path = BUNDLE_DIR / "client" if FROZEN else PROJECT_ROOT / "client"
+    favicon_path: Path = (BUNDLE_DIR if FROZEN else PROJECT_ROOT) / "assets" / "logo.svg"
 
     # Action sets (chord shortcuts shown in the radial wheels) — hand-edited by
     # the owner; re-read on every client connection, so edits show on refresh.

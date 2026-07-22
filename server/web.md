@@ -5,7 +5,7 @@
 ## Purpose
 The FastAPI application: serves the client page and static files, authenticates the WebSocket, streams video out (H.264 or JPEG), streams the cursor position, and routes input messages to the injector. API docs endpoints are disabled — nothing is exposed beyond `/`, `/static`, `/ws`, `/upload`.
 
-HTTP: `GET /` (client page), `GET /static/*` (client assets), `POST /upload?token=…` (phone → PC image: decodes the uploaded image and puts it in the Windows clipboard via [Clipboard](clipboard.md), token-gated).
+HTTP: `GET /` (client page), `GET /favicon.ico` (the logo — otherwise every fresh load logs a 404), `GET /static/*` (client assets), `POST /upload?token=…` (phone → PC image: decodes the upload and puts it in the Windows clipboard via [Clipboard](clipboard.md), token-gated). Upload decoding is Pillow-first with the HEIF opener registered — phone cameras default to **HEIC**, which OpenCV cannot read, and Pillow also applies the **EXIF orientation** (cv2.imdecode ignores it and portrait photos would paste rotated); OpenCV stays as the fallback decoder, and an undecodable upload logs its magic bytes.
 
 Protocol (project [CLAUDE.md](../CLAUDE.md) is the authority):
 - client → server (JSON text): `auth`, `pointer_down`, `pointer_up`, `pointer_move`, `scroll`, `viewport` (JPEG mode only), `key_text`, `key_special`, `chord`, `monitor_switch`, `screenshot`

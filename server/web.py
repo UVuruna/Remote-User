@@ -23,6 +23,7 @@ side open_session()/close_session().
 """
 
 import asyncio
+import io
 import json
 import logging
 import struct
@@ -30,9 +31,11 @@ from dataclasses import dataclass
 
 import cv2
 import numpy as np
+import pillow_heif
 from fastapi import FastAPI, File, Request, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from PIL import Image, ImageOps
 
 import clipboard
 import monitors
@@ -40,6 +43,26 @@ from config import SETTINGS
 from input_injector import BUTTON_FLAGS, InputInjector
 
 logger = logging.getLogger(__name__)
+
+# Phones (Samsung/Pixel defaults) shoot HEIC/HEIF, which neither OpenCV nor
+# plain Pillow read — this registers the HEIF codec into Pillow.
+pillow_heif.register_heif_opener()
+
+
+def decode_upload(data: bytes):
+    """Uploaded image → BGR ndarray, or None (caller logs the failure).
+
+    Pillow first: it covers JPEG/PNG/WEBP + HEIC (opener above) AND applies
+    the EXIF orientation — phone photos carry it, and cv2.imdecode ignores it
+    (the image would paste rotated). OpenCV remains as a fallback for formats
+    Pillow does not know."""
+    try:
+        pil = Image.open(io.BytesIO(data))
+        pil = ImageOps.exif_transpose(pil).convert("RGB")
+        return cv2.cvtColor(np.asarray(pil), cv2.COLOR_RGB2BGR)
+    except Exception as e:
+        logger.warning("Pillow could not decode upload (%s) — trying OpenCV", e)
+    return cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_COLOR)
 
 
 @dataclass
@@ -95,18 +118,26 @@ def create_app(stream, hub: FrameHub | None, injector: InputInjector, token: str
     async def index():
         return FileResponse(SETTINGS.client_dir / "index.html")
 
+    @app.get("/favicon.ico")
+    async def favicon():
+        # Browsers probe this on every fresh load; without it every session
+        # starts with a 404 in the log. SVG content on an .ico URL is fine —
+        # browsers honor the media type.
+        return FileResponse(SETTINGS.favicon_path, media_type="image/svg+xml")
+
     @app.post("/upload")
     async def upload(request: Request, file: UploadFile = File(...)):
-        """Phone → PC: decode an image the tablet sent and put it in the PC
-        clipboard, ready to paste. Token-gated like the WebSocket."""
+        """Phone → PC: decode an image the tablet sent (incl. HEIC — the phone
+        camera default) and put it in the PC clipboard, ready to paste.
+        Token-gated like the WebSocket."""
         if request.query_params.get("token") != token:
             return JSONResponse({"ok": False, "error": "unauthorized"}, status_code=401)
         data = await file.read()
-        img = await asyncio.to_thread(
-            cv2.imdecode, np.frombuffer(data, np.uint8), cv2.IMREAD_COLOR
-        )
+        img = await asyncio.to_thread(decode_upload, data)
         if img is None:
-            logger.error("Upload could not be decoded as an image (%d bytes)", len(data))
+            # magic bytes identify the format we failed on (e.g. b'ftypheic')
+            logger.error("Upload not decodable: %d bytes, name=%r, type=%r, magic=%r",
+                         len(data), file.filename, file.content_type, bytes(data[:12]))
             return JSONResponse({"ok": False, "error": "not an image"}, status_code=400)
         ok = await asyncio.to_thread(clipboard.copy_image, img)
         return {"ok": ok}

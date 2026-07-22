@@ -6,3 +6,5 @@ opencv-python-headless
 numpy
 qrcode[pil]
 PySide6
+pillow
+pillow-heif
