@@ -13,6 +13,7 @@ silently otherwise.
 import asyncio
 import logging
 import threading
+import time
 from dataclasses import dataclass, field
 
 import uvicorn
@@ -69,12 +70,27 @@ class ServerController:
         self._thread.start()
 
     def stop(self, timeout: float = 10.0) -> None:
-        """Signals uvicorn to exit and waits for the thread to unwind."""
+        """Stops uvicorn and waits for the thread to unwind.
+
+        force_exit, not just should_exit: graceful shutdown DRAINS open
+        connections, and a phone watching the stream keeps its WebSocket
+        open — the drain then waits forever, the old thread got abandoned
+        still bound to the port, and the next start() failed with
+        port-in-use. That was the live "Apply & restart does nothing"
+        failure; a client must never be able to hold the server hostage."""
+        thread = self._thread
+        if thread and thread.is_alive() and self._uvicorn is None:
+            # stop() during startup — wait for the uvicorn instance to exist
+            # so the exit flags have something to land on.
+            deadline = time.monotonic() + timeout
+            while self._uvicorn is None and thread.is_alive() and time.monotonic() < deadline:
+                time.sleep(0.05)
         if self._uvicorn:
+            self._uvicorn.force_exit = True
             self._uvicorn.should_exit = True
-        if self._thread:
-            self._thread.join(timeout)
-            if self._thread.is_alive():
+        if thread:
+            thread.join(timeout)
+            if thread.is_alive():
                 logger.error("Server thread did not stop within %.0fs", timeout)
             self._thread = None
         if self.state != "failed":

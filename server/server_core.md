@@ -13,8 +13,13 @@ The whole server stack as one start/stoppable component, shared by both entry po
 start():  spawn a daemon thread → asyncio.run(serve)
     serve: detect encoder → build stream backend + injector + app
            publish ServerInfo (mode, encoder, URLs, token, stats)
-           state = "running"; uvicorn serves until should_exit
-stop():   set uvicorn.should_exit → thread unwinds → capture/session teardown
+           state = "running"; uvicorn serves until told to exit
+stop():   set uvicorn force_exit + should_exit → thread unwinds → teardown
+          (force_exit, NOT graceful: graceful shutdown drains open
+          connections, and a phone watching the stream holds its WebSocket
+          open — the drain waited forever, the old thread stayed bound to
+          the port and the next start() failed port-in-use; this was the
+          live "Apply & restart does nothing" bug)
 Failure anywhere → state = "failed", .error set — the GUI shows it, never silent
 ```
 
@@ -24,7 +29,7 @@ Failure anywhere → state = "failed", .error set — the GUI shows it, never si
 Snapshot the GUI shows: mode, encoder, monitor size, port, token, `qr_url` (Tailscale-preferred), `lan_url`, `tailscale_ip`, live `ServerStats` (client count).
 
 ### ServerController
-- `start()` — non-blocking, idempotent while alive; `stop(timeout)` — signals uvicorn and joins
+- `start()` — non-blocking, idempotent while alive; `stop(timeout)` — force-exits uvicorn and joins (waits briefly for the uvicorn instance when stopping mid-startup, so the exit flags always land)
 - `run_blocking()` — CLI mode on the calling thread
 - `state`: `stopped → starting → running → stopped`, or `failed` + `error`
 - `console_pairing=True` prints the QR to the console (CLI); the GUI renders it in-window instead
