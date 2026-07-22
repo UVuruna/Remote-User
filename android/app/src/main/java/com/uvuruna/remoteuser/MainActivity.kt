@@ -107,7 +107,10 @@ class MainActivity : AppCompatActivity() {
             }
             val chosen = probes.firstOrNull { (_, probe) ->
                 try {
-                    probe.get(PING_TIMEOUT_MS + 500L, TimeUnit.MILLISECONDS)
+                    // A slow-but-alive probe legitimately spends up to
+                    // connectTimeout + readTimeout — waiting any less
+                    // declares a reachable server dead (cold DERP relay).
+                    probe.get(2L * PING_TIMEOUT_MS + 500L, TimeUnit.MILLISECONDS)
                 } catch (e: Exception) {
                     false
                 }
@@ -136,9 +139,15 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun repair() {
-        Prefs.setLanUrl(this, null)
-        Prefs.setTsUrl(this, null) // a new pairing may be a different PC/token
-        startActivity(Intent(this, OnboardingActivity::class.java))
+        // The stored addresses SURVIVE until a new pairing succeeds
+        // (OnboardingActivity.tryConnect overwrites them). Wiping them here
+        // meant one mis-tap of "Scan a new QR" while away from home
+        // permanently stranded the phone — nothing left to connect to and
+        // no QR to scan until physically back at the PC.
+        startActivity(
+            Intent(this, OnboardingActivity::class.java)
+                .putExtra(OnboardingActivity.EXTRA_FORCE, true)
+        )
         finish()
     }
 

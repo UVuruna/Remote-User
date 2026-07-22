@@ -12,9 +12,15 @@ scanner). Package `com.uvuruna.remoteuser`, min Android 8 (API 26).
 - **Pairing is one tap**: the install funnel page (what an Android browser
   sees on the QR link) launches the app via `remoteuser://pair?url=…` with
   the tokened URL — `OnboardingActivity` stores it and connects; nothing is
-  typed or scanned. The manual card (*scan the QR / paste the link*) remains
-  as the fallback and for re-pairing. That LAN URL plus the learned
-  Tailscale URL are the only stored state.
+  typed or scanned. Being singleTask, the handover is handled in BOTH
+  `onCreate` and `onNewIntent` (an instance is often already alive — the
+  "Open" button on the package installer starts one). The manual card
+  (*scan the QR / paste the link*) remains as the fallback and for
+  re-pairing; re-pair (`EXTRA_FORCE`) does NOT wipe the stored addresses —
+  they survive until a NEW pairing succeeds, so a mis-tap away from home
+  can never strand the phone. `openClient` uses `CLEAR_TASK`, so a re-pair
+  replaces any old `MainActivity` instead of stacking WebViews. That LAN
+  URL plus the learned Tailscale URL are the only stored state.
 - **The WebView identifies itself**: `RemoteUserApp` is appended to the
   User-Agent — that is how the server knows to serve the app the real client
   while plain Android browsers get the funnel.
