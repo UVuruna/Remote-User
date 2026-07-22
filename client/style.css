@@ -57,26 +57,32 @@ html, body {
 #status.connected  { background: linear-gradient(90deg, var(--accent), var(--accent-2)); opacity: 0; pointer-events: none; }
 #status.disconnected { background: linear-gradient(90deg, var(--error), #b91c1c); }
 
-/* Keyboard capture field — always present and focusable (mobile browsers cannot
-   focus a display:none element, so it must never be display:none), but NEVER
-   visible: what you type appears in the focused box on the PC screen itself
-   (owner decision 2026-07-22 — a mirror bar just duplicated it). */
+/* Keyboard capture field — always present and focusable, but INVISIBLE: what
+   you type appears in the focused box on the PC screen itself (owner decision
+   2026-07-22 — a mirror bar just duplicated it).
+   It must have a REAL on-screen size, otherwise Android IMEs refuse to raise
+   the keyboard / attach voice input to it (a 1px×1px field silently failed to
+   type — found live). So it is a full-width strip at the top, rendered fully
+   transparent (transparent text/caret/background) rather than opacity:0 —
+   some IMEs also skip opacity:0 fields. pointer-events:none lets touches fall
+   through to the canvas; focus is driven by the Keys button, not by tapping. */
 #kb {
   position: fixed;
   top: 0;
   left: 0;
-  width: 1px;
-  height: 1px;
+  width: 100%;
+  height: 42px;
   padding: 0;
+  margin: 0;
   border: 0;
   background: transparent;
   color: transparent;
   caret-color: transparent;
-  opacity: 0;
+  font: 16px system-ui, sans-serif; /* >=16px so the WebView never zooms on focus */
   resize: none;
   overflow: hidden;
   pointer-events: none;
-  z-index: 0;
+  z-index: 31;
 }
 
 #filepick { display: none; }
