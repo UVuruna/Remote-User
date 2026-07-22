@@ -39,6 +39,13 @@ Standard wizard (welcome → directory → components → install → finish) pl
 - Script is saved as **UTF-8 with BOM** — `Unicode true` + makensis reject a
   BOM-less file containing non-ASCII text
 
+### `build_apk.py` — Android Build
+Builds the phone app (see [Android (folder)](../android/___android.md)) into
+`dist/RemoteUser.apk`: Android Studio's JDK + the local SDK + vendored Gradle;
+generates the release keystore ONCE into gitignored `android/keystore/`
+(back it up — losing it breaks phone upgrades). Run it BEFORE `build.py` so
+the desktop installer bundles the APK (the server serves it at `/app.apk`).
+
 ### `svg_to_ico.py` — Icon Generator
 `assets/logo.svg` → `setup/icon.ico` (+ `icon-setup.ico` for the wizard,
 from `logo-setup.svg` when present). Supersampled Lanczos, 16–256 px.

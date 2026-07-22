@@ -154,7 +154,9 @@ The CLI prints the pairing URL and a QR (console + image viewer). Dev note: H.26
     📄 index.html
     📄 app.js
     📄 style.css
-  📁 setup/            ← Build pipeline (installer with bundled deps)
+  📁 android/          ← Android app (native shell + WebView on the client)
+    📝 ___android.md
+  📁 setup/            ← Build pipeline (installer with bundled deps + APK)
     📝 ___setup.md
 ```
 
@@ -166,4 +168,5 @@ The CLI prints the pairing URL and a QR (console + image viewer). Dev note: H.26
 - [AI Guidance](CLAUDE.md) — architecture constraints and pitfalls for coding sessions
 - [Server (folder)](server/___server.md) — PC-side components (core, GUI, streaming)
 - [Client (folder)](client/___client.md) — tablet-side web client
-- [Setup (folder)](setup/___setup.md) — build pipeline and installer
+- [Android (folder)](android/___android.md) — the phone app (shell around the client)
+- [Setup (folder)](setup/___setup.md) — build pipeline, installer, APK
