@@ -6,11 +6,13 @@ threads and a 1 s timer pulls state from the ServerController. Closing the
 window hides to the tray — the server keeps running until Quit.
 """
 
-import json
 import logging
 import subprocess
+import tempfile
 import threading
+import urllib.request
 import webbrowser
+from pathlib import Path
 
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QAction, QGuiApplication, QIcon, QPixmap
@@ -20,14 +22,14 @@ from PySide6.QtWidgets import (
 )
 
 import pairing
-from config import BUNDLE_DIR, FROZEN, PROJECT_ROOT, SETTINGS, save_user_settings
+import updates
+from config import BUNDLE_DIR, FROZEN, PROJECT_ROOT, SETTINGS, app_version, save_user_settings
 from gui.theme import QSS, card_shadow, repolish
 from server_core import ServerController
 
 logger = logging.getLogger(__name__)
 
 ASSET_DIR = (BUNDLE_DIR if FROZEN else PROJECT_ROOT) / "assets"
-APP_INFO_PATH = (BUNDLE_DIR if FROZEN else PROJECT_ROOT) / "setup" / "app_info.json"
 
 QR_SIZE = 216
 REFRESH_MS = 1000
@@ -43,13 +45,6 @@ PILL_TEXT = {"running": "RUNNING", "starting": "STARTING…",
              "stopped": "STOPPED", "failed": "FAILED"}
 
 
-def _app_version() -> str:
-    try:
-        return json.loads(APP_INFO_PATH.read_text(encoding="utf-8"))["version"]
-    except (FileNotFoundError, json.JSONDecodeError, KeyError):
-        return "dev"
-
-
 class MainWindow(QMainWindow):
     def __init__(self, controller: ServerController):
         super().__init__()
@@ -58,6 +53,12 @@ class MainWindow(QMainWindow):
         self._shown_qr_url = None    # avoid re-rendering the same QR every tick
         self._tray_notice_shown = False
         self._tick = 0               # refresh counter (pairing re-checks are throttled)
+        # Update flow — workers only SET these; the refresh timer (UI thread)
+        # reads them and touches Qt. States: None → found → downloading →
+        # ready (launch installer + quit) / failed (retry).
+        self._update = None
+        self._update_state = None
+        self._update_path = None
 
         self.setWindowTitle("Remote User")
         self.setStyleSheet(QSS)
@@ -74,6 +75,7 @@ class MainWindow(QMainWindow):
         root.addWidget(self._build_qr_card())
         root.addWidget(self._build_settings_card())
         root.addLayout(self._build_bottom_row())
+        root.addWidget(self._build_update_button())
         root.addWidget(self._build_footer())
 
         self._build_tray(icon)
@@ -83,6 +85,8 @@ class MainWindow(QMainWindow):
         self._timer.timeout.connect(self._refresh)
         self._timer.start(REFRESH_MS)
         self._refresh()
+
+        threading.Thread(target=self._check_updates, daemon=True).start()
 
     # -- layout builders ---------------------------------------------------
 
@@ -199,8 +203,18 @@ class MainWindow(QMainWindow):
         row.addWidget(self.tailscale_btn)
         return row
 
+    def _build_update_button(self) -> QPushButton:
+        """Hidden until the startup check finds a newer release; one click
+        downloads the installer, launches it and quits this app (files must
+        not be in use while the installer replaces them)."""
+        self.update_btn = QPushButton("")
+        self.update_btn.setObjectName("primary")
+        self.update_btn.clicked.connect(self._install_update)
+        self.update_btn.hide()
+        return self.update_btn
+
     def _build_footer(self) -> QLabel:
-        footer = QLabel(f"v{_app_version()}  ·  closing hides to tray — server keeps running")
+        footer = QLabel(f"v{app_version()}  ·  closing hides to tray — server keeps running")
         footer.setObjectName("caption")
         footer.setAlignment(Qt.AlignmentFlag.AlignHCenter)
         return footer
@@ -323,6 +337,59 @@ class MainWindow(QMainWindow):
         else:
             webbrowser.open("https://tailscale.com/download/windows")
 
+    # -- updates -----------------------------------------------------------
+
+    def _check_updates(self) -> None:
+        """Worker: one GitHub check per start. Only sets the attribute — the
+        refresh timer shows the button on the UI thread."""
+        self._update = updates.check()
+        if self._update:
+            self._update_state = "found"
+
+    def _install_update(self) -> None:
+        upd = self._update
+        if not upd or self._update_state not in ("found", "failed"):
+            return
+        if not upd.installer_url:
+            webbrowser.open(upd.page_url)  # release without an exe asset
+            return
+        self._update_state = "downloading"
+        self._refresh_update_button()
+        threading.Thread(target=self._download_update, args=(upd,), daemon=True).start()
+
+    def _download_update(self, upd) -> None:
+        """Worker: fetch the installer to %TEMP%; the refresh timer launches
+        it (Qt work stays on the UI thread)."""
+        try:
+            path = Path(tempfile.gettempdir()) / f"RemoteUser_Setup_v{upd.version}.exe"
+            urllib.request.urlretrieve(upd.installer_url, path)
+        except Exception as e:
+            logger.error("Update download failed: %s", e)
+            self._update_state = "failed"
+            return
+        self._update_path = path
+        self._update_state = "ready"
+
+    def _refresh_update_button(self) -> None:
+        state = self._update_state
+        if state in (None, "launched") or self._update is None:
+            return
+        if state == "ready":
+            self._update_state = "launched"
+            subprocess.Popen([str(self._update_path)])
+            self._quit()  # free our files; the installer takes over
+            return
+        if state == "found":
+            self.update_btn.setText(f"Update to v{self._update.version} — download && install")
+            self.update_btn.setEnabled(True)
+        elif state == "downloading":
+            self.update_btn.setText("Downloading update…")
+            self.update_btn.setEnabled(False)
+        elif state == "failed":
+            self.update_btn.setText("Update download failed — retry")
+            self.update_btn.setEnabled(True)
+        self.update_btn.show()
+
     def _refresh_pairing(self) -> None:
         """Re-checks the addresses while running — when the owner signs in to
         Tailscale mid-run, the QR and hints switch to the works-anywhere URL
@@ -345,6 +412,7 @@ class MainWindow(QMainWindow):
         self.pill.setText(PILL_TEXT.get(state, state))
         self.pill.setProperty("state", state)
         repolish(self.pill)
+        self._refresh_update_button()
 
         if state == "running" and info:
             self._tick += 1

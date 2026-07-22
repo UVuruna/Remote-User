@@ -139,6 +139,23 @@ class Settings:
     # the owner; re-read on every client connection, so edits show on refresh.
     actions_path: Path = _default_actions()
 
+    # Updates — the GitHub repo whose Releases carry new installers. The
+    # desktop GUI checks it once per start and offers the update in-window;
+    # the phone never checks the internet (its update comes from the PC:
+    # `config` carries the server version, /app.apk carries the matching APK).
+    update_repo: str = "UVuruna/Remote-User"
+    update_check: bool = True
+
+
+def app_version() -> str:
+    """The running app's version from setup/app_info.json (bundled next to
+    the exe). "dev" when the file is missing — an unpackaged checkout."""
+    path = (BUNDLE_DIR if FROZEN else PROJECT_ROOT) / "setup" / "app_info.json"
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))["version"]
+    except (FileNotFoundError, json.JSONDecodeError, KeyError):
+        return "dev"
+
 
 SETTINGS = Settings()
 
