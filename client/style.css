@@ -257,7 +257,113 @@ html, body {
 }
 .wheel-x svg { width: 26px; height: 26px; }
 
+/* --- "Access from anywhere" banner + guided wizard ------------------------ */
+
+#anywhere-banner {
+  position: fixed;
+  bottom: calc(var(--space-m) + var(--kb));
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 10px 18px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border);
+  background: rgb(15 23 42 / 0.85);
+  color: var(--accent);
+  font: 600 13px system-ui, sans-serif;
+  z-index: 25;
+  -webkit-tap-highlight-color: transparent;
+}
+#anywhere-banner[hidden] { display: none; }
+
+#wizard {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgb(15 23 42 / 0.72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-m);
+}
+#wizard[hidden] { display: none; }
+
+.wiz-card {
+  position: relative;
+  width: min(420px, 100%);
+  max-height: 92vh;
+  overflow-y: auto;
+  background: #1E293B;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 22px 20px;
+  color: var(--text-primary);
+  font: 400 14px/1.45 system-ui, sans-serif;
+  box-shadow: 0 12px 40px rgb(0 0 0 / 0.45);
+}
+.wiz-card h2 { font-size: 19px; margin-bottom: 4px; }
+.wiz-sub { color: var(--text-secondary); font-size: 13px; margin-bottom: 16px; }
+
+#wiz-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 15px;
+}
+
+.wiz-step {
+  display: flex;
+  gap: 12px;
+  padding: 12px 0;
+  border-top: 1px solid var(--border);
+}
+.wiz-num {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--glass-fill);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font: 700 13px system-ui, sans-serif;
+}
+.wiz-body b { display: block; margin-bottom: 2px; font-size: 14px; }
+.wiz-body p { color: var(--text-secondary); font-size: 13px; margin-bottom: 8px; }
+
+.wiz-btn {
+  display: inline-block;
+  padding: 9px 16px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: rgb(51 65 85 / 0.6);
+  color: var(--text-primary);
+  font: 600 13px system-ui, sans-serif;
+  text-decoration: none;
+}
+.wiz-btn.primary {
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  border: none;
+  color: #06212E;
+}
+
+/* Step 3 success state */
+.wiz-step.done .wiz-num {
+  background: rgb(34 197 94 / 0.18);
+  border-color: rgb(34 197 94 / 0.5);
+  color: #22C55E;
+}
+.wiz-step.done #wiz-status { color: #22C55E; }
+
 /* --- Hide-all mode ------------------------------------------------------- */
 body.hidden-controls .group,
 body.hidden-controls #wheel,
+body.hidden-controls #anywhere-banner,
 body.hidden-controls .corner-tl { display: none; }

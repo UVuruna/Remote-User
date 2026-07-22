@@ -451,6 +451,71 @@ kbInput.addEventListener("input", (e) => {
   }
 });
 
+// --- "Access from anywhere" wizard ----------------------------------------
+// The server's config carries tailscale_url when the PC is on Tailscale.
+// If this page runs on the home (LAN) address, a banner offers a guided
+// one-time setup: install the Tailscale app (Play Store link), sign in,
+// and the page DETECTS the moment the phone joins (probing /ping on the
+// Tailscale address) — then hands over the works-anywhere link. The user
+// only follows on-screen steps; nothing is explained outside the app.
+
+let tailscaleUrl = null;
+const anywhereBanner = document.getElementById("anywhere-banner");
+const wizardEl = document.getElementById("wizard");
+const wizStep3 = document.getElementById("wiz-step-3");
+const wizStatus = document.getElementById("wiz-status");
+const wizHint = document.getElementById("wiz-hint");
+const wizOpen = document.getElementById("wiz-open");
+let wizTimer = null;
+
+function updateAnywhereBanner() {
+  const onAnywhere = tailscaleUrl && new URL(tailscaleUrl).host === location.host;
+  anywhereBanner.hidden =
+    !tailscaleUrl || onAnywhere || sessionStorage.getItem("wizDismissed") === "1";
+}
+
+function openWizard() {
+  wizardEl.hidden = false;
+  wizProbe();
+  if (!wizTimer) wizTimer = setInterval(wizProbe, 3000);
+}
+
+function closeWizard(dismiss) {
+  wizardEl.hidden = true;
+  if (wizTimer) {
+    clearInterval(wizTimer);
+    wizTimer = null;
+  }
+  if (dismiss) sessionStorage.setItem("wizDismissed", "1");
+  updateAnywhereBanner();
+}
+
+async function wizProbe() {
+  if (!tailscaleUrl) return;
+  try {
+    // no-cors: an opaque success still proves the address is reachable —
+    // exactly the "phone joined the mesh" signal we need.
+    await fetch(`${new URL(tailscaleUrl).origin}/ping`, { mode: "no-cors", cache: "no-store" });
+  } catch {
+    return; // not on the mesh yet — keep waiting
+  }
+  wizStep3.classList.add("done");
+  wizStatus.textContent = "Connected — your phone is in!";
+  wizHint.textContent = "Open your permanent link below and save it (Add to Home screen). It works at home AND anywhere.";
+  wizOpen.hidden = false;
+  wizOpen.href = tailscaleUrl;
+  if (wizTimer) {
+    clearInterval(wizTimer);
+    wizTimer = null;
+  }
+}
+
+anywhereBanner.addEventListener("click", openWizard);
+document.getElementById("wiz-close").addEventListener("click", () => closeWizard(true));
+wizardEl.addEventListener("pointerdown", (e) => {
+  if (e.target === wizardEl) closeWizard(true); // backdrop tap = later
+});
+
 // --- Phone → PC image upload ----------------------------------------------
 
 const filePick = document.getElementById("filepick");
@@ -768,6 +833,8 @@ function connect() {
         const newMode = msg.stream || "jpeg";
         if (newMode !== streamMode) showToast(newMode === "h264" ? "H.264 stream" : "JPEG stream");
         streamMode = newMode;
+        tailscaleUrl = msg.tailscale_url || null;
+        updateAnywhereBanner();
         view = { scale: 1, tx: 0, ty: 0 };
         detailRegion = { x: 0, y: 0, w: 1, h: 1 };
         if (baseBitmap) { baseBitmap.close(); baseBitmap = null; }

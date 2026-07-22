@@ -8,11 +8,9 @@ window hides to the tray — the server keeps running until Quit.
 
 import json
 import logging
-import shutil
 import subprocess
 import threading
 import webbrowser
-from pathlib import Path
 
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QAction, QGuiApplication, QIcon, QPixmap
@@ -34,10 +32,6 @@ APP_INFO_PATH = (BUNDLE_DIR if FROZEN else PROJECT_ROOT) / "setup" / "app_info.j
 QR_SIZE = 216
 REFRESH_MS = 1000
 PAIRING_RECHECK_TICKS = 5  # re-check addresses/Tailscale every N refresh ticks
-
-# Freshly-installed Tailscale is not on THIS process's PATH (env is cached at
-# process start) — the default install location is checked as well.
-TAILSCALE_DEFAULT = Path(r"C:\Program Files\Tailscale\tailscale.exe")
 
 RESOLUTIONS = [("Native (up to 4K)", 3840), ("2560 — QHD", 2560),
                ("1920 — Full HD", 1920), ("1600 — light", 1600)]
@@ -318,22 +312,12 @@ class MainWindow(QMainWindow):
         if info:
             webbrowser.open(f"http://127.0.0.1:{info.port}/?token={info.token}")
 
-    @staticmethod
-    def _tailscale_exe() -> str | None:
-        """The tailscale CLI, whether or not it is on this process's PATH."""
-        found = shutil.which("tailscale")
-        if found:
-            return found
-        if TAILSCALE_DEFAULT.exists():
-            return str(TAILSCALE_DEFAULT)
-        return None
-
     def _setup_tailscale(self) -> None:
         """One button, whatever the state needs next: sign in when installed,
         download otherwise. (The installer chain-installs Tailscale; this
         covers dev runs and signed-out states. The refresh loop notices the
         login by itself and switches the QR to the Tailscale address.)"""
-        exe = self._tailscale_exe()
+        exe = pairing.tailscale_exe()
         if exe:
             subprocess.Popen([exe, "login"])  # opens the browser sign-in
         else:
@@ -379,9 +363,12 @@ class MainWindow(QMainWindow):
             # Tailscale's site (owner principle: no confusing third-party
             # screens; we say exactly what happens next).
             if info.tailscale_ip:
-                self.reach_label.setText("Reachable from anywhere — Tailscale is connected.")
+                self.reach_label.setText(
+                    "Anywhere-access is ON. The phone scans this home QR once — "
+                    "its page then guides its own one-time setup and hands it "
+                    "the works-anywhere link. Nothing to explain to anyone.")
                 self.tailscale_btn.hide()
-            elif self._tailscale_exe():
+            elif pairing.tailscale_exe():
                 self.reach_label.setText(
                     "One step left for away-from-home use: sign in to Tailscale. "
                     "A browser will open — pick your account and press Connect, "

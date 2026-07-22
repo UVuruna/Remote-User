@@ -33,12 +33,13 @@ import cv2
 import numpy as np
 import pillow_heif
 from fastapi import FastAPI, File, Request, UploadFile, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from PIL import Image, ImageOps
 
 import clipboard
 import monitors
+import pairing
 from config import SETTINGS
 from input_injector import BUTTON_FLAGS, InputInjector
 
@@ -125,6 +126,14 @@ def create_app(stream, hub: FrameHub | None, injector: InputInjector, token: str
         # browsers honor the media type.
         return FileResponse(SETTINGS.favicon_path, media_type="image/svg+xml")
 
+    @app.get("/ping")
+    async def ping():
+        """Reachability probe for the phone's in-page Tailscale wizard: the
+        page fetches this (no-cors) on the Tailscale address to detect the
+        moment the phone joins the mesh. Reveals nothing but 'server exists'
+        (auth still gates every real endpoint)."""
+        return Response(status_code=204)
+
     @app.post("/upload")
     async def upload(request: Request, file: UploadFile = File(...)):
         """Phone → PC: decode an image the tablet sent (incl. HEIC — the phone
@@ -156,11 +165,11 @@ def create_app(stream, hub: FrameHub | None, injector: InputInjector, token: str
         tasks = [asyncio.create_task(_send_cursor(ws, injector))]
         queue = None
         if stream.mode == "jpeg":
-            await _send_config(ws, stream)
+            await _send_config(ws, stream, token)
             queue = hub.subscribe()
             tasks.append(asyncio.create_task(_send_frames(ws, queue)))
         else:
-            tasks.append(asyncio.create_task(_stream_h264(ws, stream)))
+            tasks.append(asyncio.create_task(_stream_h264(ws, stream, token)))
         try:
             await _receive_input(ws, injector, stream)
         except WebSocketDisconnect:
@@ -193,7 +202,7 @@ async def _send_frames(ws: WebSocket, queue: asyncio.Queue) -> None:
         await ws.send_bytes(await queue.get())
 
 
-async def _stream_h264(ws: WebSocket, manager) -> None:
+async def _stream_h264(ws: WebSocket, manager, token: str) -> None:
     """One H.264 session per iteration: open (fresh init segment + keyframe),
     announce it via `config`, forward chunks until the session ends (monitor
     switch, slow-client reset, encoder death), then open the next. The task is
@@ -230,7 +239,7 @@ async def _stream_h264(ws: WebSocket, manager) -> None:
             await ws.close(code=1011)
             return
         try:
-            await _send_config(ws, manager, codec=session.codec)
+            await _send_config(ws, manager, token, codec=session.codec)
             while (chunk := await queue.get()) is not None:
                 await ws.send_bytes(chunk)
         except (WebSocketDisconnect, RuntimeError):
@@ -283,12 +292,17 @@ def _load_actions() -> dict:
         return empty
 
 
-async def _send_config(ws: WebSocket, stream, codec: str | None = None) -> None:
+async def _send_config(ws: WebSocket, stream, token: str, codec: str | None = None) -> None:
+    # tailscale_url feeds the client's guided "access from anywhere" wizard:
+    # null when the PC has no Tailscale yet (the desktop window guides that
+    # side); checked fresh per config so a login mid-run shows on reconnect.
+    ts_ip = await asyncio.to_thread(pairing.get_tailscale_ip)
     payload = {
         "type": "config",
         "monitor_width": stream.width,
         "monitor_height": stream.height,
         "stream": stream.mode,
+        "tailscale_url": f"http://{ts_ip}:{SETTINGS.port}/?token={token}" if ts_ip else None,
     }
     if codec:
         payload["codec"] = codec

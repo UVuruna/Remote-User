@@ -10,8 +10,10 @@ import ipaddress
 import logging
 import os
 import secrets
+import shutil
 import socket
 import subprocess
+from pathlib import Path
 
 import qrcode
 
@@ -20,6 +22,21 @@ from config import SETTINGS
 logger = logging.getLogger(__name__)
 
 TAILSCALE_NET = ipaddress.ip_network("100.64.0.0/10")  # CGNAT range Tailscale uses
+TAILSCALE_DEFAULT = Path(r"C:\Program Files\Tailscale\tailscale.exe")
+CREATE_NO_WINDOW = 0x08000000  # a console app must never flash a window from the GUI exe
+
+
+def tailscale_exe() -> str | None:
+    """The tailscale CLI, whether or not it is on this process's PATH — a
+    fresh install updates the SYSTEM path, but already-running processes keep
+    their cached environment (bit us live: the login was done, the server
+    still reported no Tailscale). The default install location is the fallback."""
+    found = shutil.which("tailscale")
+    if found:
+        return found
+    if TAILSCALE_DEFAULT.exists():
+        return str(TAILSCALE_DEFAULT)
+    return None
 
 
 def generate_token() -> str:
@@ -46,11 +63,15 @@ def get_lan_ip() -> str:
 
 
 def get_tailscale_ip() -> str | None:
-    """The PC's Tailscale IPv4 if Tailscale is installed and up, else None.
-    A URL on this address reaches the PC from any network."""
+    """The PC's Tailscale IPv4 if Tailscale is installed and signed in, else
+    None. A URL on this address reaches the PC from any network."""
+    exe = tailscale_exe()
+    if exe is None:
+        return None
     try:
         out = subprocess.run(
-            ["tailscale", "ip", "-4"], capture_output=True, text=True, timeout=3
+            [exe, "ip", "-4"], capture_output=True, text=True, timeout=3,
+            creationflags=CREATE_NO_WINDOW,
         )
     except (FileNotFoundError, OSError, subprocess.SubprocessError):
         return None
@@ -65,13 +86,16 @@ def get_tailscale_ip() -> str | None:
 
 
 def pairing_urls(token: str) -> dict:
-    """The addresses a client can use. `qr` is the preferred one (Tailscale
-    when present — works from anywhere; otherwise the LAN address)."""
+    """The addresses a client can use. `qr` is ALWAYS the LAN address: the
+    first scan happens at home, and a phone without Tailscale cannot open a
+    Tailscale URL at all. The client page then GUIDES the phone to the
+    `tailscale` anywhere-address itself (in-page wizard, one time) — the user
+    follows on-screen steps, never a chat/manual instruction."""
     lan_ip = get_lan_ip()
     ts_ip = get_tailscale_ip()
     lan_url = f"http://{lan_ip}:{SETTINGS.port}/?token={token}"
-    qr_url = f"http://{ts_ip}:{SETTINGS.port}/?token={token}" if ts_ip else lan_url
-    return {"qr": qr_url, "lan": lan_url, "tailscale_ip": ts_ip}
+    ts_url = f"http://{ts_ip}:{SETTINGS.port}/?token={token}" if ts_ip else None
+    return {"qr": lan_url, "lan": lan_url, "tailscale": ts_url, "tailscale_ip": ts_ip}
 
 
 def qr_png(url: str) -> bytes:
@@ -93,12 +117,13 @@ def show_pairing(token: str) -> str:
     qr_url, lan_url = urls["qr"], urls["lan"]
 
     print("\n  Scan with the tablet camera, or open manually:")
-    if urls["tailscale_ip"]:
-        print(f"  Anywhere (Tailscale): {qr_url}")
-        print(f"  Home Wi-Fi (LAN):     {lan_url}\n")
+    if urls["tailscale"]:
+        print(f"  Home Wi-Fi (QR):      {lan_url}")
+        print(f"  Anywhere (Tailscale): {urls['tailscale']}")
+        print("  (the phone page offers a guided switch to the anywhere link)\n")
     else:
         print(f"  {lan_url}")
-        print("  (LAN only — install Tailscale on the PC and phone to use it away from home)\n")
+        print("  (LAN only — the desktop app guides the Tailscale setup)\n")
 
     qr = qrcode.QRCode(border=1)
     qr.add_data(qr_url)

@@ -48,6 +48,45 @@
   <!-- Phone → PC image upload (gallery or camera) -->
   <input id="filepick" type="file" accept="image/*" hidden>
 
+  <!-- "Access from anywhere" — offered when the PC has Tailscale and this
+       page is on the home address; opens the guided one-time wizard -->
+  <button id="anywhere-banner" type="button" hidden>🌍 Use from anywhere — set up</button>
+
+  <div id="wizard" hidden>
+    <div class="wiz-card">
+      <button id="wiz-close" type="button" aria-label="Close">✕</button>
+      <h2>Use this from anywhere</h2>
+      <p class="wiz-sub">One-time setup, about a minute. Each step waits for you — just come back to this page.</p>
+
+      <div class="wiz-step" id="wiz-step-1">
+        <span class="wiz-num">1</span>
+        <div class="wiz-body">
+          <b>Install the Tailscale app</b>
+          <p>Tap the button, press Install, then come back here.</p>
+          <a class="wiz-btn" href="https://play.google.com/store/apps/details?id=com.tailscale.ipn"
+             target="_blank" rel="noopener">Open Google Play</a>
+        </div>
+      </div>
+
+      <div class="wiz-step" id="wiz-step-2">
+        <span class="wiz-num">2</span>
+        <div class="wiz-body">
+          <b>Sign in — the same account as on the PC</b>
+          <p>Open Tailscale, sign in, switch it ON. If it asks a few questions, any answers are fine — it asks only once.</p>
+        </div>
+      </div>
+
+      <div class="wiz-step" id="wiz-step-3">
+        <span class="wiz-num">3</span>
+        <div class="wiz-body">
+          <b id="wiz-status">Waiting for the connection…</b>
+          <p id="wiz-hint">This turns green by itself the moment the phone joins — nothing to press.</p>
+          <a class="wiz-btn primary" id="wiz-open" hidden>Open my anywhere link</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script src="/static/app.js"></script>
 </body>
 </html>
