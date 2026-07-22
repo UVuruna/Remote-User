@@ -129,9 +129,10 @@ class Settings:
     # Client files (bundled read-only in the installed app)
     client_dir: Path = BUNDLE_DIR / "client" if FROZEN else PROJECT_ROOT / "client"
     favicon_path: Path = (BUNDLE_DIR if FROZEN else PROJECT_ROOT) / "assets" / "logo.svg"
-    # The Android app, served at /app.apk when present ("Get the app" on the
-    # phone page — no manual file shuffling). Built by setup/build_apk.py;
-    # the desktop installer ships a copy next to the exe.
+    # The Android app, served at /app.apk when present (downloaded by the
+    # install funnel — no manual file shuffling). Built by setup/build_apk.py;
+    # the desktop installer ships a copy next to the exe. Its presence also
+    # decides whether Android browsers get routed to the funnel page.
     apk_path: Path = PROJECT_ROOT / ("RemoteUser.apk" if FROZEN else "dist/RemoteUser.apk")
 
     # Action sets (chord shortcuts shown in the radial wheels) — hand-edited by

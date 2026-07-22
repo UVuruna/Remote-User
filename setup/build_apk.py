@@ -8,7 +8,7 @@ Steps:
      up; losing it means users must uninstall/reinstall on upgrades).
   3. gradlew assembleRelease with version props from setup/app_info.json.
   4. Copy the signed APK to dist/RemoteUser.apk — the server offers it at
-     /app.apk ("Get the app" on the phone page), and the desktop installer
+     /app.apk (the Android-browser install funnel), and the desktop installer
      bundles it when present.
 
 Usage:
@@ -139,7 +139,7 @@ def main() -> None:
     target = DIST_DIR / "RemoteUser.apk"
     shutil.copy2(apk, target)
     print(f"  {target} ({target.stat().st_size / 1e6:.1f} MB)")
-    print("  The server now offers it at /app.apk (phone page shows 'Get the app').")
+    print("  The server now offers it at /app.apk (Android browsers get the install funnel).")
 
 
 if __name__ == "__main__":

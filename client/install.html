@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Remote User — Get the app</title>
+  <!-- The ONLY page an Android browser ever sees (the server routes it here
+       by User-Agent). Nothing works in a browser on a phone — this funnel
+       installs the app and hands it this exact URL (token included) via
+       intent://, so the app pairs itself with one tap. Self-contained on
+       purpose: no dependency on the client's stylesheet. -->
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      min-height: 100%;
+      background: #0f172a;
+      color: #f5f5f5;
+      font: 400 16px/1.5 system-ui, sans-serif;
+    }
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px 16px;
+    }
+    .card {
+      width: min(430px, 100%);
+      background: #1E293B;
+      border: 1px solid rgb(255 255 255 / 0.2);
+      border-radius: 18px;
+      padding: 28px 22px;
+      box-shadow: 0 12px 40px rgb(0 0 0 / 0.45);
+      text-align: center;
+    }
+    .logo {
+      width: 72px;
+      height: 72px;
+      margin-bottom: 12px;
+    }
+    h1 { font-size: 22px; margin-bottom: 4px; }
+    .sub { color: #a8b3c5; font-size: 14px; margin-bottom: 24px; }
+    .step {
+      display: flex;
+      gap: 14px;
+      text-align: left;
+      padding: 16px 0;
+      border-top: 1px solid rgb(255 255 255 / 0.14);
+    }
+    .num {
+      flex: none;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: rgb(30 41 59 / 0.6);
+      border: 1px solid rgb(255 255 255 / 0.25);
+      color: #a8b3c5;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font: 700 14px system-ui, sans-serif;
+    }
+    .step b { display: block; font-size: 15px; margin-bottom: 2px; }
+    .step p { color: #a8b3c5; font-size: 13px; margin-bottom: 10px; }
+    .btn {
+      display: block;
+      padding: 14px 18px;
+      border-radius: 12px;
+      font: 600 16px system-ui, sans-serif;
+      text-decoration: none;
+      text-align: center;
+      color: #f5f5f5;
+      background: rgb(51 65 85 / 0.6);
+      border: 1px solid rgb(255 255 255 / 0.2);
+      -webkit-tap-highlight-color: transparent;
+    }
+    .btn.primary {
+      background: linear-gradient(90deg, #38bdf8, #8b5cf6);
+      border: none;
+      color: #06212E;
+    }
+    .note { color: #a8b3c5; font-size: 12px; margin-top: 18px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <img class="logo" src="/favicon.ico" alt="Remote User logo">
+    <h1>Remote User</h1>
+    <p class="sub">Control this PC from your phone — everything happens in the app.</p>
+
+    <div class="step">
+      <span class="num">1</span>
+      <div>
+        <b>Install the app</b>
+        <p>Tap Install. Your phone will ask to allow it — allow, then open the downloaded file.</p>
+        <a class="btn primary" href="/app.apk">Install</a>
+      </div>
+    </div>
+
+    <div class="step">
+      <span class="num">2</span>
+      <div>
+        <b>Open the app</b>
+        <p>The app connects to this PC by itself — nothing to type, nothing to scan.</p>
+        <a class="btn" id="open" href="#">Open the app</a>
+      </div>
+    </div>
+
+    <p class="note">Already have the app? Just tap <b>Open the app</b>.</p>
+  </div>
+
+  <script>
+    // intent:// launches the installed app and hands it this page's URL
+    // (token included) — OnboardingActivity stores it and connects. If the
+    // app is not installed yet, the browser falls back to this same page.
+    "use strict";
+    const here = encodeURIComponent(location.href);
+    document.getElementById("open").href =
+      "intent://pair?url=" + here +
+      "#Intent;scheme=remoteuser;package=com.uvuruna.remoteuser;S.browser_fallback_url=" + here + ";end";
+  </script>
+</body>
+</html>

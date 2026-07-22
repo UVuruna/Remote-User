@@ -61,7 +61,7 @@ APP_NAME = APP_INFO["name"]
 CERT_PATH = SETUP_DIR / "cert" / f"{APP_NAME}.pfx"
 ENTRY_POINT = SERVER_DIR / "gui_main.py"
 # The phone app (built by setup/build_apk.py) rides along when present — the
-# installed server serves it at /app.apk ("Get the app" on the phone page).
+# installed server serves it at /app.apk (Android browsers get the install funnel).
 ANDROID_APK = PROJECT_DIR / "android" / "app" / "build" / "outputs" / "apk" / "release" / "app-release.apk"
 
 # PyInstaller misses uvicorn's importlib-loaded backends without these.

@@ -116,7 +116,17 @@ def create_app(stream, hub: FrameHub | None, injector: InputInjector, token: str
         return response
 
     @app.get("/")
-    async def index():
+    async def index(request: Request):
+        # Android browsers NEVER see the client (owner rule: no half-working
+        # browser sessions — on a phone the product IS the app). They get a
+        # full-screen install funnel; its "Open the app" hands this exact URL
+        # (token included) to the app via intent://, so pairing is one tap.
+        # The APK's WebView marks itself in the User-Agent and gets the real
+        # client; so do desktop browsers (dev/testing) and any Android hit
+        # while no APK is built yet.
+        ua = request.headers.get("user-agent", "")
+        if "Android" in ua and "RemoteUserApp" not in ua and SETTINGS.apk_path.exists():
+            return FileResponse(SETTINGS.client_dir / "install.html")
         return FileResponse(SETTINGS.client_dir / "index.html")
 
     @app.get("/favicon.ico")
@@ -136,9 +146,9 @@ def create_app(stream, hub: FrameHub | None, injector: InputInjector, token: str
 
     @app.get("/app.apk")
     async def apk():
-        """The Android app, offered by the phone page ('Get the app') — the
-        user never shuffles files by hand. Token-free on purpose: the APK
-        embeds no secrets (pairing happens by scanning the QR)."""
+        """The Android app, downloaded by the install funnel's Install button —
+        the user never shuffles files by hand. Token-free on purpose: the APK
+        embeds no secrets (the funnel hands the tokened URL over separately)."""
         if not SETTINGS.apk_path.exists():
             return JSONResponse({"ok": False, "error": "no APK built"}, status_code=404)
         return FileResponse(
@@ -320,7 +330,6 @@ async def _send_config(ws: WebSocket, stream, token: str, codec: str | None = No
         "monitor_height": stream.height,
         "stream": stream.mode,
         "tailscale_url": f"http://{ts_ip}:{SETTINGS.port}/?token={token}" if ts_ip else None,
-        "apk_available": SETTINGS.apk_path.exists(),
     }
     if codec:
         payload["codec"] = codec
