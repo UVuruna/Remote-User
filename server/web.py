@@ -40,7 +40,7 @@ from PIL import Image, ImageOps
 import clipboard
 import monitors
 import pairing
-from config import SETTINGS
+from config import SETTINGS, app_version
 from input_injector import BUTTON_FLAGS, InputInjector
 
 logger = logging.getLogger(__name__)
@@ -330,6 +330,9 @@ async def _send_config(ws: WebSocket, stream, token: str, codec: str | None = No
         "monitor_height": stream.height,
         "stream": stream.mode,
         "tailscale_url": f"http://{ts_ip}:{SETTINGS.port}/?token={token}" if ts_ip else None,
+        # The phone's update source is THIS PC, never the internet: the shell
+        # compares this against its own version and offers /app.apk.
+        "app_version": app_version(),
     }
     if codec:
         payload["codec"] = codec

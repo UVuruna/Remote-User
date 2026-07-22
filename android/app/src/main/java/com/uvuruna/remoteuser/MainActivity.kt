@@ -180,6 +180,28 @@ class MainActivity : AppCompatActivity() {
         fun setTailscaleUrl(url: String) {
             Prefs.setTsUrl(this@MainActivity, url.ifBlank { null })
         }
+
+        /** This shell's version — the page compares it with the server's
+         *  `config.app_version` and offers the in-app update banner. */
+        @JavascriptInterface
+        fun appVersion(): String =
+            packageManager.getPackageInfo(packageName, 0).versionName ?: "0"
+
+        /** Update tap: open /app.apk (on the SAME PC) in the system browser —
+         *  it downloads and Android installs over this app (same signature).
+         *  The WebView itself has no download pipeline; the browser here is
+         *  only the download UI. */
+        @JavascriptInterface
+        fun update(url: String) {
+            runOnUiThread {
+                try {
+                    startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                } catch (e: Exception) {
+                    // no browser to hand the download to — the page's toast
+                    // already told the user what should have happened
+                }
+            }
+        }
     }
 
     private inner class Client : WebViewClient() {

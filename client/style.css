@@ -264,6 +264,25 @@ html, body {
 }
 #anywhere-banner[hidden] { display: none; }
 
+/* In-app update offer — pill under the status, shown when the PC server
+   carries a newer APK than this shell */
+#update-banner {
+  position: fixed;
+  top: calc(56px + var(--vtop));
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 8px 16px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border);
+  background: rgb(15 23 42 / 0.9);
+  color: var(--accent);
+  font: 600 13px system-ui, sans-serif;
+  z-index: 24;
+  -webkit-tap-highlight-color: transparent;
+}
+#update-banner[hidden] { display: none; }
+body.hidden-controls #update-banner { display: none; }
+
 #wizard {
   position: fixed;
   inset: 0;

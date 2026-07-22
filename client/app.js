@@ -543,6 +543,40 @@ wizardEl.addEventListener("pointerdown", (e) => {
 // the install funnel by User-Agent.)
 const IN_APP = typeof window.Android !== "undefined";
 
+// --- In-app update (the PC carries the newer APK) --------------------------
+// The phone never checks the internet for updates: `config.app_version` says
+// what the PC runs, the bridge says what this shell is, and /app.apk on the
+// SAME PC is the newer build (the desktop app updates itself from GitHub).
+
+const updateBanner = document.getElementById("update-banner");
+
+function versionNumbers(v) {
+  return (String(v).match(/\d+/g) || []).slice(0, 3).map(Number);
+}
+
+function isNewer(server, app) {
+  const s = versionNumbers(server);
+  const a = versionNumbers(app);
+  if (!s.length || !a.length) return false;
+  for (let i = 0; i < 3; i++) {
+    const d = (s[i] || 0) - (a[i] || 0);
+    if (d) return d > 0;
+  }
+  return false;
+}
+
+function refreshUpdateBanner(serverVersion) {
+  updateBanner.hidden = !(
+    IN_APP && window.Android.appVersion && window.Android.update &&
+    serverVersion && isNewer(serverVersion, window.Android.appVersion())
+  );
+}
+
+updateBanner.addEventListener("click", () => {
+  window.Android.update(`${location.origin}/app.apk`);
+  showToast("Downloading — open the file to install the update");
+});
+
 // --- Phone → PC image upload ----------------------------------------------
 
 const filePick = document.getElementById("filepick");
@@ -877,6 +911,7 @@ function connect() {
           window.Android.setTailscaleUrl(tailscaleUrl || "");
         }
         updateAnywhereBanner();
+        refreshUpdateBanner(msg.app_version);
         view = { scale: 1, tx: 0, ty: 0 };
         detailRegion = { x: 0, y: 0, w: 1, h: 1 };
         if (baseBitmap) { baseBitmap.close(); baseBitmap = null; }
