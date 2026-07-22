@@ -64,16 +64,36 @@ def get_tailscale_ip() -> str | None:
     return None
 
 
-def show_pairing(token: str) -> str:
-    """Print the pairing URL(s) + a QR, save/open the QR PNG. Returns the QR's URL.
-    Tailscale URL is preferred (works anywhere); LAN URL is shown as well."""
+def pairing_urls(token: str) -> dict:
+    """The addresses a client can use. `qr` is the preferred one (Tailscale
+    when present — works from anywhere; otherwise the LAN address)."""
     lan_ip = get_lan_ip()
     ts_ip = get_tailscale_ip()
     lan_url = f"http://{lan_ip}:{SETTINGS.port}/?token={token}"
     qr_url = f"http://{ts_ip}:{SETTINGS.port}/?token={token}" if ts_ip else lan_url
+    return {"qr": qr_url, "lan": lan_url, "tailscale_ip": ts_ip}
+
+
+def qr_png(url: str) -> bytes:
+    """The pairing QR as PNG bytes — the desktop GUI renders these directly."""
+    import io
+    qr = qrcode.QRCode(border=1)
+    qr.add_data(url)
+    qr.make(fit=True)
+    buf = io.BytesIO()
+    qr.make_image().save(buf, format="PNG")
+    return buf.getvalue()
+
+
+def show_pairing(token: str) -> str:
+    """Console pairing: print the URL(s) + an ASCII QR, save (and optionally
+    open) the QR PNG. Returns the QR's URL. Used by the CLI entry point; the
+    desktop GUI shows the QR in-window via pairing_urls() + qr_png() instead."""
+    urls = pairing_urls(token)
+    qr_url, lan_url = urls["qr"], urls["lan"]
 
     print("\n  Scan with the tablet camera, or open manually:")
-    if ts_ip:
+    if urls["tailscale_ip"]:
         print(f"  Anywhere (Tailscale): {qr_url}")
         print(f"  Home Wi-Fi (LAN):     {lan_url}\n")
     else:

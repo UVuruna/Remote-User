@@ -26,6 +26,7 @@ import asyncio
 import json
 import logging
 import struct
+from dataclasses import dataclass
 
 import cv2
 import numpy as np
@@ -39,6 +40,12 @@ from config import SETTINGS
 from input_injector import BUTTON_FLAGS, InputInjector
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class ServerStats:
+    """Live counters the desktop GUI shows. Mutated only on the event loop."""
+    clients: int = 0
 
 
 class FrameHub:
@@ -70,7 +77,9 @@ class FrameHub:
             q.put_nowait(packet)
 
 
-def create_app(stream, hub: FrameHub | None, injector: InputInjector, token: str) -> FastAPI:
+def create_app(stream, hub: FrameHub | None, injector: InputInjector, token: str,
+               stats: ServerStats | None = None) -> FastAPI:
+    stats = stats if stats is not None else ServerStats()
     app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
 
     @app.middleware("http")
@@ -111,6 +120,7 @@ def create_app(stream, hub: FrameHub | None, injector: InputInjector, token: str
             await ws.close(code=4401)
             return
         logger.info("Client authenticated: %s", ws.client)
+        stats.clients += 1
         await ws.send_text(json.dumps({"type": "actions", **_load_actions()}))
         tasks = [asyncio.create_task(_send_cursor(ws, injector))]
         queue = None
@@ -125,6 +135,7 @@ def create_app(stream, hub: FrameHub | None, injector: InputInjector, token: str
         except WebSocketDisconnect:
             logger.info("Client disconnected: %s", ws.client)
         finally:
+            stats.clients -= 1
             for task in tasks:
                 task.cancel()
             if queue is not None:
