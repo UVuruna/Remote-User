@@ -83,6 +83,7 @@ The prototype that proved the control loop and UX on real code — now the found
 - [x] Input stability on device (2026-07-22): ghost-pointer self-heal (a lost `pointerup` froze all taps into "pinch" until refresh) + instant reconnect on return (app switch swallowed the first taps)
 - [x] APK dual-address (2026-07-22): LAN from QR + Tailscale learned via `Android.setTailscaleUrl`; `/ping` probe on start picks the reachable one — the app connects on mobile data (single stored LAN URL = minutes of timeout)
 - [x] Upload auto-paste (2026-07-22): `/upload` injects Ctrl+V after filling the clipboard — the picked image lands in the focused box by itself
+- [x] Updates flow downhill (2026-07-22): desktop checks GitHub Releases once per start → in-window Update button (download installer, launch, quit); phone compares `config.app_version` with its shell and updates from the PC's own `/app.apk` — no internet check on the phone
 - [x] Momentum scrolling; pinch zoom + two-layer base+region rendering (no blank flashes)
 - [x] Monitor switch; PC→clipboard screenshot; **phone→PC image upload** (`/upload`)
 - [x] See-through labelled buttons; Move (top-left) + Hide-all (top-right); visibility-gated session; auto-reconnect

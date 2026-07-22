@@ -35,6 +35,11 @@ scanner). Package `com.uvuruna.remoteuser`, min Android 8 (API 26).
   re-probes / Scan a new QR re-pairs and clears both addresses).
 - **`Android.rescan()` JS bridge**: on a rejected token the page shows
   "tap to scan the new QR" and the shell reopens the scanner.
+- **In-app updates from the PC**: the page compares `config.app_version`
+  with `Android.appVersion()` and, when the PC is newer, shows an update
+  banner; `Android.update(url)` opens `/app.apk` (same PC) in the system
+  browser — download, install over, done. The phone never checks the
+  internet; the desktop app is the one that watches GitHub Releases.
 - **Session behavior**: screen stays on; rotation never recreates the WebView
   (the stream survives); leaving the app pauses the page, whose visibility
   rule closes the stream (owner security decision). On resume the shell pings

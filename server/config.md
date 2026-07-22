@@ -9,6 +9,8 @@ Single source of truth for every tunable value (Rule #4 — no hardcoded values 
 
 **Paths follow the run mode.** Dev checkout: everything stays in the project (`logs/`, root `PAIRING_QR.png`, `actions.json`, ffmpeg from PATH). Installed EXE (`sys.frozen`): user data lives in `%LOCALAPPDATA%\RemoteUser` (Program Files is not writable), bundled read-only data comes from the PyInstaller bundle dir, and ffmpeg is the copy the installer placed next to the exe.
 
+**Version + updates.** `app_version()` reads the running version from the bundled `setup/app_info.json` ("dev" in an unversioned checkout) — the single source used by the GUI footer, the update check and the `config` message. `update_repo` / `update_check` drive the desktop's GitHub-release check (see [Updates](updates.md)).
+
 Key values:
 - `monitor_index` — which monitor is captured at startup (runtime switching cycles from there)
 - `max_stream_width` — frames wider than this are downscaled before encoding; bandwidth guard for 4K monitors

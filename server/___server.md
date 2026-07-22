@@ -43,6 +43,9 @@ Physical monitor rects in virtual-desktop coordinates; matches dxcam outputs to 
 ### `clipboard.py` — Clipboard
 Screenshot frames into the Windows clipboard as CF_DIB. See [Clipboard](clipboard.md).
 
+### `updates.py` — Updates
+Desktop update discovery via the project's GitHub Releases; the phone updates from the PC instead (`config.app_version` + `/app.apk`). See [Updates](updates.md).
+
 Action sets for the radial wheels are defined in [actions.json](../ACTIONS.md) at the project root (hand-edited by the owner) and served by [web.py](web.md).
 
 ## Connections
