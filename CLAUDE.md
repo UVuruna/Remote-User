@@ -22,6 +22,10 @@ Remote control of the Windows PC from an Android tablet/phone over LAN. The PC r
 - **Hard constraints (owner):** no payment for any required part; third-party services/installs OK if best; not over-indexing on privacy/security. Don't fight mature remote-desktop tools on latency — the unique value is the **app-aware companion layer** (Windows UI Automation state reading, notifications, per-app controls).
 - **Open decisions** (see ROADMAP): mesh provider (Tailscale vs ZeroTier), distribution (APK vs later Play Store), build order.
 
+## Session Workflow (owner decree 2026-07-22)
+
+**ALWAYS finish a session that touches server/client/android code by running the FULL desktop build** (`setup/build.py` — it bundles the client and the freshly built APK into the installer). The owner tests ONLY the real installed app, never the dev server from VSCode — shipping changes without a build means the owner installs stale software and the fixes "don't work". Build the APK first (`setup/build_apk.py`) when android/ or client/ changed. Do this without being asked; only GIT RELEASE still requires the owner's yes.
+
 ## Architecture Constraints
 
 1. **One monitor per view.** The client always displays and controls exactly one monitor; a switch button changes which. Client coordinates are ALWAYS normalized 0–1 within the displayed monitor; the server maps them to that monitor's rect. Never send virtual-desktop-wide coordinates.
