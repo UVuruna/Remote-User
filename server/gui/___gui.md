@@ -41,6 +41,17 @@ All colors/radii/typography in one place (root Rule #4). See [Theme](theme.md).
 - **Settings apply = save + restart**: values persist to the user settings
   file (see [Config](../config.md)) and the server restarts to pick them up —
   no half-applied state.
-- **Tailscale wizard-lite**: the installer chain-installs Tailscale; in-app,
-  the "Set up Tailscale" button runs `tailscale login` (or opens the download
-  page in dev) and hides itself once a Tailscale address is detected.
+- **Tailscale guidance is three explicit states** (owner principle, 2026-07-22:
+  non-technical users must never puzzle over a third-party screen — our window
+  says exactly what happens next): **not installed** → "Install Tailscale";
+  **installed but signed out** → "Sign in to Tailscale" with plain-language
+  text (a browser opens, pick account, come back — and Tailscale's one-time
+  questions can be answered with anything); **connected** → button hidden.
+  Install ≠ signed in — the missing-login state is the confusing one, found
+  live. The default install path is checked too (a fresh install is not on
+  this process's cached PATH).
+- **The QR follows the login live**: while running without a Tailscale
+  address, the pairing URLs are re-checked every few seconds — the moment the
+  sign-in completes, the QR/URL/hints switch to the works-anywhere address
+  with NO restart (the server already listens on all interfaces). The user
+  never has to know why it changed.
