@@ -107,7 +107,7 @@ This keeps the exact security model: end-to-end encrypted, no ports forwarded, a
 
 ## 🚀 Quick Start
 
-**Installed app (the normal way):** run `RemoteUser_Setup.exe` (built by [Setup (folder)](setup/___setup.md)). The installer carries everything — bundled ffmpeg, a chain-installed Tailscale, the firewall rule — you never install a dependency by hand. Launch **Remote User**, scan the QR in the window with the phone camera, done. The app lives in the tray; closing the window keeps it running.
+**Installed app (the normal way):** run `RemoteUser_Setup.exe` (built by [Setup (folder)](setup/___setup.md)). The installer carries everything — bundled ffmpeg, a chain-installed Tailscale, the firewall rule — you never install a dependency by hand. Launch **Remote User**, scan the QR in the window with the phone camera, done. The app lives in the tray; closing the window keeps it running. Full step-by-step: [Setup Guide](GUIDE.md) (the apps guide you through these same steps on screen).
 
 **Dev checkout (headless CLI):**
 
@@ -126,6 +126,7 @@ The CLI prints the pairing URL and a QR (console + image viewer). Dev note: H.26
 ```
 📁 Remote User/
   📝 README.md         ← You are here
+  📝 GUIDE.md          ← Step-by-step setup guide (mirrored by the in-app guidance)
   📝 ROADMAP.md        ← Development phases and status
   📝 CLAUDE.md         ← AI session guidance
   📝 ACTIONS.md        ← Owner-edited control categories (actions.json)
@@ -164,6 +165,7 @@ The CLI prints the pairing URL and a QR (console + image viewer). Dev note: H.26
 
 ## 📚 Documentation
 
+- [Setup Guide](GUIDE.md) — step-by-step install & pairing (the in-app guidance mirrors it)
 - [Roadmap](ROADMAP.md) — development phases, current status, future ideas
 - [AI Guidance](CLAUDE.md) — architecture constraints and pitfalls for coding sessions
 - [Server (folder)](server/___server.md) — PC-side components (core, GUI, streaming)
