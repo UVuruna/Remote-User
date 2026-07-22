@@ -16,9 +16,13 @@
         android:theme="@style/Theme.RemoteUser"
         tools:targetApi="26">
 
+        <!-- singleTask: the funnel launches us from the BROWSER — without it
+             the app would open inside Chrome's task (wrong Recents entry,
+             weird back stack). -->
         <activity
             android:name=".OnboardingActivity"
-            android:exported="true">
+            android:exported="true"
+            android:launchMode="singleTask">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
