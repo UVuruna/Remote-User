@@ -13,10 +13,13 @@ The token doubles as the authentication credential — scanning the QR both open
 - [Config](config.md) — port, token entropy, QR paths
 
 ### Used by
-- [Main](main.md) — at startup, before serving
+- [Server Core](server_core.md) — token + URLs at startup
+- [Main Window](gui/main_window.md) — renders `qr_png()` in the QR card
 
 ## Functions
-- `generate_token()`: `secrets.token_urlsafe`, **persisted** to `logs/token.txt` and reused across restarts so the owner's saved page survives server updates without re-scanning; delete the file (or set `persist_token=False`) to rotate
+- `generate_token()`: `secrets.token_urlsafe`, **persisted** to the token file and reused across restarts so the owner's saved page survives server updates without re-scanning; delete the file (or set `persist_token=False`) to rotate
 - `get_lan_ip()`: the LAN IP the tablet must reach on the home Wi-Fi
 - `get_tailscale_ip()`: the PC's Tailscale IPv4 (via `tailscale ip -4`, validated in 100.64.0.0/10) if installed, else `None` — a URL on this address reaches the PC from any network (see [Remote Access](../README.md#remote-access))
-- `show_pairing(token)`: prints both URLs, encodes the QR at the Tailscale address when available (works anywhere) else the LAN address; saves/opens the PNG; returns the QR's URL
+- `pairing_urls(token)`: the address set — `qr` (preferred: Tailscale when present, else LAN), `lan`, `tailscale_ip`
+- `qr_png(url)`: the QR as PNG bytes — the desktop GUI renders these directly in-window
+- `show_pairing(token)`: console pairing (CLI path) — prints both URLs + ASCII QR, saves/opens the PNG; returns the QR's URL

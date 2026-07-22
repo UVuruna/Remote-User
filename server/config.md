@@ -5,6 +5,10 @@
 ## Purpose
 Single source of truth for every tunable value (Rule #4 — no hardcoded values elsewhere): network binding, streaming parameters, pairing behavior, logging paths.
 
+**Two layers + one instance.** Code defaults (the dataclass) + a user settings JSON (`settings.json`, written only by the desktop GUI, validated against a `USER_ADJUSTABLE` allowlist — bad values log and fall back, never crash). The module-level `SETTINGS` is the ONLY instance; runtime changes go through `apply()` (controlled mutation of the shared frozen dataclass), so every module sees updates without rebinding.
+
+**Paths follow the run mode.** Dev checkout: everything stays in the project (`logs/`, root `PAIRING_QR.png`, `actions.json`, ffmpeg from PATH). Installed EXE (`sys.frozen`): user data lives in `%LOCALAPPDATA%\RemoteUser` (Program Files is not writable), bundled read-only data comes from the PyInstaller bundle dir, and ffmpeg is the copy the installer placed next to the exe.
+
 Key values:
 - `monitor_index` — which monitor is captured at startup (runtime switching cycles from there)
 - `max_stream_width` — frames wider than this are downscaled before encoding; bandwidth guard for 4K monitors

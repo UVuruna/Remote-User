@@ -21,6 +21,9 @@ The `stream` dependency is either an `H264Manager` or a `JpegStreamer` — one d
 ### FrameHub
 JPEG mode only: fan-out from the capture thread to per-client asyncio queues of size 1 — when a client lags, its stale frame is replaced, not queued. H.264 bytes are NOT individually droppable (the stream would corrupt) and use per-session ordered queues instead.
 
+### ServerStats
+Live counters for the desktop GUI (connected client count), mutated only on the event loop; [Server Core](server_core.md) exposes it via `ServerInfo`.
+
 ## Functions
 - `create_app(stream, hub, injector, token)`: builds the FastAPI app with routes closed over dependencies (`hub` is None in H.264 mode)
 - `_authenticate(ws, token)`: the 5-second auth gate

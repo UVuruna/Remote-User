@@ -1,14 +1,23 @@
 # server/
 
-The PC side of Remote User: captures the screen, streams it over WebSocket as H.264 (JPEG fallback), streams the cursor position, and injects mouse/keyboard input received from the tablet client. Entry point: `main.py`.
+The PC side of Remote User: captures the screen, streams it over WebSocket as H.264 (JPEG fallback), streams the cursor position, and injects mouse/keyboard input received from the tablet client. Two entry points around one core: `gui_main.py` (the desktop app — what the installed EXE runs) and `main.py` (headless CLI for dev).
 
 ## Files
 
-### `main.py` — Entry Point
-Declares per-monitor DPI awareness (before anything touches the screen), configures rotating-file logging, decides the stream mode once (verified H.264 encoder → `H264Manager`, otherwise `JpegStreamer` + hub), wires the web app + injector, shows the pairing QR, and runs uvicorn. See [Main](main.md).
+### `bootstrap.py` — Process Init (shared)
+DPI awareness → logging → user settings, in that order, before any screen-touching import. See [Bootstrap](bootstrap.md).
+
+### `main.py` — CLI Entry Point
+Thin: bootstrap + `ServerController.run_blocking()` with console pairing (ASCII QR + viewer). See [Main](main.md).
+
+### `gui_main.py` / `gui/` — Desktop App
+PySide6 window (status, in-window QR, settings) + tray around the server core; `--minimized` starts in the tray. See [GUI (subfolder)](gui/___gui.md).
+
+### `server_core.py` — Server Component
+The whole stack as one start/stoppable unit shared by both entry points: stream-mode decision, injector, pairing info, uvicorn lifecycle. See [Server Core](server_core.md).
 
 ### `config.py` — Settings
-Single source for every tunable value (port, fps, H.264 bitrate/GOP/fragmenting, JPEG quality, stream downscale width, cursor rate, paths). No other file hardcodes these. See [Config](config.md).
+Single source for every tunable value (port, fps, H.264 bitrate/GOP/fragmenting, JPEG quality, stream caps, cursor rate, paths). Two layers: code defaults + a user settings JSON written by the GUI; frozen (installed) runs keep user data in `%LOCALAPPDATA%\RemoteUser` and read bundled data from the install dir. See [Config](config.md).
 
 ### `capture.py` — Screen Capture
 dxcam ownership: `BaseCapture` (camera lifecycle, screenshots, monitor switch) + `JpegStreamer` (the JPEG fallback path with region-of-interest streaming) + `RawFrameSource`/`FrameSink` (raw-frame fan-out feeding the H.264 encoder sessions). See [Screen Capture](capture.md).
@@ -42,7 +51,8 @@ Action sets for the radial wheels are defined in [actions.json](../ACTIONS.md) a
 - [Client (folder)](../client/___client.md) — static files served to the tablet
 
 ### Used by
-- Run directly: `python server/main.py` (venv: `.venv`)
+- Desktop app: `python server/gui_main.py` (what the packaged EXE runs — see [Setup (folder)](../setup/___setup.md))
+- Headless dev CLI: `python server/main.py` (venv: `.venv`)
 
 ## Design Decisions
 

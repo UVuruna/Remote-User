@@ -107,15 +107,17 @@ This keeps the exact security model: end-to-end encrypted, no ports forwarded, a
 
 ## 🚀 Quick Start
 
+**Installed app (the normal way):** run `RemoteUser_Setup.exe` (built by [Setup (folder)](setup/___setup.md)). The installer carries everything — bundled ffmpeg, a chain-installed Tailscale, the firewall rule — you never install a dependency by hand. Launch **Remote User**, scan the QR in the window with the phone camera, done. The app lives in the tray; closing the window keeps it running.
+
+**Dev checkout (headless CLI):**
+
 ```
 python -m venv .venv
 .venv\Scripts\pip install -r requirements.txt
-.venv\Scripts\python server\main.py
+.venv\Scripts\python server\main.py        (or gui_main.py for the desktop window)
 ```
 
-The server prints the pairing URL, shows a QR code (console + image viewer), and starts streaming. Scan the QR with the tablet camera — Chrome opens the client and connects.
-
-**H.264 needs `ffmpeg` on PATH** (dev setup — the future installer bundles it). The server auto-detects a working encoder at startup and logs the choice; without ffmpeg it falls back to JPEG streaming automatically.
+The CLI prints the pairing URL and a QR (console + image viewer). Dev note: H.264 wants `ffmpeg` on PATH — the server auto-detects a working encoder at startup and logs the choice; without ffmpeg it falls back to JPEG streaming automatically.
 
 <a id="project-structure"></a>
 
@@ -126,22 +128,34 @@ The server prints the pairing URL, shows a QR code (console + image viewer), and
   📝 README.md         ← You are here
   📝 ROADMAP.md        ← Development phases and status
   📝 CLAUDE.md         ← AI session guidance
+  📝 ACTIONS.md        ← Owner-edited control categories (actions.json)
   ⚙️ requirements.txt
+  ⚙️ actions.json
   📁 assets/
     🖼️ logo.svg
   📁 server/           ← Python PC server
     📝 ___server.md    ← Server documentation entry point
-    🐍 main.py
+    🐍 gui_main.py     ← Desktop app entry (window + tray)
+    🐍 main.py         ← Headless CLI entry
+    🐍 bootstrap.py
+    🐍 server_core.py
     🐍 config.py
     🐍 capture.py
+    🐍 h264_streamer.py
+    🐍 encoders.py
     🐍 input_injector.py
     🐍 web.py
     🐍 pairing.py
+    🐍 monitors.py
+    🐍 clipboard.py
+    📁 gui/            ← PySide6 window, tray, theme
   📁 client/           ← Web client served to the tablet
     📝 ___client.md    ← Client documentation entry point
     📄 index.html
     📄 app.js
     📄 style.css
+  📁 setup/            ← Build pipeline (installer with bundled deps)
+    📝 ___setup.md
 ```
 
 <a id="documentation"></a>
@@ -150,5 +164,6 @@ The server prints the pairing URL, shows a QR code (console + image viewer), and
 
 - [Roadmap](ROADMAP.md) — development phases, current status, future ideas
 - [AI Guidance](CLAUDE.md) — architecture constraints and pitfalls for coding sessions
-- [Server (folder)](server/___server.md) — PC-side components
+- [Server (folder)](server/___server.md) — PC-side components (core, GUI, streaming)
 - [Client (folder)](client/___client.md) — tablet-side web client
+- [Setup (folder)](setup/___setup.md) — build pipeline and installer
