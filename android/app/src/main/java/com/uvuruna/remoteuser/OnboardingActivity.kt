@@ -9,11 +9,15 @@ import androidx.appcompat.app.AppCompatActivity
 import com.journeyapps.barcodescanner.ScanContract
 import com.journeyapps.barcodescanner.ScanOptions
 
-/** First run: bind this phone to the PC. One screen, one job — scan the QR
- *  the PC window shows (or paste the link). Every later step, including the
- *  Tailscale "use from anywhere" setup, is guided by the loaded page itself,
- *  so the guidance exists exactly once (in the web client) for browser and
- *  app alike. */
+/** First run: bind this phone to the PC.
+ *
+ *  The normal path is fully automatic: the install funnel page (what an
+ *  Android browser sees on the QR link) launches us via
+ *  `remoteuser://pair?url=…` with the tokened URL — one tap, connected.
+ *  The manual card (scan the QR / paste the link) stays as the fallback and
+ *  for re-pairing. Every later step, including the Tailscale "use from
+ *  anywhere" setup, is guided by the loaded page itself, so the guidance
+ *  exists exactly once (in the web client). */
 class OnboardingActivity : AppCompatActivity() {
 
     private val scanner = registerForActivityResult(ScanContract()) { result ->
@@ -22,6 +26,11 @@ class OnboardingActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        val handed = intent?.data?.takeIf { it.scheme == "remoteuser" }?.getQueryParameter("url")
+        if (handed != null && handed.startsWith("http") && handed.contains("token=")) {
+            tryConnect(handed) // the funnel's "Open the app" — paired, done
+            return
+        }
         Prefs.lanUrl(this)?.let {
             openClient()
             return
@@ -47,6 +56,7 @@ class OnboardingActivity : AppCompatActivity() {
             return
         }
         Prefs.setLanUrl(this, url)
+        Prefs.setTsUrl(this, null) // may be a new PC/token — relearned on first connect
         openClient()
     }
 

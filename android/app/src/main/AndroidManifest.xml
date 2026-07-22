@@ -23,6 +23,15 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- The install funnel's "Open the app" hands over the pairing
+                 URL (token included) as remoteuser://pair?url=… — the app
+                 connects with one tap, nothing typed or scanned. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="remoteuser" android:host="pair" />
+            </intent-filter>
         </activity>
 
         <!-- configChanges: rotating must NOT recreate the WebView — the live

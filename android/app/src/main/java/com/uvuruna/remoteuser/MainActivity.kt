@@ -70,6 +70,9 @@ class MainActivity : AppCompatActivity() {
             javaScriptEnabled = true
             domStorageEnabled = true
             mediaPlaybackRequiresUserGesture = false // MSE video must start by itself
+            // The server routes plain Android browsers to the install funnel;
+            // this marker is how the app itself gets the real client page.
+            userAgentString = "$userAgentString RemoteUserApp"
         }
         web.addJavascriptInterface(Bridge(), "Android")
         web.webViewClient = Client()
