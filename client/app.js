@@ -516,6 +516,25 @@ wizardEl.addEventListener("pointerdown", (e) => {
   if (e.target === wizardEl) closeWizard(true); // backdrop tap = later
 });
 
+// --- "Get the app" (Android browsers only) ---------------------------------
+// window.Android is the APK shell's JS bridge — present = already in the app.
+const getAppEl = document.getElementById("get-app");
+const IN_APP = typeof window.Android !== "undefined";
+
+function updateGetApp(apkAvailable) {
+  getAppEl.hidden =
+    !apkAvailable || IN_APP || !/Android/i.test(navigator.userAgent) ||
+    sessionStorage.getItem("getAppDismissed") === "1";
+}
+
+getAppEl.addEventListener("click", () => {
+  // One tap = download starts; hide for this session (Android shows its own
+  // install flow from the notification).
+  sessionStorage.setItem("getAppDismissed", "1");
+  showToast("Downloading… open the file to install");
+  setTimeout(() => updateGetApp(true), 0);
+});
+
 // --- Phone → PC image upload ----------------------------------------------
 
 const filePick = document.getElementById("filepick");
@@ -835,6 +854,7 @@ function connect() {
         streamMode = newMode;
         tailscaleUrl = msg.tailscale_url || null;
         updateAnywhereBanner();
+        updateGetApp(msg.apk_available === true);
         view = { scale: 1, tx: 0, ty: 0 };
         detailRegion = { x: 0, y: 0, w: 1, h: 1 };
         if (baseBitmap) { baseBitmap.close(); baseBitmap = null; }
@@ -868,6 +888,12 @@ function connect() {
   ws.onclose = (e) => {
     teardownMse(); // free the decoder; reconnect starts a fresh stream
     if (e.code === 4401) {
+      if (IN_APP) {
+        // In the APK the fix is one tap — the shell reopens the QR scanner.
+        setStatus("disconnected", "Link expired — tap here to scan the new QR");
+        statusEl.addEventListener("click", () => window.Android.rescan(), { once: true });
+        return;
+      }
       setStatus("disconnected", "Invalid token — scan the fresh QR on the PC");
       return;
     }

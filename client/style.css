@@ -275,6 +275,24 @@ html, body {
 }
 #anywhere-banner[hidden] { display: none; }
 
+/* "Get the app" — small pill under the status, Android browsers only */
+#get-app {
+  position: fixed;
+  top: calc(56px + var(--vtop));
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 7px 14px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border);
+  background: rgb(15 23 42 / 0.85);
+  color: var(--text-secondary);
+  font: 600 12px system-ui, sans-serif;
+  text-decoration: none;
+  z-index: 24;
+}
+#get-app[hidden] { display: none; }
+body.hidden-controls #get-app { display: none; }
+
 #wizard {
   position: fixed;
   inset: 0;

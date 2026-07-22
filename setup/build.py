@@ -60,6 +60,9 @@ COMPANY = json.loads(COMPANY_JSON_PATH.read_text(encoding="utf-8"))
 APP_NAME = APP_INFO["name"]
 CERT_PATH = SETUP_DIR / "cert" / f"{APP_NAME}.pfx"
 ENTRY_POINT = SERVER_DIR / "gui_main.py"
+# The phone app (built by setup/build_apk.py) rides along when present — the
+# installed server serves it at /app.apk ("Get the app" on the phone page).
+ANDROID_APK = PROJECT_DIR / "android" / "app" / "build" / "outputs" / "apk" / "release" / "app-release.apk"
 
 # PyInstaller misses uvicorn's importlib-loaded backends without these.
 HIDDEN_IMPORTS = [
@@ -219,6 +222,12 @@ def build_pyinstaller() -> Path:
     shutil.copy2(FFMPEG_EXE, app_dir / "ffmpeg" / "ffmpeg.exe")
     # Icon at dist root so NSIS shortcuts can reference $INSTDIR\icon.ico.
     shutil.copy2(ICON_PATH, app_dir / "icon.ico")
+    if ANDROID_APK.exists():
+        shutil.copy2(ANDROID_APK, app_dir / "RemoteUser.apk")
+        shutil.copy2(ANDROID_APK, DIST_DIR / "RemoteUser.apk")  # dev server serves this one
+        print("  Bundled the phone app (RemoteUser.apk)")
+    else:
+        print("  NOTE: no phone APK found (run setup/build_apk.py) — shipping without it")
     print(f"  Output: {exe_path}")
     return exe_path
 
