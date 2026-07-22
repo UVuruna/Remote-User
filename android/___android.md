@@ -9,9 +9,15 @@ scanner). Package `com.uvuruna.remoteuser`, min Android 8 (API 26).
 
 ## What the shell does (and nothing more)
 
-- **Pairing**: first run shows one card — *scan the QR on the PC* (or paste
-  the link). That LAN URL (with token) plus the learned Tailscale URL are the
-  only stored state.
+- **Pairing is one tap**: the install funnel page (what an Android browser
+  sees on the QR link) launches the app via `remoteuser://pair?url=…` with
+  the tokened URL — `OnboardingActivity` stores it and connects; nothing is
+  typed or scanned. The manual card (*scan the QR / paste the link*) remains
+  as the fallback and for re-pairing. That LAN URL plus the learned
+  Tailscale URL are the only stored state.
+- **The WebView identifies itself**: `RemoteUserApp` is appended to the
+  User-Agent — that is how the server knows to serve the app the real client
+  while plain Android browsers get the funnel.
 - **Two addresses, probed on every start**: the QR gives the LAN address; the
   page hands over the Tailscale address on every `config` via
   `Android.setTailscaleUrl()`. `MainActivity.resolveAndLoad()` probes `/ping`
@@ -61,10 +67,12 @@ The keystore is generated ONCE into gitignored `android/keystore/` —
 
 ## Distribution
 
-`dist/RemoteUser.apk` is served by the server at **`/app.apk`** — the phone
-page shows a "Get the app" pill (Android browsers, outside the app, only when
-the APK exists). The desktop build bundles the APK next to the exe, so the
-installed PC app distributes the phone app too. No file shuffling, ever.
+`dist/RemoteUser.apk` is served by the server at **`/app.apk`**. Any Android
+browser hitting the server (the QR link) gets the full-screen **install
+funnel** instead of the client: Install (downloads the APK) → Open the app
+(pairs itself via `intent://`). The desktop build bundles the APK next to
+the exe, so the installed PC app distributes the phone app too. No file
+shuffling, ever.
 
 ## Connections
 
