@@ -21,4 +21,5 @@ build/
 *.spec
 setup/cert/
 setup/icon*.ico
+setup/vendor/
 version_info.txt
