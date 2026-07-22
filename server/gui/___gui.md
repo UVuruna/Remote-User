@@ -50,8 +50,8 @@ All colors/radii/typography in one place (root Rule #4). See [Theme](theme.md).
   Install ≠ signed in — the missing-login state is the confusing one, found
   live. The default install path is checked too (a fresh install is not on
   this process's cached PATH).
-- **The QR follows the login live**: while running without a Tailscale
-  address, the pairing URLs are re-checked every few seconds — the moment the
-  sign-in completes, the QR/URL/hints switch to the works-anywhere address
-  with NO restart (the server already listens on all interfaces). The user
-  never has to know why it changed.
+- **The QR is always the HOME link** (first scan happens at home; the phone's
+  page guides its own switch to the works-anywhere address). While running
+  without a Tailscale address the state is re-checked every few seconds, so
+  the hints flip to "connected" the moment the sign-in completes — no restart
+  (the server already listens on all interfaces).

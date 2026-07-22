@@ -53,8 +53,11 @@ The `upload` built-in opens a hidden `<input type="file" accept="image/*">` (gal
 ## Viewport / keyboard fit
 `updateViewport()` sizes the canvas to `visualViewport` (fits the screen above the keyboard instantly) and publishes `--kb` (keyboard height, lifts the groups) and `--vtop` (top offset, keeps the corners visible).
 
+## "Access from anywhere" wizard
+`config.tailscale_url` (null until the PC signs in to Tailscale) drives a banner + full-screen guided overlay: **1)** Google Play deep link to the Tailscale app, **2)** sign in with the same account and switch it ON, **3)** the page polls `GET /ping` on the Tailscale address (no-cors — an opaque success proves reachability) every 3 s and, the moment the phone joins the mesh, marks the step green and offers the permanent works-anywhere link (with a save/home-screen hint). Backdrop/✕ = "later" (re-offered next session). The banner never shows when the page already runs on the Tailscale address.
+
 ## Connection
-`auth` on open; handles `config` (monitor size + stream mode + codec — full reset of view, bitmaps and the MSE pipeline; arrives after auth and after every stream restart), `cursor` (virtual-cursor position), `actions` (categories + default group indices), `toast`. Socket closes when the page hides (owner security decision); a watchdog interval reconnects when visible; MSE is torn down on every close and rebuilt from the next `config`.
+`auth` on open; handles `config` (monitor size + stream mode + codec + tailscale_url — full reset of view, bitmaps and the MSE pipeline; arrives after auth and after every stream restart), `cursor` (virtual-cursor position), `actions` (categories + default group indices), `toast`. Socket closes when the page hides (owner security decision); a watchdog interval reconnects when visible; MSE is torn down on every close and rebuilt from the next `config`.
 
 ## Connections
 
