@@ -21,10 +21,10 @@ The two D-pad groups on the tablet are defined entirely by [actions.json](action
       "name": "Mouse",
       "icon": "mouse",
       "buttons": [
+        { "action": "click" },
         { "action": "right" },
         { "action": "drag" },
-        { "action": "scroll" },
-        { "action": "hover" }
+        { "action": "scroll" }
       ]
     },
     {
@@ -40,7 +40,7 @@ The two D-pad groups on the tablet are defined entirely by [actions.json](action
 
 - **left / right** — index of the category each group shows on connect.
 - **name** — the category label (centre button + wheel).
-- **icon** — one of: `mouse`, `edit`, `keyboard`, `monitor`, `grid`, `snap`, `right`, `drag`, `scroll`, `hover`.
+- **icon** — one of: `mouse`, `edit`, `keyboard`, `monitor`, `grid`, `snap`, `click`, `right`, `drag`, `scroll`.
 - **buttons** — up to 4, placed in order **up · left · right · down**.
 
 ## Button kinds
@@ -48,9 +48,10 @@ The two D-pad groups on the tablet are defined entirely by [actions.json](action
 A button is one of:
 
 - **Built-in action** — `{ "action": "<name>" }`, where `<name>` is:
-  - `right`, `drag`, `scroll`, `hover` — **mouse modes** (toggle on/off, only one active at a time, together with `Move`): the mode decides what one finger on the screen does — tap → right-click / drag with left held / wheel / move-cursor-only (for triggering hover UI). Default (no mode) = left click. Two fingers always pinch-zoom.
-  - `keyboard` — toggle the tablet keyboard (shows a visible text bar of what you type/dictate).
-  - `upload` — pick an image from the phone (gallery/camera) and send it to the **PC clipboard**, ready to paste.
+  - `click` — **the left click**: presses at the current cursor position (the finger only steers the cursor); press it twice fast for a double click.
+  - `right`, `drag`, `scroll` — **mouse modes** (toggle on/off, only one active at a time, together with `Move`): the mode decides what one finger on the screen does — tap → right-click / drag with left held / wheel. Default (no mode) = the finger only moves the PC cursor, it never clicks. Two fingers always pinch-zoom.
+  - `keyboard` — toggle the phone keyboard; what you type/dictate lands in the focused box on the PC screen itself (no mirror bar). The keyboard's ↵ makes a new row (never "send"); the real Enter is its own button (see `key`).
+  - `upload` — pick an image from the phone (gallery/camera); the server pastes it into the focused box on the PC by itself.
   - `monitor` — switch the streamed monitor.
   - `snap` — screenshot the PC monitor into the PC clipboard (available in config; not in the default layout).
 - **Chord** — `{ "label": "Copy", "chord": "ctrl+c" }` — fires a key combination (see below).

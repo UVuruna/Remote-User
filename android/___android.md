@@ -10,27 +10,34 @@ scanner). Package `com.uvuruna.remoteuser`, min Android 8 (API 26).
 ## What the shell does (and nothing more)
 
 - **Pairing**: first run shows one card — *scan the QR on the PC* (or paste
-  the link). The URL (with token) is the only stored state.
+  the link). That LAN URL (with token) plus the learned Tailscale URL are the
+  only stored state.
+- **Two addresses, probed on every start**: the QR gives the LAN address; the
+  page hands over the Tailscale address on every `config` via
+  `Android.setTailscaleUrl()`. `MainActivity.resolveAndLoad()` probes `/ping`
+  on both in parallel (3 s timeout) and loads whichever answers — LAN
+  preferred, Tailscale the mobile-data fallback. A single stored URL was the
+  live failure: the LAN address on mobile data meant minutes of
+  `ERR_CONNECTION_TIMED_OUT` before any card showed.
 - **External links open as real apps**: the in-page "anywhere" wizard's
   Google Play button opens the actual Play Store — the same guided Tailscale
   flow works identically in browser and app (no duplicated wizard, Rule #5
   at product level).
 - **File chooser**: the page's phone→PC image upload gets the native
   gallery/camera picker.
-- **Native error card** when the PC is unreachable (Try again / Scan a new QR).
+- **Native error card** when no stored address answers the probe (Try again
+  re-probes / Scan a new QR re-pairs and clears both addresses).
 - **`Android.rescan()` JS bridge**: on a rejected token the page shows
   "tap to scan the new QR" and the shell reopens the scanner.
 - **Session behavior**: screen stays on; rotation never recreates the WebView
   (the stream survives); leaving the app pauses the page, whose visibility
   rule closes the stream (owner security decision).
-- **URL follows the wizard**: whatever tokened URL the page navigates to
-  (the works-anywhere link) is persisted as the new home.
 
 ## Files
 
 - `app/src/main/java/com/uvuruna/remoteuser/` — `OnboardingActivity` (QR
-  scan/paste → store URL), `MainActivity` (WebView + the bridges above),
-  `Prefs` (the one stored value)
+  scan/paste → store the LAN URL), `MainActivity` (WebView + the resolver
+  and bridges above), `Prefs` (the two stored addresses)
 - `app/src/main/res/` — dark brand theme (same slate/cyan palette as the
   client and desktop), layouts, launcher icons generated from `assets/logo.svg`
 - `build.gradle.kts` / `settings.gradle.kts` — AGP 8.7, Kotlin 2.0, SDK 35;

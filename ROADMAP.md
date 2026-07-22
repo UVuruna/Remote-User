@@ -77,9 +77,12 @@ The prototype that proved the control loop and UX on real code — now the found
 
 ### Core controls & UX (all owner-driven)
 - [x] Two configurable **D-pad groups** from `actions.json`: D-pad cross (landscape) / column (portrait), small dashed centre opens a **tap-based** category wheel (tap-select, ✕ cancel)
-- [x] **Touch modes as toggles** (single active): left click (default) / right / drag / scroll / hover / pan (Move). Two fingers pinch-zoom
+- [x] **Touch modes as toggles** (single active): cursor-move (default, never clicks — owner 2026-07-22) / right / drag / scroll / pan (Move); explicit **Click** button (twice = double click). Two fingers pinch-zoom
 - [x] Chord engine (`ctrl+win+alt+1`) + owner-edited categories (Mouse / Edit / Keys / View / Zones)
-- [x] Keyboard: visible top bar + value-diffing capture, `KEYEVENTF_UNICODE` (emoji), special keys; instant fit above the soft keyboard via `visualViewport`
+- [x] Keyboard: invisible textarea + value-diffing capture (typed text is watched on the PC stream itself), `KEYEVENTF_UNICODE` (emoji), special keys; IME ↵ = new row (Shift+Enter), real Enter is a D-pad button; instant fit above the soft keyboard via `visualViewport`
+- [x] Input stability on device (2026-07-22): ghost-pointer self-heal (a lost `pointerup` froze all taps into "pinch" until refresh) + instant reconnect on return (app switch swallowed the first taps)
+- [x] APK dual-address (2026-07-22): LAN from QR + Tailscale learned via `Android.setTailscaleUrl`; `/ping` probe on start picks the reachable one — the app connects on mobile data (single stored LAN URL = minutes of timeout)
+- [x] Upload auto-paste (2026-07-22): `/upload` injects Ctrl+V after filling the clipboard — the picked image lands in the focused box by itself
 - [x] Momentum scrolling; pinch zoom + two-layer base+region rendering (no blank flashes)
 - [x] Monitor switch; PC→clipboard screenshot; **phone→PC image upload** (`/upload`)
 - [x] See-through labelled buttons; Move (top-left) + Hide-all (top-right); visibility-gated session; auto-reconnect
