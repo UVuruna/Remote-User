@@ -43,6 +43,7 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var web: WebView
     private lateinit var errorView: View
+    private lateinit var loadingView: View
     private var fileCallback: ValueCallback<Array<Uri>>? = null
 
     private val filePicker =
@@ -62,6 +63,7 @@ class MainActivity : AppCompatActivity() {
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
         errorView = findViewById(R.id.error_view)
+        loadingView = findViewById(R.id.loading_view)
         findViewById<Button>(R.id.btn_retry).setOnClickListener { resolveAndLoad() }
         findViewById<Button>(R.id.btn_repair).setOnClickListener { repair() }
 
@@ -94,6 +96,7 @@ class MainActivity : AppCompatActivity() {
      *  probe answering shows the native card within ~3 s instead. */
     private fun resolveAndLoad() {
         errorView.visibility = View.GONE
+        loadingView.visibility = View.VISIBLE // "Connecting…" until the page loads or an address fails
         val candidates = listOfNotNull(Prefs.lanUrl(this), Prefs.tsUrl(this)).distinct()
         if (candidates.isEmpty()) {
             repair()
@@ -117,8 +120,12 @@ class MainActivity : AppCompatActivity() {
             }?.first
             runOnUiThread {
                 if (isFinishing || isDestroyed) return@runOnUiThread
-                if (chosen != null) web.loadUrl(chosen)
-                else errorView.visibility = View.VISIBLE
+                if (chosen != null) {
+                    web.loadUrl(chosen) // loader stays until onPageFinished
+                } else {
+                    loadingView.visibility = View.GONE
+                    errorView.visibility = View.VISIBLE
+                }
             }
         }.start()
     }
@@ -236,12 +243,18 @@ class MainActivity : AppCompatActivity() {
             view: WebView, request: WebResourceRequest, error: WebResourceError
         ) {
             if (request.isForMainFrame) {
+                loadingView.visibility = View.GONE
                 errorView.visibility = View.VISIBLE
             }
         }
 
         override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
             errorView.visibility = View.GONE
+        }
+
+        override fun onPageFinished(view: WebView, url: String?) {
+            // The page is up; its own status pill takes over from here.
+            loadingView.visibility = View.GONE
         }
     }
 

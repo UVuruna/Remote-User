@@ -37,8 +37,14 @@ scanner). Package `com.uvuruna.remoteuser`, min Android 8 (API 26).
   at product level).
 - **File chooser**: the page's phone→PC image upload gets the native
   gallery/camera picker.
+- **Native "Connecting…" screen** while the address is probed and the page
+  loads (a slow connect over mobile data must read as working, not frozen);
+  hidden on first page load, replaced by the error card on failure.
 - **Native error card** when no stored address answers the probe (Try again
-  re-probes / Scan a new QR re-pairs and clears both addresses).
+  re-probes / Scan a new QR re-pairs but KEEPS the stored addresses until a
+  new pairing succeeds).
+- **QR scanner follows the phone orientation** (portrait when upright) — the
+  ZXing default forced landscape.
 - **`Android.rescan()` JS bridge**: on a rejected token the page shows
   "tap to scan the new QR" and the shell reopens the scanner.
 - **In-app updates from the PC**: the page compares `config.app_version`

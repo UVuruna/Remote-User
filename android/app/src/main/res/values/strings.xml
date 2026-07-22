@@ -13,7 +13,9 @@
     <string name="connect">Connect</string>
     <string name="bad_link">That link does not look right — it should start with http and contain a token. Easiest: just scan the QR.</string>
 
-    <!-- Main / error view -->
+    <!-- Main / connecting + error view -->
+    <string name="connecting_title">Connecting to your PC…</string>
+    <string name="connecting_hint">This can take a few seconds — a bit longer over mobile data.</string>
     <string name="error_title">Cannot reach the PC</string>
     <string name="error_body">Make sure the Remote User app on the PC is running, and that this phone is on the same Wi-Fi (or Tailscale is ON in its app). Then try again.</string>
     <string name="try_again">Try again</string>

@@ -45,7 +45,9 @@ class OnboardingActivity : AppCompatActivity() {
                 setDesiredBarcodeFormats(ScanOptions.QR_CODE)
                 setPrompt(getString(R.string.scan_qr))
                 setBeepEnabled(false)
-                setOrientationLocked(true)
+                // false = follow the phone's orientation (portrait when held
+                // upright); the default (true) forced the scanner to landscape.
+                setOrientationLocked(false)
             })
         }
         findViewById<Button>(R.id.btn_connect).setOnClickListener {
