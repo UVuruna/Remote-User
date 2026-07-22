@@ -148,11 +148,21 @@ function drawCursor(D) {
   ctx.restore();
 }
 
+let lastKbPx = 0;
+
 function updateViewport() {
   const vv = window.visualViewport;
   const w = vv ? vv.width : window.innerWidth;
   const h = vv ? vv.height : window.innerHeight;
   const kb = vv ? Math.max(0, window.innerHeight - vv.height - vv.offsetTop) : 0;
+  if (kb < 60 && lastKbPx > 100) {
+    // The IME was dismissed natively (system back) — that hides it WITHOUT
+    // blurring the field, leaving the Keys toggle lying (active + dead first
+    // tap). Drop focus so open-state always means "keyboard on screen".
+    const ae = document.activeElement;
+    if (ae && ae.id === "kb") ae.blur();
+  }
+  lastKbPx = kb;
   const root = document.documentElement.style;
   root.setProperty("--kb", `${kb}px`);
   root.setProperty("--vtop", `${vv ? vv.offsetTop : 0}px`);
@@ -463,8 +473,17 @@ kbInput.addEventListener("input", (e) => {
   let s = 0;
   while (s < minLen - p && kbPrev[kbPrev.length - 1 - s] === value[value.length - 1 - s]) s++;
   const removed = kbPrev.length - p - s;
-  const inserted = value.slice(p, value.length - s);
-  for (let i = 0; i < removed; i++) send({ type: "key_special", key: "backspace" });
+  let inserted = value.slice(p, value.length - s);
+  let back = removed;
+  if (s > 0 && (removed > 0 || inserted)) {
+    // Mid-string edit (multi-word autocorrect, double-space period): the PC
+    // caret sits at the END of the text, so the surviving tail must be
+    // erased and retyped too — replaying only the middle would land the
+    // edit after the tail ("cant believe" → "cant believe'").
+    back += s;
+    inserted += value.slice(value.length - s);
+  }
+  for (let i = 0; i < back; i++) send({ type: "key_special", key: "backspace" });
   if (inserted) sendTyped(inserted);
   kbPrev = value;
   if (!e.isComposing && value.length > 200) {
@@ -754,6 +773,10 @@ function firstTwoPointers() {
 function beginPinch() {
   if (primary && primary.type === "drag") {
     send({ type: "pointer_up", x: primary.pos.x, y: primary.pos.y, button: "left" });
+  } else if (primary && primary.type === "move" && primary.prevCursor) {
+    // The first pinch finger relocated the PC cursor on landing — put it
+    // back, or the cursor-relative Click button acts at the stray spot.
+    send({ type: "pointer_move", x: primary.prevCursor.x, y: primary.prevCursor.y });
   }
   primary = null;
   const [p1, p2] = firstTwoPointers();
@@ -775,6 +798,11 @@ canvas.addEventListener("pointerdown", (e) => {
     // (system edge gestures, palm) — a ghost entry would turn EVERY later
     // tap into a "pinch" until refresh. A new primary pointer is the
     // browser's guarantee that no other finger is really down.
+    if (primary && primary.type === "drag" && primary.pos) {
+      // The lost pointerup left the PC's left button DOWN — release it,
+      // or every later cursor move becomes an OS drag.
+      send({ type: "pointer_up", x: primary.pos.x, y: primary.pos.y, button: "left" });
+    }
     pointers.clear();
     pinch = null;
     primary = null;
@@ -794,6 +822,7 @@ canvas.addEventListener("pointerdown", (e) => {
     primary.pos = toRemoteClamped(p.x, p.y);
     send({ type: "pointer_down", x: primary.pos.x, y: primary.pos.y, button: "left" });
   } else if (touchMode === "move") {
+    primary.prevCursor = cursorPos; // restore point if this turns into a pinch
     send({ type: "pointer_move", ...toRemoteClamped(p.x, p.y) });
   } else if (touchMode === "scroll") {
     Object.assign(primary, { lastY: p.y, acc: 0, vel: 0, lastT: performance.now(), pos: toRemoteClamped(p.x, p.y) });
@@ -883,17 +912,23 @@ window.addEventListener("contextmenu", (e) => e.preventDefault());
 
 function connect() {
   setStatus("connecting", `Connecting to ${location.host}…`);
-  ws = new WebSocket(`ws://${location.host}/ws`);
-  ws.binaryType = "arraybuffer";
+  // Every handler guards on `sock === ws`: instant reconnect can replace the
+  // global while an abandoned socket is still CLOSING, and its late onclose
+  // must never tear down the NEW connection's MSE pipeline or status.
+  const sock = new WebSocket(`ws://${location.host}/ws`);
+  ws = sock;
+  sock.binaryType = "arraybuffer";
 
-  ws.onopen = () => {
-    ws.send(JSON.stringify({ type: "auth", token }));
+  sock.onopen = () => {
+    if (sock !== ws) return;
+    sock.send(JSON.stringify({ type: "auth", token }));
     lastSentViewport = { x: 0, y: 0, w: 1, h: 1 };
     scheduleViewport();
     setStatus("connected", "Connected");
   };
 
-  ws.onmessage = (e) => {
+  sock.onmessage = (e) => {
+    if (sock !== ws) return;
     if (typeof e.data === "string") {
       const msg = JSON.parse(e.data);
       if (msg.type === "config") {
@@ -942,9 +977,13 @@ function connect() {
     }
   };
 
-  ws.onclose = (e) => {
+  sock.onclose = (e) => {
+    if (sock !== ws) return; // an abandoned socket must not touch the live one
     teardownMse(); // free the decoder; reconnect starts a fresh stream
     if (e.code === 4401) {
+      // The token is refused — retrying with the same one only hammers the
+      // server and stomps this message every 2 s. Stop until re-paired.
+      authRejected = true;
       if (IN_APP) {
         // In the APK the fix is one tap — the shell reopens the QR scanner.
         setStatus("disconnected", "Link expired — tap here to scan the new QR");
@@ -961,8 +1000,10 @@ function connect() {
   };
 }
 
+let authRejected = false;
+
 function ensureConnected() {
-  if (document.hidden) return;
+  if (document.hidden || authRejected) return;
   if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
   connect();
 }
