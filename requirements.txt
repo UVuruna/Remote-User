@@ -5,3 +5,4 @@ dxcam
 opencv-python-headless
 numpy
 qrcode[pil]
+PySide6
