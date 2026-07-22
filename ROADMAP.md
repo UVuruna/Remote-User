@@ -41,7 +41,7 @@ After the LAN prototype proved the control loop and touch UX on real code, the p
 
 ### ❓ Open Decisions (not yet settled)
 
-- **Mesh provider:** Tailscale (recommended) vs ZeroTier (equivalent).
+- **Mesh provider:** Tailscale (recommended) vs ZeroTier (equivalent). Owner observation (2026-07-22, went through signup live): Tailscale's account onboarding shows a one-time marketing survey — harmless (answers are irrelevant, "Personal use" fine, appears once per ACCOUNT, never again on other devices) but it is third-party friction our wizard cannot remove, only guide through. If it ever matters more: ZeroTier, or self-hosted Headscale (no Tailscale account at all). Not blocking.
 - **Distribution:** APK-only vs eventual Play Store.
 - **Build order:** the plan below is proposed; owner to confirm the sequence.
 
