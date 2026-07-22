@@ -140,10 +140,24 @@ class MainActivity : AppCompatActivity() {
     }
 
     /** Page pauses when the app does — the client's visibility rule then
-     *  closes the WebSocket (nothing runs while nobody is looking). */
+     *  closes the WebSocket (nothing runs while nobody is looking).
+     *
+     *  On return, verify the loaded address still answers: the app often
+     *  survives in RAM across a location change (home Wi-Fi → mobile data),
+     *  and the page would retry its now-dead address forever. If it stopped
+     *  answering, re-resolve — the other stored address takes over. */
     override fun onResume() {
         super.onResume()
-        if (::web.isInitialized) web.onResume()
+        if (!::web.isInitialized) return
+        web.onResume()
+        val current = web.url ?: return
+        Thread {
+            if (!pingOk(current)) {
+                runOnUiThread {
+                    if (!isFinishing && !isDestroyed) resolveAndLoad()
+                }
+            }
+        }.start()
     }
 
     override fun onPause() {

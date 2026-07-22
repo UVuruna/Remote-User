@@ -31,7 +31,11 @@ scanner). Package `com.uvuruna.remoteuser`, min Android 8 (API 26).
   "tap to scan the new QR" and the shell reopens the scanner.
 - **Session behavior**: screen stays on; rotation never recreates the WebView
   (the stream survives); leaving the app pauses the page, whose visibility
-  rule closes the stream (owner security decision).
+  rule closes the stream (owner security decision). On resume the shell pings
+  the loaded address — the app often survives in RAM across a location change
+  (home Wi-Fi → mobile data) and the page would retry a dead address forever;
+  if it stopped answering, the resolver runs again and the other address
+  takes over.
 
 ## Files
 
