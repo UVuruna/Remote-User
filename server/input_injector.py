@@ -188,6 +188,14 @@ class InputInjector:
             MOUSEEVENTF_MOVE | MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_VIRTUALDESK | up, abs_x, abs_y
         )
 
+    def click(self, button: str) -> None:
+        """Down+up at the CURRENT cursor position, no move — the client's
+        Click button (the finger only steers the cursor). Two presses inside
+        Windows' double-click time land as a double click naturally."""
+        down, up = BUTTON_FLAGS[button]
+        self._send(down)
+        self._send(up)
+
     def wheel(self, x_norm: float, y_norm: float, ticks: float) -> None:
         """Moves the cursor to the gesture point (the wheel targets the window
         under the cursor), then scrolls by the given number of wheel ticks."""

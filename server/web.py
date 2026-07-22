@@ -150,7 +150,9 @@ def create_app(stream, hub: FrameHub | None, injector: InputInjector, token: str
     @app.post("/upload")
     async def upload(request: Request, file: UploadFile = File(...)):
         """Phone → PC: decode an image the tablet sent (incl. HEIC — the phone
-        camera default) and put it in the PC clipboard, ready to paste.
+        camera default), put it in the PC clipboard and PASTE it into the
+        focused box right away (Ctrl+V injected — picking the image was the
+        whole gesture; the user clicked the target field before choosing it).
         Token-gated like the WebSocket."""
         if request.query_params.get("token") != token:
             return JSONResponse({"ok": False, "error": "unauthorized"}, status_code=401)
@@ -162,6 +164,8 @@ def create_app(stream, hub: FrameHub | None, injector: InputInjector, token: str
                          len(data), file.filename, file.content_type, bytes(data[:12]))
             return JSONResponse({"ok": False, "error": "not an image"}, status_code=400)
         ok = await asyncio.to_thread(clipboard.copy_image, img)
+        if ok:
+            await asyncio.to_thread(injector.press_chord, "ctrl+v")
         return {"ok": ok}
 
     app.mount("/static", StaticFiles(directory=SETTINGS.client_dir), name="static")
@@ -359,10 +363,13 @@ async def _receive_input(ws: WebSocket, injector: InputInjector, stream) -> None
     while True:
         msg = json.loads(await ws.receive_text())
         kind = msg.get("type")
-        if kind in ("pointer_down", "pointer_up"):
+        if kind in ("pointer_down", "pointer_up", "click"):
             button = msg.get("button", "left")
             if button not in BUTTON_FLAGS:
                 logger.error("Unknown button %r from client", button)
+                continue
+            if kind == "click":
+                injector.click(button)  # at the current cursor — no coordinates
                 continue
             x, y = float(msg["x"]), float(msg["y"])
             if kind == "pointer_down":
