@@ -24,7 +24,7 @@ Remote control of the Windows PC from an Android tablet/phone over LAN. The PC r
 
 ## Session Workflow (owner decree 2026-07-22)
 
-**ALWAYS finish a session that touches server/client/android code by running the FULL desktop build** (`setup/build.py` — it bundles the client and the freshly built APK into the installer). The owner tests ONLY the real installed app, never the dev server from VSCode — shipping changes without a build means the owner installs stale software and the fixes "don't work". Build the APK first (`setup/build_apk.py`) when android/ or client/ changed. Do this without being asked; only GIT RELEASE still requires the owner's yes.
+**ALWAYS finish a session that touches server/client/android code by running the FULL desktop build AND publishing a GIT RELEASE** (`setup/build.py` — it bundles the client and the freshly built APK into the installer). The owner tests and updates ONLY through the official GitHub release (Rule #23 self-update), never the dev server from VSCode and never the local `dist/` — shipping changes without a **released** build means the owner installs stale software and the fixes "don't work". Build the APK first (`setup/build_apk.py`) when android/ or client/ changed. **Do ALL of this — build and GIT RELEASE — automatically, without being asked** (root [Rule #24](../../CLAUDE.md); this supersedes the earlier "GIT RELEASE requires the owner's yes").
 
 ## Architecture Constraints
 
