@@ -40,7 +40,7 @@ The two D-pad groups on the tablet are defined entirely by [actions.json](action
 
 - **left / right** — index of the category each group shows on connect.
 - **name** — the category label (centre button + wheel).
-- **icon** — one of: `mouse`, `edit`, `keyboard`, `monitor`, `grid`, `snap`, `click`, `right`, `drag`, `scroll`.
+- **icon** — one of: `mouse`, `edit`, `keyboard`, `monitor`, `grid`, `snap`, `click`, `right`, `drag`, `scroll`, `settings`, `target`.
 - **buttons** — up to 4, placed in order **up · left · right · down**.
 
 ## Button kinds
@@ -54,6 +54,7 @@ A button is one of:
   - `upload` — pick an image from the phone (gallery/camera); the server pastes it into the focused box on the PC by itself.
   - `monitor` — switch the streamed monitor.
   - `snap` — screenshot the PC monitor into the PC clipboard (available in config; not in the default layout).
+  - `calibrate` — re-measure your fingertip so the on-screen pointer sits at a comfortable, always-visible offset from it. Tap it, then tap the screen a few times; a toast confirms when it locks. Shipped as the first item of the **Settings** category.
 - **Chord** — `{ "label": "Copy", "chord": "ctrl+c" }` — fires a key combination (see below).
 - **Special key** — `{ "label": "Esc", "key": "escape" }` — a single structural key.
 
@@ -70,4 +71,4 @@ An unrecognised chord is logged on the server and does nothing — never a half-
 
 ## Your custom categories
 
-The shipped `Zones` category maps `ctrl+win+alt+1..4` (FancyZones presets). Add or rearrange categories freely — this file is yours to hand-edit; to move a button between categories, just move its JSON entry.
+The shipped `Zones` category maps `ctrl+win+alt+1..4` (FancyZones presets). The shipped `Settings` category holds `calibrate` (finger calibration) — the home for future on-device options. Add or rearrange categories freely — this file is yours to hand-edit; to move a button between categories, just move its JSON entry.

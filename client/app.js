@@ -23,12 +23,13 @@ const BUFFER_KEEP_S = 8;         // decoded history kept in MSE before trimming
 // inward). The distance is constant per session, calibrated once from the touch
 // contact size; only the ANGLE tracks position (radial, away from the screen
 // centre → toward the nearest edge).
-const CURSOR_OFFSET_MARGIN = 20;      // CSS px added beyond the measured finger radius
-const CURSOR_OFFSET_MIN = 36;         // CSS px floor
-const CURSOR_OFFSET_MAX = 96;         // CSS px ceiling
-const CURSOR_OFFSET_FALLBACK = 52;    // CSS px until measured / for non-touch (mouse, pen)
-const CURSOR_CALIB_SAMPLES = 12;      // touch samples → median → locked for the session
-const CURSOR_CENTER_DEADZONE = 0.045; // fraction of the smaller canvas side; inside → hold last angle
+const CURSOR_OFFSET_MARGIN = 20;   // CSS px added beyond the measured finger radius
+const CURSOR_OFFSET_MIN = 36;      // CSS px floor
+const CURSOR_OFFSET_MAX = 96;      // CSS px ceiling
+const CURSOR_OFFSET_FALLBACK = 52; // CSS px until measured / for non-touch (mouse, pen)
+const CURSOR_CALIB_SAMPLES = 12;   // touch samples → MAX radius → locked for the session
+// The offset distance doubles as the radius of the centre circle the pointer
+// otherwise cannot enter; the direction is held while the finger is inside it.
 
 // --- State ----------------------------------------------------------------
 const canvas = document.getElementById("screen");
@@ -62,11 +63,15 @@ const pointers = new Map();
 let pinch = null;
 let primary = null; // the first finger: {id, type, startX, startY, moved, offset, ...}
 
-// Cursor-offset calibration: measure the touch contact radius once (median of
-// the first CURSOR_CALIB_SAMPLES touch samples), then lock it for the session.
-// lastOffsetDir carries the radial direction through the centre dead-zone.
+// Cursor-offset calibration: take the LARGEST touch contact radius over the
+// first CURSOR_CALIB_SAMPLES touch samples (max, not median — a light press
+// under-reports contact size and would hide the pointer), then lock it for the
+// session. Settings → Calibrate re-arms it. lastOffsetDir is held while the
+// finger is inside the centre circle so the pointer can glide through it.
 let fingerRadiusPx = null;           // CSS px, null until locked
-let fingerSamples = [];              // temporary calibration buffer
+let fingerMaxPx = 0;                 // running max contact radius while sampling
+let fingerSampleCount = 0;           // samples collected
+let calibrating = false;             // explicit (Settings) calibration in progress
 let lastOffsetDir = { x: 0, y: -1 }; // default "up" until a real angle is seen
 
 // Region-streaming state — declared before the first updateViewport() call.
@@ -345,15 +350,29 @@ function toRemoteClamped(px, py) {
 
 // --- Cursor offset --------------------------------------------------------
 
-// Feed one touch sample while calibrating; locks the per-session finger radius.
+// Feed one touch sample; locks the per-session finger radius at the MAX seen.
 function sampleFinger(e) {
   if (fingerRadiusPx !== null || e.pointerType !== "touch") return;
   const r = Math.max(e.width, e.height) / 2; // CSS px, the contact ellipse
-  if (r > 2) fingerSamples.push(r);          // ignore bogus 0/1 defaults
-  if (fingerSamples.length >= CURSOR_CALIB_SAMPLES) {
-    fingerSamples.sort((a, b) => a - b);
-    fingerRadiusPx = fingerSamples[fingerSamples.length >> 1]; // median
+  if (r <= 2) return;                         // ignore bogus 0/1 defaults
+  if (r > fingerMaxPx) fingerMaxPx = r;
+  if (++fingerSampleCount >= CURSOR_CALIB_SAMPLES) {
+    fingerRadiusPx = fingerMaxPx; // MAX → the pointer clears the fingertip in every press
+    if (calibrating) {
+      calibrating = false;
+      showToast(`Calibrated — pointer offset ${Math.round(offsetDistancePx())}px`);
+    }
   }
+}
+
+// Re-arm calibration (Settings → Calibrate): forget the locked radius and
+// re-measure over the next few touches.
+function startCalibration() {
+  fingerRadiusPx = null;
+  fingerMaxPx = 0;
+  fingerSampleCount = 0;
+  calibrating = true;
+  showToast("Calibrating — tap the screen a few times with your finger");
 }
 
 // Constant offset distance in CSS px: measured finger radius + margin, clamped.
@@ -364,18 +383,29 @@ function offsetDistancePx() {
   return Math.min(Math.max(base, CURSOR_OFFSET_MIN), CURSOR_OFFSET_MAX);
 }
 
-// Finger canvas-px point → remote (offset) coords. Direction is radial from the
-// canvas centre (finger below centre → pointer pushed further down, etc.), so
-// the finger stays inward and the pointer clears the fingertip toward the
-// nearest edge. Inside the centre dead-zone the last direction is reused (the
-// direction the finger came from) — no singularity, no jitter.
+// Fresh touch: point the offset straight outward from the finger's position, so
+// a new tap never starts with a stale held direction.
+function resetOffsetDir(p) {
+  const fx = p.x - canvas.width / 2;
+  const fy = p.y - canvas.height / 2;
+  const dd = Math.hypot(fx, fy);
+  if (dd > 1e-4) lastOffsetDir = { x: fx / dd, y: fy / dd };
+}
+
+// Finger canvas-px point → remote (offset) coords. The pointer sits one offset
+// away, aimed at the nearest edge (radial from the canvas centre), so the
+// finger stays inward and never covers it. Distance is constant; only the ANGLE
+// tracks position. While the finger is INSIDE the centre circle (radius = the
+// offset) the direction is HELD, so the pointer glides through the centre and
+// fills the spot it otherwise could never reach; the direction flips on its own
+// when the finger leaves the far side — i.e. once the pointer has crossed the
+// centre — never while the finger merely crosses it.
 function offsetRemote(p) {
-  const dx = p.x - canvas.width / 2;
-  const dy = p.y - canvas.height / 2;
-  const dist = Math.hypot(dx, dy);
-  const dead = CURSOR_CENTER_DEADZONE * Math.min(canvas.width, canvas.height);
-  if (dist >= dead) lastOffsetDir = { x: dx / dist, y: dy / dist };
-  const d = offsetDistancePx() * devicePixelRatio; // CSS px → canvas px
+  const fx = p.x - canvas.width / 2;
+  const fy = p.y - canvas.height / 2;
+  const fdist = Math.hypot(fx, fy);
+  const d = offsetDistancePx() * devicePixelRatio; // CSS px → canvas px = circle radius
+  if (fdist >= d) lastOffsetDir = { x: fx / fdist, y: fy / fdist }; // outside → radial-outward
   return toRemoteClamped(p.x + lastOffsetDir.x * d, p.y + lastOffsetDir.y * d);
 }
 
@@ -439,6 +469,8 @@ const ICONS = {
   edit: '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>',
   grid: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
   x: '<line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/>',
+  settings: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.09a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.09a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
+  target: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"/>',
 };
 
 function svg(name) {
@@ -458,6 +490,7 @@ const BUILTINS = {
   monitor:  { label: "Monitor", icon: "monitor", kind: "send", msg: { type: "monitor_switch" } },
   snap:     { label: "Snap",   icon: "snap",     kind: "send", msg: { type: "screenshot" } },
   upload:   { label: "Image",  icon: "image",    kind: "upload" },
+  calibrate:{ label: "Calibrate", icon: "target", kind: "calibrate" },
 };
 
 // --- Touch-mode toggles ---------------------------------------------------
@@ -722,6 +755,8 @@ function makeActionButton(btn, pos) {
       keepFocus(el, () => send(b.msg));
     } else if (b.kind === "upload") {
       keepFocus(el, () => filePick.click());
+    } else if (b.kind === "calibrate") {
+      keepFocus(el, startCalibration);
     }
   } else if (btn.chord) {
     el = makeButton("ctl text", null, btn.label || btn.chord);
@@ -882,6 +917,7 @@ canvas.addEventListener("pointerdown", (e) => {
   }
 
   const offset = e.pointerType === "touch"; // mouse/pen (dev) → no offset
+  if (offset) resetOffsetDir(p);            // fresh touch → aim outward, no stale held angle
   primary = { id: e.pointerId, startX: p.x, startY: p.y, moved: false, type: touchMode, offset };
   if (touchMode === "drag") {
     primary.pos = toRemoteMaybeOffset(p, offset);

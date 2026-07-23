@@ -51,6 +51,13 @@
         { "label": "Z3", "chord": "ctrl+win+alt+3" },
         { "label": "Z4", "chord": "ctrl+win+alt+4" }
       ]
+    },
+    {
+      "name": "Settings",
+      "icon": "settings",
+      "buttons": [
+        { "action": "calibrate" }
+      ]
     }
   ]
 }
