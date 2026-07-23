@@ -7,8 +7,15 @@ Steps:
        - ffmpeg.exe — BUNDLED into the app (H.264 encoding, zero user action)
        - tailscale-setup.exe — CHAIN-INSTALLED by the NSIS installer
   3. PyInstaller (--onedir, windowed) around server/gui_main.py + copy ffmpeg in
+  3b. Smoke test: run the frozen exe with --selfcheck so a missing bundled
+      module fails the BUILD, not the user's first launch (fail-closed)
   4. Sign the exe (self-signed cert — run create_cert.py once first)
   5. NSIS installer (+ sign it)
+
+The build always runs under the project's .venv (it re-execs itself there if
+launched with another interpreter) — otherwise PyInstaller bundles from an
+incomplete env and silently drops deps (a system-Python build shipped v0.0.045
+without `qrcode` and crashed on launch).
 
 Prerequisites (dev machine, one-time):
   - .venv with requirements.txt + pip install pyinstaller pillow
@@ -16,10 +23,12 @@ Prerequisites (dev machine, one-time):
   - python setup/create_cert.py (optional — unsigned build works, with warning)
 
 Usage:
+    python setup/build.py            (auto-re-execs under .venv)
     .venv\\Scripts\\python setup/build.py
 """
 
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -86,6 +95,25 @@ EXCLUDE_MODULES = [
 
 def step(msg: str) -> None:
     print(f"\n{'=' * 60}\n  {msg}\n{'=' * 60}")
+
+
+def reexec_under_venv() -> None:
+    """Build with the project's own .venv so PyInstaller bundles the COMPLETE
+    dependency set. Running under ANY other interpreter silently drops whatever
+    that interpreter is missing — a system-Python build shipped v0.0.045 without
+    `qrcode` and crashed on first launch. Re-exec once; the env sentinel guards
+    against a loop and the missing-.venv case just proceeds (the smoke test then
+    catches any gap)."""
+    if os.environ.get("RU_BUILD_REEXEC"):
+        return
+    venv_py = PROJECT_DIR / ".venv" / "Scripts" / "python.exe"
+    if not venv_py.exists() or venv_py.resolve() == Path(sys.executable).resolve():
+        return
+    print(f"Re-running the build under the project venv:\n  {venv_py}")
+    env = {**os.environ, "RU_BUILD_REEXEC": "1"}
+    raise SystemExit(
+        subprocess.run([str(venv_py), str(Path(__file__).resolve()), *sys.argv[1:]], env=env).returncode
+    )
 
 
 def run(cmd: list[str], mask: str | None = None, **kwargs):
@@ -237,6 +265,29 @@ def build_pyinstaller() -> Path:
     return exe_path
 
 
+def smoke_test(exe_path: Path) -> None:
+    """Fail-closed: run the FROZEN exe's --selfcheck so a missing bundled module
+    fails the BUILD, not the user's first launch (the v0.0.045 qrcode crash). The
+    exe imports its whole module graph and exits 0; anything missing → non-zero.
+    Runs before signing — no point signing/packaging an exe that cannot import."""
+    step("3b/6  Smoke test (frozen exe imports its module graph)")
+    print(f"  > {exe_path} --selfcheck")
+    try:
+        result = subprocess.run(
+            [str(exe_path), "--selfcheck"], timeout=180,
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+        )
+    except subprocess.TimeoutExpired:
+        print("  FAIL: --selfcheck timed out (the app hung on import)")
+        sys.exit(1)
+    if result.returncode != 0:
+        print(f"  FAIL: --selfcheck exited {result.returncode} — a bundled module is missing:")
+        for line in (result.stdout or "").strip().splitlines():
+            print(f"    {line}")
+        sys.exit(1)
+    print("  OK: the frozen app imports its whole module graph")
+
+
 def sign_file(file_path: Path) -> bool:
     """Sign one file with the project certificate; shared by exe + installer
     steps. Missing cert/signtool skips with a warning (build stays usable)."""
@@ -332,6 +383,7 @@ def verify_build(exe_path: Path, installer_path: Path) -> None:
 
 
 def main() -> None:
+    reexec_under_venv()  # ensure PyInstaller runs under the complete .venv env
     print(f"Building {APP_INFO['display_name']} v{APP_INFO['version']}")
     if not ENTRY_POINT.exists():
         print(f"ERROR: entry point not found: {ENTRY_POINT}")
@@ -341,6 +393,7 @@ def main() -> None:
     generate_icons()
     fetch_vendor()
     exe_path = build_pyinstaller()
+    smoke_test(exe_path)
     step("4/6  Signing exe")
     sign_file(exe_path)
     build_installer()
