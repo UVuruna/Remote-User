@@ -324,7 +324,11 @@ def verify_build(exe_path: Path, installer_path: Path) -> None:
         for p in problems:
             print(f"  FAIL: {p}")
         sys.exit(1)
-    print(f"  OK: CompanyName={company!r}  FileVersion={file_version!r}; exe+installer signed")
+    print(f"  OK: CompanyName={company!r}  FileVersion={file_version!r}")
+    if CERT_PATH.exists() and PASSWORD_PATH.exists():
+        print("  OK: exe + installer signed")
+    else:
+        print("  NOTE: signing skipped (no certificate) — installer is UNSIGNED")
 
 
 def main() -> None:
