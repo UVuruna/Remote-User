@@ -103,6 +103,11 @@ def run(cmd: list[str], mask: str | None = None, **kwargs):
     return result
 
 
+def _powershell(script: str) -> str:
+    result = subprocess.run(["powershell", "-NoProfile", "-Command", script], capture_output=True, text=True)
+    return result.stdout.strip()
+
+
 def _version_tuple(version: str) -> tuple[int, int, int, int]:
     nums = [int(p) for p in version.split(".")]
     while len(nums) < 4:
@@ -296,6 +301,32 @@ def build_installer() -> None:
     sign_file(installer_path)
 
 
+def verify_build(exe_path: Path, installer_path: Path) -> None:
+    """Fail-closed gate: a build must not silently ship broken metadata or
+    an unsigned installer. Cert/password absence is a normal skip (matches
+    sign_file's own unsigned-build fallback), not a failure."""
+    step("VERIFY  metadata + signatures (build fails if anything is missing)")
+    problems = []
+    info = _powershell(f"$v=(Get-Item '{exe_path}').VersionInfo; \"$($v.CompanyName)|$($v.FileVersion)\"")
+    company, _, file_version = info.partition("|")
+    expected_company = COMPANY["company_name"]
+    if company != expected_company:
+        problems.append(f"exe CompanyName is {company!r}, expected {expected_company!r}")
+    app_version = APP_INFO["version"]
+    if app_version not in file_version:
+        problems.append(f"exe FileVersion is {file_version!r}, expected to contain {app_version!r}")
+    if CERT_PATH.exists() and PASSWORD_PATH.exists():
+        for label, target in (("exe", exe_path), ("installer", installer_path)):
+            status = _powershell(f"(Get-AuthenticodeSignature '{target}').Status")
+            if status in ("", "NotSigned"):
+                problems.append(f"{label} is NOT signed (status {status or 'missing'!r})")
+    if problems:
+        for p in problems:
+            print(f"  FAIL: {p}")
+        sys.exit(1)
+    print(f"  OK: CompanyName={company!r}  FileVersion={file_version!r}; exe+installer signed")
+
+
 def main() -> None:
     print(f"Building {APP_INFO['display_name']} v{APP_INFO['version']}")
     if not ENTRY_POINT.exists():
@@ -312,6 +343,8 @@ def main() -> None:
 
     step("BUILD COMPLETE")
     print(f"  {DIST_DIR / APP_INFO['installer_name']}")
+
+    verify_build(exe_path, DIST_DIR / APP_INFO["installer_name"])
 
 
 if __name__ == "__main__":
