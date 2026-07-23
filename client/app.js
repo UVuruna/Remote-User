@@ -17,6 +17,19 @@ const LIVE_MAX_BEHIND_S = 0.5;   // jump to the live edge when this far behind
 const LIVE_TARGET_BEHIND_S = 0.1;
 const BUFFER_KEEP_S = 8;         // decoded history kept in MSE before trimming
 
+// Cursor offset — the finger must never sit on top of the pointer it steers.
+// The PC cursor is placed at finger + offset (a REAL offset: clicks land on the
+// visible arrow, and every edge stays reachable because the finger stays
+// inward). The distance is constant per session, calibrated once from the touch
+// contact size; only the ANGLE tracks position (radial, away from the screen
+// centre → toward the nearest edge).
+const CURSOR_OFFSET_MARGIN = 20;      // CSS px added beyond the measured finger radius
+const CURSOR_OFFSET_MIN = 36;         // CSS px floor
+const CURSOR_OFFSET_MAX = 96;         // CSS px ceiling
+const CURSOR_OFFSET_FALLBACK = 52;    // CSS px until measured / for non-touch (mouse, pen)
+const CURSOR_CALIB_SAMPLES = 12;      // touch samples → median → locked for the session
+const CURSOR_CENTER_DEADZONE = 0.045; // fraction of the smaller canvas side; inside → hold last angle
+
 // --- State ----------------------------------------------------------------
 const canvas = document.getElementById("screen");
 const ctx = canvas.getContext("2d");
@@ -47,7 +60,14 @@ let touchMode = "move";
 
 const pointers = new Map();
 let pinch = null;
-let primary = null; // the first finger: {id, type, startX, startY, moved, ...}
+let primary = null; // the first finger: {id, type, startX, startY, moved, offset, ...}
+
+// Cursor-offset calibration: measure the touch contact radius once (median of
+// the first CURSOR_CALIB_SAMPLES touch samples), then lock it for the session.
+// lastOffsetDir carries the radial direction through the centre dead-zone.
+let fingerRadiusPx = null;           // CSS px, null until locked
+let fingerSamples = [];              // temporary calibration buffer
+let lastOffsetDir = { x: 0, y: -1 }; // default "up" until a real angle is seen
 
 // Region-streaming state — declared before the first updateViewport() call.
 let lastSentViewport = { x: 0, y: 0, w: 1, h: 1 };
@@ -321,6 +341,55 @@ function toRemoteClamped(px, py) {
     x: Math.min(Math.max((px - D.x) / D.w, 0), 1),
     y: Math.min(Math.max((py - D.y) / D.h, 0), 1),
   };
+}
+
+// --- Cursor offset --------------------------------------------------------
+
+// Feed one touch sample while calibrating; locks the per-session finger radius.
+function sampleFinger(e) {
+  if (fingerRadiusPx !== null || e.pointerType !== "touch") return;
+  const r = Math.max(e.width, e.height) / 2; // CSS px, the contact ellipse
+  if (r > 2) fingerSamples.push(r);          // ignore bogus 0/1 defaults
+  if (fingerSamples.length >= CURSOR_CALIB_SAMPLES) {
+    fingerSamples.sort((a, b) => a - b);
+    fingerRadiusPx = fingerSamples[fingerSamples.length >> 1]; // median
+  }
+}
+
+// Constant offset distance in CSS px: measured finger radius + margin, clamped.
+function offsetDistancePx() {
+  const base = fingerRadiusPx === null
+    ? CURSOR_OFFSET_FALLBACK
+    : fingerRadiusPx + CURSOR_OFFSET_MARGIN;
+  return Math.min(Math.max(base, CURSOR_OFFSET_MIN), CURSOR_OFFSET_MAX);
+}
+
+// Finger canvas-px point → remote (offset) coords. Direction is radial from the
+// canvas centre (finger below centre → pointer pushed further down, etc.), so
+// the finger stays inward and the pointer clears the fingertip toward the
+// nearest edge. Inside the centre dead-zone the last direction is reused (the
+// direction the finger came from) — no singularity, no jitter.
+function offsetRemote(p) {
+  const dx = p.x - canvas.width / 2;
+  const dy = p.y - canvas.height / 2;
+  const dist = Math.hypot(dx, dy);
+  const dead = CURSOR_CENTER_DEADZONE * Math.min(canvas.width, canvas.height);
+  if (dist >= dead) lastOffsetDir = { x: dx / dist, y: dy / dist };
+  const d = offsetDistancePx() * devicePixelRatio; // CSS px → canvas px
+  return toRemoteClamped(p.x + lastOffsetDir.x * d, p.y + lastOffsetDir.y * d);
+}
+
+// One entry point: touch fingers get the offset, mouse/pen (desktop dev) don't.
+function toRemoteMaybeOffset(p, offset) {
+  return offset ? offsetRemote(p) : toRemoteClamped(p.x, p.y);
+}
+
+// Send a cursor move and draw the arrow optimistically; the server `cursor`
+// echo corrects it. `remote` is the already-offset {x, y}.
+function sendCursor(remote) {
+  cursorPos = remote;
+  send({ type: "pointer_move", ...remote });
+  redraw();
 }
 
 // --- Scroll momentum ------------------------------------------------------
@@ -805,27 +874,31 @@ canvas.addEventListener("pointerdown", (e) => {
   cancelScrollInertia();
   const p = toCanvasPx(e);
   pointers.set(e.pointerId, p);
+  sampleFinger(e);
 
   if (pointers.size >= 2) {
     beginPinch();
     return;
   }
 
-  primary = { id: e.pointerId, startX: p.x, startY: p.y, moved: false, type: touchMode };
+  const offset = e.pointerType === "touch"; // mouse/pen (dev) → no offset
+  primary = { id: e.pointerId, startX: p.x, startY: p.y, moved: false, type: touchMode, offset };
   if (touchMode === "drag") {
-    primary.pos = toRemoteClamped(p.x, p.y);
+    primary.pos = toRemoteMaybeOffset(p, offset);
     send({ type: "pointer_down", x: primary.pos.x, y: primary.pos.y, button: "left" });
+    cursorPos = primary.pos; // optimistic
   } else if (touchMode === "move") {
     primary.prevCursor = cursorPos; // restore point if this turns into a pinch
-    send({ type: "pointer_move", ...toRemoteClamped(p.x, p.y) });
+    sendCursor(toRemoteMaybeOffset(p, offset));
   } else if (touchMode === "scroll") {
-    Object.assign(primary, { lastY: p.y, acc: 0, vel: 0, lastT: performance.now(), pos: toRemoteClamped(p.x, p.y) });
+    Object.assign(primary, { lastY: p.y, acc: 0, vel: 0, lastT: performance.now(), pos: toRemoteMaybeOffset(p, offset) });
   }
 });
 
 canvas.addEventListener("pointermove", (e) => {
   const p = toCanvasPx(e);
   if (pointers.has(e.pointerId)) pointers.set(e.pointerId, p);
+  sampleFinger(e);
 
   if (pinch && pointers.size >= 2) {
     const [p1, p2] = firstTwoPointers();
@@ -844,10 +917,10 @@ canvas.addEventListener("pointermove", (e) => {
   if (!primary || primary.id !== e.pointerId) return;
 
   if (primary.type === "drag") {
-    primary.pos = toRemoteClamped(p.x, p.y);
-    send({ type: "pointer_move", x: primary.pos.x, y: primary.pos.y });
+    primary.pos = toRemoteMaybeOffset(p, primary.offset);
+    sendCursor(primary.pos);
   } else if (primary.type === "move") {
-    send({ type: "pointer_move", ...toRemoteClamped(p.x, p.y) });
+    sendCursor(toRemoteMaybeOffset(p, primary.offset));
   } else if (primary.type === "scroll") {
     const now = performance.now();
     const dy = p.y - primary.lastY;
@@ -887,10 +960,13 @@ function endPointer(e) {
     } else if (primary.type === "scroll") {
       startScrollInertia(primary.vel, primary.pos);
     } else if (primary.type === "right" && !primary.moved && e.type === "pointerup") {
-      const pos = toRemote(primary.startX, primary.startY);
-      if (pos) {
+      // Guard on the finger being on the image, but right-click at the OFFSET
+      // point (where the arrow is), consistent with move/drag.
+      if (toRemote(primary.startX, primary.startY)) {
+        const pos = toRemoteMaybeOffset({ x: primary.startX, y: primary.startY }, primary.offset);
         send({ type: "pointer_down", x: pos.x, y: pos.y, button: "right" });
         send({ type: "pointer_up", x: pos.x, y: pos.y, button: "right" });
+        cursorPos = pos; // optimistic
       }
     }
     primary = null;

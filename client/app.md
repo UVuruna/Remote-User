@@ -21,11 +21,18 @@ An append failure (quota, codec hiccup) never freezes silently — the socket cl
 **JPEG (fallback, two layers):** a **base** bitmap (the last full-monitor frame) is drawn under everything; when zoomed, the **detail** bitmap (the sharp region crop) is drawn on top, so motion never flashes blank. `onFrame` sorts each frame into base vs detail by its region header. Only this mode sends `viewport` requests.
 
 ## Virtual cursor
-`cursor` messages carry the PC pointer position (monitor-normalized) — capture frames never include it. `drawCursor` renders a classic arrow at a fixed screen size (independent of zoom) through the same drawn-rect transform as the image; positions outside 0–1 (cursor on another monitor) draw nothing.
+`cursor` messages carry the PC pointer position (monitor-normalized) — capture frames never include it. `drawCursor` renders a classic arrow at a fixed screen size (independent of zoom) through the same drawn-rect transform as the image; positions outside 0–1 (cursor on another monitor) draw nothing. The arrow is also drawn **optimistically** on every `move`/`drag` send (`sendCursor`) so it tracks with zero round-trip lag; the server `cursor` echo then corrects it.
+
+### Finger offset (the finger must not cover the pointer)
+The PC cursor is placed at **finger + offset** — a *real* offset, so clicks land on the visible arrow and every edge stays reachable because the finger stays inward (`offsetRemote`, applied to `move`, `drag`, and the right-click point).
+
+- **Distance** is constant per session, calibrated once: `sampleFinger` collects the touch contact radius (`PointerEvent.width/height`, CSS px) over the first `CURSOR_CALIB_SAMPLES` touches and locks the median; `offsetDistancePx` = radius + `CURSOR_OFFSET_MARGIN`, clamped to `[MIN, MAX]`. `CURSOR_OFFSET_FALLBACK` is used until measured and for non-touch pointers (mouse/pen in dev get **no** offset).
+- **Angle** is radial from the canvas centre → the finger is pushed toward the nearest physical edge (below centre ⇒ down, left ⇒ left…). Only the angle tracks position; the distance never changes. Computed in canvas px, so the offset is a constant *physical* distance and shrinks (in monitor terms) when zoomed.
+- **Centre dead-zone** (`CURSOR_CENTER_DEADZONE`): inside a tiny disk around the exact centre the last direction is held (the one the finger came from) — no singularity, no jitter. *Known consequence of constant distance:* the cursor cannot sit within one offset of the exact screen centre (a small hole there), owner-accepted as a fraction-of-a-second edge case. Switching to a centre-fading offset is a one-line change in `offsetRemote` (scale `d` by `min(1, dist/dead)`).
 
 ## Touch modes (toggles)
 A single `touchMode` decides what one finger does; tapping a mode button toggles it, only one is active, two fingers always pinch-zoom:
-- `move` (default) → the finger only steers the PC cursor — it never clicks
+- `move` (default) → the finger only steers the PC cursor (offset so the fingertip never covers it) — it never clicks
 - `right` → tap = right click
 - `drag` → press-move-release = left drag
 - `scroll` → move = wheel (with momentum fling)
