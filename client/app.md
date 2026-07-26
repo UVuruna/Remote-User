@@ -23,22 +23,21 @@ An append failure (quota, codec hiccup) never freezes silently — the socket cl
 ## Virtual cursor
 `cursor` messages carry the PC pointer position (monitor-normalized) — capture frames never include it. `drawCursor` renders a classic arrow at a fixed screen size (independent of zoom) through the same drawn-rect transform as the image; positions outside 0–1 (cursor on another monitor) draw nothing. The arrow is also drawn **optimistically** on every `move`/`drag` send (`sendCursor`) so it tracks with zero round-trip lag; the server `cursor` echo then corrects it.
 
-### Finger offset (the finger must not cover the pointer)
-The PC cursor is placed at **finger + offset** — a *real* offset, so clicks land on the visible arrow and every edge stays reachable because the finger stays inward (`offsetRemote`, applied to `move`, `drag`, and the right-click point).
+### Finger offset (the pointer is always diagonally ABOVE the finger)
+The PC cursor is placed at **finger + offset** in a **fixed handedness diagonal** (owner decision 2026-07-26, replacing the radial-angle system — the pointer must never sit under or beside the finger):
 
+- **Direction** comes from `config.hand` (the desktop app's Settings): right-handed → **315°, up-LEFT** of the finger; left-handed → **45°, up-RIGHT**. Never changes during use — the pointer's position relative to the finger is always the same, so aiming becomes muscle memory.
 - **Distance** is constant per session, calibrated once: `sampleFinger` takes the **MAX** touch contact radius (`PointerEvent.width/height`, CSS px) over the first `CURSOR_CALIB_SAMPLES` touches and locks it — max, not median, because a light press under-reports contact size and would hide the pointer. `offsetDistancePx` = radius + `CURSOR_OFFSET_MARGIN`, clamped to `[MIN, MAX]`. `CURSOR_OFFSET_FALLBACK` is used until measured and for non-touch pointers (mouse/pen in dev get **no** offset). **Settings → Calibrate** (`startCalibration`, the `calibrate` built-in) re-arms the measurement.
-- **Angle** is radial from the canvas centre → the finger is pushed toward the nearest physical edge (below centre ⇒ down, left ⇒ left…). Only the angle tracks position; the distance never changes. Computed in canvas px, so the offset is a constant *physical* distance and shrinks (in monitor terms) when zoomed. `resetOffsetDir` aims a fresh touch straight outward so it never starts on a stale held angle.
-- **Centre circle** (radius = the offset itself): while the finger is **inside** that circle the direction is **held**, so the pointer glides through the centre and can reach the spot it otherwise never could. The direction flips on its own only when the finger leaves the far side — i.e. once the **pointer** (not the finger) has crossed the centre — homing on the now-nearest edge. This fills the former centre hole; the sole residual is a fast switch as the pointer crosses dead-centre (owner-accepted, a fraction-of-a-second edge case).
+- **Edge margin** (`computeBaseRect`): the image is fitted into the canvas MINUS one offset-component of margin on the sides the offset points *away from* (right-handed: right + bottom; left-handed: left + bottom). The finger can then travel PAST the image edge, so the pointer reaches every corner of the PC screen — without the margin the far edges are physically unreachable. The margin follows the calibrated distance, and `clampView` clamps zoom-panning against the same reduced rect so far edges stay reachable when zoomed.
 
 ## Touch modes (toggles)
 A single `touchMode` decides what one finger does; tapping a mode button toggles it, only one is active, two fingers always pinch-zoom:
-- `move` (default) → the finger only steers the PC cursor (offset so the fingertip never covers it) — it never clicks
-- `right` → tap = right click
+- `move` (default) → the finger only steers the PC cursor (offset so the hand never covers it) — it never clicks
 - `drag` → press-move-release = left drag
 - `scroll` → move = wheel (with momentum fling)
 - `pan` (the top-left **Move**) → move = local view pan, no PC interaction
 
-Left clicks come from the **Click** built-in button (`click` message — down+up at the current cursor position; two fast presses = double click). `setMode` / `refreshModeButtons` keep the single-active state and mirror it onto every `[data-mode]` button.
+**Nothing on the canvas is a tap** (owner decision 2026-07-26): the flow is always *steer the pointer, then press a button*. Left AND right clicks are explicit built-in buttons (`click {button}` — down+up at the current cursor position; two fast presses = double click). `setMode` / `refreshModeButtons` keep the single-active state and mirror it onto every `[data-mode]` button.
 
 **Ghost-pointer self-heal:** Android WebView occasionally loses a `pointerup`/`pointercancel`; a stale `pointers` entry then turned every later tap into a "pinch" until refresh. Every `pointerdown` with `isPrimary` wipes pointer/pinch/primary state first — a new primary pointer guarantees no other finger is really down.
 
@@ -47,7 +46,7 @@ Two groups (bottom-left/right), each showing one category from the server's [act
 
 - `renderGroup(side)` builds a group's buttons from its current category
 - `makeActionButton(btn, pos)` dispatches on button kind: built-in mode (`BUILTINS`), chord, or special key
-- `keepFocus(el, onTap)` — every control uses this so a tap never steals focus from the keyboard capture field
+- `keepFocus(el, onTap)` — every control uses this; the tap never steals focus from the keyboard capture field. The action fires on **pointerup** (where a touch grants the transient user activation the file picker and IME focus need) **plus a `pointercancel` rescue**: Android claims touches that start near screen edges and ends them with a `pointercancel`, so an up-only handler simply never ran — on the real device that killed every button while the code looked correct (owner report 2026-07-26). A cancel whose travel stayed under `CANCEL_TAP_SLOP` is the stolen tap and still fires; a cancel after real travel is a system home/back swipe crossing the button and never acts. Both cases are locked in by [Tests (folder)](../tests/___tests.md)
 
 ## Category wheel (tap-based)
 `openWheel(side)` lays the categories on a circle in screen centre; **tap** an item to select (no hold, no drag), the centre **✕** or a backdrop tap cancels. `closeWheel` tears it down.
@@ -62,7 +61,7 @@ The `upload` built-in opens a hidden `<input type="file" accept="image/*">` (gal
 `updateViewport()` sizes the canvas to `visualViewport` (fits the screen above the keyboard instantly) and publishes `--kb` (keyboard height, lifts the groups) and `--vtop` (top offset, keeps the corners visible).
 
 ## "Access from anywhere" wizard
-`config.tailscale_url` (null until the PC signs in to Tailscale) drives a banner + full-screen guided overlay: **1)** Google Play deep link to the Tailscale app, **2)** sign in with the same account and switch it ON, **3)** the page polls `GET /ping` on the Tailscale address (no-cors — an opaque success proves reachability) every 3 s and, the moment the phone joins the mesh, marks the step green and offers the permanent works-anywhere link (with a save/home-screen hint). Backdrop/✕ = "later" (re-offered next session). The banner never shows when the page already runs on the Tailscale address.
+`config.tailscale_url` (null until the PC signs in to Tailscale) drives a banner + full-screen guided overlay: **1)** Google Play deep link to the Tailscale app, **2)** sign in with the same account and switch it ON, **3)** the page polls `GET /ping` on the Tailscale address (no-cors — an opaque success proves reachability) every 3 s and, the moment the phone joins the mesh, marks the step green and offers the permanent works-anywhere link (with a save/home-screen hint). The banner auto-appears **once per device** (owner 2026-07-26 — "ok once, not constantly"; a `localStorage` flag remembers the offer) and never when the page already runs on the Tailscale address; afterwards the wizard stays reachable via **Settings → Anywhere** (the `anywhere` built-in).
 
 ## In-app update
 `config.app_version` (what the PC runs) is compared with `Android.appVersion()` (what this shell is) — numerically, inside the APK only. A newer PC shows the `#update-banner` pill; tapping it calls `Android.update(origin + "/app.apk")` — the shell opens the system browser on the SAME PC's APK, Android installs over (same signature). The phone never checks the internet for updates; the PC is its update source.

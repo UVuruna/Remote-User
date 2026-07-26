@@ -6,7 +6,6 @@
 
 // --- Tunables -------------------------------------------------------------
 const ZOOM_MAX = 6;
-const TAP_MAX_MOVE = 12;
 const SCROLL_PX_PER_TICK = 40;
 const SCROLL_FLING_MIN = 0.35;
 const SCROLL_FLING_DECAY = 0.004;
@@ -18,18 +17,21 @@ const LIVE_TARGET_BEHIND_S = 0.1;
 const BUFFER_KEEP_S = 8;         // decoded history kept in MSE before trimming
 
 // Cursor offset — the finger must never sit on top of the pointer it steers.
-// The PC cursor is placed at finger + offset (a REAL offset: clicks land on the
-// visible arrow, and every edge stays reachable because the finger stays
-// inward). The distance is constant per session, calibrated once from the touch
-// contact size; only the ANGLE tracks position (radial, away from the screen
-// centre → toward the nearest edge).
+// The PC cursor is placed at finger + offset in a FIXED direction (owner
+// decision 2026-07-26, replacing the radial-angle system: the pointer must
+// always be diagonally ABOVE the finger, never under or beside it):
+//   right-handed → 315° (up-left of the finger)
+//   left-handed  →  45° (up-right of the finger)
+// The handedness comes from the desktop app's Settings via `config.hand`.
+// The distance is constant per session, calibrated once from the touch
+// contact size. The screen keeps a margin on the far side(s) — see
+// computeBaseRect — so the finger can travel PAST the image edge and the
+// pointer still reaches every corner of the PC screen.
 const CURSOR_OFFSET_MARGIN = 20;   // CSS px added beyond the measured finger radius
 const CURSOR_OFFSET_MIN = 36;      // CSS px floor
 const CURSOR_OFFSET_MAX = 96;      // CSS px ceiling
 const CURSOR_OFFSET_FALLBACK = 52; // CSS px until measured / for non-touch (mouse, pen)
 const CURSOR_CALIB_SAMPLES = 12;   // touch samples → MAX radius → locked for the session
-// The offset distance doubles as the radius of the centre circle the pointer
-// otherwise cannot enter; the direction is held while the finger is inside it.
 
 // --- State ----------------------------------------------------------------
 const canvas = document.getElementById("screen");
@@ -51,28 +53,29 @@ let ws = null;
 // from the offscreen <video>) or "jpeg" (bitmaps, region streaming).
 let streamMode = "jpeg";
 let cursorPos = null; // PC cursor, monitor-normalized — capture never includes it
+let hand = "right";   // "right" | "left" — from config; decides the offset diagonal
 
 // One finger's meaning is set by a single toggle mode. Only one is ever active.
 //   move (default — the finger only steers the PC cursor, never clicks)
-//   · right · drag · scroll · pan
-// Clicks come from the explicit Click button (press again fast = double
-// click). pan moves the local view; two fingers always pinch.
+//   · drag · scroll · pan
+// NOTHING on the canvas is a tap (owner decision 2026-07-26): the flow is
+// always steer-then-press-a-button. Left AND right clicks are explicit
+// buttons (`click` at the current cursor; press twice fast = double click).
+// pan moves the local view; two fingers always pinch.
 let touchMode = "move";
 
 const pointers = new Map();
 let pinch = null;
-let primary = null; // the first finger: {id, type, startX, startY, moved, offset, ...}
+let primary = null; // the first finger: {id, type, startX, startY, offset, ...}
 
 // Cursor-offset calibration: take the LARGEST touch contact radius over the
 // first CURSOR_CALIB_SAMPLES touch samples (max, not median — a light press
 // under-reports contact size and would hide the pointer), then lock it for the
-// session. Settings → Calibrate re-arms it. lastOffsetDir is held while the
-// finger is inside the centre circle so the pointer can glide through it.
+// session. Settings → Calibrate re-arms it.
 let fingerRadiusPx = null;           // CSS px, null until locked
 let fingerMaxPx = 0;                 // running max contact radius while sampling
 let fingerSampleCount = 0;           // samples collected
 let calibrating = false;             // explicit (Settings) calibration in progress
-let lastOffsetDir = { x: 0, y: -1 }; // default "up" until a real angle is seen
 
 // Region-streaming state — declared before the first updateViewport() call.
 let lastSentViewport = { x: 0, y: 0, w: 1, h: 1 };
@@ -92,18 +95,36 @@ function toCanvasPx(e) {
 }
 
 function send(msg) {
-  if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg));
-  else ensureConnected(); // a tap on a dead socket revives the link right away
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify(msg));
+    return;
+  }
+  // The 4401 pill carries the ONLY re-pair instruction ("tap here to scan
+  // the new QR") — never stomp it with a reconnect notice that can't succeed.
+  if (authRejected) return;
+  // A dropped command must be VISIBLE (a dead socket behind a frozen frame
+  // read as "buttons randomly stopped working" — owner report 2026-07-26).
+  setStatus("connecting", "Reconnecting…");
+  ensureConnected();
 }
 
 // --- View transform -------------------------------------------------------
 
+// The image is fitted into the canvas MINUS a margin on the sides the offset
+// points away from (right-handed: right + bottom; left-handed: left + bottom).
+// The margin equals one offset component, so the finger can travel past the
+// image edge and the pointer still reaches the far corners of the PC screen —
+// without it the offset makes those edges physically unreachable.
 function computeBaseRect() {
   if (!monitor.w) return;
+  const m = offsetDistancePx() * devicePixelRatio * Math.SQRT1_2;
+  const left = hand === "left" ? m : 0;
+  const boxW = canvas.width - m;  // one horizontal margin, on the offset's far side
+  const boxH = canvas.height - m;
   const aspect = monitor.w / monitor.h;
-  const w = Math.min(canvas.width, canvas.height * aspect);
+  const w = Math.min(boxW, boxH * aspect);
   const h = w / aspect;
-  baseRect = { x: (canvas.width - w) / 2, y: (canvas.height - h) / 2, w, h };
+  baseRect = { x: left + (boxW - w) / 2, y: (boxH - h) / 2, w, h };
 }
 
 function drawnRect() {
@@ -332,14 +353,6 @@ function renderLoop() {
 
 // --- Coordinate mapping ---------------------------------------------------
 
-function toRemote(px, py) {
-  const D = drawnRect();
-  const x = (px - D.x) / D.w;
-  const y = (py - D.y) / D.h;
-  if (x < 0 || x > 1 || y < 0 || y > 1) return null;
-  return { x, y };
-}
-
 function toRemoteClamped(px, py) {
   const D = drawnRect();
   return {
@@ -358,6 +371,9 @@ function sampleFinger(e) {
   if (r > fingerMaxPx) fingerMaxPx = r;
   if (++fingerSampleCount >= CURSOR_CALIB_SAMPLES) {
     fingerRadiusPx = fingerMaxPx; // MAX → the pointer clears the fingertip in every press
+    computeBaseRect();            // the edge margin tracks the offset distance
+    clampView();
+    redraw();
     if (calibrating) {
       calibrating = false;
       showToast(`Calibrated — pointer offset ${Math.round(offsetDistancePx())}px`);
@@ -372,6 +388,9 @@ function startCalibration() {
   fingerMaxPx = 0;
   fingerSampleCount = 0;
   calibrating = true;
+  computeBaseRect(); // the offset falls back to the default until re-locked —
+  clampView();       // the edge margin must track it, or far edges go unreachable
+  redraw();
   showToast("Calibrating — tap the screen a few times with your finger");
 }
 
@@ -383,30 +402,15 @@ function offsetDistancePx() {
   return Math.min(Math.max(base, CURSOR_OFFSET_MIN), CURSOR_OFFSET_MAX);
 }
 
-// Fresh touch: point the offset straight outward from the finger's position, so
-// a new tap never starts with a stale held direction.
-function resetOffsetDir(p) {
-  const fx = p.x - canvas.width / 2;
-  const fy = p.y - canvas.height / 2;
-  const dd = Math.hypot(fx, fy);
-  if (dd > 1e-4) lastOffsetDir = { x: fx / dd, y: fy / dd };
-}
-
 // Finger canvas-px point → remote (offset) coords. The pointer sits one offset
-// away, aimed at the nearest edge (radial from the canvas centre), so the
-// finger stays inward and never covers it. Distance is constant; only the ANGLE
-// tracks position. While the finger is INSIDE the centre circle (radius = the
-// offset) the direction is HELD, so the pointer glides through the centre and
-// fills the spot it otherwise could never reach; the direction flips on its own
-// when the finger leaves the far side — i.e. once the pointer has crossed the
-// centre — never while the finger merely crosses it.
+// away in the FIXED handedness diagonal — up-left for right-handed (315°),
+// up-right for left-handed (45°) — so the hand never covers it. The margin
+// reserved in computeBaseRect makes the far edges reachable.
 function offsetRemote(p) {
-  const fx = p.x - canvas.width / 2;
-  const fy = p.y - canvas.height / 2;
-  const fdist = Math.hypot(fx, fy);
-  const d = offsetDistancePx() * devicePixelRatio; // CSS px → canvas px = circle radius
-  if (fdist >= d) lastOffsetDir = { x: fx / fdist, y: fy / fdist }; // outside → radial-outward
-  return toRemoteClamped(p.x + lastOffsetDir.x * d, p.y + lastOffsetDir.y * d);
+  const d = offsetDistancePx() * devicePixelRatio; // CSS px → canvas px
+  const dx = (hand === "left" ? d : -d) * Math.SQRT1_2;
+  const dy = -d * Math.SQRT1_2;
+  return toRemoteClamped(p.x + dx, p.y + dy);
 }
 
 // One entry point: touch fingers get the offset, mouse/pen (desktop dev) don't.
@@ -471,6 +475,7 @@ const ICONS = {
   x: '<line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/>',
   settings: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.09a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.09a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
   target: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"/>',
+  globe: '<circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>',
 };
 
 function svg(name) {
@@ -480,10 +485,12 @@ function svg(name) {
 // --- Built-in group actions -----------------------------------------------
 
 const BUILTINS = {
-  // The finger itself only steers the cursor — Click is the explicit left
-  // click at the CURRENT cursor position; press it twice for a double click.
+  // The finger itself only steers the cursor — clicks are explicit buttons at
+  // the CURRENT cursor position; press twice fast for a double click. Right
+  // is a click button too (owner decision 2026-07-26 — with the offset
+  // pointer NOTHING may act on a canvas tap).
   click:    { label: "Click",  icon: "click",    kind: "send", msg: { type: "click", button: "left" } },
-  right:    { label: "Right",  icon: "right",    kind: "mode" },
+  right:    { label: "Right",  icon: "right",    kind: "send", msg: { type: "click", button: "right" } },
   drag:     { label: "Drag",   icon: "drag",     kind: "mode" },
   scroll:   { label: "Scroll", icon: "scroll",   kind: "mode" },
   keyboard: { label: "Keys",   icon: "keyboard", kind: "kb" },
@@ -491,6 +498,7 @@ const BUILTINS = {
   snap:     { label: "Snap",   icon: "snap",     kind: "send", msg: { type: "screenshot" } },
   upload:   { label: "Image",  icon: "image",    kind: "upload" },
   calibrate:{ label: "Calibrate", icon: "target", kind: "calibrate" },
+  anywhere: { label: "Anywhere", icon: "globe",  kind: "anywhere" },
 };
 
 // --- Touch-mode toggles ---------------------------------------------------
@@ -605,14 +613,31 @@ const wizHint = document.getElementById("wiz-hint");
 const wizOpen = document.getElementById("wiz-open");
 let wizTimer = null;
 
+// The banner auto-appears ONCE per device (owner decision 2026-07-26 — "ok
+// once, not constantly"): the first page load that could offer it sets a
+// localStorage flag and keeps offering for THAT load; every later load stays
+// clean. The wizard remains reachable any time via Settings → Anywhere.
+let anywhereOffer = null; // null = undecided for this load, then true/false
 function updateAnywhereBanner() {
   const onAnywhere = tailscaleUrl && new URL(tailscaleUrl).host === location.host;
-  anywhereBanner.hidden =
-    !tailscaleUrl || onAnywhere || sessionStorage.getItem("wizDismissed") === "1";
+  if (anywhereOffer === null && tailscaleUrl && !onAnywhere) {
+    anywhereOffer = localStorage.getItem("anywhereOffered") !== "1";
+    localStorage.setItem("anywhereOffered", "1");
+  }
+  anywhereBanner.hidden = !(tailscaleUrl && !onAnywhere && anywhereOffer === true &&
+                            sessionStorage.getItem("wizDismissed") !== "1");
 }
 
 function openWizard() {
   wizardEl.hidden = false;
+  if (!tailscaleUrl) {
+    // Settings → Anywhere can open this before the PC is on Tailscale — the
+    // probe would wait forever with no explanation. Say what unblocks it
+    // (owner principle: every step guided in-app, never left hanging).
+    wizStatus.textContent = "The PC is not on Tailscale yet";
+    wizHint.textContent = "On the PC, open the Remote User window and press " +
+      "“Set up Tailscale”. Then come back here — this screen finishes by itself.";
+  }
   wizProbe();
   if (!wizTimer) wizTimer = setInterval(wizProbe, 3000);
 }
@@ -647,8 +672,10 @@ async function wizProbe() {
   }
 }
 
-anywhereBanner.addEventListener("click", openWizard);
-document.getElementById("wiz-close").addEventListener("click", () => closeWizard(true));
+// keepFocus, not `click`: both sit where Android steals touches (the banner
+// hugs the bottom gesture zone) — a stolen tap must still open/close.
+keepFocus(anywhereBanner, openWizard);
+keepFocus(document.getElementById("wiz-close"), () => closeWizard(true));
 wizardEl.addEventListener("pointerdown", (e) => {
   if (e.target === wizardEl) closeWizard(true); // backdrop tap = later
 });
@@ -687,7 +714,7 @@ function refreshUpdateBanner(serverVersion) {
   );
 }
 
-updateBanner.addEventListener("click", () => {
+keepFocus(updateBanner, () => {
   window.Android.update(`${location.origin}/app.apk`);
   showToast("Downloading — open the file to install the update");
 });
@@ -724,11 +751,37 @@ const POSITIONS = ["up", "left", "right", "down"];
 let categories = [];
 const groups = { left: 0, right: 0 };
 
+// Buttons fire on pointerUP — the moment a touch grants transient user
+// activation (the file picker and IME focus NEED it; pointerdown does not
+// grant it for touch) — PLUS a rescue path for the Android theft that killed
+// every button on the real device (owner report 2026-07-26): the system
+// claims touches that start near screen edges / gesture zones and ends them
+// with a pointercancel, so an up-only handler simply never ran. A cancel
+// that barely travelled IS the stolen tap and still fires; a cancel after
+// real travel is a system swipe (home/back) crossing the button and must
+// NOT act on the PC. preventDefault keeps focus where it is (the keyboard
+// field stays open). Proven by the cancel cases in tests/test_input_pipeline.py.
+const CANCEL_TAP_SLOP = 18; // CSS px of travel that still counts as a stolen tap
 function keepFocus(el, onTap) {
-  el.addEventListener("pointerdown", (e) => e.preventDefault());
+  let press = null; // {id, x, y, moved} — implicit touch capture routes the events here
+  el.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    press = { id: e.pointerId, x: e.clientX, y: e.clientY, moved: false };
+  });
+  el.addEventListener("pointermove", (e) => {
+    if (press && e.pointerId === press.id &&
+        Math.hypot(e.clientX - press.x, e.clientY - press.y) > CANCEL_TAP_SLOP) {
+      press.moved = true;
+    }
+  });
   el.addEventListener("pointerup", (e) => {
     e.preventDefault();
-    onTap(e);
+    if (press && e.pointerId === press.id) onTap(e);
+    press = null;
+  });
+  el.addEventListener("pointercancel", (e) => {
+    if (press && e.pointerId === press.id && !press.moved) onTap(e);
+    press = null;
   });
 }
 
@@ -757,6 +810,8 @@ function makeActionButton(btn, pos) {
       keepFocus(el, () => filePick.click());
     } else if (b.kind === "calibrate") {
       keepFocus(el, startCalibration);
+    } else if (b.kind === "anywhere") {
+      keepFocus(el, openWizard); // the banner shows only once — this is the permanent way in
     }
   } else if (btn.chord) {
     el = makeButton("ctl text", null, btn.label || btn.chord);
@@ -917,8 +972,7 @@ canvas.addEventListener("pointerdown", (e) => {
   }
 
   const offset = e.pointerType === "touch"; // mouse/pen (dev) → no offset
-  if (offset) resetOffsetDir(p);            // fresh touch → aim outward, no stale held angle
-  primary = { id: e.pointerId, startX: p.x, startY: p.y, moved: false, type: touchMode, offset };
+  primary = { id: e.pointerId, startX: p.x, startY: p.y, type: touchMode, offset };
   if (touchMode === "drag") {
     primary.pos = toRemoteMaybeOffset(p, offset);
     send({ type: "pointer_down", x: primary.pos.x, y: primary.pos.y, button: "left" });
@@ -978,11 +1032,6 @@ canvas.addEventListener("pointermove", (e) => {
     clampView();
     redraw();
     scheduleViewport();
-  } else {
-    // right: track travel so an accidental swipe doesn't context-click
-    if (Math.hypot(p.x - primary.startX, p.y - primary.startY) > TAP_MAX_MOVE * devicePixelRatio) {
-      primary.moved = true;
-    }
   }
 });
 
@@ -995,15 +1044,6 @@ function endPointer(e) {
       send({ type: "pointer_up", x: primary.pos.x, y: primary.pos.y, button: "left" });
     } else if (primary.type === "scroll") {
       startScrollInertia(primary.vel, primary.pos);
-    } else if (primary.type === "right" && !primary.moved && e.type === "pointerup") {
-      // Guard on the finger being on the image, but right-click at the OFFSET
-      // point (where the arrow is), consistent with move/drag.
-      if (toRemote(primary.startX, primary.startY)) {
-        const pos = toRemoteMaybeOffset({ x: primary.startX, y: primary.startY }, primary.offset);
-        send({ type: "pointer_down", x: pos.x, y: pos.y, button: "right" });
-        send({ type: "pointer_up", x: pos.x, y: pos.y, button: "right" });
-        cursorPos = pos; // optimistic
-      }
     }
     primary = null;
   }
@@ -1041,6 +1081,7 @@ function connect() {
         // Full view reset — sent after auth and after every stream (re)start
         // (monitor switch, H.264 session reset).
         monitor = { w: msg.monitor_width, h: msg.monitor_height };
+        hand = msg.hand === "left" ? "left" : "right";
         const newMode = msg.stream || "jpeg";
         if (newMode !== streamMode) showToast(newMode === "h264" ? "H.264 stream" : "JPEG stream");
         streamMode = newMode;
@@ -1093,7 +1134,9 @@ function connect() {
       if (IN_APP) {
         // In the APK the fix is one tap — the shell reopens the QR scanner.
         setStatus("disconnected", "Link expired — tap here to scan the new QR");
-        statusEl.addEventListener("click", () => window.Android.rescan(), { once: true });
+        // pointerup, not click: the pill sits at the top edge where the
+        // system's bar-peek swipe can eat the click's touch sequence.
+        statusEl.addEventListener("pointerup", () => window.Android.rescan(), { once: true });
         return;
       }
       setStatus("disconnected", "Invalid token — scan the fresh QR on the PC");

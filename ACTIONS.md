@@ -40,7 +40,7 @@ The two D-pad groups on the tablet are defined entirely by [actions.json](action
 
 - **left / right** — index of the category each group shows on connect.
 - **name** — the category label (centre button + wheel).
-- **icon** — one of: `mouse`, `edit`, `keyboard`, `monitor`, `grid`, `snap`, `click`, `right`, `drag`, `scroll`, `settings`, `target`.
+- **icon** — one of: `mouse`, `edit`, `keyboard`, `monitor`, `grid`, `snap`, `click`, `right`, `drag`, `scroll`, `settings`, `target`, `globe`.
 - **buttons** — up to 4, placed in order **up · left · right · down**.
 
 ## Button kinds
@@ -49,12 +49,14 @@ A button is one of:
 
 - **Built-in action** — `{ "action": "<name>" }`, where `<name>` is:
   - `click` — **the left click**: presses at the current cursor position (the finger only steers the cursor); press it twice fast for a double click.
-  - `right`, `drag`, `scroll` — **mouse modes** (toggle on/off, only one active at a time, together with `Move`): the mode decides what one finger on the screen does — tap → right-click / drag with left held / wheel. Default (no mode) = the finger only moves the PC cursor, it never clicks. Two fingers always pinch-zoom.
+  - `right` — **the right click**: same as `click`, at the current cursor position. A press button, NOT a mode — nothing on the screen acts on a tap (the pointer rides an offset from the finger, so a tap would land away from the fingertip).
+  - `drag`, `scroll` — **mouse modes** (toggle on/off, only one active at a time, together with `Move`): the mode decides what one finger on the screen does — drag with left held / wheel. Default (no mode) = the finger only moves the PC cursor, it never clicks. Two fingers always pinch-zoom.
   - `keyboard` — toggle the phone keyboard; what you type/dictate lands in the focused box on the PC screen itself (no mirror bar). The keyboard's ↵ makes a new row (never "send"); the real Enter is its own button (see `key`).
   - `upload` — pick an image from the phone (gallery/camera); the server pastes it into the focused box on the PC by itself.
   - `monitor` — switch the streamed monitor.
   - `snap` — screenshot the PC monitor into the PC clipboard (available in config; not in the default layout).
   - `calibrate` — re-measure your fingertip so the on-screen pointer sits at a comfortable, always-visible offset from it. Tap it, then tap the screen a few times; a toast confirms when it locks. Shipped as the first item of the **Settings** category.
+  - `anywhere` — open the "use from anywhere" wizard (Tailscale setup). The banner offers it by itself only once per device; this button is the permanent way back in. Shipped in the **Settings** category.
 - **Chord** — `{ "label": "Copy", "chord": "ctrl+c" }` — fires a key combination (see below).
 - **Special key** — `{ "label": "Esc", "key": "escape" }` — a single structural key.
 
@@ -71,4 +73,4 @@ An unrecognised chord is logged on the server and does nothing — never a half-
 
 ## Your custom categories
 
-The shipped `Zones` category maps `ctrl+win+alt+1..4` (FancyZones presets). The shipped `Settings` category holds `calibrate` (finger calibration) — the home for future on-device options. Add or rearrange categories freely — this file is yours to hand-edit; to move a button between categories, just move its JSON entry.
+The shipped `Zones` category maps `ctrl+win+alt+1..4` (FancyZones presets). The shipped `Settings` category holds `calibrate` (finger calibration) and `anywhere` (the Tailscale wizard) — the home for future on-device options. Add or rearrange categories freely — this file is yours to hand-edit; to move a button between categories, just move its JSON entry.
