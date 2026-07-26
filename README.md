@@ -157,6 +157,8 @@ The CLI prints the pairing URL and a QR (console + image viewer). Dev note: H.26
     📄 style.css
   📁 android/          ← Android app (native shell + WebView on the client)
     📝 ___android.md
+  📁 tests/            ← End-to-end regression gates (run by the build)
+    📝 ___tests.md
   📁 setup/            ← Build pipeline (installer with bundled deps + APK)
     📝 ___setup.md
 ```
@@ -171,4 +173,5 @@ The CLI prints the pairing URL and a QR (console + image viewer). Dev note: H.26
 - [Server (folder)](server/___server.md) — PC-side components (core, GUI, streaming)
 - [Client (folder)](client/___client.md) — tablet-side web client
 - [Android (folder)](android/___android.md) — the phone app (shell around the client)
+- [Tests (folder)](tests/___tests.md) — end-to-end input gate (run fail-closed by the build)
 - [Setup (folder)](setup/___setup.md) — build pipeline, installer, APK

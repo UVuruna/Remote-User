@@ -11,9 +11,11 @@ bundling**: the user NEVER side-installs anything (hard owner requirement).
 ## Files
 
 ### `build.py` — Build Orchestrator
-Six steps: version info (app_info.json + root company.json) → ICOs → vendor
-payloads → PyInstaller (`--onedir --windowed`, entry `server/gui_main.py`) →
-sign exe → NSIS + sign installer.
+Steps: version info (app_info.json + root company.json) → **INPUT GATE**
+(the end-to-end click-path test in [Tests (folder)](../tests/___tests.md),
+fail-closed — a broken input pipeline cannot ship) → ICOs → vendor payloads →
+PyInstaller (`--onedir --windowed`, entry `server/gui_main.py`) → frozen-exe
+smoke test → sign exe → NSIS + sign installer → verify (metadata + signatures).
 
 Vendor payloads (cached in gitignored `setup/vendor/`, fetched on first build):
 - **ffmpeg.exe** — bundled INTO the app (`dist/RemoteUser/ffmpeg/`); the frozen

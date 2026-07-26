@@ -1,0 +1,26 @@
+{
+  "left": 0,
+  "right": 1,
+  "categories": [
+    {
+      "name": "Mouse",
+      "icon": "mouse",
+      "buttons": [
+        { "action": "click" },
+        { "action": "right" },
+        { "action": "drag" },
+        { "action": "scroll" }
+      ]
+    },
+    {
+      "name": "Keys",
+      "icon": "keyboard",
+      "buttons": [
+        { "action": "keyboard" },
+        { "label": "Enter", "key": "enter" },
+        { "label": "Esc", "chord": "escape" },
+        { "label": "Tab", "chord": "tab" }
+      ]
+    }
+  ]
+}

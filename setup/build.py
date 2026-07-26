@@ -2,6 +2,9 @@
 
 Steps:
   0. Generate version_info.txt (app_info.json + root company.json)
+  0b. INPUT GATE: tests/test_input_pipeline.py — real page + real server +
+      headless Chromium touch; a broken click path fails the BUILD, never
+      ships (fail-closed; "left click dead" shipped twice before this gate)
   1. Generate ICOs from assets/logo.svg (supersampled multi-resolution)
   2. Fetch vendor payloads (cached in setup/vendor/, gitignored):
        - ffmpeg.exe — BUNDLED into the app (H.264 encoding, zero user action)
@@ -19,6 +22,7 @@ without `qrcode` and crashed on launch).
 
 Prerequisites (dev machine, one-time):
   - .venv with requirements.txt + pip install pyinstaller pillow
+  - pip install playwright && playwright install chromium (the input gate)
   - NSIS installed (https://nsis.sourceforge.io/)
   - python setup/create_cert.py (optional — unsigned build works, with warning)
 
@@ -178,6 +182,16 @@ VSVersionInfo(
 """
     VERSION_INFO_PATH.write_text(content, encoding="utf-8")
     print(f"  Version {v} · {COMPANY['company_name']}")
+
+
+def input_gate() -> None:
+    """Fail-closed: the end-to-end input pipeline (touch → protocol →
+    injection) must pass BEFORE anything is packaged. "Left click stopped
+    working" shipped in a release more than once while every file looked
+    right — this gate makes that impossible. A missing playwright/Chromium
+    fails the build too (install it; never skip the gate silently)."""
+    step("0b/6  INPUT GATE — end-to-end click path (tests/test_input_pipeline.py)")
+    run([sys.executable, str(PROJECT_DIR / "tests" / "test_input_pipeline.py")])
 
 
 def generate_icons() -> None:
@@ -390,6 +404,7 @@ def main() -> None:
         sys.exit(1)
 
     generate_version_info()
+    input_gate()
     generate_icons()
     fetch_vendor()
     exe_path = build_pyinstaller()
