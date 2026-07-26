@@ -9,7 +9,7 @@ HTTP: `GET /` — the client page, EXCEPT for plain Android browsers: when the U
 
 Protocol (project [CLAUDE.md](../CLAUDE.md) is the authority):
 - client → server (JSON text): `auth`, `pointer_down`, `pointer_up`, `click` (down+up at the current cursor position — the Click button, no coordinates), `pointer_move`, `scroll`, `viewport` (JPEG mode only), `key_text`, `key_special`, `chord`, `monitor_switch`, `screenshot`
-- server → client (JSON text): `config` (after auth and after every stream (re)start — monitor size + `stream` mode + MSE `codec` in H.264 mode), `actions` (the owner's control categories from [actions.json](../ACTIONS.md)), `toast` (user-facing notices), `cursor` (PC pointer position for the client-drawn virtual cursor — capture frames never contain it)
+- server → client (JSON text): `config` (after auth and after every stream (re)start — monitor size + `stream` mode + MSE `codec` in H.264 mode + `hand` for the cursor-offset diagonal), `actions` (the owner's control categories from [actions.json](../ACTIONS.md)), `toast` (user-facing notices), `cursor` (PC pointer position for the client-drawn virtual cursor — capture frames never contain it)
 - server → client (binary): H.264 mode — the raw fMP4 byte stream; JPEG mode — 16-byte region header (4 × float32 LE) + JPEG
 
 **Security rule:** the first message must be a valid `auth` within 5 seconds, otherwise the socket closes with code 4401. Nothing is processed before it.

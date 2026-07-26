@@ -41,6 +41,7 @@ SETTINGS_PATH = USER_DIR / "settings.json"
 USER_ADJUSTABLE = {
     "port", "monitor_index", "target_fps", "use_h264",
     "h264_max_width", "h264_bitrate", "jpeg_quality", "open_qr_image",
+    "hand",
 }
 
 
@@ -98,6 +99,10 @@ class Settings:
     # Virtual cursor — DXGI capture never includes the mouse pointer, so the
     # server streams the cursor position and the client draws it.
     cursor_hz: int = 30             # position polls per second (sent only on change)
+    # Which hand holds the phone — decides the client's cursor-offset diagonal
+    # (right-handed → pointer up-LEFT of the finger, left-handed → up-RIGHT).
+    # Sent to the client in every `config`; set in the desktop GUI Settings.
+    hand: str = "right"             # "right" | "left"
 
     # Pairing
     token_bytes: int = 16           # entropy of the pairing token

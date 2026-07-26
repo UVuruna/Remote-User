@@ -41,6 +41,9 @@ RESOLUTIONS = [("Native (up to 4K)", 3840), ("2560 — QHD", 2560),
 BITRATES = [("6 Mbps — slow links", "6M"), ("12 Mbps — default", "12M"),
             ("20 Mbps — max quality", "20M")]
 FPS_CHOICES = [("30 fps", 30), ("60 fps", 60)]
+# Phone-side cursor offset: the pointer sits diagonally ABOVE the finger, on
+# the side the hand does not cover (right-handed → up-left, left → up-right).
+HAND_CHOICES = [("Right-handed", "right"), ("Left-handed", "left")]
 
 PILL_TEXT = {"running": "RUNNING", "starting": "STARTING…",
              "stopped": "STOPPED", "failed": "FAILED"}
@@ -176,12 +179,16 @@ class MainWindow(QMainWindow):
         self.fps_combo = QComboBox()
         for label, value in FPS_CHOICES:
             self.fps_combo.addItem(label, value)
+        self.hand_combo = QComboBox()
+        for label, value in HAND_CHOICES:
+            self.hand_combo.addItem(label, value)
         self._select_current_settings()
 
         form.addRow("Monitor", self.monitor_combo)
         form.addRow("Resolution", self.resolution_combo)
         form.addRow("Bitrate", self.bitrate_combo)
         form.addRow("Frame rate", self.fps_combo)
+        form.addRow("Phone hand", self.hand_combo)
         box.addLayout(form)
 
         apply_row = QHBoxLayout()
@@ -261,6 +268,7 @@ class MainWindow(QMainWindow):
         select(self.resolution_combo, SETTINGS.h264_max_width)
         select(self.bitrate_combo, SETTINGS.h264_bitrate)
         select(self.fps_combo, SETTINGS.target_fps)
+        select(self.hand_combo, SETTINGS.hand)
 
     def _apply_settings(self) -> None:
         changes = {
@@ -268,6 +276,7 @@ class MainWindow(QMainWindow):
             "h264_max_width": self.resolution_combo.currentData(),
             "h264_bitrate": self.bitrate_combo.currentData(),
             "target_fps": self.fps_combo.currentData(),
+            "hand": self.hand_combo.currentData(),
         }
         save_user_settings(changes)
         if self.controller.state in ("running", "starting"):

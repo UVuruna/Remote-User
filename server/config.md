@@ -19,6 +19,7 @@ Key values:
 - `h264_bitrate` / `h264_gop` / `h264_fragment_us` — stream shape: bitrate cap, keyframe interval, one fMP4 fragment per frame
 - `h264_head_timeout` / `h264_queue_chunks` — session guards: init-segment wait, per-client outbound cap (a full queue resets the session instead of building latency)
 - `cursor_hz` — virtual-cursor position polls per second (sent only on change)
+- `hand` — `"right"` / `"left"` (desktop GUI Settings): which hand holds the phone; sent in every `config`, picks the client's cursor-offset diagonal (right-handed → pointer up-left of the finger)
 - `jpeg_quality` / `target_fps` — the bandwidth/smoothness trade-off (JPEG fallback)
 
 ## Connections
