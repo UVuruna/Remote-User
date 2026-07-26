@@ -18,6 +18,9 @@ import android.widget.Button
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.concurrent.FutureTask
@@ -61,6 +64,7 @@ class MainActivity : AppCompatActivity() {
         }
         setContentView(R.layout.activity_main)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        hideSystemBars()
 
         errorView = findViewById(R.id.error_view)
         loadingView = findViewById(R.id.loading_view)
@@ -143,6 +147,25 @@ class MainActivity : AppCompatActivity() {
         }
     } catch (e: Exception) {
         false
+    }
+
+    /** Immersive: the status and navigation bars are HIDDEN while controlling
+     *  the PC. targetSdk 35 draws the WebView edge-to-edge, so a visible nav
+     *  bar sat ON TOP of the page's bottom controls and the system stole the
+     *  touches aimed at them (owner report 2026-07-26 — "no button works").
+     *  A swipe from the edge shows the bars transiently; they hide again by
+     *  themselves. Re-applied on every focus gain — the system restores bars
+     *  after dialogs, app switches and the keyboard. */
+    private fun hideSystemBars() {
+        val controller = WindowCompat.getInsetsController(window, window.decorView)
+        controller.systemBarsBehavior =
+            WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        controller.hide(WindowInsetsCompat.Type.systemBars())
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus && ::web.isInitialized) hideSystemBars()
     }
 
     private fun repair() {

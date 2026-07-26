@@ -52,6 +52,13 @@ scanner). Package `com.uvuruna.remoteuser`, min Android 8 (API 26).
   banner; `Android.update(url)` opens `/app.apk` (same PC) in the system
   browser — download, install over, done. The phone never checks the
   internet; the desktop app is the one that watches GitHub Releases.
+- **Immersive — system bars hidden** (2026-07-26): `targetSdk 35` draws the
+  WebView edge-to-edge, so the navigation bar sat ON TOP of the page's bottom
+  controls and the system stole touches near the edges ("no button works").
+  `MainActivity.hideSystemBars()` hides status + nav bars
+  (`BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE` — an edge swipe shows them
+  briefly), re-applied on every window-focus gain because the system restores
+  them after dialogs, app switches and the keyboard.
 - **Session behavior**: screen stays on; rotation never recreates the WebView
   (the stream survives); leaving the app pauses the page, whose visibility
   rule closes the stream (owner security decision). On resume the shell pings
