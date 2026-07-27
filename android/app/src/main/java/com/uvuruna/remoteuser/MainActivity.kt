@@ -1,10 +1,16 @@
 package com.uvuruna.remoteuser
 
 import android.annotation.SuppressLint
+import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
 import android.net.Uri
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.View
 import android.view.WindowManager
 import android.webkit.JavascriptInterface
@@ -15,6 +21,7 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Button
+import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
@@ -36,7 +43,9 @@ import java.util.concurrent.TimeUnit
  *  - external links (Google Play from the in-page Tailscale wizard) open as
  *    real apps, not inside the WebView
  *  - the file chooser (phone → PC image upload) is wired up
- *  - a native error card when no address answers (retry / re-pair)
+ *  - a native error card when no address answers — a live state, not a dead
+ *    end: it re-probes by itself on a timer and on every network change
+ *  - a one-time heads-up when the session runs over an unfamiliar Wi-Fi
  *  - `Android.rescan()` / `Android.setTailscaleUrl()` JS bridge
  *  - the screen stays on; rotation never recreates the session; leaving the
  *    app pauses the page (its visibility rule closes the stream — owner
@@ -48,6 +57,38 @@ class MainActivity : AppCompatActivity() {
     private lateinit var errorView: View
     private lateinit var loadingView: View
     private var fileCallback: ValueCallback<Array<Uri>>? = null
+
+    private val handler = Handler(Looper.getMainLooper())
+    private var connectivity: ConnectivityManager? = null
+    private var resolveEpoch = 0 // UI thread only — voids stale resolver threads and timers
+    private var onWifi = false // default network carries a Wi-Fi transport (UI thread only)
+    private var warnedForeignWifi = false
+
+    /** Reconnect the moment the phone actually has a network again. Foreign
+     *  Wi-Fi drops and re-grants connectivity constantly (AP kicks, power
+     *  save, captive re-auth) — leaving recovery to a finger on "Try again"
+     *  is what made the error card feel dead. Also tracks whether the default
+     *  network is Wi-Fi at all: the foreign-Wi-Fi notice needs the transport,
+     *  and a VPN network (Tailscale) lists its underlying transports in its
+     *  capabilities. */
+    private val netCallback = object : ConnectivityManager.NetworkCallback() {
+        override fun onAvailable(network: Network) {
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                if (errorView.visibility == View.VISIBLE) resolveAndLoad(silent = true)
+            }
+        }
+
+        override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) {
+            val wifi = caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
+            runOnUiThread {
+                if (wifi != onWifi) {
+                    onWifi = wifi
+                    if (!wifi) warnedForeignWifi = false // the next foreign Wi-Fi warns again
+                }
+            }
+        }
+    }
 
     private val filePicker =
         registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
@@ -90,18 +131,41 @@ class MainActivity : AppCompatActivity() {
             }
         })
 
+        connectivity = (getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager)
+            .also { it.registerDefaultNetworkCallback(netCallback) }
+
         resolveAndLoad()
+    }
+
+    override fun onDestroy() {
+        connectivity?.unregisterNetworkCallback(netCallback)
+        connectivity = null
+        handler.removeCallbacksAndMessages(null)
+        super.onDestroy()
     }
 
     /** Probes /ping on every stored address in parallel and loads the first
      *  reachable one — LAN preferred (lower latency), Tailscale the fallback
      *  (mobile data, away from home). Waiting on the WebView's own timeout
      *  (~2 min of blank screen) is exactly the failure this replaces; no
-     *  probe answering shows the native card within ~3 s instead. */
-    private fun resolveAndLoad() {
-        errorView.visibility = View.GONE
-        loadingView.visibility = View.VISIBLE // "Connecting…" until the page loads or an address fails
-        val candidates = listOfNotNull(Prefs.lanUrl(this), Prefs.tsUrl(this)).distinct()
+     *  probe answering shows the native card within ~3 s instead.
+     *
+     *  The error card is a STATE, not a dead end: while it shows, the
+     *  resolver re-runs by itself (timer + network-change events). On flaky
+     *  foreign Wi-Fi the old one-shot probe always fired mid-flap — "Try
+     *  again" looked broken and only an app restart, which happened to take
+     *  long enough for the network/tunnel to settle, ever reconnected (owner
+     *  report 2026-07-27). `silent` keeps whatever is on screen instead of
+     *  flashing the loader during those background attempts. */
+    private fun resolveAndLoad(silent: Boolean = false) {
+        val epoch = ++resolveEpoch
+        if (!silent) {
+            errorView.visibility = View.GONE
+            loadingView.visibility = View.VISIBLE // "Connecting…" until the page loads or an address fails
+        }
+        val lan = Prefs.lanUrl(this)
+        val ts = Prefs.tsUrl(this)
+        val candidates = listOfNotNull(lan, ts).distinct()
         if (candidates.isEmpty()) {
             repair()
             return
@@ -123,25 +187,65 @@ class MainActivity : AppCompatActivity() {
                 }
             }?.first
             runOnUiThread {
-                if (isFinishing || isDestroyed) return@runOnUiThread
+                if (isFinishing || isDestroyed || epoch != resolveEpoch) return@runOnUiThread
                 if (chosen != null) {
-                    web.loadUrl(chosen) // loader stays until onPageFinished
+                    // Home LAN dead but the tunnel answered, over Wi-Fi =
+                    // some network other than home — say so once per stay.
+                    if (chosen == ts && chosen != lan) warnIfForeignWifi()
+                    web.loadUrl(chosen) // loader (or card) stays until the page reacts
                 } else {
                     loadingView.visibility = View.GONE
                     errorView.visibility = View.VISIBLE
+                    scheduleRetry(epoch)
                 }
             }
         }.start()
     }
 
-    /** True when the server answers the auth-free reachability probe. */
+    /** One pending background re-probe while the error card shows. A bumped
+     *  epoch (manual Try again, onResume, a network event) or the card
+     *  leaving the screen voids it — retries never stack and never touch a
+     *  live page. */
+    private fun scheduleRetry(epoch: Int) {
+        handler.postDelayed({
+            if (epoch == resolveEpoch && !isFinishing && !isDestroyed &&
+                errorView.visibility == View.VISIBLE
+            ) {
+                resolveAndLoad(silent = true)
+            }
+        }, RETRY_INTERVAL_MS)
+    }
+
+    /** Owner request 2026-07-27: the app must WORK on any Wi-Fi, with a
+     *  security heads-up. Reading the SSID/security type (to call out open
+     *  public networks specifically) needs the location permission plus
+     *  location services — too much friction for a notice, so the signal is
+     *  transport-level: home LAN dead + tunnel alive while on Wi-Fi means an
+     *  unfamiliar network. Warned once per stay (re-armed when Wi-Fi drops). */
+    private fun warnIfForeignWifi() {
+        if (!onWifi || warnedForeignWifi) return
+        warnedForeignWifi = true
+        Toast.makeText(this, R.string.foreign_wifi_warning, Toast.LENGTH_LONG).show()
+    }
+
+    /** True when the server answers the auth-free reachability probe.
+     *  ONLY the exact, redirect-free 204 counts (the /ping contract, pinned
+     *  by the build gate): captive portals on foreign/public Wi-Fi answer
+     *  ANY request with their login page — a 2xx or a redirect to one — and
+     *  that false positive sent the WebView to a dead LAN address (live
+     *  failure 2026-07-27). `Connection: close` forces a fresh socket per
+     *  probe; pooled keep-alive sockets go stale across network changes and
+     *  fail probes a freshly started process would pass. */
     private fun pingOk(pageUrl: String): Boolean = try {
         val u = Uri.parse(pageUrl)
         val conn = URL("${u.scheme}://${u.host}:${u.port}/ping").openConnection() as HttpURLConnection
         conn.connectTimeout = PING_TIMEOUT_MS
         conn.readTimeout = PING_TIMEOUT_MS
+        conn.instanceFollowRedirects = false
+        conn.useCaches = false
+        conn.setRequestProperty("Connection", "close")
         try {
-            conn.responseCode in 200..299
+            conn.responseCode == 204
         } finally {
             conn.disconnect()
         }
@@ -192,7 +296,13 @@ class MainActivity : AppCompatActivity() {
         super.onResume()
         if (!::web.isInitialized) return
         web.onResume()
-        val current = web.url ?: return
+        val current = web.url
+        if (current == null) {
+            // Nothing ever loaded (cold start straight onto the error card) —
+            // kick the resolver instead of waiting out the retry timer.
+            if (errorView.visibility == View.VISIBLE) resolveAndLoad(silent = true)
+            return
+        }
         Thread {
             if (!pingOk(current)) {
                 runOnUiThread {
@@ -268,6 +378,7 @@ class MainActivity : AppCompatActivity() {
             if (request.isForMainFrame) {
                 loadingView.visibility = View.GONE
                 errorView.visibility = View.VISIBLE
+                scheduleRetry(resolveEpoch) // a failed page load self-heals too
             }
         }
 
@@ -296,5 +407,6 @@ class MainActivity : AppCompatActivity() {
 
     private companion object {
         const val PING_TIMEOUT_MS = 3000
+        const val RETRY_INTERVAL_MS = 4000L
     }
 }

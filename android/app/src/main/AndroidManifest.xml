@@ -4,6 +4,10 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.CAMERA" />
+    <!-- Network-change callbacks: the shell re-resolves the address the
+         moment connectivity returns (flaky foreign Wi-Fi) — normal
+         permission, granted automatically, no user prompt. -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
     <!-- The server speaks plain http on the LAN / Tailscale private network —
          cleartext must be allowed (Android blocks it by default since 9). -->
