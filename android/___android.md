@@ -31,6 +31,31 @@ scanner). Package `com.uvuruna.remoteuser`, min Android 8 (API 26).
   preferred, Tailscale the mobile-data fallback. A single stored URL was the
   live failure: the LAN address on mobile data meant minutes of
   `ERR_CONNECTION_TIMED_OUT` before any card showed.
+- **The probe accepts ONLY the exact, redirect-free 204** (2026-07-27 foreign-
+  Wi-Fi failure): captive portals on foreign/public Wi-Fi answer ANY request
+  with their login page (a 2xx or a redirect to one), so the old `2xx = alive`
+  check chose a dead LAN address and loaded garbage. Every probe also sends
+  `Connection: close` — pooled keep-alive sockets go stale across network
+  changes and fail probes a freshly started process would pass. The 204
+  contract is pinned fail-closed in the build gate (`tests/`).
+- **The error card is a state, not a dead end** (root cause of "Try again
+  does nothing, only an app restart helps", 2026-07-27): the old card ran ONE
+  probe round per tap, which on flaky foreign Wi-Fi always fired mid-flap —
+  a restart "worked" only because it took long enough for the network/tunnel
+  to settle. While the card shows, the resolver now re-runs by itself every
+  4 s (silently — no loader flash) AND immediately on every default-network
+  change (`registerDefaultNetworkCallback`; needs the auto-granted
+  `ACCESS_NETWORK_STATE`). Try again stays as the instant manual kick. An
+  epoch counter voids stale resolver threads and timers, so retries never
+  stack and never reload a live page.
+- **Unfamiliar-Wi-Fi heads-up** (owner request 2026-07-27): when the home LAN
+  probe fails but the tunnel answers while the default network is Wi-Fi, the
+  session is running over someone else's Wi-Fi — a one-per-stay toast says it
+  is protected by the encrypted tunnel but warns about public networks.
+  Detecting "open/public" specifically would need the location permission
+  just to read the SSID/security type — deliberately skipped; the transport
+  bit comes from the network callback (a VPN's capabilities include its
+  underlying transports).
 - **External links open as real apps**: the in-page "anywhere" wizard's
   Google Play button opens the actual Play Store — the same guided Tailscale
   flow works identically in browser and app (no duplicated wizard, Rule #5
@@ -41,8 +66,9 @@ scanner). Package `com.uvuruna.remoteuser`, min Android 8 (API 26).
   loads (a slow connect over mobile data must read as working, not frozen);
   hidden on first page load, replaced by the error card on failure.
 - **Native error card** when no stored address answers the probe (Try again
-  re-probes / Scan a new QR re-pairs but KEEPS the stored addresses until a
-  new pairing succeeds).
+  re-probes NOW; the card keeps re-probing by itself regardless — see above;
+  Scan a new QR re-pairs but KEEPS the stored addresses until a new pairing
+  succeeds).
 - **QR scanner follows the phone orientation** (portrait when upright) — the
   ZXing default forced landscape.
 - **`Android.rescan()` JS bridge**: on a rejected token the page shows
