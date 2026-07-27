@@ -21,8 +21,12 @@ button, **the stolen-tap rescue** (Android ends edge-zone touches with
 `pointercancel` — a no-travel cancel must still fire or buttons die
 on-device, the 2026-07-26 live failure) and its inverse (**a system swipe
 crossing a button — real travel, then cancel — must NOT fire**), edge
-reachability with the cursor-offset margin, and keyboard capture (typed
-text + the Shift+Enter new-row rule).
+reachability with the cursor-offset margin, keyboard capture (typed
+text + the Shift+Enter new-row rule), and **the /ping contract** — the
+endpoint must answer EXACTLY 204: the Android shell's reachability probe
+counts only 204 as "the PC answered", because captive portals on foreign
+Wi-Fi answer any request with a 2xx/redirect login page (live failure
+2026-07-27); a drift to 200 would strand every phone.
 
 The control layout comes from `tests/fixtures/actions.json` — pinned on
 purpose: the repo `actions.json` is the owner's hand-edited file, and a

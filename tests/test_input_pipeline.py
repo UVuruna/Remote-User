@@ -22,6 +22,10 @@ Scenarios (all must pass, any failure exits 1 — build.py runs this fail-closed
      cursor to the PC screen's bottom-right edge (offset margin geometry)
   7. keyboard    — Keys focuses the capture field; typed text arrives as
      key_text; Enter arrives as the shift+enter chord (new row)
+  8. /ping contract — the reachability probe answers EXACTLY 204: the Android
+     shell counts only 204 as "the PC answered" (captive portals on foreign
+     Wi-Fi answer any request with a 2xx/redirect login page — live failure
+     2026-07-27); a drift to 200 here would strand every phone
 
 The control layout comes from tests/fixtures/actions.json — pinned, so the
 owner's hand-edited repo actions.json can never break the build.
@@ -35,6 +39,7 @@ import socket
 import sys
 import threading
 import time
+import urllib.request
 from pathlib import Path
 
 PROJECT = Path(__file__).resolve().parent.parent
@@ -198,6 +203,11 @@ def main():
     from playwright.sync_api import sync_playwright
 
     results = {}
+
+    # 8. /ping contract — the Android shell's strict probe accepts ONLY the
+    # exact 204 (anything else is a captive portal, not our server).
+    with urllib.request.urlopen(f"http://127.0.0.1:{PORT}/ping", timeout=5) as r:
+        results["/ping contract: exactly 204 (phone probe)"] = r.status == 204
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         ctx = browser.new_context(
