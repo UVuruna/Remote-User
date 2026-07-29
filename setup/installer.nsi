@@ -160,7 +160,10 @@ Section "Start with Windows" SecAutostart
     ; inner quotes (\"...\"), not bare nested ones — the bare form silently
     ; failed and shipped an installer that created no task at all (caught by
     ; verifying the installed machine, 2026-07-29). $\\$\" emits \" in NSIS.
-    nsExec::ExecToLog 'schtasks /Create /F /TN "${APP_NAME}" /SC ONLOGON /RL HIGHEST /TR "$\\$\"$INSTDIR\${APP_EXE}$\\$\" --minimized"'
+    ; NSIS has NO backslash escape (a backslash is literal, only quotes need
+    ; $\") — the earlier "$\\$\"" form emitted garbage and schtasks failed
+    ; silently, shipping an installer that created no task at all.
+    nsExec::ExecToLog 'schtasks /Create /F /TN "${APP_NAME}" /SC ONLOGON /RL HIGHEST /TR "\$\"$INSTDIR\${APP_EXE}\$\" --minimized"'
 SectionEnd
 
 ; -- Section Descriptions -----------------------------------------
