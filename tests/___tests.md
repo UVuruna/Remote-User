@@ -22,11 +22,16 @@ button, **the stolen-tap rescue** (Android ends edge-zone touches with
 on-device, the 2026-07-26 live failure) and its inverse (**a system swipe
 crossing a button — real travel, then cancel — must NOT fire**), edge
 reachability with the cursor-offset margin, keyboard capture (typed
-text + the Shift+Enter new-row rule), and **the /ping contract** — the
+text + the Shift+Enter new-row rule), **the /ping contract** — the
 endpoint must answer EXACTLY 204: the Android shell's reachability probe
 counts only 204 as "the PC answered", because captive portals on foreign
 Wi-Fi answer any request with a 2xx/redirect login page (live failure
-2026-07-27); a drift to 200 would strand every phone.
+2026-07-27); a drift to 200 would strand every phone — and **the injection
+tripwire** (`InjectionMonitor` decision logic): Windows silently discards
+all injected input from a non-elevated process while an elevated window
+has focus (UIPI, live failure 2026-07-29 — SendInput "succeeds", the phone
+looks healthy, the mouse is dead); the monitor must alarm on exactly the
+configured miss streak, ignore small jumps, and re-arm after a success.
 
 The control layout comes from `tests/fixtures/actions.json` — pinned on
 purpose: the repo `actions.json` is the owner's hand-edited file, and a

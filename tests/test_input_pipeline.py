@@ -26,6 +26,11 @@ Scenarios (all must pass, any failure exits 1 — build.py runs this fail-closed
      shell counts only 204 as "the PC answered" (captive portals on foreign
      Wi-Fi answer any request with a 2xx/redirect login page — live failure
      2026-07-27); a drift to 200 here would strand every phone
+  9. injection tripwire — InjectionMonitor alarms on exactly the configured
+     streak of eaten big moves, ignores small ones, re-arms after a success
+     (UIPI live failure 2026-07-29: Windows silently discarded every injected
+     event while an elevated window had focus — SendInput "succeeded", the
+     phone showed a healthy session with a dead mouse)
 
 The control layout comes from tests/fixtures/actions.json — pinned, so the
 owner's hand-edited repo actions.json can never break the build.
@@ -99,6 +104,9 @@ class FakeInjector:
 
     def press_chord(self, chord):
         self._rec("press_chord", chord)
+
+    def take_input_alarm(self):
+        return False  # the gate fakes injection — nothing to verify
 
 
 class FakeStream:
@@ -208,6 +216,24 @@ def main():
     # exact 204 (anything else is a captive portal, not our server).
     with urllib.request.urlopen(f"http://127.0.0.1:{PORT}/ping", timeout=5) as r:
         results["/ping contract: exactly 204 (phone probe)"] = r.status == 204
+
+    # 9. injection tripwire — the pure decision logic of the real injector's
+    # self-check (the Win32 side is faked in this gate, so the logic that
+    # turns "moves do not land" into a visible alarm is pinned here).
+    from input_injector import InjectionMonitor
+    mon = InjectionMonitor(min_jump=24, tolerance=16, streak=3)
+    tw = [
+        mon.note((500, 500), (100, 100), 400) is False,   # miss 1 — quiet
+        mon.note((900, 900), (100, 100), 400) is False,   # miss 2 — quiet
+        mon.note((500, 500), (100, 100), 400) is True,    # miss 3 — ALARM
+        mon.note((900, 900), (100, 100), 400) is False,   # alarmed once per streak
+        mon.note((500, 500), (503, 497), 400) is False,   # landed — resets + re-arms
+        mon.note((900, 900), (100, 100), 10) is False,    # small jump never judged
+        mon.note((900, 900), (100, 100), 400) is False,   # miss 1 after reset
+        mon.note((900, 900), None, 400) is False,         # miss 2 (no cursor read)
+        mon.note((500, 500), (100, 100), 400) is True,    # miss 3 — ALARM again
+    ]
+    results["injection tripwire: alarms on eaten moves"] = all(tw)
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         ctx = browser.new_context(
