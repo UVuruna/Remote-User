@@ -94,8 +94,11 @@ Section "!${APP_DISPLAY} (required)" SecMain
     Sleep 500
 
     ; Remove any previous autostart unconditionally -- SecAutostart recreates
-    ; it only when selected, so unchecking it on upgrade actually disables it
+    ; it only when selected, so unchecking it on upgrade actually disables it.
+    ; HKCU Run is the LEGACY location: it silently refuses to start elevated
+    ; apps, and the app now runs elevated (UIPI -- see SecAutostart).
     DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "${APP_NAME}"
+    nsExec::ExecToLog 'schtasks /Delete /F /TN "${APP_NAME}"'
 
     SetOutPath "$INSTDIR"
     File /r "${DIST_DIR}\${APP_NAME}\*.*"
@@ -147,8 +150,13 @@ Section "Desktop Shortcut" SecDesktop
 SectionEnd
 
 Section "Start with Windows" SecAutostart
-    ; Standard-user app -> HKCU Run (root build spec); starts hidden in tray
-    WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "${APP_NAME}" '"$INSTDIR\${APP_EXE}" --minimized'
+    ; The app runs ELEVATED (input injection over admin windows -- Windows'
+    ; UIPI silently eats non-elevated SendInput whenever an elevated window
+    ; has focus; live failure 2026-07-29). HKCU Run silently skips elevated
+    ; apps, so autostart is a Task Scheduler logon task with highest
+    ; privileges (root build spec) -- starts in the tray, no UAC prompt at
+    ; logon (unlike a manual Start-menu launch).
+    nsExec::ExecToLog 'schtasks /Create /F /TN "${APP_NAME}" /SC ONLOGON /RL HIGHEST /TR "$\"$INSTDIR\${APP_EXE}$\" --minimized"'
 SectionEnd
 
 ; -- Section Descriptions -----------------------------------------
@@ -168,6 +176,7 @@ Section "Uninstall"
     Sleep 500
 
     DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "${APP_NAME}"
+    nsExec::ExecToLog 'schtasks /Delete /F /TN "${APP_NAME}"'
     nsExec::ExecToLog 'netsh advfirewall firewall delete rule name="${APP_DISPLAY}"'
 
     Delete "$DESKTOP\${APP_DISPLAY}.lnk"

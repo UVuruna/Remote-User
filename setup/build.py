@@ -238,6 +238,15 @@ def build_pyinstaller() -> Path:
     cmd = [
         sys.executable, "-m", "PyInstaller",
         "--noconfirm", "--onedir", "--windowed",
+        # Elevated ALWAYS. Windows (UIPI) silently discards SendInput from a
+        # non-elevated process whenever an elevated window has focus — the
+        # 2026-07-29 live failure: every phone session completely dead (mouse,
+        # click, scroll, keys), stream fine, zero errors anywhere. For an
+        # input injector elevation IS the core function (root spec:
+        # "--uac-admin only when required" — here it is). Autostart must use
+        # Task Scheduler /RL HIGHEST (installer.nsi) — HKCU Run silently
+        # refuses to start elevated apps.
+        "--uac-admin",
         "--name", APP_NAME,
         "--icon", str(ICON_PATH),
         "--version-file", str(VERSION_INFO_PATH),

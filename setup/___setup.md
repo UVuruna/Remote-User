@@ -35,7 +35,12 @@ Standard wizard (welcome → directory → components → install → finish) pl
   `$PROGRAMFILES64\Tailscale` already exists; never uninstalled by us
 - **Firewall rule** — allow-rule for the exe (LAN + Tailscale WebSocket
   traffic); without it Windows silently blocks the phone's connection
-- Autostart = HKCU Run with `--minimized` (standard-user app, starts in tray)
+- Autostart = Task Scheduler logon task `/RL HIGHEST` with `--minimized` (the
+  app runs ELEVATED — `--uac-admin` — because Windows' UIPI silently eats
+  non-elevated `SendInput` whenever an elevated window has focus, the
+  2026-07-29 dead-mouse failure; HKCU Run silently skips elevated apps, so
+  the installer creates/deletes the `RemoteUser` scheduled task and cleans up
+  the legacy Run value)
 - Uninstall removes program files, shortcuts, firewall rule, autostart and
   `%LOCALAPPDATA%\RemoteUser` (settings/token/logs)
 - Script is saved as **UTF-8 with BOM** — `Unicode true` + makensis reject a
