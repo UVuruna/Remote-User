@@ -99,6 +99,16 @@ class Settings:
     # Virtual cursor — DXGI capture never includes the mouse pointer, so the
     # server streams the cursor position and the client draws it.
     cursor_hz: int = 30             # position polls per second (sent only on change)
+
+    # Injection self-check — Windows EATS injected input (SendInput still
+    # returns success) when an elevated window or the lock screen has focus
+    # and this process is not elevated (UIPI; live failure 2026-07-29: every
+    # phone session dead, stream fine, zero errors). A commanded cursor jump
+    # of ≥ min_jump px must land within tolerance px; streak consecutive
+    # misses alert the client visibly.
+    inject_verify_min_jump: int = 24
+    inject_verify_tolerance: int = 16
+    inject_verify_streak: int = 3
     # Which hand holds the phone — decides the client's cursor-offset diagonal
     # (right-handed → pointer up-LEFT of the finger, left-handed → up-RIGHT).
     # Sent to the client in every `config`; set in the desktop GUI Settings.

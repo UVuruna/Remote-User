@@ -7,7 +7,7 @@ Injects mouse input with Win32 `SendInput` through raw ctypes structs. Client co
 
 **Precondition:** the process must already be per-monitor DPI aware ([Main](main.md) declares it) — otherwise Windows silently rescales the injected coordinates.
 
-**Known limitation (accepted, v1):** UAC-elevated windows ignore injected input unless this process also runs elevated; the failure is silent (UIPI).
+**UIPI — the proven silent killer, now defended (2026-07-29):** Windows discards ALL injected input from a non-elevated process — `SendInput` still returns success — whenever an ELEVATED window has focus (or the lock screen / a UAC secure desktop is up). Live failure: every phone session completely dead while an admin VSCode held focus; stream fine, zero errors — the recurring "every release breaks the mouse" ghost. Defense is twofold: the packaged app runs **elevated** (`--uac-admin`, Task Scheduler autostart — see [Setup (folder)](../setup/___setup.md)), and injection is **self-verifying** via `InjectionMonitor` below.
 
 ## Connections
 
@@ -20,6 +20,19 @@ Injects mouse input with Win32 `SendInput` through raw ctypes structs. Client co
 
 ## Classes
 
+### InjectionMonitor
+Pure decision logic of the injection self-check (no Win32 — pinned by the build gate). Detects eaten injection by its EFFECT:
+
+```
+ON EACH verified move (target px, actual cursor px, commanded jump px):
+    IF jump < min_jump          → not judged (physical-mouse noise)
+    IF actual within tolerance  → landed: reset miss count, re-arm alarm
+    ELSE                        → miss; after `streak` consecutive misses
+                                  → fire the alarm ONCE per losing streak
+```
+
+Config: `inject_verify_min_jump` / `_tolerance` / `_streak` in [Config](config.md).
+
 ### InputInjector
 
 #### Attributes
@@ -27,7 +40,8 @@ Injects mouse input with Win32 `SendInput` through raw ctypes structs. Client co
 - `virtual_rect`: the whole virtual desktop, from `GetSystemMetrics`
 
 #### Methods
-- `move(x_norm, y_norm)`: absolute cursor move
+- `move(x_norm, y_norm)`: absolute cursor move; also verifies the PREVIOUS move lazily (one `GetCursorPos` per move, no sleeps on the hot path) and feeds `InjectionMonitor` — an alarm sets a flag plus an ERROR log
+- `take_input_alarm()`: returns-and-clears the alarm flag; polled by the [Web Layer](web.md) cursor loop, which forwards it to the phone as a visible toast ("The PC is blocking remote input…")
 - `button_down(x_norm, y_norm, button)` / `button_up(...)`: move + press/release in one injected event (`left` / `right` / `middle`)
 - `click(button)`: down+up at the **current** cursor position, no move — the client's Click button (the finger only steers the cursor); two presses inside Windows' double-click time land as a double click
 - `wheel(x_norm, y_norm, ticks)`: moves the cursor to the gesture point (the wheel targets the window under the cursor), then scrolls by `ticks` × `WHEEL_DELTA` (positive = up)

@@ -20,7 +20,7 @@ Owns dxcam (DXGI Desktop Duplication) — the one place that touches the camera.
 Camera lifecycle + the capture thread + the screenshot service. Subclasses implement `_process(frame)`, called from the capture thread for every grabbed frame.
 
 - `width`, `height`, `monitor_index`: native pixel size of the captured monitor (the injector maps coordinates against this — never the stream size)
-- `start()` / `stop()`: dxcam video-mode capture + the `_loop` thread (stop tolerates dxcam's bare raise on double-stop)
+- `start()` / `stop()`: dxcam video-mode capture + the `_loop` thread (stop tolerates dxcam's bare raise on double-stop; start resets-and-retries once when dxcam refuses with "Capture is already running" — a stop racing a fast reconnect left the flag set and killed the NEW session, live 2026-07-29)
 - `switch_monitor(index)`: swaps the camera (call while stopped); failure keeps the old camera
 - `output_count()`: how many outputs dxcam sees
 - `take_screenshot()`: full-monitor native-resolution copy of the next frame (blocking — worker threads only)

@@ -86,7 +86,20 @@ class BaseCapture:
         return self._shot_frame
 
     def start(self) -> None:
-        self._camera.start(target_fps=SETTINGS.target_fps, video_mode=True)
+        try:
+            self._camera.start(target_fps=SETTINGS.target_fps, video_mode=True)
+        except Exception as e:
+            # dxcam keeps its internal "capturing" flag when a stop raced a
+            # fast reconnect ("Capture is already running. Call stop()
+            # first.") — the NEW session died instead of the stale capture
+            # (live 2026-07-29 02:30:45). Reset once and retry; a second
+            # failure raises loudly (Rule #1).
+            logger.warning("dxcam start refused (%s) — resetting capture and retrying", e)
+            try:
+                self._camera.stop()
+            except Exception as stop_err:  # dxcam raises bare on double-stop
+                logger.warning("Camera reset stop: %s", stop_err)
+            self._camera.start(target_fps=SETTINGS.target_fps, video_mode=True)
         self._running = True
         self._thread = threading.Thread(target=self._loop, name="capture", daemon=True)
         self._thread.start()

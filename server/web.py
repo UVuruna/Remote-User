@@ -279,23 +279,37 @@ async def _stream_h264(ws: WebSocket, manager, token: str) -> None:
             await asyncio.sleep(1.0)  # a session dying this fast is an error loop — pace it
 
 
+INPUT_BLOCKED_TOAST = (
+    "The PC is blocking remote input — an administrator window or the lock "
+    "screen has focus on the PC."
+)
+
+
 async def _send_cursor(ws: WebSocket, injector: InputInjector) -> None:
     """Streams the PC cursor position for the client-drawn virtual cursor.
-    Sent only on change, quantized to 4 decimals (~0.4 px on 4K)."""
+    Sent only on change, quantized to 4 decimals (~0.4 px on 4K).
+
+    Also the delivery path for the injector's self-check alarm: when Windows
+    eats injected input (UIPI — the 2026-07-29 dead-mouse failure), the phone
+    must SAY so instead of looking healthy over a dead session."""
     interval = 1.0 / SETTINGS.cursor_hz
     last = None
     while True:
-        pos = injector.cursor_norm()
-        if pos is not None:
-            rounded = (round(pos[0], 4), round(pos[1], 4))
-            if rounded != last:
-                last = rounded
-                try:
+        try:
+            if injector.take_input_alarm():
+                await ws.send_text(json.dumps(
+                    {"type": "toast", "text": INPUT_BLOCKED_TOAST}
+                ))
+            pos = injector.cursor_norm()
+            if pos is not None:
+                rounded = (round(pos[0], 4), round(pos[1], 4))
+                if rounded != last:
+                    last = rounded
                     await ws.send_text(json.dumps(
                         {"type": "cursor", "x": rounded[0], "y": rounded[1]}
                     ))
-                except (WebSocketDisconnect, RuntimeError):
-                    return  # socket closed under us — normal lifecycle
+        except (WebSocketDisconnect, RuntimeError):
+            return  # socket closed under us — normal lifecycle
         await asyncio.sleep(interval)
 
 

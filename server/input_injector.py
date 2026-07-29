@@ -4,11 +4,22 @@ Receives coordinates normalized 0-1 within the captured monitor and maps them
 to the 0-65535 absolute range of the entire virtual desktop, as SendInput
 requires. The process MUST be per-monitor DPI aware before this module is used
 (main.py declares it) — otherwise Windows silently rescales coordinates.
+
+Injection is SELF-VERIFYING (InjectionMonitor): Windows discards every
+injected event — SendInput still returns success — whenever the foreground
+window runs at a higher integrity level than this process (UIPI), the screen
+is locked, or a UAC secure desktop is up. Live failure 2026-07-29: an
+elevated VSCode kept focus on the PC and every phone session was completely
+dead (stream fine, zero errors anywhere). The only reliable detector is the
+EFFECT: big commanded cursor jumps must actually land.
 """
 
 import ctypes
 import ctypes.wintypes as wintypes
 import logging
+import math
+
+from config import SETTINGS
 
 logger = logging.getLogger(__name__)
 
@@ -122,6 +133,48 @@ class INPUT(ctypes.Structure):
     _fields_ = [("type", wintypes.DWORD), ("u", _U)]
 
 
+class InjectionMonitor:
+    """Detects silently-eaten injection by its EFFECT (Rule #1: no silent
+    failures — a dead mouse must scream, never mystify).
+
+    A commanded cursor jump of at least `min_jump` px must land within
+    `tolerance` px of its target; `streak` consecutive misses fire the alarm
+    once per losing streak (a landed move re-arms it). Small jumps are never
+    judged — the user's physical mouse and rounding make them ambiguous.
+    Pure logic, no Win32 — pinned by the build gate."""
+
+    def __init__(self, min_jump: float, tolerance: float, streak: int):
+        self.min_jump = min_jump
+        self._tolerance = tolerance
+        self._streak_needed = streak
+        self._misses = 0
+        self._alarmed = False
+
+    def note(
+        self,
+        target_px: tuple[float, float],
+        actual_px: tuple[float, float] | None,
+        jump_px: float,
+    ) -> bool:
+        """Feed one verified move; True exactly when the alarm fires."""
+        if jump_px < self.min_jump:
+            return False
+        hit = (
+            actual_px is not None
+            and abs(actual_px[0] - target_px[0]) <= self._tolerance
+            and abs(actual_px[1] - target_px[1]) <= self._tolerance
+        )
+        if hit:
+            self._misses = 0
+            self._alarmed = False
+            return False
+        self._misses += 1
+        if self._misses >= self._streak_needed and not self._alarmed:
+            self._alarmed = True
+            return True
+        return False
+
+
 class InputInjector:
     """Maps monitor-normalized coordinates to virtual-desktop absolutes and injects."""
 
@@ -134,7 +187,32 @@ class InputInjector:
             user32.GetSystemMetrics(SM_CXVIRTUALSCREEN),
             user32.GetSystemMetrics(SM_CYVIRTUALSCREEN),
         )
+        self._verify = InjectionMonitor(
+            SETTINGS.inject_verify_min_jump,
+            SETTINGS.inject_verify_tolerance,
+            SETTINGS.inject_verify_streak,
+        )
+        # Last commanded move, verified lazily on the NEXT move — that gives
+        # Windows a full inter-move interval to settle without ever sleeping
+        # on the hot path: (target px, commanded jump px).
+        self._pending: tuple[tuple[float, float], float] | None = None
+        self._input_alarm = False
         logger.info("Injector ready — monitor=%s virtual=%s", monitor_rect, self.virtual_rect)
+
+    def _cursor_px(self) -> tuple[int, int] | None:
+        pt = wintypes.POINT()
+        if not user32.GetCursorPos(ctypes.byref(pt)):
+            return None  # secure desktop (UAC prompt / lock screen)
+        return (pt.x, pt.y)
+
+    def take_input_alarm(self) -> bool:
+        """True once per detected eaten-input streak. Polled by the web
+        layer's cursor loop and forwarded to the phone as a visible toast —
+        the 2026-07-29 failure mode (UIPI) must never again look like a
+        healthy app with a dead mouse."""
+        alarm = self._input_alarm
+        self._input_alarm = False
+        return alarm
 
     def set_monitor_rect(self, rect: tuple[int, int, int, int]) -> None:
         """Called when the streamed monitor changes."""
@@ -171,6 +249,23 @@ class InputInjector:
             logger.error("SendInput failed: %s", ctypes.get_last_error())
 
     def move(self, x_norm: float, y_norm: float) -> None:
+        actual = self._cursor_px()
+        if self._pending is not None:
+            prev_target, prev_jump = self._pending
+            if self._verify.note(prev_target, actual, prev_jump):
+                self._input_alarm = True
+                logger.error(
+                    "Injected input is being DISCARDED by Windows — commanded "
+                    "cursor jumps do not land (UIPI: an elevated window or the "
+                    "lock screen has focus, and this process is not elevated)."
+                )
+        mon_left, mon_top, mon_w, mon_h = self.monitor_rect
+        target = (mon_left + x_norm * mon_w, mon_top + y_norm * mon_h)
+        jump = (
+            math.hypot(target[0] - actual[0], target[1] - actual[1])
+            if actual is not None else 0.0
+        )
+        self._pending = (target, jump)
         abs_x, abs_y = self._to_absolute(x_norm, y_norm)
         self._send(MOUSEEVENTF_MOVE | MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_VIRTUALDESK, abs_x, abs_y)
 
