@@ -234,6 +234,18 @@ def main():
         mon.note((500, 500), (100, 100), 400) is True,    # miss 3 — ALARM again
     ]
     results["injection tripwire: alarms on eaten moves"] = all(tw)
+
+    # 9b. the WIRING: the real InputInjector.move() must feed the monitor and
+    # raise the alarm the web layer forwards to the phone. SendInput itself is
+    # stubbed out — this gate never touches the build machine's real cursor.
+    from input_injector import InputInjector
+    real = InputInjector((0, 0, 1920, 1080))
+    real._send = lambda *a, **k: None            # never inject on the build machine
+    real._cursor_px = lambda: (10, 10)           # cursor never follows = eaten input
+    for _ in range(5):
+        real.move(0.9, 0.9)                      # big jumps, none of them land
+    results["injection tripwire: move() raises the client alarm"] = real.take_input_alarm()
+    results["injection tripwire: alarm clears after reading"] = not real.take_input_alarm()
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         ctx = browser.new_context(

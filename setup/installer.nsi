@@ -156,7 +156,11 @@ Section "Start with Windows" SecAutostart
     ; apps, so autostart is a Task Scheduler logon task with highest
     ; privileges (root build spec) -- starts in the tray, no UAC prompt at
     ; logon (unlike a manual Start-menu launch).
-    nsExec::ExecToLog 'schtasks /Create /F /TN "${APP_NAME}" /SC ONLOGON /RL HIGHEST /TR "$\"$INSTDIR\${APP_EXE}$\" --minimized"'
+    ; schtasks parses /TR with CRT rules: a path with spaces needs ESCAPED
+    ; inner quotes (\"...\"), not bare nested ones — the bare form silently
+    ; failed and shipped an installer that created no task at all (caught by
+    ; verifying the installed machine, 2026-07-29). $\\$\" emits \" in NSIS.
+    nsExec::ExecToLog 'schtasks /Create /F /TN "${APP_NAME}" /SC ONLOGON /RL HIGHEST /TR "$\\$\"$INSTDIR\${APP_EXE}$\\$\" --minimized"'
 SectionEnd
 
 ; -- Section Descriptions -----------------------------------------

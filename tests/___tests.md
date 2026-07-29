@@ -31,7 +31,10 @@ tripwire** (`InjectionMonitor` decision logic): Windows silently discards
 all injected input from a non-elevated process while an elevated window
 has focus (UIPI, live failure 2026-07-29 — SendInput "succeeds", the phone
 looks healthy, the mouse is dead); the monitor must alarm on exactly the
-configured miss streak, ignore small jumps, and re-arm after a success.
+configured miss streak, ignore small jumps, and re-arm after a success —
+plus the WIRING: the real `InputInjector.move()` (with `SendInput` stubbed
+out, so the build machine's cursor is never touched) must raise the alarm
+that the web layer forwards to the phone, and clear it once read.
 
 The control layout comes from `tests/fixtures/actions.json` — pinned on
 purpose: the repo `actions.json` is the owner's hand-edited file, and a
