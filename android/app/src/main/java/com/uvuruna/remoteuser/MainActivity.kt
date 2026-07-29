@@ -63,6 +63,13 @@ class MainActivity : AppCompatActivity() {
     private var resolveEpoch = 0 // UI thread only — voids stale resolver threads and timers
     private var onWifi = false // default network carries a Wi-Fi transport (UI thread only)
     private var warnedForeignWifi = false
+    // Document health: a LIVE page must never be reloaded by the recovery
+    // machinery — its own JS reconnects the WebSocket in milliseconds, while
+    // a reload tears the whole session down (audit finding 2026-07-29: the
+    // unlock-after-doze race turned every transient ping failure into a
+    // guaranteed reload of a healthy session).
+    private var pageAlive = false
+    private var lastLoadFailed = false
 
     /** Reconnect the moment the phone actually has a network again. Foreign
      *  Wi-Fi drops and re-grants connectivity constantly (AP kicks, power
@@ -176,8 +183,8 @@ class MainActivity : AppCompatActivity() {
                 Thread(probe).start()
                 url to probe
             }
-            val chosen = probes.firstOrNull { (_, probe) ->
-                try {
+            val results = probes.map { (url, probe) ->
+                url to try {
                     // A slow-but-alive probe legitimately spends up to
                     // connectTimeout + readTimeout — waiting any less
                     // declares a reachable server dead (cold DERP relay).
@@ -185,14 +192,26 @@ class MainActivity : AppCompatActivity() {
                 } catch (e: Exception) {
                     false
                 }
-            }?.first
+            }
+            val chosen = results.firstOrNull { it.second }?.first
             runOnUiThread {
                 if (isFinishing || isDestroyed || epoch != resolveEpoch) return@runOnUiThread
                 if (chosen != null) {
                     // Home LAN dead but the tunnel answered, over Wi-Fi =
                     // some network other than home — say so once per stay.
                     if (chosen == ts && chosen != lan) warnIfForeignWifi()
-                    web.loadUrl(chosen) // loader (or card) stays until the page reacts
+                    val current = web.url
+                    val sessionHealthy = silent && pageAlive && current != null &&
+                        results.any { it.first == current && it.second }
+                    if (sessionHealthy) {
+                        // The document is live and ITS address answers — the
+                        // page's own JS reconnects the WebSocket; a loadUrl
+                        // here would kill a healthy session (the unlock race).
+                        errorView.visibility = View.GONE
+                        loadingView.visibility = View.GONE
+                    } else {
+                        web.loadUrl(chosen) // loader (or card) stays until the page reacts
+                    }
                 } else {
                     loadingView.visibility = View.GONE
                     errorView.visibility = View.VISIBLE
@@ -306,7 +325,12 @@ class MainActivity : AppCompatActivity() {
         Thread {
             if (!pingOk(current)) {
                 runOnUiThread {
-                    if (!isFinishing && !isDestroyed) resolveAndLoad()
+                    // Silent: at unlock the Wi-Fi often is not back yet for
+                    // 1-3 s, so this single ping fails on a perfectly healthy
+                    // session — the silent resolver re-checks and keeps a
+                    // live page untouched instead of flashing the loader and
+                    // reloading it (the 2026-07-29 unlock race).
+                    if (!isFinishing && !isDestroyed) resolveAndLoad(silent = true)
                 }
             }
         }.start()
@@ -376,6 +400,8 @@ class MainActivity : AppCompatActivity() {
             view: WebView, request: WebResourceRequest, error: WebResourceError
         ) {
             if (request.isForMainFrame) {
+                lastLoadFailed = true
+                pageAlive = false
                 loadingView.visibility = View.GONE
                 errorView.visibility = View.VISIBLE
                 scheduleRetry(resolveEpoch) // a failed page load self-heals too
@@ -383,11 +409,16 @@ class MainActivity : AppCompatActivity() {
         }
 
         override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
+            lastLoadFailed = false
+            pageAlive = false
             errorView.visibility = View.GONE
         }
 
         override fun onPageFinished(view: WebView, url: String?) {
             // The page is up; its own status pill takes over from here.
+            // (onPageFinished fires after onReceivedError too — a failed
+            // load must not count as a live document.)
+            pageAlive = !lastLoadFailed
             loadingView.visibility = View.GONE
         }
     }

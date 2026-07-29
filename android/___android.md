@@ -48,6 +48,17 @@ scanner). Package `com.uvuruna.remoteuser`, min Android 8 (API 26).
   `ACCESS_NETWORK_STATE`). Try again stays as the instant manual kick. An
   epoch counter voids stale resolver threads and timers, so retries never
   stack and never reload a live page.
+- **A LIVE page is never reloaded by recovery** (audit finding 2026-07-29 —
+  the unlock race): at screen unlock Wi-Fi takes 1–3 s to reassociate, so the
+  onResume ping fails on a perfectly healthy session; the silent resolver
+  then found an answering address and `loadUrl`-ed it — tearing down a
+  session whose own JS had already reconnected. Now the shell tracks document
+  health (`pageAlive`: set on `onPageFinished` without a main-frame error,
+  cleared on error/load-start) and the silent path, when the loaded page is
+  alive AND its own address answered the probe, only hides the card — the
+  page's JS does the WebSocket reconnect. `loadUrl` happens only when the
+  document is dead or its address stopped answering (the location-change
+  case the resolver exists for).
 - **Unfamiliar-Wi-Fi heads-up** (owner request 2026-07-27): when the home LAN
   probe fails but the tunnel answers while the default network is Wi-Fi, the
   session is running over someone else's Wi-Fi — a one-per-stay toast says it
