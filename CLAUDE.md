@@ -1,6 +1,13 @@
 # CLAUDE.md — Remote User
 
-Project-specific guidance. Inherits ALL rules from the root [CLAUDE.md](../../CLAUDE.md).
+Project-specific guidance. Inherits the [root constitution](../../CLAUDE.md) —
+read it first, then use its [Router](../../CLAUDE.md#router) to load only the
+rulebook(s) your job needs (`rules/CODE.md` for implementation,
+`rules/DOCS.md` for documentation, `rules/SHIP.md` for build/release, etc.).
+This file only ADDS or TIGHTENS rules for this project — it never restates or
+loosens the root's. The four guard tests + Claude Code hooks
+([Code Rules](../../rules/CODE.md) → Enforcement) are installed in `tests/`
+and `.claude/settings.json`.
 
 ---
 
@@ -24,7 +31,7 @@ Remote control of the Windows PC from an Android tablet/phone over LAN. The PC r
 
 ## Session Workflow (owner decree 2026-07-22)
 
-**ALWAYS finish a session that touches server/client/android code by running the FULL desktop build AND publishing a GIT RELEASE** (`setup/build.py` — it bundles the client and the freshly built APK into the installer). The owner tests and updates ONLY through the official GitHub release (Rule #23 self-update), never the dev server from VSCode and never the local `dist/` — shipping changes without a **released** build means the owner installs stale software and the fixes "don't work". Build the APK first (`setup/build_apk.py`) when android/ or client/ changed. **Do ALL of this — build and GIT RELEASE — automatically, without being asked** (root [Rule #24](../../CLAUDE.md); this supersedes the earlier "GIT RELEASE requires the owner's yes").
+**ALWAYS finish a session that touches server/client/android code by running the FULL desktop build AND publishing a GIT RELEASE** (`setup/build.py` — it bundles the client and the freshly built APK into the installer). The owner tests and updates ONLY through the official GitHub release (see [Ship Rules](../../rules/SHIP.md) → Self-Update), never the dev server from VSCode and never the local `dist/` — shipping changes without a **released** build means the owner installs stale software and the fixes "don't work". Build the APK first (`setup/build_apk.py`) when android/ or client/ changed. **Do ALL of this — build and GIT RELEASE — automatically, without being asked** (THE RELEASE LAW, root [CLAUDE.md](../../CLAUDE.md) → The Laws / [Ship Rules](../../rules/SHIP.md)).
 
 ## Architecture Constraints
 
@@ -57,4 +64,4 @@ Remote control of the Windows PC from an Android tablet/phone over LAN. The PC r
 
 - Gesture disambiguation (tap vs drag vs scroll) can only be tuned on a **real touch device** — do not assume defaults are right.
 - Test Unicode injection against real targets (VSCode, browser inputs) — VK_PACKET has known quirks in some apps (e.g. Windows Terminal surrogate-pair bugs).
-- After long-running capture sessions, verify frame latency fresh — restart before measuring (see root CLAUDE.md profiling section).
+- After long-running capture sessions, verify frame latency fresh — restart before measuring (see [Code Rules](../../rules/CODE.md) → Profiling).
