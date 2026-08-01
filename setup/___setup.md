@@ -1,75 +1,81 @@
 # setup/
 
-The desktop build pipeline (root CLAUDE build spec): SVG → ICO, PyInstaller,
-code signing, NSIS installer — plus this project's specialty, **dependency
-bundling**: the user NEVER side-installs anything (hard owner requirement).
+The desktop build pipeline (root SHIP.md's 7-step pipeline) — plus this
+project's specialty, **dependency bundling**: the user NEVER side-installs
+anything (hard owner requirement), so `build.py` fetches/bundles ffmpeg and
+chain-installs Tailscale itself.
 
 ```
-.venv\Scripts\python setup/build.py     → dist/RemoteUser_Setup.exe
+.venv\Scripts\python setup/build_apk.py   → dist/RemoteUser.apk   (run first if android/ or client/ changed)
+.venv\Scripts\python setup/build.py       → dist/RemoteUser_Setup.exe
 ```
 
 ## Files
 
-### `build.py` — Build Orchestrator
-Steps: version info (app_info.json + root company.json) → **INPUT GATE**
-(the end-to-end click-path test in [Tests (folder)](../tests/___tests.md),
-fail-closed — a broken input pipeline cannot ship) → ICOs → vendor payloads →
-PyInstaller (`--onedir --windowed`, entry `server/gui_main.py`) → frozen-exe
-smoke test → sign exe → NSIS + sign installer → verify (metadata + signatures).
+| File | Tier | One line |
+|------|------|----------|
+| `build.py` | Algorithmic | 7-step build pipeline orchestrator + the fail-closed `verify_build` gate — [about](__about/build.md) · [flow](__flow/build.md) |
+| `build_apk.py` | Algorithmic | Android release-APK build protocol — toolchain, keystore, Gradle — [about](__about/build_apk.md) · [flow](__flow/build_apk.md) |
+| `svg_to_ico.py` | Algorithmic | SVG → multi-resolution ICO, supersampled Lanczos downscale — [about](__about/svg_to_ico.md) · [flow](__flow/svg_to_ico.md) |
+| `create_cert.py` | Standard | one-time self-signed code-signing certificate generator — [about](__about/create_cert.md) |
+| `installer.nsi` | *(not in this doc pass)* | NSIS installer script — sections Main / Tailscale / Desktop shortcut / Autostart; see Design Decisions below |
+| `app_info.json` | *(data, not code)* | project metadata (version, names, exe/installer filenames) read by every script above |
 
-Vendor payloads (cached in gitignored `setup/vendor/`, fetched on first build):
-- **ffmpeg.exe** — bundled INTO the app (`dist/RemoteUser/ffmpeg/`); the frozen
-  config finds it there. **Pinned to gyan.dev 7.1.1** — the newest git builds
-  need NVENC API 13.1 (NVIDIA driver ≥ 610) and silently drop hardware encoding
-  to libx264 on slightly older drivers (found on the dev PC itself).
-- **tailscale-setup.exe** — the official installer stub, chain-run by the NSIS
-  installer when Tailscale is absent.
-
-PyInstaller notes: uvicorn's importlib-loaded backends need explicit
-hidden-imports; numpy/cv2 are runtime deps (never exclude); QtWebEngine and
-friends are excluded (500 MB of unused Chromium).
-
-### `installer.nsi` — NSIS Installer
-Standard wizard (welcome → directory → components → install → finish) plus:
-- **Tailscale section** — chain-installs from the bundled stub, skipped when
-  `$PROGRAMFILES64\Tailscale` already exists; never uninstalled by us
-- **Firewall rule** — allow-rule for the exe (LAN + Tailscale WebSocket
-  traffic); without it Windows silently blocks the phone's connection
-- Autostart = Task Scheduler logon task `/RL HIGHEST` with `--minimized` (the
-  app runs ELEVATED — `--uac-admin` — because Windows' UIPI silently eats
-  non-elevated `SendInput` whenever an elevated window has focus, the
-  2026-07-29 dead-mouse failure; HKCU Run silently skips elevated apps, so
-  the installer creates/deletes the `RemoteUser` scheduled task and cleans up
-  the legacy Run value)
-- Uninstall removes program files, shortcuts, firewall rule, autostart and
-  `%LOCALAPPDATA%\RemoteUser` (settings/token/logs)
-- Script is saved as **UTF-8 with BOM** — `Unicode true` + makensis reject a
-  BOM-less file containing non-ASCII text
-
-### `build_apk.py` — Android Build
-Builds the phone app (see [Android (folder)](../android/___android.md)) into
-`dist/RemoteUser.apk`: Android Studio's JDK + the local SDK + vendored Gradle;
-generates the release keystore ONCE into gitignored `android/keystore/`
-(back it up — losing it breaks phone upgrades). Run it BEFORE `build.py` so
-the desktop installer bundles the APK (the server serves it at `/app.apk`).
-
-### `svg_to_ico.py` — Icon Generator
-`assets/logo.svg` → `setup/icon.ico` (+ `icon-setup.ico` for the wizard,
-from `logo-setup.svg` when present). Supersampled Lanczos, 16–256 px.
-
-### `create_cert.py` — Certificate (run ONCE)
-Self-signed code-signing cert → gitignored `setup/cert/` (pfx + generated
-password). Back it up externally; recreate only on expiry (5 years).
-
-### `app_info.json` — App Metadata
-Version, names, exe/installer filenames. Company-level info comes from the
-monorepo root `company.json` — never duplicated here.
+`installer.nsi` and `app_info.json` are outside this session's per-file
+`__about`/`__flow` scope (the task covered the four `.py` files only) — see
+the session report for why `installer.nsi`'s sections are a
+Config-Section-Law candidate worth a future look.
 
 ## Connections
 
 ### Uses
-- [Server (folder)](../server/___server.md) — the code being packaged; `gui_main.py` is the exe entry
-- Root `company.json` — publisher/copyright for version resources
+- [Server (folder)](../server/___server.md) — `server/gui_main.py` is the
+  PyInstaller entry point; the whole `server/` tree is what gets frozen
+- [Client (folder)](../client/___client.md) — bundled via PyInstaller
+  `--add-data` (served to the tablet at runtime)
+- [Android (folder)](../android/___android.md) — the release APK
+  (`build_apk.py`'s output) rides along in the installer when present
+- [Tests (folder)](../tests/___tests.md) — `tests/test_input_pipeline.py`,
+  run by `build.py` as the fail-closed INPUT GATE before anything is
+  packaged (confirmed wired — see `input_gate()` in
+  [Build Orchestrator](__about/build.md))
+- root `company.json` — publisher/copyright, read by `build.py` for the
+  version resource and the installer's version info
+- `setup/app_info.json` — version, names, description, exe/installer
+  filenames; the single version source read by every script here
 
 ### Used by
-- The owner, when cutting a release (then the GIT RELEASE procedure from root CLAUDE)
+- The owner, cutting a release — root SHIP.md's GIT RELEASE procedure
+  starts from this folder's `build.py`
+
+## Design Decisions
+
+- **`--onedir`, never `--onefile`** — lower RAM, faster startup, fewer AV
+  false positives (root SHIP.md Step 3); this project additionally needs
+  `--onedir` so `ffmpeg.exe` and the Android APK can sit as plain files next
+  to the exe rather than inside a one-file archive.
+- **Fail-closed everywhere a step could otherwise break silently.** Four
+  gates stop the build rather than let a broken artifact through: the INPUT
+  GATE (`build.py` Step 0b — a broken click path), the frozen-exe smoke test
+  (Step 3b — a missing bundled module), `sign_file`'s explicit
+  skip-with-warning (never a silent unsigned build the log doesn't call
+  out), and `verify_build` (the final read of the actual artifact
+  metadata/signatures). Each one exists because its failure class shipped to
+  the owner at least once before it was added — see
+  [Build Orchestrator](__about/build.md) Design Decisions.
+- **The exe runs elevated always (`--uac-admin`)** — not the SHIP.md default
+  ("only when truly required"); here it IS required. Windows UIPI silently
+  discards `SendInput` from a non-elevated process whenever an elevated
+  window has focus, so a non-elevated Remote User is a dead input device the
+  moment the owner opens one admin window (2026-07-29 live failure, see
+  project [CLAUDE.md](../CLAUDE.md) Architecture Constraint 8). Autostart
+  therefore uses a Task Scheduler `/RL HIGHEST` logon task, not the registry
+  Run key, which silently refuses to start elevated apps.
+- **The build always re-execs under `.venv`** — the only interpreter
+  guaranteed to have the complete dependency set; any other interpreter
+  silently ships an incomplete bundle (root cause of the v0.0.045 crash that
+  shipped without `qrcode`).
+- **`build_apk.py` runs BEFORE `build.py`, never the reverse** — the desktop
+  installer only bundles the phone APK when it already exists on disk
+  (`build.py` prints a note and ships without it otherwise); there is no
+  automatic chaining between the two scripts.

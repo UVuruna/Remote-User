@@ -7,7 +7,78 @@ what a browser tab cannot. One wizard, one client, two containers.
 Kotlin, two activities, two dependencies (AppCompat + the embedded ZXing
 scanner). Package `com.uvuruna.remoteuser`, min Android 8 (API 26).
 
-## What the shell does (and nothing more)
+## Files
+
+| File | Tier | One line |
+|------|------|----------|
+| `MainActivity.kt` | Algorithmic | WebView shell — dual-address resolve/failover state machine, self-healing error card, network callbacks, JS bridge, immersive UI — [about](__about/MainActivity.md) · [flow](__flow/MainActivity.md) |
+| `OnboardingActivity.kt` | Standard | first-run pairing screen — automatic funnel handoff + manual QR-scan/paste fallback — [about](__about/OnboardingActivity.md) |
+| `Prefs.kt` | Trivial | `SharedPreferences` wrapper for the two stored addresses (LAN URL from pairing, Tailscale URL learned from the page) |
+
+**Other files in this folder (not source-tier — resources and build config):**
+- `app/src/main/res/` — dark brand theme (same slate/cyan palette as the
+  client and desktop), layouts (`activity_main.xml`: WebView + loading/error
+  overlays; `activity_onboarding.xml`: logo + pairing card), `strings.xml`
+  (all user-facing copy — onboarding card, connecting screen, error card,
+  the foreign-Wi-Fi toast), launcher icons generated from `assets/logo.svg`
+- `AndroidManifest.xml` — `OnboardingActivity` is `singleTask` (exported,
+  `MAIN`/`LAUNCHER` + the `remoteuser://pair` `VIEW` intent filter);
+  `MainActivity` is not exported, declares
+  `configChanges="orientation|screenSize|…"` so rotation never recreates the
+  WebView, and `usesCleartextTraffic="true"` (the server speaks plain HTTP on
+  the LAN/Tailscale private network)
+- `build.gradle.kts` / `settings.gradle.kts` — AGP 8.7, Kotlin 2.0, SDK 35;
+  version comes from `setup/app_info.json` via build properties; release
+  signing from environment variables (never committed)
+
+## Building
+
+```
+.venv\Scripts\python setup/build_apk.py      → dist/RemoteUser.apk
+```
+
+Toolchain: Android Studio's bundled JDK + the SDK in `%LOCALAPPDATA%`;
+Gradle vendored into `setup/vendor/` (wrapper generated on first run).
+The keystore is generated ONCE into gitignored `android/keystore/` —
+**back it up**: losing it means phone upgrades require uninstall/reinstall.
+
+## Distribution
+
+`dist/RemoteUser.apk` is served by the server at **`/app.apk`**. Any Android
+browser hitting the server (the QR link) gets the full-screen **install
+funnel** instead of the client: Open the app (pairs itself via `intent://`)
+first and primary, Install (downloads the APK) below it. The desktop build
+bundles the APK next to the exe, so the installed PC app distributes the
+phone app too. No file shuffling, ever.
+
+## Connections
+
+### Uses
+- [Client (folder)](../client/___client.md) — the entire product UI, loaded
+  into the WebView (`client/index.html`); the `Android` JS bridge
+  (`rescan`/`setTailscaleUrl`/`appVersion`/`update`) and the `config`
+  WebSocket message are the two-way contact points between the shell and the
+  page's own [Connection](../client/__about/connection.md) script (the JS bridge calls and `config` handling both live there)
+- [Server (folder)](../server/___server.md) — conceptually the HTTP/WS peer
+  this shell talks to over the network (`GET /ping` reachability probe,
+  `GET /app.apk`, the page's own `/ws` connection via
+  [Web Layer](../server/__about/web.md)). This is **not a code dependency** — the
+  shell never imports server code, it only speaks HTTP/WebSocket to whatever
+  process answers at the resolved address
+
+### Used by
+- Nothing internal — this is the end-user-facing app, a terminal node with
+  no in-repo caller
+- Built by [Setup (folder)](../setup/___setup.md)'s `build_apk.py` into
+  `dist/RemoteUser.apk`, run BEFORE `build.py` so the desktop installer
+  bundles the APK and the server can serve it at `/app.apk`
+- The owner's phone (v1: sideloaded APK; a Play Store listing is a later
+  distribution decision)
+
+## Design Decisions
+
+The shell adds only what a browser tab cannot — everything below is WHY,
+not just what:
 
 - **Pairing is one tap**: the install funnel page (what an Android browser
   sees on the QR link) launches the app via `remoteuser://pair?url=…` with
@@ -19,8 +90,9 @@ scanner). Package `com.uvuruna.remoteuser`, min Android 8 (API 26).
   re-pairing; re-pair (`EXTRA_FORCE`) does NOT wipe the stored addresses —
   they survive until a NEW pairing succeeds, so a mis-tap away from home
   can never strand the phone. `openClient` uses `CLEAR_TASK`, so a re-pair
-  replaces any old `MainActivity` instead of stacking WebViews. That LAN
-  URL plus the learned Tailscale URL are the only stored state.
+  replaces any old `MainActivity` instance instead of stacking WebViews. That
+  LAN URL plus the learned Tailscale URL are the only stored state
+  (`Prefs`).
 - **The WebView identifies itself**: `RemoteUserApp` is appended to the
   User-Agent — that is how the server knows to serve the app the real client
   while plain Android browsers get the funnel.
@@ -47,7 +119,8 @@ scanner). Package `com.uvuruna.remoteuser`, min Android 8 (API 26).
   change (`registerDefaultNetworkCallback`; needs the auto-granted
   `ACCESS_NETWORK_STATE`). Try again stays as the instant manual kick. An
   epoch counter voids stale resolver threads and timers, so retries never
-  stack and never reload a live page.
+  stack and never reload a live page. See
+  [Main Activity (flow)](__flow/MainActivity.md) for the exact state machine.
 - **A LIVE page is never reloaded by recovery** (audit finding 2026-07-29 —
   the unlock race): at screen unlock Wi-Fi takes 1–3 s to reassociate, so the
   onResume ping fails on a perfectly healthy session; the silent resolver
@@ -103,43 +176,3 @@ scanner). Package `com.uvuruna.remoteuser`, min Android 8 (API 26).
   (home Wi-Fi → mobile data) and the page would retry a dead address forever;
   if it stopped answering, the resolver runs again and the other address
   takes over.
-
-## Files
-
-- `app/src/main/java/com/uvuruna/remoteuser/` — `OnboardingActivity` (QR
-  scan/paste → store the LAN URL), `MainActivity` (WebView + the resolver
-  and bridges above), `Prefs` (the two stored addresses)
-- `app/src/main/res/` — dark brand theme (same slate/cyan palette as the
-  client and desktop), layouts, launcher icons generated from `assets/logo.svg`
-- `build.gradle.kts` / `settings.gradle.kts` — AGP 8.7, Kotlin 2.0, SDK 35;
-  version comes from `setup/app_info.json` via build properties; release
-  signing from environment variables (never committed)
-
-## Building
-
-```
-.venv\Scripts\python setup/build_apk.py      → dist/RemoteUser.apk
-```
-
-Toolchain: Android Studio's bundled JDK + the SDK in `%LOCALAPPDATA%`;
-Gradle vendored into `setup/vendor/` (wrapper generated on first run).
-The keystore is generated ONCE into gitignored `android/keystore/` —
-**back it up**: losing it means phone upgrades require uninstall/reinstall.
-
-## Distribution
-
-`dist/RemoteUser.apk` is served by the server at **`/app.apk`**. Any Android
-browser hitting the server (the QR link) gets the full-screen **install
-funnel** instead of the client: Install (downloads the APK) → Open the app
-(pairs itself via `intent://`). The desktop build bundles the APK next to
-the exe, so the installed PC app distributes the phone app too. No file
-shuffling, ever.
-
-## Connections
-
-### Uses
-- [Client (folder)](../client/___client.md) — the entire UI, loaded in the WebView
-- [Web Layer](../server/web.md) — `/app.apk`, `/ping`, and the WebSocket it serves
-
-### Used by
-- The owner's phone (v1: APK; Play Store is a later distribution decision)
