@@ -4,40 +4,67 @@ The phone side of Remote User — a plain web page served by the PC server, load
 
 ## Files
 
-### `index.html` — Page Shell
-Canvas + offscreen `<video>` (the H.264/MSE decode surface) + status pill + Move (top-left) and Hide (top-right) corner buttons + two D-pad groups (bottom-left/right, filled from config) + the category-wheel overlay + the invisible keyboard-capture textarea. Viewport locked (no browser zoom/scroll — pinch drives the local zoom).
-
-### `install.html` — Android Install Funnel
-The ONLY page an Android browser ever sees (served at `/` by User-Agent when the APK exists). **"Open the app" is the first, primary button** — every scan after the first install is one tap into the app (an `intent://pair?url=…` link hands over THIS page's tokened URL, so the app pairs itself; falls back to this same page when the app is missing). Below it, "First time on this phone?" offers the one-time **Install** (`/app.apk`). Self-contained (own style block).
-
-### `app.js` — Client Logic
-WebSocket connection, H.264 (MSE) or JPEG rendering, virtual cursor, cursor-steering gestures + the Click button. See [Client App](app.md).
-
-### `load_test.js` — Load-Order Test
-Node harness that executes `app.js` top-to-bottom with DOM stubs — catches script-killing load-time errors (TDZ, missing elements) that a syntax check cannot. **Run `node client/load_test.js` before every client commit.** Born from a real failure: a `let` declared below its first load-time use killed the page before it ever connected.
-
-### `style.css` — Styling
-Design tokens per root DESIGN.md (dark surface, one accent), gradient status pill (connecting / connected / disconnected). Buttons are **see-through** (low-opacity fill, no backdrop blur — the screen stays visible behind them) with an icon + text label each, kept legible by icon/text shadows. Control pad is a 2-column grid that lifts above the soft keyboard via the `--kb` variable. `touch-action: none` everywhere.
+| File | Tier | One line |
+|------|------|----------|
+| `index.html` | Standard | page shell — canvas, corner buttons, D-pad groups, wheel, keyboard capture — [about](__about/index.md) |
+| `install.html` | Standard | Android install funnel (Install → Open the app) — the only page a plain Android browser ever sees — [about](__about/install.md) |
+| `style.css` | Algorithmic | design tokens + every component's visual rules — [about](__about/style.md) · [flow](__flow/style.md) |
+| `load_test.js` | Standard | dev harness — concatenates and executes the 6 client scripts below, in load order, against a stubbed DOM to catch load-time errors — [about](__about/load_test.md) |
+| `state.js` | Standard | tunables + shared state + `setStatus`/`toCanvasPx`/`send` — loads 1st — [about](__about/state.md) |
+| `render.js` | Algorithmic | canvas drawing, view transform, dual-mode (H.264 MSE / JPEG) frame decode — loads 2nd — [about](__about/render.md) · [flow](__flow/render.md) |
+| `input-geometry.js` | Algorithmic | finger→PC coordinate mapping, cursor-offset calibration, scroll inertia — loads 3rd — [about](__about/input-geometry.md) · [flow](__flow/input-geometry.md) |
+| `controls.js` | Algorithmic | on-screen chrome: keyboard capture, anywhere wizard, update banner, upload, D-pad groups, wheel, corner buttons, toast — loads 4th — [about](__about/controls.md) · [flow](__flow/controls.md) |
+| `gestures.js` | Algorithmic | canvas pointer-event dispatch: pinch-zoom + the single-finger touchMode gestures — loads 5th — [about](__about/gestures.md) · [flow](__flow/gestures.md) |
+| `connection.js` | Algorithmic | WebSocket lifecycle, protocol message handlers, visibility-gated session — loads 6th (starts the page) — [about](__about/connection.md) · [flow](__flow/connection.md) |
 
 ## Connections
 
 ### Uses
-- [Server (folder)](../server/___server.md) — WebSocket endpoint `/ws`, frames in, input out
+- [Server (folder)](../server/___server.md) — WebSocket endpoint `/ws` (frames in, input out), `/upload` (phone → PC images), `/ping` (anywhere-wizard reachability probe)
 
 ### Used by
-- Served at `/` and `/static` by the [Web Layer](../server/web.md)
+- [Web Layer](../server/__about/web.md) — serves `index.html` or `install.html` at `/` by User-Agent, and every file here at `/static/*` (`StaticFiles` mount)
+- [Tests (folder)](../tests/___tests.md) — `test_input_pipeline.py` drives `index.html` end-to-end in real headless Chromium
+- [Android (folder)](../android/___android.md) — the APK's WebView loads `index.html` (its User-Agent carries the `RemoteUserApp` marker, so it never gets the install funnel)
 
 ## Design Decisions
 
-- **Letterbox-aware coordinate mapping** — touches are mapped through the drawn image rect (including the zoom/pan transform), so normalized coordinates stay correct regardless of tablet aspect ratio; touches on the padding are ignored.
-- **The finger steers, buttons act** (owner decision 2026-07-22, hardened 2026-07-26) — the default gesture only moves the PC cursor; **left AND right clicks are explicit buttons** (`click {button}` at the current cursor position; twice fast = double click). NOTHING on the canvas acts on a tap — with the offset pointer a tap would land away from the fingertip. Toggle modes (drag / scroll) change what one finger does; two fingers always pinch — zooming can never leak a click to the PC. No long-press timers, no tap ambiguity.
-- **The pointer rides a fixed handedness diagonal** — up-left of the finger for right-handed users, up-right for left-handed (`config.hand`, set in the desktop app's Settings). The screen keeps an offset-sized margin on the far side(s) so the finger can push the pointer all the way to every PC-screen edge.
-- **Buttons fire on pointerup + a pointercancel rescue** — Android ends edge-zone touches with `pointercancel`, so an up-only tap handler silently never ran on the real device (every control dead, the code looked correct). A cancel with near-zero travel is the stolen tap and still fires; a cancel after real travel is a system home/back swipe and never acts (down-firing alone was wrong: touch grants user activation — needed by the file picker and IME — only at UP, and it turned system gestures into PC actions). The end-to-end gate in [Tests (folder)](../tests/___tests.md) locks both cases in.
-- **Ghost-pointer self-heal** — a lost `pointerup` (Android WebView under system gestures) used to freeze all input into phantom "pinches" until refresh; every new primary `pointerdown` wipes the pointer state first.
-- **The stream mode is the server's call** — `config` says `h264` (fMP4 chunks appended into MSE, the video drawn onto the canvas every animation frame) or `jpeg` (bitmap per message). All gesture/zoom/coordinate logic is mode-independent; only the pixels' source differs.
-- **Virtual cursor** — capture never contains the PC pointer; the server streams its position and the client draws a fixed-size arrow through the same view transform as the image.
-- **Region streaming (JPEG mode only)** — when zoomed, the client reports its visible region and receives native-resolution crops instead of upscaled downsampled frames; bandwidth stays constant, zoom stays sharp. In H.264 mode inter-frame compression already makes the full frame cheap, so the client never sends `viewport`.
-- **Visibility-gated session** (owner security decision) — the socket closes the moment the page is hidden (tab switch, screen lock) and reconnects on return; the PC is never controllable while the owner isn't looking.
-- **Token from the URL** (`?token=…`, delivered by the QR code) is sent as the first WebSocket message — the server accepts nothing before it.
-- **Guided "anywhere access" wizard** (owner principle: the app explains every step, never a human): when the server reports a `tailscale_url` and the page runs on the home address, a banner offers a one-time in-page wizard — Google Play deep link for the Tailscale app, a sign-in step, then the page polls `/ping` on the Tailscale address and hands over the permanent works-anywhere link the moment the phone joins. The banner auto-appears **once per device** (localStorage — owner 2026-07-26: "ok once, not constantly"); the wizard stays reachable via Settings → Anywhere. Once the page runs on the Tailscale address the banner never shows.
-- **Auto-reconnect** — instantly on return to the page (`visibilitychange`/`pageshow`, and any send on a dead socket), plus a 2 s watchdog; the status pill is the only UI chrome.
+- **No framework, no build step** — plain HTML/CSS/JS the WebView (and any
+  desktop browser, for dev) loads directly; `load_test.js` is the only
+  tooling, and it is run manually (`node client/load_test.js`), never a
+  bundler step.
+- **Android browsers get funneled, never the client directly** (owner rule —
+  no half-working browser sessions on a phone): the server routes plain
+  Android User-Agents to [Install Funnel](__about/install.md), and only the
+  APK's WebView or a desktop browser reaches [Page Shell](__about/index.md).
+  See [Web Layer](../server/__about/web.md) for the routing logic.
+- **`install.html` is self-contained on purpose** — its own inline
+  `<style>`/`<script>`, no dependency on `style.css` or any of the client
+  scripts: the one page an app-less phone can reach must never break because
+  of a mismatch elsewhere in the client.
+- **File-specific behavior is documented with its file, not duplicated here**
+  — the gesture model (finger steers, buttons act), the cursor's fixed
+  handedness diagonal, letterbox-aware coordinate mapping, the pointerup +
+  pointercancel button rescue (locked in by [Tests (folder)](../tests/___tests.md)),
+  ghost-pointer self-heal, H.264/JPEG rendering, virtual-cursor drawing,
+  region streaming, the visibility-gated session, and the guided "anywhere
+  access" wizard were all one `app.js` file (1,174 lines) — split (god-file
+  refactor, THE STRUCTURE LAW) into the 6 `state.js`/`render.js`/
+  `input-geometry.js`/`controls.js`/`gestures.js`/`connection.js` files above,
+  each documented individually. Visual-only decisions (see-through buttons,
+  the `--kb`/`--vtop` viewport variables) are in [Style](__about/style.md).
+- **The 6 client scripts share ONE global scope, on purpose** — classic
+  (non-module) `<script>` tags loaded in the exact order `index.html` lists
+  them, which is semantically identical to one concatenated file. This
+  preserves `app.js`'s original behavior with zero change while splitting it
+  into cohesive, independently readable modules; the order is load-bearing
+  (`controls.js` calls `keepFocus` before its own definition, relying on
+  function hoisting scoped to that one file — see
+  [Controls](__about/controls.md)). `load_test.js` must be kept in sync with
+  `index.html`'s script order — both list the same 6 files.
+- **One CSS inconsistency noticed while documenting, flagged not fixed:**
+  `body.hidden-controls` hides most of the chrome in one grouped block at the
+  end of `style.css`, but `#update-banner`'s own `body.hidden-controls`
+  rule is declared next to its component block instead — see
+  [Style (flow)](__flow/style.md) for exactly where. Harmless today (both
+  rules fire), but a future edit to the grouped block alone would miss it.

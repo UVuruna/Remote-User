@@ -1,0 +1,124 @@
+// WebSocket connection lifecycle: connect/reconnect, the `config`/`cursor`/
+// `actions`/`toast` message handlers, visibility-gated session, and the
+// initial connect() call. Loads LAST — this is where the page actually
+// starts running. Part of the app.js split. See client/__about/connection.md.
+"use strict";
+
+// --- Connection -----------------------------------------------------------
+
+function connect() {
+  setStatus("connecting", `Connecting to ${location.host}…`);
+  // Every handler guards on `sock === ws`: instant reconnect can replace the
+  // global while an abandoned socket is still CLOSING, and its late onclose
+  // must never tear down the NEW connection's MSE pipeline or status.
+  const sock = new WebSocket(`ws://${location.host}/ws`);
+  ws = sock;
+  sock.binaryType = "arraybuffer";
+
+  sock.onopen = () => {
+    if (sock !== ws) return;
+    sock.send(JSON.stringify({ type: "auth", token }));
+    lastSentViewport = { x: 0, y: 0, w: 1, h: 1 };
+    scheduleViewport();
+    setStatus("connected", "Connected");
+  };
+
+  sock.onmessage = (e) => {
+    if (sock !== ws) return;
+    if (typeof e.data === "string") {
+      const msg = JSON.parse(e.data);
+      if (msg.type === "config") {
+        // Full view reset — sent after auth and after every stream (re)start
+        // (monitor switch, H.264 session reset).
+        monitor = { w: msg.monitor_width, h: msg.monitor_height };
+        hand = msg.hand === "left" ? "left" : "right";
+        const newMode = msg.stream || "jpeg";
+        if (newMode !== streamMode) showToast(newMode === "h264" ? "H.264 stream" : "JPEG stream");
+        streamMode = newMode;
+        tailscaleUrl = msg.tailscale_url || null;
+        if (IN_APP && window.Android.setTailscaleUrl) {
+          // The shell stores the works-anywhere address (fresh token included)
+          // and probes it on every start — the app then connects on mobile
+          // data too, not only on the home Wi-Fi.
+          window.Android.setTailscaleUrl(tailscaleUrl || "");
+        }
+        updateAnywhereBanner();
+        refreshUpdateBanner(msg.app_version);
+        view = { scale: 1, tx: 0, ty: 0 };
+        detailRegion = { x: 0, y: 0, w: 1, h: 1 };
+        if (baseBitmap) { baseBitmap.close(); baseBitmap = null; }
+        if (detailBitmap) { detailBitmap.close(); detailBitmap = null; }
+        lastSentViewport = { x: 0, y: 0, w: 1, h: 1 };
+        cursorPos = null;
+        if (streamMode === "h264") initMse(msg.codec);
+        else teardownMse();
+        computeBaseRect();
+        redraw();
+      } else if (msg.type === "cursor") {
+        cursorPos = { x: msg.x, y: msg.y };
+        if (streamMode !== "h264") redraw(); // h264 redraws every rAF anyway
+      } else if (msg.type === "actions") {
+        categories = msg.categories || [];
+        groups.left = Math.min(msg.left ?? 0, categories.length - 1);
+        groups.right = Math.min(msg.right ?? 0, categories.length - 1);
+        renderGroup("left");
+        renderGroup("right");
+      } else if (msg.type === "toast") {
+        showToast(msg.text);
+      }
+    } else if (streamMode === "h264") {
+      mseQueue.push(e.data);
+      pumpMse();
+    } else {
+      onFrame(e.data);
+    }
+  };
+
+  sock.onclose = (e) => {
+    if (sock !== ws) return; // an abandoned socket must not touch the live one
+    teardownMse(); // free the decoder; reconnect starts a fresh stream
+    if (e.code === 4401) {
+      // The token is refused — retrying with the same one only hammers the
+      // server and stomps this message every 2 s. Stop until re-paired.
+      authRejected = true;
+      if (IN_APP) {
+        // In the APK the fix is one tap — the shell reopens the QR scanner.
+        setStatus("disconnected", "Link expired — tap here to scan the new QR");
+        // pointerup, not click: the pill sits at the top edge where the
+        // system's bar-peek swipe can eat the click's touch sequence.
+        statusEl.addEventListener("pointerup", () => window.Android.rescan(), { once: true });
+        return;
+      }
+      setStatus("disconnected", "Invalid token — scan the fresh QR on the PC");
+      return;
+    }
+    setStatus(
+      "disconnected",
+      document.hidden ? "Paused — screen away" : `Disconnected (code ${e.code}) — retrying…`
+    );
+  };
+}
+
+let authRejected = false;
+
+function ensureConnected() {
+  if (document.hidden || authRejected) return;
+  if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
+  connect();
+}
+
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) {
+    if (ws) ws.close();
+  } else {
+    // Reconnect the moment the user comes back (app switch, image picker,
+    // screen unlock) — waiting out the retry interval swallowed the first
+    // taps and read as "input randomly dies".
+    ensureConnected();
+  }
+});
+window.addEventListener("pageshow", ensureConnected);
+
+setInterval(ensureConnected, RECONNECT_MS);
+
+connect();
