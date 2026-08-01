@@ -1,45 +1,46 @@
 # gui/
 
 The desktop face of Remote User: a PySide6 window + tray icon around the
-[Server Core](../server_core.md). This is what the installed EXE runs
-(entry point: `server/gui_main.py`); the CLI (`server/main.py`) stays for dev.
-
-Design follows root DESIGN.md (dark-first, soft depth, one accent) with the
-same slate/cyan palette as the web client — one product, one look.
+[Server Core](../__about/server_core.md). This is what the installed EXE runs (entry
+point: `server/gui_main.py`, documented under [Server (folder)](../___server.md));
+the CLI (`server/main.py`) stays for dev. Design follows root DESIGN.md
+(dark-first, soft depth, one accent) with a palette shared with the web
+client (see [Theme](__about/theme.md) for the verified overlap).
 
 ## Files
 
-### `../gui_main.py` — Desktop Entry Point
-Bootstrap (DPI → logging → settings) BEFORE Qt and server imports, then
-QApplication + window + controller. `--minimized` starts hidden in the tray
-(the installer's autostart entry uses it); the server always starts on launch.
-Quit lives in the tray menu — closing the window only hides it.
-
-### `main_window.py` — Main Window + Tray
-Status pill, pairing QR card, settings card, Start/Stop, Tailscale helper,
-tray icon. See [Main Window](main_window.md).
-
-### `theme.py` — Design Tokens + QSS
-All colors/radii/typography in one place (root Rule #4). See [Theme](theme.md).
+| File | Tier | One line |
+|------|------|----------|
+| `main_window.py` | Algorithmic | window shell, tray, layout, wiring — [about](__about/main_window.md) · [flow](__flow/main_window.md) |
+| `theme.py` | Algorithmic | design tokens + QSS + effect helpers — [about](__about/theme.md) · [flow](__flow/theme.md) |
+| `__init__.py` | Trivial | package marker; one-line docstring naming `gui_main.py` as the entry point |
 
 ## Connections
 
 ### Uses
-- [Server Core](../server_core.md) — start/stop/state/info
-- [Pairing](../pairing.md) — QR PNG bytes
-- [Config](../config.md) — current values + `save_user_settings()`
+- [Server Core](../__about/server_core.md) — `ServerController`: start/stop/state/info
+- [Pairing](../__about/pairing.md) — QR PNG bytes, Tailscale executable/URL lookup
+- [Config](../__about/config.md) — current settings, `save_user_settings()`, `app_version()`
+- [Updates](../__about/updates.md) — startup GitHub-release check for the Update button
+- [Screen Capture](../__about/capture.md) — monitor count for the settings combo
+- [Client (folder)](../../client/___client.md) — `theme.py`'s palette is
+  deliberately the same slate/cyan family as `client/style.css` (verified
+  token-by-token in [Theme](__about/theme.md))
 
 ### Used by
-- The installed EXE (`RemoteUser.exe` → `gui_main.py`); dev: `python server/gui_main.py`
+- The installed EXE (`RemoteUser.exe` → `gui_main.py`); dev:
+  `python server/gui_main.py`. `gui_main.py` itself lives one level up and is
+  documented in [Server (folder)](../___server.md) — it has no dedicated
+  `__about`/`__flow` pair of its own.
 
 ## Design Decisions
 
 - **The GUI never blocks**: start/stop/restart run on worker threads; a 1 s
-  QTimer polls controller state. A `_busy` flag gates the buttons meanwhile.
+  `QTimer` polls controller state. A `_busy` flag gates the buttons meanwhile.
 - **Close = hide to tray** (server keeps running); a one-time balloon explains
   it. Quit is explicit, in the tray menu.
 - **Settings apply = save + restart**: values persist to the user settings
-  file (see [Config](../config.md)) and the server restarts to pick them up —
+  file (see [Config](../__about/config.md)) and the server restarts to pick them up —
   no half-applied state.
 - **Tailscale guidance is three explicit states** (owner principle, 2026-07-22:
   non-technical users must never puzzle over a third-party screen — our window
@@ -55,3 +56,7 @@ All colors/radii/typography in one place (root Rule #4). See [Theme](theme.md).
   without a Tailscale address the state is re-checked every few seconds, so
   the hints flip to "connected" the moment the sign-in completes — no restart
   (the server already listens on all interfaces).
+- **All colors/radii live in `theme.py` only** (root Rule #4) — no component
+  code hardcodes a literal; see [Theme](__about/theme.md) for the token tree
+  and its verified (and one honestly-noted un-verified) overlap with the web
+  client's palette.
