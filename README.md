@@ -136,6 +136,8 @@ The CLI prints the pairing URL and a QR (console + image viewer). Dev note: H.26
     🖼️ logo.svg
   📁 server/           ← Python PC server
     📝 ___server.md    ← Server documentation entry point
+    📁 __about/        ← what each file does + connections
+    📁 __flow/         ← Algorithmic-tier files' diagrams + pseudocode
     🐍 gui_main.py     ← Desktop app entry (window + tray)
     🐍 main.py         ← Headless CLI entry
     🐍 bootstrap.py
@@ -149,18 +151,29 @@ The CLI prints the pairing URL and a QR (console + image viewer). Dev note: H.26
     🐍 pairing.py
     🐍 monitors.py
     🐍 clipboard.py
-    📁 gui/            ← PySide6 window, tray, theme
-  📁 client/           ← Web client served to the tablet
+    📁 gui/            ← PySide6 window, tray, theme (own __about/__flow)
+  📁 client/           ← Web client served to the tablet — no framework, no build step
     📝 ___client.md    ← Client documentation entry point
-    📄 index.html
-    📄 app.js
+    📁 __about/        ← what each file does + connections
+    📁 __flow/         ← Algorithmic-tier files' diagrams + pseudocode
+    📄 index.html      ← page shell (desktop browsers + the Android app's WebView)
+    📄 install.html    ← Android-browser install funnel
+    📄 state.js        ← client script 1/6 — tunables + shared state
+    📄 render.js       ← client script 2/6 — canvas drawing, H.264/JPEG decode
+    📄 input-geometry.js ← client script 3/6 — coordinate mapping, cursor calibration
+    📄 controls.js     ← client script 4/6 — keyboard, wizard, D-pad, wheel, toast
+    📄 gestures.js     ← client script 5/6 — pointer-event dispatch, pinch zoom
+    📄 connection.js   ← client script 6/6 — WebSocket lifecycle, protocol handlers
     📄 style.css
+    📄 load_test.js    ← dev harness — load-order smoke test
   📁 android/          ← Android app (native shell + WebView on the client)
     📝 ___android.md
+    📁 __about/ · 📁 __flow/
   📁 tests/            ← End-to-end regression gates (run by the build)
     📝 ___tests.md
   📁 setup/            ← Build pipeline (installer with bundled deps + APK)
     📝 ___setup.md
+    📁 __about/ · 📁 __flow/
 ```
 
 <a id="documentation"></a>
