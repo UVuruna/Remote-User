@@ -27,8 +27,8 @@ import sys
 from dataclasses import dataclass, fields
 from pathlib import Path
 
+# ═══════════════════════════ PATHS & RUNTIME MODE ═══════════════════════════
 logger = logging.getLogger(__name__)
-
 FROZEN = getattr(sys, "frozen", False)
 PROJECT_ROOT = Path(sys.executable).parent if FROZEN else Path(__file__).resolve().parent.parent
 BUNDLE_DIR = Path(getattr(sys, "_MEIPASS", PROJECT_ROOT))  # onedir: <app>/_internal
@@ -45,6 +45,7 @@ USER_ADJUSTABLE = {
 }
 
 
+# ═══════════════════════════ DEFAULT-VALUE HELPERS ═══════════════════════════
 def _default_ffmpeg() -> str:
     if FROZEN:
         bundled = PROJECT_ROOT / "ffmpeg" / "ffmpeg.exe"
@@ -62,6 +63,7 @@ def _default_actions() -> Path:
     return PROJECT_ROOT / "actions.json"
 
 
+# ═══════════════════════════ SETTINGS TABLE ═══════════════════════════
 @dataclass(frozen=True)
 class Settings:
     # Network
@@ -162,6 +164,7 @@ class Settings:
     update_check: bool = True
 
 
+# ═══════════════════════════ VERSION ═══════════════════════════
 def app_version() -> str:
     """The running app's version from setup/app_info.json (bundled next to
     the exe). "dev" when the file is missing — an unpackaged checkout."""
@@ -172,6 +175,7 @@ def app_version() -> str:
         return "dev"
 
 
+# ═══════════════════════════ SHARED INSTANCE & MUTATION ═══════════════════════════
 SETTINGS = Settings()
 
 
@@ -184,6 +188,7 @@ def apply(**changes) -> None:
         object.__setattr__(SETTINGS, key, value)
 
 
+# ═══════════════════════════ USER SETTINGS I/O ═══════════════════════════
 def _coerced(key: str, value):
     """Validates a user-file override against the dataclass field type.
     Returns the coerced value, or None when the value is unusable.
