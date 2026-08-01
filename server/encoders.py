@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 
 CREATE_NO_WINDOW = 0x08000000
 
+# ═══════════════════════════ PER-ENCODER ARGUMENT TABLE ═══════════════════════════
 # Per-encoder low-latency argument sets. Each hardware family names its knobs
 # differently; libx264 uses zerolatency. Kept here so the streamer stays generic.
 _ENCODER_ARGS = {
@@ -26,6 +27,7 @@ _ENCODER_ARGS = {
 }
 
 
+# ═══════════════════════════ DETECTION ═══════════════════════════
 def _listed_encoders() -> set[str]:
     """Encoders ffmpeg was built with (a name here is necessary but not sufficient)."""
     try:

@@ -46,6 +46,7 @@ SM_YVIRTUALSCREEN = 77
 SM_CXVIRTUALSCREEN = 78
 SM_CYVIRTUALSCREEN = 79
 
+# ═══════════════════════════ MOUSE/KEY MAPPING TABLES ═══════════════════════════
 BUTTON_FLAGS = {
     "left": (MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP),
     "right": (MOUSEEVENTF_RIGHTDOWN, MOUSEEVENTF_RIGHTUP),
@@ -86,6 +87,7 @@ MODIFIER_VKS = {
 }
 
 
+# ═══════════════════════════ WIN32 STRUCTURES & INJECTION ═══════════════════════════
 def vk_for_key(token: str) -> int | None:
     """Virtual-key code for a single chord token (letter, digit, F-key, or name)."""
     token = token.lower()

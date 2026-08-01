@@ -9,6 +9,7 @@ color or radius.
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import QGraphicsDropShadowEffect, QWidget
 
+# ═══════════════════════════ DESIGN TOKENS ═══════════════════════════
 TOKENS = {
     # Surfaces (elevation steps lighter, never flat gray)
     "surface0": "#0F172A",
@@ -35,6 +36,7 @@ TOKENS = {
 # (modern Win11 face) when Inter is not installed on the machine.
 FONT_STACK = '"Inter", "Segoe UI Variable Display", "Segoe UI", sans-serif'
 
+# ═══════════════════════════ STYLESHEET (QSS) ═══════════════════════════
 QSS = """
 QWidget {{
     background: {surface0};
@@ -136,6 +138,7 @@ QToolTip {{
 """.format(font=FONT_STACK, **TOKENS)
 
 
+# ═══════════════════════════ HELPERS ═══════════════════════════
 def card_shadow(widget: QWidget) -> None:
     """Soft ambient card shadow per DESIGN.md — Qt's defaults ARE the dated
     look (blur 1, offset 8/8), so parameters are always set explicitly."""
