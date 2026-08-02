@@ -102,6 +102,12 @@ no mouse and keyboard.
   from the layout (identical to removing it via the phone); moving/resizing a
   member does NOT break the layout — the server tracks the live window and
   recomputes the crop at focus time.
+- **Two devices, one at a time** (owner 2026-08-02): the owner alternates
+  between a tablet and a phone, whose screens differ — so window dimensions
+  saved on the PC cannot fit both. At app open the layouts ADAPT to the
+  connecting device (its aspect/size re-drives the member-window sizing), and
+  simultaneous use is forbidden: opening the app on one device closes the
+  session on the other.
 - **`next_input` command:** UIA-cycled focus through TEXT-INPUT fields only,
   scoped to what is visible — full desktop view → fields of all visible
   windows; layout focus → only that window's fields. Built for the
