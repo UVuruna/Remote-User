@@ -40,3 +40,10 @@ was removed — the pointer sits under the finger); `config.hand` stays a
 legacy field the server still sends and nobody reads. Frame rate gained a
 "10 fps — light" choice. An old settings.json carrying "hand" is ignored on
 load with a warning (documented non-fatal path).
+
+## apk_version (owner bug 2026-08-02)
+`apk_version()` reads the `RemoteUser.apk.version` sidecar (written by
+`build_apk.py`, bundled by `build.py`) — the version of the APK this server
+serves at /app.apk. The phone's update banner compares against THIS, not
+`app_version()`: the APK does not change with desktop-only releases, and the
+old comparison offered a phantom update forever.

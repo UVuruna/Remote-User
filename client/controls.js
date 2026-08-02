@@ -308,10 +308,13 @@ function isNewer(server, app) {
   return false;
 }
 
-function refreshUpdateBanner(serverVersion) {
+function refreshUpdateBanner(apkVersion) {
+  // Compare against the APK the PC actually SERVES (config.apk_version) —
+  // comparing against the server version offered phantom updates whenever a
+  // release changed only the desktop side (owner bug 2026-08-02).
   updateBanner.hidden = !(
     IN_APP && window.Android.appVersion && window.Android.update &&
-    serverVersion && isNewer(serverVersion, window.Android.appVersion())
+    apkVersion && isNewer(apkVersion, window.Android.appVersion())
   );
 }
 
@@ -524,43 +527,53 @@ const GRID_CELLS = { "2x1": 2, "1x2": 2, "2x2": 4 };
 let creating = null; // {source, entries, slots, mode, grid, orient, awaitingTap}
 let loadingTimer = null;
 
-// Cube face order is the owner's spec: start on top, then the adjacent side
-// each time — top → left → back → right → front → bottom — and loop. The
-// server's layout_progress (one per window it creates) drives the turns.
-const CUBE_ORDER = ["top", "left", "back", "right", "front", "bottom"];
-const CUBE_TURN = {
-  top: "rotateX(-90deg)",
-  left: "rotateY(90deg)",
-  back: "rotateY(180deg)",
-  right: "rotateY(-90deg)",
-  front: "rotateX(0deg)",
-  bottom: "rotateX(90deg)",
-};
+// The cube spins CONTINUOUSLY while the overlay is up — tilted corner view
+// in orthographic projection, so it always reads as a real cube (owner
+// sketch 2026-08-02). Every layout_progress (one per window the server
+// creates) injects a momentum burst: each new window visibly whips it
+// onward, decaying back to the idle spin.
 const layCube = document.getElementById("lay-cube");
-let cubeIndex = 0;
+const CUBE_BASE_SPEED = 70;  // deg/s idle spin
+const CUBE_BURST = 300;      // extra degrees granted per created window
+let cubeAngle = 40;
+let cubeBurst = 0;
+let cubeRaf = null;
+let cubeLast = 0;
 
-function cubeShow(face) {
-  layCube.style.transform = CUBE_TURN[face];
+function cubeFrame(now) {
+  const dt = Math.min(100, now - cubeLast) / 1000;
+  cubeLast = now;
+  const burstSpeed = Math.min(cubeBurst * 3, 720);
+  cubeAngle = (cubeAngle + (CUBE_BASE_SPEED + burstSpeed) * dt) % 360;
+  cubeBurst = Math.max(0, cubeBurst - burstSpeed * dt);
+  layCube.style.transform = `rotateX(-28deg) rotateY(${cubeAngle}deg)`;
+  cubeRaf = requestAnimationFrame(cubeFrame);
 }
 
 function cubeNext() {
-  cubeIndex = (cubeIndex + 1) % CUBE_ORDER.length;
-  cubeShow(CUBE_ORDER[cubeIndex]);
+  cubeBurst += CUBE_BURST;
 }
 
 function showLayLoading(text) {
   layLoading.querySelector("span").textContent = text || "Working…";
   layLoading.hidden = false;
-  cubeIndex = 0;
-  cubeShow("top");
+  cubeBurst = 0;
+  if (!cubeRaf) {
+    cubeLast = performance.now();
+    cubeRaf = requestAnimationFrame(cubeFrame);
+  }
   clearTimeout(loadingTimer);
-  loadingTimer = setTimeout(() => { layLoading.hidden = true; }, 40000);
+  loadingTimer = setTimeout(hideLayLoading, 40000);
 }
 
 function hideLayLoading() {
   clearTimeout(loadingTimer);
   loadingTimer = null;
   layLoading.hidden = true;
+  if (cubeRaf) {
+    cancelAnimationFrame(cubeRaf);
+    cubeRaf = null;
+  }
 }
 
 function refreshNewlayButton() {

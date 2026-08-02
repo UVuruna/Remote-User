@@ -42,7 +42,7 @@ import monitors
 import pairing
 import uia
 import window_manager
-from config import SETTINGS, app_version
+from config import SETTINGS, apk_version, app_version
 from input_injector import BUTTON_FLAGS, InputInjector
 
 logger = logging.getLogger(__name__)
@@ -387,9 +387,12 @@ async def _send_config(ws: WebSocket, stream, token: str, codec: str | None = No
         "stream": stream.mode,
         "hand": SETTINGS.hand,
         "tailscale_url": f"http://{ts_ip}:{SETTINGS.port}/?token={token}" if ts_ip else None,
-        # The phone's update source is THIS PC, never the internet: the shell
-        # compares this against its own version and offers /app.apk.
+        # The phone's update source is THIS PC, never the internet. The
+        # banner compares against apk_version — the version of the APK this
+        # server actually serves (app_version nagged forever on desktop-only
+        # releases); app_version stays for display/diagnostics.
         "app_version": app_version(),
+        "apk_version": apk_version(),
     }
     if codec:
         payload["codec"] = codec

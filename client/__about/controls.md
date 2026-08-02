@@ -108,3 +108,11 @@ colored faces (top gold, bottom purple-gray, left azure, right orange, front
 green, back red); each `layout_progress` (one per window the server creates)
 turns it to the next face — top → left → back → right → front → bottom, loop.
 The source chooser carries the owner's two icons (clipboard list / window+).
+
+## Polish round (owner feedback 2026-08-02, evening)
+Source-chooser buttons are large rounded SQUARES (matching the card's radius
+— the pill radius had turned them into label-clipping circles). The cube now
+spins CONTINUOUSLY in orthographic projection (no perspective, tilted corner
+view — always reads as a cube); each `layout_progress` injects a decaying
+momentum burst instead of a discrete face jump. The update banner compares
+against `config.apk_version` — the APK the PC actually serves.

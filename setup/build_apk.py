@@ -124,6 +124,12 @@ def build(env: dict, password: str) -> Path:
     if not apk.exists():
         print(f"  ERROR: APK not found at {apk}")
         sys.exit(1)
+    # Sidecar: the version THIS apk was built as. The server sends it to the
+    # phone (`config.apk_version`) so the update banner compares against the
+    # APK it actually serves — comparing against the SERVER version nagged
+    # forever whenever a release changed only the desktop side (owner bug
+    # report 2026-08-02: "constantly offers an update I already installed").
+    apk.with_name(apk.name + ".version").write_text(version, encoding="utf-8")
     return apk
 
 
@@ -138,6 +144,8 @@ def main() -> None:
     DIST_DIR.mkdir(exist_ok=True)
     target = DIST_DIR / "RemoteUser.apk"
     shutil.copy2(apk, target)
+    shutil.copy2(apk.with_name(apk.name + ".version"),
+                 DIST_DIR / "RemoteUser.apk.version")
     print(f"  {target} ({target.stat().st_size / 1e6:.1f} MB)")
     print("  The server now offers it at /app.apk (Android browsers get the install funnel).")
 

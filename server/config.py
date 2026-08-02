@@ -181,6 +181,18 @@ def app_version() -> str:
         return "dev"
 
 
+def apk_version() -> str:
+    """Version of the APK this server actually serves at /app.apk (sidecar
+    written by build_apk.py, bundled by build.py). Falls back to the app
+    version for trees without the sidecar. The phone's update banner MUST
+    compare against this, not the server version — the APK does not change
+    with desktop-only releases (owner bug 2026-08-02: eternal update offer)."""
+    try:
+        return Path(str(SETTINGS.apk_path) + ".version").read_text(encoding="utf-8").strip()
+    except OSError:
+        return app_version()
+
+
 # ═══════════════════════════ SHARED INSTANCE & MUTATION ═══════════════════════════
 SETTINGS = Settings()
 

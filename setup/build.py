@@ -285,6 +285,12 @@ def build_pyinstaller() -> Path:
     if ANDROID_APK.exists():
         shutil.copy2(ANDROID_APK, app_dir / "RemoteUser.apk")
         shutil.copy2(ANDROID_APK, DIST_DIR / "RemoteUser.apk")  # dev server serves this one
+        # The sidecar version rides along — config.apk_version tells the
+        # phone what /app.apk actually is (update-banner truth).
+        apk_ver = ANDROID_APK.with_name(ANDROID_APK.name + ".version")
+        if apk_ver.exists():
+            shutil.copy2(apk_ver, app_dir / "RemoteUser.apk.version")
+            shutil.copy2(apk_ver, DIST_DIR / "RemoteUser.apk.version")
         print("  Bundled the phone app (RemoteUser.apk)")
     else:
         print("  NOTE: no phone APK found (run setup/build_apk.py) — shipping without it")
