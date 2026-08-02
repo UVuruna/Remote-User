@@ -124,14 +124,16 @@ no mouse and keyboard.
   connecting device (its aspect/size re-drives the member-window sizing), and
   simultaneous use is forbidden: opening the app on one device closes the
   session on the other.
-- **`next_input` command:** UIA-cycled focus through TEXT-INPUT fields only,
-  scoped to what is visible — full desktop view → fields of all visible
-  windows; layout focus → only that window's fields. Built for the
-  dictation-first workflow (IME ↵ already = new row; real Enter is a D-pad
-  button).
-- Related, smaller: a **quality setting** — full signal vs reduced
-  resolution/fps (~10), applied always or only on mobile data (the shell
-  already watches transport changes).
+- **`next_input` command** *(shipped 2026-08-02, step 3)*: UIA-cycled focus
+  through TEXT-INPUT fields only (Edit/Document elements), scoped to what is
+  visible — full desktop view → fields of all visible windows; layout focus →
+  only that layout's members. Built for the dictation-first workflow (IME ↵
+  already = new row; real Enter is a D-pad button).
+- **Quality setting** *(shipped 2026-08-02, step 3)*: the `quality` action
+  cycles full → reduced (half resolution, ~10 fps, low bitrate — per client,
+  in its own ffmpeg) → auto (reduced only on mobile data via the shell's
+  `Android.transport()` bridge); the choice persists on the device and is
+  restated on every connect.
 
 ### Probe results (2026-08-02, Windows build 26200, elevated server)
 

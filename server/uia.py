@@ -170,6 +170,68 @@ def tab_at(mon_rect: tuple[int, int, int, int], nx: float, ny: float) -> dict | 
 
 
 # ---------------------------------------------------------------------------
+# next_input — cycle keyboard focus through text-input fields
+
+def focus_next_input(scope_hwnds: list[int] | None) -> str | None:
+    """Move keyboard focus to the NEXT text-input field (Edit/Document
+    elements), ordered top-to-bottom then left-to-right. Scope (owner spec):
+    layout focus → only that layout's member windows; full desktop → every
+    visible (non-minimized) window. Returns a short label for the toast, or
+    None when no field exists. Blocking — call via to_thread."""
+    with _uia() as auto:
+        if auto is None:
+            return None
+        try:
+            if scope_hwnds:
+                windows = [h for h in scope_hwnds if window_manager.is_alive(h)]
+            else:
+                windows = [w["hwnd"] for w in window_manager.list_windows()
+                           if not user32.IsIconic(w["hwnd"])]
+            fields: list[tuple[int, object]] = []
+            for hwnd in windows:
+                win = auto.ControlFromHandle(hwnd)
+                if win is None:
+                    continue
+                for ct in (auto.ControlType.EditControl, auto.ControlType.DocumentControl):
+                    for c in _find_all(auto, win, ct):
+                        try:
+                            if (c.IsOffscreen or not c.IsEnabled
+                                    or not getattr(c, "IsKeyboardFocusable", True)):
+                                continue
+                            r = c.BoundingRectangle
+                        except Exception:  # noqa: BLE001 — a dying element mid-walk
+                            continue
+                        if r.width() < 20 or r.height() < 10:
+                            continue
+                        fields.append((hwnd, c))
+            if not fields:
+                return None
+            fields.sort(key=lambda f: (f[1].BoundingRectangle.top,
+                                       f[1].BoundingRectangle.left))
+            focused_id = None
+            try:
+                focused_id = tuple(auto.GetFocusedControl().Element.GetRuntimeId())
+            except Exception:  # noqa: BLE001 — nothing focused is normal
+                pass
+            idx = -1
+            if focused_id:
+                for i, (_, c) in enumerate(fields):
+                    try:
+                        if tuple(c.Element.GetRuntimeId()) == focused_id:
+                            idx = i
+                            break
+                    except Exception:  # noqa: BLE001
+                        continue
+            hwnd, nxt = fields[(idx + 1) % len(fields)]
+            window_manager.raise_window(hwnd)
+            nxt.SetFocus()
+            return nxt.Name or window_manager.window_at_hwnd(hwnd)["title"]
+        except Exception as e:  # noqa: BLE001 — must fail soft
+            logger.warning("next_input failed: %s", e)
+            return None
+
+
+# ---------------------------------------------------------------------------
 # Extraction
 
 def _find_all(auto, control, control_type):

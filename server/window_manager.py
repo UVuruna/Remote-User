@@ -309,14 +309,30 @@ def place_window(hwnd: int, rect: tuple[int, int, int, int]) -> None:
 
 
 def raise_window(hwnd: int) -> None:
-    """Bring to front + give focus. Windows refuses SetForegroundWindow to
-    background processes under some timing — the standard Alt-nudge unlocks
-    it; we run elevated, so this combination is reliable in practice."""
+    """Bring to front + give focus. Windows refuses SetForegroundWindow to a
+    background process under some timings (a freshly created layout stayed
+    BEHIND — owner report 2026-08-02), so this stacks every known unlock:
+    explicit z-top first (works regardless of focus rules), then plain
+    SetForegroundWindow, then the AttachThreadInput trick, then the Alt
+    nudge."""
     user32.ShowWindow(hwnd, SW_RESTORE)
-    if not user32.SetForegroundWindow(hwnd):
-        user32.keybd_event(VK_MENU, 0, 0, 0)
-        user32.keybd_event(VK_MENU, 0, KEYEVENTF_KEYUP, 0)
-        user32.SetForegroundWindow(hwnd)
+    user32.SetWindowPos(hwnd, 0, 0, 0, 0, 0,  # HWND_TOP
+                        0x0001 | 0x0002 | 0x0040)  # NOSIZE|NOMOVE|SHOWWINDOW
+    if user32.SetForegroundWindow(hwnd):
+        return
+    fg = user32.GetForegroundWindow()
+    if fg:
+        fg_tid = user32.GetWindowThreadProcessId(fg, None)
+        our_tid = kernel32.GetCurrentThreadId()
+        user32.AttachThreadInput(our_tid, fg_tid, True)
+        user32.BringWindowToTop(hwnd)
+        ok = user32.SetForegroundWindow(hwnd)
+        user32.AttachThreadInput(our_tid, fg_tid, False)
+        if ok:
+            return
+    user32.keybd_event(VK_MENU, 0, 0, 0)
+    user32.keybd_event(VK_MENU, 0, KEYEVENTF_KEYUP, 0)
+    user32.SetForegroundWindow(hwnd)
 
 
 def _cells(region, template: str) -> list[tuple[int, int, int, int]]:

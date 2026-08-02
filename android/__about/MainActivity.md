@@ -90,6 +90,8 @@ The page's only way to reach the shell.
 - `lockOrientation(mode)`: layout focus locks the phone's rotation to the
   layout's chosen orientation (`"portrait"` / `"wide"`), `""` unlocks — the
   full-desktop view rotates freely (owner 2026-08-02)
+- `transport()`: `"cellular"` / `"wifi"` / `""` — the page's auto quality
+  mode reduces the stream only on mobile data (owner spec 2026-08-02)
 
 ### Client (inner class, `WebViewClient`)
 - `shouldOverrideUrlLoading`: keeps navigation to the paired server's own

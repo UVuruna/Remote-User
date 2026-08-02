@@ -26,6 +26,10 @@ const ICONS = {
   x: '<line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/>',
   settings: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.09a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.09a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
   target: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"/>',
+  list: '<rect x="4" y="2.5" width="16" height="19" rx="2"/><rect x="9" y="1" width="6" height="3.5" rx="1"/><path d="m7.5 9 1.2 1.2L11 7.8"/><line x1="13" y1="9" x2="17" y2="9"/><path d="m7.5 14 1.2 1.2L11 12.8"/><line x1="13" y1="14" x2="17" y2="14"/><line x1="13" y1="18" x2="17" y2="18"/>',
+  input: '<rect x="2" y="6" width="20" height="12" rx="2"/><line x1="6" y1="10" x2="6" y2="14"/><path d="m14 10 3 2-3 2"/>',
+  gauge: '<path d="M12 20a8 8 0 1 1 8-8"/><path d="m12 12 5-3"/><path d="M17 17l3 3"/>',
+  newwin: '<rect x="3" y="4" width="18" height="16" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><circle cx="6" cy="6.5" r="0.5" fill="currentColor"/><circle cx="8.5" cy="6.5" r="0.5" fill="currentColor"/><line x1="12" y1="11.5" x2="12" y2="17.5"/><line x1="9" y1="14.5" x2="15" y2="14.5"/>',
   globe: '<circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>',
 };
 
@@ -50,7 +54,53 @@ const BUILTINS = {
   upload:   { label: "Image",  icon: "image",    kind: "upload" },
   calibrate:{ label: "Calibrate", icon: "target", kind: "calibrate" },
   anywhere: { label: "Anywhere", icon: "globe",  kind: "anywhere" },
+  // Phase F+ step 3 (owner spec): UIA-cycled focus through TEXT-INPUT fields
+  // only — full desktop → all visible windows, layout focus → that layout —
+  // built for the dictation-first workflow.
+  next_input: { label: "Next box", icon: "input", kind: "send", msg: { type: "next_input" } },
+  // full → reduced (half res, ~10 fps — saves data) → auto (reduced only on
+  // mobile data, via the shell's transport bridge)
+  quality:  { label: "Quality", icon: "gauge",  kind: "quality" },
 };
+
+// --- Stream quality (Phase F+ step 3) --------------------------------------
+
+function qualityMode() {
+  return localStorage.getItem("qualityMode") || "full";
+}
+
+function transportCellular() {
+  try {
+    return IN_APP && window.Android.transport && window.Android.transport() === "cellular";
+  } catch {
+    return false;
+  }
+}
+
+function effectiveReduced() {
+  const m = qualityMode();
+  return m === "reduced" || (m === "auto" && transportCellular());
+}
+
+function sendQuality() {
+  send({ type: "quality", reduced: effectiveReduced() });
+}
+
+function refreshQualityButtons() {
+  document.querySelectorAll('[data-action="quality"]').forEach((el) =>
+    el.classList.toggle("active", effectiveReduced()));
+}
+
+function cycleQuality() {
+  const order = ["full", "reduced", "auto"];
+  const m = order[(order.indexOf(qualityMode()) + 1) % order.length];
+  localStorage.setItem("qualityMode", m);
+  showToast(m === "full" ? "Quality: full"
+    : m === "reduced" ? "Quality: reduced — saves data"
+    : "Quality: auto — reduced on mobile data");
+  sendQuality();
+  refreshQualityButtons();
+}
 
 // --- Touch-mode toggles ---------------------------------------------------
 
@@ -366,6 +416,8 @@ function makeActionButton(btn, pos) {
       keepFocus(el, () => showToast("Not needed anymore — the pointer is right under your finger"));
     } else if (b.kind === "anywhere") {
       keepFocus(el, openWizard); // the banner shows only once — this is the permanent way in
+    } else if (b.kind === "quality") {
+      keepFocus(el, cycleQuality);
     }
   } else if (btn.chord) {
     el = makeButton("ctl text", null, btn.label || btn.chord);
@@ -393,6 +445,7 @@ function renderGroup(side) {
 
   (cat.buttons || []).slice(0, 4).forEach((btn, i) => host.appendChild(makeActionButton(btn, i)));
   refreshModeButtons();
+  refreshQualityButtons();
   if (keyboardOpen()) {
     host.querySelectorAll('[data-action="keyboard"]').forEach((el) => el.classList.add("active"));
   }
@@ -471,9 +524,35 @@ const GRID_CELLS = { "2x1": 2, "1x2": 2, "2x2": 4 };
 let creating = null; // {source, entries, slots, mode, grid, orient, awaitingTap}
 let loadingTimer = null;
 
+// Cube face order is the owner's spec: start on top, then the adjacent side
+// each time — top → left → back → right → front → bottom — and loop. The
+// server's layout_progress (one per window it creates) drives the turns.
+const CUBE_ORDER = ["top", "left", "back", "right", "front", "bottom"];
+const CUBE_TURN = {
+  top: "rotateX(-90deg)",
+  left: "rotateY(90deg)",
+  back: "rotateY(180deg)",
+  right: "rotateY(-90deg)",
+  front: "rotateX(0deg)",
+  bottom: "rotateX(90deg)",
+};
+const layCube = document.getElementById("lay-cube");
+let cubeIndex = 0;
+
+function cubeShow(face) {
+  layCube.style.transform = CUBE_TURN[face];
+}
+
+function cubeNext() {
+  cubeIndex = (cubeIndex + 1) % CUBE_ORDER.length;
+  cubeShow(CUBE_ORDER[cubeIndex]);
+}
+
 function showLayLoading(text) {
   layLoading.querySelector("span").textContent = text || "Working…";
   layLoading.hidden = false;
+  cubeIndex = 0;
+  cubeShow("top");
   clearTimeout(loadingTimer);
   loadingTimer = setTimeout(() => { layLoading.hidden = true; }, 40000);
 }
@@ -592,15 +671,24 @@ function openSourceChooser() {
   sub.className = "lay-sub";
   sub.textContent = "Where should the windows come from?";
   const row = document.createElement("div");
-  row.className = "lay-row";
-  row.appendChild(layChip("From a list", false, () => {
+  row.className = "lay-row lay-sources";
+  // The two sources carry the owner's icons (clipboard list / window+plus).
+  function sourceBtn(iconName, label, onTap) {
+    const el = document.createElement("button");
+    el.type = "button";
+    el.className = "lay-chip lay-source";
+    el.innerHTML = svg(iconName) + `<span>${label}</span>`;
+    keepFocus(el, onTap);
+    return el;
+  }
+  row.appendChild(sourceBtn("list", "From a list", () => {
     creating = newCreation("list");
     refreshNewlayButton();
     closeLayoutPanel();
     showLayLoading("Collecting windows and tabs…");
     send({ type: "layout_list" });
   }));
-  row.appendChild(layChip("Tap a window", false, () => {
+  row.appendChild(sourceBtn("newwin", "Tap a window", () => {
     creating = newCreation("tap");
     armNextTap();
   }));

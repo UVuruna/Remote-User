@@ -53,3 +53,10 @@ Extraction re-finds the tab BY NAME inside the window after raising it (tabs
 shift; a stale point grabs the wrong one) with the pick point as fallback.
 All waits are trimmed to the working minimum — the owner found the visible
 clicking/choosing too slow.
+
+## Step 3 (owner spec 2026-08-02)
+`focus_next_input(scope_hwnds)` — the `next_input` action: collect Edit +
+Document elements (visible, enabled, keyboard-focusable, sensibly sized) of
+the scope windows (layout members, or every non-minimized window), order them
+top-to-bottom/left-to-right, find the currently focused one by RuntimeId and
+SetFocus the next (raising its window first). Fails soft to None.

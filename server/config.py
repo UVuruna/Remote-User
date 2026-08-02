@@ -97,6 +97,12 @@ class Settings:
     h264_queue_chunks: int = 256    # per-client outbound chunk queue (~4 s at full bitrate); a
                                     # full queue means the client cannot keep up — its session
                                     # is reset instead of building latency
+    # Reduced-quality mode (owner spec 2026-08-02: save mobile data — the
+    # phone chooses full / reduced / auto-on-mobile-data and reports the
+    # effective state; these are the reduced encoder settings):
+    h264_reduced_scale: int = 2     # halve width and height
+    h264_reduced_fps: int = 10
+    h264_reduced_bitrate: str = "1200k"
 
     # Virtual cursor — DXGI capture never includes the mouse pointer, so the
     # server streams the cursor position and the client draws it.

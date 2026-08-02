@@ -62,6 +62,7 @@ class MainActivity : AppCompatActivity() {
     private var connectivity: ConnectivityManager? = null
     private var resolveEpoch = 0 // UI thread only — voids stale resolver threads and timers
     private var onWifi = false // default network carries a Wi-Fi transport (UI thread only)
+    @Volatile private var onCellular = false // for the page's auto quality mode (any thread)
     private var warnedForeignWifi = false
     // Document health: a LIVE page must never be reloaded by the recovery
     // machinery — its own JS reconnects the WebSocket in milliseconds, while
@@ -88,6 +89,7 @@ class MainActivity : AppCompatActivity() {
 
         override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) {
             val wifi = caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
+            onCellular = caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)
             runOnUiThread {
                 if (wifi != onWifi) {
                     onWifi = wifi
@@ -359,6 +361,15 @@ class MainActivity : AppCompatActivity() {
         @JavascriptInterface
         fun appVersion(): String =
             packageManager.getPackageInfo(packageName, 0).versionName ?: "0"
+
+        /** The page's auto quality mode: reduced stream only on mobile data
+         *  (owner spec 2026-08-02). "cellular" / "wifi" / "". */
+        @JavascriptInterface
+        fun transport(): String = when {
+            onCellular -> "cellular"
+            onWifi -> "wifi"
+            else -> ""
+        }
 
         /** Layout focus locks the phone's rotation to the layout's chosen
          *  orientation (owner 2026-08-02); "" unlocks (full-desktop view,

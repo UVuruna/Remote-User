@@ -64,13 +64,17 @@ class H264Session:
     stream is over (stop(), ffmpeg exit, or a stream error) — the web layer
     reacts by opening a fresh session."""
 
-    def __init__(self, source: RawFrameSource, encoder: str, on_data, on_end):
+    def __init__(self, source: RawFrameSource, encoder: str, on_data, on_end,
+                 reduced: bool = False):
         """on_data(bytes) / on_end() are called from the read thread and must
-        be cheap and thread-safe (the web layer bridges them to asyncio)."""
+        be cheap and thread-safe (the web layer bridges them to asyncio).
+        reduced = the client asked for the data-saving stream (half
+        resolution, ~10 fps, low bitrate — owner spec 2026-08-02)."""
         self._source = source
         self._encoder = encoder
         self._on_data = on_data
         self._on_end = on_end
+        self._reduced = reduced
         self._sink = FrameSink()
         self._proc: subprocess.Popen | None = None
         self._running = False
@@ -81,14 +85,25 @@ class H264Session:
         self.width, self.height = source.stream_w, source.stream_h
 
     def _ffmpeg_cmd(self) -> list[str]:
+        # Reduced mode downscales + drops fps INSIDE this client's own ffmpeg
+        # (capture and other clients stay untouched); dimensions must stay
+        # even for yuv420p.
+        filters = []
+        bitrate = SETTINGS.h264_bitrate
+        if self._reduced:
+            s = max(1, SETTINGS.h264_reduced_scale)
+            filters = ["-vf", f"scale=trunc(iw/{s}/2)*2:trunc(ih/{s}/2)*2,"
+                              f"fps={SETTINGS.h264_reduced_fps}"]
+            bitrate = SETTINGS.h264_reduced_bitrate
         return [
             SETTINGS.ffmpeg_path, "-hide_banner", "-loglevel", "error",
             "-f", "rawvideo", "-pix_fmt", "bgr24",
             "-s", f"{self.width}x{self.height}", "-r", str(SETTINGS.target_fps),
             "-i", "pipe:0", "-an",
+            *filters,
             "-c:v", self._encoder, *encoders.encoder_args(self._encoder),
             "-g", str(SETTINGS.h264_gop), "-pix_fmt", "yuv420p",
-            "-b:v", SETTINGS.h264_bitrate, "-maxrate", SETTINGS.h264_bitrate,
+            "-b:v", bitrate, "-maxrate", bitrate,
             "-f", "mp4",
             "-movflags", "+frag_keyframe+empty_moov+default_base_moof",
             "-frag_duration", str(SETTINGS.h264_fragment_us),
@@ -215,14 +230,15 @@ class H264Manager:
         connected (capture idles otherwise and the request times out)."""
         return self._source.take_screenshot()
 
-    def open_session(self, on_data, on_end) -> H264Session:
+    def open_session(self, on_data, on_end, reduced: bool = False) -> H264Session:
         """Starts capture with the first client. Blocking (ffmpeg spawn + init
         segment wait). Raises RuntimeError when the encoder fails to start."""
         with self._lock:
             if not self._source_running:
                 self._source.start()
                 self._source_running = True
-            session = H264Session(self._source, self.encoder, on_data, on_end)
+            session = H264Session(self._source, self.encoder, on_data, on_end,
+                                  reduced=reduced)
             try:
                 session.start()
             except Exception:  # RuntimeError (no head) or OSError (Popen) — same cleanup
