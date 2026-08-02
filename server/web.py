@@ -40,6 +40,7 @@ from PIL import Image, ImageOps
 import clipboard
 import monitors
 import pairing
+import window_manager
 from config import SETTINGS, app_version
 from input_injector import BUTTON_FLAGS, InputInjector
 
@@ -184,15 +185,41 @@ def create_app(stream, hub: FrameHub | None, injector: InputInjector, token: str
 
     app.mount("/static", StaticFiles(directory=SETTINGS.client_dir), name="static")
 
+    # Layouts live for the SERVER's lifetime (owner 2026-08-02): the phone may
+    # disconnect and return, the slider list survives. One registry per app.
+    layouts = window_manager.LayoutRegistry()
+    # One device at a time (owner 2026-08-02 — tablet and phone must never
+    # drive the PC together): the newest authenticated socket wins, the
+    # previous one is closed with 4409 and its client stops auto-reconnecting.
+    active_client: dict = {"ws": None}
+
     @app.websocket("/ws")
     async def ws_endpoint(ws: WebSocket):
         await ws.accept()
-        if not await _authenticate(ws, token):
+        first = await _authenticate(ws, token)
+        if first is None:
             await ws.close(code=4401)
             return
         logger.info("Client authenticated: %s", ws.client)
+        prev = active_client["ws"]
+        active_client["ws"] = ws
+        if prev is not None:
+            try:
+                await prev.close(code=4409)  # taken over by this device
+            except RuntimeError:
+                pass  # already closing
         stats.clients += 1
+        # The device's short/long side ratio — layout placement turns it into
+        # a real aspect per the layout's chosen orientation.
+        screen = first.get("screen") or {}
+        try:
+            w, h = float(screen.get("w", 9)), float(screen.get("h", 16))
+            ratio = min(w, h) / max(w, h) if w > 0 and h > 0 else 9 / 16
+        except (TypeError, ValueError):
+            ratio = 9 / 16
+        conn = {"ratio": ratio, "active": None, "region": None}
         await ws.send_text(json.dumps({"type": "actions", **_load_actions()}))
+        await _send_layout_state(ws, layouts, conn)
         tasks = [asyncio.create_task(_send_cursor(ws, injector))]
         queue = None
         if stream.mode == "jpeg":
@@ -202,11 +229,13 @@ def create_app(stream, hub: FrameHub | None, injector: InputInjector, token: str
         else:
             tasks.append(asyncio.create_task(_stream_h264(ws, stream, token)))
         try:
-            await _receive_input(ws, injector, stream, token)
+            await _receive_input(ws, injector, stream, token, layouts, conn)
         except WebSocketDisconnect:
             logger.info("Client disconnected: %s", ws.client)
         finally:
             stats.clients -= 1
+            if active_client["ws"] is ws:
+                active_client["ws"] = None
             for task in tasks:
                 task.cancel()
             if queue is not None:
@@ -216,16 +245,18 @@ def create_app(stream, hub: FrameHub | None, injector: InputInjector, token: str
     return app
 
 
-async def _authenticate(ws: WebSocket, token: str) -> bool:
+async def _authenticate(ws: WebSocket, token: str) -> dict | None:
+    """Returns the auth message (it may carry the device's `screen` size for
+    layout placement) — None on failure."""
     try:
         first = json.loads(await asyncio.wait_for(ws.receive_text(), timeout=5))
     except (asyncio.TimeoutError, json.JSONDecodeError, WebSocketDisconnect):
         logger.warning("Auth failed (no/invalid first message) from %s", ws.client)
-        return False
+        return None
     if first.get("type") != "auth" or first.get("token") != token:
         logger.warning("Auth failed (bad token) from %s", ws.client)
-        return False
-    return True
+        return None
+    return first
 
 
 async def _send_frames(ws: WebSocket, queue: asyncio.Queue) -> None:
@@ -390,7 +421,69 @@ async def _screenshot(ws: WebSocket, stream) -> None:
                  else "Clipboard busy — try again")
 
 
-async def _receive_input(ws: WebSocket, injector: InputInjector, stream, token: str) -> None:
+def _mon_rect(stream) -> tuple[int, int, int, int]:
+    return monitors.rect_for_size(stream.width, stream.height, stream.monitor_index)
+
+
+async def _send_layout_state(ws: WebSocket, layouts, conn: dict) -> None:
+    state = await asyncio.to_thread(layouts.state, conn["active"], conn["region"])
+    if state["active"] is None:
+        conn["active"], conn["region"] = None, None  # pruned under us
+    await ws.send_text(json.dumps(state))
+
+
+async def _layout_pick(ws: WebSocket, layouts, stream, msg: dict) -> None:
+    """The phone's armed tap: identify the window under the point and offer
+    the layout choices (solo / grid templates + open windows to fill cells)."""
+    target = await asyncio.to_thread(
+        window_manager.window_at, _mon_rect(stream),
+        float(msg["x"]), float(msg["y"]))
+    if target is None:
+        await _toast(ws, "No window there — tap on a window")
+        return
+    others = await asyncio.to_thread(window_manager.list_windows, {target["hwnd"]})
+    await ws.send_text(json.dumps({
+        "type": "layout_offer",
+        "target": target,
+        "windows": others,
+        "grids": list(window_manager.GRID_TEMPLATES),
+    }))
+
+
+async def _layout_create(ws: WebSocket, layouts, stream, conn: dict, msg: dict) -> None:
+    orient = "wide" if msg.get("orient") == "wide" else "portrait"
+    index = await asyncio.to_thread(
+        layouts.create, int(msg["target"]), str(msg.get("mode", "solo")),
+        msg.get("grid"), [int(h) for h in msg.get("fill", [])],
+        orient, conn["ratio"], _mon_rect(stream))
+    if index is None:
+        await _toast(ws, "That window is gone — layout not created")
+    else:
+        await _layout_focus(ws, layouts, stream, conn, index)
+        return
+    await _send_layout_state(ws, layouts, conn)
+
+
+async def _layout_focus(ws: WebSocket, layouts, stream, conn: dict, index: int) -> None:
+    """index -1 = back to the full desktop. Region is re-read fresh on every
+    focus — desk-side moves/resizes never break a layout (owner rule)."""
+    if index < 0:
+        conn["active"], conn["region"] = None, None
+    else:
+        region = await asyncio.to_thread(
+            layouts.focus, index, conn["ratio"], _mon_rect(stream))
+        if region is None:
+            conn["active"], conn["region"] = None, None
+            await _toast(ws, "That layout's window is gone")
+        else:
+            conn["active"], conn["region"] = index, region
+    await _send_layout_state(ws, layouts, conn)
+
+
+async def _receive_input(ws: WebSocket, injector: InputInjector, stream, token: str,
+                         layouts=None, conn: dict | None = None) -> None:
+    conn = conn if conn is not None else {"ratio": 9 / 16, "active": None, "region": None}
+    layouts = layouts if layouts is not None else window_manager.LayoutRegistry()
     while True:
         msg = json.loads(await ws.receive_text())
         kind = msg.get("type")
@@ -427,5 +520,20 @@ async def _receive_input(ws: WebSocket, injector: InputInjector, stream, token: 
             await _switch_monitor(ws, injector, stream, token)
         elif kind == "screenshot":
             await _screenshot(ws, stream)
+        elif kind == "layout_pick":
+            await _layout_pick(ws, layouts, stream, msg)
+        elif kind == "layout_create":
+            await _layout_create(ws, layouts, stream, conn, msg)
+        elif kind == "layout_focus":
+            await _layout_focus(ws, layouts, stream, conn, int(msg["index"]))
+        elif kind == "layout_remove":
+            index = int(msg["index"])
+            await asyncio.to_thread(layouts.remove, index)
+            if conn["active"] is not None:
+                if conn["active"] == index:
+                    conn["active"], conn["region"] = None, None
+                elif conn["active"] > index:
+                    conn["active"] -= 1
+            await _send_layout_state(ws, layouts, conn)
         else:
             logger.warning("Unknown message type %r from client", kind)

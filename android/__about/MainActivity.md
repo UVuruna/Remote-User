@@ -87,6 +87,9 @@ The page's only way to reach the shell.
 - `update(url)`: opens `/app.apk` (same PC) in the system browser — the
   WebView itself has no download pipeline, so the browser is only the
   download UI; Android installs over this app on the same signature
+- `lockOrientation(mode)`: layout focus locks the phone's rotation to the
+  layout's chosen orientation (`"portrait"` / `"wide"`), `""` unlocks — the
+  full-desktop view rotates freely (owner 2026-08-02)
 
 ### Client (inner class, `WebViewClient`)
 - `shouldOverrideUrlLoading`: keeps navigation to the paired server's own

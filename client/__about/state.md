@@ -67,3 +67,10 @@ Loads FIRST of the six client scripts (see [Client (folder)](../___client.md))
   one concatenated file (same shared lexical scope), which is what this split
   preserves. See [Client (folder)](../___client.md) Design Decisions for the
   full god-file-split rationale.
+## Layouts (Phase F+ step 1)
+`layouts` / `layoutActive` / `layoutRegion` mirror the server's `layout_state`
+(the server owns the list — it survives phone disconnects); `layoutArm` is the
+one-shot "next canvas tap picks a window" flag set by the Layout (+) button;
+`viewLocked()` gates gestures, cursor clamping and the view transform.
+`send()` also refuses to auto-reconnect after a 4409 takeover (one device at a
+time — a background reconnect would steal the session back in a loop).

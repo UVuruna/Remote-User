@@ -57,3 +57,8 @@ everything defined in the first four files).
   phantom pinch until page refresh.
 - **Two fingers always pinch**, regardless of `touchMode` — pinch cannot leak
   a click or drag to the PC.
+## Layouts (Phase F+ step 1)
+An armed layout pick intercepts the primary `pointerdown`: it sends
+`layout_pick` with the tapped monitor-normalized point and injects NOTHING.
+While the view is locked to a layout region, two fingers do nothing (pinch
+disabled — the layout transform owns the view).

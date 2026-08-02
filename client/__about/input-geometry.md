@@ -58,3 +58,7 @@ gesture ends. Third of the six client scripts to load (after
 - **Calibration takes the MAX, not the median or first sample** — a light
   first touch under-reports contact radius and would place the pointer too
   close, partly hidden by the finger.
+## Layouts (Phase F+ step 1)
+`toRemoteClamped` additionally clamps into `layoutRegion` while a layout is
+focused — the finger may travel past the framed window's edge, the PC cursor
+never does (the phone sees ONLY that region).

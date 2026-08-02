@@ -7,10 +7,15 @@
 
 function toRemoteClamped(px, py) {
   const D = drawnRect();
-  return {
-    x: Math.min(Math.max((px - D.x) / D.w, 0), 1),
-    y: Math.min(Math.max((py - D.y) / D.h, 0), 1),
-  };
+  let x = Math.min(Math.max((px - D.x) / D.w, 0), 1);
+  let y = Math.min(Math.max((py - D.y) / D.h, 0), 1);
+  if (viewLocked()) {
+    // Layout focus: the finger may travel past the framed window's edge but
+    // the PC cursor must never leave it — the phone sees ONLY this region.
+    x = Math.min(Math.max(x, layoutRegion.x), layoutRegion.x + layoutRegion.w);
+    y = Math.min(Math.max(y, layoutRegion.y), layoutRegion.y + layoutRegion.h);
+  }
+  return { x, y };
 }
 
 // --- Cursor offset --------------------------------------------------------
@@ -25,6 +30,7 @@ function sampleFinger(e) {
     fingerRadiusPx = fingerMaxPx; // MAX → the pointer clears the fingertip in every press
     computeBaseRect();            // the edge margin tracks the offset distance
     clampView();
+    applyLayoutView();
     redraw();
     if (calibrating) {
       calibrating = false;
@@ -42,6 +48,7 @@ function startCalibration() {
   calibrating = true;
   computeBaseRect(); // the offset falls back to the default until re-locked —
   clampView();       // the edge margin must track it, or far edges go unreachable
+  applyLayoutView();
   redraw();
   showToast("Calibrating — tap the screen a few times with your finger");
 }

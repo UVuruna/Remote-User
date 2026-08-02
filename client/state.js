@@ -75,6 +75,20 @@ const pointers = new Map();
 let pinch = null;
 let primary = null; // the first finger: {id, type, startX, startY, offset, ...}
 
+// --- Layouts (Phase F+ step 1) --------------------------------------------
+// The SERVER owns the layout list (it survives phone disconnects); the client
+// mirrors it via `layout_state`. While a layout is focused the view is LOCKED
+// onto its monitor-normalized region: pinch/pan are disabled and the PC
+// cursor is clamped inside it — the phone sees and drives ONLY that window.
+let layouts = [];
+let layoutActive = null; // index into layouts, null = full desktop
+let layoutRegion = null; // {x,y,w,h} monitor-normalized, null on desktop
+let layoutArm = false;   // one-shot: the next canvas tap picks a window
+
+function viewLocked() {
+  return layoutRegion !== null;
+}
+
 // Cursor-offset calibration: take the LARGEST touch contact radius over the
 // first CURSOR_CALIB_SAMPLES touch samples (max, not median — a light press
 // under-reports contact size and would hide the pointer), then lock it for the
@@ -108,7 +122,9 @@ function send(msg) {
   }
   // The 4401 pill carries the ONLY re-pair instruction ("tap here to scan
   // the new QR") — never stomp it with a reconnect notice that can't succeed.
-  if (authRejected) return;
+  // 4409 (another device took over) likewise: only a deliberate tap on the
+  // pill reconnects, or two devices would steal the session in a loop.
+  if (authRejected || takenOver) return;
   // A dropped command must be VISIBLE (a dead socket behind a frozen frame
   // read as "buttons randomly stopped working" — owner report 2026-07-26).
   setStatus("connecting", "Reconnecting…");

@@ -10,11 +10,16 @@ HTTP routes: `GET /` — the client page ONLY for the APK's WebView (User-Agent 
 
 **Security rule:** the WebSocket's first message must be a valid `auth` within 5 seconds, or the socket closes with code 4401. Nothing is processed before it (root CLAUDE architecture constraint 3).
 
+**One device at a time** (owner 2026-08-02): the newest authenticated socket wins; the previous one is closed with code **4409** and its client stops auto-reconnecting until a deliberate tap (otherwise two devices would steal the session from each other in a loop). The `auth` message may carry `screen {w, h}` — the device's aspect drives layout window sizing.
+
+**Layouts** (Phase F+ step 1): `layout_pick {x, y}` (armed tap) → `layout_offer {target, windows, grids}`; `layout_create {target, mode, grid, fill, orient}`; `layout_focus {index}` (−1 = full desktop) re-reads the FRESH region each time; `layout_remove {index}`. The server answers every change with `layout_state {layouts, active, region, orient}` (also sent right after auth — the registry survives phone disconnects). All blocking Win32 work is delegated to [Window Manager](window_manager.md) via `to_thread`. Streaming is untouched: the client locks its own view onto `region` (full-frame H.264 is cheap — ROADMAP measurement); the JPEG path narrows via the existing `viewport` mechanism.
+
 The `stream` argument threaded through every handler is either an `H264Manager` or a `JpegStreamer` — one duck interface: `mode`, `width`, `height`, `monitor_index`, `output_count()`, `switch_to()`, `take_screenshot()`; the JPEG side additionally has `set_viewport()`, the H.264 side has `open_session()`/`close_session()`. The connection handler branches once on `stream.mode`.
 
 ## Connections
 
 ### Uses
+- [Window Manager](window_manager.md) — the `layout_*` message handlers (pick/create/focus/remove) and the `layout_state` payload; the registry lives per app instance (server lifetime)
 - [Config](config.md) — client dir, favicon path, queue caps, cursor rate, `app_version()`
 - [Input Injector](input_injector.md) — `InputInjector`, `BUTTON_FLAGS` for validating the client's `button` field
 - [H.264 Streamer](h264_streamer.md) / [Screen Capture](capture.md) — whichever stream backend [Server Core](server_core.md) built

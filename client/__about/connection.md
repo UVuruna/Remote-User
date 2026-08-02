@@ -63,3 +63,10 @@ every other script must already be loaded by this point (and is, since
   `onclose` would tear down the new connection's MSE pipeline.
 - **4401 is terminal, not retried** — hammering the server with the same
   rejected token helps nobody; the phone needs a fresh QR/pairing link.
+## Layouts (Phase F+ step 1)
+`auth` now carries `screen {w, h}` — the device's aspect drives layout window
+sizing on the server (tablet vs phone). New handlers: `layout_state` (mirror
+the list, update the bar, lock/unlock rotation, apply or reset the locked
+view) and `layout_offer` (opens the creation panel). Close code **4409** =
+another device took over (one device at a time): no auto-reconnect — a
+deliberate tap on the status pill takes the session back.
