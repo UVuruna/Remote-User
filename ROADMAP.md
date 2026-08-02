@@ -72,11 +72,19 @@ no mouse and keyboard.
 ### The model
 
 - **Layout** = one window full-screen or a grid of windows (Windows-Snap-like).
-  The phone's slider/arrows cycle layouts full screen. Layouts are composed by
-  the user ON THE SPOT — never predefined: a **SWITCHER touch mode** (a toggle,
-  like drag/scroll) where tapping a window/tab in the stream makes the server
-  identify what is under the point and the phone offers "solo" or "a grid with
-  another open app".
+  Layouts are composed by the user ON THE SPOT — never predefined. UI (owner
+  2026-08-02, correcting the earlier "switcher mode" idea): the top line —
+  where Hide lives; the old Move/pan corner button is DROPPED as unnecessary —
+  carries the **layout bar**: left arrow · app icon + open-tab name · right
+  arrow, cycling the layouts; the bar does not exist while no layout does. A
+  separate **create-layout button** (not called "switcher") arms the next tap
+  on the stream: the server identifies what is under the point and the phone
+  offers "solo" or "grid"; grid presents PREDEFINED templates (2x1, 1x2,
+  2x2, …) whose remaining cells the user fills from a list of open apps.
+- **Rotation** (owner 2026-08-02): in layout focus the phone's screen rotation
+  is LOCKED to the layout's chosen orientation (portrait or wide, picked at
+  creation); on the full-desktop view rotation is free — turning the phone
+  swaps portrait/wide as usual.
 - **The unit of selection is the TAB, not the application** (VSCode editor tab,
   Chrome tab, Explorer tab): the tab is extracted into its own OS window, which
   the layout then arranges. Extraction strategies in priority order (owner
