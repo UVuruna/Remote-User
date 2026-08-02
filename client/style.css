@@ -411,6 +411,9 @@ body.hidden-controls #update-banner { display: none; }
   white-space: nowrap;
   max-width: 40vw;
 }
+#lay-icon { width: 18px; height: 18px; }
+.lay-chip img { width: 16px; height: 16px; vertical-align: -3px; margin-right: 6px; }
+.lay-appicon { width: 22px; height: 22px; vertical-align: -4px; margin-right: 8px; }
 #lay-close { color: var(--text-secondary); font-size: 13px; }
 
 #layout-panel {

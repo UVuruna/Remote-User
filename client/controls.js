@@ -360,7 +360,10 @@ function makeActionButton(btn, pos) {
     } else if (b.kind === "upload") {
       keepFocus(el, () => filePick.click());
     } else if (b.kind === "calibrate") {
-      keepFocus(el, startCalibration);
+      // The offset/calibration system is gone (owner 2026-08-02 — the pointer
+      // sits under the finger). The action stays registered so an owner
+      // actions.json that still lists it renders a harmless button.
+      keepFocus(el, () => showToast("Not needed anymore — the pointer is right under your finger"));
     } else if (b.kind === "anywhere") {
       keepFocus(el, openWizard); // the banner shows only once — this is the permanent way in
     }
@@ -472,14 +475,16 @@ keepFocus(newlayBtn, () => {
 
 const layoutBar = document.getElementById("layout-bar");
 const layNameEl = document.getElementById("lay-name");
+const layIconEl = document.getElementById("lay-icon");
 const layCloseBtn = document.getElementById("lay-close");
 
 function updateLayoutBar() {
   layoutBar.hidden = layouts.length === 0;
   layCloseBtn.hidden = layoutActive === null;
-  layNameEl.textContent = layoutActive === null
-    ? "Desktop"
-    : layouts[layoutActive].name;
+  const lay = layoutActive === null ? null : layouts[layoutActive];
+  layNameEl.textContent = lay ? lay.name : "Desktop";
+  layIconEl.hidden = !(lay && lay.icon);
+  if (lay && lay.icon) layIconEl.src = lay.icon;
 }
 
 // The bar cycles positions [Desktop, layout 0, layout 1, …]; index -1 on the
@@ -519,11 +524,17 @@ layPanel.addEventListener("pointerdown", (e) => {
   if (e.target === layPanel) closeLayoutPanel(); // backdrop tap = cancel
 });
 
-function layChip(label, selected, onTap) {
+function layChip(label, selected, onTap, icon) {
   const el = document.createElement("button");
   el.type = "button";
   el.className = "lay-chip" + (selected ? " sel" : "");
-  el.textContent = label;
+  if (icon) {
+    const img = document.createElement("img");
+    img.src = icon;
+    img.alt = "";
+    el.appendChild(img);
+  }
+  el.appendChild(document.createTextNode(label));
   keepFocus(el, onTap);
   return el;
 }
@@ -549,10 +560,20 @@ function openLayoutPanel(offer) {
     card.className = "lay-card";
 
     const h = document.createElement("h2");
-    h.textContent = offer.target.process.replace(/\.exe$/i, "");
+    if (offer.target.icon) {
+      const img = document.createElement("img");
+      img.className = "lay-appicon";
+      img.src = offer.target.icon;
+      img.alt = "";
+      h.appendChild(img);
+    }
+    h.appendChild(document.createTextNode(offer.target.process.replace(/\.exe$/i, "")));
     const sub = document.createElement("p");
     sub.className = "lay-sub";
-    sub.textContent = offer.target.title;
+    // A picked TAB is named explicitly — it becomes its own window on Create.
+    sub.textContent = offer.tab
+      ? `Tab: ${offer.tab.name}`
+      : offer.target.title;
     card.append(h, sub);
 
     const modeRow = document.createElement("div");
@@ -586,7 +607,7 @@ function openLayoutPanel(offer) {
           if (i >= 0) sel.fill.splice(i, 1);
           else if (sel.fill.length < needed()) sel.fill.push(w.hwnd);
           render();
-        })));
+        }, w.icon)));
       card.appendChild(winRow);
     }
 
@@ -611,6 +632,11 @@ function openLayoutPanel(offer) {
       send({
         type: "layout_create",
         target: offer.target.hwnd,
+        // Echo the pick point + tab: the server re-hits the tab fresh and
+        // extracts it into its own window before arranging (step 2).
+        tab: offer.tab || null,
+        x: offer.x,
+        y: offer.y,
         mode: sel.mode,
         grid: sel.grid,
         fill: sel.fill,

@@ -1,0 +1,46 @@
+# UIA Tab Layer
+
+**Script:** [UIA Tab Layer (script)](../uia.py) ·
+**Flow:** [diagram](../__flow/uia.md)
+
+## Purpose
+Phase F+ step 2 (spec: ROADMAP → Layouts & Tab Control): the unit of layout
+selection is the TAB — a VSCode editor tab, Chrome tab or Explorer tab is
+turned into its OWN OS window before the layout machinery arranges it.
+`tab_at` names the tab under the phone's pick tap (UI Automation hit-test,
+walking ancestors to the `TabItem` — hits often land on an inner element);
+`extract_tab` performs the separation with three strategies in the owner's
+priority order (all probe-verified live 2026-08-02):
+
+1. **The app's own context-menu command** — right-click the tab, click the
+   menu item whose name contains "new window" (Chrome `Move tab to new
+   window`, VSCode `Move into New Window`).
+2. **Explorer path** (no such command exists there): select the tab, read the
+   path from the address band, `explorer.exe <path>`, close the original tab.
+3. **Drag tear-off fallback** — real held-button interpolated `SendInput`
+   moves (Explorer's XAML strip ignores cursor-teleport drags) dropped on the
+   taskbar strip, the one spot outside every window rect (VSCode refuses to
+   detach when the drop lands inside ANY VSCode window's rect).
+
+**Every failure returns None and the caller uses the whole window** — a tap
+on something that merely looks like a tab (VSCode activity-bar icons are
+`TabItem`s too) self-corrects instead of erroring. `uiautomation` is imported
+lazily inside a per-thread COM initializer (the web layer calls from asyncio
+worker threads); a missing/broken package disables ONLY the tab layer.
+Extraction clicks/drags are this module's own SendInput synthesis — separate
+from the phone-driven, self-verifying injector.
+
+## Connections
+### Uses
+- [Window Manager](window_manager.md) — window enumeration/raising and the
+  work-area rect for the drag drop point
+
+### Used by
+- [Web Layer](web.md) — `layout_pick` names the tab in `layout_offer`;
+  `layout_create` extracts it before arranging
+
+## Functions
+- `tab_at(mon_rect, nx, ny)`: `{"name"}` of the tab under a
+  monitor-normalized point, or None
+- `extract_tab(mon_rect, nx, ny, target)`: run the strategy chain; returns
+  the new window's hwnd or None (fall back to the whole window)

@@ -8,3 +8,4 @@ qrcode[pil]
 PySide6
 pillow
 pillow-heif
+uiautomation

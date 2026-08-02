@@ -51,6 +51,7 @@ STANDARD = {
 # protocol. Needs __about/{name}.md AND __flow/{name}.md.
 ALGORITHMIC = {
     "server/server_core.py",
+    "server/uia.py",
     "server/config.py",
     "server/capture.py",
     "server/h264_streamer.py",
