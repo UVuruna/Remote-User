@@ -44,3 +44,8 @@ everywhere the page must own gestures itself rather than the browser.
 - **`install.html` does not use this file** — it is self-contained (its own
   inline `<style>`) so the one page an app-less phone can reach never depends
   on anything else in the client.
+
+## Layouts (Phase F+ step 1)
+`#layout-bar` is a top-center pill (same glass look as the status pill);
+`#layout-panel` / `.lay-card` / `.lay-chip` mirror the wizard card's styling.
+Both are hidden by Hide-all.

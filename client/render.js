@@ -31,7 +31,28 @@ function drawnRect() {
   };
 }
 
+// Layout focus: zoom/translate the view so the layout's region fills the
+// canvas (minus the same cursor-offset margin computeBaseRect reserves, so
+// the offset pointer can still reach the region's far edges). While locked
+// this transform is authoritative — clampView backs off, gestures are off.
+function applyLayoutView() {
+  if (!viewLocked() || !monitor.w) return;
+  const m = offsetDistancePx() * devicePixelRatio * Math.SQRT1_2;
+  const left = hand === "left" ? m : 0;
+  const boxW = canvas.width - m;
+  const boxH = canvas.height - m;
+  const r = layoutRegion;
+  const rw = r.w * baseRect.w;
+  const rh = r.h * baseRect.h;
+  const s = Math.min(boxW / rw, boxH / rh);
+  view.scale = s;
+  view.tx = left + (boxW - rw * s) / 2 - (baseRect.x + r.x * baseRect.w) * s;
+  view.ty = (boxH - rh * s) / 2 - (baseRect.y + r.y * baseRect.h) * s;
+  redraw();
+}
+
 function clampView() {
+  if (viewLocked()) return; // the layout transform owns the view
   if (view.scale <= 1) {
     view = { scale: 1, tx: 0, ty: 0 };
     return;
@@ -107,6 +128,7 @@ function updateViewport() {
   canvas.height = Math.round(h * devicePixelRatio);
   computeBaseRect();
   clampView();
+  applyLayoutView(); // rotation / keyboard resize must re-fit the locked region
   redraw();
   scheduleViewport();
 }

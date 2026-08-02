@@ -148,6 +148,7 @@ The CLI prints the pairing URL and a QR (console + image viewer). Dev note: H.26
     🐍 encoders.py
     🐍 input_injector.py
     🐍 web.py
+    🐍 window_manager.py
     🐍 pairing.py
     🐍 monitors.py
     🐍 clipboard.py

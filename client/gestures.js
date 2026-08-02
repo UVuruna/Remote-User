@@ -34,6 +34,18 @@ function beginPinch() {
 canvas.addEventListener("pointerdown", (e) => {
   if (keyboardOpen()) e.preventDefault(); // a tap must not blur the keyboard field
   if (streamMode === "h264" && video.paused) video.play().catch(() => {}); // autoplay unlock
+  if (layoutArm && e.isPrimary) {
+    // Armed by the Layout (+) button: this tap PICKS a window instead of
+    // acting — the server answers with layout_offer (nothing is injected).
+    layoutArm = false;
+    refreshNewlayButton();
+    const p0 = toCanvasPx(e);
+    send({ type: "layout_pick", ...toRemoteClamped(p0.x, p0.y) });
+    pointers.clear();
+    pinch = null;
+    primary = null;
+    return;
+  }
   if (e.isPrimary) {
     // Self-heal: Android WebView loses the occasional pointerup/cancel
     // (system edge gestures, palm) — a ghost entry would turn EVERY later
@@ -55,6 +67,7 @@ canvas.addEventListener("pointerdown", (e) => {
   sampleFinger(e);
 
   if (pointers.size >= 2) {
+    if (viewLocked()) return; // layout focus: the view is locked, no pinch
     beginPinch();
     return;
   }

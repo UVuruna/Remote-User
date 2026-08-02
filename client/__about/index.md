@@ -53,3 +53,9 @@ file picker, and the "access from anywhere" banner + guided wizard overlay.
   gets [Install Funnel](install.md) instead (owner rule, hardened 2026-08-02)
 - [Tests (folder)](../../tests/___tests.md) — the input-pipeline gate drives
   this exact page end-to-end in real headless Chromium
+
+## Layouts (Phase F+ step 1)
+The top-left corner button is now **Layout (+)** (the Move/pan button is gone
+— owner 2026-08-02); `#layout-bar` sits top-center (hidden until a layout
+exists; `‹ name ›` + ✕); `#layout-panel` is the empty container controls.js
+fills with the creation card.

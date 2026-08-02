@@ -80,3 +80,12 @@ for the split's general load-order reasoning.
   file** — a direct consequence of the `keepFocus` hoisting dependency
   above; this is a structural constraint of the split, not an arbitrary
   grouping choice.
+## Layouts (Phase F+ step 1)
+The Layout (+) corner button ARMS a one-shot window pick (no switcher mode —
+owner 2026-08-02); the top-center layout bar (`‹ name ›` + ✕) cycles
+Desktop → layout 1 → … and removes the focused layout; `openLayoutPanel`
+builds the creation card from `layout_offer` (Only this / Grid 2x1·1x2·2x2 +
+open windows to fill the cells + Portrait/Wide); `applyOrientationLock`
+drives the shell's `Android.lockOrientation` bridge (layout focus = rotation
+locked, desktop = free). The old Move/pan corner button is GONE (owner
+2026-08-02).

@@ -360,6 +360,20 @@ class MainActivity : AppCompatActivity() {
         fun appVersion(): String =
             packageManager.getPackageInfo(packageName, 0).versionName ?: "0"
 
+        /** Layout focus locks the phone's rotation to the layout's chosen
+         *  orientation (owner 2026-08-02); "" unlocks (full-desktop view,
+         *  rotation free). "wide" = landscape, "portrait" = portrait. */
+        @JavascriptInterface
+        fun lockOrientation(mode: String) {
+            runOnUiThread {
+                requestedOrientation = when (mode) {
+                    "portrait" -> android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                    "wide" -> android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+                    else -> android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+                }
+            }
+        }
+
         /** Update tap: open /app.apk (on the SAME PC) in the system browser —
          *  it downloads and Android installs over this app (same signature).
          *  The WebView itself has no download pipeline; the browser here is

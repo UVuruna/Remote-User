@@ -56,7 +56,7 @@ phone app too. No file shuffling, ever.
 ### Uses
 - [Client (folder)](../client/___client.md) — the entire product UI, loaded
   into the WebView (`client/index.html`); the `Android` JS bridge
-  (`rescan`/`setTailscaleUrl`/`appVersion`/`update`) and the `config`
+  (`rescan`/`setTailscaleUrl`/`appVersion`/`update`/`lockOrientation`) and the `config`
   WebSocket message are the two-way contact points between the shell and the
   page's own [Connection](../client/__about/connection.md) script (the JS bridge calls and `config` handling both live there)
 - [Server (folder)](../server/___server.md) — conceptually the HTTP/WS peer

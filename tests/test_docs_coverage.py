@@ -36,6 +36,7 @@ STANDARD = {
     "server/bootstrap.py",
     "server/pairing.py",
     "server/monitors.py",
+    "server/window_manager.py",
     "server/clipboard.py",
     "server/updates.py",
     "client/index.html",

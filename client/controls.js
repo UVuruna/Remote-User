@@ -445,15 +445,186 @@ function closeWheel() {
 
 // --- Corner buttons -------------------------------------------------------
 
-const panBtn = document.getElementById("btn-pan");
-panBtn.dataset.mode = "pan";
-keepFocus(panBtn, () => setMode("pan"));
-
 const hideBtn = document.getElementById("btn-hide");
 keepFocus(hideBtn, () => {
   const hidden = document.body.classList.toggle("hidden-controls");
   hideBtn.classList.toggle("active", hidden);
 });
+
+// --- Layouts (Phase F+ step 1) --------------------------------------------
+// The + button ARMS the next canvas tap to pick a window (no switcher mode —
+// owner 2026-08-02); the server's layout_offer opens the panel below; the
+// top-center bar cycles Desktop → layout 1 → … and exists only while at
+// least one layout does. The server owns the list — the client only mirrors
+// `layout_state` (see connection.js).
+
+const newlayBtn = document.getElementById("btn-newlay");
+
+function refreshNewlayButton() {
+  newlayBtn.classList.toggle("active", layoutArm);
+}
+
+keepFocus(newlayBtn, () => {
+  layoutArm = !layoutArm;
+  refreshNewlayButton();
+  showToast(layoutArm ? "Tap a window on the screen…" : "Layout creation cancelled");
+});
+
+const layoutBar = document.getElementById("layout-bar");
+const layNameEl = document.getElementById("lay-name");
+const layCloseBtn = document.getElementById("lay-close");
+
+function updateLayoutBar() {
+  layoutBar.hidden = layouts.length === 0;
+  layCloseBtn.hidden = layoutActive === null;
+  layNameEl.textContent = layoutActive === null
+    ? "Desktop"
+    : layouts[layoutActive].name;
+}
+
+// The bar cycles positions [Desktop, layout 0, layout 1, …]; index -1 on the
+// wire means "back to the full desktop".
+function layoutStep(dir) {
+  if (!layouts.length) return;
+  const total = layouts.length + 1;
+  const pos = layoutActive === null ? 0 : layoutActive + 1;
+  send({ type: "layout_focus", index: ((pos + dir + total) % total) - 1 });
+}
+
+keepFocus(document.getElementById("lay-prev"), () => layoutStep(-1));
+keepFocus(document.getElementById("lay-next"), () => layoutStep(1));
+keepFocus(layCloseBtn, () => {
+  if (layoutActive !== null) send({ type: "layout_remove", index: layoutActive });
+});
+
+// In the APK, layout focus locks the phone's rotation to the layout's chosen
+// orientation; the full desktop unlocks it (owner 2026-08-02). "" = unlock.
+function applyOrientationLock() {
+  if (!IN_APP || !window.Android.lockOrientation) return;
+  window.Android.lockOrientation(
+    layoutActive !== null && layouts[layoutActive] ? layouts[layoutActive].orient : "");
+}
+
+// --- Layout creation panel -------------------------------------------------
+
+const layPanel = document.getElementById("layout-panel");
+const GRID_CELLS = { "2x1": 2, "1x2": 2, "2x2": 4 };
+
+function closeLayoutPanel() {
+  layPanel.hidden = true;
+  layPanel.innerHTML = "";
+}
+
+layPanel.addEventListener("pointerdown", (e) => {
+  if (e.target === layPanel) closeLayoutPanel(); // backdrop tap = cancel
+});
+
+function layChip(label, selected, onTap) {
+  const el = document.createElement("button");
+  el.type = "button";
+  el.className = "lay-chip" + (selected ? " sel" : "");
+  el.textContent = label;
+  keepFocus(el, onTap);
+  return el;
+}
+
+function openLayoutPanel(offer) {
+  layoutArm = false;
+  refreshNewlayButton();
+  const sel = {
+    mode: "solo",
+    grid: null,
+    fill: [], // hwnds filling the grid's remaining cells, in tap order
+    orient: window.innerHeight >= window.innerWidth ? "portrait" : "wide",
+  };
+
+  function needed() {
+    return sel.mode === "grid" ? (GRID_CELLS[sel.grid] || 2) - 1 : 0;
+  }
+
+  function render() {
+    layPanel.innerHTML = "";
+    layPanel.hidden = false;
+    const card = document.createElement("div");
+    card.className = "lay-card";
+
+    const h = document.createElement("h2");
+    h.textContent = offer.target.process.replace(/\.exe$/i, "");
+    const sub = document.createElement("p");
+    sub.className = "lay-sub";
+    sub.textContent = offer.target.title;
+    card.append(h, sub);
+
+    const modeRow = document.createElement("div");
+    modeRow.className = "lay-row";
+    modeRow.appendChild(layChip("Only this", sel.mode === "solo", () => {
+      sel.mode = "solo";
+      sel.grid = null;
+      sel.fill = [];
+      render();
+    }));
+    (offer.grids || []).forEach((g) => modeRow.appendChild(
+      layChip(`Grid ${g}`, sel.mode === "grid" && sel.grid === g, () => {
+        sel.mode = "grid";
+        sel.grid = g;
+        sel.fill = [];
+        render();
+      })));
+    card.appendChild(modeRow);
+
+    if (sel.mode === "grid") {
+      const hint = document.createElement("p");
+      hint.className = "lay-sub";
+      hint.textContent = `Pick ${needed()} more window(s) for the grid:`;
+      card.appendChild(hint);
+      const winRow = document.createElement("div");
+      winRow.className = "lay-row";
+      (offer.windows || []).forEach((w) => winRow.appendChild(
+        layChip(w.title.length > 34 ? w.title.slice(0, 33) + "…" : w.title,
+                sel.fill.includes(w.hwnd), () => {
+          const i = sel.fill.indexOf(w.hwnd);
+          if (i >= 0) sel.fill.splice(i, 1);
+          else if (sel.fill.length < needed()) sel.fill.push(w.hwnd);
+          render();
+        })));
+      card.appendChild(winRow);
+    }
+
+    const orientRow = document.createElement("div");
+    orientRow.className = "lay-row";
+    orientRow.appendChild(layChip("Portrait", sel.orient === "portrait", () => {
+      sel.orient = "portrait";
+      render();
+    }));
+    orientRow.appendChild(layChip("Wide", sel.orient === "wide", () => {
+      sel.orient = "wide";
+      render();
+    }));
+    card.appendChild(orientRow);
+
+    const actions = document.createElement("div");
+    actions.className = "lay-actions";
+    actions.appendChild(layChip("Cancel", false, closeLayoutPanel));
+    const ready = sel.mode === "solo" || sel.fill.length === needed();
+    const create = layChip("Create", ready, () => {
+      if (!ready) return;
+      send({
+        type: "layout_create",
+        target: offer.target.hwnd,
+        mode: sel.mode,
+        grid: sel.grid,
+        fill: sel.fill,
+        orient: sel.orient,
+      });
+      closeLayoutPanel();
+    });
+    actions.appendChild(create);
+    card.appendChild(actions);
+    layPanel.appendChild(card);
+  }
+
+  render();
+}
 
 // --- Toast ----------------------------------------------------------------
 

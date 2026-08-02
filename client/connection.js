@@ -17,7 +17,12 @@ function connect() {
 
   sock.onopen = () => {
     if (sock !== ws) return;
-    sock.send(JSON.stringify({ type: "auth", token }));
+    // `screen` feeds layout placement: the server sizes layout windows to
+    // this device's aspect (tablet vs phone — owner 2026-08-02).
+    sock.send(JSON.stringify({
+      type: "auth", token,
+      screen: { w: window.screen.width, h: window.screen.height },
+    }));
     lastSentViewport = { x: 0, y: 0, w: 1, h: 1 };
     scheduleViewport();
     setStatus("connected", "Connected");
@@ -53,7 +58,9 @@ function connect() {
         if (streamMode === "h264") initMse(msg.codec);
         else teardownMse();
         computeBaseRect();
+        applyLayoutView(); // a stream reset must not drop the locked region
         redraw();
+        scheduleViewport();
       } else if (msg.type === "cursor") {
         cursorPos = { x: msg.x, y: msg.y };
         if (streamMode !== "h264") redraw(); // h264 redraws every rAF anyway
@@ -65,6 +72,22 @@ function connect() {
         renderGroup("right");
       } else if (msg.type === "toast") {
         showToast(msg.text);
+      } else if (msg.type === "layout_state") {
+        layouts = msg.layouts || [];
+        layoutActive = msg.active ?? null;
+        layoutRegion = msg.region || null;
+        updateLayoutBar();
+        applyOrientationLock();
+        if (viewLocked()) {
+          applyLayoutView();
+        } else {
+          view = { scale: 1, tx: 0, ty: 0 };
+          clampView();
+          redraw();
+        }
+        scheduleViewport();
+      } else if (msg.type === "layout_offer") {
+        openLayoutPanel(msg);
       }
     } else if (streamMode === "h264") {
       mseQueue.push(e.data);
@@ -92,6 +115,18 @@ function connect() {
       setStatus("disconnected", "Invalid token — scan the fresh QR on the PC");
       return;
     }
+    if (e.code === 4409) {
+      // Another device opened the app — one device at a time (owner
+      // 2026-08-02). No auto-reconnect: that would steal the session back
+      // in a loop. A deliberate tap takes over again.
+      takenOver = true;
+      setStatus("disconnected", "Another device took over — tap here to use this one");
+      statusEl.addEventListener("pointerup", () => {
+        takenOver = false;
+        ensureConnected();
+      }, { once: true });
+      return;
+    }
     setStatus(
       "disconnected",
       document.hidden ? "Paused — screen away" : `Disconnected (code ${e.code}) — retrying…`
@@ -100,9 +135,10 @@ function connect() {
 }
 
 let authRejected = false;
+let takenOver = false;
 
 function ensureConnected() {
-  if (document.hidden || authRejected) return;
+  if (document.hidden || authRejected || takenOver) return;
   if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
   connect();
 }

@@ -378,8 +378,97 @@ body.hidden-controls #update-banner { display: none; }
 }
 .wiz-step.done #wiz-status { color: #22C55E; }
 
+/* --- Layout bar + creation panel (Phase F+ step 1) ------------------------ */
+
+#layout-bar {
+  position: fixed;
+  top: calc(var(--space-m) + var(--vtop));
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 6px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border);
+  background: rgb(15 23 42 / 0.85);
+  color: var(--text-primary);
+  font: 600 13px system-ui, sans-serif;
+  z-index: 30;
+  max-width: 62vw;
+}
+#layout-bar[hidden] { display: none; }
+#layout-bar button {
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  font: 700 20px/1 system-ui, sans-serif;
+  padding: 4px 10px;
+}
+#lay-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 40vw;
+}
+#lay-close { color: var(--text-secondary); font-size: 13px; }
+
+#layout-panel {
+  position: fixed;
+  inset: 0;
+  z-index: 45;
+  background: rgb(15 23 42 / 0.72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-m);
+}
+#layout-panel[hidden] { display: none; }
+
+.lay-card {
+  width: min(420px, 100%);
+  max-height: 92vh;
+  overflow-y: auto;
+  background: #1E293B;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 22px 20px;
+  color: var(--text-primary);
+  font: 400 14px/1.45 system-ui, sans-serif;
+  box-shadow: 0 12px 40px rgb(0 0 0 / 0.45);
+}
+.lay-card h2 { font-size: 19px; margin-bottom: 2px; }
+.lay-sub { color: var(--text-secondary); font-size: 13px; margin-bottom: 10px; }
+
+.lay-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 10px 0;
+}
+.lay-chip {
+  padding: 9px 15px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border);
+  background: rgb(51 65 85 / 0.6);
+  color: var(--text-primary);
+  font: 600 13px system-ui, sans-serif;
+}
+.lay-chip.sel {
+  border-color: var(--accent);
+  color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-glow);
+}
+.lay-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 14px;
+}
+
 /* --- Hide-all mode ------------------------------------------------------- */
 body.hidden-controls .group,
 body.hidden-controls #wheel,
 body.hidden-controls #anywhere-banner,
+body.hidden-controls #layout-bar,
 body.hidden-controls .corner-tl { display: none; }

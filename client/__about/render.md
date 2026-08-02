@@ -70,3 +70,11 @@ MediaSource Extensions (MSE). Second of the six client scripts to load (after
   is read — is never entered before `video` exists. By the time `streamMode`
   can ever become `"h264"` (only via an async `config` message), the whole
   page has finished loading.
+## Layouts (Phase F+ step 1)
+`applyLayoutView()` implements layout focus client-side: it zooms/translates
+the view so `layoutRegion` fills the canvas (minus the same cursor-offset
+margin `computeBaseRect` reserves, keeping the region's far edges reachable).
+While locked, `clampView()` backs off — the layout transform owns the view —
+and `updateViewport` + every stream reset re-apply it. Streaming itself is
+untouched: full-frame H.264 stays cheap (ROADMAP measurement), and the JPEG
+path narrows through the existing `viewport` region mechanism.

@@ -14,16 +14,25 @@
   <!-- Offscreen H.264 decode surface (MSE) — frames are drawn onto the canvas -->
   <video id="vid" muted playsinline></video>
 
-  <!-- Top-left: move the view without clicking (pinned above the keyboard) -->
-  <button id="btn-pan" class="ctl corner corner-tl" type="button" aria-label="Move view (no click)">
+  <!-- Top-left: create a layout — arms the next tap on the stream to pick a
+       window (the old Move/pan button is gone, owner decision 2026-08-02) -->
+  <button id="btn-newlay" class="ctl corner corner-tl" type="button" aria-label="New layout">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M18 11V6a2 2 0 0 0-2-2 2 2 0 0 0-2 2"/>
-      <path d="M14 10V4a2 2 0 0 0-2-2 2 2 0 0 0-2 2v2"/>
-      <path d="M10 10.5V6a2 2 0 0 0-2-2 2 2 0 0 0-2 2v8"/>
-      <path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/>
+      <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/>
+      <rect x="14" y="3" width="7" height="7" rx="1"/>
+      <line x1="17.5" y1="14.5" x2="17.5" y2="20.5"/><line x1="14.5" y1="17.5" x2="20.5" y2="17.5"/>
     </svg>
-    <span class="lbl">Move</span>
+    <span class="lbl">Layout</span>
   </button>
+
+  <!-- Top-center: the layout bar — arrows cycle Desktop → layout 1 → … ;
+       exists only while at least one layout does (owner 2026-08-02) -->
+  <div id="layout-bar" hidden>
+    <button id="lay-prev" type="button" aria-label="Previous layout">‹</button>
+    <span id="lay-name">Desktop</span>
+    <button id="lay-next" type="button" aria-label="Next layout">›</button>
+    <button id="lay-close" type="button" aria-label="Remove this layout" hidden>✕</button>
+  </div>
 
   <!-- Top-right: hide every control, leaving only the screen -->
   <button id="btn-hide" class="ctl corner corner-tr" type="button" aria-label="Hide controls">
@@ -57,6 +66,9 @@
   <!-- Shown inside the app when the PC carries a newer app version — one tap
        downloads /app.apk from this same PC (the phone never checks the web) -->
   <button id="update-banner" type="button" hidden>⬆️ Update the app — new version is ready</button>
+
+  <!-- Layout creation offer (filled by controls.js from `layout_offer`) -->
+  <div id="layout-panel" hidden></div>
 
   <div id="wizard" hidden>
     <div class="wiz-card">
