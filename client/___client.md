@@ -12,7 +12,7 @@ The phone side of Remote User — a plain web page served by the PC server, load
 | `load_test.js` | Standard | dev harness — concatenates and executes the 6 client scripts below, in load order, against a stubbed DOM to catch load-time errors — [about](__about/load_test.md) |
 | `state.js` | Standard | tunables + shared state + `setStatus`/`toCanvasPx`/`send` — loads 1st — [about](__about/state.md) |
 | `render.js` | Algorithmic | canvas drawing, view transform, dual-mode (H.264 MSE / JPEG) frame decode — loads 2nd — [about](__about/render.md) · [flow](__flow/render.md) |
-| `input-geometry.js` | Algorithmic | finger→PC coordinate mapping, cursor-offset calibration, scroll inertia — loads 3rd — [about](__about/input-geometry.md) · [flow](__flow/input-geometry.md) |
+| `input-geometry.js` | Algorithmic | finger→PC coordinate mapping (pointer under the finger since 2026-08-02), scroll inertia — loads 3rd — [about](__about/input-geometry.md) · [flow](__flow/input-geometry.md) |
 | `controls.js` | Algorithmic | on-screen chrome: keyboard capture, anywhere wizard, update banner, upload, D-pad groups, wheel, corner buttons, toast — loads 4th — [about](__about/controls.md) · [flow](__flow/controls.md) |
 | `gestures.js` | Algorithmic | canvas pointer-event dispatch: pinch-zoom + the single-finger touchMode gestures — loads 5th — [about](__about/gestures.md) · [flow](__flow/gestures.md) |
 | `connection.js` | Algorithmic | WebSocket lifecycle, protocol message handlers, visibility-gated session — loads 6th (starts the page) — [about](__about/connection.md) · [flow](__flow/connection.md) |

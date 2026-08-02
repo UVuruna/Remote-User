@@ -23,22 +23,10 @@ const LIVE_MAX_BEHIND_S = 0.5;   // jump to the live edge when this far behind
 const LIVE_TARGET_BEHIND_S = 0.1;
 const BUFFER_KEEP_S = 8;         // decoded history kept in MSE before trimming
 
-// Cursor offset — the finger must never sit on top of the pointer it steers.
-// The PC cursor is placed at finger + offset in a FIXED direction (owner
-// decision 2026-07-26, replacing the radial-angle system: the pointer must
-// always be diagonally ABOVE the finger, never under or beside it):
-//   right-handed → 315° (up-left of the finger)
-//   left-handed  →  45° (up-right of the finger)
-// The handedness comes from the desktop app's Settings via `config.hand`.
-// The distance is constant per session, calibrated once from the touch
-// contact size. The screen keeps a margin on the far side(s) — see
-// computeBaseRect — so the finger can travel PAST the image edge and the
-// pointer still reaches every corner of the PC screen.
-const CURSOR_OFFSET_MARGIN = 20;   // CSS px added beyond the measured finger radius
-const CURSOR_OFFSET_MIN = 36;      // CSS px floor
-const CURSOR_OFFSET_MAX = 96;      // CSS px ceiling
-const CURSOR_OFFSET_FALLBACK = 52; // CSS px until measured / for non-touch (mouse, pen)
-const CURSOR_CALIB_SAMPLES = 12;   // touch samples → MAX radius → locked for the session
+// The PC cursor sits exactly under the finger (owner decision 2026-08-02,
+// reversing the 2026-07-26 offset system after living with it: the pointer
+// is where the tap registers, no diagonal offset, no reserved edge margins —
+// the image touches all four screen edges).
 
 // --- State ----------------------------------------------------------------
 const canvas = document.getElementById("screen");
@@ -60,7 +48,6 @@ let ws = null;
 // from the offscreen <video>) or "jpeg" (bitmaps, region streaming).
 let streamMode = "jpeg";
 let cursorPos = null; // PC cursor, monitor-normalized — capture never includes it
-let hand = "right";   // "right" | "left" — from config; decides the offset diagonal
 
 // One finger's meaning is set by a single toggle mode. Only one is ever active.
 //   move (default — the finger only steers the PC cursor, never clicks)
@@ -88,15 +75,6 @@ let layoutArm = false;   // one-shot: the next canvas tap picks a window
 function viewLocked() {
   return layoutRegion !== null;
 }
-
-// Cursor-offset calibration: take the LARGEST touch contact radius over the
-// first CURSOR_CALIB_SAMPLES touch samples (max, not median — a light press
-// under-reports contact size and would hide the pointer), then lock it for the
-// session. Settings → Calibrate re-arms it.
-let fingerRadiusPx = null;           // CSS px, null until locked
-let fingerMaxPx = 0;                 // running max contact radius while sampling
-let fingerSampleCount = 0;           // samples collected
-let calibrating = false;             // explicit (Settings) calibration in progress
 
 // Region-streaming state — declared before the first updateViewport() call.
 let lastSentViewport = { x: 0, y: 0, w: 1, h: 1 };

@@ -66,3 +66,10 @@ Pseudocode:
         clear canvas
         draw source pixels (video element OR base+detail bitmaps) into drawnRect()
         drawCursor()
+
+## Offset system removed (owner 2026-08-02)
+The cursor-offset system (handedness diagonal, finger calibration, reserved
+edge margins) is GONE — the pointer sits exactly under the finger, the image
+aspect-fits the FULL canvas, and a focused layout touches all four screen
+edges. Any offset/margin description in this doc's diagrams predating
+2026-08-02 is historical.

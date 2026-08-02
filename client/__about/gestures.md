@@ -62,3 +62,10 @@ An armed layout pick intercepts the primary `pointerdown`: it sends
 `layout_pick` with the tapped monitor-normalized point and injects NOTHING.
 While the view is locked to a layout region, two fingers do nothing (pinch
 disabled — the layout transform owns the view).
+
+## Offset system removed (owner 2026-08-02)
+The cursor-offset system (handedness diagonal, finger calibration, reserved
+edge margins) is GONE — the pointer sits exactly under the finger, the image
+aspect-fits the FULL canvas, and a focused layout touches all four screen
+edges. Any offset/margin description in this doc's diagrams predating
+2026-08-02 is historical.
