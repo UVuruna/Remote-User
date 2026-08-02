@@ -7,6 +7,7 @@ Development plan for the remote-control system. See [Remote User](README.md) for
 - [Product Direction (decided 2026-07-22)](#direction)
 - [Open Decisions](#open)
 - [Build Plan](#build-plan)
+- [Phase F+ Spec — Layouts & Tab Control (owner spec 2026-08-02)](#layout-spec)
 - [Foundation — LAN Prototype (done)](#foundation)
 - [Future Ideas](#future)
 
@@ -54,7 +55,87 @@ After the LAN prototype proved the control loop and touch UX on real code, the p
 - **Phase C — Desktop app** *(core delivered `0.0.034`–`0.0.037`; owner install-test pending)*: server refactored into a reusable core (`bootstrap` + `server_core` + user-settings persistence in `%LOCALAPPDATA%`), PySide6 window (status pill, in-window QR, settings with apply-and-restart) + tray, and the full build pipeline — PyInstaller onedir, code signing, NSIS installer that **bundles ffmpeg** (pinned 7.1.1: newest builds need NVENC API 13.1 / driver ≥ 610 and would silently drop to software encoding), **chain-installs Tailscale**, adds the firewall rule, optional autostart (`--minimized` to tray). Verified end-to-end: the frozen EXE streams 4K H.264 via NVENC with its own token. Remaining: owner runs the installer for real, Tailscale login guidance polish, GUI niceties (tunnel toggle, log viewer) as needed.
 - **Phase D — Phone app (APK)** *(v1 shipped this session; owner device-test pending)*: a native Kotlin shell around the EXISTING web client — one wizard, one client, two containers. The shell adds only what a browser cannot: QR-scan pairing, real-app routing for the in-page wizard's Play Store link (so the guided Tailscale flow — deep-link, detect join via `/ping`, continue — works identically in the app), the upload file-chooser, a native unreachable-PC card, `Android.rescan()` re-pairing, keep-screen-on + rotation-safe session. Distribution is in-product and the browser is ONLY a funnel (owner rule 2026-07-22 — no half-working browser sessions): an Android browser on the QR link gets the full-screen `install.html` (served by User-Agent; the APK's WebView appends a `RemoteUserApp` marker) — Install downloads `/app.apk`, **Open the app** hands the tokened URL over via `remoteuser://pair` and the app pairs itself, nothing typed or scanned; the desktop installer bundles the APK. Remaining: owner installs on the phone and walks the guided flow; login/device-list shell UI is deferred to the Play-Store decision.
 - **Phase E — Login / pairing:** the "click Connect and my PC appears" flow tying the account to finding the PC.
-- **Phase F+ — App-aware companion layer** (the differentiator): focused-window/process detection, Windows UI Automation state reading, notifications, per-app controls. Owner specs the features.
+- **Phase F+ — App-aware companion layer** (the differentiator): focused-window/process detection, Windows UI Automation state reading, notifications, per-app controls. First concrete feature specced and probe-verified: [Layouts & Tab Control](#layout-spec).
+
+---
+
+<a id="layout-spec"></a>
+
+## 📐 Phase F+ Spec — Layouts & Tab Control (owner spec 2026-08-02)
+
+The first concrete slice of the companion layer, shaped with the owner and
+feasibility-proven the same day. End goal restated by the owner: navigation and
+(mostly textual) command entry as fast and easy as possible — minimal direct
+mouse work, everything through commands that ease those processes when there is
+no mouse and keyboard.
+
+### The model
+
+- **Layout** = one window full-screen or a grid of windows (Windows-Snap-like).
+  The phone's slider/arrows cycle layouts full screen. Layouts are composed by
+  the user ON THE SPOT — never predefined: a **SWITCHER touch mode** (a toggle,
+  like drag/scroll) where tapping a window/tab in the stream makes the server
+  identify what is under the point and the phone offers "solo" or "a grid with
+  another open app".
+- **The unit of selection is the TAB, not the application** (VSCode editor tab,
+  Chrome tab, Explorer tab): the tab is extracted into its own OS window, which
+  the layout then arranges. Extraction strategies in priority order (owner
+  decision 2026-08-02 — the app's real functionality first, simulation last):
+  1. **The app's own "move to new window" command** — tab context menu invoked
+     via UIA: Chrome `Move tab to new window`, VSCode `Move into New Window`.
+  2. **Explorer has no such command:** read the tab's folder path via UIA, open
+     a new window at that path, close the original tab.
+  3. **Universal fallback — simulated drag tear-off** with real held-button
+     interpolated `SendInput` moves (the injector's own mechanics).
+- **Layout focus locks the view:** the phone shows ONLY the focused member's
+  region — the stream crop AND the mouse-move mapping are both constrained to
+  that region. Focus switch = raise the window (which also solves overlap) and
+  recompute its current rect.
+- **Window sizing:** target the phone's aspect (portrait or wide — user's
+  choice). Apps with min-size constraints get the nearest legal size — same
+  aspect but larger, or other dimensions with a small letterbox on the phone.
+- **Lifetime** (owner 2026-08-02): layouts are session-scoped but persist on
+  the PC while the server runs — the phone may disconnect and return, the
+  slider list survives; they die with the server app. The desktop is never
+  restored: extracted tabs stay as windows, no auto-return.
+- **Desk-side changes:** the user closing a member window at the PC removes it
+  from the layout (identical to removing it via the phone); moving/resizing a
+  member does NOT break the layout — the server tracks the live window and
+  recomputes the crop at focus time.
+- **`next_input` command:** UIA-cycled focus through TEXT-INPUT fields only,
+  scoped to what is visible — full desktop view → fields of all visible
+  windows; layout focus → only that window's fields. Built for the
+  dictation-first workflow (IME ↵ already = new row; real Enter is a D-pad
+  button).
+- Related, smaller: a **quality setting** — full signal vs reduced
+  resolution/fps (~10), applied always or only on mobile data (the shell
+  already watches transport changes).
+
+### Probe results (2026-08-02, Windows build 26200, elevated server)
+
+| | Chrome | VSCode | Explorer |
+|---|---|---|---|
+| Tab enumeration (UIA `TabItem`) | ✓ | ✓ | ✓ |
+| Hit-test (`ElementFromPoint`) | ✓ | ✓ | ✓ |
+| Context-menu "move to new window" | ✓ | ✓ | ✗ → path strategy |
+| Drag tear-off (`SendInput`) | ✓ | ✓ | ✓ |
+
+Hard-won specifics the implementation must respect:
+
+- **Explorer's XAML tab strip ignores cursor-teleport drags** (`SetCursorPos`
+  moves with a held button never grab the tab — the owner spotted it live):
+  tear-off needs real interpolated `SendInput` moves.
+- **VSCode detaches only when the drop lands outside EVERY VSCode window
+  RECT** — visual occlusion is irrelevant; a fully tiled desktop leaves no drop
+  zone and the taskbar can be hidden. Exactly why the native command is primary
+  and drag is only the fallback.
+- **Tab lists carry noise:** VSCode also exposes activity-bar/panel items and
+  Explorer exposes Home-page pills (Recent/Favorites) as `TabItem` — filter by
+  geometry (the tab band at the window top), name and parent chain.
+- **Hit-test may return an INNER element** (VSCode: a `GroupControl` label) —
+  walk ancestors up to the `TabItem`/window.
+- Dev quirk: `Code.exe` rejects `-n`/`--new-window` when invoked directly —
+  window options only work through the `code` CLI wrapper.
 
 ---
 
