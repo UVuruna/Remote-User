@@ -26,7 +26,7 @@ flowchart TB
         end
         subgraph SETCARD["Settings card"]
             direction TB
-            FORM["Form: Monitor · Resolution · Bitrate ·\nFrame rate · Phone hand (combo boxes)"]
+            FORM["Form: Monitor · Resolution · Bitrate ·\nFrame rate (combo boxes)"]
             APPLY["Apply && restart button (right-aligned)"]
         end
         subgraph BOTTOM["Bottom row"]
@@ -66,7 +66,7 @@ Widget inventory per zone (nested-list form, for a quick text scan):
   - `self.reach_label` (word-wrapped hint)
 - Settings card (`QFrame#card`)
   - `QFormLayout`: `self.monitor_combo`, `self.resolution_combo`,
-    `self.bitrate_combo`, `self.fps_combo`, `self.hand_combo`
+    `self.bitrate_combo`, `self.fps_combo`
   - `self.apply_btn`
 - Bottom row
   - `self.power_btn` (`#primary`/`#danger`)

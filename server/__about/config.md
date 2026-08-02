@@ -33,3 +33,10 @@ Frozen dataclass — the module-level `SETTINGS` instance is the only one. See t
 - `load_user_settings()`: applies `settings.json` overrides onto `SETTINGS` once at startup (after logging is configured); missing file = defaults, unreadable file logs and keeps defaults
 - `save_user_settings(changes)`: the GUI's only write path — merges `changes` over the existing file (rejects keys outside `USER_ADJUSTABLE` with `ValueError`), writes it, and applies them to the running `SETTINGS`
 - `_coerced(key, value)`: validates one override against the dataclass field's declared type (bool checked before int — bool is an int subclass); returns `None` (logged) for an unusable value
+
+## Settings trim (owner 2026-08-02)
+"Phone hand" is gone from the Settings form (the cursor-offset system it fed
+was removed — the pointer sits under the finger); `config.hand` stays a
+legacy field the server still sends and nobody reads. Frame rate gained a
+"10 fps — light" choice. An old settings.json carrying "hand" is ignored on
+load with a warning (documented non-fatal path).
