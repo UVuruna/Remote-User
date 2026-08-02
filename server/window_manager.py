@@ -32,6 +32,7 @@ WS_EX_TOOLWINDOW = 0x00000080
 DWMWA_CLOAKED = 14
 DWMWA_EXTENDED_FRAME_BOUNDS = 9
 SW_RESTORE = 9
+SW_MINIMIZE = 6
 SWP_NOZORDER = 0x0004
 SWP_NOACTIVATE = 0x0010
 VK_MENU = 0x12
@@ -257,6 +258,16 @@ def window_at(mon_rect: tuple[int, int, int, int], nx: float, ny: float) -> dict
             "process": os.path.basename(path), "icon": icon_data_uri(path)}
 
 
+def window_at_hwnd(hwnd: int) -> dict | None:
+    """Info dict (same shape as list_windows) for a known hwnd, or None when
+    the window died meanwhile."""
+    if not is_alive(hwnd):
+        return None
+    path = _process_path(hwnd)
+    return {"hwnd": hwnd, "title": _title(hwnd),
+            "process": os.path.basename(path), "icon": icon_data_uri(path)}
+
+
 def _work_area(mon_rect: tuple[int, int, int, int]) -> tuple[int, int, int, int]:
     """Work area (taskbar excluded) of the monitor containing mon_rect."""
     left, top, width, height = mon_rect
@@ -416,6 +427,16 @@ class LayoutRegistry:
             if region is None:
                 return None
         return _normalize(region, mon_rect)
+
+    def minimize_members(self) -> None:
+        """Desktop position (owner 2026-08-02): every window that belongs to
+        ANY layout gets minimized — the full-desktop view shows the desktop
+        and only the windows that are NOT layout material. Focusing a layout
+        later restores its own members (place/raise SW_RESTORE)."""
+        self.prune()
+        for lay in self.layouts:
+            for hwnd in lay.members:
+                user32.ShowWindow(hwnd, SW_MINIMIZE)
 
     def remove(self, index: int) -> None:
         """Deleting a layout leaves the desktop exactly as it is (owner rule —

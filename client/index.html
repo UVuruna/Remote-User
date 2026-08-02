@@ -71,6 +71,10 @@
   <!-- Layout creation offer (filled by controls.js from `layout_offer`) -->
   <div id="layout-panel" hidden></div>
 
+  <!-- Loading overlay — tab extraction runs visible work on the PC for a few
+       seconds; the phone must say so instead of looking frozen -->
+  <div id="lay-loading" hidden><div class="lay-spinner"></div><span>Working…</span></div>
+
   <div id="wizard" hidden>
     <div class="wiz-card">
       <button id="wiz-close" type="button" aria-label="Close">✕</button>

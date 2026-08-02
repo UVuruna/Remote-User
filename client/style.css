@@ -468,6 +468,35 @@ body.hidden-controls #update-banner { display: none; }
   justify-content: flex-end;
   margin-top: 14px;
 }
+.lay-list {
+  max-height: 38vh;
+  overflow-y: auto;
+  align-content: flex-start;
+}
+
+#lay-loading {
+  position: fixed;
+  inset: 0;
+  z-index: 48;
+  background: rgb(15 23 42 / 0.66);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  color: var(--text-primary);
+  font: 600 14px system-ui, sans-serif;
+}
+#lay-loading[hidden] { display: none; }
+.lay-spinner {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 4px solid var(--border);
+  border-top-color: var(--accent);
+  animation: lay-spin 0.9s linear infinite;
+}
+@keyframes lay-spin { to { transform: rotate(360deg); } }
 
 /* --- Hide-all mode ------------------------------------------------------- */
 body.hidden-controls .group,

@@ -85,6 +85,14 @@ no mouse and keyboard.
   is LOCKED to the layout's chosen orientation (portrait or wide, picked at
   creation); on the full-desktop view rotation is free — turning the phone
   swaps portrait/wide as usual.
+- **Creation sources & Desktop behavior** (owner refinements 2026-08-02,
+  after the first on-device pass): the Layout (+) button offers TWO sources —
+  "From a list" (the server enumerates every window AND each window's content
+  tabs — a window name alone hid its tabs) or "Tap a window" (a grid takes
+  one tap per cell); both fill the same ordered slots. Server-side tab
+  extraction is covered by a phone-side loading overlay and runs at trimmed
+  waits. The Desktop slider position MINIMIZES every layout member — the
+  full-desktop view shows only the windows that are not layout material.
 - **The unit of selection is the TAB, not the application** (VSCode editor tab,
   Chrome tab, Explorer tab): the tab is extracted into its own OS window, which
   the layout then arranges. Extraction strategies in priority order (owner

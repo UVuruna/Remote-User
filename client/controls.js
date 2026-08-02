@@ -455,22 +455,54 @@ keepFocus(hideBtn, () => {
 });
 
 // --- Layouts (Phase F+ step 1) --------------------------------------------
-// The + button ARMS the next canvas tap to pick a window (no switcher mode —
-// owner 2026-08-02); the server's layout_offer opens the panel below; the
-// top-center bar cycles Desktop → layout 1 → … and exists only while at
-// least one layout does. The server owns the list — the client only mirrors
-// `layout_state` (see connection.js).
+// The + button opens a source CHOOSER (owner 2026-08-02): build the layout
+// "From a list" (the server enumerates every window AND its content tabs) or
+// "By tapping" windows/tabs in the stream — a grid then takes one tap per
+// cell. A creation session (`creating`) collects SLOTS either way; Create
+// ships them and the server extracts any tab slots into their own windows
+// (a loading overlay covers those seconds). The top-center bar cycles
+// Desktop → layout 1 → …; the server owns the list (survives disconnects).
 
 const newlayBtn = document.getElementById("btn-newlay");
+const layPanel = document.getElementById("layout-panel");
+const layLoading = document.getElementById("lay-loading");
+const GRID_CELLS = { "2x1": 2, "1x2": 2, "2x2": 4 };
+
+let creating = null; // {source, entries, slots, mode, grid, orient, awaitingTap}
+let loadingTimer = null;
+
+function showLayLoading(text) {
+  layLoading.querySelector("span").textContent = text || "Working…";
+  layLoading.hidden = false;
+  clearTimeout(loadingTimer);
+  loadingTimer = setTimeout(() => { layLoading.hidden = true; }, 40000);
+}
+
+function hideLayLoading() {
+  clearTimeout(loadingTimer);
+  loadingTimer = null;
+  layLoading.hidden = true;
+}
 
 function refreshNewlayButton() {
-  newlayBtn.classList.toggle("active", layoutArm);
+  newlayBtn.classList.toggle("active", layoutArm || creating !== null);
+}
+
+function cancelCreation(silent) {
+  creating = null;
+  layoutArm = false;
+  refreshNewlayButton();
+  closeLayoutPanel();
+  hideLayLoading();
+  if (!silent) showToast("Layout creation cancelled");
 }
 
 keepFocus(newlayBtn, () => {
-  layoutArm = !layoutArm;
-  refreshNewlayButton();
-  showToast(layoutArm ? "Tap a window on the screen…" : "Layout creation cancelled");
+  if (creating || layoutArm) {
+    cancelCreation();
+    return;
+  }
+  openSourceChooser();
 });
 
 const layoutBar = document.getElementById("layout-bar");
@@ -488,7 +520,8 @@ function updateLayoutBar() {
 }
 
 // The bar cycles positions [Desktop, layout 0, layout 1, …]; index -1 on the
-// wire means "back to the full desktop".
+// wire means "back to the full desktop" (the server then minimizes every
+// layout member — the desktop shows only non-layout windows).
 function layoutStep(dir) {
   if (!layouts.length) return;
   const total = layouts.length + 1;
@@ -510,10 +543,7 @@ function applyOrientationLock() {
     layoutActive !== null && layouts[layoutActive] ? layouts[layoutActive].orient : "");
 }
 
-// --- Layout creation panel -------------------------------------------------
-
-const layPanel = document.getElementById("layout-panel");
-const GRID_CELLS = { "2x1": 2, "1x2": 2, "2x2": 4 };
+// --- Layout creation -------------------------------------------------------
 
 function closeLayoutPanel() {
   layPanel.hidden = true;
@@ -521,7 +551,7 @@ function closeLayoutPanel() {
 }
 
 layPanel.addEventListener("pointerdown", (e) => {
-  if (e.target === layPanel) closeLayoutPanel(); // backdrop tap = cancel
+  if (e.target === layPanel) cancelCreation(); // backdrop tap = cancel
 });
 
 function layChip(label, selected, onTap, icon) {
@@ -539,117 +569,204 @@ function layChip(label, selected, onTap, icon) {
   return el;
 }
 
-function openLayoutPanel(offer) {
-  layoutArm = false;
-  refreshNewlayButton();
-  const sel = {
+function newCreation(source) {
+  return {
+    source,                 // "list" | "tap"
+    entries: null,          // list source: [{kind, hwnd, title, process, icon, tab?, x?, y?}]
+    slots: [],              // chosen cells, in order — slot 1 names the layout
     mode: "solo",
     grid: null,
-    fill: [], // hwnds filling the grid's remaining cells, in tap order
     orient: window.innerHeight >= window.innerWidth ? "portrait" : "wide",
+    awaitingTap: false,
   };
+}
 
-  function needed() {
-    return sel.mode === "grid" ? (GRID_CELLS[sel.grid] || 2) - 1 : 0;
+function openSourceChooser() {
+  layPanel.innerHTML = "";
+  layPanel.hidden = false;
+  const card = document.createElement("div");
+  card.className = "lay-card";
+  const h = document.createElement("h2");
+  h.textContent = "New layout";
+  const sub = document.createElement("p");
+  sub.className = "lay-sub";
+  sub.textContent = "Where should the windows come from?";
+  const row = document.createElement("div");
+  row.className = "lay-row";
+  row.appendChild(layChip("From a list", false, () => {
+    creating = newCreation("list");
+    refreshNewlayButton();
+    closeLayoutPanel();
+    showLayLoading("Collecting windows and tabs…");
+    send({ type: "layout_list" });
+  }));
+  row.appendChild(layChip("Tap a window", false, () => {
+    creating = newCreation("tap");
+    armNextTap();
+  }));
+  const actions = document.createElement("div");
+  actions.className = "lay-actions";
+  actions.appendChild(layChip("Cancel", false, () => cancelCreation()));
+  card.append(h, sub, row, actions);
+  layPanel.appendChild(card);
+}
+
+function armNextTap() {
+  creating.awaitingTap = true;
+  layoutArm = true;
+  refreshNewlayButton();
+  closeLayoutPanel();
+  showToast("Tap a window or tab on the screen…");
+}
+
+function cellsNeeded() {
+  return creating.mode === "grid" ? (GRID_CELLS[creating.grid] || 2) : 1;
+}
+
+function slotFromOffer(msg) {
+  return {
+    hwnd: msg.target.hwnd,
+    title: msg.tab ? msg.tab.name : msg.target.title,
+    process: msg.target.process,
+    icon: msg.target.icon,
+    tab: msg.tab || null,
+    x: msg.x,
+    y: msg.y,
+  };
+}
+
+function slotFromEntry(e) {
+  return {
+    hwnd: e.hwnd, title: e.title, process: e.process, icon: e.icon,
+    tab: e.tab || null, x: e.x, y: e.y,
+  };
+}
+
+// The layout_offer handler (connection.js delegates here): either the list
+// arrived, or one tap's result — both feed the same creation session.
+function handleLayoutOffer(msg) {
+  hideLayLoading();
+  layoutArm = false;
+  if (!creating) creating = newCreation("tap");
+  if (msg.entries) {
+    creating.entries = msg.entries;
+  } else if (msg.target) {
+    creating.slots.push(slotFromOffer(msg));
+    creating.awaitingTap = false;
   }
+  refreshNewlayButton();
+  renderCreationPanel();
+}
 
-  function render() {
-    layPanel.innerHTML = "";
-    layPanel.hidden = false;
-    const card = document.createElement("div");
-    card.className = "lay-card";
+function sameSlot(a, b) {
+  return a.hwnd === b.hwnd &&
+    (a.tab ? b.tab && a.tab.name === b.tab.name : !b.tab);
+}
 
-    const h = document.createElement("h2");
-    if (offer.target.icon) {
-      const img = document.createElement("img");
-      img.className = "lay-appicon";
-      img.src = offer.target.icon;
-      img.alt = "";
-      h.appendChild(img);
-    }
-    h.appendChild(document.createTextNode(offer.target.process.replace(/\.exe$/i, "")));
+function renderCreationPanel() {
+  const c = creating;
+  layPanel.innerHTML = "";
+  layPanel.hidden = false;
+  const card = document.createElement("div");
+  card.className = "lay-card";
+
+  const h = document.createElement("h2");
+  h.textContent = "New layout";
+  card.appendChild(h);
+
+  // chosen slots — tap one to remove it
+  if (c.slots.length) {
     const sub = document.createElement("p");
     sub.className = "lay-sub";
-    // A picked TAB is named explicitly — it becomes its own window on Create.
-    sub.textContent = offer.tab
-      ? `Tab: ${offer.tab.name}`
-      : offer.target.title;
-    card.append(h, sub);
-
-    const modeRow = document.createElement("div");
-    modeRow.className = "lay-row";
-    modeRow.appendChild(layChip("Only this", sel.mode === "solo", () => {
-      sel.mode = "solo";
-      sel.grid = null;
-      sel.fill = [];
-      render();
-    }));
-    (offer.grids || []).forEach((g) => modeRow.appendChild(
-      layChip(`Grid ${g}`, sel.mode === "grid" && sel.grid === g, () => {
-        sel.mode = "grid";
-        sel.grid = g;
-        sel.fill = [];
-        render();
-      })));
-    card.appendChild(modeRow);
-
-    if (sel.mode === "grid") {
-      const hint = document.createElement("p");
-      hint.className = "lay-sub";
-      hint.textContent = `Pick ${needed()} more window(s) for the grid:`;
-      card.appendChild(hint);
-      const winRow = document.createElement("div");
-      winRow.className = "lay-row";
-      (offer.windows || []).forEach((w) => winRow.appendChild(
-        layChip(w.title.length > 34 ? w.title.slice(0, 33) + "…" : w.title,
-                sel.fill.includes(w.hwnd), () => {
-          const i = sel.fill.indexOf(w.hwnd);
-          if (i >= 0) sel.fill.splice(i, 1);
-          else if (sel.fill.length < needed()) sel.fill.push(w.hwnd);
-          render();
-        }, w.icon)));
-      card.appendChild(winRow);
-    }
-
-    const orientRow = document.createElement("div");
-    orientRow.className = "lay-row";
-    orientRow.appendChild(layChip("Portrait", sel.orient === "portrait", () => {
-      sel.orient = "portrait";
-      render();
-    }));
-    orientRow.appendChild(layChip("Wide", sel.orient === "wide", () => {
-      sel.orient = "wide";
-      render();
-    }));
-    card.appendChild(orientRow);
-
-    const actions = document.createElement("div");
-    actions.className = "lay-actions";
-    actions.appendChild(layChip("Cancel", false, closeLayoutPanel));
-    const ready = sel.mode === "solo" || sel.fill.length === needed();
-    const create = layChip("Create", ready, () => {
-      if (!ready) return;
-      send({
-        type: "layout_create",
-        target: offer.target.hwnd,
-        // Echo the pick point + tab: the server re-hits the tab fresh and
-        // extracts it into its own window before arranging (step 2).
-        tab: offer.tab || null,
-        x: offer.x,
-        y: offer.y,
-        mode: sel.mode,
-        grid: sel.grid,
-        fill: sel.fill,
-        orient: sel.orient,
-      });
-      closeLayoutPanel();
-    });
-    actions.appendChild(create);
-    card.appendChild(actions);
-    layPanel.appendChild(card);
+    sub.textContent = `Chosen (${c.slots.length}/${cellsNeeded()}) — tap to remove:`;
+    card.appendChild(sub);
+    const row = document.createElement("div");
+    row.className = "lay-row";
+    c.slots.forEach((s, i) => row.appendChild(
+      layChip(s.title.length > 30 ? s.title.slice(0, 29) + "…" : s.title, true,
+              () => { c.slots.splice(i, 1); renderCreationPanel(); }, s.icon)));
+    card.appendChild(row);
   }
 
-  render();
+  const modeRow = document.createElement("div");
+  modeRow.className = "lay-row";
+  modeRow.appendChild(layChip("Only one", c.mode === "solo", () => {
+    c.mode = "solo";
+    c.grid = null;
+    c.slots = c.slots.slice(0, 1);
+    renderCreationPanel();
+  }));
+  ["2x1", "1x2", "2x2"].forEach((g) => modeRow.appendChild(
+    layChip(`Grid ${g}`, c.mode === "grid" && c.grid === g, () => {
+      c.mode = "grid";
+      c.grid = g;
+      c.slots = c.slots.slice(0, GRID_CELLS[g]);
+      renderCreationPanel();
+    })));
+  card.appendChild(modeRow);
+
+  if (c.source === "list" && c.entries) {
+    const hint = document.createElement("p");
+    hint.className = "lay-sub";
+    hint.textContent = "Windows and tabs on the PC:";
+    card.appendChild(hint);
+    const list = document.createElement("div");
+    list.className = "lay-row lay-list";
+    c.entries.forEach((e) => {
+      const slot = slotFromEntry(e);
+      const idx = c.slots.findIndex((s) => sameSlot(s, slot));
+      const label = (e.kind === "tab" ? "↳ " : "") +
+        (e.title.length > 34 ? e.title.slice(0, 33) + "…" : e.title);
+      list.appendChild(layChip(label, idx >= 0, () => {
+        if (idx >= 0) c.slots.splice(idx, 1);          // tap again = deselect
+        else if (c.slots.length < cellsNeeded()) c.slots.push(slot);
+        else c.slots[c.slots.length - 1] = slot;       // full = replace last
+        renderCreationPanel();
+      }, e.kind === "window" ? e.icon : null));
+    });
+    card.appendChild(list);
+  } else if (c.source === "tap" && c.slots.length < cellsNeeded()) {
+    const row = document.createElement("div");
+    row.className = "lay-row";
+    row.appendChild(layChip(`Tap window ${c.slots.length + 1} of ${cellsNeeded()}`,
+                            false, armNextTap));
+    card.appendChild(row);
+  }
+
+  const orientRow = document.createElement("div");
+  orientRow.className = "lay-row";
+  orientRow.appendChild(layChip("Portrait", c.orient === "portrait", () => {
+    c.orient = "portrait";
+    renderCreationPanel();
+  }));
+  orientRow.appendChild(layChip("Wide", c.orient === "wide", () => {
+    c.orient = "wide";
+    renderCreationPanel();
+  }));
+  card.appendChild(orientRow);
+
+  const actions = document.createElement("div");
+  actions.className = "lay-actions";
+  actions.appendChild(layChip("Cancel", false, () => cancelCreation()));
+  const ready = c.slots.length === cellsNeeded();
+  actions.appendChild(layChip("Create", ready, () => {
+    if (!ready) return;
+    send({
+      type: "layout_create",
+      slots: c.slots.map((s) => ({ hwnd: s.hwnd, tab: s.tab, x: s.x, y: s.y })),
+      mode: c.mode,
+      grid: c.grid,
+      orient: c.orient,
+    });
+    creating = null;
+    refreshNewlayButton();
+    closeLayoutPanel();
+    // Tab extraction takes a few seconds of visible work on the PC — the
+    // overlay says so instead of a frozen-looking phone (owner 2026-08-02).
+    showLayLoading("Arranging the windows…");
+  }));
+  card.appendChild(actions);
+  layPanel.appendChild(card);
 }
 
 // --- Toast ----------------------------------------------------------------

@@ -70,3 +70,7 @@ the list, update the bar, lock/unlock rotation, apply or reset the locked
 view) and `layout_offer` (opens the creation panel). Close code **4409** =
 another device took over (one device at a time): no auto-reconnect — a
 deliberate tap on the status pill takes the session back.
+
+## Creation flow rework (owner feedback 2026-08-02, same day)
+`layout_offer` is delegated to `handleLayoutOffer` (list arrival or one tap's
+slot — same creation session); `layout_state` hides the loading overlay.

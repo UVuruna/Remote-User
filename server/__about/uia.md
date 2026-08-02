@@ -44,3 +44,12 @@ from the phone-driven, self-verifying injector.
   monitor-normalized point, or None
 - `extract_tab(mon_rect, nx, ny, target)`: run the strategy chain; returns
   the new window's hwnd or None (fall back to the whole window)
+
+## Refinements (owner feedback 2026-08-02, same day)
+`list_tabs` enumerates a window's REAL content tabs for the list-based
+creation source (filter: top strip within the window's top 15%, width ≥ 60 px
+— drops VSCode activity-bar/panel icons and Explorer's Home pills).
+Extraction re-finds the tab BY NAME inside the window after raising it (tabs
+shift; a stale point grabs the wrong one) with the pick point as fallback.
+All waits are trimmed to the working minimum — the owner found the visible
+clicking/choosing too slow.
