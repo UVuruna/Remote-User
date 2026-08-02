@@ -53,7 +53,7 @@ function connect() {
           window.Android.setTailscaleUrl(tailscaleUrl || "");
         }
         updateAnywhereBanner();
-        refreshUpdateBanner(msg.app_version);
+        refreshUpdateBanner(msg.apk_version || msg.app_version);
         view = { scale: 1, tx: 0, ty: 0 };
         detailRegion = { x: 0, y: 0, w: 1, h: 1 };
         if (baseBitmap) { baseBitmap.close(); baseBitmap = null; }

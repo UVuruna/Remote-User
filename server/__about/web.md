@@ -50,3 +50,6 @@ JPEG mode only: fans frames from the capture thread out to per-client `asyncio.Q
 - `_switch_monitor(...)`: `stream.switch_to()` + injector rect update; JPEG resends `config` directly, H.264 clients get it from their fresh session instead
 - `_screenshot(ws, stream)`: native-resolution frame → clipboard, toast on the result
 - `_receive_input(ws, injector, stream, token)`: the main dispatch loop — see the flow doc
+
+`config` additionally carries `apk_version` (the served APK's real version —
+the phone's update-banner comparison; `app_version` stays for display).

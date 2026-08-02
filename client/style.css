@@ -468,6 +468,23 @@ body.hidden-controls #update-banner { display: none; }
   justify-content: flex-end;
   margin-top: 14px;
 }
+
+/* Source chooser: two LARGE rounded squares (like the parent card — owner
+   2026-08-02: the pill radius turned them into circles that clipped the
+   labels), icon above text, sharing the row. */
+.lay-sources { justify-content: center; gap: 14px; }
+.lay-source {
+  flex: 1 1 0;
+  max-width: 46%;
+  border-radius: 18px;
+  padding: 26px 12px 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  font-size: 14px;
+}
+.lay-source svg { width: 62px; height: 62px; }
 .lay-list {
   max-height: 38vh;
   overflow-y: auto;
@@ -492,13 +509,13 @@ body.hidden-controls #update-banner { display: none; }
 #lay-loading[hidden] { display: none; }
 
 /* The cube: owner-specified faces — top gold, bottom purple-gray, left azure,
-   right orange, front green, back red. JS turns .cube to the next face for
-   every window the server creates; the scene bobs gently so waiting moments
-   between turns never look frozen. */
+   right orange, front green, back red. NO perspective = orthographic
+   projection (owner sketch 2026-08-02 — a corner view where the cube reads
+   as a cube, never a flat square); JS spins it continuously while loading
+   and adds a momentum burst for every window the server creates. */
 .cube-scene {
   width: 110px;
   height: 110px;
-  perspective: 640px;
   animation: cube-bob 2.6s ease-in-out infinite;
 }
 .cube {
@@ -506,7 +523,7 @@ body.hidden-controls #update-banner { display: none; }
   height: 100%;
   position: relative;
   transform-style: preserve-3d;
-  transition: transform 0.65s cubic-bezier(0.45, 0, 0.25, 1);
+  transform: rotateX(-28deg) rotateY(40deg);
 }
 .cube-face {
   position: absolute;

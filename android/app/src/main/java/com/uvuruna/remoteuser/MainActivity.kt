@@ -392,11 +392,19 @@ class MainActivity : AppCompatActivity() {
         @JavascriptInterface
         fun update(url: String) {
             runOnUiThread {
+                val view = Intent(Intent.ACTION_VIEW, Uri.parse(url))
                 try {
-                    startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                    startActivity(view)
                 } catch (e: Exception) {
-                    // no browser to hand the download to — the page's toast
-                    // already told the user what should have happened
+                    // Some setups resolve no direct handler ("no app can open
+                    // this" — owner report 2026-08-02); the chooser always
+                    // offers whatever browsers exist.
+                    try {
+                        startActivity(Intent.createChooser(view, "Download the update"))
+                    } catch (e2: Exception) {
+                        // truly nothing to hand the download to — the page's
+                        // toast already told the user what should have happened
+                    }
                 }
             }
         }

@@ -111,3 +111,6 @@ native gallery/camera chooser (`filePicker`, `GetContent("image/*")`).
 ### Companion object
 `PING_TIMEOUT_MS` (3000), `RETRY_INTERVAL_MS` (4000) — the two tunables
 behind the probe timeout and the self-healing error-card cadence.
+
+`update(url)` falls back to an Intent chooser when no direct ACTION_VIEW
+handler resolves ("no app can open this" — owner report 2026-08-02).
