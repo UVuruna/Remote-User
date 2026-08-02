@@ -9,8 +9,8 @@ FakeInjector records calls instead of SendInput, so the gate runs headless on
 the build machine without touching the real screen.
 
 Scenarios (all must pass, any failure exits 1 — build.py runs this fail-closed):
-  1. steering    — a touch on the canvas sends pointer_move (cursor offset
-     applied) and NEVER a click (the no-tap decree)
+  1. steering    — a touch on the canvas sends pointer_move (pointer exactly
+     under the finger — owner 2026-08-02) and NEVER a click (the no-tap decree)
   2. click       — the Click button lands injector.click("left")
   3. right click — the Right button lands injector.click("right") (a BUTTON, not a tap)
   4. chord       — a chord button lands press_chord
@@ -18,8 +18,8 @@ Scenarios (all must pass, any failure exits 1 — build.py runs this fail-closed
      (Android steals edge touches; up-only buttons died on-device 2026-07-26)
   5b. system swipe — pointercancel after real travel must NOT fire (a home/back
      gesture crossing a button is not a press)
-  6. edge reach  — a touch in the far bottom-right corner still drives the
-     cursor to the PC screen's bottom-right edge (offset margin geometry)
+  6. edge reach  — a touch in the far bottom-right corner drives the cursor
+     to the PC screen's bottom-right edge (full-screen fit, no margins)
   7. keyboard    — Keys focuses the capture field; typed text arrives as
      key_text; Enter arrives as the shift+enter chord (new row)
   8. /ping contract — the reachability probe answers EXACTLY 204: the Android
@@ -328,8 +328,8 @@ def main():
         results["system swipe over a button does NOT fire"] = \
             ("click", "left") not in snapshot()
 
-        # 6. edge reach: with the up-left offset (right-handed default), the
-        # margin must let a bottom-right-corner touch reach the screen corner.
+        # 6. edge reach: the image fills the canvas with no reserved margins
+        # (owner 2026-08-02) — a corner touch maps straight to the corner.
         clear_calls()
         page.touchscreen.tap(VIEW_W - 2, VIEW_H - 2)
         results["edge reach: corner touch -> cursor at ~(1,1)"] = \

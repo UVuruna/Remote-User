@@ -36,7 +36,8 @@ function connect() {
         // Full view reset — sent after auth and after every stream (re)start
         // (monitor switch, H.264 session reset).
         monitor = { w: msg.monitor_width, h: msg.monitor_height };
-        hand = msg.hand === "left" ? "left" : "right";
+        // config.hand is ignored since 2026-08-02 — the cursor-offset system
+        // (handedness diagonal) is gone; the pointer sits under the finger.
         const newMode = msg.stream || "jpeg";
         if (newMode !== streamMode) showToast(newMode === "h264" ? "H.264 stream" : "JPEG stream");
         streamMode = newMode;

@@ -64,7 +64,6 @@ canvas.addEventListener("pointerdown", (e) => {
   cancelScrollInertia();
   const p = toCanvasPx(e);
   pointers.set(e.pointerId, p);
-  sampleFinger(e);
 
   if (pointers.size >= 2) {
     if (viewLocked()) return; // layout focus: the view is locked, no pinch
@@ -72,24 +71,23 @@ canvas.addEventListener("pointerdown", (e) => {
     return;
   }
 
-  const offset = e.pointerType === "touch"; // mouse/pen (dev) → no offset
-  primary = { id: e.pointerId, startX: p.x, startY: p.y, type: touchMode, offset };
+  // The pointer is exactly under the finger (owner 2026-08-02 — no offset).
+  primary = { id: e.pointerId, startX: p.x, startY: p.y, type: touchMode };
   if (touchMode === "drag") {
-    primary.pos = toRemoteMaybeOffset(p, offset);
+    primary.pos = toRemoteClamped(p.x, p.y);
     send({ type: "pointer_down", x: primary.pos.x, y: primary.pos.y, button: "left" });
     cursorPos = primary.pos; // optimistic
   } else if (touchMode === "move") {
     primary.prevCursor = cursorPos; // restore point if this turns into a pinch
-    sendCursor(toRemoteMaybeOffset(p, offset));
+    sendCursor(toRemoteClamped(p.x, p.y));
   } else if (touchMode === "scroll") {
-    Object.assign(primary, { lastY: p.y, acc: 0, vel: 0, lastT: performance.now(), pos: toRemoteMaybeOffset(p, offset) });
+    Object.assign(primary, { lastY: p.y, acc: 0, vel: 0, lastT: performance.now(), pos: toRemoteClamped(p.x, p.y) });
   }
 });
 
 canvas.addEventListener("pointermove", (e) => {
   const p = toCanvasPx(e);
   if (pointers.has(e.pointerId)) pointers.set(e.pointerId, p);
-  sampleFinger(e);
 
   if (pinch && pointers.size >= 2) {
     const [p1, p2] = firstTwoPointers();
@@ -108,10 +106,10 @@ canvas.addEventListener("pointermove", (e) => {
   if (!primary || primary.id !== e.pointerId) return;
 
   if (primary.type === "drag") {
-    primary.pos = toRemoteMaybeOffset(p, primary.offset);
+    primary.pos = toRemoteClamped(p.x, p.y);
     sendCursor(primary.pos);
   } else if (primary.type === "move") {
-    sendCursor(toRemoteMaybeOffset(p, primary.offset));
+    sendCursor(toRemoteClamped(p.x, p.y));
   } else if (primary.type === "scroll") {
     const now = performance.now();
     const dy = p.y - primary.lastY;

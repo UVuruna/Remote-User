@@ -5,21 +5,15 @@
 
 // --- View transform -------------------------------------------------------
 
-// The image is fitted into the canvas MINUS a margin on the sides the offset
-// points away from (right-handed: right + bottom; left-handed: left + bottom).
-// The margin equals one offset component, so the finger can travel past the
-// image edge and the pointer still reaches the far corners of the PC screen —
-// without it the offset makes those edges physically unreachable.
+// The image is aspect-fitted into the FULL canvas, centered — no reserved
+// margins (owner 2026-08-02: the pointer sits under the finger, so the old
+// offset margins are gone and the image touches the screen edges).
 function computeBaseRect() {
   if (!monitor.w) return;
-  const m = offsetDistancePx() * devicePixelRatio * Math.SQRT1_2;
-  const left = hand === "left" ? m : 0;
-  const boxW = canvas.width - m;  // one horizontal margin, on the offset's far side
-  const boxH = canvas.height - m;
   const aspect = monitor.w / monitor.h;
-  const w = Math.min(boxW, boxH * aspect);
+  const w = Math.min(canvas.width, canvas.height * aspect);
   const h = w / aspect;
-  baseRect = { x: left + (boxW - w) / 2, y: (boxH - h) / 2, w, h };
+  baseRect = { x: (canvas.width - w) / 2, y: (canvas.height - h) / 2, w, h };
 }
 
 function drawnRect() {
@@ -32,22 +26,18 @@ function drawnRect() {
 }
 
 // Layout focus: zoom/translate the view so the layout's region fills the
-// canvas (minus the same cursor-offset margin computeBaseRect reserves, so
-// the offset pointer can still reach the region's far edges). While locked
-// this transform is authoritative — clampView backs off, gestures are off.
+// FULL canvas — a matching-aspect region touches all four screen edges
+// (owner 2026-08-02). While locked this transform is authoritative —
+// clampView backs off, gestures are off.
 function applyLayoutView() {
   if (!viewLocked() || !monitor.w) return;
-  const m = offsetDistancePx() * devicePixelRatio * Math.SQRT1_2;
-  const left = hand === "left" ? m : 0;
-  const boxW = canvas.width - m;
-  const boxH = canvas.height - m;
   const r = layoutRegion;
   const rw = r.w * baseRect.w;
   const rh = r.h * baseRect.h;
-  const s = Math.min(boxW / rw, boxH / rh);
+  const s = Math.min(canvas.width / rw, canvas.height / rh);
   view.scale = s;
-  view.tx = left + (boxW - rw * s) / 2 - (baseRect.x + r.x * baseRect.w) * s;
-  view.ty = (boxH - rh * s) / 2 - (baseRect.y + r.y * baseRect.h) * s;
+  view.tx = (canvas.width - rw * s) / 2 - (baseRect.x + r.x * baseRect.w) * s;
+  view.ty = (canvas.height - rh * s) / 2 - (baseRect.y + r.y * baseRect.h) * s;
   redraw();
 }
 
