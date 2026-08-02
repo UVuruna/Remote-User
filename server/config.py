@@ -41,7 +41,8 @@ SETTINGS_PATH = USER_DIR / "settings.json"
 USER_ADJUSTABLE = {
     "port", "monitor_index", "target_fps", "use_h264",
     "h264_max_width", "h264_bitrate", "jpeg_quality", "open_qr_image",
-    "hand",
+    # "hand" retired 2026-08-02 (the cursor-offset system is gone); an old
+    # settings.json carrying it is simply ignored on load.
 }
 
 
@@ -117,10 +118,9 @@ class Settings:
     inject_verify_min_jump: int = 24
     inject_verify_tolerance: int = 16
     inject_verify_streak: int = 3
-    # Which hand holds the phone — decides the client's cursor-offset diagonal
-    # (right-handed → pointer up-LEFT of the finger, left-handed → up-RIGHT).
-    # Sent to the client in every `config`; set in the desktop GUI Settings.
-    hand: str = "right"             # "right" | "left"
+    # LEGACY (2026-08-02): the cursor-offset system is gone — still sent in
+    # `config` for protocol stability, ignored by the client, no GUI control.
+    hand: str = "right"
 
     # Pairing
     token_bytes: int = 16           # entropy of the pairing token

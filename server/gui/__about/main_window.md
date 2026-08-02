@@ -70,3 +70,10 @@ window hides it to the tray; the server keeps running until Quit.
   the button stuck on "Downloading…" forever
 - `closeEvent()` — overridden to `event.ignore()` + `hide()` instead of
   closing; shows a one-time tray balloon explaining the app is still running
+
+## Settings trim (owner 2026-08-02)
+"Phone hand" is gone from the Settings form (the cursor-offset system it fed
+was removed — the pointer sits under the finger); `config.hand` stays a
+legacy field the server still sends and nobody reads. Frame rate gained a
+"10 fps — light" choice. An old settings.json carrying "hand" is ignored on
+load with a warning (documented non-fatal path).
