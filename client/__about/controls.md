@@ -98,3 +98,13 @@ slot-based panel: chosen slots are removable chips, list selection toggles and
 REPLACES the last pick when full (the stuck-selection bug), Create ships
 `slots` and shows the loading overlay (`#lay-loading`) while the server
 extracts tabs — visible seconds on the PC.
+
+## Step 3 additions (owner spec 2026-08-02)
+`next_input` builtin (jump to the next text box — dictation workflow) and the
+`quality` cycle (full → reduced → auto-on-mobile-data via
+`Android.transport()`; persisted in localStorage, restated on every connect).
+The loading overlay is now the owner-specified CUBE: fully opaque screen, six
+colored faces (top gold, bottom purple-gray, left azure, right orange, front
+green, back red); each `layout_progress` (one per window the server creates)
+turns it to the next face — top → left → back → right → front → bottom, loop.
+The source chooser carries the owner's two icons (clipboard list / window+).

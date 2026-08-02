@@ -474,29 +474,57 @@ body.hidden-controls #update-banner { display: none; }
   align-content: flex-start;
 }
 
+/* FULLY opaque (owner: nothing behind may show) — the whole screen becomes
+   the animation while the server creates windows. */
 #lay-loading {
   position: fixed;
   inset: 0;
   z-index: 48;
-  background: rgb(15 23 42 / 0.66);
+  background: #0F172A;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 14px;
+  gap: 40px;
   color: var(--text-primary);
-  font: 600 14px system-ui, sans-serif;
+  font: 600 15px system-ui, sans-serif;
 }
 #lay-loading[hidden] { display: none; }
-.lay-spinner {
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  border: 4px solid var(--border);
-  border-top-color: var(--accent);
-  animation: lay-spin 0.9s linear infinite;
+
+/* The cube: owner-specified faces — top gold, bottom purple-gray, left azure,
+   right orange, front green, back red. JS turns .cube to the next face for
+   every window the server creates; the scene bobs gently so waiting moments
+   between turns never look frozen. */
+.cube-scene {
+  width: 110px;
+  height: 110px;
+  perspective: 640px;
+  animation: cube-bob 2.6s ease-in-out infinite;
 }
-@keyframes lay-spin { to { transform: rotate(360deg); } }
+.cube {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  transform-style: preserve-3d;
+  transition: transform 0.65s cubic-bezier(0.45, 0, 0.25, 1);
+}
+.cube-face {
+  position: absolute;
+  inset: 0;
+  border: 2px solid rgb(15 23 42 / 0.55);
+  border-radius: 10px;
+  opacity: 0.96;
+}
+.cf-front  { background: #22C55E; transform: rotateY(0deg)    translateZ(55px); }
+.cf-back   { background: #EF4444; transform: rotateY(180deg)  translateZ(55px); }
+.cf-left   { background: #38BDF8; transform: rotateY(-90deg)  translateZ(55px); }
+.cf-right  { background: #F97316; transform: rotateY(90deg)   translateZ(55px); }
+.cf-top    { background: #FFD700; transform: rotateX(90deg)   translateZ(55px); }
+.cf-bottom { background: #7E6B8F; transform: rotateX(-90deg)  translateZ(55px); }
+@keyframes cube-bob {
+  0%, 100% { transform: translateY(-6px); }
+  50% { transform: translateY(6px); }
+}
 
 /* --- Hide-all mode ------------------------------------------------------- */
 body.hidden-controls .group,

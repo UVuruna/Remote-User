@@ -49,14 +49,16 @@ A button is one of:
 
 - **Built-in action** — `{ "action": "<name>" }`, where `<name>` is:
   - `click` — **the left click**: presses at the current cursor position (the finger only steers the cursor); press it twice fast for a double click.
-  - `right` — **the right click**: same as `click`, at the current cursor position. A press button, NOT a mode — nothing on the screen acts on a tap (the pointer rides an offset from the finger, so a tap would land away from the fingertip).
+  - `right` — **the right click**: same as `click`, at the current cursor position. A press button, NOT a mode — nothing on the screen acts on a tap.
   - `drag`, `scroll` — **mouse modes** (toggle on/off, only one active at a time, together with `Move`): the mode decides what one finger on the screen does — drag with left held / wheel. Default (no mode) = the finger only moves the PC cursor, it never clicks. Two fingers always pinch-zoom.
   - `keyboard` — toggle the phone keyboard; what you type/dictate lands in the focused box on the PC screen itself (no mirror bar). The keyboard's ↵ makes a new row (never "send"); the real Enter is its own button (see `key`).
   - `upload` — pick an image from the phone (gallery/camera); the server pastes it into the focused box on the PC by itself.
   - `monitor` — switch the streamed monitor.
   - `snap` — screenshot the PC monitor into the PC clipboard (available in config; not in the default layout).
-  - `calibrate` — re-measure your fingertip so the on-screen pointer sits at a comfortable, always-visible offset from it. Tap it, then tap the screen a few times; a toast confirms when it locks. Shipped as the first item of the **Settings** category.
+  - `next_input` — jump keyboard focus to the NEXT text-input box (built for dictation: navigate between fields without the mouse). On the full desktop it cycles the boxes of every visible window; in layout focus, only that layout's. Shipped in the **Settings** category.
+  - `quality` — cycle the stream quality: full → reduced (half resolution, ~10 fps — saves mobile data) → auto (reduced only on mobile data). Shipped in the **Settings** category.
   - `anywhere` — open the "use from anywhere" wizard (Tailscale setup). The banner offers it by itself only once per device; this button is the permanent way back in. Shipped in the **Settings** category.
+  - `calibrate` — retired (the pointer sits exactly under the finger since 2026-08-02); the button only explains that it is no longer needed.
 - **Chord** — `{ "label": "Copy", "chord": "ctrl+c" }` — fires a key combination (see below).
 - **Special key** — `{ "label": "Esc", "key": "escape" }` — a single structural key.
 
@@ -73,4 +75,4 @@ An unrecognised chord is logged on the server and does nothing — never a half-
 
 ## Your custom categories
 
-The shipped `Zones` category maps `ctrl+win+alt+1..4` (FancyZones presets). The shipped `Settings` category holds `calibrate` (finger calibration) and `anywhere` (the Tailscale wizard) — the home for future on-device options. Add or rearrange categories freely — this file is yours to hand-edit; to move a button between categories, just move its JSON entry.
+The shipped `Zones` category maps `ctrl+win+alt+1..4` (FancyZones presets). The shipped `Settings` category holds `next_input` (jump to the next text box), `quality` (stream quality cycle) and `anywhere` (the Tailscale wizard) — the home for on-device options. Add or rearrange categories freely — this file is yours to hand-edit; to move a button between categories, just move its JSON entry.

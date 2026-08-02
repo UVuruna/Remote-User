@@ -71,9 +71,22 @@
   <!-- Layout creation offer (filled by controls.js from `layout_offer`) -->
   <div id="layout-panel" hidden></div>
 
-  <!-- Loading overlay — tab extraction runs visible work on the PC for a few
-       seconds; the phone must say so instead of looking frozen -->
-  <div id="lay-loading" hidden><div class="lay-spinner"></div><span>Working…</span></div>
+  <!-- Loading overlay — FULLY opaque (owner 2026-08-02: nothing behind may
+       show): a 3D cube that turns to its next face for every window the
+       server creates (top → left → back → right → front → bottom, looping) -->
+  <div id="lay-loading" hidden>
+    <div class="cube-scene">
+      <div class="cube" id="lay-cube">
+        <div class="cube-face cf-front"></div>
+        <div class="cube-face cf-back"></div>
+        <div class="cube-face cf-left"></div>
+        <div class="cube-face cf-right"></div>
+        <div class="cube-face cf-top"></div>
+        <div class="cube-face cf-bottom"></div>
+      </div>
+    </div>
+    <span>Working…</span>
+  </div>
 
   <div id="wizard" hidden>
     <div class="wiz-card">

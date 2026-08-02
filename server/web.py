@@ -218,7 +218,7 @@ def create_app(stream, hub: FrameHub | None, injector: InputInjector, token: str
             ratio = min(w, h) / max(w, h) if w > 0 and h > 0 else 9 / 16
         except (TypeError, ValueError):
             ratio = 9 / 16
-        conn = {"ratio": ratio, "active": None, "region": None}
+        conn = {"ratio": ratio, "active": None, "region": None, "reduced": False}
         await ws.send_text(json.dumps({"type": "actions", **_load_actions()}))
         await _send_layout_state(ws, layouts, conn)
         tasks = [asyncio.create_task(_send_cursor(ws, injector))]
@@ -228,7 +228,7 @@ def create_app(stream, hub: FrameHub | None, injector: InputInjector, token: str
             queue = hub.subscribe()
             tasks.append(asyncio.create_task(_send_frames(ws, queue)))
         else:
-            tasks.append(asyncio.create_task(_stream_h264(ws, stream, token)))
+            tasks.append(asyncio.create_task(_stream_h264(ws, stream, token, conn)))
         try:
             await _receive_input(ws, injector, stream, token, layouts, conn)
         except WebSocketDisconnect:
@@ -265,11 +265,13 @@ async def _send_frames(ws: WebSocket, queue: asyncio.Queue) -> None:
         await ws.send_bytes(await queue.get())
 
 
-async def _stream_h264(ws: WebSocket, manager, token: str) -> None:
+async def _stream_h264(ws: WebSocket, manager, token: str,
+                       conn: dict | None = None) -> None:
     """One H.264 session per iteration: open (fresh init segment + keyframe),
     announce it via `config`, forward chunks until the session ends (monitor
-    switch, slow-client reset, encoder death), then open the next. The task is
-    cancelled on disconnect; the session always closes."""
+    switch, slow-client reset, quality change, encoder death), then open the
+    next. The task is cancelled on disconnect; the session always closes."""
+    conn = conn if conn is not None else {}
     loop = asyncio.get_running_loop()
     while True:
         queue: asyncio.Queue = asyncio.Queue(maxsize=SETTINGS.h264_queue_chunks)
@@ -286,6 +288,9 @@ async def _stream_h264(ws: WebSocket, manager, token: str) -> None:
                     q.get_nowait()
                 q.put_nowait(None)
 
+        # The quality handler ends the CURRENT session through this hook —
+        # the loop then reopens with the new reduced/full encoder settings.
+        conn["reset_stream"] = lambda p=push: loop.call_soon_threadsafe(p, None)
         started = loop.time()
         try:
             # Default args bind THIS iteration's push — `push` itself rebinds
@@ -295,6 +300,7 @@ async def _stream_h264(ws: WebSocket, manager, token: str) -> None:
                 manager.open_session,
                 lambda chunk, p=push: loop.call_soon_threadsafe(p, chunk),
                 lambda p=push: loop.call_soon_threadsafe(p, None),
+                conn.get("reduced", False),
             )
         except (RuntimeError, OSError) as e:
             logger.error("H.264 session failed to open: %s", e)
@@ -509,10 +515,13 @@ async def _layout_create(ws: WebSocket, layouts, stream, conn: dict, msg: dict) 
         await _send_layout_state(ws, layouts, conn)
         return
     resolved: list[tuple[int, str | None]] = []
-    for slot in slots:
+    for i, slot in enumerate(slots):
         r = await _resolve_slot(ws, stream, slot)
         if r is not None:
             resolved.append(r)
+        # one turn of the phone's loading cube per processed window
+        await ws.send_text(json.dumps(
+            {"type": "layout_progress", "done": i + 1, "total": len(slots)}))
     if not resolved:
         await _toast(ws, "Those windows are gone — layout not created")
         await _send_layout_state(ws, layouts, conn)
@@ -593,6 +602,25 @@ async def _receive_input(ws: WebSocket, injector: InputInjector, stream, token: 
             await _layout_pick(ws, layouts, stream, msg)
         elif kind == "layout_list":
             await _layout_list(ws, stream)
+        elif kind == "next_input":
+            # Scope follows the view (owner spec): layout focus → only its
+            # member windows; full desktop → every visible window.
+            hwnds = None
+            if conn["active"] is not None and 0 <= conn["active"] < len(layouts.layouts):
+                hwnds = list(layouts.layouts[conn["active"]].members)
+            name = await asyncio.to_thread(uia.focus_next_input, hwnds)
+            label = (name or "")[:40]
+            await _toast(ws, f"→ {label}" if name else "No text boxes found")
+        elif kind == "quality":
+            # Full vs reduced stream (owner spec: lower resolution + ~10 fps,
+            # chosen always or only on mobile data — the CLIENT decides when
+            # and just tells us the effective state). H.264: the running
+            # session is reset and reopens with the reduced encoder settings.
+            conn["reduced"] = bool(msg.get("reduced"))
+            if stream.mode == "h264" and conn.get("reset_stream"):
+                conn["reset_stream"]()
+            await _toast(ws, "Reduced quality — saving data" if conn["reduced"]
+                         else "Full quality")
         elif kind == "layout_create":
             await _layout_create(ws, layouts, stream, conn, msg)
         elif kind == "layout_focus":

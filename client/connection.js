@@ -23,6 +23,10 @@ function connect() {
       type: "auth", token,
       screen: { w: window.screen.width, h: window.screen.height },
     }));
+    // The server starts every connection at full quality — restate the saved
+    // preference (a network switch reconnects, so auto mode re-evaluates
+    // here too).
+    if (effectiveReduced()) sendQuality();
     lastSentViewport = { x: 0, y: 0, w: 1, h: 1 };
     scheduleViewport();
     setStatus("connected", "Connected");
@@ -90,6 +94,8 @@ function connect() {
         scheduleViewport();
       } else if (msg.type === "layout_offer") {
         handleLayoutOffer(msg);
+      } else if (msg.type === "layout_progress") {
+        cubeNext(); // one window created on the PC = one cube turn
       }
     } else if (streamMode === "h264") {
       mseQueue.push(e.data);
