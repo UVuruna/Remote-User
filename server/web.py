@@ -40,6 +40,7 @@ from PIL import Image, ImageOps
 import clipboard
 import monitors
 import pairing
+import uia
 import window_manager
 from config import SETTINGS, app_version
 from input_injector import BUTTON_FLAGS, InputInjector
@@ -435,16 +436,21 @@ async def _send_layout_state(ws: WebSocket, layouts, conn: dict) -> None:
 async def _layout_pick(ws: WebSocket, layouts, stream, msg: dict) -> None:
     """The phone's armed tap: identify the window under the point and offer
     the layout choices (solo / grid templates + open windows to fill cells)."""
+    x, y = float(msg["x"]), float(msg["y"])
     target = await asyncio.to_thread(
-        window_manager.window_at, _mon_rect(stream),
-        float(msg["x"]), float(msg["y"]))
+        window_manager.window_at, _mon_rect(stream), x, y)
     if target is None:
         await _toast(ws, "No window there — tap on a window")
         return
+    # Tab under the same point (step 2): the offer names it, and the client
+    # echoes the pick point back in layout_create so extraction re-hits fresh.
+    tab = await asyncio.to_thread(uia.tab_at, _mon_rect(stream), x, y)
     others = await asyncio.to_thread(window_manager.list_windows, {target["hwnd"]})
     await ws.send_text(json.dumps({
         "type": "layout_offer",
         "target": target,
+        "tab": tab,
+        "x": x, "y": y,
         "windows": others,
         "grids": list(window_manager.GRID_TEMPLATES),
     }))
@@ -452,10 +458,30 @@ async def _layout_pick(ws: WebSocket, layouts, stream, msg: dict) -> None:
 
 async def _layout_create(ws: WebSocket, layouts, stream, conn: dict, msg: dict) -> None:
     orient = "wide" if msg.get("orient") == "wide" else "portrait"
+    target = int(msg["target"])
+    name = None
+    tab = msg.get("tab")
+    if tab and "x" in msg and "y" in msg:
+        # Step 2: the picked TAB becomes its own window first (app's own
+        # command → Explorer path → drag; every failure falls back to the
+        # whole window — probe-verified strategies, ROADMAP spec).
+        await _toast(ws, f"Moving “{tab.get('name', 'tab')}” to its own window…")
+        target_info = await asyncio.to_thread(
+            window_manager.window_at, _mon_rect(stream),
+            float(msg["x"]), float(msg["y"]))
+        if target_info and target_info["hwnd"] == target:
+            extracted = await asyncio.to_thread(
+                uia.extract_tab, _mon_rect(stream),
+                float(msg["x"]), float(msg["y"]), target_info)
+            if extracted is not None:
+                target = extracted
+                name = tab.get("name")
+            else:
+                await _toast(ws, "Could not separate the tab — using the whole window")
     index = await asyncio.to_thread(
-        layouts.create, int(msg["target"]), str(msg.get("mode", "solo")),
+        layouts.create, target, str(msg.get("mode", "solo")),
         msg.get("grid"), [int(h) for h in msg.get("fill", [])],
-        orient, conn["ratio"], _mon_rect(stream))
+        orient, conn["ratio"], _mon_rect(stream), name)
     if index is None:
         await _toast(ws, "That window is gone — layout not created")
     else:

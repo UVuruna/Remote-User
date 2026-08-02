@@ -16,7 +16,8 @@ The PC side of Remote User: captures the screen, streams it over WebSocket as H.
 | `encoders.py` | Algorithmic | H.264 encoder auto-detection — NVENC → QuickSync → AMF → libx264, verified by test-encoding — [about](__about/encoders.md) · [flow](__flow/encoders.md) |
 | `input_injector.py` | Algorithmic | Win32 `SendInput` injection + the `InjectionMonitor` self-check tripwire — [about](__about/input_injector.md) · [flow](__flow/input_injector.md) |
 | `web.py` | Algorithmic | FastAPI app — the WebSocket protocol handler, HTTP routes, stream dispatch — [about](__about/web.md) · [flow](__flow/web.md) |
-| `window_manager.py` | Standard | window layouts (Phase F+ step 1) — enumerate/hit-test/arrange/raise windows + the session-scoped `LayoutRegistry` — [about](__about/window_manager.md) |
+| `window_manager.py` | Standard | window layouts (Phase F+ step 1) — enumerate/hit-test/arrange/raise windows, app icons, the session-scoped `LayoutRegistry` — [about](__about/window_manager.md) |
+| `uia.py` | Algorithmic | tab layer (Phase F+ step 2) — UIA tab hit-test + extraction to a window (app command / Explorer path / SendInput drag) — [about](__about/uia.md) · [flow](__flow/uia.md) |
 | `pairing.py` | Standard | token generation, LAN/Tailscale IP discovery, QR code — [about](__about/pairing.md) |
 | `monitors.py` | Standard | physical monitor rects in virtual-desktop coordinates — [about](__about/monitors.md) |
 | `clipboard.py` | Standard | screenshot frames into the Windows clipboard as CF_DIB — [about](__about/clipboard.md) |

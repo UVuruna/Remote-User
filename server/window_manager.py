@@ -50,7 +50,7 @@ _SHELL_CLASSES = {"Progman", "WorkerW", "Shell_TrayWnd", "Shell_SecondaryTrayWnd
 _EnumWindowsProc = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
 
 
-def _process_name(hwnd: int) -> str:
+def _process_path(hwnd: int) -> str:
     pid = wintypes.DWORD()
     user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
     handle = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid.value)
@@ -60,7 +60,98 @@ def _process_name(hwnd: int) -> str:
     size = wintypes.DWORD(1024)
     ok = kernel32.QueryFullProcessImageNameW(handle, 0, buf, ctypes.byref(size))
     kernel32.CloseHandle(handle)
-    return os.path.basename(buf.value) if ok else ""
+    return buf.value if ok else ""
+
+
+def _process_name(hwnd: int) -> str:
+    return os.path.basename(_process_path(hwnd))
+
+
+# --- App icons (the phone shows the real app icon next to tab/window names,
+# owner request 2026-08-02) ---------------------------------------------------
+
+_ICON_SIZE = 32
+_icon_cache: dict[str, str | None] = {}
+
+
+class _SHFILEINFO(ctypes.Structure):
+    _fields_ = [("hIcon", wintypes.HICON), ("iIcon", ctypes.c_int),
+                ("dwAttributes", wintypes.DWORD),
+                ("szDisplayName", ctypes.c_wchar * 260),
+                ("szTypeName", ctypes.c_wchar * 80)]
+
+
+class _BITMAPINFOHEADER(ctypes.Structure):
+    _fields_ = [("biSize", wintypes.DWORD), ("biWidth", ctypes.c_long),
+                ("biHeight", ctypes.c_long), ("biPlanes", wintypes.WORD),
+                ("biBitCount", wintypes.WORD), ("biCompression", wintypes.DWORD),
+                ("biSizeImage", wintypes.DWORD), ("biXPelsPerMeter", ctypes.c_long),
+                ("biYPelsPerMeter", ctypes.c_long), ("biClrUsed", wintypes.DWORD),
+                ("biClrImportant", wintypes.DWORD)]
+
+
+def icon_data_uri(exe_path: str) -> str | None:
+    """The exe's icon as a PNG data URI (cached per path; None on any
+    failure — the phone falls back to text-only chips)."""
+    if not exe_path:
+        return None
+    if exe_path in _icon_cache:
+        return _icon_cache[exe_path]
+    uri = None
+    try:
+        import base64
+        import io
+
+        from PIL import Image
+
+        gdi32 = ctypes.windll.gdi32
+        # 64-bit handles: without explicit types ctypes truncates HDC/HBITMAP
+        # to c_int and DrawIconEx/SelectObject overflow (hit live 2026-08-02).
+        gdi32.CreateCompatibleDC.restype = ctypes.c_void_p
+        gdi32.CreateCompatibleDC.argtypes = [ctypes.c_void_p]
+        gdi32.CreateDIBSection.restype = ctypes.c_void_p
+        gdi32.CreateDIBSection.argtypes = [ctypes.c_void_p, ctypes.c_void_p,
+                                           ctypes.c_uint, ctypes.c_void_p,
+                                           ctypes.c_void_p, ctypes.c_uint]
+        gdi32.SelectObject.restype = ctypes.c_void_p
+        gdi32.SelectObject.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+        gdi32.DeleteObject.argtypes = [ctypes.c_void_p]
+        gdi32.DeleteDC.argtypes = [ctypes.c_void_p]
+        user32.GetDC.restype = ctypes.c_void_p
+        user32.ReleaseDC.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+        user32.DrawIconEx.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int,
+                                      ctypes.c_void_p, ctypes.c_int, ctypes.c_int,
+                                      ctypes.c_uint, ctypes.c_void_p, ctypes.c_uint]
+        info = _SHFILEINFO()
+        SHGFI_ICON = 0x100
+        if ctypes.windll.shell32.SHGetFileInfoW(exe_path, 0, ctypes.byref(info),
+                                                ctypes.sizeof(info), SHGFI_ICON):
+            hdc = user32.GetDC(0)
+            memdc = gdi32.CreateCompatibleDC(hdc)
+            bmi = _BITMAPINFOHEADER(ctypes.sizeof(_BITMAPINFOHEADER),
+                                    _ICON_SIZE, -_ICON_SIZE, 1, 32, 0,
+                                    0, 0, 0, 0, 0)
+            bits = ctypes.c_void_p()
+            hbmp = gdi32.CreateDIBSection(memdc, ctypes.byref(bmi), 0,
+                                          ctypes.byref(bits), None, 0)
+            old = gdi32.SelectObject(memdc, hbmp)
+            user32.DrawIconEx(memdc, 0, 0, info.hIcon, _ICON_SIZE, _ICON_SIZE,
+                              0, None, 3)  # DI_NORMAL
+            raw = ctypes.string_at(bits, _ICON_SIZE * _ICON_SIZE * 4)
+            gdi32.SelectObject(memdc, old)
+            gdi32.DeleteObject(hbmp)
+            gdi32.DeleteDC(memdc)
+            user32.ReleaseDC(0, hdc)
+            user32.DestroyIcon(info.hIcon)
+            img = Image.frombuffer("RGBA", (_ICON_SIZE, _ICON_SIZE), raw,
+                                   "raw", "BGRA", 0, 1)
+            buf = io.BytesIO()
+            img.save(buf, "PNG")
+            uri = "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
+    except Exception as e:  # noqa: BLE001 — icons are decoration, never a failure
+        logger.warning("Icon extraction failed for %s: %s", exe_path, e)
+    _icon_cache[exe_path] = uri
+    return uri
 
 
 def _title(hwnd: int) -> str:
@@ -133,7 +224,10 @@ def list_windows(exclude: set[int] | None = None) -> list[dict]:
         user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
         if pid.value == own_pid:
             return True
-        out.append({"hwnd": hwnd, "title": title, "process": _process_name(hwnd)})
+        path = _process_path(hwnd)
+        out.append({"hwnd": hwnd, "title": title,
+                    "process": os.path.basename(path),
+                    "icon": icon_data_uri(path)})
         return True
 
     user32.EnumWindows(callback, 0)
@@ -158,7 +252,9 @@ def window_at(mon_rect: tuple[int, int, int, int], nx: float, ny: float) -> dict
     user32.GetWindowThreadProcessId(root, ctypes.byref(pid))
     if pid.value == os.getpid():
         return None
-    return {"hwnd": root, "title": title, "process": _process_name(root)}
+    path = _process_path(root)
+    return {"hwnd": root, "title": title,
+            "process": os.path.basename(path), "icon": icon_data_uri(path)}
 
 
 def _work_area(mon_rect: tuple[int, int, int, int]) -> tuple[int, int, int, int]:
@@ -236,13 +332,15 @@ class Layout:
     for. Members are ordered — grid cell order for grids, [window] for solo."""
 
     def __init__(self, name: str, process: str, members: list[int],
-                 template: str | None, orient: str, aspect: float):
+                 template: str | None, orient: str, aspect: float,
+                 icon: str | None = None):
         self.name = name
         self.process = process
         self.members = members
         self.template = template  # None = solo
         self.orient = orient      # "portrait" | "wide"
         self.aspect = aspect      # w/h the layout was last arranged for
+        self.icon = icon          # target app's icon (PNG data URI) for the bar
 
 
 class LayoutRegistry:
@@ -261,7 +359,8 @@ class LayoutRegistry:
 
     def create(self, target: int, mode: str, template: str | None,
                fill: list[int], orient: str, device_ratio: float,
-               mon_rect: tuple[int, int, int, int]) -> int | None:
+               mon_rect: tuple[int, int, int, int],
+               name: str | None = None) -> int | None:
         """Arrange the windows and register the layout. Returns its index, or
         None when the target window died between pick and create.
         device_ratio = the phone's short/long side ratio; the layout's chosen
@@ -279,9 +378,10 @@ class LayoutRegistry:
             template = None
             members = members[:1]
             place_window(target, _region_rect(mon_rect, aspect))
-        name = _title(target) or "Window"
+        name = name or _title(target) or "Window"
         self.layouts.append(Layout(name, _process_name(target), members,
-                                   template, orient, aspect))
+                                   template, orient, aspect,
+                                   icon_data_uri(_process_path(target))))
         return len(self.layouts) - 1
 
     def focus(self, index: int, device_ratio: float,
@@ -332,7 +432,8 @@ class LayoutRegistry:
         return {
             "type": "layout_state",
             "layouts": [{"name": lay.name, "process": lay.process,
-                         "orient": lay.orient} for lay in self.layouts],
+                         "orient": lay.orient, "icon": lay.icon}
+                        for lay in self.layouts],
             "active": active,
             "region": region,
             "orient": self.layouts[active].orient if active is not None else None,

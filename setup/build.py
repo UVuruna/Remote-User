@@ -84,6 +84,10 @@ HIDDEN_IMPORTS = [
     "uvicorn.protocols.http.h11_impl", "uvicorn.protocols.http.httptools_impl",
     "uvicorn.protocols.websockets", "uvicorn.protocols.websockets.auto",
     "uvicorn.protocols.websockets.websockets_impl",
+    # uia.py imports uiautomation LAZILY (per-thread COM init) — PyInstaller
+    # cannot see it, and without these the frozen app would silently lose the
+    # tab layer (window layouts still work — uia fails soft by design).
+    "uiautomation", "comtypes", "comtypes.client", "comtypes.stream",
     "uvicorn.protocols.websockets.wsproto_impl",
     "uvicorn.lifespan", "uvicorn.lifespan.on", "uvicorn.lifespan.off",
 ]
