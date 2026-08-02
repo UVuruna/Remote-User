@@ -89,3 +89,12 @@ open windows to fill the cells + Portrait/Wide); `applyOrientationLock`
 drives the shell's `Android.lockOrientation` bridge (layout focus = rotation
 locked, desktop = free). The old Move/pan corner button is GONE (owner
 2026-08-02).
+
+## Creation flow rework (owner feedback 2026-08-02, same day)
+The Layout (+) button now opens a source CHOOSER: "From a list" (server sends
+every window and its content tabs — tabs were invisible in the first cut, the
+reported gap) or "Tap a window" (a grid takes one tap per cell). Both feed one
+slot-based panel: chosen slots are removable chips, list selection toggles and
+REPLACES the last pick when full (the stuck-selection bug), Create ships
+`slots` and shows the loading overlay (`#lay-loading`) while the server
+extracts tabs — visible seconds on the PC.

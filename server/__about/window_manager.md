@@ -62,3 +62,9 @@ region; `remove(index)`; `prune()`; `state(active, region)` builds the
 - `raise_window(hwnd)`: restore + `SetForegroundWindow`, with the Alt-nudge
   retry when Windows refuses foreground to a background process
 - `is_alive(hwnd)`: window exists, visible, not DWM-cloaked
+
+## Refinements (owner feedback 2026-08-02, same day)
+`minimize_members()` — the Desktop slider position minimizes every layout
+member, so the full-desktop view shows only non-layout windows; focusing a
+layout later restores its own members. `window_at_hwnd(hwnd)` returns the
+list_windows-shaped info dict for a known handle (slot resolution).

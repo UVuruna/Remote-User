@@ -43,10 +43,13 @@ logger = logging.getLogger(__name__)
 
 user32 = ctypes.windll.user32
 
-MENU_WAIT_S = 1.0
-NEW_WINDOW_TIMEOUT_S = 6.0
-DRAG_GRAB_STEP_S = 0.03
-DRAG_MOVE_STEP_S = 0.012
+MENU_WAIT_S = 0.55        # owner 2026-08-02: extraction was visibly sluggish —
+NEW_WINDOW_TIMEOUT_S = 6.0  # every wait here is trimmed to the working minimum
+DRAG_GRAB_STEP_S = 0.02
+DRAG_MOVE_STEP_S = 0.008
+NEW_WINDOW_POLL_S = 0.12
+TAB_MIN_WIDTH = 60        # px — narrower TabItems are activity-bar icons, not tabs
+TAB_TOP_FRACTION = 0.15   # real tab strips live in the window's top 15%
 
 # ---------------------------------------------------------------------------
 # SendInput synthesis (server-side, not phone input): the extraction clicks
@@ -83,31 +86,31 @@ def _mouse(flags: int, x: int = 0, y: int = 0) -> None:
 def _click(x: int, y: int, button: str = "left") -> None:
     down, up = (0x0002, 0x0004) if button == "left" else (0x0008, 0x0010)
     _mouse(0x0001 | 0x8000, x, y)
-    time.sleep(0.08)
+    time.sleep(0.04)
     _mouse(down)
-    time.sleep(0.06)
+    time.sleep(0.04)
     _mouse(up)
-    time.sleep(0.08)
+    time.sleep(0.04)
 
 
 def _held_drag(x1: int, y1: int, x2: int, y2: int) -> None:
     """Real held-button drag: slow 40 px grab first (XAML strips need the
     drag state to engage), then interpolated travel, hover, release."""
     _mouse(0x0001 | 0x8000, x1, y1)
-    time.sleep(0.25)
+    time.sleep(0.15)
     _mouse(0x0002)
-    time.sleep(0.35)
+    time.sleep(0.25)
     for i in range(1, 9):
         _mouse(0x0001 | 0x8000, x1, y1 + 5 * i)
         time.sleep(DRAG_GRAB_STEP_S)
-    n = 50
+    n = 40
     for i in range(1, n + 1):
         _mouse(0x0001 | 0x8000,
                x1 + (x2 - x1) * i // n, (y1 + 40) + (y2 - (y1 + 40)) * i // n)
         time.sleep(DRAG_MOVE_STEP_S)
-    time.sleep(0.6)
+    time.sleep(0.4)
     _mouse(0x0004)
-    time.sleep(0.3)
+    time.sleep(0.2)
 
 
 # ---------------------------------------------------------------------------
@@ -169,6 +172,58 @@ def tab_at(mon_rect: tuple[int, int, int, int], nx: float, ny: float) -> dict | 
 # ---------------------------------------------------------------------------
 # Extraction
 
+def _find_all(auto, control, control_type):
+    """Native FindAll of a control type under `control` (fast, one COM batch)."""
+    from uiautomation.uiautomation import _AutomationClient
+    cond = _AutomationClient.instance().IUIAutomation.CreatePropertyCondition(
+        auto.PropertyId.ControlTypeProperty, control_type)
+    arr = control.Element.FindAll(4, cond)  # TreeScope_Descendants
+    return [auto.Control.CreateControlFromElement(arr.GetElement(i))
+            for i in range(arr.Length)]
+
+
+def _real_tabs(auto, hwnd: int) -> list:
+    """The window's REAL content tabs: TabItems in the top strip, wide enough
+    to carry a name — filters out VSCode activity-bar/panel icons and
+    Explorer's Home-page pills (probe findings 2026-08-02)."""
+    win = auto.ControlFromHandle(hwnd)
+    if win is None:
+        return []
+    wr = win.BoundingRectangle
+    if wr.height() <= 0:
+        return []
+    out = []
+    for tab in _find_all(auto, win, auto.ControlType.TabItemControl):
+        r = tab.BoundingRectangle
+        if (not tab.IsOffscreen and r.width() >= TAB_MIN_WIDTH
+                and (r.top - wr.top) < wr.height() * TAB_TOP_FRACTION):
+            out.append(tab)
+    return out
+
+
+def list_tabs(mon_rect: tuple[int, int, int, int], hwnd: int) -> list[dict]:
+    """Content tabs of one window as list entries: {"name", "x", "y"} with
+    the tab centre monitor-normalized (the pick point extraction re-hits).
+    Blocking — call via to_thread."""
+    left, top, width, height = mon_rect
+    with _uia() as auto:
+        if auto is None:
+            return []
+        try:
+            out = []
+            for tab in _real_tabs(auto, hwnd):
+                r = tab.BoundingRectangle
+                out.append({
+                    "name": tab.Name,
+                    "x": (r.xcenter() - left) / width,
+                    "y": (r.ycenter() - top) / height,
+                })
+            return out
+        except Exception as e:  # noqa: BLE001 — a UIA hiccup yields an empty list
+            logger.warning("list_tabs failed for %#x: %s", hwnd, e)
+            return []
+
+
 def _same_process_windows(process: str) -> set[int]:
     return {w["hwnd"] for w in window_manager.list_windows() if w["process"] == process}
 
@@ -179,11 +234,23 @@ def _wait_new_window(process: str, before: set[int]) -> int | None:
         new = _same_process_windows(process) - before
         if new:
             return new.pop()
-        time.sleep(0.25)
+        time.sleep(NEW_WINDOW_POLL_S)
     return None
 
 
-def _find_tab_rect(auto, mon_rect, nx, ny) -> tuple[int, int, int, int] | None:
+def _find_tab_rect(auto, mon_rect, nx, ny, hwnd: int | None = None,
+                   name: str | None = None) -> tuple[int, int, int, int] | None:
+    """The tab's CURRENT rect. Name match within the window wins (tabs shift
+    when the window is raised/re-ordered — a stale point would grab the wrong
+    one); the pick point is the fallback."""
+    if hwnd and name:
+        try:
+            for tab in _real_tabs(auto, hwnd):
+                if tab.Name == name:
+                    r = tab.BoundingRectangle
+                    return (r.left, r.top, r.width(), r.height())
+        except Exception:  # noqa: BLE001 — fall through to the point hit
+            pass
     left, top, width, height = mon_rect
     tab = _tab_item_from(auto, auto.ControlFromPoint(
         int(left + nx * width), int(top + ny * height)))
@@ -209,12 +276,7 @@ def _try_context_menu(auto, tab_rect, target: dict, before: set[int]) -> int | N
     item = None
     for src in sources:
         try:
-            from uiautomation.uiautomation import _AutomationClient
-            cond = _AutomationClient.instance().IUIAutomation.CreatePropertyCondition(
-                auto.PropertyId.ControlTypeProperty, auto.ControlType.MenuItemControl)
-            arr = src.Element.FindAll(4, cond)  # TreeScope_Descendants
-            for i in range(arr.Length):
-                mi = auto.Control.CreateControlFromElement(arr.GetElement(i))
+            for mi in _find_all(auto, src, auto.ControlType.MenuItemControl):
                 if "new window" in (mi.Name or "").lower() and not mi.IsOffscreen:
                     item = mi
                     break
@@ -236,16 +298,11 @@ def _try_explorer_path(auto, tab_rect, target: dict, before: set[int]) -> int | 
     there, close the original tab."""
     cx, cy = tab_rect[0] + tab_rect[2] // 2, tab_rect[1] + tab_rect[3] // 2
     _click(cx, cy)  # select the picked tab so the address band shows ITS path
-    time.sleep(0.6)
+    time.sleep(0.4)
     path = None
     try:
         win = auto.ControlFromHandle(target["hwnd"])
-        from uiautomation.uiautomation import _AutomationClient
-        cond = _AutomationClient.instance().IUIAutomation.CreatePropertyCondition(
-            auto.PropertyId.ControlTypeProperty, auto.ControlType.ToolBarControl)
-        arr = win.Element.FindAll(4, cond)
-        for i in range(arr.Length):
-            tb = auto.Control.CreateControlFromElement(arr.GetElement(i))
+        for tb in _find_all(auto, win, auto.ControlType.ToolBarControl):
             name = tb.Name or ""
             if name.startswith("Address"):
                 path = name.split(":", 1)[1].strip() if ":" in name else None
@@ -261,9 +318,9 @@ def _try_explorer_path(auto, tab_rect, target: dict, before: set[int]) -> int | 
     # Close the original tab (Ctrl+W on the original window) — the content
     # now lives in its own window.
     window_manager.raise_window(target["hwnd"])
-    time.sleep(0.4)
+    time.sleep(0.25)
     auto.SendKeys("{Ctrl}w")
-    time.sleep(0.3)
+    time.sleep(0.2)
     window_manager.raise_window(hwnd)
     return hwnd
 
@@ -283,19 +340,21 @@ def _try_drag(tab_rect, target: dict, before: set[int],
 
 
 def extract_tab(mon_rect: tuple[int, int, int, int], nx: float, ny: float,
-                target: dict) -> int | None:
-    """Turn the tab under the pick point into its own window; returns the new
-    hwnd or None (caller falls back to the whole window). Blocking, seconds —
-    call via to_thread."""
+                target: dict, tab_name: str | None = None) -> int | None:
+    """Turn the picked tab into its own window; returns the new hwnd or None
+    (caller falls back to the whole window). `tab_name` (from the offer/list)
+    re-finds the tab by NAME after the window is raised — tabs shift, a stale
+    point grabs the wrong one. Blocking, seconds — call via to_thread."""
     with _uia() as auto:
         if auto is None:
             return None
         try:
-            tab_rect = _find_tab_rect(auto, mon_rect, nx, ny)
+            window_manager.raise_window(target["hwnd"])
+            time.sleep(0.15)
+            tab_rect = _find_tab_rect(auto, mon_rect, nx, ny,
+                                      target["hwnd"], tab_name)
             if tab_rect is None:
                 return None
-            window_manager.raise_window(target["hwnd"])
-            time.sleep(0.3)
             before = _same_process_windows(target["process"])
             proc = target["process"].lower()
             if proc == "explorer.exe":
@@ -303,8 +362,9 @@ def extract_tab(mon_rect: tuple[int, int, int, int], nx: float, ny: float,
             else:
                 hwnd = _try_context_menu(auto, tab_rect, target, before)
             if hwnd is None:
-                # the tab may have moved after a failed attempt — re-hit it
-                tab_rect = _find_tab_rect(auto, mon_rect, nx, ny) or tab_rect
+                # the tab may have moved after a failed attempt — re-find it
+                tab_rect = _find_tab_rect(auto, mon_rect, nx, ny,
+                                          target["hwnd"], tab_name) or tab_rect
                 hwnd = _try_drag(tab_rect, target, before, mon_rect)
             return hwnd
         except Exception as e:  # noqa: BLE001 — extraction must fail soft

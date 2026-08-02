@@ -443,44 +443,84 @@ async def _layout_pick(ws: WebSocket, layouts, stream, msg: dict) -> None:
         await _toast(ws, "No window there — tap on a window")
         return
     # Tab under the same point (step 2): the offer names it, and the client
-    # echoes the pick point back in layout_create so extraction re-hits fresh.
+    # echoes the pick point back in layout_create so extraction re-finds it.
+    # Grid cells are picked by FURTHER taps (owner 2026-08-02), so no window
+    # list rides along here — the list-based source is `layout_list`.
     tab = await asyncio.to_thread(uia.tab_at, _mon_rect(stream), x, y)
-    others = await asyncio.to_thread(window_manager.list_windows, {target["hwnd"]})
     await ws.send_text(json.dumps({
         "type": "layout_offer",
         "target": target,
         "tab": tab,
         "x": x, "y": y,
-        "windows": others,
         "grids": list(window_manager.GRID_TEMPLATES),
     }))
 
 
+async def _layout_list(ws: WebSocket, stream) -> None:
+    """The list-based creation source (owner 2026-08-02): every open window
+    PLUS each window's content tabs as separate entries — 'Google Chrome'
+    alone hid its tabs, the exact reported gap."""
+    mon_rect = _mon_rect(stream)
+    windows = await asyncio.to_thread(window_manager.list_windows)
+    entries = []
+    for w in windows:
+        entries.append({"kind": "window", "hwnd": w["hwnd"], "title": w["title"],
+                        "process": w["process"], "icon": w["icon"]})
+        for tab in await asyncio.to_thread(uia.list_tabs, mon_rect, w["hwnd"]):
+            entries.append({"kind": "tab", "hwnd": w["hwnd"],
+                            "tab": {"name": tab["name"]},
+                            "x": tab["x"], "y": tab["y"],
+                            "title": tab["name"],
+                            "process": w["process"], "icon": w["icon"]})
+    await ws.send_text(json.dumps({
+        "type": "layout_offer",
+        "target": None,
+        "entries": entries,
+        "grids": list(window_manager.GRID_TEMPLATES),
+    }))
+
+
+async def _resolve_slot(ws: WebSocket, stream, slot: dict) -> tuple[int, str | None] | None:
+    """One creation slot → a concrete hwnd. A slot naming a TAB is extracted
+    into its own window first (app command → Explorer path → drag); every
+    failure falls back to the slot's whole window."""
+    hwnd = int(slot["hwnd"])
+    tab = slot.get("tab")
+    if not tab:
+        return (hwnd, None)
+    info = await asyncio.to_thread(window_manager.window_at_hwnd, hwnd)
+    if info is None:
+        return None
+    extracted = await asyncio.to_thread(
+        uia.extract_tab, _mon_rect(stream),
+        float(slot.get("x", 0.5)), float(slot.get("y", 0.5)),
+        info, tab.get("name"))
+    if extracted is None:
+        await _toast(ws, f"Could not separate “{tab.get('name', 'tab')}” — using the whole window")
+        return (hwnd, None)
+    return (extracted, tab.get("name"))
+
+
 async def _layout_create(ws: WebSocket, layouts, stream, conn: dict, msg: dict) -> None:
     orient = "wide" if msg.get("orient") == "wide" else "portrait"
-    target = int(msg["target"])
-    name = None
-    tab = msg.get("tab")
-    if tab and "x" in msg and "y" in msg:
-        # Step 2: the picked TAB becomes its own window first (app's own
-        # command → Explorer path → drag; every failure falls back to the
-        # whole window — probe-verified strategies, ROADMAP spec).
-        await _toast(ws, f"Moving “{tab.get('name', 'tab')}” to its own window…")
-        target_info = await asyncio.to_thread(
-            window_manager.window_at, _mon_rect(stream),
-            float(msg["x"]), float(msg["y"]))
-        if target_info and target_info["hwnd"] == target:
-            extracted = await asyncio.to_thread(
-                uia.extract_tab, _mon_rect(stream),
-                float(msg["x"]), float(msg["y"]), target_info)
-            if extracted is not None:
-                target = extracted
-                name = tab.get("name")
-            else:
-                await _toast(ws, "Could not separate the tab — using the whole window")
+    slots = msg.get("slots") or []
+    if not slots:
+        await _toast(ws, "Nothing selected — layout not created")
+        await _send_layout_state(ws, layouts, conn)
+        return
+    resolved: list[tuple[int, str | None]] = []
+    for slot in slots:
+        r = await _resolve_slot(ws, stream, slot)
+        if r is not None:
+            resolved.append(r)
+    if not resolved:
+        await _toast(ws, "Those windows are gone — layout not created")
+        await _send_layout_state(ws, layouts, conn)
+        return
+    target, name = resolved[0]
     index = await asyncio.to_thread(
         layouts.create, target, str(msg.get("mode", "solo")),
-        msg.get("grid"), [int(h) for h in msg.get("fill", [])],
+        msg.get("grid"), [h for h, _ in resolved[1:]],
         orient, conn["ratio"], _mon_rect(stream), name)
     if index is None:
         await _toast(ws, "That window is gone — layout not created")
@@ -495,6 +535,9 @@ async def _layout_focus(ws: WebSocket, layouts, stream, conn: dict, index: int) 
     focus — desk-side moves/resizes never break a layout (owner rule)."""
     if index < 0:
         conn["active"], conn["region"] = None, None
+        # Desktop position minimizes every layout member — the desktop shows
+        # only the windows that are NOT layout material (owner 2026-08-02).
+        await asyncio.to_thread(layouts.minimize_members)
     else:
         region = await asyncio.to_thread(
             layouts.focus, index, conn["ratio"], _mon_rect(stream))
@@ -548,6 +591,8 @@ async def _receive_input(ws: WebSocket, injector: InputInjector, stream, token: 
             await _screenshot(ws, stream)
         elif kind == "layout_pick":
             await _layout_pick(ws, layouts, stream, msg)
+        elif kind == "layout_list":
+            await _layout_list(ws, stream)
         elif kind == "layout_create":
             await _layout_create(ws, layouts, stream, conn, msg)
         elif kind == "layout_focus":

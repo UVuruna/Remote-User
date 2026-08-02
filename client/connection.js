@@ -74,6 +74,7 @@ function connect() {
       } else if (msg.type === "toast") {
         showToast(msg.text);
       } else if (msg.type === "layout_state") {
+        hideLayLoading(); // creation/extraction finished (or pruned)
         layouts = msg.layouts || [];
         layoutActive = msg.active ?? null;
         layoutRegion = msg.region || null;
@@ -88,7 +89,7 @@ function connect() {
         }
         scheduleViewport();
       } else if (msg.type === "layout_offer") {
-        openLayoutPanel(msg);
+        handleLayoutOffer(msg);
       }
     } else if (streamMode === "h264") {
       mseQueue.push(e.data);
