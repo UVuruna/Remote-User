@@ -48,8 +48,8 @@ file picker, and the "access from anywhere" banner + guided wizard overlay.
 
 ### Used by
 
-- [Web Layer](../../server/__about/web.md) — served at `/` for desktop browsers and
-  the APK's WebView (`RemoteUserApp` User-Agent marker); plain Android
-  browsers get [Install Funnel](install.md) instead
+- [Web Layer](../../server/__about/web.md) — served at `/` ONLY to the APK's
+  WebView (`RemoteUserApp` User-Agent marker); every browser on every device
+  gets [Install Funnel](install.md) instead (owner rule, hardened 2026-08-02)
 - [Tests (folder)](../../tests/___tests.md) — the input-pipeline gate drives
   this exact page end-to-end in real headless Chromium

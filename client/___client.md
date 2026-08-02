@@ -1,13 +1,13 @@
 # client/
 
-The phone side of Remote User — a plain web page served by the PC server, loaded inside the Android app's WebView. A plain Android **browser** never sees it: the server routes browsers by User-Agent to the install funnel (`install.html`), because on a phone the product is the app (owner rule — no half-working browser sessions). Desktop browsers still get the client for dev/testing. No framework, no build step.
+The phone side of Remote User — a plain web page served by the PC server, loaded inside the Android app's WebView. NO **browser** ever sees it (owner rule, hardened 2026-08-02 — tablet Chrome carries a desktop User-Agent, so "detect Android" routing leaked the client): the server serves the client only to the `RemoteUserApp` WebView marker and routes every other User-Agent to the install funnel (`install.html`). No framework, no build step.
 
 ## Files
 
 | File | Tier | One line |
 |------|------|----------|
 | `index.html` | Standard | page shell — canvas, corner buttons, D-pad groups, wheel, keyboard capture — [about](__about/index.md) |
-| `install.html` | Standard | Android install funnel (Install → Open the app) — the only page a plain Android browser ever sees — [about](__about/install.md) |
+| `install.html` | Standard | install funnel (Open the app → Install) — the only page ANY browser ever sees — [about](__about/install.md) |
 | `style.css` | Algorithmic | design tokens + every component's visual rules — [about](__about/style.md) · [flow](__flow/style.md) |
 | `load_test.js` | Standard | dev harness — concatenates and executes the 6 client scripts below, in load order, against a stubbed DOM to catch load-time errors — [about](__about/load_test.md) |
 | `state.js` | Standard | tunables + shared state + `setStatus`/`toCanvasPx`/`send` — loads 1st — [about](__about/state.md) |
@@ -29,15 +29,17 @@ The phone side of Remote User — a plain web page served by the PC server, load
 
 ## Design Decisions
 
-- **No framework, no build step** — plain HTML/CSS/JS the WebView (and any
-  desktop browser, for dev) loads directly; `load_test.js` is the only
-  tooling, and it is run manually (`node client/load_test.js`), never a
-  bundler step.
-- **Android browsers get funneled, never the client directly** (owner rule —
-  no half-working browser sessions on a phone): the server routes plain
-  Android User-Agents to [Install Funnel](__about/install.md), and only the
-  APK's WebView or a desktop browser reaches [Page Shell](__about/index.md).
-  See [Web Layer](../server/__about/web.md) for the routing logic.
+- **No framework, no build step** — plain HTML/CSS/JS the WebView loads
+  directly; `load_test.js` is the only tooling, and it is run manually
+  (`node client/load_test.js`), never a bundler step.
+- **Browsers get funneled, never the client** (owner rule — no half-working
+  browser sessions, hardened 2026-08-02 to ALL browsers after tablet Chrome's
+  desktop User-Agent leaked the client): the server routes every User-Agent
+  without the APK WebView's `RemoteUserApp` marker to
+  [Install Funnel](__about/install.md); only the WebView reaches
+  [Page Shell](__about/index.md). Dev exception: with no APK built the funnel
+  has nothing to offer, so a dev checkout still serves the client. See
+  [Web Layer](../server/__about/web.md) for the routing logic.
 - **`install.html` is self-contained on purpose** — its own inline
   `<style>`/`<script>`, no dependency on `style.css` or any of the client
   scripts: the one page an app-less phone can reach must never break because
