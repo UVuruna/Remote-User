@@ -156,8 +156,8 @@ The CLI prints the pairing URL and a QR (console + image viewer). Dev note: H.26
     📝 ___client.md    ← Client documentation entry point
     📁 __about/        ← what each file does + connections
     📁 __flow/         ← Algorithmic-tier files' diagrams + pseudocode
-    📄 index.html      ← page shell (desktop browsers + the Android app's WebView)
-    📄 install.html    ← Android-browser install funnel
+    📄 index.html      ← page shell (ONLY the Android app's WebView ever gets it)
+    📄 install.html    ← install funnel — what every browser gets instead
     📄 state.js        ← client script 1/6 — tunables + shared state
     📄 render.js       ← client script 2/6 — canvas drawing, H.264/JPEG decode
     📄 input-geometry.js ← client script 3/6 — coordinate mapping, cursor calibration

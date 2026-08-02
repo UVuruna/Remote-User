@@ -117,15 +117,19 @@ def create_app(stream, hub: FrameHub | None, injector: InputInjector, token: str
 
     @app.get("/")
     async def index(request: Request):
-        # Android browsers NEVER see the client (owner rule: no half-working
-        # browser sessions — on a phone the product IS the app). They get a
-        # full-screen install funnel; its "Open the app" hands this exact URL
-        # (token included) to the app via intent://, so pairing is one tap.
-        # The APK's WebView marks itself in the User-Agent and gets the real
-        # client; so do desktop browsers (dev/testing) and any Android hit
-        # while no APK is built yet.
+        # NO browser EVER sees the client (owner rule, hardened 2026-08-02
+        # after the tablet failure): Chrome on Android TABLETS presents a
+        # desktop-Linux User-Agent with no "Android" token at all, so any
+        # detect-Android routing silently serves the live client in a browser
+        # — the exact forbidden half-experience. Therefore the client goes
+        # ONLY to the APK's WebView (it appends the RemoteUserApp marker);
+        # every other User-Agent, on every device, gets the install funnel,
+        # whose "Open the app" hands this exact URL (token included) to the
+        # app via intent:// — pairing stays one tap. Sole exception: a dev
+        # checkout with no APK built yet, where the funnel would have nothing
+        # to offer (official installers always bundle the APK).
         ua = request.headers.get("user-agent", "")
-        if "Android" in ua and "RemoteUserApp" not in ua and SETTINGS.apk_path.exists():
+        if "RemoteUserApp" not in ua and SETTINGS.apk_path.exists():
             return FileResponse(SETTINGS.client_dir / "install.html")
         return FileResponse(SETTINGS.client_dir / "index.html")
 
