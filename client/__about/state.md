@@ -74,3 +74,10 @@ one-shot "next canvas tap picks a window" flag set by the Layout (+) button;
 `viewLocked()` gates gestures, cursor clamping and the view transform.
 `send()` also refuses to auto-reconnect after a 4409 takeover (one device at a
 time — a background reconnect would steal the session back in a loop).
+
+## `kbShift` (owner 2026-08-03)
+The canvas keeps its full height when the soft keyboard opens and is shifted
+up instead of being squeezed ([Render](render.md)). Pointer events are
+reported against the VISIBLE viewport, so `toCanvasPx` adds `kbShift` back to
+land in canvas space — every gesture goes through it, so this is the single
+place that needs to know.

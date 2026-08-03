@@ -11,6 +11,7 @@
   --accent-glow: rgb(56 189 248 / 0.25);
   --warning: #f59e0b;
   --error: #ef4444;
+  --corner: 58px;  /* corner button size — the layout bar's hard bounds */
   --radius-pill: 999px;
   --space-s: 8px;
   --space-m: 16px;
@@ -65,7 +66,13 @@ html, body {
    type — found live). So it is a full-width strip at the top, rendered fully
    transparent (transparent text/caret/background) rather than opacity:0 —
    some IMEs also skip opacity:0 fields. pointer-events:none lets touches fall
-   through to the canvas; focus is driven by the Keys button, not by tapping. */
+   through to the canvas; focus is driven by the Keys button, not by tapping.
+   THE ORANGE BAR (owner reported it five times, fixed 2026-08-03): text,
+   caret, background and border were all transparent — but nobody turned off
+   the FOCUS RING. `outline` is not painted with `color`, and Android WebView
+   draws it in the system accent (orange on this phone), so the moment the
+   keyboard opened a full-width orange rectangle appeared across the top. Both
+   `outline` and any focus `box-shadow` are now killed in every focus state. */
 #kb {
   position: fixed;
   top: 0;
@@ -82,7 +89,17 @@ html, body {
   resize: none;
   overflow: hidden;
   pointer-events: none;
+  outline: none;
+  box-shadow: none;
+  -webkit-tap-highlight-color: transparent;
   z-index: 31;
+}
+#kb:focus,
+#kb:focus-visible,
+#kb:focus-within {
+  outline: none;
+  box-shadow: none;
+  border: 0;
 }
 
 #filepick { display: none; }
@@ -104,8 +121,8 @@ html, body {
    icon + label kept legible by shadows. */
 
 .ctl {
-  width: 58px;
-  height: 58px;
+  width: var(--corner);
+  height: var(--corner);
   border-radius: 16px;
   background: var(--glass-fill);
   border: 1px solid var(--border);
@@ -380,22 +397,22 @@ body.hidden-controls #update-banner { display: none; }
 
 /* --- Layout bar + creation panel (Phase F+ step 1) ------------------------ */
 
+/* The bar lives STRICTLY between the two corner buttons (owner 2026-08-03 —
+   a long layout name used to push the › arrow and the ✕ off the screen). It
+   is bounded on both sides instead of centered-with-a-max-width, so the name
+   is the only thing that can give: it wraps to a second line. */
 #layout-bar {
   position: fixed;
   top: calc(var(--space-m) + var(--vtop));
-  left: 50%;
-  transform: translateX(-50%);
+  left: calc(var(--space-m) + var(--corner) + var(--space-s));
+  right: calc(var(--space-m) + var(--corner) + var(--space-s));
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 2px;
-  padding: 4px 6px;
-  border-radius: var(--radius-pill);
-  border: 1px solid var(--border);
-  background: rgb(15 23 42 / 0.85);
   color: var(--text-primary);
   font: 600 13px system-ui, sans-serif;
   z-index: 30;
-  max-width: 62vw;
 }
 #layout-bar[hidden] { display: none; }
 #layout-bar button {
@@ -412,28 +429,54 @@ body.hidden-controls #update-banner { display: none; }
   display: flex;
   align-items: center;
 }
-#layout-bar .lay-arrow svg { width: 32px; height: 32px; }
-/* The name is its own framed button — tapping it opens the full layout list. */
+/* The arrows stand on the bare stream now (the frame carries the background),
+   so they get the same shadow every control icon has. */
+#layout-bar .lay-arrow svg {
+  width: 32px;
+  height: 32px;
+  filter: drop-shadow(0 1px 3px rgb(0 0 0 / 0.85));
+}
+/* The frame is the rectangle: name + ✕ together, and it takes whatever width
+   the arrows leave — never more. */
+#lay-frame {
+  flex: 0 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 8px 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: rgb(15 23 42 / 0.85);
+}
+/* Tapping the name opens the full layout list. */
 #layout-bar #lay-pick {
+  flex: 1 1 auto;
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: 7px;
-  padding: 7px 13px;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: rgb(51 65 85 / 0.55);
-  font: 600 14px/1.1 system-ui, sans-serif;
+  padding: 0;
+  font: 600 14px/1.15 system-ui, sans-serif;
+  text-align: left;
 }
 #lay-name {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;   /* two rows, then ellipsis — never past the frame */
+  -webkit-box-orient: vertical;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 40vw;
+  overflow-wrap: anywhere;
 }
-#lay-icon { width: 18px; height: 18px; }
+#lay-icon { width: 18px; height: 18px; flex: none; }
 .lay-chip img { width: 16px; height: 16px; vertical-align: -3px; margin-right: 6px; }
 .lay-appicon { width: 22px; height: 22px; vertical-align: -4px; margin-right: 8px; }
-#lay-close { color: var(--text-secondary); font-size: 13px; }
+#layout-bar #lay-close {
+  flex: none;
+  align-self: stretch;
+  padding: 0 6px;
+  color: var(--text-secondary);
+  font: 700 15px/1 system-ui, sans-serif;
+}
 
 #layout-panel {
   position: fixed;

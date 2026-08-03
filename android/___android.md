@@ -169,6 +169,11 @@ not just what:
   (`BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE` — an edge swipe shows them
   briefly), re-applied on every window-focus gain because the system restores
   them after dialogs, app switches and the keyboard.
+- **No platform focus highlight** (owner 2026-08-03): the page's keyboard
+  capture field is deliberately invisible, so any focus rectangle drawn around
+  it is a bright bar across the top of the stream — the owner reported it five
+  times. The page kills the CSS focus ring and
+  `web.defaultFocusHighlightEnabled = false` kills the framework's.
 - **Session behavior**: screen stays on; rotation never recreates the WebView
   (the stream survives); leaving the app pauses the page, whose visibility
   rule closes the stream (owner security decision). On resume the shell pings

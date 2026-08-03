@@ -114,11 +114,28 @@ function drawCursor(D) {
   ctx.restore();
 }
 
+// The full viewport for the CURRENT orientation, remembered across keyboard
+// openings. The soft keyboard shrinks the viewport (the WebView is resized, or
+// visualViewport reports less — depending on the device), and re-fitting the
+// picture into that shorter box squeezed the whole layout (owner report
+// 2026-08-03). The width is the tell: it never changes when the keyboard
+// appears, only on rotation — so a width change resets the remembered height,
+// and otherwise the tallest height ever seen for this width IS the full one.
+let fullView = { w: 0, h: 0 };
+
 function updateViewport() {
   const vv = window.visualViewport;
   const w = vv ? vv.width : window.innerWidth;
-  const h = vv ? vv.height : window.innerHeight;
+  const visibleH = vv ? vv.height : window.innerHeight;
   const kb = vv ? Math.max(0, window.innerHeight - vv.height - vv.offsetTop) : 0;
+  if (Math.abs(w - fullView.w) > 1) fullView = { w, h: visibleH }; // rotation
+  else fullView.h = Math.max(fullView.h, visibleH);
+  // What the canvas keeps (full height) vs what is actually visible: the
+  // difference is how far the canvas is lifted so its BOTTOM edge — the row
+  // the user is typing into — sits right above the keyboard.
+  const h = fullView.h;
+  kbShift = Math.max(0, h - visibleH);
+  canvas.style.transform = kbShift ? `translateY(${-kbShift}px)` : "";
   // NOTE: do NOT blur the keyboard field on a keyboard-height drop. Switching
   // to the IME's voice/mic input transiently shrinks the keyboard, and a blur
   // there tore down the field mid-dictation (had to re-tap Keys to get back —
