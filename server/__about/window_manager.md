@@ -81,6 +81,30 @@ stays black on the phone.
 [Web Layer](web.md) leaves those out of the creation list, because one window
 cannot be shown in two places (owner 2026-08-03).
 
+## The move must be INVISIBLE (owner rule, hardened 2026-08-03)
+The phone's cube overlay exists so the user never sees windows moving — it
+covers the rearrangement and fades out onto the finished picture. Twice it
+faded out onto a window still sliding up out of the taskbar, because this
+module reported "done" too early:
+
+- `ShowWindow(SW_RESTORE)` / `SW_MINIMIZE` return immediately while DWM plays
+  the slide transition, which the screen capture faithfully records.
+  `freeze_transitions(hwnd)` (DWMWA_TRANSITIONS_FORCEDISABLED) turns that
+  animation off for every layout member, so restore/minimize are instant —
+  there is nothing left to watch. `remove()` gives the window its normal
+  animation back.
+- Even without the transition, the app re-lays-out after the resize.
+  `wait_settled(hwnd)` blocks until the window is out of the taskbar and its
+  visible frame has stopped changing (2 identical reads, 1.5 s cap);
+  `wait_minimized(hwnds)` blocks until every member is really iconic before
+  the Desktop position is reported.
+
+`place_window`, `raise_window` and `minimize_members` all wait, so
+`layout_state` now means "the desk is finished", which is exactly what the
+phone's overlay needs to fade out on — see
+[Layouts](../../client/__about/layouts.md) for the client half (it must also
+wait out the stream latency before judging the picture).
+
 ## Refinements (owner feedback 2026-08-02, same day)
 `minimize_members()` — the Desktop slider position minimizes every layout
 member, so the full-desktop view shows only non-layout windows; focusing a

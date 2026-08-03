@@ -77,18 +77,28 @@ function cubeNext() {
   cubeBurst += CUBE_BURST;
 }
 
-// The overlay stays up until the SCREEN has settled (owner 2026-08-03, said
-// repeatedly): the server's answer is not the end — windows restore from
-// minimized, slide into their cells and repaint for a while after it, and the
-// user must never watch that happen. So `layout_state` only ARMS the settle
-// watcher: a 64x36 thumbnail of the live frame is sampled a few times a
-// second and the overlay drops when two consecutive samples barely differ
-// (or when the settle deadline passes — unrelated motion on the PC, e.g. a
-// playing video, must not hold it forever).
+// THE OVERLAY IS THE FRONT — the work happens behind it (owner rule, said
+// four times before it was finally right). It may fade out ONLY when the
+// layout window is in place and alone on screen, or — for Desktop — when
+// every layout member is really minimized. Two ends have to agree on that:
+//
+//   1. The SERVER now finishes for real before it answers: DWM's slide
+//      animation is disabled per window and it waits until each window is out
+//      of the taskbar and has stopped moving (window_manager.wait_settled /
+//      wait_minimized). `layout_state` therefore means "the desk is done".
+//   2. This side must not trust its own picture too early. THE BUG THE OWNER
+//      SAW TWICE: sampling started the instant `layout_state` arrived, but
+//      the phone was then still displaying the OLD frame — the encoder and
+//      the network are a few hundred ms behind the PC. Two identical samples
+//      of a STALE picture read as "settled", the cube left, and the new
+//      frames — the ones with the window rising — arrived right after it.
+//      So sampling only STARTS after SETTLE_CATCHUP_MS, by which time the
+//      finished screen has certainly been decoded here.
+const SETTLE_CATCHUP_MS = 650; // stream latency: never judge before this
 const SETTLE_SAMPLE_MS = 140;
 const SETTLE_DIFF = 2.6;      // mean |Δ| per colour channel that counts as "still"
 const SETTLE_STABLE_HITS = 2;
-const SETTLE_MAX_MS = 4000;   // never wait longer than this after the server is done
+const SETTLE_MAX_MS = 4000;   // never wait longer than this after catching up
 const LOADING_MIN_MS = 700;   // never flash the animation
 const LOADING_MAX_MS = 40000; // absolute backstop (server never answered)
 
@@ -97,6 +107,7 @@ settleCanvas.width = 64;
 settleCanvas.height = 36;
 const settleCtx = settleCanvas.getContext("2d", { willReadFrequently: true });
 let settleTimer = null;
+let settleStartTimer = null;
 let settlePrev = null;
 let settleHits = 0;
 let settleDeadline = 0;
@@ -135,20 +146,28 @@ function settleTick() {
   }
 }
 
-// Called when the server reports the layout is done (layout_state): from here
-// the animation runs only as long as the PICTURE still moves.
+// Called when the server reports the desk is done (layout_state). The picture
+// here is still the old one for another few hundred ms, so judging starts
+// only after the catch-up delay — see the block comment above.
 function settleLayLoading() {
-  if (!layLoadingOpen || settleTimer) return;
-  settlePrev = null;
-  settleHits = 0;
-  settleDeadline = performance.now() + SETTLE_MAX_MS;
-  settleTimer = setInterval(settleTick, SETTLE_SAMPLE_MS);
+  if (!layLoadingOpen || settleTimer || settleStartTimer) return;
+  settleStartTimer = setTimeout(() => {
+    settleStartTimer = null;
+    if (!layLoadingOpen) return;
+    settlePrev = null;
+    settleHits = 0;
+    settleDeadline = performance.now() + SETTLE_MAX_MS;
+    settleTimer = setInterval(settleTick, SETTLE_SAMPLE_MS);
+  }, SETTLE_CATCHUP_MS);
 }
 
 function showLayLoading(text) {
   layLoading.querySelector("span").textContent = text || "Working…";
-  clearInterval(settleTimer);   // a new operation — watch again when it answers
+  // A new operation — stop judging the old one; watch again when it answers.
+  clearInterval(settleTimer);
+  clearTimeout(settleStartTimer);
   settleTimer = null;
+  settleStartTimer = null;
   clearTimeout(loadingTimer);
   loadingTimer = setTimeout(hideLayLoading, LOADING_MAX_MS);
   if (layLoadingOpen) return;
@@ -171,7 +190,9 @@ function hideLayLoading() {
   clearTimeout(loadingTimer);
   loadingTimer = null;
   clearInterval(settleTimer);
+  clearTimeout(settleStartTimer);
   settleTimer = null;
+  settleStartTimer = null;
   settlePrev = null;
   if (!layLoadingOpen) return;
   layLoadingOpen = false;
