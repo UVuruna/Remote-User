@@ -57,5 +57,5 @@ file picker, and the "access from anywhere" banner + guided wizard overlay.
 ## Layouts (Phase F+ step 1)
 The top-left corner button is now **Layout (+)** (the Move/pan button is gone
 — owner 2026-08-02); `#layout-bar` sits top-center (hidden until a layout
-exists; `‹ name ›` + ✕); `#layout-panel` is the empty container controls.js
+exists; big SVG arrows outside a framed name button that opens the layout list, + ✕); `#layout-panel` is the empty container controls.js
 fills with the creation card.

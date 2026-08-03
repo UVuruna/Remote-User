@@ -9,13 +9,14 @@ The phone side of Remote User — a plain web page served by the PC server, load
 | `index.html` | Standard | page shell — canvas, corner buttons, D-pad groups, wheel, keyboard capture — [about](__about/index.md) |
 | `install.html` | Standard | install funnel (Open the app → Install) — the only page ANY browser ever sees — [about](__about/install.md) |
 | `style.css` | Algorithmic | design tokens + every component's visual rules — [about](__about/style.md) · [flow](__flow/style.md) |
-| `load_test.js` | Standard | dev harness — concatenates and executes the 6 client scripts below, in load order, against a stubbed DOM to catch load-time errors — [about](__about/load_test.md) |
+| `load_test.js` | Standard | dev harness — concatenates and executes the 7 client scripts below, in load order, against a stubbed DOM to catch load-time errors — [about](__about/load_test.md) |
 | `state.js` | Standard | tunables + shared state + `setStatus`/`toCanvasPx`/`send` — loads 1st — [about](__about/state.md) |
 | `render.js` | Algorithmic | canvas drawing, view transform, dual-mode (H.264 MSE / JPEG) frame decode — loads 2nd — [about](__about/render.md) · [flow](__flow/render.md) |
 | `input-geometry.js` | Algorithmic | finger→PC coordinate mapping (pointer under the finger since 2026-08-02), scroll inertia — loads 3rd — [about](__about/input-geometry.md) · [flow](__flow/input-geometry.md) |
 | `controls.js` | Algorithmic | on-screen chrome: keyboard capture, anywhere wizard, update banner, upload, D-pad groups, wheel, corner buttons, toast — loads 4th — [about](__about/controls.md) · [flow](__flow/controls.md) |
-| `gestures.js` | Algorithmic | canvas pointer-event dispatch: pinch-zoom + the single-finger touchMode gestures — loads 5th — [about](__about/gestures.md) · [flow](__flow/gestures.md) |
-| `connection.js` | Algorithmic | WebSocket lifecycle, protocol message handlers, visibility-gated session — loads 6th (starts the page) — [about](__about/connection.md) · [flow](__flow/connection.md) |
+| `layouts.js` | Algorithmic | layout bar, layout list, aspect-ratio panel, creation flow, loading cube — loads 5th — [about](__about/layouts.md) · [flow](__flow/layouts.md) |
+| `gestures.js` | Algorithmic | canvas pointer-event dispatch: pinch-zoom + the single-finger touchMode gestures — loads 6th — [about](__about/gestures.md) · [flow](__flow/gestures.md) |
+| `connection.js` | Algorithmic | WebSocket lifecycle, protocol message handlers, visibility-gated session — loads 7th (starts the page) — [about](__about/connection.md) · [flow](__flow/connection.md) |
 
 ## Connections
 
@@ -51,11 +52,13 @@ The phone side of Remote User — a plain web page served by the PC server, load
   ghost-pointer self-heal, H.264/JPEG rendering, virtual-cursor drawing,
   region streaming, the visibility-gated session, and the guided "anywhere
   access" wizard were all one `app.js` file (1,174 lines) — split (god-file
-  refactor, THE STRUCTURE LAW) into the 6 `state.js`/`render.js`/
+  refactor, THE STRUCTURE LAW) into the `state.js`/`render.js`/
   `input-geometry.js`/`controls.js`/`gestures.js`/`connection.js` files above,
-  each documented individually. Visual-only decisions (see-through buttons,
+  each documented individually; `layouts.js` split off `controls.js` the same
+  way on 2026-08-03 when the layout feature (bar, list, aspect panel,
+  creation, loading cube) pushed it past 1,000 lines. Visual-only decisions (see-through buttons,
   the `--kb`/`--vtop` viewport variables) are in [Style](__about/style.md).
-- **The 6 client scripts share ONE global scope, on purpose** — classic
+- **The 7 client scripts share ONE global scope, on purpose** — classic
   (non-module) `<script>` tags loaded in the exact order `index.html` lists
   them, which is semantically identical to one concatenated file. This
   preserves `app.js`'s original behavior with zero change while splitting it
@@ -63,7 +66,7 @@ The phone side of Remote User — a plain web page served by the PC server, load
   (`controls.js` calls `keepFocus` before its own definition, relying on
   function hoisting scoped to that one file — see
   [Controls](__about/controls.md)). `load_test.js` must be kept in sync with
-  `index.html`'s script order — both list the same 6 files.
+  `index.html`'s script order — both list the same 7 files.
 - **One CSS inconsistency noticed while documenting, flagged not fixed:**
   `body.hidden-controls` hides most of the chrome in one grouped block at the
   end of `style.css`, but `#update-banner`'s own `body.hidden-controls`

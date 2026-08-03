@@ -47,5 +47,5 @@ everywhere the page must own gestures itself rather than the browser.
 
 ## Layouts (Phase F+ step 1)
 `#layout-bar` is a top-center pill (same glass look as the status pill);
-`#layout-panel` / `.lay-card` / `.lay-chip` mirror the wizard card's styling.
+`#layout-panel` / `.lay-card` / `.lay-chip` mirror the wizard card's styling; `.lay-item` rows, `.lay-ratio` and the `.asp-*` aspect widget (dashed screen box, accent region, round handles) belong to the layout list and aspect panel. `#lay-loading` is visible through the `open` class with an opacity transition, NEVER the `hidden` attribute — `hidden` would kill the cross-fade (owner 2026-08-03).
 Both are hidden by Hide-all.

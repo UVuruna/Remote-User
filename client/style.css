@@ -403,7 +403,26 @@ body.hidden-controls #update-banner { display: none; }
   border: none;
   color: var(--text-primary);
   font: 700 20px/1 system-ui, sans-serif;
-  padding: 4px 10px;
+  padding: 4px 8px;
+}
+/* Big SVG arrows OUTSIDE the name (owner 2026-08-03 — the old ‹ › glyphs sat
+   inside the label and were too small to hit reliably). */
+#layout-bar .lay-arrow {
+  padding: 2px 4px;
+  display: flex;
+  align-items: center;
+}
+#layout-bar .lay-arrow svg { width: 32px; height: 32px; }
+/* The name is its own framed button — tapping it opens the full layout list. */
+#layout-bar #lay-pick {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 13px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: rgb(51 65 85 / 0.55);
+  font: 600 14px/1.1 system-ui, sans-serif;
 }
 #lay-name {
   overflow: hidden;
@@ -491,8 +510,117 @@ body.hidden-controls #update-banner { display: none; }
   align-content: flex-start;
 }
 
+/* Layout list + aspect panel (owner 2026-08-03) — rows inside the same card
+   as the creation panel; the aspect button on a row carries its current W:H. */
+.lay-item {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  margin: 8px 0;
+}
+.lay-item-main {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: rgb(51 65 85 / 0.5);
+  color: var(--text-primary);
+  font: 600 14px system-ui, sans-serif;
+  text-align: left;
+}
+.lay-item-main img { width: 20px; height: 20px; flex: none; }
+.lay-item-main span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lay-item-main.sel { border-color: var(--accent); color: var(--accent); }
+.lay-ratio {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: rgb(51 65 85 / 0.5);
+  color: var(--text-secondary);
+  font: 600 12px system-ui, sans-serif;
+}
+.lay-ratio svg { width: 20px; height: 20px; }
+
+/* Aspect panel — W : H fields over a live preview of the phone screen (dashed)
+   with the region inside it; the region can only ever SHRINK inside the
+   screen box (owner 2026-08-03), so the free axis is the only draggable one. */
+.asp-fields {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin: 14px 0 6px;
+  font: 700 15px system-ui, sans-serif;
+}
+.asp-fields input {
+  width: 74px;
+  padding: 9px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: rgb(51 65 85 / 0.6);
+  color: var(--text-primary);
+  font: 700 15px system-ui, sans-serif;
+  text-align: center;
+}
+.asp-fields input:disabled { color: var(--text-secondary); opacity: 0.7; }
+.asp-prev {
+  height: 190px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 6px 0;
+}
+.asp-screen {
+  position: relative;
+  max-width: 100%;
+  max-height: 100%;
+  border: 1px dashed var(--text-secondary);
+  border-radius: 4px;
+}
+.asp-region {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  border: 2px solid var(--accent);
+  border-radius: 4px;
+  background: rgb(56 189 248 / 0.12);
+}
+.asp-h {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  margin: -9px 0 0 -9px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.asp-h.t { top: 0; left: 50%; }
+.asp-h.b { top: 100%; left: 50%; }
+.asp-h.l { top: 50%; left: 0; }
+.asp-h.r { top: 50%; left: 100%; }
+.asp-h.free { box-shadow: 0 0 0 6px var(--accent-glow); }
+.asp-value {
+  text-align: center;
+  color: var(--text-secondary);
+  font: 600 13px system-ui, sans-serif;
+}
+
 /* FULLY opaque (owner: nothing behind may show) — the whole screen becomes
-   the animation while the server creates windows. */
+   the animation while the server creates windows. It cross-fades in and out
+   (owner 2026-08-03, "like the theme switch in Prompt Painter"), so the
+   `hidden` attribute is NOT used here — visibility is the `open` class. */
 #lay-loading {
   position: fixed;
   inset: 0;
@@ -505,8 +633,20 @@ body.hidden-controls #update-banner { display: none; }
   gap: 40px;
   color: var(--text-primary);
   font: 600 15px system-ui, sans-serif;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 280ms cubic-bezier(0.4, 0, 0.2, 1),
+              visibility 0s linear 280ms;
 }
-#lay-loading[hidden] { display: none; }
+#lay-loading.open {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 280ms cubic-bezier(0.4, 0, 0.2, 1), visibility 0s;
+}
+/* NOTE: the fade is opacity-only on purpose — `.cube-scene`'s transform is
+   owned by the cube-bob animation AND by the JS spin, so a transition on it
+   would simply be overridden (and a scale on #lay-loading itself would expose
+   the screen behind its edges). */
 
 /* The cube: owner-specified faces — top gold, bottom purple-gray, left azure,
    right orange, front green, back red. NO perspective = orthographic

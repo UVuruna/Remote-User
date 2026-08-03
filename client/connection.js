@@ -78,7 +78,10 @@ function connect() {
       } else if (msg.type === "toast") {
         showToast(msg.text);
       } else if (msg.type === "layout_state") {
-        hideLayLoading(); // creation/extraction finished (or pruned)
+        // The server is done — but the PC is not: windows are still restoring
+        // and sliding into place. The loading animation stays up until the
+        // STREAM stops moving (owner 2026-08-03).
+        settleLayLoading();
         layouts = msg.layouts || [];
         layoutActive = msg.active ?? null;
         layoutRegion = msg.region || null;
