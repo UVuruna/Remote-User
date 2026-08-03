@@ -96,3 +96,14 @@ clamped to the very same rect in
 [Input Geometry](input-geometry.md) (`toRemoteClamped`), so the empty space is
 not reachable either: a focused layout is one window, whole — nothing of the
 desktop is visible or touchable.
+
+## The keyboard no longer squeezes the picture (owner 2026-08-03)
+`updateViewport()` used to size the canvas to the CURRENT viewport, so the
+soft keyboard (the shell runs `adjustResize`) shortened the canvas and the
+whole picture was re-fitted into it — the layout visibly deformed. The canvas
+now keeps the FULL height of the current orientation (`fullView`, remembered
+across keyboard openings — the width is the tell: it changes only on rotation)
+and is simply lifted by `kbShift` with a CSS transform, so its bottom edge —
+the row being typed into — sits right above the keyboard while the top runs
+off screen. Touch coordinates add the same shift back in `toCanvasPx`
+([State](state.md)).

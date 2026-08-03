@@ -130,6 +130,12 @@ class MainActivity : AppCompatActivity() {
             // this marker is how the app itself gets the real client page.
             userAgentString = "$userAgentString RemoteUserApp"
         }
+        // No framework focus rectangle over our content: the page's keyboard
+        // capture field is deliberately invisible, and any highlight drawn
+        // around it is a bright bar across the top of the stream (owner
+        // reported it five times — the page kills the CSS focus ring, this
+        // kills the platform one). API 26 = our minSdk, so no guard needed.
+        web.defaultFocusHighlightEnabled = false
         web.addJavascriptInterface(Bridge(), "Android")
         web.webViewClient = Client()
         web.webChromeClient = Chrome()

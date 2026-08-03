@@ -89,8 +89,18 @@ window.addEventListener("error", (e) => setStatus("disconnected", `Page error: $
 window.addEventListener("unhandledrejection", (e) =>
   setStatus("disconnected", `Page error: ${e.reason}`));
 
+// The canvas keeps its FULL height when the soft keyboard opens and is simply
+// shifted up by `kbShift` CSS px (owner 2026-08-03 — the picture must never be
+// squeezed; the bottom stays visible above the keyboard and the top runs off
+// screen). Touch coordinates are reported against the visible viewport, so the
+// same shift is added back here to land in canvas space.
+let kbShift = 0;
+
 function toCanvasPx(e) {
-  return { x: e.clientX * devicePixelRatio, y: e.clientY * devicePixelRatio };
+  return {
+    x: e.clientX * devicePixelRatio,
+    y: (e.clientY + kbShift) * devicePixelRatio,
+  };
 }
 
 function send(msg) {

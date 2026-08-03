@@ -35,16 +35,22 @@
         <polyline points="15 4 7 12 15 20"/>
       </svg>
     </button>
-    <button id="lay-pick" type="button" aria-label="Choose a layout">
-      <img id="lay-icon" alt="" hidden>
-      <span id="lay-name">Desktop</span>
-    </button>
+    <!-- The framed name — the ✕ lives INSIDE the frame, and the whole bar is
+         bounded by the two corner buttons: the name wraps to a second line
+         rather than pushing the arrow or the ✕ off the screen (owner
+         2026-08-03) -->
+    <div id="lay-frame">
+      <button id="lay-pick" type="button" aria-label="Choose a layout">
+        <img id="lay-icon" alt="" hidden>
+        <span id="lay-name">Desktop</span>
+      </button>
+      <button id="lay-close" type="button" aria-label="Remove this layout" hidden>✕</button>
+    </div>
     <button id="lay-next" class="lay-arrow" type="button" aria-label="Next layout">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
         <polyline points="9 4 17 12 9 20"/>
       </svg>
     </button>
-    <button id="lay-close" type="button" aria-label="Remove this layout" hidden>✕</button>
   </div>
 
   <!-- Top-right: hide every control, leaving only the screen -->
