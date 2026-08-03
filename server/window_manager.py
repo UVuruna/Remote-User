@@ -19,6 +19,7 @@ import ctypes
 import ctypes.wintypes as wintypes
 import logging
 import os
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +32,7 @@ GWL_EXSTYLE = -20
 WS_EX_TOOLWINDOW = 0x00000080
 DWMWA_CLOAKED = 14
 DWMWA_EXTENDED_FRAME_BOUNDS = 9
+DWMWA_TRANSITIONS_FORCEDISABLED = 3
 SW_RESTORE = 9
 SW_MINIMIZE = 6
 SWP_NOZORDER = 0x0004
@@ -317,14 +319,75 @@ def layout_region(mon_rect, aspect: float,
     return box
 
 
+# --- Making the move INVISIBLE (owner rule, hardened 2026-08-03) ------------
+# The phone's cube overlay exists so the user NEVER sees windows moving: it
+# covers the whole rearrangement and fades out onto the finished picture. Two
+# Windows facts broke that and are handled here, at the source:
+#   1. `ShowWindow(SW_RESTORE)` / `SW_MINIMIZE` return IMMEDIATELY while DWM
+#      still plays the slide-up/slide-down transition — which the screen
+#      capture faithfully records. `freeze_transitions` turns that animation
+#      OFF per window (DWMWA_TRANSITIONS_FORCEDISABLED), so restore and
+#      minimize are instantaneous, with nothing to watch.
+#   2. Even without the transition, the app itself re-lays-out after the
+#      resize. `wait_settled` blocks until the window is really out of the
+#      taskbar and its visible frame has stopped changing, so the server only
+#      reports "done" when the desk truly is done.
+
+SETTLE_TIMEOUT_S = 1.5
+SETTLE_POLL_S = 0.03
+SETTLE_STABLE_READS = 2
+
+
+def freeze_transitions(hwnd: int, disabled: bool = True) -> None:
+    """Disable (or restore) DWM's minimize/restore animation for one window."""
+    val = wintypes.BOOL(1 if disabled else 0)
+    dwmapi.DwmSetWindowAttribute(hwnd, DWMWA_TRANSITIONS_FORCEDISABLED,
+                                 ctypes.byref(val), ctypes.sizeof(val))
+
+
+def wait_settled(hwnd: int, timeout_s: float = SETTLE_TIMEOUT_S) -> None:
+    """Block until the window is out of the taskbar and its visible frame has
+    stopped moving (or the timeout — never hang the session on one app)."""
+    deadline = time.monotonic() + timeout_s
+    last = None
+    stable = 0
+    while time.monotonic() < deadline:
+        if user32.IsIconic(hwnd) or not user32.IsWindow(hwnd):
+            last, stable = None, 0
+        else:
+            rect = _frame_rect(hwnd)
+            if rect is not None and rect == last:
+                stable += 1
+                if stable >= SETTLE_STABLE_READS:
+                    return
+            else:
+                last, stable = rect, 0
+        time.sleep(SETTLE_POLL_S)
+    logger.warning("Window %#x never settled within %.1fs", hwnd, timeout_s)
+
+
+def wait_minimized(hwnds: list[int], timeout_s: float = SETTLE_TIMEOUT_S) -> None:
+    """Block until every listed window is really iconic — the Desktop view
+    must not appear while members are still sliding down (owner 2026-08-03)."""
+    deadline = time.monotonic() + timeout_s
+    while time.monotonic() < deadline:
+        if all(not user32.IsWindow(h) or user32.IsIconic(h) for h in hwnds):
+            return
+        time.sleep(SETTLE_POLL_S)
+    logger.warning("Some layout members never minimized within %.1fs", timeout_s)
+
+
 def place_window(hwnd: int, rect: tuple[int, int, int, int]) -> None:
     """Restore + move/size so the VISIBLE frame lands on rect. Apps with a
-    minimum size simply end up larger — the phone letterboxes (owner-accepted)."""
+    minimum size simply end up larger — the phone letterboxes (owner-accepted).
+    Returns once the window has actually landed (see wait_settled)."""
     x, y, w, h = rect
+    freeze_transitions(hwnd)
     user32.ShowWindow(hwnd, SW_RESTORE)
     bl, bt, br, bb = _border_offsets(hwnd)
     user32.SetWindowPos(hwnd, 0, x - bl, y - bt, w + bl + br, h + bt + bb,
                         SWP_NOZORDER | SWP_NOACTIVATE)
+    wait_settled(hwnd)
 
 
 def raise_window(hwnd: int) -> None:
@@ -334,9 +397,11 @@ def raise_window(hwnd: int) -> None:
     explicit z-top first (works regardless of focus rules), then plain
     SetForegroundWindow, then the AttachThreadInput trick, then the Alt
     nudge."""
+    freeze_transitions(hwnd)  # no slide-up out of the taskbar to watch
     user32.ShowWindow(hwnd, SW_RESTORE)
     user32.SetWindowPos(hwnd, 0, 0, 0, 0, 0,  # HWND_TOP
                         0x0001 | 0x0002 | 0x0040)  # NOSIZE|NOMOVE|SHOWWINDOW
+    wait_settled(hwnd)
     if user32.SetForegroundWindow(hwnd):
         return
     fg = user32.GetForegroundWindow()
@@ -477,9 +542,12 @@ class LayoutRegistry:
         and only the windows that are NOT layout material. Focusing a layout
         later restores its own members (place/raise SW_RESTORE)."""
         self.prune()
-        for lay in self.layouts:
-            for hwnd in lay.members:
-                user32.ShowWindow(hwnd, SW_MINIMIZE)
+        members = [h for lay in self.layouts for h in lay.members]
+        for hwnd in members:
+            freeze_transitions(hwnd)  # no slide-down to watch
+            user32.ShowWindow(hwnd, SW_MINIMIZE)
+        # Only report Desktop once they are ALL really gone (owner 2026-08-03).
+        wait_minimized(members)
 
     def set_ratio(self, index: int, w: int, h: int) -> bool:
         """Store this layout's owner-chosen W:H (0/0 = back to the phone's own
@@ -498,8 +566,12 @@ class LayoutRegistry:
 
     def remove(self, index: int) -> None:
         """Deleting a layout leaves the desktop exactly as it is (owner rule —
-        no auto-return of windows)."""
+        no auto-return of windows). Its windows get their normal Windows
+        minimize/restore animation back — we only froze it while they were
+        layout material."""
         if 0 <= index < len(self.layouts):
+            for hwnd in self.layouts[index].members:
+                freeze_transitions(hwnd, False)
             del self.layouts[index]
 
     def state(self, active: int | None, region: dict | None) -> dict:
