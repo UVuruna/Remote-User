@@ -85,3 +85,14 @@ edge margins) is GONE — the pointer sits exactly under the finger, the image
 aspect-fits the FULL canvas, and a focused layout touches all four screen
 edges. Any offset/margin description in this doc's diagrams predating
 2026-08-02 is historical.
+
+## The locked region is CLIPPED (owner 2026-08-03)
+Since a layout can carry its own aspect ratio ([Layouts](layouts.md)), its
+region no longer fills the screen — and `redraw()` was still painting the
+whole monitor frame, so the desktop behind the layout showed through in the
+leftover bars. `redraw()` now clips to the region rect while `viewLocked()`,
+leaving the theme background (`#0f172a`) everywhere else. The PC cursor is
+clamped to the very same rect in
+[Input Geometry](input-geometry.md) (`toRemoteClamped`), so the empty space is
+not reachable either: a focused layout is one window, whole — nothing of the
+desktop is visible or touchable.

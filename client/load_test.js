@@ -36,7 +36,11 @@ function stubElement() {
     className: "",
     textContent: "",
     innerHTML: "",
-    getContext: () => ({ fillRect() {}, drawImage() {}, fillStyle: "" }),
+    getContext: () => ({
+      fillRect() {}, drawImage() {}, fillStyle: "",
+      // redraw() clips to the layout region while a layout is focused
+      save() {}, restore() {}, beginPath() {}, rect() {}, clip() {},
+    }),
   };
 }
 

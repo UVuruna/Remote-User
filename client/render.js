@@ -57,6 +57,19 @@ function redraw() {
   ctx.fillStyle = "#0f172a";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   const D = drawnRect();
+  ctx.save();
+  if (viewLocked()) {
+    // In layout focus the phone shows ONLY the framed region. Once a layout
+    // carries its own aspect ratio the region no longer fills the screen, and
+    // what is left over must stay the app's own background — NEVER the
+    // desktop behind it (owner 2026-08-03). The PC cursor is clamped to the
+    // very same rect (input-geometry.js `toRemoteClamped`), so nothing out
+    // there is reachable either: the layout stays one window, whole.
+    ctx.beginPath();
+    ctx.rect(D.x + layoutRegion.x * D.w, D.y + layoutRegion.y * D.h,
+             layoutRegion.w * D.w, layoutRegion.h * D.h);
+    ctx.clip();
+  }
   if (streamMode === "h264") {
     if (video.readyState >= 2) ctx.drawImage(video, D.x, D.y, D.w, D.h);
   } else {
@@ -72,6 +85,7 @@ function redraw() {
     }
   }
   drawCursor(D);
+  ctx.restore();
 }
 
 // The PC pointer, drawn client-side (screen capture never contains it).
