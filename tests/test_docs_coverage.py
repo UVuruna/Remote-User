@@ -64,6 +64,7 @@ ALGORITHMIC = {
     "client/render.js",
     "client/input-geometry.js",
     "client/controls.js",
+    "client/layouts.js",
     "client/gestures.js",
     "client/connection.js",
     "setup/svg_to_ico.py",

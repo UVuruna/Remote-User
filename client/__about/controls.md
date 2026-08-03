@@ -9,9 +9,9 @@ Everything that isn't the canvas itself: icons, the built-in action registry,
 touch-mode toggle buttons, invisible keyboard capture, the "access from
 anywhere" Tailscale wizard, the in-app update banner, phone→PC image upload,
 the two configurable D-pad control groups, the tap-based category wheel,
-corner buttons (Move/Hide) and the toast pill. Fourth of the six client
+corner buttons (Move/Hide) and the toast pill. Fourth of the seven client
 scripts to load (after [Input Geometry](input-geometry.md), before
-[Gestures](gestures.md)).
+[Layouts](layouts.md)).
 
 **Kept as one file, not split further:** the wizard section calls
 `keepFocus(anywhereBanner, openWizard)` at the top level, textually BEFORE
@@ -36,6 +36,8 @@ for the split's general load-order reasoning.
   `renderGroup("left"/"right")`; the `config` handler calls
   `updateAnywhereBanner()`/`refreshUpdateBanner()`
 - [Gestures](gestures.md) — reads `keyboardOpen()`
+- [Layouts](layouts.md) — every layout button is wired through `keepFocus`,
+  and it uses `svg`, `showToast` and `IN_APP` from here
 
 ## Key Functions & Data
 
@@ -80,39 +82,16 @@ for the split's general load-order reasoning.
   file** — a direct consequence of the `keepFocus` hoisting dependency
   above; this is a structural constraint of the split, not an arbitrary
   grouping choice.
-## Layouts (Phase F+ step 1)
-The Layout (+) corner button ARMS a one-shot window pick (no switcher mode —
-owner 2026-08-02); the top-center layout bar (`‹ name ›` + ✕) cycles
-Desktop → layout 1 → … and removes the focused layout; `openLayoutPanel`
-builds the creation card from `layout_offer` (Only this / Grid 2x1·1x2·2x2 +
-open windows to fill the cells + Portrait/Wide); `applyOrientationLock`
-drives the shell's `Android.lockOrientation` bridge (layout focus = rotation
-locked, desktop = free). The old Move/pan corner button is GONE (owner
-2026-08-02).
-
-## Creation flow rework (owner feedback 2026-08-02, same day)
-The Layout (+) button now opens a source CHOOSER: "From a list" (server sends
-every window and its content tabs — tabs were invisible in the first cut, the
-reported gap) or "Tap a window" (a grid takes one tap per cell). Both feed one
-slot-based panel: chosen slots are removable chips, list selection toggles and
-REPLACES the last pick when full (the stuck-selection bug), Create ships
-`slots` and shows the loading overlay (`#lay-loading`) while the server
-extracts tabs — visible seconds on the PC.
+- **The layout feature moved out** (2026-08-03) — the layout bar, list,
+  aspect panel, creation flow and loading cube used to live at the end of this
+  file and now have their own script and doc: [Layouts](layouts.md). This file
+  crossed 1,000 lines (THE STRUCTURE LAW) and the split follows the
+  responsibility line: what is left drives the PC directly, what left composes
+  and frames windows on it.
 
 ## Step 3 additions (owner spec 2026-08-02)
 `next_input` builtin (jump to the next text box — dictation workflow) and the
 `quality` cycle (full → reduced → auto-on-mobile-data via
 `Android.transport()`; persisted in localStorage, restated on every connect).
-The loading overlay is now the owner-specified CUBE: fully opaque screen, six
-colored faces (top gold, bottom purple-gray, left azure, right orange, front
-green, back red); each `layout_progress` (one per window the server creates)
-turns it to the next face — top → left → back → right → front → bottom, loop.
-The source chooser carries the owner's two icons (clipboard list / window+).
-
-## Polish round (owner feedback 2026-08-02, evening)
-Source-chooser buttons are large rounded SQUARES (matching the card's radius
-— the pill radius had turned them into label-clipping circles). The cube now
-spins CONTINUOUSLY in orthographic projection (no perspective, tilted corner
-view — always reads as a cube); each `layout_progress` injects a decaying
-momentum burst instead of a discrete face jump. The update banner compares
-against `config.apk_version` — the APK the PC actually serves.
+The update banner compares against `config.apk_version` — the APK the PC
+actually serves.

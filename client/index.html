@@ -25,13 +25,25 @@
     <span class="lbl">Layout</span>
   </button>
 
-  <!-- Top-center: the layout bar — arrows cycle Desktop → layout 1 → … ;
-       exists only while at least one layout does (owner 2026-08-02) -->
+  <!-- Top-center: the layout bar — big SVG arrows OUTSIDE the name cycle
+       Desktop → layout 1 → … , and the framed name itself opens the full
+       layout list (owner 2026-08-03: with many layouts, stepping through them
+       one by one was the wrong tool). Exists only while a layout does. -->
   <div id="layout-bar" hidden>
-    <button id="lay-prev" type="button" aria-label="Previous layout">‹</button>
-    <img id="lay-icon" alt="" hidden>
-    <span id="lay-name">Desktop</span>
-    <button id="lay-next" type="button" aria-label="Next layout">›</button>
+    <button id="lay-prev" class="lay-arrow" type="button" aria-label="Previous layout">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="15 4 7 12 15 20"/>
+      </svg>
+    </button>
+    <button id="lay-pick" type="button" aria-label="Choose a layout">
+      <img id="lay-icon" alt="" hidden>
+      <span id="lay-name">Desktop</span>
+    </button>
+    <button id="lay-next" class="lay-arrow" type="button" aria-label="Next layout">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="9 4 17 12 9 20"/>
+      </svg>
+    </button>
     <button id="lay-close" type="button" aria-label="Remove this layout" hidden>✕</button>
   </div>
 
@@ -72,9 +84,13 @@
   <div id="layout-panel" hidden></div>
 
   <!-- Loading overlay — FULLY opaque (owner 2026-08-02: nothing behind may
-       show): a 3D cube that turns to its next face for every window the
-       server creates (top → left → back → right → front → bottom, looping) -->
-  <div id="lay-loading" hidden>
+       show): a 3D cube spinning for the WHOLE time a layout is being built,
+       loaded or switched, gone only once the streamed screen actually stands
+       still (owner 2026-08-03). Every showing opens on the next face of
+       top → left → back → right → front → bottom, and it cross-fades in and
+       out. Visibility is the `open` class, never the `hidden` attribute —
+       `hidden` would kill the fade. -->
+  <div id="lay-loading">
     <div class="cube-scene">
       <div class="cube" id="lay-cube">
         <div class="cube-face cf-front"></div>
@@ -123,13 +139,14 @@
     </div>
   </div>
 
-  <!-- Split from a single app.js (god-file refactor) into 6 classic scripts
+  <!-- Split from a single app.js (god-file refactor) into 7 classic scripts
        sharing one global scope — LOAD ORDER MATTERS, keep it in sync with
        client/load_test.js's FILES list. See client/___client.md. -->
   <script src="/static/state.js"></script>
   <script src="/static/render.js"></script>
   <script src="/static/input-geometry.js"></script>
   <script src="/static/controls.js"></script>
+  <script src="/static/layouts.js"></script>
   <script src="/static/gestures.js"></script>
   <script src="/static/connection.js"></script>
 </body>

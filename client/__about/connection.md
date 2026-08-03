@@ -73,4 +73,4 @@ deliberate tap on the status pill takes the session back.
 
 ## Creation flow rework (owner feedback 2026-08-02, same day)
 `layout_offer` is delegated to `handleLayoutOffer` (list arrival or one tap's
-slot — same creation session); `layout_state` hides the loading overlay.
+slot — same creation session); `layout_state` ARMS the loading overlay's settle watcher (`settleLayLoading`) instead of hiding it — the server being done is not the screen being still (owner 2026-08-03; see [Layouts](layouts.md)).
