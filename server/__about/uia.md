@@ -60,3 +60,16 @@ Document elements (visible, enabled, keyboard-focusable, sensibly sized) of
 the scope windows (layout members, or every non-minimized window), order them
 top-to-bottom/left-to-right, find the currently focused one by RuntimeId and
 SetFocus the next (raising its window first). Fails soft to None.
+
+## Tab-capable apps only (owner decision 2026-08-03)
+`TAB_APPS` / `has_tabs(process)` gate the whole tab layer: only Chrome, Edge,
+Firefox, Brave, Opera, Vivaldi, LibreWolf, VSCode/Insiders, Cursor, Windsurf,
+Explorer and Windows Terminal get their tabs offered. UIA has no "this tab can
+become a window" property, and an app's internal section switcher (the
+Pointer / Ring / Umbra pills in DOMY Watch's design pane) is a `TabItem` in
+the window's top strip exactly like a Chrome tab — offering those cost six
+seconds of extraction that always fell back to the whole window. The list is
+the set of apps the three strategies actually cover; everything else is
+offered as a whole window only, and its UIA tree is never walked (which also
+makes the creation list visibly faster). [Web Layer](web.md) applies the gate
+before calling `list_tabs` / `tab_at`.
