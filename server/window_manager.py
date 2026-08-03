@@ -286,16 +286,35 @@ def _work_area(mon_rect: tuple[int, int, int, int]) -> tuple[int, int, int, int]
     return (w.left, w.top, w.right - w.left, w.bottom - w.top)
 
 
+def _fit_rect(box, aspect: float) -> tuple[int, int, int, int]:
+    """Largest rect of the given aspect (w/h) centered inside `box`."""
+    bl, bt, bw, bh = box
+    w = min(bw, int(bh * aspect))
+    h = int(w / aspect)
+    if h > bh:
+        h = bh
+        w = int(h * aspect)
+    return (bl + (bw - w) // 2, bt + (bh - h) // 2, w, h)
+
+
 def _region_rect(mon_rect, aspect: float) -> tuple[int, int, int, int]:
     """Largest rect of the given aspect (w/h) centered in the work area — the
     area the phone will frame; solo windows fill it, grids subdivide it."""
-    wl, wt, ww, wh = _work_area(mon_rect)
-    w = min(ww, int(wh * aspect))
-    h = int(w / aspect)
-    if h > wh:
-        h = wh
-        w = int(h * aspect)
-    return (wl + (ww - w) // 2, wt + (wh - h) // 2, w, h)
+    return _fit_rect(_work_area(mon_rect), aspect)
+
+
+def layout_region(mon_rect, aspect: float,
+                  ratio: tuple[int, int] | None = None) -> tuple[int, int, int, int]:
+    """The rect the phone frames. The DEVICE shape (`aspect`) gives the outer
+    box; a per-layout ratio override may only make the region SMALLER inside
+    it (owner decision 2026-08-03: portrait keeps the phone's width and the
+    region may only get shorter, landscape keeps its height and the region may
+    only get narrower — the unused strip stays black on the phone). Anything
+    that would grow past the phone's own shape is clamped by the same fit."""
+    box = _region_rect(mon_rect, aspect)
+    if ratio and ratio[0] > 0 and ratio[1] > 0:
+        return _fit_rect(box, ratio[0] / ratio[1])
+    return box
 
 
 def place_window(hwnd: int, rect: tuple[int, int, int, int]) -> None:
@@ -368,6 +387,11 @@ class Layout:
         self.orient = orient      # "portrait" | "wide"
         self.aspect = aspect      # w/h the layout was last arranged for
         self.icon = icon          # target app's icon (PNG data URI) for the bar
+        # Owner-chosen W:H for THIS layout (None = the phone's own shape).
+        # `arranged` is what the windows currently stand in — a changed ratio
+        # is what makes the next focus re-place them (owner 2026-08-03).
+        self.ratio: tuple[int, int] | None = None
+        self.arranged_ratio: tuple[int, int] | None = None
 
 
 class LayoutRegistry:
@@ -397,14 +421,14 @@ class LayoutRegistry:
         aspect = device_ratio if orient == "portrait" else 1.0 / device_ratio
         members = [target] + [h for h in fill if is_alive(h) and h != target]
         if mode == "grid" and template in GRID_TEMPLATES:
-            cells = _cells(_region_rect(mon_rect, aspect), template)
+            cells = _cells(layout_region(mon_rect, aspect), template)
             members = members[:len(cells)]
             for hwnd, cell in zip(members, cells):
                 place_window(hwnd, cell)
         else:
             template = None
             members = members[:1]
-            place_window(target, _region_rect(mon_rect, aspect))
+            place_window(target, layout_region(mon_rect, aspect))
         name = name or _title(target) or "Window"
         self.layouts.append(Layout(name, _process_name(target), members,
                                    template, orient, aspect,
@@ -422,18 +446,21 @@ class LayoutRegistry:
             return None
         lay = self.layouts[index]
         aspect = device_ratio if lay.orient == "portrait" else 1.0 / device_ratio
-        if abs(aspect - lay.aspect) > 0.05:
-            lay.aspect = aspect  # different device — rebuild the arrangement
+        if abs(aspect - lay.aspect) > 0.05 or lay.arranged_ratio != lay.ratio:
+            # A different device, or the owner changed this layout's aspect —
+            # rebuild the arrangement.
+            lay.aspect = aspect
+            lay.arranged_ratio = lay.ratio
+            region = layout_region(mon_rect, aspect, lay.ratio)
             if lay.template:
-                for hwnd, cell in zip(lay.members,
-                                      _cells(_region_rect(mon_rect, aspect), lay.template)):
+                for hwnd, cell in zip(lay.members, _cells(region, lay.template)):
                     place_window(hwnd, cell)
             else:
-                place_window(lay.members[0], _region_rect(mon_rect, aspect))
+                place_window(lay.members[0], region)
         for hwnd in lay.members:
             raise_window(hwnd)
         if lay.template:
-            cells = _cells(_region_rect(mon_rect, lay.aspect), lay.template)
+            cells = _cells(layout_region(mon_rect, lay.aspect, lay.ratio), lay.template)
             region = cells[0]
             x2 = max(c[0] + c[2] for c in cells[:len(lay.members)])
             y2 = max(c[1] + c[3] for c in cells[:len(lay.members)])
@@ -454,6 +481,21 @@ class LayoutRegistry:
             for hwnd in lay.members:
                 user32.ShowWindow(hwnd, SW_MINIMIZE)
 
+    def set_ratio(self, index: int, w: int, h: int) -> bool:
+        """Store this layout's owner-chosen W:H (0/0 = back to the phone's own
+        shape). Only stored — the next focus re-places the windows, which is
+        what the caller does right after (owner 2026-08-03)."""
+        if not 0 <= index < len(self.layouts):
+            return False
+        self.layouts[index].ratio = (w, h) if w > 0 and h > 0 else None
+        return True
+
+    def member_hwnds(self) -> set[int]:
+        """Every window that already belongs to SOME layout — the creation
+        list hides them (owner 2026-08-03: one window cannot be shown twice)."""
+        self.prune()
+        return {h for lay in self.layouts for h in lay.members}
+
     def remove(self, index: int) -> None:
         """Deleting a layout leaves the desktop exactly as it is (owner rule —
         no auto-return of windows)."""
@@ -469,7 +511,8 @@ class LayoutRegistry:
         return {
             "type": "layout_state",
             "layouts": [{"name": lay.name, "process": lay.process,
-                         "orient": lay.orient, "icon": lay.icon}
+                         "orient": lay.orient, "icon": lay.icon,
+                         "ratio": list(lay.ratio) if lay.ratio else None}
                         for lay in self.layouts],
             "active": active,
             "region": region,

@@ -51,6 +51,26 @@ NEW_WINDOW_POLL_S = 0.12
 TAB_MIN_WIDTH = 60        # px — narrower TabItems are activity-bar icons, not tabs
 TAB_TOP_FRACTION = 0.15   # real tab strips live in the window's top 15%
 
+# Only THESE apps get their tabs offered (owner decision 2026-08-03). UIA has
+# no "this tab can become a window" property: an app's internal section
+# switcher (the Pointer/Ring/Umbra pills in DOMY Watch's design pane) is a
+# TabItem in the window's top strip exactly like a Chrome tab, and offering it
+# cost 6 s of extraction that always fell back to the whole window. The list
+# is the set of apps the extraction strategies actually cover — everything
+# else is offered as a whole window only, and its UIA tree is never walked
+# (which also makes the creation list visibly faster).
+TAB_APPS = {
+    "chrome.exe", "msedge.exe", "brave.exe", "opera.exe", "opera_gx.exe",
+    "vivaldi.exe", "firefox.exe", "librewolf.exe",
+    "code.exe", "code - insiders.exe", "cursor.exe", "windsurf.exe",
+    "explorer.exe", "windowsterminal.exe",
+}
+
+
+def has_tabs(process: str) -> bool:
+    """True when this process's TabItems are REAL content tabs (see TAB_APPS)."""
+    return (process or "").lower() in TAB_APPS
+
 # ---------------------------------------------------------------------------
 # SendInput synthesis (server-side, not phone input): the extraction clicks
 # and drags below are OUR OWN synthetic mouse — kept separate from the

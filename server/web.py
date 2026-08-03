@@ -455,7 +455,11 @@ async def _layout_pick(ws: WebSocket, layouts, stream, msg: dict) -> None:
     # echoes the pick point back in layout_create so extraction re-finds it.
     # Grid cells are picked by FURTHER taps (owner 2026-08-02), so no window
     # list rides along here — the list-based source is `layout_list`.
-    tab = await asyncio.to_thread(uia.tab_at, _mon_rect(stream), x, y)
+    # Only tab-capable apps are asked (owner 2026-08-03) — everything else's
+    # TabItems are internal section switchers that cannot become a window.
+    tab = None
+    if uia.has_tabs(target["process"]):
+        tab = await asyncio.to_thread(uia.tab_at, _mon_rect(stream), x, y)
     await ws.send_text(json.dumps({
         "type": "layout_offer",
         "target": target,
@@ -465,16 +469,21 @@ async def _layout_pick(ws: WebSocket, layouts, stream, msg: dict) -> None:
     }))
 
 
-async def _layout_list(ws: WebSocket, stream) -> None:
+async def _layout_list(ws: WebSocket, layouts, stream) -> None:
     """The list-based creation source (owner 2026-08-02): every open window
     PLUS each window's content tabs as separate entries — 'Google Chrome'
-    alone hid its tabs, the exact reported gap."""
+    alone hid its tabs, the exact reported gap. Windows that already belong to
+    a layout are LEFT OUT (owner 2026-08-03): one window cannot be shown in
+    two places, so it stays off the list for as long as it is in a layout."""
     mon_rect = _mon_rect(stream)
-    windows = await asyncio.to_thread(window_manager.list_windows)
+    used = await asyncio.to_thread(layouts.member_hwnds)
+    windows = await asyncio.to_thread(window_manager.list_windows, used)
     entries = []
     for w in windows:
         entries.append({"kind": "window", "hwnd": w["hwnd"], "title": w["title"],
                         "process": w["process"], "icon": w["icon"]})
+        if not uia.has_tabs(w["process"]):
+            continue  # its TabItems are internal sections, not real tabs
         for tab in await asyncio.to_thread(uia.list_tabs, mon_rect, w["hwnd"]):
             entries.append({"kind": "tab", "hwnd": w["hwnd"],
                             "tab": {"name": tab["name"]},
@@ -542,6 +551,19 @@ async def _layout_create(ws: WebSocket, layouts, stream, conn: dict, msg: dict) 
     await _send_layout_state(ws, layouts, conn)
 
 
+async def _layout_aspect(ws: WebSocket, layouts, stream, conn: dict, msg: dict) -> None:
+    """The phone's Aspect panel (owner 2026-08-03): store this layout's W:H
+    (0/0 = back to the phone's own shape) and focus it — the focus is what
+    re-places the windows into the new region."""
+    index = int(msg["index"])
+    w, h = int(msg.get("w") or 0), int(msg.get("h") or 0)
+    if not await asyncio.to_thread(layouts.set_ratio, index, w, h):
+        await _toast(ws, "That layout is gone")
+        await _send_layout_state(ws, layouts, conn)
+        return
+    await _layout_focus(ws, layouts, stream, conn, index)
+
+
 async def _layout_focus(ws: WebSocket, layouts, stream, conn: dict, index: int) -> None:
     """index -1 = back to the full desktop. Region is re-read fresh on every
     focus — desk-side moves/resizes never break a layout (owner rule)."""
@@ -604,7 +626,7 @@ async def _receive_input(ws: WebSocket, injector: InputInjector, stream, token: 
         elif kind == "layout_pick":
             await _layout_pick(ws, layouts, stream, msg)
         elif kind == "layout_list":
-            await _layout_list(ws, stream)
+            await _layout_list(ws, layouts, stream)
         elif kind == "next_input":
             # Scope follows the view (owner spec): layout focus → only its
             # member windows; full desktop → every visible window.
@@ -626,6 +648,8 @@ async def _receive_input(ws: WebSocket, injector: InputInjector, stream, token: 
                          else "Full quality")
         elif kind == "layout_create":
             await _layout_create(ws, layouts, stream, conn, msg)
+        elif kind == "layout_aspect":
+            await _layout_aspect(ws, layouts, stream, conn, msg)
         elif kind == "layout_focus":
             await _layout_focus(ws, layouts, stream, conn, int(msg["index"]))
         elif kind == "layout_remove":
