@@ -50,9 +50,11 @@ everything here composes and frames WINDOWS on it.
   at once (Desktop first), a row taps to focus, its trailing button opens the
   aspect panel.
 - **Aspect panel** — `openAspectPanel`, `renderAspectPanel`,
-  `updateAspectPreview`, `dragHandle`, `ratioPair`, `devicePair`: W : H fields
-  over a dashed phone-screen preview with the region inside it. Nothing moves
-  on the PC until Apply, which sends `layout_aspect {index, w, h}`.
+  `updateAspectPreview`, `aspFrac`, `clampAspect`, `dragAspect`, `ratioPair`,
+  `devicePair`: W : H fields over a dashed phone-screen preview with the region
+  inside it. The state is one continuous number (`a` = W/H); the fields render
+  it and either one may be typed. Nothing moves on the PC until Apply, which
+  sends `layout_aspect {index, w, h}` on a 1000-scale (`0/0` = Screen).
 - **Creation** — `openSourceChooser`, `armNextTap`, `handleLayoutOffer`,
   `renderCreationPanel`, `cancelCreation`, `slotFromOffer`/`slotFromEntry`,
   `GRID_CELLS`.
@@ -101,12 +103,23 @@ everything here composes and frames WINDOWS on it.
   one was the reported pain.
 - **The aspect ratio can only make the region SMALLER than the phone's own
   shape** (owner decision 2026-08-03): portrait keeps the phone's full width
-  and only loses height, landscape keeps its height and only loses width. The
-  panel therefore locks the pinned field and lets only the free one be typed
-  or dragged, and the server clamps the same way — see
-  [Window Manager](../../server/__about/window_manager.md).
-- **W : H as small whole numbers**, not raw pixels: a phone's 412×892 reduces
-  to 103:223, which is unusable in two number fields. `ratioPair` picks the
-  best approximation with a denominator ≤ 40 (412×892 → 6:13, 1080×2400 →
-  9:20). "Screen" resets the override entirely (`w = h = 0` on the wire), so
-  an approximation error can never accumulate into a shrinking region.
+  and only loses height, landscape keeps its height and only loses width. That
+  is the ONE rule — `clampAspect` enforces it (and a `ASP_MIN_FRAC` floor so
+  the region can never collapse to a slit), and the server clamps the same way
+  — see [Window Manager](../../server/__about/window_manager.md).
+- **The ratio is continuous, not stepped in units of the device pair** (owner
+  2026-08-04, the reported bug). The panel used to hold `[W, H]` as whole
+  units of the phone's approximated pair, so on a tablet reducing to 7:5 one
+  step was ~14% of the width and **8:5 was simply unreachable**. State is now
+  the plain number W/H: a drag moves it pixel by pixel and typing any pair
+  (8 : 5) sets it exactly. `ratioPair` is demoted to a *rendering* of that
+  number (denominator ≤ 40 — 412×892 → 6:13), used for the fields and the row
+  label; Apply sends the exact value as `round(a × 1000) : 1000`.
+- **The whole preview is the drag surface**, not the two 18px dots — on a
+  tablet those were nearly unhittable, which is what read as "barely
+  responsive". Pointer capture on the screen box, `touch-action: none` so a
+  drag never becomes a page scroll, and the region itself is
+  `pointer-events: none`.
+- **"Screen" resets the override entirely** (`w = h = 0` on the wire — also
+  sent when a drag lands back on the full screen), so an approximation error
+  can never accumulate into a shrinking region.
