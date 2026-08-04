@@ -60,8 +60,14 @@ everything defined in the first four files).
 ## Layouts (Phase F+ step 1)
 An armed layout pick intercepts the primary `pointerdown`: it sends
 `layout_pick` with the tapped monitor-normalized point and injects NOTHING.
-While the view is locked to a layout region, two fingers do nothing (pinch
-disabled — the layout transform owns the view).
+## Pinch works in layout focus too (owner 2026-08-04)
+Two fingers pinch in EVERY mode. Layout focus used to return early on the
+second pointer; now it only changes where the zoom bottoms out: the pinch
+scale is clamped to `[viewHome.scale, viewHome.scale * ZOOM_MAX]` instead of
+`[1, ZOOM_MAX]`, so maximum zoom-out is exactly the layout's own framing
+(the region fitted to the screen) and everything above it behaves as on the
+desktop. Panning is bounded by `clampView()` to the region rect — see
+[Render](render.md).
 
 ## Offset system removed (owner 2026-08-02)
 The cursor-offset system (handedness diagonal, finger calibration, reserved

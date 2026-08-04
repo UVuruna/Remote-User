@@ -64,9 +64,12 @@ let primary = null; // the first finger: {id, type, startX, startY, offset, ...}
 
 // --- Layouts (Phase F+ step 1) --------------------------------------------
 // The SERVER owns the layout list (it survives phone disconnects); the client
-// mirrors it via `layout_state`. While a layout is focused the view is LOCKED
-// onto its monitor-normalized region: pinch/pan are disabled and the PC
-// cursor is clamped inside it — the phone sees and drives ONLY that window.
+// mirrors it via `layout_state`. While a layout is focused the view is BOUND
+// to its monitor-normalized region: the region fitted to the screen is the
+// maximum zoom-out, two fingers pinch in and pan exactly as on the desktop
+// (owner 2026-08-04 — no reason for zoom to be missing here), and both the
+// view and the PC cursor stay inside the region — the phone sees and drives
+// ONLY that window.
 let layouts = [];
 let layoutActive = null; // index into layouts, null = full desktop
 let layoutRegion = null; // {x,y,w,h} monitor-normalized, null on desktop

@@ -25,32 +25,64 @@ function drawnRect() {
   };
 }
 
-// Layout focus: zoom/translate the view so the layout's region fills the
-// FULL canvas — a matching-aspect region touches all four screen edges
-// (owner 2026-08-02). While locked this transform is authoritative —
-// clampView backs off, gestures are off.
-function applyLayoutView() {
-  if (!viewLocked() || !monitor.w) return;
+// The rect the view may ever show, in unscaled base-canvas px: the whole
+// monitor on the desktop, the layout's own region in layout focus. Panning
+// never brings anything outside it into sight.
+function viewBounds() {
+  if (!viewLocked()) return baseRect;
   const r = layoutRegion;
-  const rw = r.w * baseRect.w;
-  const rh = r.h * baseRect.h;
-  const s = Math.min(canvas.width / rw, canvas.height / rh);
-  view.scale = s;
-  view.tx = (canvas.width - rw * s) / 2 - (baseRect.x + r.x * baseRect.w) * s;
-  view.ty = (canvas.height - rh * s) / 2 - (baseRect.y + r.y * baseRect.h) * s;
+  return {
+    x: baseRect.x + r.x * baseRect.w,
+    y: baseRect.y + r.y * baseRect.h,
+    w: r.w * baseRect.w,
+    h: r.h * baseRect.h,
+  };
+}
+
+// The HOME transform = maximum zoom-out. On the desktop that is the plain
+// aspect-fitted monitor (scale 1); in layout focus it is the region fitted
+// into the FULL canvas — a matching-aspect region touches all four screen
+// edges (owner 2026-08-02). Pinch zoom works in BOTH modes and can never go
+// below home (owner 2026-08-04 — layout focus is no longer a hard lock, it
+// just starts and bottoms out at its own framing).
+let viewHome = { scale: 1, tx: 0, ty: 0 };
+
+function computeViewHome() {
+  if (!viewLocked() || !monitor.w) {
+    viewHome = { scale: 1, tx: 0, ty: 0 };
+    return;
+  }
+  const R = viewBounds();
+  const s = Math.min(canvas.width / R.w, canvas.height / R.h);
+  viewHome = {
+    scale: s,
+    tx: (canvas.width - R.w * s) / 2 - R.x * s,
+    ty: (canvas.height - R.h * s) / 2 - R.y * s,
+  };
+}
+
+// Snap all the way back out (layout switch, monitor switch, stream reset).
+function resetViewHome() {
+  computeViewHome();
+  view = { ...viewHome };
   redraw();
 }
 
 function clampView() {
-  if (viewLocked()) return; // the layout transform owns the view
-  if (view.scale <= 1) {
-    view = { scale: 1, tx: 0, ty: 0 };
+  const f = viewHome;
+  if (view.scale <= f.scale) {
+    view = { ...f };
     return;
   }
-  view.scale = Math.min(view.scale, ZOOM_MAX);
+  view.scale = Math.min(view.scale, f.scale * ZOOM_MAX);
   const s = view.scale;
-  view.tx = Math.min(Math.max(view.tx, (baseRect.x + baseRect.w) * (1 - s)), baseRect.x * (1 - s));
-  view.ty = Math.min(Math.max(view.ty, (baseRect.y + baseRect.h) * (1 - s)), baseRect.y * (1 - s));
+  const R = viewBounds();
+  // Where the bounds rect sits when fully zoomed out — the zoomed view must
+  // always cover it, so no letterbox/desktop ever creeps in at an edge.
+  const hx = R.x * f.scale + f.tx;
+  const hy = R.y * f.scale + f.ty;
+  view.tx = Math.min(Math.max(view.tx, hx + R.w * f.scale - (R.x + R.w) * s), hx - R.x * s);
+  view.ty = Math.min(Math.max(view.ty, hy + R.h * f.scale - (R.y + R.h) * s), hy - R.y * s);
 }
 
 function redraw() {
@@ -148,8 +180,8 @@ function updateViewport() {
   canvas.width = Math.round(w * devicePixelRatio);
   canvas.height = Math.round(h * devicePixelRatio);
   computeBaseRect();
-  clampView();
-  applyLayoutView(); // rotation / keyboard resize must re-fit the locked region
+  computeViewHome(); // rotation / keyboard resize re-fits the layout's region
+  clampView();       // ...and keeps whatever zoom the user pinched into
   redraw();
   scheduleViewport();
 }

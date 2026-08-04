@@ -71,7 +71,10 @@ Loads FIRST of the six client scripts (see [Client (folder)](../___client.md))
 `layouts` / `layoutActive` / `layoutRegion` mirror the server's `layout_state`
 (the server owns the list — it survives phone disconnects); `layoutArm` is the
 one-shot "next canvas tap picks a window" flag set by the Layout (+) button;
-`viewLocked()` gates gestures, cursor clamping and the view transform.
+`viewLocked()` selects the view's bounds rect (see [Render](render.md)) and
+the cursor clamp — it no longer disables gestures: since owner 2026-08-04
+pinch zoom/pan works in layout focus too, bottoming out at the layout's own
+framing.
 `send()` also refuses to auto-reconnect after a 4409 takeover (one device at a
 time — a background reconnect would steal the session back in a loop).
 

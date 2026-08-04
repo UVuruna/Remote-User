@@ -54,7 +54,6 @@ function connect() {
         }
         updateAnywhereBanner();
         refreshUpdateBanner(msg.apk_version || msg.app_version);
-        view = { scale: 1, tx: 0, ty: 0 };
         detailRegion = { x: 0, y: 0, w: 1, h: 1 };
         if (baseBitmap) { baseBitmap.close(); baseBitmap = null; }
         if (detailBitmap) { detailBitmap.close(); detailBitmap = null; }
@@ -63,7 +62,7 @@ function connect() {
         if (streamMode === "h264") initMse(msg.codec);
         else teardownMse();
         computeBaseRect();
-        applyLayoutView(); // a stream reset must not drop the locked region
+        resetViewHome(); // a stream reset must not drop the focused region
         redraw();
         scheduleViewport();
       } else if (msg.type === "cursor") {
@@ -87,13 +86,7 @@ function connect() {
         layoutRegion = msg.region || null;
         updateLayoutBar();
         applyOrientationLock();
-        if (viewLocked()) {
-          applyLayoutView();
-        } else {
-          view = { scale: 1, tx: 0, ty: 0 };
-          clampView();
-          redraw();
-        }
+        resetViewHome(); // every layout change starts fully zoomed out again
         scheduleViewport();
       } else if (msg.type === "layout_offer") {
         handleLayoutOffer(msg);
