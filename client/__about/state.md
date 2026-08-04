@@ -77,6 +77,13 @@ pinch zoom/pan works in layout focus too, bottoming out at the layout's own
 framing.
 `send()` also refuses to auto-reconnect after a 4409 takeover (one device at a
 time — a background reconnect would steal the session back in a loop).
+`layoutRestore` (owner 2026-08-04) remembers the focused layout across the
+socket churn every excursion causes (gallery pick, permission dialog — the
+page hides, the socket closes by rule, the fresh connection's server-side
+focus starts at desktop): armed by each focused `layout_state`, cleared in
+`send()` by a DELIBERATE `layout_focus`/`layout_remove`, consumed by
+[Connection](connection.md)'s handler which re-sends `layout_focus` so the
+app comes back into the layout it was working in.
 
 ## `kbShift` (owner 2026-08-03)
 The canvas keeps its full height when the soft keyboard opens and is shifted

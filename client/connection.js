@@ -84,6 +84,20 @@ function connect() {
         layouts = msg.layouts || [];
         layoutActive = msg.active ?? null;
         layoutRegion = msg.region || null;
+        if (layoutActive === null && layoutRestore &&
+            layouts[layoutRestore.index] &&
+            layouts[layoutRestore.index].name === layoutRestore.name) {
+          // The server says desktop but nobody CHOSE the desktop — this is a
+          // fresh connection after an excursion (gallery, permission dialog:
+          // the page hid, the socket closed, per-connection focus reset).
+          // Go back into the layout the owner was working in (owner
+          // 2026-08-04). One shot: the reply's layout_state re-arms it.
+          const back = layoutRestore.index;
+          layoutRestore = null;
+          send({ type: "layout_focus", index: back });
+        } else if (layoutActive !== null && layouts[layoutActive]) {
+          layoutRestore = { index: layoutActive, name: layouts[layoutActive].name };
+        }
         refreshCategories(); // app-aware sets appear/vanish with layout focus
         updateLayoutBar();
         applyOrientationLock();

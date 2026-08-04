@@ -72,6 +72,16 @@ view) and `layout_offer` (opens the creation panel). Close code **4409** =
 another device took over (one device at a time): no auto-reconnect — a
 deliberate tap on the status pill takes the session back.
 
+## Layout focus survives excursions (owner 2026-08-04)
+Server-side focus is per-connection, so every excursion that hides the page
+(gallery pick, a permission dialog) closed the socket and dumped the owner
+back on the desktop. The `layout_state` handler now consumes `layoutRestore`
+([State](state.md)): a state that says desktop while the client remembers a
+focused layout (same index AND name — a pruned/renamed list skips the
+restore) means "reconnect reset us", and the client re-sends
+`layout_focus {index}` once; a user's deliberate desktop/remove choice clears
+the memory in `send()` and is never overridden.
+
 ## Creation flow rework (owner feedback 2026-08-02, same day)
 `layout_offer` is delegated to `handleLayoutOffer` (list arrival or one tap's
 slot — same creation session); `layout_state` ARMS the loading overlay's settle watcher (`settleLayLoading`) instead of hiding it — the server being done is not the screen being still (owner 2026-08-03; see [Layouts](layouts.md)).
