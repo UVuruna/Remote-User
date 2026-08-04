@@ -42,6 +42,13 @@ client (see [Theme](__about/theme.md) for the verified overlap).
 - **Settings apply = save + restart**: values persist to the user settings
   file (see [Config](../__about/config.md)) and the server restarts to pick them up —
   no half-applied state.
+- **"Edit controls" is a BRIDGE, not the destination** (owner 2026-08-04):
+  `_edit_controls()` opens the user copy of `actions.json` in the system
+  editor (in the installed app the first click seeds the copy in
+  %LOCALAPPDATA% from the read-only bundled default and repoints the running
+  server via `config.apply`); the phone picks edits up on its next
+  connection. The real Controls editor is ROADMAP Phase G — end users must
+  never hand-edit files.
 - **Tailscale guidance is three explicit states** (owner principle, 2026-07-22:
   non-technical users must never puzzle over a third-party screen — our window
   says exactly what happens next): **not installed** → "Install Tailscale";

@@ -202,6 +202,36 @@ The prototype that proved the control loop and UX on real code — now the found
 
 ---
 
+<a id="editor"></a>
+
+## 🖥️ Phase G — Desktop Controls Editor (owner decree 2026-08-04)
+
+The owner announced this flow repeatedly and it was recorded only as "future
+desktop GUI" — never phased, so it never got built (process failure, owner
+called it out 2026-08-04). Standing rule from that day: **every "X is done on
+the desktop" decision enters this roadmap as a phase immediately.**
+
+A "Controls" section in the desktop app that edits the user copy of
+`actions.json` — end users must NEVER hand-edit files. The phone picks up
+edits on its next connection (already works). Bridge until built: the
+"Edit controls" button (v0.0.072) opens the JSON in the system editor.
+
+- [ ] **G1 — Categories & buttons** (1–2 sessions): category list (add /
+  remove / rename / icon from the shipped set); per category up to 4 buttons
+  on T/L/R/B; a button is a builtin (dropdown) or a chord — chords are
+  RECORDED (press the combo on the PC keyboard), never typed; live D-pad
+  preview.
+- [ ] **G2 — App sets** (½ session): same editor over `app_sets`, with the
+  process picked from the list of running programs (real app icons — the
+  server already extracts them for layouts).
+- [ ] **G3 — Zones creator** (1 session): the owner's described flow —
+  group (name + icon) and individual zones (name + shortcut + optional icon),
+  written as a custom category.
+- Login (Tailscale identity) stays a separate, later phase — not part of the
+  editor.
+
+---
+
 <a id="future"></a>
 
 ## 💡 Future Ideas
