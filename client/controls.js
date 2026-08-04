@@ -106,6 +106,10 @@ const BUILTINS = {
   // only — full desktop → all visible windows, layout focus → that layout —
   // built for the dictation-first workflow.
   next_input: { label: "Next box", icon: "input", kind: "send", msg: { type: "next_input" } },
+  // Phone-side wheel picker (owner 2026-08-05, replacing next_input in the
+  // Settings defaults): choose WHICH custom sets ride in the wheel (max 3)
+  // and whether app-aware sets appear at all. Creation stays desktop-only.
+  sets:     { label: "Sets",   icon: "grid",   kind: "sets" },
   // full → reduced (half res, ~10 fps — saves data) → auto (reduced only on
   // mobile data, via the shell's transport bridge)
   quality:  { label: "Quality", icon: "gauge",  kind: "quality" },
@@ -496,21 +500,61 @@ const groupEls = {
 const POSITIONS = ["up", "left", "right", "down"];
 
 let categories = [];
-let appSets = []; // app-aware sets from actions.json (owner 2026-08-04)
+let appSets = [];    // app-aware sets from actions.json (owner 2026-08-04)
+let customSets = []; // owner-made sets from the desktop editor (owner 2026-08-05)
 const groups = { left: 0, right: 0 };
+
+// Phone-side wheel preferences (the Settings → Sets picker): which custom
+// sets this DEVICE hides, and whether app-aware sets appear. Per-phone on
+// purpose — the desktop editor sets the defaults, the phone overrides them.
+function setsPrefs() {
+  try {
+    const p = JSON.parse(localStorage.getItem("setsPrefs") || "{}");
+    return {
+      state: p.state && typeof p.state === "object" ? p.state : {},
+      apps: p.apps !== false,
+    };
+  } catch {
+    return { state: {}, apps: true };
+  }
+}
+
+// Effective on/off for one custom set: the phone's explicit choice wins,
+// otherwise the desktop editor's default (`enabled` in actions.json).
+function customSetOn(s) {
+  const choice = setsPrefs().state[s.name];
+  return choice !== undefined ? choice : s.enabled !== false;
+}
+
+function saveSetsPrefs(p) {
+  localStorage.setItem("setsPrefs", JSON.stringify(p));
+}
 
 // App-aware sets exist ONLY in layout focus (owner decision 2026-08-04):
 // when the focused layout's app matches a set's `process`, that set appears
 // as an extra category in the wheel — nothing switches by itself, and the
 // category vanishes with the layout focus.
 function visibleAppSets() {
+  if (!setsPrefs().apps) return [];
   if (layoutActive === null || !layouts[layoutActive]) return [];
   const proc = String(layouts[layoutActive].process || "").toLowerCase();
   return appSets.filter((s) => proc.includes(String(s.process || "").toLowerCase()));
 }
 
+// The wheel's composition (owner 2026-08-05): the 5 shipped sets ALWAYS, the
+// app set when focused, then the enabled custom sets — never more than
+// WHEEL_MAX total, so a full house temporarily bumps customs from the END
+// (they come back when the layout focus/app set goes away).
+const WHEEL_MAX = 8;
+const CUSTOM_MAX = 3;
+
+function enabledCustomSets() {
+  return customSets.filter(customSetOn).slice(0, CUSTOM_MAX);
+}
+
 function allCats() {
-  return categories.concat(visibleAppSets());
+  const base = categories.concat(visibleAppSets());
+  return base.concat(enabledCustomSets()).slice(0, WHEEL_MAX);
 }
 
 // Re-render after anything that changes the category list (actions arrived,
@@ -632,6 +676,8 @@ function makeActionButton(btn, pos) {
       keepFocus(el, () => send({ type: "screenshot", paste: true, ...shotRegion() }));
     } else if (b.kind === "pick") {
       keepFocus(el, () => document.getElementById(b.input).click());
+    } else if (b.kind === "sets") {
+      keepFocus(el, openSetsPanel);
     } else if (b.kind === "send") {
       keepFocus(el, () => send(b.msg));
     } else if (b.kind === "upload") {
@@ -674,7 +720,15 @@ function renderGroup(side) {
   keepFocus(center, () => openWheel(side));
   host.appendChild(center);
 
-  (cat.buttons || []).slice(0, 4).forEach((btn, i) => host.appendChild(makeActionButton(btn, i)));
+  // Per-set, per-orientation button arrangement (owner 2026-08-05): the set
+  // may carry order_land (slots T·L·R·B) and order_port (top→bottom column)
+  // from the desktop editor; ours is the default and always restorable there.
+  const btns = (cat.buttons || []).slice(0, 4);
+  const raw = matchMedia("(orientation: portrait)").matches ? cat.order_port : cat.order_land;
+  const order = Array.isArray(raw) && raw.length === btns.length &&
+    [...raw].sort().join() === btns.map((_, i) => i).join()
+    ? raw : btns.map((_, i) => i);
+  order.forEach((bi, slot) => host.appendChild(makeActionButton(btns[bi], slot)));
   refreshModeButtons();
   refreshQualityButtons();
   if (keyboardOpen()) {
@@ -730,6 +784,94 @@ function closeWheel() {
   wheelEl.removeEventListener("pointerdown", backdropCancel);
   wheelEl.innerHTML = "";
 }
+
+// --- Sets picker (Settings → Sets, owner 2026-08-05) ----------------------
+// Chooses WHICH sets ride in the wheel on THIS phone: the five built-ins are
+// always on; up to CUSTOM_MAX owner-made sets (created on the desktop —
+// creation never happens here) plus the app-shortcuts toggle. Stored in
+// localStorage — per device, overriding the desktop editor's defaults.
+
+const setsPanel = document.getElementById("sets-panel");
+
+function openSetsPanel() {
+  setsPanel.innerHTML = "";
+  const card = document.createElement("div");
+  card.className = "sets-card";
+  card.innerHTML = `<h2>Wheel sets</h2>
+    <p class="sets-sub">The five built-in sets are always shown. Add up to ${CUSTOM_MAX} of your own — they are created on the PC (Remote User window → Edit controls).</p>`;
+
+  const list = document.createElement("div");
+  list.className = "sets-list";
+  if (!customSets.length) {
+    const empty = document.createElement("p");
+    empty.className = "sets-sub";
+    empty.textContent = "No custom sets yet.";
+    list.appendChild(empty);
+  }
+  customSets.forEach((s) => {
+    const row = document.createElement("label");
+    row.className = "sets-row";
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.checked = customSetOn(s);
+    cb.addEventListener("change", () => {
+      if (cb.checked && enabledCustomSets().length >= CUSTOM_MAX) {
+        cb.checked = false;
+        showToast(`Up to ${CUSTOM_MAX} of your sets at once — untick one first`);
+        return;
+      }
+      const p = setsPrefs();
+      p.state[s.name] = cb.checked;
+      saveSetsPrefs(p);
+      refreshCategories();
+    });
+    const ic = document.createElement("span");
+    ic.className = "sets-ic";
+    ic.innerHTML = svg(s.icon && ICONS[s.icon] ? s.icon : "grid");
+    row.append(cb, ic, document.createTextNode(s.name));
+    list.appendChild(row);
+  });
+  card.appendChild(list);
+
+  const appRow = document.createElement("label");
+  appRow.className = "sets-row apps";
+  const appCb = document.createElement("input");
+  appCb.type = "checkbox";
+  appCb.checked = setsPrefs().apps;
+  appCb.addEventListener("change", () => {
+    const p = setsPrefs();
+    p.apps = appCb.checked;
+    saveSetsPrefs(p);
+    refreshCategories();
+  });
+  appRow.append(appCb, document.createTextNode("App shortcuts while a layout is focused (VSCode, Chrome…)"));
+  card.appendChild(appRow);
+
+  const done = document.createElement("button");
+  done.type = "button";
+  done.className = "sets-done";
+  done.textContent = "Done";
+  keepFocus(done, closeSetsPanel);
+  card.appendChild(done);
+
+  setsPanel.appendChild(card);
+  setsPanel.hidden = false;
+}
+
+function closeSetsPanel() {
+  setsPanel.hidden = true;
+  setsPanel.innerHTML = "";
+}
+
+setsPanel.addEventListener("pointerdown", (e) => {
+  if (e.target === setsPanel) closeSetsPanel(); // backdrop tap = done
+});
+
+// Rotation may carry a different button order per set (order_port).
+matchMedia("(orientation: portrait)").addEventListener("change", () => {
+  renderGroup("left");
+  renderGroup("right");
+});
 
 // --- Corner buttons -------------------------------------------------------
 

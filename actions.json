@@ -47,12 +47,13 @@
       "icon": "settings",
       "buttons": [
         { "action": "monitor" },
-        { "action": "next_input" },
+        { "action": "sets" },
         { "action": "quality" },
         { "action": "anywhere" }
       ]
     }
   ],
+  "custom_sets": [],
   "app_sets": [
     {
       "process": "code",
