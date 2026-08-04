@@ -28,7 +28,7 @@ flowchart TB
     SHOW --> WAIT[server works\n layout_progress → cubeNext momentum burst]
     WAIT --> STATE[layout_state arrives\n= server is done]
     STATE --> ARM[settleLayLoading:\nstart sampling 64x36 thumbnails]
-    ARM --> TICK{two samples\nnearly identical?}
+    ARM --> TICK{three samples\nnearly identical?}
     TICK -- no --> AGE{past SETTLE_MAX_MS\nafter the answer?}
     AGE -- no --> TICK
     AGE -- yes --> HIDE
@@ -51,7 +51,7 @@ Pseudocode:
             draw the live frame source into a 64x36 canvas
             still = mean |Δrgb| vs the previous sample < SETTLE_DIFF
             hits = still ? hits + 1 : 0
-            IF past the settle deadline OR (hits >= 2 AND up > LOADING_MIN_MS):
+            IF past the settle deadline OR (hits >= SETTLE_STABLE_HITS AND up > LOADING_MIN_MS):
                 hideLayLoading()
 
 ## Algorithm — the aspect ratio panel

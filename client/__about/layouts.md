@@ -64,8 +64,9 @@ everything here composes and frames WINDOWS on it.
 - **The overlay is the FRONT; the work happens behind it** (owner rule, said
   four times). It may fade out only when the layout window is in place and
   alone on screen — or, for Desktop, when every layout member is really
-  minimized. Two ends must agree: the server now finishes for real before it
-  answers (DWM transitions frozen + `wait_settled`/`wait_minimized` — see
+  minimized. Two ends must agree: the server now finishes AND VERIFIES before
+  it answers (DWM transitions frozen + `wait_landed` position checks +
+  `wait_minimized`, 2026-08-04 — see
   [Window Manager](../../server/__about/window_manager.md)), and this side
   waits `SETTLE_CATCHUP_MS` after the answer before it judges the picture at
   all. **That delay is the bug the owner saw twice:** sampling used to start
