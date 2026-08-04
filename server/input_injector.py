@@ -76,6 +76,9 @@ VK_CODES = {
     "up": 0x26,
     "right": 0x27,
     "down": 0x28,
+    # VK_OEM_3 — the backquote/tilde key (VSCode's integrated-terminal chord)
+    "`": 0xC0,
+    "backquote": 0xC0,
 }
 
 # Modifiers usable in a chord ("ctrl+win+alt+1").
@@ -292,6 +295,14 @@ class InputInjector:
         down, up = BUTTON_FLAGS[button]
         self._send(down)
         self._send(up)
+
+    def press(self, button: str, down: bool) -> None:
+        """One half of a CLICK/HOLD button (owner 2026-08-04 — the phone's
+        mouse buttons behave like a real mouse): DOWN when the finger lands
+        on the button, UP when it lifts, always at the CURRENT cursor. A tap
+        is a click; a held finger is a held PC button (drag/select)."""
+        flags = BUTTON_FLAGS[button]
+        self._send(flags[0] if down else flags[1])
 
     def wheel(self, x_norm: float, y_norm: float, ticks: float) -> None:
         """Moves the cursor to the gesture point (the wheel targets the window

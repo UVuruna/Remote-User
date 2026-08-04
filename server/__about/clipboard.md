@@ -3,7 +3,7 @@
 **Script:** [Clipboard (script)](../clipboard.py)
 
 ## Purpose
-Writes a captured BGR frame into the Windows clipboard as a `CF_DIB` image. Two callers use it: the tablet's screenshot action (paste the PC screen somewhere on the PC) and the phone→PC image upload (paste a phone photo into the focused box).
+Puts phone-sent content into the Windows clipboard, ready to paste. Two payloads (owner 2026-08-04): one image → `CF_DIB` bitmap (screenshot action + single-image upload — pastes into any image box); a LIST of files → `CF_HDROP` (multi-file / non-image uploads — exactly what Explorer's own Copy puts there, so Ctrl+V drops real files).
 
 Implementation notes that matter:
 - 32-bit BGRX pixels (no DIB row padding needed), rows written bottom-up per the DIB convention
@@ -20,4 +20,6 @@ Implementation notes that matter:
 - [Web Layer](web.md) — the `screenshot` message handler and the `/upload` route
 
 ## Functions
-- `copy_image(frame_bgr)`: numpy BGR frame → clipboard; returns a success bool, never raises on a clipboard-busy condition
+- `copy_image(frame_bgr)`: numpy BGR frame → clipboard (`CF_DIB`); returns a success bool, never raises on a clipboard-busy condition
+- `copy_files(paths)`: real files → clipboard (`CF_HDROP`: `DROPFILES` header + UTF-16 double-NUL list); same success-bool contract
+- `_set_clipboard(fmt, payload, what)`: the shared open-retry / GlobalAlloc / SetClipboardData path both of the above use

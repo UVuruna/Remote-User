@@ -35,7 +35,8 @@ Maps monitor-normalized coordinates to virtual-desktop absolutes and injects.
 - `move(x_norm, y_norm)`: absolute cursor move; also verifies the PREVIOUS move lazily (reads `GetCursorPos` once per call, no sleeps on the hot path) and feeds `InjectionMonitor` — see the flow doc for the lazy-verify timing
 - `take_input_alarm()`: returns-and-clears the alarm flag; polled by the web layer's cursor loop and forwarded to the phone as a visible toast
 - `button_down(x_norm, y_norm, button)` / `button_up(...)`: move + press/release in one injected event (`left`/`right`/`middle`, from `BUTTON_FLAGS`)
-- `click(button)`: down+up at the CURRENT cursor position, no move — the client's Click button (the finger only steers the cursor); two presses inside Windows' double-click time land as a double click naturally
+- `click(button)`: down+up at the CURRENT cursor position, no move; two presses inside Windows' double-click time land as a double click naturally
+- `press(button, down)`: one half of a CLICK/HOLD button (owner 2026-08-04 — the phone's Click/Right/Middle behave like a real mouse): DOWN when the finger lands, UP when it lifts, at the current cursor — a tap is a click, a held finger drags/selects
 - `wheel(x_norm, y_norm, ticks)`: moves the cursor to the gesture point first (the wheel targets the window under the cursor), then scrolls by `ticks × WHEEL_DELTA`
 - `type_text(text)`: arbitrary Unicode via `KEYEVENTF_UNICODE` (VK_PACKET) — one down+up per UTF-16 code unit, so surrogate pairs (emoji) work
 - `press_key(name)`: structural keys (Enter, Backspace, Tab, Escape, Delete, Home/End, Page Up/Down, arrows, Space, Insert) by VK code from `VK_CODES`; an unknown name logs and injects nothing
@@ -44,7 +45,7 @@ Maps monitor-normalized coordinates to virtual-desktop absolutes and injects.
 - `set_monitor_rect(rect)`: called when the streamed monitor changes
 
 ## Module-level data and helpers
-- `VK_CODES`: name → virtual-key code for structural keys (`enter`, `backspace`, `tab`, `escape`/`esc`, `delete`/`del`, `insert`, `home`, `end`, `pageup`, `pagedown`, `space`, arrow keys)
+- `VK_CODES`: name → virtual-key code for structural keys (`enter`, `backspace`, `tab`, `escape`/`esc`, `delete`/`del`, `insert`, `home`, `end`, `pageup`, `pagedown`, `space`, arrow keys, `` ` ``/`backquote` — VSCode's terminal chord)
 - `MODIFIER_VKS`: `ctrl`/`control`, `alt`, `shift`, `win`/`meta`/`super` → VK code
 - `BUTTON_FLAGS`: `left`/`right`/`middle` → `(down flag, up flag)` — imported directly by [Web Layer](web.md) to validate the client's `button` field
 - `vk_for_key(token)`: a single chord token (a single letter/digit, a name in `VK_CODES`, a bare modifier, or `f1`–`f24`) → VK code, or `None`

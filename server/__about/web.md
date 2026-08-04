@@ -45,11 +45,12 @@ JPEG mode only: fans frames from the capture thread out to per-client `asyncio.Q
 - `_stream_h264(ws, manager, token)`: opens an `H264Session`, sends `config` with the parsed codec, forwards chunks until the session ends, closes it, opens the next — see the flow doc for the full per-iteration loop and its backpressure handling
 - `_send_frames(ws, queue)`: the JPEG per-client sender — pulls from its `FrameHub` queue and forwards
 - `_send_cursor(ws, injector)`: polls `cursor_norm()` at `cursor_hz`, sends only on change (quantized to 4 decimals); also the delivery path for `injector.take_input_alarm()`
-- `_load_actions()`: reads `actions.json` fresh on every connect (owner edits apply without a restart); missing/invalid file logs and yields empty categories, never a crash
+- `_load_actions()`: reads `actions.json` fresh on every connect (owner edits apply without a restart); missing/invalid file logs and yields empty categories, never a crash. Also passes through `app_sets` (owner 2026-08-04) — the client shows those ONLY in layout focus, when the focused layout's process matches
 - `_send_config(ws, stream, token, codec=None)`: builds and sends the `config` payload (monitor size, `stream` mode, `hand`, `tailscale_url`, `app_version`, and `codec` when given)
 - `_switch_monitor(...)`: `stream.switch_to()` + injector rect update; JPEG resends `config` directly, H.264 clients get it from their fresh session instead
-- `_screenshot(ws, stream)`: native-resolution frame → clipboard, toast on the result
-- `_receive_input(ws, injector, stream, token)`: the main dispatch loop — see the flow doc
+- `_screenshot(ws, stream, injector, msg)`: native-resolution frame → optional crop to the region the phone views (the Attach set's Shot sends it — owner 2026-08-04: never the whole desktop) → clipboard; `paste:true` additionally injects Ctrl+V ("Screenshot pasted on the PC")
+- `_receive_input(ws, injector, stream, token)`: the main dispatch loop — see the flow doc. New message `press {button, down}` (CLICK/HOLD mouse buttons) → `injector.press`
+- `POST /upload_files?token=…`: the multi-file / any-type phone upload — saves to a temp drop folder (previous upload's files cleared here, not after their paste), `clipboard.copy_files` (CF_HDROP) + injected Ctrl+V
 
 `config` additionally carries `apk_version` (the served APK's real version —
 the phone's update-banner comparison; `app_version` stays for display).
