@@ -16,9 +16,12 @@ and guidance; this class only adds:
   one is loaded, LAN preferred. A single stored URL was the original live
   failure: the LAN address on mobile data meant minutes of
   `ERR_CONNECTION_TIMED_OUT` before anything showed.
-- **A self-healing error card** — while shown, it re-probes itself on a 4 s
-  timer AND immediately on every default-network change, instead of the old
-  one-shot "Try again" that always fired mid-flap on flaky Wi-Fi.
+- **A self-healing, cause-aware error card** — while shown, it re-probes
+  itself on a 4 s timer AND immediately on every default-network change,
+  instead of the old one-shot "Try again" that always fired mid-flap on flaky
+  Wi-Fi. It also names WHY the connection failed and makes its primary button
+  the fix for that cause (install Tailscale / open Tailscale / re-probe now)
+  — see `classifyFailure()` below.
 - **Document-health tracking (`pageAlive`)** so recovery never reloads a
   session that is actually fine — the classic case is screen unlock, where
   Wi-Fi takes 1–3 s to reassociate and a single ping fails on a perfectly
@@ -64,7 +67,11 @@ error overlay views, the network callback, and the resolve/retry state
 (`resolveEpoch`, `pageAlive`, `lastLoadFailed`, `onWifi`,
 `warnedForeignWifi`). Key methods: `resolveAndLoad(silent)` (the probe/
 failover core — see the flow doc), `scheduleRetry(epoch)`, `pingOk(url)`
-(the strict-204 `/ping` probe), `warnIfForeignWifi()`, `hideSystemBars()`,
+(the strict-204 `/ping` probe), `showErrorCard()` / `renderErrorCard()` /
+`classifyFailure()` and the actions they bind (`openTailscale()`,
+`installTailscale()`, with `hasNetwork()` / `tunnelUp()` /
+`tailscaleLauncher()` as the three readings behind the diagnosis),
+`warnIfForeignWifi()`, `hideSystemBars()`,
 `repair()` (hands off to `OnboardingActivity`), `onResume()` /
 `onPause()` / `onDestroy()` lifecycle wiring.
 
@@ -108,9 +115,19 @@ The page's only way to reach the shell.
 `onShowFileChooser`: routes the page's phone→PC image-upload picker to the
 native gallery/camera chooser (`filePicker`, `GetContent("image/*")`).
 
+### Fail (private enum)
+The five causes the phone can honestly distinguish, in decision order:
+`NO_NET` (no network at all) → `PC_NO_TUNNEL` (no Tailscale address was ever
+reported by the PC — the missing step is on the PC) → `TS_MISSING`
+(Tailscale not installed here) → `TS_OFF` (installed, no VPN up) →
+`PC_DOWN` (tunnel up, so the PC itself is not answering). `showErrorCard()`
+maps each to its own title/body and its own primary button.
+
 ### Companion object
 `PING_TIMEOUT_MS` (3000), `RETRY_INTERVAL_MS` (4000) — the two tunables
-behind the probe timeout and the self-healing error-card cadence.
+behind the probe timeout and the self-healing error-card cadence — and
+`TAILSCALE_PKG` (`com.tailscale.ipn`), which must stay in sync with the
+manifest's `<queries>` entry and the page's Play Store link.
 
 `update(url)` falls back to an Intent chooser when no direct ACTION_VIEW
 handler resolves ("no app can open this" — owner report 2026-08-02).

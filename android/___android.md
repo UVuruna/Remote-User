@@ -23,7 +23,9 @@ scanner). Package `com.uvuruna.remoteuser`, min Android 8 (API 26).
   the foreign-Wi-Fi toast), launcher icons generated from `assets/logo.svg`
 - `AndroidManifest.xml` — `OnboardingActivity` is `singleTask` (exported,
   `MAIN`/`LAUNCHER` + the `remoteuser://pair` `VIEW` intent filter);
-  `MainActivity` is not exported, declares
+  a `<queries>` element declares `com.tailscale.ipn` so Android 11+ package
+  visibility lets the error card tell "Tailscale not installed" from
+  "installed but off"; `MainActivity` is not exported, declares
   `configChanges="orientation|screenSize|…"` so rotation never recreates the
   WebView, and `usesCleartextTraffic="true"` (the server speaks plain HTTP on
   the LAN/Tailscale private network)
@@ -149,10 +151,27 @@ not just what:
 - **Native "Connecting…" screen** while the address is probed and the page
   loads (a slow connect over mobile data must read as working, not frozen);
   hidden on first page load, replaced by the error card on failure.
-- **Native error card** when no stored address answers the probe (Try again
-  re-probes NOW; the card keeps re-probing by itself regardless — see above;
-  Scan a new QR re-pairs but KEEPS the stored addresses until a new pairing
-  succeeds).
+- **Native error card** when no stored address answers the probe (the card
+  keeps re-probing by itself regardless — see above; Scan a new QR re-pairs
+  but KEEPS the stored addresses until a new pairing succeeds).
+- **The card names the CAUSE and its button is the FIX** (owner request
+  2026-08-04): one generic "Try again" served five different failures,
+  including the everyday one — phone away from home with Tailscale switched
+  off — where Try again can never work and the fix lives in another app.
+  `classifyFailure()` reads three things, all without a new permission: is
+  there a network at all, is Tailscale installed (needs the manifest
+  `<queries>` entry on Android 11+), is a VPN tunnel up. That plus "did the
+  PC ever report a Tailscale address" yields five states — no network / PC
+  not on Tailscale / Tailscale missing / Tailscale off / PC down — each with
+  its own text and primary button (Install Tailscale → Play Store, Turn
+  Tailscale on → opens the app, or Try again). Android cannot flip another
+  app's VPN switch, so the button opens Tailscale and the text names the one
+  control to press; coming back needs no tap, since the network callback
+  fires the moment the tunnel is up. Limits accepted on purpose: the platform
+  exposes only "some VPN is up", not "Tailscale is connected", and telling
+  the home Wi-Fi from a foreign one would cost the location permission just
+  to read an SSID — so the "Tailscale is off" copy also covers "at home, PC
+  asleep". Decision tree: [Main Activity (flow)](__flow/MainActivity.md).
 - **QR scanner follows the phone orientation** (portrait when upright) — the
   ZXing default forced landscape.
 - **`Android.rescan()` JS bridge**: on a rejected token the page shows

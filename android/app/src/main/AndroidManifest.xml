@@ -9,6 +9,14 @@
          permission, granted automatically, no user prompt. -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
+    <!-- Package visibility (Android 11+): without this, the system pretends
+         Tailscale is not installed, so the error card could never tell
+         "not installed" from "installed but off" — the two states whose
+         guidance differs completely (install it vs. flip its switch). -->
+    <queries>
+        <package android:name="com.tailscale.ipn" />
+    </queries>
+
     <!-- The server speaks plain http on the LAN / Tailscale private network —
          cleartext must be allowed (Android blocks it by default since 9). -->
     <application
