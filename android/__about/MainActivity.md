@@ -103,11 +103,17 @@ The page's only way to reach the shell.
   — one `SpeechRecognizer` listening round per call; results reach the page
   via `__voiceResult(text)`, round-end via `__voiceEnd(reason)` (`"denied"` /
   `"unavailable"` / `""`), and the page restarts rounds while its switcher is
-  ON. First use asks the `RECORD_AUDIO` runtime permission once. The
-  recognizer binds to **Google's recognition service** when installed
-  (`googleRecognitionService()` — owner report 2026-08-04: the phone's
-  default service, Samsung's on Samsung phones, garbled the dictation; the
-  Google engine is the whole point). Note the hard platform limit: an app
+  ON. First use asks the `RECORD_AUDIO` runtime permission once. Recognizer
+  choice (`makeRecognizer()`, owner reports 2026-08-04): first the
+  **on-device recognizer** (Android 13+, `isOnDeviceRecognitionAvailable`) —
+  the ONLY Android API with real language auto-switching, run with
+  `EXTRA_ENABLE_LANGUAGE_DETECTION`/`_SWITCH` over `voiceLanguages()` (phone
+  locale + sr-RS + en-US), because the cloud service transcribed Serbian
+  speech as English gibberish (it runs one language); a language error
+  (`ERROR_LANGUAGE_NOT_SUPPORTED`/`_UNAVAILABLE` — model missing) demotes to
+  **Google's cloud service** (`googleRecognitionService()`; the phone default
+  — Samsung's — garbled dictation outright) pinned to the phone's own locale,
+  never a silent English default. Note the hard platform limit: an app
   cannot open the KEYBOARD's own voice typing (Gboard mic) — no API switches
   another IME into voice mode; this in-place recognizer is the closest
   invisible equivalent, and the visible Google dialog

@@ -218,6 +218,8 @@ class MainActivity : AppCompatActivity() {
     // ends at silence; the page restarts rounds while its Mic switcher is ON.
 
     private var recognizer: SpeechRecognizer? = null
+    private var voiceOnDevice = false  // current recognizer is the on-device one
+    private var voiceCloudOnly = false // a language error demoted us for this run
 
     /** Bind to GOOGLE's recognition service when it exists (owner report
      *  2026-08-04: the phone's DEFAULT service — Samsung's on Samsung phones —
@@ -234,47 +236,79 @@ class MainActivity : AppCompatActivity() {
         return android.content.ComponentName(g.serviceInfo.packageName, g.serviceInfo.name)
     }
 
+    /** The languages dictation must understand WITHOUT a manual switch (owner
+     *  2026-08-04: Serbian and English in the same session, like the
+     *  keyboard's voice typing does): the phone's own locale + the pair. */
+    private fun voiceLanguages(): ArrayList<String> =
+        arrayListOf(java.util.Locale.getDefault().toLanguageTag(), "sr-RS", "en-US")
+            .distinct().let { ArrayList(it) }
+
+    /** Owner report 2026-08-04 (round two): the cloud recognizer transcribed
+     *  Serbian speech as English gibberish — it runs ONE language. The only
+     *  Android API with real language auto-switching is the ON-DEVICE
+     *  recognizer (Android 13+, the same models voice typing uses), so it is
+     *  first choice; a language error (model missing) demotes to the Google
+     *  cloud service pinned to the phone's own language. */
+    private fun makeRecognizer(): SpeechRecognizer {
+        voiceOnDevice = android.os.Build.VERSION.SDK_INT >= 33 && !voiceCloudOnly &&
+            SpeechRecognizer.isOnDeviceRecognitionAvailable(this)
+        if (voiceOnDevice) return SpeechRecognizer.createOnDeviceSpeechRecognizer(this)
+        val google = googleRecognitionService()
+        return if (google != null) SpeechRecognizer.createSpeechRecognizer(this, google)
+        else SpeechRecognizer.createSpeechRecognizer(this)
+    }
+
+    private val voiceListener = object : RecognitionListener {
+        override fun onResults(results: Bundle?) {
+            val text = results
+                ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                ?.firstOrNull()
+            if (!text.isNullOrBlank()) {
+                web.evaluateJavascript(
+                    "window.__voiceResult && __voiceResult(${JSONObject.quote(text)})",
+                    null
+                )
+            }
+            voiceEnd("")
+        }
+
+        override fun onError(error: Int) {
+            if (voiceOnDevice && (
+                    error == SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED ||
+                    error == SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE)
+            ) {
+                // No on-device model for the asked languages — demote to the
+                // cloud service; the page's restart lands on the new one.
+                voiceCloudOnly = true
+                recognizer?.destroy()
+                recognizer = null
+                voiceEnd("")
+                return
+            }
+            // NO_MATCH / SPEECH_TIMEOUT are a quiet room, not failures —
+            // the page simply starts the next round while ON.
+            voiceEnd(
+                if (error == SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS) "denied"
+                else ""
+            )
+        }
+
+        override fun onReadyForSpeech(params: Bundle?) {}
+        override fun onBeginningOfSpeech() {}
+        override fun onRmsChanged(rmsdB: Float) {}
+        override fun onBufferReceived(buffer: ByteArray?) {}
+        override fun onEndOfSpeech() {}
+        override fun onPartialResults(partialResults: Bundle?) {}
+        override fun onEvent(eventType: Int, params: Bundle?) {}
+    }
+
     private fun beginListening() {
         if (!SpeechRecognizer.isRecognitionAvailable(this)) {
             voiceEnd("unavailable")
             return
         }
-        val r = recognizer ?: run {
-            val google = googleRecognitionService()
-            if (google != null) SpeechRecognizer.createSpeechRecognizer(this, google)
-            else SpeechRecognizer.createSpeechRecognizer(this)
-        }.also { rec ->
-            rec.setRecognitionListener(object : RecognitionListener {
-                override fun onResults(results: Bundle?) {
-                    val text = results
-                        ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                        ?.firstOrNull()
-                    if (!text.isNullOrBlank()) {
-                        web.evaluateJavascript(
-                            "window.__voiceResult && __voiceResult(${JSONObject.quote(text)})",
-                            null
-                        )
-                    }
-                    voiceEnd("")
-                }
-
-                override fun onError(error: Int) {
-                    // NO_MATCH / SPEECH_TIMEOUT are a quiet room, not failures
-                    // — the page simply starts the next round while ON.
-                    voiceEnd(
-                        if (error == SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS) "denied"
-                        else ""
-                    )
-                }
-
-                override fun onReadyForSpeech(params: Bundle?) {}
-                override fun onBeginningOfSpeech() {}
-                override fun onRmsChanged(rmsdB: Float) {}
-                override fun onBufferReceived(buffer: ByteArray?) {}
-                override fun onEndOfSpeech() {}
-                override fun onPartialResults(partialResults: Bundle?) {}
-                override fun onEvent(eventType: Int, params: Bundle?) {}
-            })
+        val r = recognizer ?: makeRecognizer().also { rec ->
+            rec.setRecognitionListener(voiceListener)
             recognizer = rec
         }
         r.startListening(
@@ -284,6 +318,30 @@ class MainActivity : AppCompatActivity() {
                     RecognizerIntent.LANGUAGE_MODEL_FREE_FORM
                 )
                 putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false)
+                if (voiceOnDevice && android.os.Build.VERSION.SDK_INT >= 33) {
+                    // Real auto-switching between the owner's languages —
+                    // only the on-device recognizer understands these.
+                    putExtra(RecognizerIntent.EXTRA_ENABLE_LANGUAGE_DETECTION, true)
+                    putExtra(
+                        RecognizerIntent.EXTRA_ENABLE_LANGUAGE_SWITCH,
+                        RecognizerIntent.LANGUAGE_SWITCH_BALANCED
+                    )
+                    putStringArrayListExtra(
+                        RecognizerIntent.EXTRA_LANGUAGE_SWITCH_ALLOWED_LANGUAGES,
+                        voiceLanguages()
+                    )
+                    putStringArrayListExtra(
+                        RecognizerIntent.EXTRA_LANGUAGE_DETECTION_ALLOWED_LANGUAGES,
+                        voiceLanguages()
+                    )
+                } else {
+                    // One-language cloud round: at least the phone's OWN
+                    // language, never a silent English default.
+                    putExtra(
+                        RecognizerIntent.EXTRA_LANGUAGE,
+                        java.util.Locale.getDefault().toLanguageTag()
+                    )
+                }
             }
         )
     }
