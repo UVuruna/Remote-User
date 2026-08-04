@@ -2,8 +2,11 @@
 
 Protocol (see project CLAUDE.md):
 - client → server, JSON text: auth, pointer_down, pointer_up, click (at the
-  current cursor, no coordinates), pointer_move, scroll, viewport (JPEG mode
-  only), key_text, key_special, chord, monitor_switch, screenshot
+  current cursor, no coordinates), press (one half of a CLICK/HOLD mouse
+  button — down on finger-land, up on lift, at the current cursor),
+  pointer_move, scroll, viewport (JPEG mode only), key_text, key_special,
+  chord, monitor_switch, screenshot (optionally with the region the phone
+  views + paste=true — crops and injects Ctrl+V)
 - server → client, JSON text: `config` after auth and after every stream
   (re)start — monitor size plus `stream` ("h264" | "jpeg") and, in H.264 mode,
   the MSE `codec` string parsed from the live init segment; `actions` (radial
@@ -26,8 +29,11 @@ import asyncio
 import io
 import json
 import logging
+import shutil
 import struct
+import tempfile
 from dataclasses import dataclass
+from pathlib import Path
 
 import cv2
 import numpy as np
@@ -183,6 +189,38 @@ def create_app(stream, hub: FrameHub | None, injector: InputInjector, token: str
         if ok:
             await asyncio.to_thread(injector.press_chord, "ctrl+v")
         return {"ok": ok}
+
+    @app.post("/upload_files")
+    async def upload_files(request: Request, files: list[UploadFile] = File(...)):
+        """Phone → PC, the multi-file / any-type path (owner 2026-08-04):
+        several gallery images, or a PDF from the phone's Files — saved to a
+        temp drop folder, put on the clipboard as REAL files (CF_HDROP) and
+        pasted right away, exactly like Copy in Explorer + Ctrl+V. A single
+        image goes through /upload instead (bitmap — image boxes need that).
+        Token-gated like the WebSocket."""
+        if request.query_params.get("token") != token:
+            return JSONResponse({"ok": False, "error": "unauthorized"}, status_code=401)
+        drop = Path(tempfile.gettempdir()) / "RemoteUserDrop"
+        # The PREVIOUS upload's files are cleared here, not right after their
+        # paste — a target app may still be reading them from the clipboard.
+        shutil.rmtree(drop, ignore_errors=True)
+        drop.mkdir(parents=True, exist_ok=True)
+        paths = []
+        for i, f in enumerate(files):
+            name = Path(f.filename or f"file_{i}").name or f"file_{i}"
+            path = drop / name
+            if path in paths:  # two picks may carry the same name
+                path = drop / f"{i}_{name}"
+            path.write_bytes(await f.read())
+            paths.append(path)
+        if not paths:
+            return JSONResponse({"ok": False, "error": "no files"}, status_code=400)
+        ok = await asyncio.to_thread(clipboard.copy_files, paths)
+        if ok:
+            await asyncio.to_thread(injector.press_chord, "ctrl+v")
+        else:
+            logger.error("CF_HDROP copy failed for %d files", len(paths))
+        return {"ok": ok, "count": len(paths)}
 
     app.mount("/static", StaticFiles(directory=SETTINGS.client_dir), name="static")
 
@@ -364,11 +402,14 @@ def _load_actions() -> dict:
     """Reads the owner's action categories fresh (edits apply on the next
     connect). A missing or invalid file is logged and yields no categories —
     never a crash."""
-    empty = {"categories": [], "left": 0, "right": 0}
+    empty = {"categories": [], "app_sets": [], "left": 0, "right": 0}
     try:
         data = json.loads(SETTINGS.actions_path.read_text(encoding="utf-8"))
         return {
             "categories": data.get("categories", []),
+            # App-aware sets (owner 2026-08-04): shown by the client ONLY in
+            # layout focus, when the focused layout's app matches `process`.
+            "app_sets": data.get("app_sets", []),
             "left": data.get("left", 0),
             "right": data.get("right", 0),
         }
@@ -426,14 +467,34 @@ async def _switch_monitor(ws: WebSocket, injector: InputInjector, stream, token:
     await _toast(ws, f"Monitor {stream.monitor_index + 1}/{count}")
 
 
-async def _screenshot(ws: WebSocket, stream) -> None:
+async def _screenshot(ws: WebSocket, stream, injector: InputInjector, msg: dict) -> None:
+    """PC screenshot into the PC clipboard. The Attach set's Shot button sends
+    the REGION the phone currently views (owner 2026-08-04 — zoomed = that
+    part, layout focus = the layout's rect, never the whole desktop) plus
+    paste=true, and the server injects Ctrl+V itself; the legacy snap action
+    sends neither and only fills the clipboard."""
     frame = await asyncio.to_thread(stream.take_screenshot)
     if frame is None:
         await _toast(ws, "Screenshot failed — see server log")
         return
+    try:
+        x, y = float(msg.get("x", 0)), float(msg.get("y", 0))
+        w, h = float(msg.get("w", 1)), float(msg.get("h", 1))
+    except (TypeError, ValueError):
+        x, y, w, h = 0.0, 0.0, 1.0, 1.0
+    fh, fw = frame.shape[:2]
+    x1 = min(max(int(x * fw), 0), fw - 1)
+    y1 = min(max(int(y * fh), 0), fh - 1)
+    x2 = min(max(int((x + w) * fw), x1 + 1), fw)
+    y2 = min(max(int((y + h) * fh), y1 + 1), fh)
+    frame = frame[y1:y2, x1:x2]
     ok = await asyncio.to_thread(clipboard.copy_image, frame)
-    await _toast(ws, "Screenshot in PC clipboard — paste with right-click" if ok
-                 else "Clipboard busy — try again")
+    if ok and msg.get("paste"):
+        await asyncio.to_thread(injector.press_chord, "ctrl+v")
+        await _toast(ws, "Screenshot pasted on the PC")
+    else:
+        await _toast(ws, "Screenshot in PC clipboard — paste with right-click" if ok
+                     else "Clipboard busy — try again")
 
 
 def _mon_rect(stream) -> tuple[int, int, int, int]:
@@ -616,6 +677,14 @@ async def _receive_input(ws: WebSocket, injector: InputInjector, stream, token: 
                 injector.button_down(x, y, button)
             else:
                 injector.button_up(x, y, button)
+        elif kind == "press":
+            # CLICK/HOLD mouse buttons (owner 2026-08-04): down when the
+            # finger lands, up when it lifts — at the current cursor.
+            button = msg.get("button", "left")
+            if button not in BUTTON_FLAGS:
+                logger.error("Unknown button %r from client", button)
+                continue
+            injector.press(button, bool(msg.get("down")))
         elif kind == "pointer_move":
             injector.move(float(msg["x"]), float(msg["y"]))
         elif kind == "scroll":
@@ -635,7 +704,7 @@ async def _receive_input(ws: WebSocket, injector: InputInjector, stream, token: 
         elif kind == "monitor_switch":
             await _switch_monitor(ws, injector, stream, token)
         elif kind == "screenshot":
-            await _screenshot(ws, stream)
+            await _screenshot(ws, stream, injector, msg)
         elif kind == "layout_pick":
             await _layout_pick(ws, layouts, stream, msg)
         elif kind == "layout_list":
