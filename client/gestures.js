@@ -32,7 +32,11 @@ function beginPinch() {
 }
 
 canvas.addEventListener("pointerdown", (e) => {
-  if (keyboardOpen()) e.preventDefault(); // a tap must not blur the keyboard field
+  // A tap on the stream switches the input switchers OFF by itself (owner
+  // 2026-08-04, reversing the old keep-focus rule): clicking outside the
+  // textarea is the natural "done typing" — no manual toggle-off needed.
+  // (Only for the primary finger — a second pinch finger must not close it.)
+  if (e.isPrimary && !layoutArm) inputOff();
   if (streamMode === "h264" && video.paused) video.play().catch(() => {}); // autoplay unlock
   if (layoutArm && e.isPrimary) {
     // Armed by the Layout (+) button: this tap PICKS a window instead of

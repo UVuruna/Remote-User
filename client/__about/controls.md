@@ -41,11 +41,33 @@ for the split's general load-order reasoning.
 
 ## Key Functions & Data
 
-- `ICONS` / `svg(name)` — inline SVG path fragments for control icons.
-- `BUILTINS` — the registry of built-in actions (`click`, `right`, `drag`,
-  `scroll`, `keyboard`, `monitor`, `snap`, `upload`, `calibrate`,
-  `anywhere`) — label, icon, and dispatch kind (`send`/`mode`/`kb`/`upload`/
-  `calibrate`/`anywhere`).
+- `ICONS` / `svg(name)` — inline SVG path fragments for control icons
+  (owner-approved set 2026-08-04: mouse-button faces for click/middle, mic,
+  enter/esc, attach/gallery/shot/folder, edit-set icons, monitor2,
+  undo/redo/find/del for hand-edited files).
+- `BUILTINS` — the registry of built-in actions — label, icon, and dispatch
+  kind. Kinds: `hold` (Click/Right/Middle — CLICK/HOLD mouse buttons),
+  `mode` (scroll/drag toggles), `kb`, `mic`, `key-off` (enter/esc — switch
+  keyboard+mic OFF, then press the real key), `pick` (gallery/camera/files),
+  `shot` (region screenshot), `send`, `upload`, `calibrate`, `anywhere`,
+  `quality`.
+- `holdButton(el, button)` — the CLICK/HOLD primitive (owner 2026-08-04):
+  `press {button, down:true}` on pointerdown, `down:false` on
+  pointerup/pointercancel — a tap clicks, a held finger holds the PC button
+  (what the old Drag toggle did); cancel always releases so no PC button can
+  stay stuck.
+- Mic switcher (`micStart/micStop/toggleMic`, `__voiceResult`, `__voiceEnd`)
+  — direct voice input via the shell's `Android.startVoice()` bridge
+  (SpeechRecognizer); recognized text goes out as `key_text`. Only one of
+  mic/keyboard is ever ON; `inputOff()` (Enter/Esc buttons, a tap on the
+  stream) switches both OFF.
+- `shotRegion()` — the monitor-normalized rect the phone is LOOKING at
+  (zoom/layout aware) — sent with `screenshot {paste:true}` by the Shot
+  button; the server crops, fills the clipboard and injects Ctrl+V itself.
+- App-aware sets (`appSets`, `visibleAppSets`, `allCats`,
+  `refreshCategories`) — sets from actions.json `app_sets` that exist ONLY
+  in layout focus, appearing as extra wheel categories while the focused
+  layout's app matches (owner 2026-08-04).
 - `setMode(mode)` / `refreshModeButtons()` — the single-active `touchMode`
   toggle and its button-state mirroring.
 - Keyboard capture (`kbInput`, `keyboardOpen`, `toggleKeyboard`,
@@ -59,8 +81,11 @@ for the split's general load-order reasoning.
 - In-app update (`versionNumbers`, `isNewer`, `refreshUpdateBanner`) —
   compares the server's `app_version` against the APK shell's own version
   (`window.Android.appVersion()`), shown only `IN_APP`.
-- Phone → PC upload (`filePick` change handler) — POSTs the chosen image to
-  `/upload`; the server pastes it into the PC's focused control.
+- Phone → PC upload (`uploadPicked`, the `PICKERS` change handlers) — one
+  image POSTs to `/upload` (bitmap paste); several files or any non-image
+  POST to `/upload_files` (pasted as REAL files via CF_HDROP). Gallery and
+  Files inputs allow multi-select; Camera captures directly (owner
+  2026-08-04). The server injects the Ctrl+V itself.
 - `keepFocus(el, onTap)` — the shared button-press primitive: fires on
   `pointerup` (touch grants transient user activation only at UP — needed by
   the file picker/IME) plus a `pointercancel` rescue when travel stayed under

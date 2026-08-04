@@ -11,13 +11,17 @@ the build machine without touching the real screen.
 Scenarios (all must pass, any failure exits 1 — build.py runs this fail-closed):
   1. steering    — a touch on the canvas sends pointer_move (pointer exactly
      under the finger — owner 2026-08-02) and NEVER a click (the no-tap decree)
-  2. click       — the Click button lands injector.click("left")
-  3. right click — the Right button lands injector.click("right") (a BUTTON, not a tap)
-  4. chord       — a chord button lands press_chord
-  5. stolen tap  — pointerdown ended by a no-travel pointercancel STILL fires
-     (Android steals edge touches; up-only buttons died on-device 2026-07-26)
-  5b. system swipe — pointercancel after real travel must NOT fire (a home/back
-     gesture crossing a button is not a press)
+  2. click       — Click/Right/Middle are CLICK/HOLD buttons (owner
+     2026-08-04): finger lands -> press(button, down), lifts -> press(button,
+     up); a tap is exactly one down+up pair in order
+  4. keys + chord — the Esc builtin lands press_key("escape"); switching the
+     wheel to Edit and tapping Copy lands press_chord("ctrl+c")
+  5. stolen tap  — pointerdown ended by a pointercancel still completes the
+     click: the down already fired, the cancel must RELEASE (Android steals
+     edge touches; up-only buttons died on-device 2026-07-26)
+  5b. system swipe — a pointercancel after real travel must also release: a
+     hold button fires down on touch (that IS hold semantics), so the one
+     guarantee is that no PC button ever stays STUCK down
   6. edge reach  — a touch in the far bottom-right corner drives the cursor
      to the PC screen's bottom-right edge (full-screen fit, no margins)
   7. keyboard    — Keys focuses the capture field; typed text arrives as
@@ -92,6 +96,9 @@ class FakeInjector:
 
     def click(self, button):
         self._rec("click", button)
+
+    def press(self, button, down):
+        self._rec("press", button, down)
 
     def wheel(self, x, y, ticks):
         self._rec("wheel", round(x, 4), round(y, 4), ticks)
@@ -276,27 +283,44 @@ def main():
         results["steering: canvas touch -> pointer_move"] = moved
         results["no-tap rule: canvas touch never clicks"] = not clicked
 
-        # 2. left click
-        clear_calls()
-        tap_button(page, '#group-left [data-action="click"]')
-        results["Click button -> click(left)"] = \
-            wait_for(lambda c: ("click", "left") in c)
+        # 2. CLICK/HOLD buttons (owner 2026-08-04): a tap on Click/Right/
+        # Middle is one press-down + press-up pair, in that order — the same
+        # wiring that holds the PC button while the finger stays down.
+        def press_pair(c, button):
+            downs = [i for i, x in enumerate(c) if x == ("press", button, True)]
+            ups = [i for i, x in enumerate(c) if x == ("press", button, False)]
+            return bool(downs and ups) and downs[0] < ups[-1]
 
-        # 3. right click — a BUTTON now, never a canvas tap
-        clear_calls()
-        tap_button(page, '#group-left [data-action="right"]')
-        results["Right button -> click(right)"] = \
-            wait_for(lambda c: ("click", "right") in c)
+        for name, action in (("left", "click"), ("right", "right"), ("middle", "middle")):
+            clear_calls()
+            tap_button(page, f'#group-left [data-action="{action}"]')
+            results[f"{action} button -> press({name}) down+up"] = \
+                wait_for(lambda c, b=name: press_pair(c, b))
 
-        # 4. chord (Esc lives in the default right group)
+        # 4. Esc is a builtin now (it also switches keyboard/mic OFF) and
+        # lands as the real key; a chord button still lands press_chord —
+        # reached through the category wheel (Edit is not on screen), which
+        # pins the wheel's tap-to-switch path too.
         clear_calls()
-        tap_button(page, '#group-right .ctl.text:has-text("Esc")')
-        results["Esc button -> chord(escape)"] = \
-            wait_for(lambda c: ("press_chord", "escape") in c)
+        tap_button(page, '#group-right [data-action="esc"]')
+        results["Esc button -> press_key(escape)"] = \
+            wait_for(lambda c: ("press_key", "escape") in c)
+        clear_calls()
+        tap_button(page, '#group-right .ctl.cat')
+        page.wait_for_selector('#wheel .wheel-item', timeout=3000)
+        tap_button(page, '#wheel .wheel-item:has-text("Edit")')
+        tap_button(page, '#group-right .ctl:has-text("Copy")')
+        results["wheel -> Edit -> Copy -> chord(ctrl+c)"] = \
+            wait_for(lambda c: ("press_chord", "ctrl+c") in c)
+        # put Input back — the keyboard scenario below needs it on screen
+        tap_button(page, '#group-right .ctl.cat')
+        page.wait_for_selector('#wheel .wheel-item', timeout=3000)
+        tap_button(page, '#wheel .wheel-item:has-text("Input")')
 
-        # 5. stolen-tap rescue: Android ends edge-zone touches with a
-        # pointercancel — a cancel with (near) zero travel IS the tap and must
-        # still fire (the 2026-07-26 all-buttons-dead failure)...
+        # 5. stolen-tap rescue on a HOLD button: Android ends edge-zone
+        # touches with a pointercancel — the down already fired on touch, so
+        # the cancel must RELEASE and the click still completes (the
+        # 2026-07-26 all-buttons-dead failure, hold-semantics edition)...
         clear_calls()
         page.evaluate("""() => {
             const btn = document.querySelector('#group-left [data-action="click"]');
@@ -307,11 +331,12 @@ def main():
             btn.dispatchEvent(new PointerEvent('pointerdown', opts));
             btn.dispatchEvent(new PointerEvent('pointercancel', opts));
         }""")
-        results["stolen tap (cancel, no travel) still fires"] = \
-            wait_for(lambda c: ("click", "left") in c)
+        results["stolen tap (cancel) still completes the click"] = \
+            wait_for(lambda c: press_pair(c, "left"))
 
-        # 5b. ...but a SYSTEM SWIPE crossing the button (real travel, then
-        # cancel) must NOT act on the PC — a home/back gesture is not a press.
+        # 5b. ...and a SYSTEM SWIPE crossing the button must never leave the
+        # PC button STUCK down: with real hold semantics the down fires on
+        # touch (that is the feature), so the pinned guarantee is the release.
         clear_calls()
         page.evaluate("""() => {
             const btn = document.querySelector('#group-left [data-action="click"]');
@@ -325,8 +350,27 @@ def main():
             btn.dispatchEvent(new PointerEvent('pointercancel', opts(cx, cy - 80)));
         }""")
         time.sleep(0.4)
-        results["system swipe over a button does NOT fire"] = \
-            ("click", "left") not in snapshot()
+        swipe_calls = snapshot()
+        results["system swipe never leaves the button stuck down"] = \
+            ("press", "left", True) not in swipe_calls or press_pair(swipe_calls, "left")
+
+        # keepFocus buttons (chords, toggles) still ignore a travelled cancel:
+        # the same swipe over Esc must not press the key.
+        clear_calls()
+        page.evaluate("""() => {
+            const btn = document.querySelector('#group-right [data-action="esc"]');
+            const r = btn.getBoundingClientRect();
+            const cx = r.x + r.width / 2, cy = r.y + r.height / 2;
+            const opts = (x, y) => ({bubbles: true, cancelable: true, isPrimary: true,
+                                     pointerId: 97, pointerType: 'touch',
+                                     clientX: x, clientY: y});
+            btn.dispatchEvent(new PointerEvent('pointerdown', opts(cx, cy)));
+            btn.dispatchEvent(new PointerEvent('pointermove', opts(cx, cy - 80)));
+            btn.dispatchEvent(new PointerEvent('pointercancel', opts(cx, cy - 80)));
+        }""")
+        time.sleep(0.4)
+        results["system swipe over a tap button does NOT fire"] = \
+            ("press_key", "escape") not in snapshot()
 
         # 6. edge reach: the image fills the canvas with no reserved margins
         # (owner 2026-08-02) — a corner touch maps straight to the corner.

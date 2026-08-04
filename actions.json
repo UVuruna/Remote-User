@@ -1,6 +1,6 @@
 {
   "left": 0,
-  "right": 2,
+  "right": 1,
   "categories": [
     {
       "name": "Mouse",
@@ -8,57 +8,83 @@
       "buttons": [
         { "action": "click" },
         { "action": "right" },
-        { "action": "drag" },
+        { "action": "middle" },
         { "action": "scroll" }
+      ]
+    },
+    {
+      "name": "Input",
+      "icon": "keyboard",
+      "buttons": [
+        { "action": "keyboard" },
+        { "action": "enter" },
+        { "action": "esc" },
+        { "action": "mic" }
+      ]
+    },
+    {
+      "name": "Attach",
+      "icon": "attach",
+      "buttons": [
+        { "action": "gallery" },
+        { "action": "pcshot" },
+        { "action": "camera" },
+        { "action": "files" }
       ]
     },
     {
       "name": "Edit",
       "icon": "edit",
       "buttons": [
-        { "label": "Copy",  "chord": "ctrl+c" },
-        { "label": "Paste", "chord": "ctrl+v" },
-        { "label": "Cut",   "chord": "ctrl+x" },
-        { "label": "All",   "chord": "ctrl+a" }
-      ]
-    },
-    {
-      "name": "Keys",
-      "icon": "keyboard",
-      "buttons": [
-        { "action": "keyboard" },
-        { "label": "Enter", "key": "enter" },
-        { "label": "Esc",   "chord": "escape" },
-        { "label": "Tab",   "chord": "tab" }
-      ]
-    },
-    {
-      "name": "View",
-      "icon": "monitor",
-      "buttons": [
-        { "action": "monitor" },
-        { "action": "upload" },
-        { "label": "Alt+Tab", "chord": "alt+tab" },
-        { "label": "Win",     "chord": "win" }
-      ]
-    },
-    {
-      "name": "Zones",
-      "icon": "grid",
-      "buttons": [
-        { "label": "Z1", "chord": "ctrl+win+alt+1" },
-        { "label": "Z2", "chord": "ctrl+win+alt+2" },
-        { "label": "Z3", "chord": "ctrl+win+alt+3" },
-        { "label": "Z4", "chord": "ctrl+win+alt+4" }
+        { "label": "All",   "icon": "selall", "chord": "ctrl+a" },
+        { "label": "Copy",  "icon": "copy",   "chord": "ctrl+c" },
+        { "label": "Cut",   "icon": "cut",    "chord": "ctrl+x" },
+        { "label": "Paste", "icon": "paste",  "chord": "ctrl+v" }
       ]
     },
     {
       "name": "Settings",
       "icon": "settings",
       "buttons": [
+        { "action": "monitor" },
         { "action": "next_input" },
         { "action": "quality" },
         { "action": "anywhere" }
+      ]
+    }
+  ],
+  "app_sets": [
+    {
+      "process": "code",
+      "name": "VSCode",
+      "icon": "newwin",
+      "buttons": [
+        { "label": "Sidebar",  "chord": "ctrl+b" },
+        { "label": "Palette",  "chord": "ctrl+shift+p" },
+        { "label": "Terminal", "chord": "ctrl+`" },
+        { "label": "Find", "icon": "find", "chord": "ctrl+f" }
+      ]
+    },
+    {
+      "process": "chrome",
+      "name": "Chrome",
+      "icon": "newwin",
+      "buttons": [
+        { "label": "New tab",  "chord": "ctrl+t" },
+        { "label": "Close",    "chord": "ctrl+w" },
+        { "label": "Next tab", "chord": "ctrl+tab" },
+        { "label": "Address",  "chord": "ctrl+l" }
+      ]
+    },
+    {
+      "process": "explorer",
+      "name": "Explorer",
+      "icon": "newwin",
+      "buttons": [
+        { "label": "Rename",  "chord": "f2" },
+        { "label": "New dir", "chord": "ctrl+shift+n" },
+        { "label": "Delete", "icon": "del", "chord": "delete" },
+        { "label": "Up", "chord": "alt+up" }
       ]
     }
   ]

@@ -75,8 +75,15 @@
        phone IME offers ↵ (new row), never a Send/Go key. -->
   <textarea id="kb" rows="1" enterkeyhint="enter" aria-label="Type — goes to the PC" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false"></textarea>
 
-  <!-- Phone → PC image upload (gallery or camera) -->
+  <!-- Phone → PC uploads (owner 2026-08-04): the Attach set's sources. The
+       shell's file chooser honors accept/multiple/capture — gallery and Files
+       allow picking SEVERAL at once (they paste as real files on the PC);
+       camera opens the camera and waits for the shot. filepick stays for the
+       legacy single-image `upload` action. -->
   <input id="filepick" type="file" accept="image/*" hidden>
+  <input id="pick-gallery" type="file" accept="image/*" multiple hidden>
+  <input id="pick-camera" type="file" accept="image/*" capture="environment" hidden>
+  <input id="pick-files" type="file" multiple hidden>
 
   <!-- "Access from anywhere" — offered when the PC has Tailscale and this
        page is on the home address; opens the guided one-time wizard -->

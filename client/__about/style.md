@@ -27,8 +27,9 @@ everywhere the page must own gestures itself rather than the browser.
 - [Render](render.md) — `updateViewport()` writes the live `--kb`/`--vtop`
   custom properties
 - [Controls](controls.md) — toggles `body.hidden-controls`, `.ctl.active`
-  (mode/keyboard buttons), `.wheel-item.current`, and the wizard's step
-  classes
+  (mode/keyboard/mic buttons), `.ctl.held` (a CLICK/HOLD mouse button while
+  the finger keeps the PC button pressed — pressed-in scale, not the latched
+  glow), `.wheel-item.current`, and the wizard's step classes
 - [Web Layer](../../server/__about/web.md) — served from `/static/style.css` (the
   `StaticFiles` mount over `client/`)
 

@@ -20,7 +20,26 @@ const ICONS = {
   right: '<rect x="6" y="3" width="12" height="18" rx="6"/><path d="M12 3v7"/><path d="M12 3h2a4 4 0 0 1 4 4v3h-6z" fill="currentColor" stroke="none"/>',
   drag: '<polyline points="5 9 2 12 5 15"/><polyline points="9 5 12 2 15 5"/><polyline points="15 19 12 22 9 19"/><polyline points="19 9 22 12 19 15"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="12" y1="2" x2="12" y2="22"/>',
   scroll: '<path d="m7 15 5 5 5-5"/><path d="m7 9 5-5 5 5"/>',
-  click: '<path d="M3 3l7.4 18 2.3-7.3L20 11.4z"/><path d="M14 6.5a7 7 0 0 0-8-2.4"/>',
+  // Click = mirror of `right` (owner-approved icon set 2026-08-04); Middle =
+  // the filled wheel (variant A of the approved proposals).
+  click: '<rect x="6" y="3" width="12" height="18" rx="6"/><path d="M12 3v7"/><path d="M12 3h-2a4 4 0 0 0-4 4v3h6z" fill="currentColor" stroke="none"/>',
+  middle: '<rect x="6" y="3" width="12" height="18" rx="6"/><rect x="10.6" y="6" width="2.8" height="6" rx="1.4" fill="currentColor" stroke="none"/>',
+  mic: '<rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><line x1="12" y1="18" x2="12" y2="22"/>',
+  enter: '<path d="M20 5v6a3 3 0 0 1-3 3H5"/><path d="m9 10-4 4 4 4"/>',
+  esc: '<path d="M18 13v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h5"/><path d="M15 4h5v5"/><path d="m20 4-8 8"/>',
+  attach: '<path d="M21.44 11.05 12.25 20.24a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/>',
+  gallery: '<rect x="7" y="3" width="14" height="14" rx="2"/><circle cx="11" cy="7" r="1.5"/><path d="m21 12-3-3-7 7"/><path d="M3 7v11a3 3 0 0 0 3 3h11"/>',
+  shot: '<path d="M9 4H6a2 2 0 0 0-2 2v3"/><path d="M15 4h3a2 2 0 0 1 2 2v3"/><path d="M20 15v3a2 2 0 0 1-2 2h-3"/><path d="M4 15v3a2 2 0 0 0 2 2h3"/><circle cx="12" cy="12" r="3"/>',
+  folder: '<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>',
+  selall: '<rect x="4" y="4" width="16" height="16" rx="2" stroke-dasharray="3 3.2"/><rect x="9" y="9" width="6" height="6" rx="1" fill="currentColor" stroke="none"/>',
+  copy: '<rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
+  cut: '<circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/>',
+  paste: '<path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M12 10v7"/><path d="m9 14 3 3 3-3"/>',
+  monitor2: '<rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/><path d="m10 7.5-3 3 3 3"/><path d="m14 7.5 3 3-3 3"/>',
+  undo: '<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>',
+  redo: '<path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/>',
+  find: '<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.2" y2="16.2"/>',
+  del: '<path d="M9 5 2.6 12 9 19h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2z"/><line x1="17" y1="9.5" x2="12" y2="14.5"/><line x1="12" y1="9.5" x2="17" y2="14.5"/>',
   keyboard: '<rect x="2" y="5" width="20" height="14" rx="2"/><path d="M6 9h.01M10 9h.01M14 9h.01M18 9h.01M6 13h.01M18 13h.01M9 13h6"/>',
   monitor: '<rect x="2" y="4" width="14" height="10" rx="2"/><path d="M9 18h7"/><path d="M9 14v4"/><path d="m17 9 4 3-4 3"/>',
   image: '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-4.5-4.5L5 21"/>',
@@ -48,17 +67,33 @@ function svg(name) {
 
 const BUILTINS = {
   // The finger itself only steers the cursor — clicks are explicit buttons at
-  // the CURRENT cursor position; press twice fast for a double click. Right
-  // is a click button too (owner decision 2026-07-26 — with the offset
-  // pointer NOTHING may act on a canvas tap).
-  click:    { label: "Click",  icon: "click",    kind: "send", msg: { type: "click", button: "left" } },
-  right:    { label: "Right",  icon: "right",    kind: "send", msg: { type: "click", button: "right" } },
+  // the CURRENT cursor position (owner decision 2026-07-26: with the pointer
+  // under the finger NOTHING may act on a canvas tap). Click/Right/Middle are
+  // CLICK/HOLD buttons like a real mouse (owner 2026-08-04): a tap is a
+  // click, keeping the finger down holds the PC button down (what the old
+  // Drag toggle did) — press twice fast for a double click.
+  click:    { label: "Click",  icon: "click",    kind: "hold", button: "left" },
+  right:    { label: "Right",  icon: "right",    kind: "hold", button: "right" },
+  middle:   { label: "Middle", icon: "middle",   kind: "hold", button: "middle" },
   drag:     { label: "Drag",   icon: "drag",     kind: "mode" },
   scroll:   { label: "Scroll", icon: "scroll",   kind: "mode" },
   keyboard: { label: "Keys",   icon: "keyboard", kind: "kb" },
-  monitor:  { label: "Monitor", icon: "monitor", kind: "send", msg: { type: "monitor_switch" } },
+  // Enter/Esc first switch OFF both input switchers (keyboard + mic), then
+  // press the real key (owner 2026-08-04 — "skida off i radi funkcionalnost").
+  enter:    { label: "Enter",  icon: "enter",    kind: "key-off", key: "enter" },
+  esc:      { label: "Esc",    icon: "esc",      kind: "key-off", key: "escape" },
+  mic:      { label: "Mic",    icon: "mic",      kind: "mic" },
+  monitor:  { label: "Monitor", icon: "monitor2", kind: "send", msg: { type: "monitor_switch" } },
   snap:     { label: "Snap",   icon: "snap",     kind: "send", msg: { type: "screenshot" } },
+  // Attach set (owner 2026-08-04): every source ends the same way — the
+  // picked/made picture lands in the PC clipboard and is PASTED right away.
+  // pcshot captures exactly the REGION the phone currently views (zoom /
+  // layout focus), never the whole desktop.
   upload:   { label: "Image",  icon: "image",    kind: "upload" },
+  gallery:  { label: "Gallery", icon: "gallery", kind: "pick", input: "pick-gallery" },
+  camera:   { label: "Camera", icon: "snap",     kind: "pick", input: "pick-camera" },
+  files:    { label: "Files",  icon: "folder",   kind: "pick", input: "pick-files" },
+  pcshot:   { label: "Shot",   icon: "shot",     kind: "shot" },
   calibrate:{ label: "Calibrate", icon: "target", kind: "calibrate" },
   anywhere: { label: "Anywhere", icon: "globe",  kind: "anywhere" },
   // Phase F+ step 3 (owner spec): UIA-cycled focus through TEXT-INPUT fields
@@ -143,10 +178,11 @@ function keyboardOpen() {
 
 function toggleKeyboard() {
   if (keyboardOpen()) kbInput.blur();
-  else kbInput.focus({ preventScroll: true });
+  else kbInput.focus({ preventScroll: true }); // focus -> micStop (only one of mic/keyboard may be ON)
 }
 
 kbInput.addEventListener("focus", () => {
+  micStop();
   document.querySelectorAll('[data-action="keyboard"]').forEach((el) => el.classList.add("active"));
 });
 kbInput.addEventListener("blur", () => {
@@ -203,6 +239,80 @@ kbInput.addEventListener("input", (e) => {
     kbPrev = "";
   }
 });
+
+// --- Mic (voice input) switcher -------------------------------------------
+// Owner 2026-08-04: the Mic button opens voice input DIRECTLY — no opening
+// the keyboard first, then hunting the IME's mic key. The page cannot listen
+// itself (Android WebView has no Speech API), so the shell does: the
+// `Android.startVoice()` bridge runs a SpeechRecognizer and calls
+// `__voiceResult(text)` back with each recognized utterance; `__voiceEnd`
+// closes one listening round — while the switcher is ON the page restarts it,
+// so dictation keeps flowing sentence after sentence. Only one of mic /
+// keyboard is ever ON (owner rule).
+
+let micOn = false;
+
+function micSupported() {
+  return IN_APP && typeof window.Android.startVoice === "function";
+}
+
+function setMicActive(on) {
+  document.querySelectorAll('[data-action="mic"]').forEach((el) =>
+    el.classList.toggle("active", on));
+}
+
+function micStart() {
+  if (!micSupported()) {
+    showToast("Voice input needs the updated app — update from the banner");
+    return;
+  }
+  if (keyboardOpen()) kbInput.blur();
+  micOn = true;
+  setMicActive(true);
+  window.Android.startVoice();
+}
+
+function micStop() {
+  if (!micOn) return;
+  micOn = false;
+  setMicActive(false);
+  if (micSupported()) window.Android.stopVoice();
+}
+
+function toggleMic() {
+  if (micOn) micStop();
+  else micStart();
+}
+
+// Called by the shell (evaluateJavascript) with each recognized utterance.
+window.__voiceResult = (text) => {
+  if (text) sendTyped(text + " ");
+};
+
+// One listening round ended (silence, error, permission). Restart while ON.
+window.__voiceEnd = (reason) => {
+  if (!micOn) return;
+  if (reason === "denied") {
+    micStop();
+    showToast("Microphone permission was denied — allow it in Android settings");
+    return;
+  }
+  if (reason === "unavailable") {
+    micStop();
+    showToast("Voice recognition is not available on this phone");
+    return;
+  }
+  setTimeout(() => {
+    if (micOn && micSupported()) window.Android.startVoice();
+  }, 250);
+};
+
+// Enter/Esc and a tap on the stream switch every input switcher OFF
+// (owner 2026-08-04 — no manual toggling off before the next action).
+function inputOff() {
+  if (keyboardOpen()) kbInput.blur();
+  micStop();
+}
 
 // --- "Access from anywhere" wizard ----------------------------------------
 // The server's config carries tailscale_url when the PC is on Tailscale.
@@ -330,26 +440,46 @@ keepFocus(updateBanner, () => {
   showToast("Downloading — open the file to install the update");
 });
 
-// --- Phone → PC image upload ----------------------------------------------
+// --- Phone → PC upload (gallery / camera / any files) ---------------------
+// The server pastes by itself (Ctrl+V injected) — picking was the whole
+// gesture. ONE image goes as a bitmap (/upload — pastes into any image box);
+// several files, or any non-image (PDF…), go as real FILES (/upload_files —
+// CF_HDROP on the PC clipboard, pasted into apps that accept files). Owner
+// 2026-08-04: gallery and Files allow selecting more than one.
 
-const filePick = document.getElementById("filepick");
-filePick.addEventListener("change", async () => {
-  const file = filePick.files && filePick.files[0];
-  if (!file) return;
-  showToast("Uploading image…");
+async function uploadPicked(files) {
+  if (!files || !files.length) return;
+  const list = [...files];
+  showToast(list.length > 1 ? `Uploading ${list.length} files…` : "Uploading…");
+  const single = list.length === 1 && list[0].type.startsWith("image/");
   try {
     const body = new FormData();
-    body.append("file", file);
-    const res = await fetch(`/upload?token=${encodeURIComponent(token)}`, { method: "POST", body });
-    const j = await res.json();
-    // The server pastes it into the focused box by itself (Ctrl+V injected) —
-    // picking the image was the whole gesture.
-    showToast(j.ok ? "Image pasted on the PC" : "Upload failed");
+    let url;
+    if (single) {
+      body.append("file", list[0]);
+      url = `/upload?token=${encodeURIComponent(token)}`;
+    } else {
+      list.forEach((f) => body.append("files", f));
+      url = `/upload_files?token=${encodeURIComponent(token)}`;
+    }
+    const j = await (await fetch(url, { method: "POST", body })).json();
+    showToast(j.ok
+      ? (single ? "Image pasted on the PC" : `${list.length} file${list.length > 1 ? "s" : ""} pasted on the PC`)
+      : "Upload failed");
   } catch (err) {
     showToast(`Upload failed: ${err.message}`);
   }
-  filePick.value = "";
-});
+}
+
+const filePick = document.getElementById("filepick");
+const PICKERS = ["filepick", "pick-gallery", "pick-camera", "pick-files"];
+for (const id of PICKERS) {
+  const el = document.getElementById(id);
+  el.addEventListener("change", async () => {
+    await uploadPicked(el.files);
+    el.value = "";
+  });
+}
 
 // --- D-pad groups ---------------------------------------------------------
 
@@ -360,7 +490,32 @@ const groupEls = {
 const POSITIONS = ["up", "left", "right", "down"];
 
 let categories = [];
+let appSets = []; // app-aware sets from actions.json (owner 2026-08-04)
 const groups = { left: 0, right: 0 };
+
+// App-aware sets exist ONLY in layout focus (owner decision 2026-08-04):
+// when the focused layout's app matches a set's `process`, that set appears
+// as an extra category in the wheel — nothing switches by itself, and the
+// category vanishes with the layout focus.
+function visibleAppSets() {
+  if (layoutActive === null || !layouts[layoutActive]) return [];
+  const proc = String(layouts[layoutActive].process || "").toLowerCase();
+  return appSets.filter((s) => proc.includes(String(s.process || "").toLowerCase()));
+}
+
+function allCats() {
+  return categories.concat(visibleAppSets());
+}
+
+// Re-render after anything that changes the category list (actions arrived,
+// layout focus changed) — a group left pointing past the end falls back to 0.
+function refreshCategories() {
+  const n = allCats().length;
+  for (const side of ["left", "right"]) {
+    if (groups[side] >= n) groups[side] = 0;
+    renderGroup(side);
+  }
+}
 
 // Buttons fire on pointerUP — the moment a touch grants transient user
 // activation (the file picker and IME focus NEED it; pointerdown does not
@@ -404,6 +559,49 @@ function makeButton(cls, iconName, label) {
   return el;
 }
 
+// CLICK/HOLD mouse buttons (owner 2026-08-04 — like a real mouse): the PC
+// button goes DOWN on pointerdown and UP on release, at the current cursor.
+// A tap is a click; keeping the finger down drags/selects. pointercancel
+// releases too — Android stealing the touch must never leave the PC button
+// stuck down (so a system swipe crossing the button costs one stray click,
+// the price of real hold semantics — unlike keepFocus buttons, down cannot
+// wait to see how the touch ends).
+function holdButton(el, button) {
+  let pid = null;
+  el.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    pid = e.pointerId;
+    el.classList.add("held");
+    send({ type: "press", button, down: true });
+  });
+  const release = (e) => {
+    if (pid === null || e.pointerId !== pid) return;
+    pid = null;
+    el.classList.remove("held");
+    send({ type: "press", button, down: false });
+  };
+  el.addEventListener("pointerup", (e) => { e.preventDefault(); release(e); });
+  el.addEventListener("pointercancel", release);
+}
+
+// The monitor-normalized rect the phone is LOOKING at right now — what the
+// Shot button captures (owner 2026-08-04: never the whole desktop; zoomed =
+// the zoomed part, layout focus = that layout's region).
+function shotRegion() {
+  const D = drawnRect();
+  let x1 = Math.max(0, -D.x / D.w);
+  let y1 = Math.max(0, -D.y / D.h);
+  let x2 = Math.min(1, (canvas.width - D.x) / D.w);
+  let y2 = Math.min(1, (canvas.height - D.y) / D.h);
+  if (viewLocked()) {
+    x1 = Math.max(x1, layoutRegion.x);
+    y1 = Math.max(y1, layoutRegion.y);
+    x2 = Math.min(x2, layoutRegion.x + layoutRegion.w);
+    y2 = Math.min(y2, layoutRegion.y + layoutRegion.h);
+  }
+  return { x: x1, y: y1, w: Math.max(0, x2 - x1), h: Math.max(0, y2 - y1) };
+}
+
 function makeActionButton(btn, pos) {
   let el;
   if (btn.action && BUILTINS[btn.action]) {
@@ -415,6 +613,19 @@ function makeActionButton(btn, pos) {
       keepFocus(el, () => setMode(btn.action));
     } else if (b.kind === "kb") {
       keepFocus(el, toggleKeyboard);
+    } else if (b.kind === "hold") {
+      holdButton(el, b.button);
+    } else if (b.kind === "key-off") {
+      keepFocus(el, () => {
+        inputOff();
+        send({ type: "key_special", key: b.key });
+      });
+    } else if (b.kind === "mic") {
+      keepFocus(el, toggleMic);
+    } else if (b.kind === "shot") {
+      keepFocus(el, () => send({ type: "screenshot", paste: true, ...shotRegion() }));
+    } else if (b.kind === "pick") {
+      keepFocus(el, () => document.getElementById(b.input).click());
     } else if (b.kind === "send") {
       keepFocus(el, () => send(b.msg));
     } else if (b.kind === "upload") {
@@ -430,10 +641,14 @@ function makeActionButton(btn, pos) {
       keepFocus(el, cycleQuality);
     }
   } else if (btn.chord) {
-    el = makeButton("ctl text", null, btn.label || btn.chord);
+    // actions.json buttons may name an icon from ICONS (owner-approved icon
+    // set 2026-08-04 — e.g. Edit's Copy/Cut/Paste/All); no icon = text button.
+    const icon = btn.icon && ICONS[btn.icon] ? btn.icon : null;
+    el = makeButton(icon ? "ctl" : "ctl text", icon, btn.label || btn.chord);
     keepFocus(el, () => send({ type: "chord", chord: btn.chord }));
   } else if (btn.key) {
-    el = makeButton("ctl text", null, btn.label || btn.key);
+    const icon = btn.icon && ICONS[btn.icon] ? btn.icon : null;
+    el = makeButton(icon ? "ctl" : "ctl text", icon, btn.label || btn.key);
     keepFocus(el, () => send({ type: "key_special", key: btn.key }));
   } else {
     el = makeButton("ctl text", null, btn.label || "?");
@@ -445,7 +660,7 @@ function makeActionButton(btn, pos) {
 function renderGroup(side) {
   const host = groupEls[side];
   host.innerHTML = "";
-  const cat = categories[groups[side]];
+  const cat = allCats()[groups[side]];
   if (!cat) return;
 
   const center = makeButton("ctl cat", cat.icon, cat.name);
@@ -470,8 +685,9 @@ function openWheel(side) {
   wheelEl.innerHTML = "";
   const cx = window.innerWidth / 2;
   const cy = window.innerHeight / 2;
-  const n = categories.length;
-  categories.forEach((cat, i) => {
+  const cats = allCats();
+  const n = cats.length;
+  cats.forEach((cat, i) => {
     const angle = -Math.PI / 2 + (i * 2 * Math.PI) / Math.max(1, n);
     const item = document.createElement("div");
     item.className = "wheel-item" + (i === groups[side] ? " current" : "");

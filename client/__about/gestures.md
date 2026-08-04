@@ -20,8 +20,9 @@ everything defined in the first four files).
   (autoplay unlock on first touch)
 - [Input Geometry](input-geometry.md) — `toRemoteMaybeOffset`, `sendCursor`,
   `sampleFinger`, `startScrollInertia`/`cancelScrollInertia`
-- [Controls](controls.md) — `keyboardOpen()` (a tap must not blur the
-  keyboard field), `scheduleViewport()`
+- [Controls](controls.md) — `inputOff()` (a primary tap on the stream
+  switches keyboard AND mic OFF by itself — owner 2026-08-04, reversing the
+  old keep-focus rule), `scheduleViewport()`
 
 ### Used by
 - Nothing downstream — this is where raw touch input becomes protocol
@@ -68,6 +69,12 @@ scale is clamped to `[viewHome.scale, viewHome.scale * ZOOM_MAX]` instead of
 (the region fitted to the screen) and everything above it behaves as on the
 desktop. Panning is bounded by `clampView()` to the region rect — see
 [Render](render.md).
+
+## Input switchers auto-OFF (owner 2026-08-04)
+The primary `pointerdown` on the canvas calls `inputOff()` — tapping the
+stream is the natural "done typing/dictating", so the keyboard and mic
+switchers turn OFF without a manual toggle. (The old rule was the opposite —
+`preventDefault` to keep the field focused; the owner reversed it.)
 
 ## Offset system removed (owner 2026-08-02)
 The cursor-offset system (handedness diagonal, finger calibration, reserved

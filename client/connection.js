@@ -70,10 +70,10 @@ function connect() {
         if (streamMode !== "h264") redraw(); // h264 redraws every rAF anyway
       } else if (msg.type === "actions") {
         categories = msg.categories || [];
+        appSets = msg.app_sets || [];
         groups.left = Math.min(msg.left ?? 0, categories.length - 1);
         groups.right = Math.min(msg.right ?? 0, categories.length - 1);
-        renderGroup("left");
-        renderGroup("right");
+        refreshCategories();
       } else if (msg.type === "toast") {
         showToast(msg.text);
       } else if (msg.type === "layout_state") {
@@ -84,6 +84,7 @@ function connect() {
         layouts = msg.layouts || [];
         layoutActive = msg.active ?? null;
         layoutRegion = msg.region || null;
+        refreshCategories(); // app-aware sets appear/vanish with layout focus
         updateLayoutBar();
         applyOrientationLock();
         resetViewHome(); // every layout change starts fully zoomed out again

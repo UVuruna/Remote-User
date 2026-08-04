@@ -28,8 +28,12 @@ file picker, and the "access from anywhere" banner + guided wizard overlay.
 - `#wheel` — the tap-based category-picker overlay
 - `#kb` — the invisible but real-size keyboard-capture textarea (typed /
   dictated text goes to the PC's focused box)
-- `#filepick` — hidden `<input type="file" accept="image/*">` for phone → PC
-  image upload
+- `#filepick` — hidden `<input type="file" accept="image/*">` for the legacy
+  single-image upload action
+- `#pick-gallery` / `#pick-camera` / `#pick-files` — the Attach set's hidden
+  inputs (owner 2026-08-04): gallery and Files carry `multiple` (several picks
+  paste as real files on the PC), camera carries `capture` (the shell opens
+  the camera directly)
 - `#anywhere-banner` / `#wizard` (`#wiz-step-1/2/3`) — the guided "access from
   anywhere" (Tailscale) banner and its step-by-step overlay
 - `#update-banner` — shown inside the APK when the PC server carries a newer
