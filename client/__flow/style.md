@@ -27,7 +27,10 @@
 └─ Shape / Spacing
     ├─ --radius-pill  999px
     ├─ --space-s      8px
-    └─ --space-m      16px
+    ├─ --space-m      16px
+    └─ --topbar       bottom edge of the top panel (corners + layout bar) —
+                      every floating notice starts BELOW this line so it can
+                      never cover the layout name / arrows
 ```
 
 ## Rule blocks, in file order
@@ -38,10 +41,14 @@ style.css
 ├─ html, body                   full-size, no scroll/overscroll/selection,
 │                               touch-action:none
 ├─ #screen                      the canvas — full-size, touch-action:none
-├─ #status                      connection pill, fixed top-center
+├─ #status                      connection + toast pill, fixed top-center,
+│                               top: --topbar (under the top panel)
 │   ├─ .connecting              warning→amber gradient
 │   ├─ .connected               accent gradient, opacity:0 (fades out once live)
-│   └─ .disconnected            error→red gradient
+│   ├─ .disconnected            error→red gradient
+│   └─ .fade                    opacity:0 keeping the current colour — how an
+│                               expiring toast leaves the screen without
+│                               flashing a blue "Connected" pill
 ├─ #kb                          keyboard-capture textarea — full-width 42px
 │                               strip, transparent text/caret/background,
 │                               pointer-events:none (real-size + transparent,

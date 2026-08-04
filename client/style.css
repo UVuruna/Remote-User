@@ -12,6 +12,11 @@
   --warning: #f59e0b;
   --error: #ef4444;
   --corner: 58px;  /* corner button size — the layout bar's hard bounds */
+  /* Bottom edge of the top panel (Layout / Hide corners + the layout bar).
+     EVERY floating notice (status pill, toasts, update banner) starts below
+     this line — owner 2026-08-04: they used to sit ON the layout name and
+     arrows, so the layout could not be switched until the notice faded. */
+  --topbar: calc(var(--space-m) + var(--vtop) + var(--corner) + var(--space-s));
   --radius-pill: 999px;
   --space-s: 8px;
   --space-m: 16px;
@@ -43,7 +48,7 @@ html, body {
 
 #status {
   position: fixed;
-  top: 12px;
+  top: var(--topbar);
   left: 50%;
   transform: translateX(-50%);
   padding: var(--space-s) 20px;
@@ -57,6 +62,9 @@ html, body {
 #status.connecting { background: linear-gradient(90deg, var(--warning), #d97706); }
 #status.connected  { background: linear-gradient(90deg, var(--accent), var(--accent-2)); opacity: 0; pointer-events: none; }
 #status.disconnected { background: linear-gradient(90deg, var(--error), #b91c1c); }
+/* An expiring toast fades out KEEPING its own colour (see showToast) — the
+   pill only returns to the connected state once it is already invisible. */
+#status.fade { opacity: 0; pointer-events: none; }
 
 /* Keyboard capture field — always present and focusable, but INVISIBLE: what
    you type appears in the focused box on the PC screen itself (owner decision
@@ -293,7 +301,7 @@ html, body {
    carries a newer APK than this shell */
 #update-banner {
   position: fixed;
-  top: calc(56px + var(--vtop));
+  top: calc(var(--topbar) + 44px);
   left: 50%;
   transform: translateX(-50%);
   padding: 8px 16px;
