@@ -27,6 +27,8 @@ const ICONS = {
   mic: '<rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><line x1="12" y1="18" x2="12" y2="22"/>',
   enter: '<path d="M20 5v6a3 3 0 0 1-3 3H5"/><path d="m9 10-4 4 4 4"/>',
   esc: '<path d="M18 13v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h5"/><path d="M15 4h5v5"/><path d="m20 4-8 8"/>',
+  // wrap-text: a line breaking onto the next row (the New row button)
+  newrow: '<line x1="3" y1="6" x2="21" y2="6"/><path d="M3 12h13a3 3 0 0 1 0 6h-4"/><polyline points="14 16 12 18 14 20"/><line x1="3" y1="18" x2="7" y2="18"/>',
   attach: '<path d="M21.44 11.05 12.25 20.24a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/>',
   gallery: '<rect x="7" y="3" width="14" height="14" rx="2"/><circle cx="11" cy="7" r="1.5"/><path d="m21 12-3-3-7 7"/><path d="M3 7v11a3 3 0 0 0 3 3h11"/>',
   shot: '<path d="M9 4H6a2 2 0 0 0-2 2v3"/><path d="M15 4h3a2 2 0 0 1 2 2v3"/><path d="M20 15v3a2 2 0 0 1-2 2h-3"/><path d="M4 15v3a2 2 0 0 0 2 2h3"/><circle cx="12" cy="12" r="3"/>',
@@ -82,6 +84,10 @@ const BUILTINS = {
   // press the real key (owner 2026-08-04 — "skida off i radi funkcionalnost").
   enter:    { label: "Enter",  icon: "enter",    kind: "key-off", key: "enter" },
   esc:      { label: "Esc",    icon: "esc",      kind: "key-off", key: "escape" },
+  // New row (owner 2026-08-04): Shift+Enter — the dictation flow has no
+  // keyboard, so line breaks need their own button. Deliberately NOT
+  // key-off: you break the line mid-dictation and keep talking.
+  newrow:   { label: "New row", icon: "newrow",  kind: "send", msg: { type: "chord", chord: "shift+enter" } },
   mic:      { label: "Mic",    icon: "mic",      kind: "mic" },
   monitor:  { label: "Monitor", icon: "monitor2", kind: "send", msg: { type: "monitor_switch" } },
   snap:     { label: "Snap",   icon: "snap",     kind: "send", msg: { type: "screenshot" } },
