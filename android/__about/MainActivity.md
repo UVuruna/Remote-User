@@ -99,6 +99,11 @@ The page's only way to reach the shell.
   full-desktop view rotates freely (owner 2026-08-02)
 - `transport()`: `"cellular"` / `"wifi"` / `""` — the page's auto quality
   mode reduces the stream only on mobile data (owner spec 2026-08-02)
+- `startVoice()` / `stopVoice()`: the page's Mic switcher (owner 2026-08-04)
+  — one `SpeechRecognizer` listening round per call; results reach the page
+  via `__voiceResult(text)`, round-end via `__voiceEnd(reason)` (`"denied"` /
+  `"unavailable"` / `""`), and the page restarts rounds while its switcher is
+  ON. First use asks the `RECORD_AUDIO` runtime permission once.
 
 ### Client (inner class, `WebViewClient`)
 - `shouldOverrideUrlLoading`: keeps navigation to the paired server's own
@@ -112,8 +117,13 @@ The page's only way to reach the shell.
   live document)
 
 ### Chrome (inner class, `WebChromeClient`)
-`onShowFileChooser`: routes the page's phone→PC image-upload picker to the
-native gallery/camera chooser (`filePicker`, `GetContent("image/*")`).
+`onShowFileChooser`: routes the page's pickers by what its input asked for
+(owner 2026-08-04): `capture` → the camera itself (`TakePicture` into
+`cache/camera/` via FileProvider — CAMERA runtime permission required because
+the manifest declares it for the QR scanner); `multiple` →
+`GetMultipleContents`; otherwise a single `GetContent` of the input's accept
+type. Voice input lives in `beginListening()` / `voiceEnd()` (one
+`SpeechRecognizer` owned by the activity, destroyed in `onDestroy`).
 
 ### Fail (private enum)
 The five causes the phone can honestly distinguish, in decision order:

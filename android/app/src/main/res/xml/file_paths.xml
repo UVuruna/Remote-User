@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- FileProvider scope for the camera capture (Attach → Camera): only the
+     cache/camera/ folder is ever shared, and only with the camera app. -->
+<paths>
+    <cache-path name="camera" path="camera/" />
+</paths>

@@ -1,8 +1,10 @@
 package com.uvuruna.remoteuser
 
+import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.net.ConnectivityManager
 import android.net.Network
@@ -11,6 +13,9 @@ import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.speech.RecognitionListener
+import android.speech.RecognizerIntent
+import android.speech.SpeechRecognizer
 import android.view.View
 import android.view.WindowManager
 import android.webkit.JavascriptInterface
@@ -26,9 +31,12 @@ import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.FileProvider
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import org.json.JSONObject
+import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.concurrent.FutureTask
@@ -111,6 +119,41 @@ class MainActivity : AppCompatActivity() {
             fileCallback = null
         }
 
+    /** Multi-select picker — the page's gallery/Files inputs carry `multiple`
+     *  (owner 2026-08-04: more than one image/file may go to the PC at once). */
+    private val multiPicker =
+        registerForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
+            fileCallback?.onReceiveValue(uris?.toTypedArray() ?: arrayOf())
+            fileCallback = null
+        }
+
+    /** Camera capture for the page's `capture` input: the shot lands in this
+     *  app's cache via FileProvider — no gallery detour, no storage permission. */
+    private var cameraUri: Uri? = null
+    private val cameraShot =
+        registerForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
+            val uri = cameraUri
+            fileCallback?.onReceiveValue(if (ok && uri != null) arrayOf(uri) else arrayOf())
+            fileCallback = null
+            cameraUri = null
+        }
+
+    /** CAMERA is declared in the manifest (the QR scanner), so the capture
+     *  intent legally REQUIRES the runtime grant too. */
+    private val cameraPermission =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            if (granted) launchCamera()
+            else {
+                fileCallback?.onReceiveValue(arrayOf())
+                fileCallback = null
+            }
+        }
+
+    private val audioPermission =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            if (granted) beginListening() else voiceEnd("denied")
+        }
+
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -163,8 +206,89 @@ class MainActivity : AppCompatActivity() {
     override fun onDestroy() {
         connectivity?.unregisterNetworkCallback(netCallback)
         connectivity = null
+        recognizer?.destroy()
+        recognizer = null
         handler.removeCallbacksAndMessages(null)
         super.onDestroy()
+    }
+
+    // ── Voice input (owner 2026-08-04: the Mic button listens DIRECTLY) ──
+    // The page cannot (WebView has no Speech API); SpeechRecognizer here
+    // listens in place — no keyboard, no separate Google screen. One round
+    // ends at silence; the page restarts rounds while its Mic switcher is ON.
+
+    private var recognizer: SpeechRecognizer? = null
+
+    private fun beginListening() {
+        if (!SpeechRecognizer.isRecognitionAvailable(this)) {
+            voiceEnd("unavailable")
+            return
+        }
+        val r = recognizer ?: SpeechRecognizer.createSpeechRecognizer(this).also { rec ->
+            rec.setRecognitionListener(object : RecognitionListener {
+                override fun onResults(results: Bundle?) {
+                    val text = results
+                        ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                        ?.firstOrNull()
+                    if (!text.isNullOrBlank()) {
+                        web.evaluateJavascript(
+                            "window.__voiceResult && __voiceResult(${JSONObject.quote(text)})",
+                            null
+                        )
+                    }
+                    voiceEnd("")
+                }
+
+                override fun onError(error: Int) {
+                    // NO_MATCH / SPEECH_TIMEOUT are a quiet room, not failures
+                    // — the page simply starts the next round while ON.
+                    voiceEnd(
+                        if (error == SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS) "denied"
+                        else ""
+                    )
+                }
+
+                override fun onReadyForSpeech(params: Bundle?) {}
+                override fun onBeginningOfSpeech() {}
+                override fun onRmsChanged(rmsdB: Float) {}
+                override fun onBufferReceived(buffer: ByteArray?) {}
+                override fun onEndOfSpeech() {}
+                override fun onPartialResults(partialResults: Bundle?) {}
+                override fun onEvent(eventType: Int, params: Bundle?) {}
+            })
+            recognizer = rec
+        }
+        r.startListening(
+            Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                putExtra(
+                    RecognizerIntent.EXTRA_LANGUAGE_MODEL,
+                    RecognizerIntent.LANGUAGE_MODEL_FREE_FORM
+                )
+                putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false)
+            }
+        )
+    }
+
+    /** One listening round is over — the page decides whether to restart. */
+    private fun voiceEnd(reason: String) {
+        if (::web.isInitialized) {
+            web.evaluateJavascript("window.__voiceEnd && __voiceEnd('$reason')", null)
+        }
+    }
+
+    private fun launchCamera() {
+        val dir = File(cacheDir, "camera").apply { mkdirs() }
+        val file = File(dir, "shot.jpg")
+        val uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", file)
+        cameraUri = uri
+        try {
+            cameraShot.launch(uri)
+        } catch (e: Exception) {
+            // no camera app at all — hand back an empty pick, the page toasts
+            fileCallback?.onReceiveValue(arrayOf())
+            fileCallback = null
+            cameraUri = null
+        }
     }
 
     /** Probes /ping on every stored address in parallel and loads the first
@@ -523,6 +647,24 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        /** The page's Mic switcher (owner 2026-08-04): start one listening
+         *  round. Results/round-end come back via __voiceResult/__voiceEnd;
+         *  the page restarts rounds while its switcher stays ON. */
+        @JavascriptInterface
+        fun startVoice() {
+            runOnUiThread {
+                if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) ==
+                    PackageManager.PERMISSION_GRANTED
+                ) beginListening()
+                else audioPermission.launch(Manifest.permission.RECORD_AUDIO)
+            }
+        }
+
+        @JavascriptInterface
+        fun stopVoice() {
+            runOnUiThread { recognizer?.cancel() }
+        }
+
         /** Update tap: open /app.apk (on the SAME PC) in the system browser —
          *  it downloads and Android installs over this app (same signature).
          *  The WebView itself has no download pipeline; the browser here is
@@ -602,7 +744,21 @@ class MainActivity : AppCompatActivity() {
         ): Boolean {
             fileCallback?.onReceiveValue(arrayOf())
             fileCallback = filePathCallback
-            filePicker.launch("image/*")
+            // The page's inputs say what they want (owner 2026-08-04):
+            // capture -> the camera itself; multiple -> multi-select picker;
+            // otherwise a single pick of the input's accept type.
+            val accept = fileChooserParams.acceptTypes
+                ?.firstOrNull { !it.isNullOrBlank() } ?: "*/*"
+            when {
+                fileChooserParams.isCaptureEnabled ->
+                    if (checkSelfPermission(Manifest.permission.CAMERA) ==
+                        PackageManager.PERMISSION_GRANTED
+                    ) launchCamera()
+                    else cameraPermission.launch(Manifest.permission.CAMERA)
+                fileChooserParams.mode == FileChooserParams.MODE_OPEN_MULTIPLE ->
+                    multiPicker.launch(accept)
+                else -> filePicker.launch(accept)
+            }
             return true
         }
     }
