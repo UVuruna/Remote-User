@@ -300,7 +300,11 @@ function layRow(label, icon, selected, onTap, aspectBtn) {
 }
 
 function ratioLabel(lay) {
-  return lay.ratio ? `${lay.ratio[0]}:${lay.ratio[1]}` : "Screen";
+  if (!lay.ratio) return "Screen";
+  // The stored ratio is FINE-GRAINED (see the aspect panel: w is sent on a
+  // 1000-scale), so it is labelled by its closest small pair, not printed raw.
+  const [n, d] = ratioPair(lay.ratio[0] / lay.ratio[1], 40);
+  return `${n}:${d}`;
 }
 
 function openLayoutPicker() {
@@ -363,24 +367,41 @@ function devicePair(orient) {
   return orient === "portrait" ? [n, d] : [d, n];
 }
 
-let aspecting = null; // {index, dev:[W,H], val:[W,H], portrait}
+// The panel works on a CONTINUOUS ratio, not on whole units of the device pair
+// (owner 2026-08-04): the pair is a coarse approximation of the screen (a
+// tablet reduces to 7:5), so stepping it by one unit jumped in ~14% chunks and
+// 8:5 was simply unreachable. The state is the plain number W/H; the W:H
+// fields are only a readable rendering of it, and both are freely typeable.
+// The ONE rule survives: the region may only shrink INWARD from the free axis
+// — wide keeps the full height (top/bottom edges pinned), portrait keeps the
+// full width (left/right edges pinned).
+const ASP_MIN_FRAC = 0.15; // never let the region collapse to a slit
+const ASP_SCALE = 1000;    // ratios are sent as round(a * 1000) : 1000
+
+let aspecting = null; // {index, portrait, devA, a, els}
 
 function openAspectPanel(index) {
   const lay = layouts[index];
   if (!lay) return;
   const portrait = lay.orient === "portrait";
   const dev = devicePair(lay.orient);
-  // An existing override only ever shrank the free axis, so it is re-read on
-  // the device's own scale; anything larger is clamped back to the screen.
-  let val = dev.slice();
-  if (lay.ratio) {
-    const a = lay.ratio[0] / lay.ratio[1];
-    val = portrait
-      ? [dev[0], Math.max(1, Math.min(dev[1], Math.round(dev[0] / a)))]
-      : [Math.max(1, Math.min(dev[0], Math.round(dev[1] * a))), dev[1]];
-  }
-  aspecting = { index, dev, val, portrait };
+  const devA = dev[0] / dev[1];
+  aspecting = { index, portrait, devA, a: devA };
+  if (lay.ratio && lay.ratio[1] > 0) aspecting.a = clampAspect(lay.ratio[0] / lay.ratio[1]);
   renderAspectPanel();
+}
+
+// Fraction of the free axis the region currently uses (1 = the whole screen).
+function aspFrac(a) {
+  const s = aspecting;
+  return s.portrait ? s.devA / a : a / s.devA;
+}
+
+function clampAspect(a) {
+  const s = aspecting;
+  if (!Number.isFinite(a) || a <= 0) return s.devA;
+  const f = Math.min(1, Math.max(ASP_MIN_FRAC, aspFrac(a)));
+  return s.portrait ? s.devA / f : s.devA * f;
 }
 
 function renderAspectPanel() {
@@ -399,7 +420,9 @@ function renderAspectPanel() {
     (a.portrait ? "full width, free height" : "full height, free width");
   card.append(h, sub);
 
-  // W : H — the pinned side is locked, the free side is typed or dragged.
+  // W : H — BOTH are typeable now (owner 2026-08-04: "8:5" must be reachable
+  // by typing it). Whatever pair is typed becomes the ratio, clamped by the
+  // one rule; the fields are only refreshed while they are not being edited.
   const fields = document.createElement("div");
   fields.className = "asp-fields";
   const inW = document.createElement("input");
@@ -408,20 +431,17 @@ function renderAspectPanel() {
     el.type = "number";
     el.inputMode = "numeric";
     el.min = "1";
-  });
-  inW.value = a.val[0];
-  inH.value = a.val[1];
-  inW.max = String(a.dev[0]);
-  inH.max = String(a.dev[1]);
-  inW.disabled = a.portrait;
-  inH.disabled = !a.portrait;
-  const free = a.portrait ? inH : inW;
-  const freeIdx = a.portrait ? 1 : 0;
-  free.addEventListener("input", () => {
-    const n = parseInt(free.value, 10);
-    if (!Number.isFinite(n)) return;
-    a.val[freeIdx] = Math.max(1, Math.min(a.dev[freeIdx], n));
-    updateAspectPreview();
+    el.addEventListener("input", () => {
+      const w = parseFloat(inW.value);
+      const h = parseFloat(inH.value);
+      if (!(w > 0) || !(h > 0)) return;
+      a.a = clampAspect(w / h);
+      a.typing = el;
+      updateAspectPreview();
+      a.typing = null;
+    });
+    // Leaving the field snaps its text back onto the (possibly clamped) value.
+    el.addEventListener("blur", updateAspectPreview);
   });
   const wLbl = document.createElement("b");
   wLbl.textContent = "W";
@@ -438,7 +458,7 @@ function renderAspectPanel() {
   prev.className = "asp-prev";
   const screenBox = document.createElement("div");
   screenBox.className = "asp-screen";
-  screenBox.style.aspectRatio = `${a.dev[0]} / ${a.dev[1]}`;
+  screenBox.style.aspectRatio = `${a.devA} / 1`;
   if (a.portrait) screenBox.style.height = "100%";
   else screenBox.style.width = "100%";
   const region = document.createElement("div");
@@ -447,10 +467,12 @@ function renderAspectPanel() {
     const dot = document.createElement("i");
     const isFree = a.portrait ? (side === "t" || side === "b") : (side === "l" || side === "r");
     dot.className = `asp-h ${side}${isFree ? " free" : ""}`;
-    if (isFree) dragHandle(dot, screenBox);
     region.appendChild(dot);
   });
   screenBox.appendChild(region);
+  // The WHOLE preview drags, not just the two 18px dots — on a tablet those
+  // dots were nearly unhittable, which is what read as "barely responsive".
+  dragAspect(screenBox);
   prev.appendChild(screenBox);
   card.appendChild(prev);
 
@@ -461,15 +483,21 @@ function renderAspectPanel() {
   const actions = document.createElement("div");
   actions.className = "lay-actions";
   actions.appendChild(layChip("Screen", false, () => {
-    a.val = a.dev.slice();
-    renderAspectPanel();
+    a.a = a.devA;
+    updateAspectPreview();
   }));
   actions.appendChild(layChip("Cancel", false, () => {
     aspecting = null;
     openLayoutPicker(); // back one step, not out of the layouts entirely
   }));
   actions.appendChild(layChip("Apply", true, () => {
-    send({ type: "layout_aspect", index: a.index, w: a.val[0], h: a.val[1] });
+    // The full screen is "no override" (0/0); anything else goes as a fine
+    // 1000-scale pair, so the server region is exactly what the preview showed.
+    const full = aspFrac(a.a) > 0.999;
+    send({
+      type: "layout_aspect", index: a.index,
+      w: full ? 0 : Math.round(a.a * ASP_SCALE), h: full ? 0 : ASP_SCALE,
+    });
     aspecting = null;
     closeLayoutPanel();
     showLayLoading("Reshaping the layout…");
@@ -484,33 +512,38 @@ function renderAspectPanel() {
 function updateAspectPreview() {
   const a = aspecting;
   if (!a || !a.els) return;
-  a.els.inW.value = a.val[0];
-  a.els.inH.value = a.val[1];
-  a.els.region.style.width = a.portrait ? "100%" : `${(a.val[0] / a.dev[0]) * 100}%`;
-  a.els.region.style.height = a.portrait ? `${(a.val[1] / a.dev[1]) * 100}%` : "100%";
-  a.els.value.textContent =
-    `${(a.val[0] / a.val[1]).toFixed(3)}:1   (${a.val[0]}:${a.val[1]})`;
+  const [n, d] = ratioPair(a.a, 40);
+  if (a.typing !== a.els.inW) a.els.inW.value = n;
+  if (a.typing !== a.els.inH) a.els.inH.value = d;
+  const pct = `${aspFrac(a.a) * 100}%`;
+  a.els.region.style.width = a.portrait ? "100%" : pct;
+  a.els.region.style.height = a.portrait ? pct : "100%";
+  a.els.value.textContent = `${a.a.toFixed(3)}:1   (${n}:${d})`;
 }
 
-// Dragging a free-axis handle resizes the preview symmetrically around the
-// centre — the region is always centred on the monitor, so the handle can
-// only ever pull the region IN from both sides at once.
-function dragHandle(dot, screenBox) {
-  dot.addEventListener("pointerdown", (e) => {
-    e.preventDefault();
-    dot.setPointerCapture(e.pointerId);
-  });
-  dot.addEventListener("pointermove", (e) => {
-    if (!dot.hasPointerCapture(e.pointerId)) return;
+// Dragging anywhere in the preview resizes the region symmetrically around the
+// centre — the region is always centred on the monitor, so a drag can only
+// ever pull it IN from both sides at once. The motion is continuous: the ratio
+// follows the finger pixel by pixel, with no whole-unit steps to snap to.
+function dragAspect(screenBox) {
+  const apply = (e) => {
     const a = aspecting;
     if (!a) return; // the panel closed under a captured pointer
     const r = screenBox.getBoundingClientRect();
-    const frac = a.portrait
+    const raw = a.portrait
       ? Math.abs(e.clientY - (r.top + r.height / 2)) * 2 / r.height
       : Math.abs(e.clientX - (r.left + r.width / 2)) * 2 / r.width;
-    const i = a.portrait ? 1 : 0;
-    a.val[i] = Math.max(1, Math.min(a.dev[i], Math.round(frac * a.dev[i])));
+    const frac = Math.min(1, Math.max(ASP_MIN_FRAC, raw)); // never divide by 0
+    a.a = a.portrait ? a.devA / frac : a.devA * frac;
     updateAspectPreview();
+  };
+  screenBox.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    screenBox.setPointerCapture(e.pointerId);
+    apply(e);
+  });
+  screenBox.addEventListener("pointermove", (e) => {
+    if (screenBox.hasPointerCapture(e.pointerId)) apply(e);
   });
 }
 

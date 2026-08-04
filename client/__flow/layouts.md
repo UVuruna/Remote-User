@@ -58,16 +58,14 @@ Pseudocode:
 
 ```mermaid
 flowchart TB
-    OPEN[tap a layout's ratio button] --> DEV[devicePair orient:\nscreen sides → small ints, e.g. 9:20]
-    DEV --> PIN{layout orientation}
-    PIN -- portrait --> PW[W locked = devW\nH free, 1..devH]
-    PIN -- wide --> PH[H locked = devH\nW free, 1..devW]
-    PW --> EDIT
-    PH --> EDIT[type the free field\nOR drag its handle]
-    EDIT --> PREV[preview only —\nnothing moves on the PC]
-    PREV --> APPLY[Apply] --> SEND[send layout_aspect index,w,h]
+    OPEN[tap a layout's ratio button] --> DEV[devicePair orient → devA = W/H\nthe phone's own shape as one number]
+    DEV --> STATE[state a = devA\nor the layout's stored ratio]
+    STATE --> EDIT[drag anywhere in the preview — continuous\nOR type either W / H field]
+    EDIT --> CLAMP[clampAspect: shrink-only side\nportrait a ≥ devA · wide a ≤ devA\nfloor ASP_MIN_FRAC]
+    CLAMP --> PREV[preview only —\nnothing moves on the PC\nfields show ratioPair a]
+    PREV --> APPLY[Apply] --> SEND[send layout_aspect index,\nround a×1000 : 1000\nfull screen → 0,0]
     SEND --> LOAD[showLayLoading 'Reshaping the layout…']
-    PREV --> RESET[Screen] --> DEFAULT[val = device pair\nApply sends the device shape]
+    PREV --> RESET[Screen] --> DEFAULT[a = devA\nApply sends 0,0 = no override]
 ```
 
 The rule the panel enforces, and the server enforces again

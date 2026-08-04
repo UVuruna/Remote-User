@@ -639,9 +639,13 @@ body.hidden-controls #update-banner { display: none; }
   max-height: 100%;
   border: 1px dashed var(--text-secondary);
   border-radius: 4px;
+  /* The whole box is the drag surface (owner 2026-08-04) — `none` so a drag
+     never turns into a page scroll mid-gesture. */
+  touch-action: none;
 }
 .asp-region {
   position: absolute;
+  pointer-events: none; /* the drag is captured by the screen box itself */
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
