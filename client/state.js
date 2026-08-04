@@ -74,6 +74,13 @@ let layouts = [];
 let layoutActive = null; // index into layouts, null = full desktop
 let layoutRegion = null; // {x,y,w,h} monitor-normalized, null on desktop
 let layoutArm = false;   // one-shot: the next canvas tap picks a window
+// The layout to RE-FOCUS after a reconnect that reset to desktop (owner
+// 2026-08-04: any excursion — gallery pick, a permission dialog — hides the
+// page, the socket closes by rule, and the fresh connection's server-side
+// focus starts at desktop; the app must come back into the layout it was
+// in). Armed by every layout_state that carries a focus; cleared by a
+// DELIBERATE focus change/removal the user sends (see send() below).
+let layoutRestore = null; // {index, name} or null
 
 function viewLocked() {
   return layoutRegion !== null;
@@ -107,6 +114,10 @@ function toCanvasPx(e) {
 }
 
 function send(msg) {
+  // A DELIBERATE focus change or removal voids the auto-refocus — only a
+  // reconnect may restore a layout, never a user's explicit choice of the
+  // desktop. (A focus of a real index re-arms via its layout_state reply.)
+  if (msg.type === "layout_focus" || msg.type === "layout_remove") layoutRestore = null;
   if (ws && ws.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify(msg));
     return;
