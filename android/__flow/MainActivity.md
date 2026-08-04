@@ -32,7 +32,7 @@ flowchart TB
     PROBE --> STALE{activity finishing/destroyed\nOR epoch != resolveEpoch?}
     STALE -- yes --> DISCARD[[discard — a newer resolveAndLoad superseded this one]]
     STALE -- no --> CHOSEN{any candidate answered 204?}
-    CHOSEN -- no --> ERRCARD[show error card]
+    CHOSEN -- no --> ERRCARD[showErrorCard — diagnose the cause, see below]
     ERRCARD --> RETRY[scheduleRetry epoch]
     RETRY -.4s later, if epoch still current\nAND card still visible.-> START
     CHOSEN -- "yes — first match in LAN-first order" --> FOREIGN{chosen == Tailscale AND\nchosen != LAN AND onWifi?}
@@ -90,6 +90,47 @@ Pseudocode (language-neutral):
             IF epoch == resolveEpoch AND activity alive AND error card still visible:
                 resolveAndLoad(silent = true)
             # else: a newer call, a manual retry, or the card closing already voided this timer
+
+## Algorithm — what the error card says (`classifyFailure`)
+
+One generic "Try again" message covered five different causes (owner report
+2026-08-04). The everyday one — phone away from the home Wi-Fi with Tailscale
+switched off — is precisely the one where Try again can NEVER work and the
+fix is two taps away in another app. The card is now rendered per cause, and
+its primary button IS the fix.
+
+```mermaid
+flowchart TB
+    IN[no stored address answered /ping] --> NET{active network with\nINTERNET capability?}
+    NET -- no --> A["NO_NET — 'This phone has no internet'\nbutton: Try again"]
+    NET -- yes --> TSURL{Prefs.tsUrl == null?\n(PC never reported a tunnel address)}
+    TSURL -- yes --> B["PC_NO_TUNNEL — 'Turn Tailscale on — on the PC'\nbutton: Try again"]
+    TSURL -- no --> INST{getLaunchIntentForPackage\ncom.tailscale.ipn == null?}
+    INST -- yes --> C["TS_MISSING — 'One app is missing: Tailscale'\nbutton: Install Tailscale → Play Store"]
+    INST -- no --> VPN{default network is a VPN?\nTRANSPORT_VPN or not NOT_VPN}
+    VPN -- no --> D["TS_OFF — 'Tailscale is off'\nbutton: Turn Tailscale on → opens the app"]
+    VPN -- yes --> E["PC_DOWN — 'Cannot reach the PC'\nbutton: Try again"]
+```
+
+The card is re-rendered on EVERY failed resolve, so it follows the phone's
+state live: flip the tunnel on and the next 4 s round moves the text from
+"Tailscale is off" to "the PC is not answering" — or, normally, loads the
+session and the card disappears. Nothing here replaces the self-healing: the
+network callback fires the moment the VPN comes up, so a user who turns
+Tailscale on and switches back finds the session already loading — the
+button exists to get them INTO Tailscale, not to reconnect.
+
+Honest limits, both accepted deliberately:
+- Android exposes no "is Tailscale connected" API — only "some VPN is up".
+  Another VPN running with Tailscale off reads as `PC_DOWN`.
+- Telling the home Wi-Fi from a foreign one would need the location
+  permission just to read an SSID. So `TS_OFF` also catches "at home,
+  Tailscale off, PC asleep" — its copy says exactly that, and turning the
+  tunnel on is the only move the phone has in either case.
+- Android gives no way to flip another app's VPN switch, so `openTailscale()`
+  opens Tailscale and the card's text names the one control to press.
+  Package visibility (`<queries>` in the manifest) is what makes the
+  installed/not-installed distinction readable at all on Android 11+.
 
 ## Why the epoch counter exists
 

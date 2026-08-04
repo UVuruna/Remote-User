@@ -45,7 +45,11 @@
             android:textSize="14sp" />
     </LinearLayout>
 
-    <!-- Shown only when the main frame fails to load (PC off / wrong network) -->
+    <!-- Shown only when no stored address answers. Title, body and the primary
+         button are all set from code per diagnosed cause (MainActivity.Fail) —
+         the values below are the "PC is down" state, which is also what the
+         card falls back to. -->
+
     <LinearLayout
         android:id="@+id/error_view"
         android:layout_width="match_parent"
@@ -58,6 +62,7 @@
         android:visibility="gone">
 
         <TextView
+            android:id="@+id/error_title"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="@string/error_title"
@@ -66,6 +71,7 @@
             android:textStyle="bold" />
 
         <TextView
+            android:id="@+id/error_body"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="6dp"
@@ -74,7 +80,7 @@
             android:textSize="14sp" />
 
         <Button
-            android:id="@+id/btn_retry"
+            android:id="@+id/btn_action"
             android:layout_width="match_parent"
             android:layout_height="50dp"
             android:layout_marginTop="16dp"
