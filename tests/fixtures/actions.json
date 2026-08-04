@@ -8,18 +8,28 @@
       "buttons": [
         { "action": "click" },
         { "action": "right" },
-        { "action": "drag" },
+        { "action": "middle" },
         { "action": "scroll" }
       ]
     },
     {
-      "name": "Keys",
+      "name": "Input",
       "icon": "keyboard",
       "buttons": [
         { "action": "keyboard" },
-        { "label": "Enter", "key": "enter" },
-        { "label": "Esc", "chord": "escape" },
-        { "label": "Tab", "chord": "tab" }
+        { "action": "enter" },
+        { "action": "esc" },
+        { "action": "mic" }
+      ]
+    },
+    {
+      "name": "Edit",
+      "icon": "edit",
+      "buttons": [
+        { "label": "All",   "icon": "selall", "chord": "ctrl+a" },
+        { "label": "Copy",  "icon": "copy",   "chord": "ctrl+c" },
+        { "label": "Cut",   "icon": "cut",    "chord": "ctrl+x" },
+        { "label": "Paste", "icon": "paste",  "chord": "ctrl+v" }
       ]
     }
   ]

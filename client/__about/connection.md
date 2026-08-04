@@ -40,8 +40,9 @@ every other script must already be loaded by this point (and is, since
     every stream restart.
   - `cursor` — updates `cursorPos` (server-authoritative correction of the
     client's optimistic draw).
-  - `actions` — replaces `categories`/`groups` and re-renders both D-pad
-    groups.
+  - `actions` — replaces `categories`/`appSets`/`groups` and re-renders both
+    D-pad groups via `refreshCategories()`; `layout_state` calls it too —
+    app-aware sets appear/vanish with layout focus (owner 2026-08-04).
   - `toast` — shows a status-pill notice.
 - `onmessage` (binary) — H.264: pushed into `mseQueue` + `pumpMse()`; JPEG:
   handed to `onFrame()`.

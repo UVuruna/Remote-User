@@ -8,14 +8,26 @@ The two D-pad groups on the tablet are defined entirely by [actions.json](action
 - **Landscape:** each group is a D-pad cross (up / left / right / down) around a small centre button.
 - **Portrait:** the four buttons stack in a column.
 - The small **centre button** (dashed) opens the **category wheel**: tap it, tap the category you want, or tap the centre **✕** to cancel. Each group switches independently.
-- Top-left **Move** (pan the view, no click) and top-right **Hide** (hide all controls) are fixed, not part of the categories.
+- Top-left **Layout (+)** (pick a window for a new layout) and top-right **Hide** (hide all controls) are fixed, not part of the categories.
+
+## Shipped categories (owner set 2026-08-04)
+
+- **Mouse** — Click / Right / Middle (CLICK/HOLD buttons, see below) + Scroll (mode toggle).
+- **Input** — Keys (keyboard toggle) / Enter / Esc / Mic (direct voice input).
+- **Attach** — Gallery / Shot (PC screenshot of the viewed region) / Camera / Files — every source ends as a paste on the PC.
+- **Edit** — All / Copy / Cut / Paste (chords with icons).
+- **Settings** — Monitor switch / next_input / quality / anywhere.
+
+`Zones` is no longer shipped — zone chords are a **custom** category the owner
+adds when wanted (this file is hand-editable; a future desktop editor will
+manage names/icons/shortcuts per zone).
 
 ## Format
 
 ```json
 {
   "left": 0,
-  "right": 2,
+  "right": 1,
   "categories": [
     {
       "name": "Mouse",
@@ -23,7 +35,7 @@ The two D-pad groups on the tablet are defined entirely by [actions.json](action
       "buttons": [
         { "action": "click" },
         { "action": "right" },
-        { "action": "drag" },
+        { "action": "middle" },
         { "action": "scroll" }
       ]
     },
@@ -31,8 +43,16 @@ The two D-pad groups on the tablet are defined entirely by [actions.json](action
       "name": "Edit",
       "icon": "edit",
       "buttons": [
-        { "label": "Copy", "chord": "ctrl+c" }
+        { "label": "Copy", "icon": "copy", "chord": "ctrl+c" }
       ]
+    }
+  ],
+  "app_sets": [
+    {
+      "process": "code",
+      "name": "VSCode",
+      "icon": "newwin",
+      "buttons": [ { "label": "Sidebar", "chord": "ctrl+b" } ]
     }
   ]
 }
@@ -40,39 +60,54 @@ The two D-pad groups on the tablet are defined entirely by [actions.json](action
 
 - **left / right** — index of the category each group shows on connect.
 - **name** — the category label (centre button + wheel).
-- **icon** — one of: `mouse`, `edit`, `keyboard`, `monitor`, `grid`, `snap`, `click`, `right`, `drag`, `scroll`, `settings`, `target`, `globe`.
+- **icon** — one of: `mouse`, `edit`, `keyboard`, `monitor`, `monitor2`, `grid`, `snap`, `click`, `middle`, `right`, `drag`, `scroll`, `settings`, `target`, `globe`, `mic`, `enter`, `esc`, `attach`, `gallery`, `shot`, `folder`, `selall`, `copy`, `cut`, `paste`, `undo`, `redo`, `find`, `del`, `newwin`, `image`, `input`, `gauge`.
 - **buttons** — up to 4, placed in order **up · left · right · down**.
+
+## App-aware sets (`app_sets`)
+
+Sets that exist **only in layout focus** (owner decision 2026-08-04): when the
+focused layout's app matches `process` (case-insensitive substring of the
+process name, e.g. `"code"` → `Code.exe`), the set appears as an **extra
+category in the wheel** — nothing switches by itself, and it vanishes when the
+layout focus ends. Shipped: **VSCode** (Sidebar, Palette, Terminal, Find),
+**Chrome** (New tab, Close, Next tab, Address), **Explorer** (Rename, New dir,
+Delete, Up). Buttons use the same chord/key/icon format as categories.
 
 ## Button kinds
 
 A button is one of:
 
 - **Built-in action** — `{ "action": "<name>" }`, where `<name>` is:
-  - `click` — **the left click**: presses at the current cursor position (the finger only steers the cursor); press it twice fast for a double click.
-  - `right` — **the right click**: same as `click`, at the current cursor position. A press button, NOT a mode — nothing on the screen acts on a tap.
-  - `drag`, `scroll` — **mouse modes** (toggle on/off, only one active at a time, together with `Move`): the mode decides what one finger on the screen does — drag with left held / wheel. Default (no mode) = the finger only moves the PC cursor, it never clicks. Two fingers always pinch-zoom.
-  - `keyboard` — toggle the phone keyboard; what you type/dictate lands in the focused box on the PC screen itself (no mirror bar). The keyboard's ↵ makes a new row (never "send"); the real Enter is its own button (see `key`).
-  - `upload` — pick an image from the phone (gallery/camera); the server pastes it into the focused box on the PC by itself.
-  - `monitor` — switch the streamed monitor.
-  - `snap` — screenshot the PC monitor into the PC clipboard (available in config; not in the default layout).
-  - `next_input` — jump keyboard focus to the NEXT text-input box (built for dictation: navigate between fields without the mouse). On the full desktop it cycles the boxes of every visible window; in layout focus, only that layout's. Shipped in the **Settings** category.
-  - `quality` — cycle the stream quality: full → reduced (half resolution, ~10 fps — saves mobile data) → auto (reduced only on mobile data). Shipped in the **Settings** category.
-  - `anywhere` — open the "use from anywhere" wizard (Tailscale setup). The banner offers it by itself only once per device; this button is the permanent way back in. Shipped in the **Settings** category.
-  - `calibrate` — retired (the pointer sits exactly under the finger since 2026-08-02); the button only explains that it is no longer needed.
-- **Chord** — `{ "label": "Copy", "chord": "ctrl+c" }` — fires a key combination (see below).
-- **Special key** — `{ "label": "Esc", "key": "escape" }` — a single structural key.
+  - `click`, `right`, `middle` — **CLICK/HOLD mouse buttons** (owner 2026-08-04, like a real mouse): a tap is a click at the current cursor position (the finger only steers the cursor); **keeping the finger on the button holds the PC button down** — steer with the other hand to drag/select, lift to release. Press twice fast for a double click.
+  - `scroll`, `drag` — **mouse modes** (toggle on/off, one active at a time): the mode decides what one finger on the screen does. Default (no mode) = the finger only moves the PC cursor. Two fingers always pinch-zoom. (`drag` is redundant with holding `click` and is not shipped.)
+  - `keyboard` — toggle the phone keyboard; typing/dictation lands in the focused box on the PC. **A tap on the stream switches it OFF by itself** (owner 2026-08-04). The keyboard's ↵ makes a new row (never "send"); the real Enter is its own button.
+  - `enter`, `esc` — press the real Enter/Escape **and switch keyboard + mic OFF first** (owner 2026-08-04).
+  - `mic` — **direct voice input** (no keyboard detour): the app listens via Android speech recognition and types what you say into the focused PC box. A toggle like the keyboard; only one of mic/keyboard is ever ON; a tap on the stream switches it off. First use asks the microphone permission once.
+  - `gallery` — pick image(s) from the phone gallery (more than one allowed). One image pastes as a picture; several paste as **files**.
+  - `camera` — open the camera, take a shot, paste it on the PC.
+  - `files` — pick any file(s) (PDF…); pasted on the PC as **real files** (like Copy in Explorer).
+  - `pcshot` — **Shot**: screenshot of exactly the REGION the phone is viewing (zoomed part / focused layout — never the whole desktop), pasted into the focused PC box.
+  - `upload` — legacy single-image pick (kept for hand-edited files; `gallery` replaces it).
+  - `monitor` — switch the streamed monitor (shipped in **Settings**).
+  - `snap` — full-monitor screenshot into the PC clipboard only (no paste; not in the default layout).
+  - `next_input` — jump keyboard focus to the NEXT text-input box (dictation workflow). Full desktop = every visible window; layout focus = only that layout's. Shipped in **Settings**.
+  - `quality` — cycle stream quality: full → reduced → auto-on-mobile-data. Shipped in **Settings**.
+  - `anywhere` — open the "use from anywhere" wizard (Tailscale setup). Shipped in **Settings**.
+  - `calibrate` — retired (the pointer sits exactly under the finger since 2026-08-02).
+- **Chord** — `{ "label": "Copy", "chord": "ctrl+c" }` — fires a key combination (see below). An optional `"icon"` from the list above gives it an icon face.
+- **Special key** — `{ "label": "Esc", "key": "escape" }` — a single structural key; `"icon"` works here too.
 
 ## Chord syntax
 
 `modifier+…+key` — modifiers held while the last key is tapped.
 
 - **Modifiers:** `ctrl`, `alt`, `shift`, `win`
-- **Keys:** letters, digits, `f1`–`f24`, or named: `enter`, `esc`, `tab`, `space`, `backspace`, `delete`, `insert`, `home`, `end`, `pageup`, `pagedown`, `left`, `up`, `right`, `down`
+- **Keys:** letters, digits, `f1`–`f24`, `` ` `` (backquote), or named: `enter`, `esc`, `tab`, `space`, `backspace`, `delete`, `insert`, `home`, `end`, `pageup`, `pagedown`, `left`, `up`, `right`, `down`
 
-Examples: `ctrl+c` · `alt+tab` · `ctrl+win+alt+1` · `shift+enter` · `win`
+Examples: `ctrl+c` · `alt+tab` · `ctrl+win+alt+1` · `shift+enter` · `win` · ``ctrl+` ``
 
 An unrecognised chord is logged on the server and does nothing — never a half-pressed key.
 
 ## Your custom categories
 
-The shipped `Zones` category maps `ctrl+win+alt+1..4` (FancyZones presets). The shipped `Settings` category holds `next_input` (jump to the next text box), `quality` (stream quality cycle) and `anywhere` (the Tailscale wizard) — the home for on-device options. Add or rearrange categories freely — this file is yours to hand-edit; to move a button between categories, just move its JSON entry.
+Add or rearrange categories freely — this file is yours to hand-edit; to move a button between categories, just move its JSON entry. Old favourites that left the defaults (`Alt+Tab`, `Win`, zone chords) are one JSON entry away.

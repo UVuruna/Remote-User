@@ -173,6 +173,15 @@ html, body {
   transform: scale(1.06);
 }
 
+/* A CLICK/HOLD mouse button while the finger keeps it pressed — the PC
+   button is DOWN right now (drag in progress), so the glow must differ from
+   a latched toggle only in feel, not meaning: pressed-in, not switched-on. */
+.ctl.held {
+  color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-glow), 0 0 14px var(--accent-glow);
+  transform: scale(0.94);
+}
+
 /* The category button is smaller — used only when switching presets */
 .ctl.cat {
   width: 42px;
