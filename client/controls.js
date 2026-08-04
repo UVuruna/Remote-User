@@ -519,11 +519,21 @@ keepFocus(hideBtn, () => {
 
 // --- Toast ----------------------------------------------------------------
 
+// A toast borrows the status pill. When it expires the pill must simply FADE
+// OUT — going straight back to the "connected" state flashed a blue
+// "Connected" pill after every toast (owner 2026-08-04), because that state's
+// opacity:0 is reached through a 0.4 s transition while its blue background
+// applies instantly. So the amber pill fades in place first, and only the
+// invisible pill is switched back to the connected state.
 let toastTimer = null;
+let toastFadeTimer = null;
 function showToast(text) {
-  setStatus("connecting", text);
+  setStatus("connecting", text);   // clears .fade — a new toast always shows
   clearTimeout(toastTimer);
+  clearTimeout(toastFadeTimer);
   toastTimer = setTimeout(() => {
-    if (ws && ws.readyState === WebSocket.OPEN) setStatus("connected", "Connected");
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;  // not connected: the real state must stay visible
+    statusEl.classList.add("fade");
+    toastFadeTimer = setTimeout(() => setStatus("connected", "Connected"), 450);
   }, 2500);
 }
