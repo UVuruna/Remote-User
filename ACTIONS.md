@@ -13,7 +13,7 @@ The two D-pad groups on the tablet are defined entirely by [actions.json](action
 ## Shipped categories (owner set 2026-08-04)
 
 - **Mouse** — Click / Right / Middle (CLICK/HOLD buttons, see below) + Scroll (mode toggle).
-- **Input** — Keys (keyboard toggle) / Enter / Esc / Mic (direct voice input).
+- **Input** — Keys (keyboard toggle) / Enter / New row / Mic (direct voice input). New row replaced Esc in the defaults (owner 2026-08-04 — dictation has no keyboard, so line breaks need a button; Esc stays available as `{ "action": "esc" }` for hand-edited files).
 - **Attach** — Gallery / Shot (PC screenshot of the viewed region) / Camera / Files — every source ends as a paste on the PC.
 - **Edit** — All / Copy / Cut / Paste (chords with icons).
 - **Settings** — Monitor switch / next_input / quality / anywhere.
@@ -81,7 +81,8 @@ A button is one of:
   - `click`, `right`, `middle` — **CLICK/HOLD mouse buttons** (owner 2026-08-04, like a real mouse): a tap is a click at the current cursor position (the finger only steers the cursor); **keeping the finger on the button holds the PC button down** — steer with the other hand to drag/select, lift to release. Press twice fast for a double click.
   - `scroll`, `drag` — **mouse modes** (toggle on/off, one active at a time): the mode decides what one finger on the screen does. Default (no mode) = the finger only moves the PC cursor. Two fingers always pinch-zoom. (`drag` is redundant with holding `click` and is not shipped.)
   - `keyboard` — toggle the phone keyboard; typing/dictation lands in the focused box on the PC. **A tap on the stream switches it OFF by itself** (owner 2026-08-04). The keyboard's ↵ makes a new row (never "send"); the real Enter is its own button.
-  - `enter`, `esc` — press the real Enter/Escape **and switch keyboard + mic OFF first** (owner 2026-08-04).
+  - `enter`, `esc` — press the real Enter/Escape **and switch keyboard + mic OFF first** (owner 2026-08-04). `esc` left the default layout (New row took its slot) but stays available here.
+  - `newrow` — Shift+Enter (a new line that never "sends"). Deliberately does NOT switch the mic/keyboard off — break the line mid-dictation and keep talking.
   - `mic` — **direct voice input** (no keyboard detour): the app listens via Android speech recognition and types what you say into the focused PC box. A toggle like the keyboard; only one of mic/keyboard is ever ON; a tap on the stream switches it off. First use asks the microphone permission once.
   - `gallery` — pick image(s) from the phone gallery (more than one allowed). One image pastes as a picture; several paste as **files**.
   - `camera` — open the camera, take a shot, paste it on the PC.

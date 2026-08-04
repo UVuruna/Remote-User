@@ -48,7 +48,9 @@ for the split's general load-order reasoning.
 - `BUILTINS` — the registry of built-in actions — label, icon, and dispatch
   kind. Kinds: `hold` (Click/Right/Middle — CLICK/HOLD mouse buttons),
   `mode` (scroll/drag toggles), `kb`, `mic`, `key-off` (enter/esc — switch
-  keyboard+mic OFF, then press the real key), `pick` (gallery/camera/files),
+  keyboard+mic OFF, then press the real key; `newrow` is deliberately a plain
+  `send` of shift+enter so a line break never interrupts dictation),
+  `pick` (gallery/camera/files),
   `shot` (region screenshot), `send`, `upload`, `calibrate`, `anywhere`,
   `quality`.
 - `holdButton(el, button)` — the CLICK/HOLD primitive (owner 2026-08-04):

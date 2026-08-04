@@ -18,7 +18,7 @@
       "buttons": [
         { "action": "keyboard" },
         { "action": "enter" },
-        { "action": "esc" },
+        { "action": "newrow" },
         { "action": "mic" }
       ]
     },
