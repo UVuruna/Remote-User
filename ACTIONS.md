@@ -16,21 +16,27 @@ The two D-pad groups on the tablet are defined entirely by [actions.json](action
 - **Input** — Keys (keyboard toggle) / Enter / New row / Mic (direct voice input). New row replaced Esc in the defaults (owner 2026-08-04 — dictation has no keyboard, so line breaks need a button; Esc stays available as `{ "action": "esc" }` for hand-edited files).
 - **Attach** — Gallery / Shot (PC screenshot of the viewed region) / Camera / Files — every source ends as a paste on the PC.
 - **Edit** — All / Copy / Cut / Paste (chords with icons).
+- **Navigate** — Esc / Prev (Shift+Tab) / Next (Tab) / Find (Ctrl+F) — moving between and closing UI elements (owner 2026-08-05: Esc proved essential in live use).
+- **Cursor** — Undo / ← / → / Redo — text-caret steps and edit history.
+- **Media** *(off by default)* — Play·Pause / Vol− / Vol+ / Mute (real media keys).
+- **Windows** *(off by default)* — Alt+Tab / Win / Desktop (Win+D) / Tasks (Win+Tab).
 - **Settings** — Monitor switch / Sets (the wheel picker) / quality / anywhere. `next_input` left the defaults 2026-08-05 (still available as an action).
 
-## Custom sets & the wheel (owner spec 2026-08-05)
+## The wheel (owner spec 2026-08-05, revised the same day)
 
-The five shipped categories are ALWAYS in the wheel. On top of them:
-- the **app set** appears while a matching layout is focused (so the wheel is
-  normally 5, six with an app set), and
-- up to **3 custom sets** — created in the desktop app (**Controls…** button;
-  end users never hand-edit files), stored under `"custom_sets"`: same shape
-  as a category plus `"enabled"` (shown-by-default flag).
-- Hard cap **8** in the wheel: a full house temporarily bumps custom sets
-  from the end while the app set is visible.
-- The phone's **Settings → Sets** picker chooses per device which custom sets
-  ride along (max 3) and whether app sets appear at all — stored on the
-  phone, overriding the desktop defaults.
+- **Mouse, Input and Settings are `"required"`** — always in the wheel, never
+  hideable (mouse + typing + the recovery/picker path must survive anything).
+- Every other shipped set (Edit, Attach, Navigate, Cursor, Media, Windows)
+  and every custom set is **toggleable**: `"enabled"` in the file is the
+  desktop default (`false` = off), the phone's **Settings → Sets** picker
+  overrides it per device.
+- **Custom sets** are created in the desktop app (**Controls…** button; end
+  users never hand-edit files), stored under `"custom_sets"` — same shape as
+  a category plus `"enabled"`.
+- The **app set** rides along while a matching layout is focused, and does
+  not charge against the picker's count.
+- Hard cap **8** in the wheel: over the cap, non-required sets are bumped
+  from the END (they return when the app set goes away).
 
 Any set (shipped or custom) may carry `"order_land"` / `"order_port"` — the
 button arrangement per orientation (indices into `buttons`; landscape slots
@@ -123,7 +129,7 @@ A button is one of:
 `modifier+…+key` — modifiers held while the last key is tapped.
 
 - **Modifiers:** `ctrl`, `alt`, `shift`, `win`
-- **Keys:** letters, digits, `f1`–`f24`, `` ` `` (backquote), or named: `enter`, `esc`, `tab`, `space`, `backspace`, `delete`, `insert`, `home`, `end`, `pageup`, `pagedown`, `left`, `up`, `right`, `down`
+- **Keys:** letters, digits, `f1`–`f24`, `` ` `` (backquote), or named: `enter`, `esc`, `tab`, `space`, `backspace`, `delete`, `insert`, `home`, `end`, `pageup`, `pagedown`, `left`, `up`, `right`, `down`, and the media keys `playpause`, `mute`, `volup`, `voldown`
 
 Examples: `ctrl+c` · `alt+tab` · `ctrl+win+alt+1` · `shift+enter` · `win` · ``ctrl+` ``
 

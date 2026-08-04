@@ -8,9 +8,10 @@
 The desktop Controls editor (ROADMAP Phase G1, owner spec 2026-08-05): a
 dialog that edits the USER copy of `actions.json` — end users never hand-edit
 files. Creates/deletes/renames CUSTOM sets (4 buttons each: a built-in action
-or a RECORDED chord, with an optional icon), chooses which custom sets the
-phone's wheel shows by default (the five built-ins are always shown; at most
-`CUSTOM_MAX` = 3 custom), and rearranges ANY set's buttons per orientation
+or a RECORDED chord, with an optional icon), chooses which sets the phone's
+wheel shows by default (Mouse/Input/Settings are `required` and locked ON;
+every other shipped or custom set toggles, `WHEEL_MAX` = 8 total), and
+rearranges ANY set's buttons per orientation
 (`order_land` — landscape cross, `order_port` — portrait column) with a reset
 to the shipped default. The phone re-reads `actions.json` on every
 connection, so changes need no restart; the phone's own Settings → Sets
@@ -46,7 +47,7 @@ picker can override the defaults per device.
 - **`ControlsEditor`** — the dialog: set list (built-ins flagged, arrangement
   editable for ALL sets; content editable only for custom), `_store_current`
   writes screen → RAM on every selection change, `_save` validates (empty
-  sets warned, enabled clamped to `CUSTOM_MAX`) and writes the file.
+  sets warned, shown-by-default clamped to `WHEEL_MAX`) and writes the file.
 
 ## Functions
 

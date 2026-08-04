@@ -52,7 +52,9 @@ client (see [Theme](__about/theme.md) for the verified overlap).
   RECORDED chord — `ChordRecorder` captures the combination from the PC
   keyboard, it is never typed), icon from the client's own icon set
   (`load_client_icons()` parses `const ICONS` out of client/controls.js — one
-  source of truth), `enabled` = shown-in-wheel default (max 3 enforced on
+  source of truth), `enabled` = shown-in-wheel default (revised same day:
+  Mouse/Input/Settings are `required` and locked ON; every other shipped or
+  custom set toggles; over 8 shown-by-default, extras are switched off on
   save). Any set — shipped ones included — gets per-orientation arrangement
   (`order_land`/`order_port` via `OrderList`, identity order = no entry) with
   a reset to the shipped default. End users never hand-edit files; the

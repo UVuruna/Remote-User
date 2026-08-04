@@ -29,6 +29,18 @@ const ICONS = {
   esc: '<path d="M18 13v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h5"/><path d="M15 4h5v5"/><path d="m20 4-8 8"/>',
   // wrap-text: a line breaking onto the next row (the New row button)
   newrow: '<line x1="3" y1="6" x2="21" y2="6"/><path d="M3 12h13a3 3 0 0 1 0 6h-4"/><polyline points="14 16 12 18 14 20"/><line x1="3" y1="18" x2="7" y2="18"/>',
+  // Navigate / Cursor sets (owner 2026-08-05)
+  nav: '<circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88" fill="currentColor" stroke="none"/>',
+  tab: '<line x1="20" y1="6" x2="20" y2="18"/><path d="M4 12h11"/><path d="m11 8 4 4-4 4"/>',
+  tabback: '<line x1="4" y1="6" x2="4" y2="18"/><path d="M20 12H9"/><path d="m13 8-4 4 4 4"/>',
+  leftright: '<polyline points="9 7 4 12 9 17"/><polyline points="15 7 20 12 15 17"/>',
+  arrowl: '<line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 5 5 12 12 19"/>',
+  arrowr: '<line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/>',
+  // Media set
+  play: '<polygon points="5 4 15 12 5 20"/><line x1="19" y1="5" x2="19" y2="19"/>',
+  volup: '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19"/><line x1="15" y1="12" x2="21" y2="12"/><line x1="18" y1="9" x2="18" y2="15"/>',
+  voldown: '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19"/><line x1="15" y1="12" x2="21" y2="12"/>',
+  mute: '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19"/><line x1="15" y1="9" x2="21" y2="15"/><line x1="21" y1="9" x2="15" y2="15"/>',
   attach: '<path d="M21.44 11.05 12.25 20.24a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/>',
   gallery: '<rect x="7" y="3" width="14" height="14" rx="2"/><circle cx="11" cy="7" r="1.5"/><path d="m21 12-3-3-7 7"/><path d="M3 7v11a3 3 0 0 0 3 3h11"/>',
   shot: '<path d="M9 4H6a2 2 0 0 0-2 2v3"/><path d="M15 4h3a2 2 0 0 1 2 2v3"/><path d="M20 15v3a2 2 0 0 1-2 2h-3"/><path d="M4 15v3a2 2 0 0 0 2 2h3"/><circle cx="12" cy="12" r="3"/>',
@@ -519,9 +531,10 @@ function setsPrefs() {
   }
 }
 
-// Effective on/off for one custom set: the phone's explicit choice wins,
+// Effective on/off for one toggleable set (an optional shipped category OR a
+// custom set — required ones never ask): the phone's explicit choice wins,
 // otherwise the desktop editor's default (`enabled` in actions.json).
-function customSetOn(s) {
+function setOn(s) {
   const choice = setsPrefs().state[s.name];
   return choice !== undefined ? choice : s.enabled !== false;
 }
@@ -541,20 +554,28 @@ function visibleAppSets() {
   return appSets.filter((s) => proc.includes(String(s.process || "").toLowerCase()));
 }
 
-// The wheel's composition (owner 2026-08-05): the 5 shipped sets ALWAYS, the
-// app set when focused, then the enabled custom sets — never more than
-// WHEEL_MAX total, so a full house temporarily bumps customs from the END
-// (they come back when the layout focus/app set goes away).
+// The wheel's composition (owner 2026-08-05, revised same day): Mouse, Input
+// and Settings are REQUIRED (`required` in actions.json — never hidden); the
+// other shipped sets (Edit, Attach, Navigate, Cursor, Media, Windows) and
+// the custom sets are toggleable; the app set rides along in layout focus.
+// Hard cap WHEEL_MAX total — over the cap, non-required sets are bumped from
+// the END (they come back when the app set goes away).
 const WHEEL_MAX = 8;
-const CUSTOM_MAX = 3;
 
-function enabledCustomSets() {
-  return customSets.filter(customSetOn).slice(0, CUSTOM_MAX);
+function visibleCount() {
+  // What the picker charges against the cap — the transient app set is free.
+  return categories.filter((c) => c.required || setOn(c)).length +
+    customSets.filter(setOn).length;
 }
 
 function allCats() {
-  const base = categories.concat(visibleAppSets());
-  return base.concat(enabledCustomSets()).slice(0, WHEEL_MAX);
+  const list = categories.filter((c) => c.required || setOn(c))
+    .concat(visibleAppSets())
+    .concat(customSets.filter(setOn));
+  for (let i = list.length - 1; list.length > WHEEL_MAX && i >= 0; i--) {
+    if (!list[i].required) list.splice(i, 1);
+  }
+  return list;
 }
 
 // Re-render after anything that changes the category list (actions arrived,
@@ -787,37 +808,24 @@ function closeWheel() {
 
 // --- Sets picker (Settings → Sets, owner 2026-08-05) ----------------------
 // Chooses WHICH sets ride in the wheel on THIS phone: the five built-ins are
-// always on; up to CUSTOM_MAX owner-made sets (created on the desktop —
+// always on; the rest toggle up to WHEEL_MAX total (creation on the desktop —
 // creation never happens here) plus the app-shortcuts toggle. Stored in
 // localStorage — per device, overriding the desktop editor's defaults.
 
 const setsPanel = document.getElementById("sets-panel");
 
-function openSetsPanel() {
-  setsPanel.innerHTML = "";
-  const card = document.createElement("div");
-  card.className = "sets-card";
-  card.innerHTML = `<h2>Wheel sets</h2>
-    <p class="sets-sub">The five built-in sets are always shown. Add up to ${CUSTOM_MAX} of your own — they are created on the PC (Remote User window → Edit controls).</p>`;
-
-  const list = document.createElement("div");
-  list.className = "sets-list";
-  if (!customSets.length) {
-    const empty = document.createElement("p");
-    empty.className = "sets-sub";
-    empty.textContent = "No custom sets yet.";
-    list.appendChild(empty);
-  }
-  customSets.forEach((s) => {
-    const row = document.createElement("label");
-    row.className = "sets-row";
-    const cb = document.createElement("input");
-    cb.type = "checkbox";
-    cb.checked = customSetOn(s);
+function setsRow(s, locked) {
+  const row = document.createElement("label");
+  row.className = "sets-row";
+  const cb = document.createElement("input");
+  cb.type = "checkbox";
+  cb.checked = locked || setOn(s);
+  cb.disabled = locked;
+  if (!locked) {
     cb.addEventListener("change", () => {
-      if (cb.checked && enabledCustomSets().length >= CUSTOM_MAX) {
+      if (cb.checked && visibleCount() >= WHEEL_MAX) {
         cb.checked = false;
-        showToast(`Up to ${CUSTOM_MAX} of your sets at once — untick one first`);
+        showToast(`The wheel holds ${WHEEL_MAX} sets — untick one first`);
         return;
       }
       const p = setsPrefs();
@@ -825,12 +833,25 @@ function openSetsPanel() {
       saveSetsPrefs(p);
       refreshCategories();
     });
-    const ic = document.createElement("span");
-    ic.className = "sets-ic";
-    ic.innerHTML = svg(s.icon && ICONS[s.icon] ? s.icon : "grid");
-    row.append(cb, ic, document.createTextNode(s.name));
-    list.appendChild(row);
-  });
+  }
+  const ic = document.createElement("span");
+  ic.className = "sets-ic";
+  ic.innerHTML = svg(s.icon && ICONS[s.icon] ? s.icon : "grid");
+  row.append(cb, ic, document.createTextNode(s.name + (locked ? " — always on" : "")));
+  return row;
+}
+
+function openSetsPanel() {
+  setsPanel.innerHTML = "";
+  const card = document.createElement("div");
+  card.className = "sets-card";
+  card.innerHTML = `<h2>Wheel sets</h2>
+    <p class="sets-sub">Mouse, Input and Settings are always in the wheel. Pick the rest — up to ${WHEEL_MAX} in total. New sets are made on the PC (Remote User window → Controls…).</p>`;
+
+  const list = document.createElement("div");
+  list.className = "sets-list";
+  categories.forEach((s) => list.appendChild(setsRow(s, !!s.required)));
+  customSets.forEach((s) => list.appendChild(setsRow(s, false)));
   card.appendChild(list);
 
   const appRow = document.createElement("label");

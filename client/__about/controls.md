@@ -66,13 +66,14 @@ for the split's general load-order reasoning.
 - `shotRegion()` — the monitor-normalized rect the phone is LOOKING at
   (zoom/layout aware) — sent with `screenshot {paste:true}` by the Shot
   button; the server crops, fills the clipboard and injects Ctrl+V itself.
-- Wheel composition (`allCats`, `refreshCategories`; owner 2026-08-05): the
-  5 shipped categories ALWAYS + the app set in layout focus
-  (`visibleAppSets`, owner 2026-08-04) + up to `CUSTOM_MAX` (3) custom sets
-  from the desktop editor (`customSets`, `enabledCustomSets`), hard-capped at
-  `WHEEL_MAX` (8) with customs bumped from the end. Per-device overrides live
-  in localStorage (`setsPrefs`/`customSetOn`), edited by the Settings → Sets
-  overlay (`openSetsPanel`).
+- Wheel composition (`allCats`, `refreshCategories`; owner 2026-08-05,
+  revised same day): `required` categories (Mouse/Input/Settings) ALWAYS +
+  toggleable shipped sets and custom sets (`setOn`: phone choice from
+  localStorage wins over the desktop `enabled` default) + the app set in
+  layout focus (`visibleAppSets`, owner 2026-08-04; charges nothing), hard
+  cap `WHEEL_MAX` (8) with non-required sets bumped from the END. The
+  Settings → Sets overlay (`openSetsPanel`/`setsRow`) locks required rows and
+  blocks enabling past the cap (`visibleCount`).
 - Per-orientation button arrangement (owner 2026-08-05): a set may carry
   `order_land` (slots T·L·R·B) / `order_port` (column top→bottom) from the
   desktop editor; `renderGroup` applies the one matching the current
