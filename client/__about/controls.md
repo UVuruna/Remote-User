@@ -66,10 +66,18 @@ for the split's general load-order reasoning.
 - `shotRegion()` — the monitor-normalized rect the phone is LOOKING at
   (zoom/layout aware) — sent with `screenshot {paste:true}` by the Shot
   button; the server crops, fills the clipboard and injects Ctrl+V itself.
-- App-aware sets (`appSets`, `visibleAppSets`, `allCats`,
-  `refreshCategories`) — sets from actions.json `app_sets` that exist ONLY
-  in layout focus, appearing as extra wheel categories while the focused
-  layout's app matches (owner 2026-08-04).
+- Wheel composition (`allCats`, `refreshCategories`; owner 2026-08-05): the
+  5 shipped categories ALWAYS + the app set in layout focus
+  (`visibleAppSets`, owner 2026-08-04) + up to `CUSTOM_MAX` (3) custom sets
+  from the desktop editor (`customSets`, `enabledCustomSets`), hard-capped at
+  `WHEEL_MAX` (8) with customs bumped from the end. Per-device overrides live
+  in localStorage (`setsPrefs`/`customSetOn`), edited by the Settings → Sets
+  overlay (`openSetsPanel`).
+- Per-orientation button arrangement (owner 2026-08-05): a set may carry
+  `order_land` (slots T·L·R·B) / `order_port` (column top→bottom) from the
+  desktop editor; `renderGroup` applies the one matching the current
+  orientation (invalid orders fall back to the shipped default) and a
+  `matchMedia("(orientation: portrait)")` listener re-renders on rotation.
 - `setMode(mode)` / `refreshModeButtons()` — the single-active `touchMode`
   toggle and its button-state mirroring.
 - Keyboard capture (`kbInput`, `keyboardOpen`, `toggleKeyboard`,

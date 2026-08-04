@@ -60,6 +60,7 @@ ALGORITHMIC = {
     "server/web.py",
     "server/gui/theme.py",
     "server/gui/main_window.py",
+    "server/gui/controls_editor.py",
     "client/style.css",
     "client/render.js",
     "client/input-geometry.js",

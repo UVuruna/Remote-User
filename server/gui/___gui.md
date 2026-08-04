@@ -42,13 +42,21 @@ client (see [Theme](__about/theme.md) for the verified overlap).
 - **Settings apply = save + restart**: values persist to the user settings
   file (see [Config](../__about/config.md)) and the server restarts to pick them up —
   no half-applied state.
-- **"Edit controls" is a BRIDGE, not the destination** (owner 2026-08-04):
-  `_edit_controls()` opens the user copy of `actions.json` in the system
-  editor (in the installed app the first click seeds the copy in
-  %LOCALAPPDATA% from the read-only bundled default and repoints the running
-  server via `config.apply`); the phone picks edits up on its next
-  connection. The real Controls editor is ROADMAP Phase G — end users must
-  never hand-edit files.
+- **The Controls editor** ([about](__about/controls_editor.md) ·
+  [flow](__flow/controls_editor.md), ROADMAP Phase G1 — owner
+  spec 2026-08-05): the "Controls…" button opens a dialog that edits the USER
+  copy of `actions.json` (`user_actions_path()` seeds the %LOCALAPPDATA% copy
+  from the read-only bundled default on first use and repoints the running
+  server via `config.apply`; the phone refreshes on its next connection).
+  Custom sets: create/delete/rename, 4 buttons each (a built-in action or a
+  RECORDED chord — `ChordRecorder` captures the combination from the PC
+  keyboard, it is never typed), icon from the client's own icon set
+  (`load_client_icons()` parses `const ICONS` out of client/controls.js — one
+  source of truth), `enabled` = shown-in-wheel default (max 3 enforced on
+  save). Any set — shipped ones included — gets per-orientation arrangement
+  (`order_land`/`order_port` via `OrderList`, identity order = no entry) with
+  a reset to the shipped default. End users never hand-edit files; the
+  dialog's "Open the file" stays as the power-user escape hatch.
 - **Tailscale guidance is three explicit states** (owner principle, 2026-07-22:
   non-technical users must never puzzle over a third-party screen — our window
   says exactly what happens next): **not installed** → "Install Tailscale";

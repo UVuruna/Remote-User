@@ -16,7 +16,26 @@ The two D-pad groups on the tablet are defined entirely by [actions.json](action
 - **Input** — Keys (keyboard toggle) / Enter / New row / Mic (direct voice input). New row replaced Esc in the defaults (owner 2026-08-04 — dictation has no keyboard, so line breaks need a button; Esc stays available as `{ "action": "esc" }` for hand-edited files).
 - **Attach** — Gallery / Shot (PC screenshot of the viewed region) / Camera / Files — every source ends as a paste on the PC.
 - **Edit** — All / Copy / Cut / Paste (chords with icons).
-- **Settings** — Monitor switch / next_input / quality / anywhere.
+- **Settings** — Monitor switch / Sets (the wheel picker) / quality / anywhere. `next_input` left the defaults 2026-08-05 (still available as an action).
+
+## Custom sets & the wheel (owner spec 2026-08-05)
+
+The five shipped categories are ALWAYS in the wheel. On top of them:
+- the **app set** appears while a matching layout is focused (so the wheel is
+  normally 5, six with an app set), and
+- up to **3 custom sets** — created in the desktop app (**Controls…** button;
+  end users never hand-edit files), stored under `"custom_sets"`: same shape
+  as a category plus `"enabled"` (shown-by-default flag).
+- Hard cap **8** in the wheel: a full house temporarily bumps custom sets
+  from the end while the app set is visible.
+- The phone's **Settings → Sets** picker chooses per device which custom sets
+  ride along (max 3) and whether app sets appear at all — stored on the
+  phone, overriding the desktop defaults.
+
+Any set (shipped or custom) may carry `"order_land"` / `"order_port"` — the
+button arrangement per orientation (indices into `buttons`; landscape slots
+are top·left·right·bottom, portrait is the column top→bottom). The shipped
+order is the default; the desktop editor's "Reset arrangement" restores it.
 
 `Zones` is no longer shipped — zone chords are a **custom** category the owner
 adds when wanted (this file is hand-editable; a future desktop editor will
@@ -91,7 +110,8 @@ A button is one of:
   - `upload` — legacy single-image pick (kept for hand-edited files; `gallery` replaces it).
   - `monitor` — switch the streamed monitor (shipped in **Settings**).
   - `snap` — full-monitor screenshot into the PC clipboard only (no paste; not in the default layout).
-  - `next_input` — jump keyboard focus to the NEXT text-input box (dictation workflow). Full desktop = every visible window; layout focus = only that layout's. Shipped in **Settings**.
+  - `next_input` — jump keyboard focus to the NEXT text-input box (dictation workflow). Full desktop = every visible window; layout focus = only that layout's. Out of the defaults since 2026-08-05 (Sets took the slot).
+  - `sets` — open the phone's wheel picker: which custom sets are shown on THIS device (max 3) and whether app sets appear. Shipped in **Settings**.
   - `quality` — cycle stream quality: full → reduced → auto-on-mobile-data. Shipped in **Settings**.
   - `anywhere` — open the "use from anywhere" wizard (Tailscale setup). Shipped in **Settings**.
   - `calibrate` — retired (the pointer sits exactly under the finger since 2026-08-02).

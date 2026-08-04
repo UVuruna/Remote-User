@@ -34,6 +34,8 @@ file picker, and the "access from anywhere" banner + guided wizard overlay.
   inputs (owner 2026-08-04): gallery and Files carry `multiple` (several picks
   paste as real files on the PC), camera carries `capture` (the shell opens
   the camera directly)
+- `#sets-panel` — the Settings → Sets overlay (which custom sets ride in the
+  wheel on this phone; creation is desktop-only)
 - `#anywhere-banner` / `#wizard` (`#wiz-step-1/2/3`) — the guided "access from
   anywhere" (Tailscale) banner and its step-by-step overlay
 - `#update-banner` — shown inside the APK when the PC server carries a newer

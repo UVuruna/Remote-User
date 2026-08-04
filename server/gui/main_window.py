@@ -24,10 +24,8 @@ from PySide6.QtWidgets import (
 
 import pairing
 import updates
-from config import (
-    BUNDLE_DIR, FROZEN, PROJECT_ROOT, SETTINGS, USER_DIR,
-    app_version, apply as apply_settings, save_user_settings,
-)
+from config import BUNDLE_DIR, FROZEN, PROJECT_ROOT, SETTINGS, app_version, save_user_settings
+from gui.controls_editor import ControlsEditor
 from gui.theme import QSS, card_shadow, repolish
 from server_core import ServerController
 
@@ -204,7 +202,7 @@ class MainWindow(QMainWindow):
         self.power_btn.clicked.connect(self._toggle_server)
         row.addWidget(self.power_btn)
         row.addStretch()
-        self.controls_btn = QPushButton("Edit controls")
+        self.controls_btn = QPushButton("Controls…")
         self.controls_btn.clicked.connect(self._edit_controls)
         row.addWidget(self.controls_btn)
         self.tailscale_btn = QPushButton("Set up Tailscale")
@@ -213,29 +211,14 @@ class MainWindow(QMainWindow):
         return row
 
     def _edit_controls(self) -> None:
-        """Open the owner-editable actions.json in the system editor — the
-        phone picks edits up on its next connection, no restart. In the
-        installed app the bundled default sits in read-only Program Files, so
-        the first click seeds the user copy in %LOCALAPPDATA% and repoints
-        the running server at it. A BRIDGE, not the destination (owner
-        2026-08-04): the real Controls editor is a ROADMAP phase — end users
-        must never hand-edit files."""
-        path = Path(SETTINGS.actions_path)
-        if FROZEN:
-            user_copy = USER_DIR / "actions.json"
-            if not user_copy.exists():
-                try:
-                    user_copy.parent.mkdir(parents=True, exist_ok=True)
-                    user_copy.write_bytes(path.read_bytes())
-                except OSError as e:
-                    logger.error("Could not seed the user actions.json: %s", e)
-                    return
-            apply_settings(actions_path=user_copy)
-            path = user_copy
+        """The Controls editor (ROADMAP Phase G1): create custom sets, choose
+        which ride in the phone's wheel, rearrange any set per orientation —
+        end users never hand-edit files. The phone picks changes up on its
+        next connection, no restart."""
         try:
-            os.startfile(path)  # noqa: S606 — the owner's own editor, their file
+            ControlsEditor(self).exec()
         except OSError as e:
-            logger.error("Could not open %s: %s", path, e)
+            logger.error("Controls editor failed: %s", e)
 
     def _build_update_button(self) -> QPushButton:
         """Hidden until the startup check finds a newer release; one click

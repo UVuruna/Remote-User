@@ -402,7 +402,7 @@ def _load_actions() -> dict:
     """Reads the owner's action categories fresh (edits apply on the next
     connect). A missing or invalid file is logged and yields no categories —
     never a crash."""
-    empty = {"categories": [], "app_sets": [], "left": 0, "right": 0}
+    empty = {"categories": [], "app_sets": [], "custom_sets": [], "left": 0, "right": 0}
     try:
         data = json.loads(SETTINGS.actions_path.read_text(encoding="utf-8"))
         return {
@@ -410,6 +410,11 @@ def _load_actions() -> dict:
             # App-aware sets (owner 2026-08-04): shown by the client ONLY in
             # layout focus, when the focused layout's app matches `process`.
             "app_sets": data.get("app_sets", []),
+            # Owner-made sets from the desktop Controls editor (owner
+            # 2026-08-05): the client shows up to 3 of them after the five
+            # built-ins; `enabled` is the desktop default, the phone's own
+            # Sets picker overrides it per device.
+            "custom_sets": data.get("custom_sets", []),
             "left": data.get("left", 0),
             "right": data.get("right", 0),
         }

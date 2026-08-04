@@ -71,6 +71,7 @@ function connect() {
       } else if (msg.type === "actions") {
         categories = msg.categories || [];
         appSets = msg.app_sets || [];
+        customSets = msg.custom_sets || [];
         groups.left = Math.min(msg.left ?? 0, categories.length - 1);
         groups.right = Math.min(msg.right ?? 0, categories.length - 1);
         refreshCategories();
