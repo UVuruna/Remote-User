@@ -12,7 +12,7 @@ flowchart TB
     PRIMARY -- no --> KEEP[keep existing state]
     WIPE --> COUNT
     KEEP --> COUNT{pointers.size >= 2?}
-    COUNT -- yes --> PINCH[beginPinch]
+    COUNT -- yes --> PINCH[beginPinch — every mode, layout focus included]
     COUNT -- no --> MODE{touchMode?}
     MODE -- drag --> DRAGSTART[pointer_down at offset position]
     MODE -- move --> MOVESTART[sendCursor at offset position]

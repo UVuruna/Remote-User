@@ -85,6 +85,10 @@ no mouse and keyboard.
   is LOCKED to the layout's chosen orientation (portrait or wide, picked at
   creation); on the full-desktop view rotation is free — turning the phone
   swaps portrait/wide as usual.
+- **Zoom in layout focus** (owner 2026-08-04): pinch zoom/pan is NOT skipped in
+  layout mode — same two fingers as everywhere. The layout's region fitted to
+  the screen is the maximum zoom-out and the default framing on every layout
+  switch; panning can never bring the surrounding desktop into view.
 - **Creation sources & Desktop behavior** (owner refinements 2026-08-02,
   after the first on-device pass): the Layout (+) button offers TWO sources —
   "From a list" (the server enumerates every window AND each window's content

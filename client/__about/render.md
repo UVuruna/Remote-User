@@ -71,11 +71,8 @@ MediaSource Extensions (MSE). Second of the six client scripts to load (after
   can ever become `"h264"` (only via an async `config` message), the whole
   page has finished loading.
 ## Layouts (Phase F+ step 1)
-`applyLayoutView()` implements layout focus client-side: it zooms/translates
-the view so `layoutRegion` fills the canvas (minus the same cursor-offset
-margin `computeBaseRect` reserves, keeping the region's far edges reachable).
-While locked, `clampView()` backs off — the layout transform owns the view —
-and `updateViewport` + every stream reset re-apply it. Streaming itself is
+Layout focus is client-side: the view is bound to `layoutRegion`. Streaming
+itself is
 untouched: full-frame H.264 stays cheap (ROADMAP measurement), and the JPEG
 path narrows through the existing `viewport` region mechanism.
 
@@ -96,6 +93,27 @@ clamped to the very same rect in
 [Input Geometry](input-geometry.md) (`toRemoteClamped`), so the empty space is
 not reachable either: a focused layout is one window, whole — nothing of the
 desktop is visible or touchable.
+
+## One zoom model for both modes (owner 2026-08-04)
+Layout focus is no longer a hard view lock — "there is no reason for zoom to
+be missing there". Three small functions carry it:
+
+- `viewBounds()` — the rect the view may ever show, in unscaled base-canvas
+  px: `baseRect` on the desktop, the `layoutRegion` sub-rect in layout focus.
+- `computeViewHome()` → `viewHome` — the MAXIMUM ZOOM-OUT transform:
+  `{scale: 1, tx: 0, ty: 0}` on the desktop, the bounds rect fitted (and
+  centred) into the full canvas in layout focus. Recomputed on every
+  `updateViewport()` (rotation, keyboard) so the framing survives a resize.
+- `resetViewHome()` — snap back out; called on a stream reset and on every
+  `layout_state` (a layout switch always starts fully zoomed out).
+
+`clampView()` then works off `viewHome` in both modes instead of the literal
+`1`: below `viewHome.scale` the view snaps back to home exactly, above it the
+scale is capped at `viewHome.scale * ZOOM_MAX` and the translation is bounded
+so the drawn bounds rect always covers where that rect sits at home — no
+letterbox bar, and in layout focus no neighbouring desktop, can creep in at an
+edge. With `viewHome = {1, 0, 0}` the bounds reduce to the previous desktop
+formula unchanged.
 
 ## The keyboard no longer squeezes the picture (owner 2026-08-03)
 `updateViewport()` used to size the canvas to the CURRENT viewport, so the

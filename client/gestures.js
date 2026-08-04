@@ -66,7 +66,9 @@ canvas.addEventListener("pointerdown", (e) => {
   pointers.set(e.pointerId, p);
 
   if (pointers.size >= 2) {
-    if (viewLocked()) return; // layout focus: the view is locked, no pinch
+    // Two fingers pinch in EVERY mode, layout focus included (owner
+    // 2026-08-04) — there the zoom just bottoms out at the layout's own
+    // framing instead of the whole monitor.
     beginPinch();
     return;
   }
@@ -93,7 +95,10 @@ canvas.addEventListener("pointermove", (e) => {
     const [p1, p2] = firstTwoPointers();
     const dist = Math.hypot(p1.x - p2.x, p1.y - p2.y);
     const mid = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
-    const s = Math.min(Math.max(pinch.startScale * (dist / pinch.startDist), 1), ZOOM_MAX);
+    const s = Math.min(
+      Math.max(pinch.startScale * (dist / pinch.startDist), viewHome.scale),
+      viewHome.scale * ZOOM_MAX
+    );
     view.scale = s;
     view.tx = mid.x - (baseRect.x + pinch.qx * baseRect.w) * s;
     view.ty = mid.y - (baseRect.y + pinch.qy * baseRect.h) * s;
