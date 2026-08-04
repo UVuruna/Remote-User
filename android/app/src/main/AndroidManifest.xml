@@ -4,6 +4,9 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.CAMERA" />
+    <!-- Voice input (owner 2026-08-04): the Mic button listens directly via
+         SpeechRecognizer — asked at first use, once. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <!-- Network-change callbacks: the shell re-resolves the address the
          moment connectivity returns (flaky foreign Wi-Fi) — normal
          permission, granted automatically, no user prompt. -->
@@ -12,9 +15,14 @@
     <!-- Package visibility (Android 11+): without this, the system pretends
          Tailscale is not installed, so the error card could never tell
          "not installed" from "installed but off" — the two states whose
-         guidance differs completely (install it vs. flip its switch). -->
+         guidance differs completely (install it vs. flip its switch).
+         The RecognitionService entry is the same story for voice input:
+         without it, SpeechRecognizer reports "not available" on Android 11+. -->
     <queries>
         <package android:name="com.tailscale.ipn" />
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
     </queries>
 
     <!-- The server speaks plain http on the LAN / Tailscale private network —
@@ -57,5 +65,18 @@
             android:exported="false"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|smallestScreenSize"
             android:windowSoftInputMode="adjustResize" />
+
+        <!-- Camera capture target (the Attach set's Camera button): the shot
+             is written into this app's cache and handed to the page — no
+             storage permission, nothing left in the user's gallery. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
     </application>
 </manifest>
