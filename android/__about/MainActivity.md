@@ -103,7 +103,16 @@ The page's only way to reach the shell.
   — one `SpeechRecognizer` listening round per call; results reach the page
   via `__voiceResult(text)`, round-end via `__voiceEnd(reason)` (`"denied"` /
   `"unavailable"` / `""`), and the page restarts rounds while its switcher is
-  ON. First use asks the `RECORD_AUDIO` runtime permission once.
+  ON. First use asks the `RECORD_AUDIO` runtime permission once. The
+  recognizer binds to **Google's recognition service** when installed
+  (`googleRecognitionService()` — owner report 2026-08-04: the phone's
+  default service, Samsung's on Samsung phones, garbled the dictation; the
+  Google engine is the whole point). Note the hard platform limit: an app
+  cannot open the KEYBOARD's own voice typing (Gboard mic) — no API switches
+  another IME into voice mode; this in-place recognizer is the closest
+  invisible equivalent, and the visible Google dialog
+  (`ACTION_RECOGNIZE_SPEECH` activity) is the fallback plan if quality still
+  disappoints.
 
 ### Client (inner class, `WebViewClient`)
 - `shouldOverrideUrlLoading`: keeps navigation to the paired server's own

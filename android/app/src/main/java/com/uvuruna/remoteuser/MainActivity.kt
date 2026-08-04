@@ -219,12 +219,31 @@ class MainActivity : AppCompatActivity() {
 
     private var recognizer: SpeechRecognizer? = null
 
+    /** Bind to GOOGLE's recognition service when it exists (owner report
+     *  2026-08-04: the phone's DEFAULT service — Samsung's on Samsung phones —
+     *  garbled half the dictation and mixed languages; the quality the owner
+     *  built this app for is Google's, the same engine family as the
+     *  keyboard's voice typing). Falls back to the default service. */
+    private fun googleRecognitionService(): android.content.ComponentName? {
+        val services = packageManager.queryIntentServices(
+            Intent("android.speech.RecognitionService"), 0
+        )
+        val g = services.firstOrNull {
+            it.serviceInfo.packageName == "com.google.android.googlequicksearchbox"
+        } ?: return null
+        return android.content.ComponentName(g.serviceInfo.packageName, g.serviceInfo.name)
+    }
+
     private fun beginListening() {
         if (!SpeechRecognizer.isRecognitionAvailable(this)) {
             voiceEnd("unavailable")
             return
         }
-        val r = recognizer ?: SpeechRecognizer.createSpeechRecognizer(this).also { rec ->
+        val r = recognizer ?: run {
+            val google = googleRecognitionService()
+            if (google != null) SpeechRecognizer.createSpeechRecognizer(this, google)
+            else SpeechRecognizer.createSpeechRecognizer(this)
+        }.also { rec ->
             rec.setRecognitionListener(object : RecognitionListener {
                 override fun onResults(results: Bundle?) {
                     val text = results
