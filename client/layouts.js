@@ -83,9 +83,11 @@ function cubeNext() {
 // every layout member is really minimized. Two ends have to agree on that:
 //
 //   1. The SERVER now finishes for real before it answers: DWM's slide
-//      animation is disabled per window and it waits until each window is out
-//      of the taskbar and has stopped moving (window_manager.wait_settled /
-//      wait_minimized). `layout_state` therefore means "the desk is done".
+//      animation is disabled per window and it VERIFIES each window stands on
+//      its commanded rect (window_manager.wait_landed — position, not just
+//      "stopped moving"; a refusal reaches the phone as a toast) and that
+//      every member is really iconic on Desktop (wait_minimized).
+//      `layout_state` therefore means "the desk is done, checked".
 //   2. This side must not trust its own picture too early. THE BUG THE OWNER
 //      SAW TWICE: sampling started the instant `layout_state` arrived, but
 //      the phone was then still displaying the OLD frame — the encoder and
@@ -97,7 +99,7 @@ function cubeNext() {
 const SETTLE_CATCHUP_MS = 650; // stream latency: never judge before this
 const SETTLE_SAMPLE_MS = 140;
 const SETTLE_DIFF = 2.6;      // mean |Δ| per colour channel that counts as "still"
-const SETTLE_STABLE_HITS = 2;
+const SETTLE_STABLE_HITS = 3; // ~420 ms of stillness — 2 let a paused move through
 const SETTLE_MAX_MS = 4000;   // never wait longer than this after catching up
 const LOADING_MIN_MS = 700;   // never flash the animation
 const LOADING_MAX_MS = 40000; // absolute backstop (server never answered)

@@ -237,6 +237,11 @@ def create_app(stream, hub: FrameHub | None, injector: InputInjector, token: str
             stats.clients -= 1
             if active_client["ws"] is ws:
                 active_client["ws"] = None
+                # Nobody is watching any layout now — no member may stay
+                # always-on-top at the desk. Only the LAST socket does this:
+                # on a 4409 takeover the new device may be mid-focus.
+                if conn["active"] is not None:
+                    await asyncio.to_thread(layouts.clear_topmost)
             for task in tasks:
                 task.cancel()
             if queue is not None:
@@ -539,13 +544,18 @@ async def _layout_create(ws: WebSocket, layouts, stream, conn: dict, msg: dict) 
         await _send_layout_state(ws, layouts, conn)
         return
     target, name = resolved[0]
-    index = await asyncio.to_thread(
+    created = await asyncio.to_thread(
         layouts.create, target, str(msg.get("mode", "solo")),
         msg.get("grid"), [h for h, _ in resolved[1:]],
         orient, conn["ratio"], _mon_rect(stream), name)
-    if index is None:
+    if created is None:
         await _toast(ws, "That window is gone — layout not created")
     else:
+        index, placed = created
+        if not placed:
+            # Verified placement failed for at least one member (min-size or a
+            # stubborn app) — say so instead of pretending (owner 2026-08-04).
+            await _toast(ws, "A window would not take its exact spot")
         await _layout_focus(ws, layouts, stream, conn, index)
         return
     await _send_layout_state(ws, layouts, conn)
@@ -573,13 +583,16 @@ async def _layout_focus(ws: WebSocket, layouts, stream, conn: dict, index: int) 
         # only the windows that are NOT layout material (owner 2026-08-02).
         await asyncio.to_thread(layouts.minimize_members)
     else:
-        region = await asyncio.to_thread(
+        focused = await asyncio.to_thread(
             layouts.focus, index, conn["ratio"], _mon_rect(stream))
-        if region is None:
+        if focused is None:
             conn["active"], conn["region"] = None, None
             await _toast(ws, "That layout's window is gone")
         else:
+            region, placed = focused
             conn["active"], conn["region"] = index, region
+            if not placed:
+                await _toast(ws, "A window would not take its exact spot")
     await _send_layout_state(ws, layouts, conn)
 
 

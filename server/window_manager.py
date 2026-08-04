@@ -35,8 +35,15 @@ DWMWA_EXTENDED_FRAME_BOUNDS = 9
 DWMWA_TRANSITIONS_FORCEDISABLED = 3
 SW_RESTORE = 9
 SW_MINIMIZE = 6
+SWP_NOSIZE = 0x0001
+SWP_NOMOVE = 0x0002
 SWP_NOZORDER = 0x0004
 SWP_NOACTIVATE = 0x0010
+SWP_SHOWWINDOW = 0x0040
+# HWND_* are sentinel HANDLES, not flags — wrap them so ctypes passes a full
+# pointer-width value on x64 (a bare -1 would be a 32-bit int argument).
+HWND_TOPMOST = wintypes.HWND(-1)
+HWND_NOTOPMOST = wintypes.HWND(-2)
 VK_MENU = 0x12
 KEYEVENTF_KEYUP = 0x0002
 PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
@@ -332,10 +339,18 @@ def layout_region(mon_rect, aspect: float,
 #      resize. `wait_settled` blocks until the window is really out of the
 #      taskbar and its visible frame has stopped changing, so the server only
 #      reports "done" when the desk truly is done.
+#   3. "Stopped moving" alone was still a lie twice (owner 2026-08-04): a
+#      window PAUSED mid-restore reads as settled, and a timeout used to log a
+#      warning and carry on as if placed. `wait_landed` therefore verifies the
+#      POSITION — the frame rect must actually match the commanded rect (apps
+#      with a larger minimum size are owner-accepted, so only smaller/off-spot
+#      fails) — and every placement reports success honestly.
 
 SETTLE_TIMEOUT_S = 1.5
 SETTLE_POLL_S = 0.03
-SETTLE_STABLE_READS = 2
+SETTLE_STABLE_READS = 4
+PLACE_TOLERANCE_PX = 8   # DWM frame rounding; anything past this is "not there"
+PLACE_RETRIES = 1        # one extra SetWindowPos when the first shot missed
 
 
 def freeze_transitions(hwnd: int, disabled: bool = True) -> None:
@@ -345,9 +360,10 @@ def freeze_transitions(hwnd: int, disabled: bool = True) -> None:
                                  ctypes.byref(val), ctypes.sizeof(val))
 
 
-def wait_settled(hwnd: int, timeout_s: float = SETTLE_TIMEOUT_S) -> None:
+def wait_settled(hwnd: int, timeout_s: float = SETTLE_TIMEOUT_S) -> bool:
     """Block until the window is out of the taskbar and its visible frame has
-    stopped moving (or the timeout — never hang the session on one app)."""
+    stopped moving (or the timeout — never hang the session on one app).
+    Returns whether it really settled — callers must not pretend on False."""
     deadline = time.monotonic() + timeout_s
     last = None
     stable = 0
@@ -359,11 +375,47 @@ def wait_settled(hwnd: int, timeout_s: float = SETTLE_TIMEOUT_S) -> None:
             if rect is not None and rect == last:
                 stable += 1
                 if stable >= SETTLE_STABLE_READS:
-                    return
+                    return True
             else:
                 last, stable = rect, 0
         time.sleep(SETTLE_POLL_S)
     logger.warning("Window %#x never settled within %.1fs", hwnd, timeout_s)
+    return False
+
+
+def _at_rect(rect: tuple[int, int, int, int],
+             target: tuple[int, int, int, int]) -> bool:
+    """The commanded spot, honestly: top-left within tolerance, size at least
+    the cell (apps with a bigger minimum size end up larger — owner-accepted,
+    the phone letterboxes)."""
+    x, y, w, h = rect
+    tx, ty, tw, th = target
+    return (abs(x - tx) <= PLACE_TOLERANCE_PX
+            and abs(y - ty) <= PLACE_TOLERANCE_PX
+            and w >= tw - PLACE_TOLERANCE_PX
+            and h >= th - PLACE_TOLERANCE_PX)
+
+
+def wait_landed(hwnd: int, target: tuple[int, int, int, int],
+                timeout_s: float = SETTLE_TIMEOUT_S) -> bool:
+    """Block until the window's visible frame IS the commanded rect and has
+    stayed there through consecutive reads. This — not "stopped moving" — is
+    what layout_state's promise rests on (owner 2026-08-04)."""
+    deadline = time.monotonic() + timeout_s
+    last = None
+    stable = 0
+    while time.monotonic() < deadline:
+        rect = None
+        if user32.IsWindow(hwnd) and not user32.IsIconic(hwnd):
+            rect = _frame_rect(hwnd)
+        if rect is not None and rect == last and _at_rect(rect, target):
+            stable += 1
+            if stable >= SETTLE_STABLE_READS:
+                return True
+        else:
+            last, stable = rect, 0
+        time.sleep(SETTLE_POLL_S)
+    return False
 
 
 def wait_minimized(hwnds: list[int], timeout_s: float = SETTLE_TIMEOUT_S) -> None:
@@ -377,17 +429,29 @@ def wait_minimized(hwnds: list[int], timeout_s: float = SETTLE_TIMEOUT_S) -> Non
     logger.warning("Some layout members never minimized within %.1fs", timeout_s)
 
 
-def place_window(hwnd: int, rect: tuple[int, int, int, int]) -> None:
-    """Restore + move/size so the VISIBLE frame lands on rect. Apps with a
-    minimum size simply end up larger — the phone letterboxes (owner-accepted).
-    Returns once the window has actually landed (see wait_settled)."""
+def place_window(hwnd: int, rect: tuple[int, int, int, int]) -> bool:
+    """Restore + move/size so the VISIBLE frame lands on rect, VERIFIED. Apps
+    with a minimum size simply end up larger — the phone letterboxes
+    (owner-accepted). Layout members go TOPMOST the moment they are touched
+    (owner decree 2026-08-04: a layout is NEVER below any other window, not
+    even mid-creation); `drop_topmost` is the other half of that lifecycle.
+    Returns whether the window really stands on the commanded rect — a False
+    must reach the phone as a toast, never be shrugged off."""
     x, y, w, h = rect
     freeze_transitions(hwnd)
     user32.ShowWindow(hwnd, SW_RESTORE)
-    bl, bt, br, bb = _border_offsets(hwnd)
-    user32.SetWindowPos(hwnd, 0, x - bl, y - bt, w + bl + br, h + bt + bb,
-                        SWP_NOZORDER | SWP_NOACTIVATE)
-    wait_settled(hwnd)
+    for _ in range(PLACE_RETRIES + 1):
+        # Borders re-read per attempt — the first SetWindowPos can change them
+        # (e.g. a maximized window dropping back to a sizable frame).
+        bl, bt, br, bb = _border_offsets(hwnd)
+        user32.SetWindowPos(hwnd, HWND_TOPMOST,
+                            x - bl, y - bt, w + bl + br, h + bt + bb,
+                            SWP_NOACTIVATE)
+        if wait_landed(hwnd, rect):
+            return True
+    logger.warning("Window %#x refused rect %s (stands at %s)",
+                   hwnd, rect, _frame_rect(hwnd))
+    return False
 
 
 def raise_window(hwnd: int) -> None:
@@ -396,11 +460,13 @@ def raise_window(hwnd: int) -> None:
     BEHIND — owner report 2026-08-02), so this stacks every known unlock:
     explicit z-top first (works regardless of focus rules), then plain
     SetForegroundWindow, then the AttachThreadInput trick, then the Alt
-    nudge."""
+    nudge. TOPMOST, not HWND_TOP (owner decree 2026-08-04): HWND_TOP cannot
+    pass an always-on-top window (Task Manager, players) — a raised layout
+    member must be above EVERYTHING while it is what the phone shows."""
     freeze_transitions(hwnd)  # no slide-up out of the taskbar to watch
     user32.ShowWindow(hwnd, SW_RESTORE)
-    user32.SetWindowPos(hwnd, 0, 0, 0, 0, 0,  # HWND_TOP
-                        0x0001 | 0x0002 | 0x0040)  # NOSIZE|NOMOVE|SHOWWINDOW
+    user32.SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0,
+                        SWP_NOSIZE | SWP_NOMOVE | SWP_SHOWWINDOW)
     wait_settled(hwnd)
     if user32.SetForegroundWindow(hwnd):
         return
@@ -417,6 +483,15 @@ def raise_window(hwnd: int) -> None:
     user32.keybd_event(VK_MENU, 0, 0, 0)
     user32.keybd_event(VK_MENU, 0, KEYEVENTF_KEYUP, 0)
     user32.SetForegroundWindow(hwnd)
+
+
+def drop_topmost(hwnd: int) -> None:
+    """Back to the normal z-band. Called whenever a window stops being what
+    the phone shows (desktop focus, another layout, removal, disconnect) — a
+    layout member must never stay always-on-top for the owner AT the desk."""
+    if user32.IsWindow(hwnd):
+        user32.SetWindowPos(hwnd, HWND_NOTOPMOST, 0, 0, 0, 0,
+                            SWP_NOSIZE | SWP_NOMOVE | SWP_NOACTIVATE)
 
 
 def _cells(region, template: str) -> list[tuple[int, int, int, int]]:
@@ -476,40 +551,45 @@ class LayoutRegistry:
     def create(self, target: int, mode: str, template: str | None,
                fill: list[int], orient: str, device_ratio: float,
                mon_rect: tuple[int, int, int, int],
-               name: str | None = None) -> int | None:
-        """Arrange the windows and register the layout. Returns its index, or
-        None when the target window died between pick and create.
-        device_ratio = the phone's short/long side ratio; the layout's chosen
-        orientation turns it into the actual w/h aspect."""
+               name: str | None = None) -> tuple[int, bool] | None:
+        """Arrange the windows and register the layout. Returns (index, all
+        members verified on their rects), or None when the target window died
+        between pick and create. device_ratio = the phone's short/long side
+        ratio; the layout's chosen orientation turns it into the actual w/h
+        aspect."""
         if not is_alive(target):
             return None
         aspect = device_ratio if orient == "portrait" else 1.0 / device_ratio
         members = [target] + [h for h in fill if is_alive(h) and h != target]
+        placed = True
         if mode == "grid" and template in GRID_TEMPLATES:
             cells = _cells(layout_region(mon_rect, aspect), template)
             members = members[:len(cells)]
             for hwnd, cell in zip(members, cells):
-                place_window(hwnd, cell)
+                placed = place_window(hwnd, cell) and placed
         else:
             template = None
             members = members[:1]
-            place_window(target, layout_region(mon_rect, aspect))
+            placed = place_window(target, layout_region(mon_rect, aspect))
         name = name or _title(target) or "Window"
         self.layouts.append(Layout(name, _process_name(target), members,
                                    template, orient, aspect,
                                    icon_data_uri(_process_path(target))))
-        return len(self.layouts) - 1
+        return len(self.layouts) - 1, placed
 
     def focus(self, index: int, device_ratio: float,
-              mon_rect: tuple[int, int, int, int]) -> dict | None:
-        """Raise the layout's windows and return the FRESH monitor-normalized
-        region to frame. Re-arranges when the connecting device's aspect
-        drifted from what the layout was built for (tablet vs phone — owner
-        2026-08-02). Returns None when the layout is gone (pruned)."""
+              mon_rect: tuple[int, int, int, int]) -> tuple[dict, bool] | None:
+        """Raise the layout's windows and return (FRESH monitor-normalized
+        region to frame, every member verified on its rect). Re-arranges when
+        the connecting device's aspect drifted from what the layout was built
+        for (tablet vs phone — owner 2026-08-02). Returns None when the layout
+        is gone (pruned). Members of every OTHER layout drop out of the
+        topmost band — only what the phone shows is above the world."""
         self.prune()
         if not 0 <= index < len(self.layouts):
             return None
         lay = self.layouts[index]
+        placed = True
         aspect = device_ratio if lay.orient == "portrait" else 1.0 / device_ratio
         if abs(aspect - lay.aspect) > 0.05 or lay.arranged_ratio != lay.ratio:
             # A different device, or the owner changed this layout's aspect —
@@ -519,9 +599,13 @@ class LayoutRegistry:
             region = layout_region(mon_rect, aspect, lay.ratio)
             if lay.template:
                 for hwnd, cell in zip(lay.members, _cells(region, lay.template)):
-                    place_window(hwnd, cell)
+                    placed = place_window(hwnd, cell) and placed
             else:
-                place_window(lay.members[0], region)
+                placed = place_window(lay.members[0], region)
+        for other in self.layouts:
+            if other is not lay:
+                for hwnd in other.members:
+                    drop_topmost(hwnd)
         for hwnd in lay.members:
             raise_window(hwnd)
         if lay.template:
@@ -534,7 +618,7 @@ class LayoutRegistry:
             region = _frame_rect(lay.members[0])
             if region is None:
                 return None
-        return _normalize(region, mon_rect)
+        return _normalize(region, mon_rect), placed
 
     def minimize_members(self) -> None:
         """Desktop position (owner 2026-08-02): every window that belongs to
@@ -545,6 +629,9 @@ class LayoutRegistry:
         members = [h for lay in self.layouts for h in lay.members]
         for hwnd in members:
             freeze_transitions(hwnd)  # no slide-down to watch
+            # Out of the topmost band FIRST — a member the owner later restores
+            # from the taskbar at the desk must come back as a normal window.
+            drop_topmost(hwnd)
             user32.ShowWindow(hwnd, SW_MINIMIZE)
         # Only report Desktop once they are ALL really gone (owner 2026-08-03).
         wait_minimized(members)
@@ -568,11 +655,19 @@ class LayoutRegistry:
         """Deleting a layout leaves the desktop exactly as it is (owner rule —
         no auto-return of windows). Its windows get their normal Windows
         minimize/restore animation back — we only froze it while they were
-        layout material."""
+        layout material — and leave the topmost band."""
         if 0 <= index < len(self.layouts):
             for hwnd in self.layouts[index].members:
                 freeze_transitions(hwnd, False)
+                drop_topmost(hwnd)
             del self.layouts[index]
+
+    def clear_topmost(self) -> None:
+        """Every member back to the normal z-band — the phone hung up, nothing
+        is being shown, no window may stay always-on-top at the desk."""
+        for lay in self.layouts:
+            for hwnd in lay.members:
+                drop_topmost(hwnd)
 
     def state(self, active: int | None, region: dict | None) -> dict:
         """The layout_state payload. Prune first so the phone never lists a

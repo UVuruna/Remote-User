@@ -57,10 +57,19 @@ region; `remove(index)`; `prune()`; `state(active, region)` builds the
   not-our-process top-level windows → `{hwnd, title, process}` dicts
 - `window_at(mon_rect, nx, ny)`: the app window under a monitor-normalized
   point (`WindowFromPoint` → `GA_ROOT` ancestor), same dict shape or None
-- `place_window(hwnd, rect)`: restore + `SetWindowPos`, compensating the
-  invisible-border offsets so the VISIBLE frame lands on rect
-- `raise_window(hwnd)`: restore + `SetForegroundWindow`, with the Alt-nudge
-  retry when Windows refuses foreground to a background process
+- `place_window(hwnd, rect) -> bool`: restore + `SetWindowPos`, compensating
+  the invisible-border offsets so the VISIBLE frame lands on rect, then
+  VERIFIES it landed (`wait_landed`, one retry). Places into the TOPMOST band
+  (owner decree 2026-08-04: a layout member is never below any other window,
+  not even mid-creation). False = the window refused its rect — the web layer
+  toasts it, never shrugs it off.
+- `raise_window(hwnd)`: restore + z-top (`HWND_TOPMOST` — `HWND_TOP` cannot
+  pass an always-on-top window like Task Manager) + `SetForegroundWindow`,
+  with the Alt-nudge retry when Windows refuses foreground to a background
+  process
+- `drop_topmost(hwnd)` / `LayoutRegistry.clear_topmost()`: the other half of
+  the TOPMOST lifecycle — back to the normal z-band on desktop focus, focus
+  of another layout, layout removal, and phone disconnect
 - `is_alive(hwnd)`: window exists, visible, not DWM-cloaked
 
 ## Per-layout aspect ratio (owner decision 2026-08-03)
@@ -94,14 +103,21 @@ module reported "done" too early:
   there is nothing left to watch. `remove()` gives the window its normal
   animation back.
 - Even without the transition, the app re-lays-out after the resize.
-  `wait_settled(hwnd)` blocks until the window is out of the taskbar and its
-  visible frame has stopped changing (2 identical reads, 1.5 s cap);
+  `wait_settled(hwnd) -> bool` blocks until the window is out of the taskbar
+  and its visible frame has stopped changing (4 identical reads, 1.5 s cap);
   `wait_minimized(hwnds)` blocks until every member is really iconic before
   the Desktop position is reported.
+- "Stopped moving" alone lied twice (owner 2026-08-04): a window paused
+  mid-restore read as settled, and a timeout logged a warning and carried on.
+  `wait_landed(hwnd, rect) -> bool` verifies the POSITION — the frame rect
+  must match the commanded rect (±8 px; a larger minimum size is
+  owner-accepted, the phone letterboxes) and hold it through 4 reads.
+  `create`/`focus` report the verdict up; a failure reaches the phone as the
+  "would not take its exact spot" toast.
 
-`place_window`, `raise_window` and `minimize_members` all wait, so
-`layout_state` now means "the desk is finished", which is exactly what the
-phone's overlay needs to fade out on — see
+`place_window`, `raise_window` and `minimize_members` all wait AND verify, so
+`layout_state` now means "the desk is finished, checked", which is exactly
+what the phone's overlay needs to fade out on — see
 [Layouts](../../client/__about/layouts.md) for the client half (it must also
 wait out the stream latency before judging the picture).
 
