@@ -4,8 +4,9 @@ Edits the USER copy of actions.json — end users never hand-edit files. What
 it can do:
 - create/delete/rename any number of CUSTOM sets (4 buttons each: a built-in
   action or a recorded chord, with an optional icon from the shipped set);
-- choose which custom sets are shown in the phone's wheel by default (the
-  five built-in sets are ALWAYS shown; at most CUSTOM_MAX custom ones);
+- choose which sets are shown in the phone's wheel by default
+  (Mouse/Input/Settings are `required` and always shown; every other shipped
+  or custom set toggles, at most WHEEL_MAX in the wheel);
 - rearrange any set's buttons per orientation — landscape (top·left·right·
   bottom cross) and portrait (top→bottom column) — with a one-click reset to
   the shipped default order.
@@ -37,8 +38,9 @@ from config import FROZEN, SETTINGS, USER_DIR, apply as apply_settings
 
 logger = logging.getLogger(__name__)
 
-CUSTOM_MAX = 3          # custom sets shown in the wheel at once (owner 2026-08-05)
-BUILTIN_SET_COUNT = 5   # Mouse/Input/Attach/Edit/Settings — always shown, content fixed
+WHEEL_MAX = 8  # sets in the phone's wheel at once; Mouse/Input/Settings are
+               # `required` (never hidden), everything else toggles
+               # (owner 2026-08-05)
 
 # Built-in actions a custom button may trigger (mirrors client BUILTINS —
 # calibrate is retired and left out on purpose).
@@ -318,7 +320,7 @@ class ControlsEditor(QDialog):
             self.icon_combo.addItem(icon_for(body), name, name)
         form.addWidget(self.icon_combo, 0, 3)
         self.enabled_check = QCheckBox(
-            f"Shown in the wheel by default (up to {CUSTOM_MAX} of your sets)")
+            f"Shown in the wheel by default (the wheel holds up to {WHEEL_MAX} sets)")
         form.addWidget(self.enabled_check, 1, 1, 1, 3)
         right.addLayout(form)
 
@@ -393,12 +395,15 @@ class ControlsEditor(QDialog):
             return
         s = self._sets()[index]
         custom = self._is_custom(index)
+        required = bool(s.get("required"))
         self.name_edit.setText(s.get("name", ""))
         self.name_edit.setEnabled(custom)
         self.icon_combo.setEnabled(custom)
         self.icon_combo.setCurrentIndex(max(0, self.icon_combo.findData(s.get("icon", ""))))
-        self.enabled_check.setEnabled(custom)
-        self.enabled_check.setChecked(custom and s.get("enabled", True))
+        # Mouse/Input/Settings are always in the wheel; every other set —
+        # shipped or custom — has a shown-by-default toggle.
+        self.enabled_check.setEnabled(not required)
+        self.enabled_check.setChecked(required or s.get("enabled", True))
         self.buttons_group.setEnabled(custom)
         buttons = (s.get("buttons") or [])[:4]
         for r, rowe in enumerate(self.button_rows):
@@ -427,6 +432,11 @@ class ControlsEditor(QDialog):
             s["buttons"] = [b for b in buttons if b is not None]
         else:
             s = self.data["categories"][index]
+            if not s.get("required"):
+                if self.enabled_check.isChecked():
+                    s.pop("enabled", None)  # shown by default needs no entry
+                else:
+                    s["enabled"] = False
         n = len((s.get("buttons") or [])[:4])
         for key, widget in (("order_land", self.order_land), ("order_port", self.order_port)):
             order = widget.order()[:n]
@@ -489,13 +499,16 @@ class ControlsEditor(QDialog):
                 self, "Empty sets",
                 "These sets have no finished buttons yet and will show empty "
                 "on the phone:\n  " + ", ".join(incomplete))
-        enabled = [s for s in self.data["custom_sets"] if s.get("enabled", True)]
-        if len(enabled) > CUSTOM_MAX:
-            for s in enabled[CUSTOM_MAX:]:
+        shown = [s for s in self._sets()
+                 if s.get("required") or s.get("enabled", True)]
+        if len(shown) > WHEEL_MAX:
+            extras = [s for s in shown if not s.get("required")][WHEEL_MAX - len(shown):]
+            for s in extras:
                 s["enabled"] = False
             QMessageBox.information(
                 self, "Wheel limit",
-                f"The wheel shows up to {CUSTOM_MAX} of your sets — the extras "
-                "were left OFF by default (the phone's Sets picker can swap them in).")
+                f"The wheel holds up to {WHEEL_MAX} sets — the last "
+                f"{len(extras)} were left OFF by default (the phone's Sets "
+                "picker can swap them in).")
         self._write()
         self.accept()

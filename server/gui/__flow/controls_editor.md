@@ -43,7 +43,7 @@ Record… ──▶ ChordRecorder.keyPressEvent
 Save
  ├─ _store_current()
  ├─ warn: custom sets with zero finished buttons
- ├─ clamp: enabled custom sets > CUSTOM_MAX → extras set enabled=false
+ ├─ clamp: shown-by-default sets > WHEEL_MAX → non-required extras enabled=false
  └─ write actions.json (indent=2)  ──▶ phone re-reads on next connection
 ```
 

@@ -5,6 +5,7 @@
     {
       "name": "Mouse",
       "icon": "mouse",
+      "required": true,
       "buttons": [
         { "action": "click" },
         { "action": "right" },
@@ -15,6 +16,7 @@
     {
       "name": "Input",
       "icon": "keyboard",
+      "required": true,
       "buttons": [
         { "action": "keyboard" },
         { "action": "enter" },
@@ -43,8 +45,51 @@
       ]
     },
     {
+      "name": "Navigate",
+      "icon": "nav",
+      "buttons": [
+        { "action": "esc" },
+        { "label": "Prev", "icon": "tabback", "chord": "shift+tab" },
+        { "label": "Next", "icon": "tab",     "chord": "tab" },
+        { "label": "Find", "icon": "find",    "chord": "ctrl+f" }
+      ]
+    },
+    {
+      "name": "Cursor",
+      "icon": "leftright",
+      "buttons": [
+        { "label": "Undo",  "icon": "undo",   "chord": "ctrl+z" },
+        { "label": "Left",  "icon": "arrowl", "key": "left" },
+        { "label": "Right", "icon": "arrowr", "key": "right" },
+        { "label": "Redo",  "icon": "redo",   "chord": "ctrl+y" }
+      ]
+    },
+    {
+      "name": "Media",
+      "icon": "play",
+      "enabled": false,
+      "buttons": [
+        { "label": "Play",  "icon": "play",    "key": "playpause" },
+        { "label": "Vol −", "icon": "voldown", "key": "voldown" },
+        { "label": "Vol +", "icon": "volup",   "key": "volup" },
+        { "label": "Mute",  "icon": "mute",    "key": "mute" }
+      ]
+    },
+    {
+      "name": "Windows",
+      "icon": "grid",
+      "enabled": false,
+      "buttons": [
+        { "label": "Alt+Tab",  "chord": "alt+tab" },
+        { "label": "Win",  "icon": "grid", "chord": "win" },
+        { "label": "Desktop",  "icon": "desktop", "chord": "win+d" },
+        { "label": "Tasks",    "chord": "win+tab" }
+      ]
+    },
+    {
       "name": "Settings",
       "icon": "settings",
+      "required": true,
       "buttons": [
         { "action": "monitor" },
         { "action": "sets" },

@@ -219,11 +219,12 @@ edits on its next connection (already works). Bridge until built: the
 - [x] **G1 — Custom sets & arrangement** (done 2026-08-05, v0.0.073): the
   desktop "Controls…" dialog — create/delete/rename custom sets (4 buttons:
   builtin dropdown or RECORDED chord + icon from the client's set), choose
-  which are shown by default (max 3 — the wheel holds the 5 built-ins + the
-  app set + up to 3 custom, hard cap 8), per-orientation arrangement
-  (landscape cross / portrait column) for EVERY set with reset-to-default.
-  Phone side: Settings → Sets picker (per-device custom-set choice + app-sets
-  toggle, localStorage), per-orientation ordering in the D-pads.
+  which sets are shown by default, per-orientation arrangement (landscape
+  cross / portrait column) for EVERY set with reset-to-default. Phone side:
+  Settings → Sets picker (per-device choice + app-sets toggle, localStorage),
+  per-orientation ordering in the D-pads. Wheel model (owner, same day):
+  Mouse/Input/Settings `required`; Edit/Attach/Navigate/Cursor + Media/
+  Windows (off by default) + customs toggleable; hard cap 8.
   Deferred from G1: a live D-pad preview inside the editor.
 - [ ] **G2 — App sets** (½ session): same editor over `app_sets`, with the
   process picked from the list of running programs (real app icons — the
