@@ -13,6 +13,8 @@ client (see [Theme](__about/theme.md) for the verified overlap).
 |------|------|----------|
 | `main_window.py` | Algorithmic | window shell, tray, layout, wiring — [about](__about/main_window.md) · [flow](__flow/main_window.md) |
 | `theme.py` | Algorithmic | design tokens + QSS + effect helpers — [about](__about/theme.md) · [flow](__flow/theme.md) |
+| `controls_editor.py` | Algorithmic | the Controls dialog: load/assemble/save `actions.json` — [about](__about/controls_editor.md) · [flow](__flow/controls_editor.md) |
+| `controls_widgets.py` | Algorithmic | its widgets: chord recorder, pool table, command form, arrangement ladders — [about](__about/controls_widgets.md) · [flow](__flow/controls_widgets.md) |
 | `__init__.py` | Trivial | package marker; one-line docstring naming `gui_main.py` as the entry point |
 
 ## Connections

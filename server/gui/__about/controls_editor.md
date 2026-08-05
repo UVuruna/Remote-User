@@ -23,6 +23,11 @@ files. What it does:
   focused layout).
 - Rearranges the four ACTIVE buttons per orientation (`order_land` — landscape
   cross, `order_port` — portrait column) with a reset to the shipped default.
+  The slot ladder is fixed and belongs to the POSITION — `Top · Left · Right ·
+  Bottom` in landscape, `1ˢᵗ … 4ᵗʰ` in portrait (owner 2026-08-05); only the
+  commands travel through it. The widgets themselves live in
+  [Controls Widgets](controls_widgets.md) (THE STRUCTURE LAW split of the
+  same day).
 
 App-aware sets (`app_sets`, VSCode/Chrome/Explorer) appear in the editor for
 the first time — their pools are where the owner's per-app reserves live.

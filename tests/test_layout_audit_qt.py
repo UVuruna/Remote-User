@@ -97,7 +97,7 @@ def make_controls_editor() -> QWidget:
 
 
 def make_chord_recorder() -> QWidget:
-    from gui.controls_editor import ChordRecorder
+    from gui.controls_widgets import ChordRecorder
     return ChordRecorder()
 
 
