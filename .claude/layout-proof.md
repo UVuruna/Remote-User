@@ -9,7 +9,7 @@ SESSION: 7583f4e9-4bcd-4842-b7ce-9d71cbc34872
 SESSION: 010646e6-701d-482d-ac47-275166fd9746
 - Quality panel (client/panels.js + client/style.css) - phone 412x915 portrait + 915x412 landscape - audit: PASS - .venv python tests/test_layout_audit.py re-run on the MERGED tree 2026-08-05 (real page, headless Chromium: card fully in viewport, no page horizontal overflow, no element clipped)
 - Sets picker (client/panels.js + client/style.css) - phone 412x915 + 915x412 - audit: PASS - tests/test_layout_audit.py (same three checks)
-- Dictation setup card (client/panels.js + client/style.css) - phone 412x915 + 915x412 - audit: PASS - tests/test_layout_audit.py (card in viewport, no overflow, no clipped rows; 3-language stub incl. long names)
+- Dictation setup card (client/panels.js + client/style.css) - phone 412x915 + 915x412 - audit: PASS - tests/test_layout_audit.py re-run after round 4 (card in viewport, no overflow, no clipped rows; 5-language stub incl. long names + the collapsed extra section + the mute-beeps row)
 - Aspect panel + Move handle (client/layouts.js + client/style.css) - phone 412x915 + 915x412 - audit: PASS - tests/test_layout_audit.py (card in viewport, no clipping, handle fully inside the card, zero page errors)
 - Layout region placement (server/window_manager.py, no window of its own) - audit: PASS - tests/test_layout_audit.py `_fit_rect_audit`: the region stays inside its box and keeps positive size for every pos 0..1 and aspect 0.4..3.2
 

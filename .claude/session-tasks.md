@@ -6,7 +6,21 @@ docs of every changed module + this checklist.
 
 WAITING_ON_OWNER: yes
 
-Round 2 SHIPPED as v0.0.075. Round-3 owner report (2026-08-05): RECOGNITION
+ROUND 4 IMPLEMENTED (owner approved "moze sve i bipovi kao checkbox"):
+(a) shipped-pools merge now ALSO runs once at server start
+(web._merge_shipped_actions, FROZEN-only) — default-set updates reach the
+phone without opening the editor; (b) LOCK stops everything — shell onPause
+cancels the round + refuses new ones, page hides → inputOff(); (c) "Mute
+listening beeps" checkbox in the card, DEFAULT ON (AudioManager mute during
+listening, restored on cancel/background); (d) "More languages (N)…"
+collapsed section — downloadable models + online-service list; (e) pulse
+animation removed, dashed border stays. Verified: load test, guards (venv),
+INPUT GATE, layout audit re-run with the extended card. BUILD/RELEASE
+PENDING: a parallel session holds uncommitted gui/tests changes — building
+now would bundle their unfinished work; release follows the moment the tree
+is clean.
+
+Round-3 owner report (2026-08-05): RECOGNITION
 WORKS (Serbian Latin chosen, text lands) — remaining: (a) Settings still
 shows Anywhere — ROOT CAUSE FOUND: the desktop Controls editor snapshots
 actions.json into the USER copy which wins forever, bundled default updates
@@ -166,5 +180,13 @@ only (their commands stay ours, custom sets stay fully editable).
       Also fixed while proving it: the detail form kept the PREVIOUS set's
       command when both selections sat on row 0 (setCurrentCell is silent when
       the index does not change).
-- [ ] 17. Session close — docs of every changed module, APK + desktop build,
-      GIT RELEASE.
+- [x] 17. DONE — Session close: docs of every changed module updated
+      (controls_editor __about + __flow, main_window __about + __flow, theme,
+      client controls, input_injector, ACTIONS.md pools+reserves table,
+      CLAUDE.md, tests/___tests.md, .claude/layout-proof.md). APK 0.0.077 +
+      full desktop build (INPUT GATE + PRESENCE GATE + PyInstaller + signed
+      installer, "OK: exe + installer signed"), GIT RELEASE published:
+      https://github.com/UVuruna/Remote-User/releases/tag/v0.0.077
+      Scope note: v0.0.077 carries THIS round only — the parallel session's
+      dictation round 4 (0.0.182) landed after the tag and ships with theirs
+      (verified in the built client: pools present, their card changes not).
