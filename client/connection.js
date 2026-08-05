@@ -60,6 +60,10 @@ function connect() {
         }
         updateAnywhereBanner();
         refreshUpdateBanner(msg.apk_version || msg.app_version);
+        // The PC's own quality settings — the quality panel can only go BELOW
+        // them, so it shows them and greys out the unreachable steps.
+        setStreamBase(msg.base || null);
+        refreshQualityButtons();
         detailRegion = { x: 0, y: 0, w: 1, h: 1 };
         if (baseBitmap) { baseBitmap.close(); baseBitmap = null; }
         if (detailBitmap) { detailBitmap.close(); detailBitmap = null; }

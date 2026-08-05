@@ -1,4 +1,4 @@
-# panels.js — Settings overlay panels (Sets picker + Quality)
+# panels.js — Settings overlay panels (Sets picker + Dictation)
 
 Split out of `controls.js` on 2026-08-05 (THE STRUCTURE LAW): `controls.js`
 owns the D-pad groups, the wheel and the button actions; this module owns the
@@ -14,15 +14,10 @@ prefs bridge (`prefGet`/`prefSet` in controls.js) — origin-independent, see
 the bridge note there (owner bug 2026-08-05: pure localStorage split state
 between the LAN and Tailscale origins, the picker "rotated").
 
-## Quality panel (`openQualityPanel`)
+## Quality panel — moved out
 
-Owner 2026-08-05 — replaces the old full/reduced cycler. Segment rows for
-FPS (Max/10/15/30/60), resolution (Full/⅔/½ — half per axis is quarter
-pixels, so the middle step is ⅔) and bitrate (High/Mid/Low), plus the
-"save data on mobile networks" checkbox. Every tap saves (`qualityPrefs` in
-controls.js) and sends the EFFECTIVE values to the server, which re-opens
-this client's encoder; "Max/Full/High" mean "no override — the desktop
-Settings defaults apply".
+Lives in [quality.js](quality.md) since 2026-08-05: it edits the quality
+prefs and reads the PC's base, so panel and prefs are one responsibility.
 
 ## Dictation setup card (`openDictationPanel`, owner round 2 2026-08-05)
 

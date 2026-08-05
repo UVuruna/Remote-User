@@ -4,7 +4,7 @@
 // commit:
 //   node client/load_test.js
 //
-// The app was split (god-file refactor) into 8 classic scripts that share
+// The app was split (god-file refactor) into 9 classic scripts that share
 // ONE global scope in the browser (multiple <script> tags evaluated in
 // document order = the same semantics as one concatenated file). FILES below
 // must list them in the EXACT order index.html loads them in — concatenating
@@ -77,6 +77,7 @@ const FILES = [
   "input-geometry.js",
   "controls.js",
   "panels.js",
+  "quality.js",
   "layouts.js",
   "gestures.js",
   "connection.js",

@@ -14,10 +14,11 @@ The phone side of Remote User — a plain web page served by the PC server, load
 | `render.js` | Algorithmic | canvas drawing, view transform, dual-mode (H.264 MSE / JPEG) frame decode — loads 2nd — [about](__about/render.md) · [flow](__flow/render.md) |
 | `input-geometry.js` | Algorithmic | finger→PC coordinate mapping (pointer under the finger since 2026-08-02), scroll inertia — loads 3rd — [about](__about/input-geometry.md) · [flow](__flow/input-geometry.md) |
 | `controls.js` | Algorithmic | on-screen chrome: keyboard capture, anywhere wizard, update banner, upload, D-pad groups, wheel, corner buttons, toast — loads 4th — [about](__about/controls.md) · [flow](__flow/controls.md) |
-| `panels.js` | Standard | Settings overlays: Sets picker + Quality panel (split from controls.js 2026-08-05) — loads 5th — [about](__about/panels.md) |
-| `layouts.js` | Algorithmic | layout bar, layout list, aspect-ratio panel (+ Move handle), creation flow, loading cube — loads 6th — [about](__about/layouts.md) · [flow](__flow/layouts.md) |
-| `gestures.js` | Algorithmic | canvas pointer-event dispatch: pinch-zoom + font-zoom staircase + the single-finger touchMode gestures — loads 7th — [about](__about/gestures.md) · [flow](__flow/gestures.md) |
-| `connection.js` | Algorithmic | WebSocket lifecycle, protocol message handlers, visibility-gated session — loads 8th (starts the page) — [about](__about/connection.md) · [flow](__flow/connection.md) |
+| `panels.js` | Standard | Settings overlays: Sets picker + dictation setup card (split from controls.js 2026-08-05) — loads 5th — [about](__about/panels.md) |
+| `quality.js` | Standard | stream quality: this device's overrides of the PC's settings — prefs + panel, hierarchy-aware (split 2026-08-05) — loads 6th — [about](__about/quality.md) |
+| `layouts.js` | Algorithmic | layout bar, layout list, aspect-ratio panel (+ Move handle), creation flow, loading cube — loads 7th — [about](__about/layouts.md) · [flow](__flow/layouts.md) |
+| `gestures.js` | Algorithmic | canvas pointer-event dispatch: pinch-zoom + font-zoom staircase + the single-finger touchMode gestures — loads 8th — [about](__about/gestures.md) · [flow](__flow/gestures.md) |
+| `connection.js` | Algorithmic | WebSocket lifecycle, protocol message handlers, visibility-gated session — loads 9th (starts the page) — [about](__about/connection.md) · [flow](__flow/connection.md) |
 
 ## Connections
 

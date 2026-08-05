@@ -399,6 +399,15 @@ body.hidden-controls #update-banner { display: none; }
   color: var(--accent);
   background: rgb(56 189 248 / 0.08);
 }
+/* A step the PC's own settings put out of reach (owner 2026-08-05): visibly
+   inert, so nobody taps 30 fps under a 10 fps PC and wonders why nothing
+   changed. Struck through, not just dimmed — dim alone reads as "unselected". */
+.q-seg button.out {
+  color: var(--text-secondary);
+  opacity: 0.4;
+  text-decoration: line-through;
+  border-style: dashed;
+}
 .sets-card {
   width: min(420px, 100%);
   max-height: 92vh;
