@@ -9,10 +9,14 @@ import android.graphics.Bitmap
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
+import android.net.TrafficStats
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
+import android.app.KeyguardManager
 import android.os.Handler
 import android.os.Looper
+import android.os.PowerManager
 import android.view.View
 import android.view.WindowManager
 import android.webkit.JavascriptInterface
@@ -82,6 +86,21 @@ class MainActivity : AppCompatActivity() {
     // guaranteed reload of a healthy session).
     private var pageAlive = false
     private var lastLoadFailed = false
+    /** An EXCURSION is a trip THIS shell sent the user on — a file picker, the
+     *  camera, the voice recogniser, a runtime permission dialog. It is the
+     *  one kind of page-hide that means "still working with you, back in a
+     *  second", and it is the only thing the PC is allowed to hold layout
+     *  windows above the owner's desk for.
+     *
+     *  It used to be guessed in the page from a 90-second timer armed by the
+     *  last Mic/picker tap, so locking the tablet moments after dictating was
+     *  reported as an excursion and the owner's Chrome and VSCode hovered over
+     *  his desk for five minutes (his report, twice, 2026-08-05). The shell is
+     *  the only component that KNOWS, so the shell is what answers now. */
+    private var excursions = 0
+    /** The activity is between onStart and onStop — i.e. there is a window on
+     *  screen to load a page into. */
+    private var started = false
 
     /** Reconnect the moment the phone actually has a network again. Foreign
      *  Wi-Fi drops and re-grants connectivity constantly (AP kicks, power
@@ -112,6 +131,7 @@ class MainActivity : AppCompatActivity() {
 
     private val filePicker =
         registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+            endExcursion()
             fileCallback?.onReceiveValue(if (uri != null) arrayOf(uri) else arrayOf())
             fileCallback = null
         }
@@ -120,6 +140,7 @@ class MainActivity : AppCompatActivity() {
      *  (owner 2026-08-04: more than one image/file may go to the PC at once). */
     private val multiPicker =
         registerForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
+            endExcursion()
             fileCallback?.onReceiveValue(uris?.toTypedArray() ?: arrayOf())
             fileCallback = null
         }
@@ -129,6 +150,7 @@ class MainActivity : AppCompatActivity() {
     private var cameraUri: Uri? = null
     private val cameraShot =
         registerForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
+            endExcursion()
             val uri = cameraUri
             fileCallback?.onReceiveValue(if (ok && uri != null) arrayOf(uri) else arrayOf())
             fileCallback = null
@@ -139,8 +161,11 @@ class MainActivity : AppCompatActivity() {
      *  intent legally REQUIRES the runtime grant too. */
     private val cameraPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            // Granted -> the camera opens next, so the trip is not over yet;
+            // refused -> it is, and the page comes straight back.
             if (granted) launchCamera()
             else {
+                endExcursion()
                 fileCallback?.onReceiveValue(arrayOf())
                 fileCallback = null
             }
@@ -148,7 +173,20 @@ class MainActivity : AppCompatActivity() {
 
     private val audioPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            endExcursion()
             if (granted) voice.listen() else voice.deny()
+        }
+
+    /** Android 13+ asks before ANY app may raise a notification. Requested on
+     *  the first notice rather than at startup: a user who never turns the
+     *  feature on is never asked, and the ask arrives with its reason
+     *  visible on screen (owner principle — nothing unexplained). */
+    private val notifyPermission =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            if (!granted) {
+                web.evaluateJavascript(
+                    "window.__notifyDenied && __notifyDenied()", null)
+            }
         }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -204,6 +242,7 @@ class MainActivity : AppCompatActivity() {
         connectivity?.unregisterNetworkCallback(netCallback)
         connectivity = null
         voice.destroy()
+        notifier.release()
         handler.removeCallbacksAndMessages(null)
         super.onDestroy()
     }
@@ -217,6 +256,11 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    // ── Notifications ── lives in Notifier.kt (ROADMAP Phase H, owner
+    // 2026-08-05): a job on the PC finished, and the phone says WHICH agent.
+    // Lazy, because most sessions never receive one.
+    private val notifier by lazy { Notifier(this) }
+
     private fun launchCamera() {
         val dir = File(cacheDir, "camera").apply { mkdirs() }
         val file = File(dir, "shot.jpg")
@@ -226,6 +270,7 @@ class MainActivity : AppCompatActivity() {
             cameraShot.launch(uri)
         } catch (e: Exception) {
             // no camera app at all — hand back an empty pick, the page toasts
+            endExcursion()   // nothing will hide the page after all
             fileCallback?.onReceiveValue(arrayOf())
             fileCallback = null
             cameraUri = null
@@ -290,9 +335,12 @@ class MainActivity : AppCompatActivity() {
                         // here would kill a healthy session (the unlock race).
                         errorView.visibility = View.GONE
                         loadingView.visibility = View.GONE
-                    } else {
+                    } else if (started) {
                         web.loadUrl(chosen) // loader (or card) stays until the page reacts
                     }
+                    // Not started = no window on screen. Loading here is what
+                    // let a background network event open a full stream to a
+                    // phone in a pocket; onResume re-runs the resolver anyway.
                 } else {
                     loadingView.visibility = View.GONE
                     showErrorCard()
@@ -542,6 +590,44 @@ class MainActivity : AppCompatActivity() {
         }.start()
     }
 
+    /** Called at the moment the shell itself launches something that will
+     *  hide the page. Paired with endExcursion() in every result callback. */
+    private fun beginExcursion() {
+        excursions++
+    }
+
+    private fun endExcursion() {
+        if (excursions > 0) excursions--
+    }
+
+    /** Is the screen actually off, or the device locked? This is the fact the
+     *  page could never know and kept guessing wrong. isInteractive() is false
+     *  from the moment the screen goes dark; the keyguard covers "screen on,
+     *  but locked" (a lock button press on some OEM builds, a smart-lock
+     *  timeout). Either one is the end of the session, full stop. */
+    private fun screenIsAway(): Boolean {
+        val power = getSystemService(Context.POWER_SERVICE) as? PowerManager
+        if (power != null && !power.isInteractive) return true
+        val keyguard = getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager
+        return keyguard?.isKeyguardLocked == true
+    }
+
+    override fun onStart() {
+        super.onStart()
+        started = true
+    }
+
+    override fun onStop() {
+        // Nothing may keep probing, retrying or LOADING while there is no
+        // window on screen: the resolver's 4 s timer and the network callback
+        // used to run on regardless, and a loadUrl from either of them woke a
+        // pocketed phone into a full session (audit 2026-08-05).
+        started = false
+        handler.removeCallbacksAndMessages(null)
+        resolveEpoch++   // voids any resolver thread still in flight
+        super.onStop()
+    }
+
     override fun onPause() {
         // The LOCK button stops EVERYTHING (owner round 4, 2026-08-05):
         // the mic lives in this shell, not in the page, and its round loop
@@ -598,6 +684,60 @@ class MainActivity : AppCompatActivity() {
             else -> ""
         }
 
+        /** WHY the page is being hidden — the question the page kept getting
+         *  wrong on its own (owner failure 2026-08-05, twice: his Chrome and
+         *  VSCode left hovering over his desk). Three answers, and the server
+         *  treats anything it does not recognise as the end of the session:
+         *
+         *  "lock"      — the screen is off or the device is locked. ALWAYS the
+         *                end, whatever else is going on: nothing of ours may
+         *                stay above the owner's desk while he is not looking.
+         *  "excursion" — THIS shell launched a picker / camera / voice /
+         *                permission dialog and is still waiting for its
+         *                result. The owner is with us; the PC holds the layout.
+         *  ""          — the app was switched away or closed. The end.
+         *
+         *  The lock test comes first on purpose: a picker can be open when the
+         *  screen goes off, and the screen wins. */
+        @JavascriptInterface
+        fun hideReason(): String = when {
+            screenIsAway() -> "lock"
+            excursions > 0 -> "excursion"
+            else -> ""
+        }
+
+        /** What this phone has spent, straight from Android (cumulative since
+         *  boot): our own UID and the whole device. The PC's Traffic window
+         *  subtracts a reading taken before an absence from one taken after
+         *  it — which is how "does it keep running while the screen is off"
+         *  gets an answer measured BY THE PHONE instead of argued about
+         *  (owner 2026-08-05). UNSUPPORTED (-1) is reported as 0. */
+        @JavascriptInterface
+        fun netStats(): String {
+            fun ok(value: Long) = if (value == TrafficStats.UNSUPPORTED.toLong()) 0L else value
+            val uid = applicationInfo.uid
+            return JSONObject()
+                .put("app_rx", ok(TrafficStats.getUidRxBytes(uid)))
+                .put("app_tx", ok(TrafficStats.getUidTxBytes(uid)))
+                .put("dev_rx", ok(TrafficStats.getTotalRxBytes()))
+                .put("dev_tx", ok(TrafficStats.getTotalTxBytes()))
+                .toString()
+        }
+
+        /** Hold the screen awake while the owner is actually working, release
+         *  it when he stops. The flag used to be set once in onCreate and
+         *  never cleared, so the tablet NEVER slept by itself: the presence
+         *  signal the whole layout design rests on could only fire if he
+         *  locked it by hand, and the screen burned battery over a stream
+         *  nobody was watching (audit 2026-08-05). */
+        @JavascriptInterface
+        fun keepAwake(on: Boolean) {
+            runOnUiThread {
+                if (on) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            }
+        }
+
         /** Layout focus locks the phone's rotation to the layout's chosen
          *  orientation (owner 2026-08-02); "" unlocks (full-desktop view,
          *  rotation free). "wide" = landscape, "portrait" = portrait. */
@@ -622,7 +762,10 @@ class MainActivity : AppCompatActivity() {
                 if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) ==
                     PackageManager.PERMISSION_GRANTED
                 ) voice.listen()
-                else audioPermission.launch(Manifest.permission.RECORD_AUDIO)
+                else {
+                    beginExcursion()   // the permission dialog hides the page
+                    audioPermission.launch(Manifest.permission.RECORD_AUDIO)
+                }
             }
         }
 
@@ -657,6 +800,29 @@ class MainActivity : AppCompatActivity() {
         @JavascriptInterface
         fun voiceSetMuteBeeps(on: Boolean) {
             runOnUiThread { voice.setMuteBeepsPref(on) }
+        }
+
+        /** A job on the PC finished (ROADMAP Phase H, owner 2026-08-05). The
+         *  AGENT's name leads, and it is also the notification TAG, so the
+         *  same agent replaces its own line while several agents keep one
+         *  line each. */
+        @JavascriptInterface
+        fun notify(title: String, text: String, tag: String) {
+            runOnUiThread {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                    checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) !=
+                    PackageManager.PERMISSION_GRANTED) {
+                    notifyPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    return@runOnUiThread   // this one is lost; the next lands
+                }
+                notifier.post(title, text, tag)
+            }
+        }
+
+        /** Says the notice out loud (owner: "izgovori neku reč"). */
+        @JavascriptInterface
+        fun speak(text: String) {
+            runOnUiThread { notifier.speak(text) }
         }
 
         /** Update tap: open /app.apk (on the SAME PC) in the system browser —
@@ -743,6 +909,7 @@ class MainActivity : AppCompatActivity() {
             // otherwise a single pick of the input's accept type.
             val accept = fileChooserParams.acceptTypes
                 ?.firstOrNull { !it.isNullOrBlank() } ?: "*/*"
+            beginExcursion()   // the page is about to be hidden BY US
             when {
                 fileChooserParams.isCaptureEnabled ->
                     if (checkSelfPermission(Manifest.permission.CAMERA) ==

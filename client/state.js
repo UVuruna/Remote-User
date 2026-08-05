@@ -26,11 +26,25 @@ const RECONNECT_MS = 2000;
 // server's patience is 12 s (three missed beats).
 const HEARTBEAT_MS = 4000;
 // An excursion — image picker, camera, voice, a permission dialog — hides the
-// page while the owner is very much still working with us. Anything that
-// leaves the app on purpose marks it, and the hide that follows within this
-// window is announced as an excursion instead of a leave, so the PC does not
-// pack the layout away underneath a gallery pick.
-const EXCURSION_GRACE_MS = 90000;
+// page while the owner is very much still working with us, so the PC holds the
+// layout instead of packing it away underneath a gallery pick.
+//
+// THIS TIMER IS THE FALLBACK, NOT THE ANSWER (owner failure 2026-08-05, the
+// second time his windows stayed on top). It used to be 90 s and it was the
+// ONLY signal: tapping Mic armed it, and LOCKING the tablet six seconds later
+// was therefore announced to the PC as "back in a moment", which held his
+// Chrome and VSCode above everything for five minutes while he sat at his
+// desk. Inside the app the reason now comes from the shell, which can read
+// the screen and keyguard state and knows whether it launched the picker
+// itself (`Android.hideReason()`); this grace only covers a dev browser,
+// where nothing can be asked — and it is short enough to be harmless there.
+const EXCURSION_GRACE_MS = 12000;
+// How long the screen is held awake after the last touch. The shell used to
+// set FLAG_KEEP_SCREEN_ON once and never clear it, so the tablet NEVER slept
+// by itself: the presence signal the whole design rests on could only ever
+// fire if the owner locked it by hand, and the screen burned battery all the
+// while (audit 2026-08-05).
+const KEEP_AWAKE_MS = 180000;
 const LIVE_MAX_BEHIND_S = 0.5;   // jump to the live edge when this far behind
 const LIVE_TARGET_BEHIND_S = 0.1;
 const BUFFER_KEEP_S = 8;         // decoded history kept in MSE before trimming
@@ -140,6 +154,47 @@ function markExcursion() {
 
 function inExcursion() {
   return performance.now() < excursionUntil;
+}
+
+// WHY the page is being hidden, in the words of whoever actually knows.
+// Inside the app that is the shell: it reads the screen and keyguard state,
+// and it knows whether IT put a picker / camera / voice / permission dialog in
+// front of us. The page's own timer is only consulted when nobody can be
+// asked — a dev browser, or an older shell without the bridge.
+//
+// The vocabulary is small and the server treats everything it does not
+// recognise as a LEAVE, because the safe default is the owner's own desk:
+//   "lock"      — screen off or device locked. ALWAYS the end of the session.
+//   "excursion" — we are still working; the PC holds the layout.
+//   ""          — app switched away, closed: the end of the session.
+function hideReason() {
+  if (IN_APP && window.Android.hideReason) {
+    try {
+      const reason = window.Android.hideReason();
+      if (reason) return reason;
+      // The shell answered "not a lock, not my picker" — believe it over any
+      // timer of ours. An empty answer IS an answer.
+      return "";
+    } catch (e) {
+      // fall through to the page's own guess
+    }
+  }
+  return inExcursion() ? "excursion" : "";
+}
+
+// What the phone itself has spent (Android TrafficStats — our app's UID and
+// the whole device, both cumulative since the phone booted). The PC's Traffic
+// window turns two of these readings into the only honest answer to "does it
+// keep running while the screen is off" (owner 2026-08-05). Null outside the
+// app, where there is nothing to ask.
+function phoneNet() {
+  if (!IN_APP || !window.Android.netStats) return null;
+  try {
+    const raw = JSON.parse(window.Android.netStats() || "null");
+    return raw && typeof raw.app_rx === "number" ? raw : null;
+  } catch (e) {
+    return null;
+  }
 }
 
 function send(msg) {

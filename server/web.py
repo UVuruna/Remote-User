@@ -6,8 +6,7 @@ Protocol (see project CLAUDE.md):
   button — down on finger-land, up on lift, at the current cursor),
   pointer_move, scroll, viewport (JPEG mode only), key_text, key_special,
   chord, monitor_switch, screenshot (optionally with the region the phone
-  views + paste=true — crops and injects Ctrl+V), paste_text (a typed
-  command: clipboard + Ctrl+V + Enter)
+  views + paste=true — crops and injects Ctrl+V)
 - server → client, JSON text: `config` after auth and after every stream
   (re)start — monitor size plus `stream` ("h264" | "jpeg") and, in H.264 mode,
   the MSE `codec` string parsed from the live init segment; `actions` (radial
@@ -22,8 +21,9 @@ No message is processed before a valid `auth` — hard security rule.
 
 The `stream` argument everywhere is either an H264Manager or a JpegStreamer —
 one duck interface: mode, width, height, monitor_index, output_count(),
-switch_to(), take_screenshot(); the JPEG side adds set_viewport(), the H.264
-side open_session()/close_session().
+switch_to(), take_screenshot(); the JPEG side adds set_viewport() plus
+start()/stop() (its capture runs on demand, driven by FrameHub.subscribers),
+the H.264 side open_session()/close_session().
 """
 
 import asyncio
@@ -47,12 +47,17 @@ from PIL import Image, ImageOps
 
 import clipboard
 import config
+import layout_api
 import monitors
+import notify
 import pairing
+import presence
+import traffic
 import uia
 import window_manager
 from config import SETTINGS, apk_version, app_version
 from input_injector import BUTTON_FLAGS, InputInjector
+from layout_api import toast as _toast
 
 logger = logging.getLogger(__name__)
 
@@ -77,21 +82,10 @@ def decode_upload(data: bytes):
     return cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_COLOR)
 
 
-# --- Presence (owner 2026-08-05) -------------------------------------------
-# Layout members are always-on-top while the phone is showing them, so the
-# server MUST know the moment the phone stops working with us — otherwise
-# those windows keep hovering over everything for the owner AT THE DESK. A
-# clean socket close cannot carry that news: a locked phone lets its Wi-Fi
-# sleep and the TCP connection just goes quiet (the live symptom — "kada
-# sednem za desktop ostane topmost na svima"). So presence is a positive
-# signal: the client sends `hb` every few seconds, and silence IS the leave.
-HEARTBEAT_TIMEOUT_S = 12.0   # ~3 missed heartbeats (the client beats at 4 s)
-# An excursion (image picker, camera, voice, a permission dialog) pauses the
-# page — its heartbeats stop while the owner is very much still there — so the
-# client announces it first (`away {excursion: true}`) and this much longer
-# backstop is all that remains, for the excursion that never returns.
-EXCURSION_MAX_S = 300.0
-WATCHDOG_POLL_S = 2.0
+# Presence — the phone's heartbeat, its parting word, and the rule that the
+# owner's own desk outranks both — lives in `presence.py` (split 2026-08-05,
+# THE STRUCTURE LAW: one responsibility, its own failure history, its own
+# gate in tests/test_presence.py). Its timings live there too.
 
 # --- Typed commands (owner 2026-08-05) --------------------------------------
 # A `paste_text` button pastes and then presses Enter. The pause between them
@@ -124,6 +118,15 @@ class FrameHub:
     def unsubscribe(self, q: asyncio.Queue) -> None:
         self._queues.discard(q)
 
+    @property
+    def subscribers(self) -> int:
+        """How many clients are actually being fed — the JPEG capture runs on
+        demand off this number, exactly as the H.264 path already does. It
+        used to start with the SERVER and stop with it, so the fallback mode
+        captured and encoded 30 frames a second at an empty room, all night
+        (audit 2026-08-05)."""
+        return len(self._queues)
+
     def push_threadsafe(self, jpeg: bytes, region: tuple[float, float, float, float]) -> None:
         """Called from the capture thread. A slow client keeps only the newest frame."""
         packet = struct.pack("<4f", *region) + jpeg
@@ -137,7 +140,7 @@ class FrameHub:
 
 
 def create_app(stream, hub: FrameHub | None, injector: InputInjector, token: str,
-               stats: ServerStats | None = None) -> FastAPI:
+               stats: ServerStats | None = None, layouts=None) -> FastAPI:
     stats = stats if stats is not None else ServerStats()
     app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
 
@@ -206,6 +209,7 @@ def create_app(stream, hub: FrameHub | None, injector: InputInjector, token: str
         if request.query_params.get("token") != token:
             return JSONResponse({"ok": False, "error": "unauthorized"}, status_code=401)
         data = await file.read()
+        traffic.METER.add_in(len(data))  # phone -> PC counts wherever it enters
         img = await asyncio.to_thread(decode_upload, data)
         if img is None:
             # magic bytes identify the format we failed on (e.g. b'ftypheic')
@@ -238,7 +242,9 @@ def create_app(stream, hub: FrameHub | None, injector: InputInjector, token: str
             path = drop / name
             if path in paths:  # two picks may carry the same name
                 path = drop / f"{i}_{name}"
-            path.write_bytes(await f.read())
+            blob = await f.read()
+            traffic.METER.add_in(len(blob))
+            path.write_bytes(blob)
             paths.append(path)
         if not paths:
             return JSONResponse({"ok": False, "error": "no files"}, status_code=400)
@@ -252,16 +258,37 @@ def create_app(stream, hub: FrameHub | None, injector: InputInjector, token: str
     app.mount("/static", StaticFiles(directory=SETTINGS.client_dir), name="static")
 
     # Layouts live for the SERVER's lifetime (owner 2026-08-02): the phone may
-    # disconnect and return, the slider list survives. One registry per app.
-    layouts = window_manager.LayoutRegistry()
+    # disconnect and return, the slider list survives. The caller may hand one
+    # in so it survives a RESTART too (Apply & restart used to build a fresh
+    # empty registry, losing both the owner's layouts and the only in-memory
+    # list of which windows were still always-on-top — audit 2026-08-05), and
+    # `app.state` publishes it so teardown can reach it without the closure.
+    layouts = layouts if layouts is not None else window_manager.LayoutRegistry()
+    app.state.layouts = layouts
     # One device at a time (owner 2026-08-02 — tablet and phone must never
     # drive the PC together): the newest authenticated socket wins, the
     # previous one is closed with 4409 and its client stops auto-reconnecting.
     active_client: dict = {"ws": None}
+    # "The PC calls you" (ROADMAP Phase H, owner 2026-08-05): anything on this
+    # machine that finishes a job POSTs /notify, and the phone raises a real
+    # notification naming the AGENT. It rides the same one-device slot above,
+    # so a device that took the session over is the one that hears about it.
+    notify.register(app, token, active_client)
+
+    # An excursion hold outlives the socket that announced it, so its task
+    # needs an owner here — a bare create_task is only referenced by the event
+    # loop while it runs and may be garbage-collected mid-sleep, which would
+    # silently skip the very release it exists for.
+    holds: set = set()
 
     @app.websocket("/ws")
-    async def ws_endpoint(ws: WebSocket):
-        await ws.accept()
+    async def ws_endpoint(raw_ws: WebSocket):
+        await raw_ws.accept()
+        # Every byte to and from this phone is counted from here on (owner's
+        # traffic monitor 2026-08-05). Wrapping the socket ONCE is what makes
+        # the measurement complete — counters added at each send call site
+        # would measure most of the traffic, and "most" settles nothing.
+        ws = traffic.MeteredSocket(raw_ws, traffic.METER)
         first = await _authenticate(ws, token)
         if first is None:
             await ws.close(code=4401)
@@ -274,7 +301,14 @@ def create_app(stream, hub: FrameHub | None, injector: InputInjector, token: str
                 await prev.close(code=4409)  # taken over by this device
             except RuntimeError:
                 pass  # already closing
+        # A hold armed by an EARLIER connection must not fire into this one:
+        # its only test was "no client connected", which is equally true in
+        # every ordinary reconnect gap, so a stale one would minimize the
+        # layout the owner is looking at right now (audit 2026-08-05).
+        for hold in list(holds):
+            hold.cancel()
         stats.clients += 1
+        traffic.METER.set_clients(stats.clients)
         # The device's short/long side ratio — layout placement turns it into
         # a real aspect per the layout's chosen orientation.
         screen = first.get("screen") or {}
@@ -285,50 +319,64 @@ def create_app(stream, hub: FrameHub | None, injector: InputInjector, token: str
             ratio = 9 / 16
         conn = {"ratio": ratio, "active": None, "region": None, "quality": None,
                 # presence: when we last heard from the phone, and whether it
-                # announced an excursion (see HEARTBEAT_TIMEOUT_S above)
+                # announced an excursion on its way out (see presence.py)
                 "seen": time.monotonic(), "away": None, "left": False}
-        await ws.send_text(json.dumps({"type": "actions", **_load_actions()}))
-        await _send_layout_state(ws, layouts, conn)
-        # Coming back resumes the layout the phone was last working in (owner
-        # 2026-08-05) — leaving work mode minimized them, and the desktop is
-        # NOT where the owner left off. Only a deliberate desktop choice
-        # (which forgets the pointer) resumes on the desktop.
-        resume = await asyncio.to_thread(layouts.resume_index)
-        if resume is not None:
-            await _layout_focus(ws, layouts, stream, conn, resume)
-        tasks = [asyncio.create_task(_send_cursor(ws, injector)),
-                 asyncio.create_task(_presence_watchdog(ws, layouts, conn))]
+        tasks: list = []
         queue = None
-        if stream.mode == "jpeg":
-            await _send_config(ws, stream, token)
-            queue = hub.subscribe()
-            tasks.append(asyncio.create_task(_send_frames(ws, queue)))
-        else:
-            tasks.append(asyncio.create_task(_stream_h264(ws, stream, token, conn)))
+        # EVERYTHING that can raise a window lives inside this try (audit
+        # 2026-08-05): the resume-focus below puts members into the
+        # always-on-top band, and it used to sit OUTSIDE, so one exception
+        # anywhere in the setup left them there with no finally to lower them.
         try:
+            await ws.send_text(json.dumps({"type": "actions", **_load_actions()}))
+            await layout_api.send_layout_state(ws, layouts, conn)
+            # Coming back resumes the layout the phone was last working in
+            # (owner 2026-08-05) — leaving work mode minimized them, and the
+            # desktop is NOT where the owner left off. Only a deliberate
+            # desktop choice (which forgets the pointer) resumes on the desktop.
+            resume = await asyncio.to_thread(layouts.resume_index)
+            if resume is not None:
+                await layout_api.layout_focus(ws, layouts, stream, conn, resume)
+            tasks.append(asyncio.create_task(_send_cursor(ws, injector)))
+            tasks.append(asyncio.create_task(
+                presence.watchdog(ws, layouts, conn, active_client)))
+            if stream.mode == "jpeg":
+                await _send_config(ws, stream, token)
+                queue = hub.subscribe()
+                if hub.subscribers == 1:
+                    await asyncio.to_thread(stream.start)  # first watcher
+                tasks.append(asyncio.create_task(_send_frames(ws, queue)))
+            else:
+                tasks.append(asyncio.create_task(_stream_h264(ws, stream, token, conn)))
             await _receive_input(ws, injector, stream, token, layouts, conn)
         except WebSocketDisconnect:
             logger.info("Client disconnected: %s", ws.client)
         finally:
             stats.clients -= 1
+            traffic.METER.set_clients(stats.clients)
             if active_client["ws"] is ws:
                 active_client["ws"] = None
                 # Nobody is watching any layout now. Only the LAST socket does
                 # this: on a 4409 takeover the new device may be mid-focus.
                 # An announced EXCURSION is not a leave — the owner is picking
-                # an image and comes right back; the watchdog's long backstop
-                # covers the excursion that never returns.
+                # an image and comes right back; the backstop covers the
+                # excursion that never returns, and his own keyboard at this
+                # PC cuts even that short (presence.py).
                 if conn.get("away"):
                     logger.info("Phone away on an excursion — layout held")
-                    asyncio.create_task(
-                        _excursion_backstop(layouts, active_client))
+                    hold = asyncio.create_task(
+                        presence.excursion_backstop(layouts, active_client))
+                    holds.add(hold)
+                    hold.add_done_callback(holds.discard)
                 else:
-                    await _leave_session(layouts, conn)
+                    await presence.leave_session(layouts, conn)
             for task in tasks:
                 task.cancel()
             if queue is not None:
                 hub.unsubscribe(queue)
                 stream.set_viewport(0.0, 0.0, 1.0, 1.0)
+                if hub.subscribers == 0:
+                    await asyncio.to_thread(stream.stop)  # nobody left to feed
 
     return app
 
@@ -347,50 +395,6 @@ async def _authenticate(ws: WebSocket, token: str) -> dict | None:
     return first
 
 
-async def _leave_session(layouts, conn: dict) -> None:
-    """The phone stopped working with us — screen locked, app closed, killed,
-    network gone (owner 2026-08-05). Everything the layouts hold on the PC is
-    handed back to the desk: every member leaves the always-on-top band and
-    gets minimized, exactly like choosing Desktop. Which layout was being used
-    stays remembered in the registry — the next session resumes there.
-    Idempotent: the watchdog and the socket's own teardown both call it."""
-    if conn.get("left"):
-        return
-    conn["left"] = True
-    conn["active"], conn["region"] = None, None
-    logger.info("Phone left work mode — layout members minimized")
-    await asyncio.to_thread(layouts.minimize_members)
-
-
-async def _excursion_backstop(layouts, active_client: dict) -> None:
-    """An excursion (image picker, camera, voice) legitimately keeps the layout
-    alive with the socket closed — but only while the owner really comes back.
-    This is the far end of that patience; a phone still absent by then left."""
-    await asyncio.sleep(EXCURSION_MAX_S)
-    if active_client["ws"] is None:
-        await _leave_session(layouts, {})
-
-
-async def _presence_watchdog(ws: WebSocket, layouts, conn: dict) -> None:
-    """Silence is the leave signal (see HEARTBEAT_TIMEOUT_S). A locked phone
-    rarely manages a clean socket close — its Wi-Fi sleeps and the connection
-    just goes quiet — so the layout's always-on-top windows would hover over
-    the owner's desk forever. Missing heartbeats end the session instead."""
-    while True:
-        await asyncio.sleep(WATCHDOG_POLL_S)
-        silent = time.monotonic() - conn["seen"]
-        if silent < (EXCURSION_MAX_S if conn.get("away") else HEARTBEAT_TIMEOUT_S):
-            continue
-        logger.info("No signal from the phone for %.0fs (%s) — session ends",
-                    silent, "excursion" if conn.get("away") else "heartbeat")
-        await _leave_session(layouts, conn)
-        try:
-            await ws.close(code=4408)  # gone quiet — the phone reconnects fresh
-        except RuntimeError:
-            pass
-        return
-
-
 async def _send_frames(ws: WebSocket, queue: asyncio.Queue) -> None:
     while True:
         await ws.send_bytes(await queue.get())
@@ -405,6 +409,11 @@ async def _stream_h264(ws: WebSocket, manager, token: str,
     conn = conn if conn is not None else {}
     loop = asyncio.get_running_loop()
     while True:
+        # The phone said it is gone. Capture, ffmpeg and the socket all stay
+        # idle until it says otherwise — a stream nobody can see is exactly
+        # the traffic the owner went looking for (owner 2026-08-05).
+        while conn.get("paused"):
+            await asyncio.sleep(0.25)
         queue: asyncio.Queue = asyncio.Queue(maxsize=SETTINGS.h264_queue_chunks)
 
         def push(item, q=queue) -> None:
@@ -593,11 +602,8 @@ async def _send_config(ws: WebSocket, stream, token: str, codec: str | None = No
     await ws.send_text(json.dumps(payload))
 
 
-async def _toast(ws: WebSocket, text: str) -> None:
-    await ws.send_text(json.dumps({"type": "toast", "text": text}))
-
-
-async def _switch_monitor(ws: WebSocket, injector: InputInjector, stream, token: str) -> None:
+async def _switch_monitor(ws: WebSocket, injector: InputInjector, stream, token: str,
+                          layouts=None, conn: dict | None = None) -> None:
     count = stream.output_count()
     if count < 2:
         await _toast(ws, "Only one active monitor")
@@ -610,6 +616,15 @@ async def _switch_monitor(ws: WebSocket, injector: InputInjector, stream, token:
     injector.set_monitor_rect(
         monitors.rect_for_size(stream.width, stream.height, stream.monitor_index)
     )
+    # A focused layout stands on the monitor we just stopped watching, and it
+    # is still always-on-top there — over a desk the phone can no longer even
+    # see (audit 2026-08-05). Switching monitors therefore LEAVES the layout,
+    # exactly like choosing Desktop; the layout bar is still there to step
+    # back into it once the phone is looking at its monitor again.
+    if layouts is not None and conn is not None and conn.get("active") is not None:
+        await asyncio.to_thread(layouts.minimize_members)
+        conn["active"], conn["region"] = None, None
+        await layout_api.send_layout_state(ws, layouts, conn)
     if stream.mode == "jpeg":
         await _send_config(ws, stream, token)  # H.264 clients get config from their fresh session
     await _toast(ws, f"Monitor {stream.monitor_index + 1}/{count}")
@@ -666,172 +681,6 @@ def _paste_text(injector: InputInjector, text: str, enter: bool) -> None:
         injector.press_key("enter")
 
 
-def _mon_rect(stream) -> tuple[int, int, int, int]:
-    return monitors.rect_for_size(stream.width, stream.height, stream.monitor_index)
-
-
-async def _send_layout_state(ws: WebSocket, layouts, conn: dict) -> None:
-    state = await asyncio.to_thread(layouts.state, conn["active"], conn["region"])
-    if state["active"] is None:
-        conn["active"], conn["region"] = None, None  # pruned under us
-    await ws.send_text(json.dumps(state))
-
-
-async def _layout_pick(ws: WebSocket, layouts, stream, msg: dict) -> None:
-    """The phone's armed tap: identify the window under the point and offer
-    the layout choices (solo / grid templates + open windows to fill cells)."""
-    x, y = float(msg["x"]), float(msg["y"])
-    target = await asyncio.to_thread(
-        window_manager.window_at, _mon_rect(stream), x, y)
-    if target is None:
-        await _toast(ws, "No window there — tap on a window")
-        return
-    # Tab under the same point (step 2): the offer names it, and the client
-    # echoes the pick point back in layout_create so extraction re-finds it.
-    # Grid cells are picked by FURTHER taps (owner 2026-08-02), so no window
-    # list rides along here — the list-based source is `layout_list`.
-    # Only tab-capable apps are asked (owner 2026-08-03) — everything else's
-    # TabItems are internal section switchers that cannot become a window.
-    tab = None
-    if uia.has_tabs(target["process"]):
-        tab = await asyncio.to_thread(uia.tab_at, _mon_rect(stream), x, y)
-    await ws.send_text(json.dumps({
-        "type": "layout_offer",
-        "target": target,
-        "tab": tab,
-        "x": x, "y": y,
-        "grids": list(window_manager.GRID_TEMPLATES),
-    }))
-
-
-async def _layout_list(ws: WebSocket, layouts, stream) -> None:
-    """The list-based creation source (owner 2026-08-02): every open window
-    PLUS each window's content tabs as separate entries — 'Google Chrome'
-    alone hid its tabs, the exact reported gap. Windows that already belong to
-    a layout are LEFT OUT (owner 2026-08-03): one window cannot be shown in
-    two places, so it stays off the list for as long as it is in a layout."""
-    mon_rect = _mon_rect(stream)
-    used = await asyncio.to_thread(layouts.member_hwnds)
-    windows = await asyncio.to_thread(window_manager.list_windows, used)
-    entries = []
-    for w in windows:
-        entries.append({"kind": "window", "hwnd": w["hwnd"], "title": w["title"],
-                        "process": w["process"], "icon": w["icon"]})
-        if not uia.has_tabs(w["process"]):
-            continue  # its TabItems are internal sections, not real tabs
-        for tab in await asyncio.to_thread(uia.list_tabs, mon_rect, w["hwnd"]):
-            entries.append({"kind": "tab", "hwnd": w["hwnd"],
-                            "tab": {"name": tab["name"]},
-                            "x": tab["x"], "y": tab["y"],
-                            "title": tab["name"],
-                            "process": w["process"], "icon": w["icon"]})
-    await ws.send_text(json.dumps({
-        "type": "layout_offer",
-        "target": None,
-        "entries": entries,
-        "grids": list(window_manager.GRID_TEMPLATES),
-    }))
-
-
-async def _resolve_slot(ws: WebSocket, stream, slot: dict) -> tuple[int, str | None] | None:
-    """One creation slot → a concrete hwnd. A slot naming a TAB is extracted
-    into its own window first (app command → Explorer path → drag); every
-    failure falls back to the slot's whole window."""
-    hwnd = int(slot["hwnd"])
-    tab = slot.get("tab")
-    if not tab:
-        return (hwnd, None)
-    info = await asyncio.to_thread(window_manager.window_at_hwnd, hwnd)
-    if info is None:
-        return None
-    extracted = await asyncio.to_thread(
-        uia.extract_tab, _mon_rect(stream),
-        float(slot.get("x", 0.5)), float(slot.get("y", 0.5)),
-        info, tab.get("name"))
-    if extracted is None:
-        await _toast(ws, f"Could not separate “{tab.get('name', 'tab')}” — using the whole window")
-        return (hwnd, None)
-    return (extracted, tab.get("name"))
-
-
-async def _layout_create(ws: WebSocket, layouts, stream, conn: dict, msg: dict) -> None:
-    orient = "wide" if msg.get("orient") == "wide" else "portrait"
-    slots = msg.get("slots") or []
-    if not slots:
-        await _toast(ws, "Nothing selected — layout not created")
-        await _send_layout_state(ws, layouts, conn)
-        return
-    resolved: list[tuple[int, str | None]] = []
-    for i, slot in enumerate(slots):
-        r = await _resolve_slot(ws, stream, slot)
-        if r is not None:
-            resolved.append(r)
-        # one turn of the phone's loading cube per processed window
-        await ws.send_text(json.dumps(
-            {"type": "layout_progress", "done": i + 1, "total": len(slots)}))
-    if not resolved:
-        await _toast(ws, "Those windows are gone — layout not created")
-        await _send_layout_state(ws, layouts, conn)
-        return
-    target, name = resolved[0]
-    # The phone may carry the owner's own name (owner 2026-08-05); the tab /
-    # window title stays the default the panel prefilled it with.
-    typed = str(msg.get("name", "")).strip()[:80]
-    name = typed or name
-    created = await asyncio.to_thread(
-        layouts.create, target, str(msg.get("mode", "solo")),
-        msg.get("grid"), [h for h, _ in resolved[1:]],
-        orient, conn["ratio"], _mon_rect(stream), name)
-    if created is None:
-        await _toast(ws, "That window is gone — layout not created")
-    else:
-        index, placed = created
-        if not placed:
-            # Verified placement failed for at least one member (min-size or a
-            # stubborn app) — say so instead of pretending (owner 2026-08-04).
-            await _toast(ws, "A window would not take its exact spot")
-        await _layout_focus(ws, layouts, stream, conn, index)
-        return
-    await _send_layout_state(ws, layouts, conn)
-
-
-async def _layout_aspect(ws: WebSocket, layouts, stream, conn: dict, msg: dict) -> None:
-    """The phone's Aspect panel (owner 2026-08-03): store this layout's W:H
-    (0/0 = back to the phone's own shape) and free-axis position (owner
-    2026-08-05 — the Move handle; 0–1000, 500 = centered), then focus it —
-    the focus is what re-places the windows into the new region."""
-    index = int(msg["index"])
-    w, h = int(msg.get("w") or 0), int(msg.get("h") or 0)
-    pos = int(msg.get("pos") if msg.get("pos") is not None else 500) / 1000
-    if not await asyncio.to_thread(layouts.set_ratio, index, w, h, pos):
-        await _toast(ws, "That layout is gone")
-        await _send_layout_state(ws, layouts, conn)
-        return
-    await _layout_focus(ws, layouts, stream, conn, index)
-
-
-async def _layout_focus(ws: WebSocket, layouts, stream, conn: dict, index: int) -> None:
-    """index -1 = back to the full desktop. Region is re-read fresh on every
-    focus — desk-side moves/resizes never break a layout (owner rule)."""
-    if index < 0:
-        conn["active"], conn["region"] = None, None
-        # Desktop position minimizes every layout member — the desktop shows
-        # only the windows that are NOT layout material (owner 2026-08-02).
-        await asyncio.to_thread(layouts.minimize_members)
-    else:
-        focused = await asyncio.to_thread(
-            layouts.focus, index, conn["ratio"], _mon_rect(stream))
-        if focused is None:
-            conn["active"], conn["region"] = None, None
-            await _toast(ws, "That layout's window is gone")
-        else:
-            region, placed = focused
-            conn["active"], conn["region"] = index, region
-            if not placed:
-                await _toast(ws, "A window would not take its exact spot")
-    await _send_layout_state(ws, layouts, conn)
-
-
 async def _receive_input(ws: WebSocket, injector: InputInjector, stream, token: str,
                          layouts=None, conn: dict | None = None) -> None:
     conn = conn if conn is not None else {"ratio": 9 / 16, "active": None,
@@ -847,20 +696,48 @@ async def _receive_input(ws: WebSocket, injector: InputInjector, stream, token: 
         if kind != "away":
             conn["away"] = None
         if kind not in ("away", "hb"):
-            conn["left"] = False  # real work on this socket = the phone is back
+            conn["left"] = False   # real work on this socket = the phone is back
+            conn["paused"] = False  # ...so the stream may run again
         if kind == "hb":
-            continue  # heartbeat: the timestamp above IS the whole payload
+            # The timestamp above IS the heartbeat. It may carry the phone's
+            # own traffic counters (Android TrafficStats — what OUR app spent
+            # and what the whole device spent); the desktop graph shows both
+            # sides so "does it run while the screen is off" stops being an
+            # argument (owner 2026-08-05).
+            if msg.get("net"):
+                traffic.METER.note_phone(msg["net"])
+            continue
         if kind == "away":
-            # The page is about to be hidden. An EXCURSION (image picker,
-            # camera, voice, a permission dialog) means the owner is still
-            # working with us and comes straight back — hold everything.
-            # Anything else (lock, app closed) hands the desk its windows back
-            # immediately, without waiting for the heartbeat to run out.
-            if msg.get("excursion"):
+            # The page is about to be hidden, and it says WHY. An EXCURSION
+            # (image picker, camera, voice, a permission dialog) means the
+            # owner is still working with us and comes straight back — hold
+            # everything. Anything else, above all a LOCK, hands the desk its
+            # windows back immediately.
+            #
+            # The word comes from the Android shell, which reads the screen
+            # and keyguard state and knows whether it launched the picker
+            # itself. It replaces a 90-second timer in the page that guessed
+            # — and guessed "excursion" for a tablet locked seconds after
+            # dictating, which is the whole 2026-08-05 topmost failure.
+            if msg.get("net"):
+                traffic.METER.note_phone(msg["net"])
+            # Nothing may be SENT to a phone that has gone: the page normally
+            # closes the socket right behind this message, but when its Wi-Fi
+            # falls asleep first the socket lingers — and the encoder was
+            # happily filling it for as long as the hold lasted (audit
+            # 2026-08-05). The stream stops here, on every kind of away; only
+            # the LAYOUT rides the excursion timer.
+            conn["paused"] = True
+            if conn.get("reset_stream"):
+                conn["reset_stream"]()
+            if presence.is_excursion(msg):
                 conn["away"] = True
                 logger.info("Phone announced an excursion — layout held")
             else:
-                await _leave_session(layouts, conn)
+                conn["away"] = None   # a leave is not served by the long budget
+                logger.info("Phone left (%s) — the desk gets its windows back",
+                            msg.get("reason") or "no reason given")
+                await presence.leave_session(layouts, conn)
             continue
         if kind in ("pointer_down", "pointer_up", "click"):
             button = msg.get("button", "left")
@@ -910,13 +787,13 @@ async def _receive_input(ws: WebSocket, injector: InputInjector, stream, token: 
         elif kind == "chord":
             injector.press_chord(str(msg["chord"]))
         elif kind == "monitor_switch":
-            await _switch_monitor(ws, injector, stream, token)
+            await _switch_monitor(ws, injector, stream, token, layouts, conn)
         elif kind == "screenshot":
             await _screenshot(ws, stream, injector, msg)
         elif kind == "layout_pick":
-            await _layout_pick(ws, layouts, stream, msg)
+            await layout_api.layout_pick(ws, layouts, stream, msg)
         elif kind == "layout_list":
-            await _layout_list(ws, layouts, stream)
+            await layout_api.layout_list(ws, layouts, stream)
         elif kind == "next_input":
             # Scope follows the view (owner spec): layout focus → only its
             # member windows; full desktop → every visible window.
@@ -958,23 +835,23 @@ async def _receive_input(ws: WebSocket, injector: InputInjector, stream, token: 
             # evidence goes to THIS log, never to a panel on the phone).
             logger.info("Phone: %s", str(msg.get("text", ""))[:500])
         elif kind == "layout_create":
-            await _layout_create(ws, layouts, stream, conn, msg)
+            await layout_api.layout_create(ws, layouts, stream, conn, msg)
         elif kind == "layout_aspect":
-            await _layout_aspect(ws, layouts, stream, conn, msg)
+            await layout_api.layout_aspect(ws, layouts, stream, conn, msg)
         elif kind == "layout_focus":
             index = int(msg["index"])
             if index < 0:
                 # A DELIBERATE desktop choice is the state to resume into —
                 # nothing to come back to (owner 2026-08-05).
                 await asyncio.to_thread(layouts.forget_focus)
-            await _layout_focus(ws, layouts, stream, conn, index)
+            await layout_api.layout_focus(ws, layouts, stream, conn, index)
         elif kind == "layout_rename":
             # The owner's own name for a layout (owner 2026-08-05) — the window
             # title is only the default the creation panel offers.
             if not await asyncio.to_thread(
                     layouts.rename, int(msg["index"]), str(msg.get("name", ""))):
                 await _toast(ws, "That layout is gone")
-            await _send_layout_state(ws, layouts, conn)
+            await layout_api.send_layout_state(ws, layouts, conn)
         elif kind == "layout_remove":
             index = int(msg["index"])
             await asyncio.to_thread(layouts.remove, index)
@@ -983,6 +860,6 @@ async def _receive_input(ws: WebSocket, injector: InputInjector, stream, token: 
                     conn["active"], conn["region"] = None, None
                 elif conn["active"] > index:
                     conn["active"] -= 1
-            await _send_layout_state(ws, layouts, conn)
+            await layout_api.send_layout_state(ws, layouts, conn)
         else:
             logger.warning("Unknown message type %r from client", kind)
