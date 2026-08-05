@@ -4,7 +4,7 @@ ISPORUKA: kod = mic language-agnostic debug/fix, layout Move handle, sets
 picker fix, quality panel, layout zoom-font, build + GIT RELEASE · dokument =
 docs of every changed module + this checklist.
 
-WAITING_ON_OWNER: no
+WAITING_ON_OWNER: yes
 
 Round 2 SHIPPED as v0.0.075 (dictation setup card + Settings Language +
 silent download state + client_log diagnostics to the server log; layout
@@ -45,6 +45,17 @@ work resumes. Enforced machine-wide by rules/hooks/session_tasks_guard.py.
       missing (Tailscale-error-card pattern). Diagnostics must go SILENTLY
       to the server log, never flashed at the user. Design presented,
       waiting on the owner's yes.
+      ROUND 2 SHIPPED (v0.0.075, still in v0.0.076): the dictation setup card
+      (language chosen by the USER, never guessed), the Settings → Language
+      entry, the alternate Mic look while a model downloads, and silent
+      `client_log` diagnostics into the server log. BLOCKED HERE, not
+      abandoned: the next step is EVIDENCE only obtainable on the owner's
+      phone — install v0.0.076, pick the language on the card, dictate a
+      sentence, and send back (a) what got typed on the PC and (b) the
+      server-log lines around it. Which fix follows is decided by that log:
+      an engine/model gap, a wrong language pin, or a recognizer error code
+      each lead somewhere different, and guessing between them is exactly
+      what the first two rounds proved wasteful.
 - [x] 2. Layout resize panel: center Move handle (✥) — drag repositions the
       shrunken region along the free axis; applied on Apply; double-tap
       re-centers. DONE 0.0.169: layout_aspect {pos} + Layout.pos/_fit_rect
