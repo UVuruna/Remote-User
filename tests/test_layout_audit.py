@@ -108,6 +108,16 @@ def main() -> int:
                  "#quality-panel .sets-card"),
                 ("Sets picker", "openSetsPanel()", "closeSetsPanel()",
                  "#sets-panel .sets-card"),
+                ("Dictation card",
+                 "window.Android = {"
+                 " voiceLangs: () => JSON.stringify(["
+                 "  {tag:'sr-RS', name:'Srpski (Srbija)', status:'download'},"
+                 "  {tag:'en-US', name:'English (United States)', status:'ready'},"
+                 "  {tag:'de-DE', name:'Deutsch (Deutschland)', status:'online'}]),"
+                 " voiceChosen: () => 'sr-RS', voiceSetLang: () => {},"
+                 " voiceState: () => '' };"
+                 "renderDictationCard()",
+                 "closeDictationPanel()", "#dictation-panel .sets-card"),
                 ("Aspect panel + Move handle",
                  "layouts = [{name:'Audit', process:'x', orient:'portrait',"
                  " icon:null, ratio:[600,1000], pos:0.5}]; openAspectPanel(0)",

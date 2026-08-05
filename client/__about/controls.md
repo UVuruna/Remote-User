@@ -146,5 +146,12 @@ APK the PC actually serves.
 - **The overlay panels moved out** (2026-08-05, same STRUCTURE-LAW split as
   layouts): Sets picker + Quality panel live in [Panels](panels.md); this file
   keeps their state/prefs logic, panels.js keeps their DOM.
-- `__voiceInfo(text)` — diagnostic line from the shell shown as a toast while
-  the mic is ON (owner: no silent voice failures).
+- `__voiceInfo(text)` — diagnostic line from the shell, forwarded SILENTLY
+  to the PC's server log as `client_log` (owner round 2, angrily: evidence
+  for the developer, never a panel flashed at the user).
+- `__voiceState(state)` + `refreshMicButtons()` — the Mic button wears the
+  `dl` look (dashed, pulsing) while the chosen language's on-device model
+  downloads; dictation keeps working online meanwhile.
+- `micStart()` opens the dictation setup card ([Panels](panels.md)) instead
+  of listening when no language was ever chosen; the `dictation` builtin
+  (Settings → Language, replacing `anywhere` in the defaults) reopens it.

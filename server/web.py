@@ -752,6 +752,10 @@ async def _receive_input(ws: WebSocket, injector: InputInjector, stream, token: 
                     "default quality" if quality is None else
                     f"{quality['fps'] or 'max'} fps · {quality['res']} res · "
                     f"{quality['bitrate']} bitrate"))
+        elif kind == "client_log":
+            # Silent phone-side diagnostics (owner round 2, 2026-08-05: voice
+            # evidence goes to THIS log, never to a panel on the phone).
+            logger.info("Phone: %s", str(msg.get("text", ""))[:500])
         elif kind == "layout_create":
             await _layout_create(ws, layouts, stream, conn, msg)
         elif kind == "layout_aspect":

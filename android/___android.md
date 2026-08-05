@@ -13,6 +13,7 @@ scanner). Package `com.uvuruna.remoteuser`, min Android 8 (API 26).
 |------|------|----------|
 | `MainActivity.kt` | Algorithmic | WebView shell — dual-address resolve/failover state machine, self-healing error card, network callbacks, JS bridge, immersive UI — [about](__about/MainActivity.md) · [flow](__flow/MainActivity.md) |
 | `OnboardingActivity.kt` | Standard | first-run pairing screen — automatic funnel handoff + manual QR-scan/paste fallback — [about](__about/OnboardingActivity.md) |
+| `VoiceInput.kt` | Standard | dictation subsystem — user-chosen language, engine choice, silent model download, silent diagnostics (split from MainActivity 2026-08-05) — [about](__about/VoiceInput.md) |
 | `Prefs.kt` | Trivial | `SharedPreferences` wrapper for the two stored addresses (LAN URL from pairing, Tailscale URL learned from the page) |
 
 **Other files in this folder (not source-tier — resources and build config):**

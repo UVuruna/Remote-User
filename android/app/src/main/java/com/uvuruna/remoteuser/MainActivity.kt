@@ -13,9 +13,6 @@ import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import android.speech.RecognitionListener
-import android.speech.RecognizerIntent
-import android.speech.SpeechRecognizer
 import android.view.View
 import android.view.WindowManager
 import android.webkit.JavascriptInterface
@@ -151,7 +148,7 @@ class MainActivity : AppCompatActivity() {
 
     private val audioPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-            if (granted) beginListening() else voiceEnd("denied")
+            if (granted) voice.listen() else voice.deny()
         }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -206,251 +203,17 @@ class MainActivity : AppCompatActivity() {
     override fun onDestroy() {
         connectivity?.unregisterNetworkCallback(netCallback)
         connectivity = null
-        recognizer?.destroy()
-        recognizer = null
+        voice.destroy()
         handler.removeCallbacksAndMessages(null)
         super.onDestroy()
     }
 
-    // ── Voice input (owner 2026-08-04: the Mic button listens DIRECTLY) ──
-    // The page cannot (WebView has no Speech API); SpeechRecognizer here
-    // listens in place — no keyboard, no separate Google screen. One round
-    // ends at silence; the page restarts rounds while its Mic switcher is ON.
-
-    private var recognizer: SpeechRecognizer? = null
-    private var voiceOnDevice = false  // current recognizer is the on-device one
-    private var voiceCloudOnly = false // a language error demoted us for this run
-
-    /** Bind to GOOGLE's recognition service when it exists (owner report
-     *  2026-08-04: the phone's DEFAULT service — Samsung's on Samsung phones —
-     *  garbled half the dictation and mixed languages; the quality the owner
-     *  built this app for is Google's, the same engine family as the
-     *  keyboard's voice typing). Falls back to the default service. */
-    private fun googleRecognitionService(): android.content.ComponentName? {
-        val services = packageManager.queryIntentServices(
-            Intent("android.speech.RecognitionService"), 0
-        )
-        val g = services.firstOrNull {
-            it.serviceInfo.packageName == "com.google.android.googlequicksearchbox"
-        } ?: return null
-        return android.content.ComponentName(g.serviceInfo.packageName, g.serviceInfo.name)
-    }
-
-    /** The languages dictation must understand WITHOUT a manual switch, like
-     *  the keyboard's voice typing does. LANGUAGE-AGNOSTIC (owner decree
-     *  2026-08-05, angrily — a hardcoded "sr-RS" was the owner's case leaking
-     *  into the product): the PHONE'S configured languages, whatever they
-     *  are, in the user's own priority order. */
-    private fun voiceLanguages(): ArrayList<String> {
-        val list = android.os.LocaleList.getAdjustedDefault()
-        return ArrayList((0 until list.size()).map { list[it].toLanguageTag() }.distinct())
-    }
-
-    /** Debug/diagnostic line for the page's status pill (owner demand
-     *  2026-08-05: REAL debugging with evidence, not blind tweaks — the
-     *  phone SAYS which engine/languages run and what errors come back). */
-    private fun voiceInfo(text: String) {
-        if (::web.isInitialized) {
-            web.evaluateJavascript(
-                "window.__voiceInfo && __voiceInfo(${JSONObject.quote(text)})", null
-            )
-        }
-    }
-
-    /** True when the two BCP-47 tags speak the same language ("sr-RS" vs
-     *  "sr-Latn-RS" vs "sr") — the model lists and the locale list write the
-     *  same language differently. */
-    private fun sameLang(a: String, b: String): Boolean =
-        java.util.Locale.forLanguageTag(a).language ==
-            java.util.Locale.forLanguageTag(b).language
-
-    // What checkRecognitionSupport reported for the on-device recognizer
-    // (empty until the async result lands; checked once per app run).
-    private var voiceSupportChecked = false
-    private var voiceInstalled: List<String> = emptyList()
-
-    /** Asks the on-device recognizer WHAT it can actually do — the missing
-     *  evidence behind every earlier blind fix (owner 2026-08-05): English
-     *  worked, the owner's own language produced NOTHING, because the
-     *  on-device model list simply did not contain it and no error ever
-     *  fired. If the user's language is supported but not installed, the
-     *  model download is triggered HERE (the app drives its dependencies —
-     *  owner principle); until it is installed the cloud service pinned to
-     *  the user's language takes over. */
-    private fun checkVoiceSupport(intent: Intent) {
-        if (android.os.Build.VERSION.SDK_INT < 33 || voiceSupportChecked) return
-        voiceSupportChecked = true
-        if (!SpeechRecognizer.isOnDeviceRecognitionAvailable(this)) return
-        val probe = SpeechRecognizer.createOnDeviceSpeechRecognizer(this)
-        probe.checkRecognitionSupport(intent, mainExecutor,
-            object : android.speech.RecognitionSupportCallback {
-                override fun onSupportResult(support: android.speech.RecognitionSupport) {
-                    voiceInstalled = support.installedOnDeviceLanguages
-                    val wanted = voiceLanguages()
-                    val primary = wanted.first()
-                    val downloadable = support.supportedOnDeviceLanguages
-                        .filterNot { s -> voiceInstalled.any { sameLang(it, s) } }
-                    if (voiceInstalled.none { sameLang(it, primary) }) {
-                        if (downloadable.any { sameLang(it, primary) }) {
-                            probe.triggerModelDownload(intent)
-                            voiceInfo("Downloading the $primary voice model — using online recognition meanwhile")
-                        } else {
-                            voiceInfo("This phone has no on-device model for $primary — using online recognition")
-                        }
-                        // The on-device engine cannot hear the user's own
-                        // language — demote NOW instead of waiting for an
-                        // error that never fires.
-                        voiceCloudOnly = true
-                        recognizer?.destroy()
-                        recognizer = null
-                    } else {
-                        voiceInfo("Voice: on-device, languages " +
-                            wanted.filter { w -> voiceInstalled.any { sameLang(it, w) } }
-                                .joinToString(", "))
-                    }
-                    probe.destroy()
-                }
-
-                override fun onError(error: Int) {
-                    voiceInfo("Voice support check failed (code $error)")
-                    probe.destroy()
-                }
-            })
-    }
-
-    /** Owner report 2026-08-04 (round two): the cloud recognizer transcribed
-     *  Serbian speech as English gibberish — it runs ONE language. The only
-     *  Android API with real language auto-switching is the ON-DEVICE
-     *  recognizer (Android 13+, the same models voice typing uses), so it is
-     *  first choice — but ONLY when it actually holds a model for the user's
-     *  primary language (checkVoiceSupport above; the silent gap of
-     *  2026-08-05). Otherwise the Google cloud service pinned to the phone's
-     *  own language. */
-    private fun makeRecognizer(): SpeechRecognizer {
-        voiceOnDevice = android.os.Build.VERSION.SDK_INT >= 33 && !voiceCloudOnly &&
-            SpeechRecognizer.isOnDeviceRecognitionAvailable(this)
-        if (voiceOnDevice) return SpeechRecognizer.createOnDeviceSpeechRecognizer(this)
-        val google = googleRecognitionService()
-        voiceInfo("Voice: " + (if (google != null) "Google online" else "system service") +
-            " @ " + java.util.Locale.getDefault().toLanguageTag())
-        return if (google != null) SpeechRecognizer.createSpeechRecognizer(this, google)
-        else SpeechRecognizer.createSpeechRecognizer(this)
-    }
-
-    private val voiceListener = object : RecognitionListener {
-        override fun onResults(results: Bundle?) {
-            val text = results
-                ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                ?.firstOrNull()
-            if (!text.isNullOrBlank()) {
-                web.evaluateJavascript(
-                    "window.__voiceResult && __voiceResult(${JSONObject.quote(text)})",
-                    null
-                )
-            }
-            voiceEnd("")
-        }
-
-        override fun onError(error: Int) {
-            if (voiceOnDevice && (
-                    error == SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED ||
-                    error == SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE)
-            ) {
-                // No on-device model for the asked languages — demote to the
-                // cloud service; the page's restart lands on the new one.
-                voiceCloudOnly = true
-                recognizer?.destroy()
-                recognizer = null
-                voiceEnd("")
-                return
-            }
-            // NO_MATCH / SPEECH_TIMEOUT are a quiet room, not failures —
-            // the page simply starts the next round while ON. Every OTHER
-            // error is said out loud (owner 2026-08-05: no silent voice
-            // failures ever again).
-            if (error != SpeechRecognizer.ERROR_NO_MATCH &&
-                error != SpeechRecognizer.ERROR_SPEECH_TIMEOUT
-            ) {
-                voiceInfo("Voice error $error (" +
-                    (if (voiceOnDevice) "on-device" else "online") + ")")
-            }
-            voiceEnd(
-                if (error == SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS) "denied"
-                else ""
-            )
-        }
-
-        override fun onReadyForSpeech(params: Bundle?) {}
-        override fun onBeginningOfSpeech() {}
-        override fun onRmsChanged(rmsdB: Float) {}
-        override fun onBufferReceived(buffer: ByteArray?) {}
-        override fun onEndOfSpeech() {}
-        override fun onPartialResults(partialResults: Bundle?) {}
-        override fun onEvent(eventType: Int, params: Bundle?) {}
-    }
-
-    private fun beginListening() {
-        if (!SpeechRecognizer.isRecognitionAvailable(this)) {
-            voiceEnd("unavailable")
-            return
-        }
-        // First round of a run: ask the on-device engine what it REALLY
-        // supports (async — may demote to cloud and trigger a model
-        // download; this round still runs on the current choice).
-        checkVoiceSupport(
-            Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).putExtra(
-                RecognizerIntent.EXTRA_LANGUAGE_MODEL,
-                RecognizerIntent.LANGUAGE_MODEL_FREE_FORM
-            )
-        )
-        val r = recognizer ?: makeRecognizer().also { rec ->
-            rec.setRecognitionListener(voiceListener)
-            recognizer = rec
-        }
-        r.startListening(
-            Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                putExtra(
-                    RecognizerIntent.EXTRA_LANGUAGE_MODEL,
-                    RecognizerIntent.LANGUAGE_MODEL_FREE_FORM
-                )
-                putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false)
-                if (voiceOnDevice && android.os.Build.VERSION.SDK_INT >= 33) {
-                    // Real auto-switching between the user's languages —
-                    // only the on-device recognizer understands these.
-                    // Restricted to languages a model actually EXISTS for
-                    // (once known): a wanted-but-missing language used to
-                    // ride along silently and hear nothing.
-                    val wanted = voiceLanguages()
-                    val usable = wanted.filter { w ->
-                        voiceInstalled.any { sameLang(it, w) }
-                    }.ifEmpty { wanted }.let { ArrayList(it) }
-                    putExtra(RecognizerIntent.EXTRA_ENABLE_LANGUAGE_DETECTION, true)
-                    putExtra(
-                        RecognizerIntent.EXTRA_ENABLE_LANGUAGE_SWITCH,
-                        RecognizerIntent.LANGUAGE_SWITCH_BALANCED
-                    )
-                    putStringArrayListExtra(
-                        RecognizerIntent.EXTRA_LANGUAGE_SWITCH_ALLOWED_LANGUAGES, usable
-                    )
-                    putStringArrayListExtra(
-                        RecognizerIntent.EXTRA_LANGUAGE_DETECTION_ALLOWED_LANGUAGES, usable
-                    )
-                } else {
-                    // One-language cloud round: at least the phone's OWN
-                    // language, never a silent English default.
-                    putExtra(
-                        RecognizerIntent.EXTRA_LANGUAGE,
-                        java.util.Locale.getDefault().toLanguageTag()
-                    )
-                }
-            }
-        )
-    }
-
-    /** One listening round is over — the page decides whether to restart. */
-    private fun voiceEnd(reason: String) {
-        if (::web.isInitialized) {
-            web.evaluateJavascript("window.__voiceEnd && __voiceEnd('$reason')", null)
+    // ── Voice input ── lives in VoiceInput.kt (split 2026-08-05, THE
+    // STRUCTURE LAW): SpeechRecognizer rounds, the user-chosen dictation
+    // language, on-device model download and the silent diagnostics chain.
+    private val voice by lazy {
+        VoiceInput(this) { code ->
+            if (::web.isInitialized) web.evaluateJavascript(code, null)
         }
     }
 
@@ -845,21 +608,39 @@ class MainActivity : AppCompatActivity() {
 
         /** The page's Mic switcher (owner 2026-08-04): start one listening
          *  round. Results/round-end come back via __voiceResult/__voiceEnd;
-         *  the page restarts rounds while its switcher stays ON. */
+         *  the page restarts rounds while its switcher stays ON. The whole
+         *  subsystem lives in VoiceInput.kt. */
         @JavascriptInterface
         fun startVoice() {
             runOnUiThread {
                 if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) ==
                     PackageManager.PERMISSION_GRANTED
-                ) beginListening()
+                ) voice.listen()
                 else audioPermission.launch(Manifest.permission.RECORD_AUDIO)
             }
         }
 
         @JavascriptInterface
         fun stopVoice() {
-            runOnUiThread { recognizer?.cancel() }
+            runOnUiThread { voice.cancel() }
         }
+
+        /** The dictation setup card (owner round 2, 2026-08-05): candidate
+         *  languages with their on-device status, the stored choice, and the
+         *  download state that styles the Mic button. */
+        @JavascriptInterface
+        fun voiceLangs(): String = voice.candidates()
+
+        @JavascriptInterface
+        fun voiceChosen(): String = voice.chosenTag()
+
+        @JavascriptInterface
+        fun voiceSetLang(tag: String) {
+            runOnUiThread { voice.setChosen(tag) }
+        }
+
+        @JavascriptInterface
+        fun voiceState(): String = voice.state()
 
         /** Update tap: open /app.apk (on the SAME PC) in the system browser —
          *  it downloads and Android installs over this app (same signature).

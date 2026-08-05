@@ -20,7 +20,7 @@ The two D-pad groups on the tablet are defined entirely by [actions.json](action
 - **Cursor** — Undo / ← / → / Redo — text-caret steps and edit history.
 - **Media** *(off by default)* — Play·Pause / Vol− / Vol+ / Mute (real media keys).
 - **Windows** *(off by default)* — Alt+Tab / Win / Desktop (Win+D) / Tasks (Win+Tab).
-- **Settings** — Monitor switch / Sets (the wheel picker) / quality / anywhere. `next_input` left the defaults 2026-08-05 (still available as an action).
+- **Settings** — Monitor switch / Sets (the wheel picker) / quality / dictation (the Language card — owner 2026-08-05, replacing `anywhere` in the defaults; `next_input` and `anywhere` left the defaults 2026-08-05, both still available as actions).
 
 ## The wheel (owner spec 2026-08-05, revised the same day)
 
@@ -118,8 +118,9 @@ A button is one of:
   - `snap` — full-monitor screenshot into the PC clipboard only (no paste; not in the default layout).
   - `next_input` — jump keyboard focus to the NEXT text-input box (dictation workflow). Full desktop = every visible window; layout focus = only that layout's. Out of the defaults since 2026-08-05 (Sets took the slot).
   - `sets` — open the phone's wheel picker: which custom sets are shown on THIS device (max 3) and whether app sets appear. Shipped in **Settings**.
-  - `quality` — cycle stream quality: full → reduced → auto-on-mobile-data. Shipped in **Settings**.
-  - `anywhere` — open the "use from anywhere" wizard (Tailscale setup). Shipped in **Settings**.
+  - `quality` — open the stream-quality panel (fps / resolution / bitrate + auto-save on mobile data — owner 2026-08-05, replacing the old cycle). Shipped in **Settings**.
+  - `dictation` — open the dictation-language card (choose the language you speak; model download guided). Shipped in **Settings** (owner 2026-08-05).
+  - `anywhere` — open the "use from anywhere" wizard (Tailscale setup). NOT in the defaults since 2026-08-05 (the first-contact banner still guides new phones); stays in the pool for custom sets.
   - `calibrate` — retired (the pointer sits exactly under the finger since 2026-08-02).
 - **Chord** — `{ "label": "Copy", "chord": "ctrl+c" }` — fires a key combination (see below). An optional `"icon"` from the list above gives it an icon face.
 - **Special key** — `{ "label": "Esc", "key": "escape" }` — a single structural key; `"icon"` works here too.

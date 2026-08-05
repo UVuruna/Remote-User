@@ -114,6 +114,11 @@ const BUILTINS = {
   pcshot:   { label: "Shot",   icon: "shot",     kind: "shot" },
   calibrate:{ label: "Calibrate", icon: "target", kind: "calibrate" },
   anywhere: { label: "Anywhere", icon: "globe",  kind: "anywhere" },
+  // Dictation setup (owner round 2, 2026-08-05): replaces Anywhere in the
+  // default Settings set (the anywhere ACTION stays in this pool — future
+  // preset combining, see ROADMAP). Opens the language card; the same card
+  // auto-opens on the first Mic tap.
+  dictation: { label: "Language", icon: "globe", kind: "dictation" },
   // Phase F+ step 3 (owner spec): UIA-cycled focus through TEXT-INPUT fields
   // only — full desktop → all visible windows, layout focus → that layout —
   // built for the dictation-first workflow.
@@ -332,6 +337,13 @@ function micStart() {
     showToast("Voice input needs the updated app — update from the banner");
     return;
   }
+  // First contact (owner round 2, 2026-08-05): no chosen dictation language
+  // yet → the setup card opens INSTEAD of listening. Never guess a language
+  // — the phone's system-locale order proved wrong on the owner's device.
+  if (window.Android.voiceChosen && !window.Android.voiceChosen()) {
+    openDictationPanel();
+    return;
+  }
   if (keyboardOpen()) kbInput.blur();
   micOn = true;
   setMicActive(true);
@@ -355,11 +367,29 @@ window.__voiceResult = (text) => {
   if (text) sendTyped(text + " ");
 };
 
-// Diagnostic line from the shell (owner 2026-08-05 — evidence on the pill:
-// which engine/languages dictation runs and what errors come back).
+// Diagnostic line from the shell — SILENT evidence (owner round 2, angrily:
+// never a panel flashed at the user): forwarded to the PC's server log,
+// where the developer reads it.
 window.__voiceInfo = (text) => {
-  if (micOn) showToast(text);
+  send({ type: "client_log", text: `[voice] ${text}` });
 };
+
+// Model-download state from the shell: the Mic button wears an alternate
+// look while the chosen language's model downloads (dictation keeps working
+// online meanwhile — owner round 2).
+let voiceDownloading = false;
+window.__voiceState = (state) => {
+  voiceDownloading = state === "downloading";
+  refreshMicButtons();
+};
+
+function refreshMicButtons() {
+  if (IN_APP && window.Android.voiceState) {
+    try { voiceDownloading = window.Android.voiceState() === "downloading"; } catch {}
+  }
+  document.querySelectorAll('[data-action="mic"]').forEach((el) =>
+    el.classList.toggle("dl", voiceDownloading));
+}
 
 // One listening round ended (silence, error, permission). Restart while ON.
 window.__voiceEnd = (reason) => {
@@ -372,6 +402,11 @@ window.__voiceEnd = (reason) => {
   if (reason === "unavailable") {
     micStop();
     showToast("Voice recognition is not available on this phone");
+    return;
+  }
+  if (reason === "nolang") {
+    micStop();
+    openDictationPanel(); // choose first, then dictate
     return;
   }
   setTimeout(() => {
@@ -762,6 +797,8 @@ function makeActionButton(btn, pos) {
       keepFocus(el, openWizard); // the banner shows only once — this is the permanent way in
     } else if (b.kind === "quality") {
       keepFocus(el, openQualityPanel);
+    } else if (b.kind === "dictation") {
+      keepFocus(el, openDictationPanel);
     }
   } else if (btn.chord) {
     // actions.json buttons may name an icon from ICONS (owner-approved icon
@@ -802,6 +839,7 @@ function renderGroup(side) {
   order.forEach((bi, slot) => host.appendChild(makeActionButton(btns[bi], slot)));
   refreshModeButtons();
   refreshQualityButtons();
+  refreshMicButtons();
   if (keyboardOpen()) {
     host.querySelectorAll('[data-action="keyboard"]').forEach((el) => el.classList.add("active"));
   }
