@@ -73,3 +73,21 @@ the set of apps the three strategies actually cover; everything else is
 offered as a whole window only, and its UIA tree is never walked (which also
 makes the creation list visibly faster). [Web Layer](web.md) applies the gate
 before calling `list_tabs` / `tab_at`.
+
+## Transient raises are never TOPMOST (audit 2026-08-05)
+
+Every `raise_window` call in this module is a **stage direction**, not layout
+membership, and all four now pass `topmost=False`:
+
+- `focus_next_input` raises whichever window owns the next text field. On the
+  full desktop that is an arbitrary third-party window, in no layout at all —
+  a topmost raise nailed it above the owner's desk for the rest of the Windows
+  session, with no list that could ever name it again.
+- `_try_explorer_path` raises the SOURCE window (to send Ctrl+W) and then the
+  freshly created one, before either is registered.
+- `_try_drag` raises the SOURCE window to find the tab under the cursor. It
+  keeps its remaining tabs and never becomes a member.
+
+Only [Layout API](layout_api.md) via `window_manager.place_window` /
+`raise_window(topmost=True)` may put a window into the always-on-top band, and
+those are the ones the ledger owes a way back down.

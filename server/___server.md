@@ -16,6 +16,9 @@ The PC side of Remote User: captures the screen, streams it over WebSocket as H.
 | `encoders.py` | Algorithmic | H.264 encoder auto-detection — NVENC → QuickSync → AMF → libx264, verified by test-encoding — [about](__about/encoders.md) · [flow](__flow/encoders.md) |
 | `input_injector.py` | Algorithmic | Win32 `SendInput` injection + the `InjectionMonitor` self-check tripwire — [about](__about/input_injector.md) · [flow](__flow/input_injector.md) |
 | `web.py` | Algorithmic | FastAPI app — the WebSocket protocol handler, HTTP routes, stream dispatch — [about](__about/web.md) · [flow](__flow/web.md) |
+| `presence.py` | Algorithmic | is the owner still working with us, and whose desk are we on — heartbeat, the `away` reason, the excursion hold, and the rule that local input at THIS PC outranks all of it — [about](__about/presence.md) · [flow](__flow/presence.md) |
+| `layout_api.py` | Algorithmic | the phone's layout protocol — pick, list, create, focus, aspect, state — [about](__about/layout_api.md) · [flow](__flow/layout_api.md) |
+| `traffic.py` | Standard | every byte to and from the phone, sampled per second and recorded — the owner's instrument for "does it run while the screen is off" — [about](__about/traffic.md) |
 | `window_manager.py` | Standard | window layouts (Phase F+ step 1) — enumerate/hit-test/arrange/raise windows, app icons, the session-scoped `LayoutRegistry` — [about](__about/window_manager.md) |
 | `uia.py` | Algorithmic | tab layer (Phase F+ step 2) — UIA tab hit-test + extraction to a window (app command / Explorer path / SendInput drag) — [about](__about/uia.md) · [flow](__flow/uia.md) |
 | `pairing.py` | Standard | token generation, LAN/Tailscale IP discovery, QR code — [about](__about/pairing.md) |

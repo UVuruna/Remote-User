@@ -102,3 +102,23 @@ everything. Two signals fix it, both from here:
 ## Creation flow rework (owner feedback 2026-08-02, same day)
 `layout_offer` is delegated to `handleLayoutOffer` (list arrival or one tap's
 slot — same creation session); `layout_state` ARMS the loading overlay's settle watcher (`settleLayLoading`) instead of hiding it — the server being done is not the screen being still (owner 2026-08-03; see [Layouts](layouts.md)).
+
+## Round 6 (owner report 2026-08-05, the second TOPMOST failure)
+
+- **The parting word carries a REASON.** `away {reason, excursion, net}` —
+  `reason` from [State](state.md)'s `hideReason()`, which asks the shell rather
+  than guessing; `excursion` stays for an older server; `net` is the phone's
+  own traffic counters.
+- **The heartbeat carries `net` too**, so the PC can subtract a reading taken
+  before an absence from one taken after it.
+- **The page connects through `ensureConnected()`, not a bare `connect()`.**
+  Every other entry point checked `document.hidden` and this one did not — and
+  the shell can load the page while the activity is paused, so an unguarded
+  connect opened a full 4K stream to a pocketed phone AND re-raised the
+  owner's layout windows on top of his desk.
+- **`layoutRestore` is cleared on 4409 and 4401.** A page that was taken over
+  or whose link expired is no longer the authority on what the session should
+  show, and it must not silently re-raise "its" layout on some later reconnect.
+- **The screen is held awake only while the owner is working** — every
+  pointer/key event re-arms `KEEP_AWAKE_MS`, and the idle sweep calls
+  `Android.keepAwake(false)` so the phone's own timeout takes over.

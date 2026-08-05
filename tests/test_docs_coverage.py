@@ -39,6 +39,7 @@ STANDARD = {
     "server/window_manager.py",
     "server/clipboard.py",
     "server/updates.py",
+    "server/traffic.py",
     "client/index.html",
     "client/install.html",
     "client/load_test.js",
@@ -63,7 +64,13 @@ ALGORITHMIC = {
     "server/encoders.py",
     "server/input_injector.py",
     "server/web.py",
+    # Split out of web.py on 2026-08-05 (THE STRUCTURE LAW): presence is a
+    # state machine with its own rules and its own gate, layout_api is the
+    # phone's layout protocol. Both are algorithmic — they carry a flow.
+    "server/presence.py",
+    "server/layout_api.py",
     "server/gui/theme.py",
+    "server/gui/traffic_window.py",
     "server/gui/main_window.py",
     "server/gui/controls_editor.py",
     "server/gui/controls_widgets.py",
