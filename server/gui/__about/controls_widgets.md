@@ -16,7 +16,7 @@ saving* `actions.json`, this module owns *the pieces the owner touches*.
 | `SlotDelegate` | draws an arrangement row as rich text (the portrait ordinals' superscript) |
 | `SlotList` | a list that asks for exactly the height of its rows (SPACE & LEGIBILITY, ladder step 1) |
 | `OrderList` | one orientation's arrangement: the fixed slot ladder + the four commands + Up/Down |
-| `CommandDetail` | the selected pool command — one field per full-width row |
+| `CommandDetail` | the selected pool command — one field per full-width row; on a built-in row every field is read-only EXCEPT the name (owner 2026-08-05) |
 | `CommandTable` | the set's whole POOL with a tick on the four that ride the D-pad |
 
 Shared with the dialog and defined here, because they describe how a command

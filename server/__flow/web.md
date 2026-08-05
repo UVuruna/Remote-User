@@ -35,6 +35,7 @@ flowchart TB
     B -- scroll --> G["injector.wheel(x, y, ticks)"]
     B -- key_text --> H["injector.type_text(text)"]
     B -- key_special --> I["injector.press_key(key)"]
+    B -- paste_text --> I2["_paste_text: clipboard.copy_text → ctrl+v → Enter"]
     B -- viewport --> J{stream.mode == jpeg?}
     J -- yes --> K["stream.set_viewport(x, y, w, h)"]
     J -- no --> L["ignored — H.264 always streams the full frame"]
@@ -48,6 +49,7 @@ flowchart TB
     G --> A
     H --> A
     I --> A
+    I2 --> A
     K --> A
     L --> A
     M --> A

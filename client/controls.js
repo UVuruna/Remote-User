@@ -1,4 +1,4 @@
-// On-screen interactive chrome: icons, built-in action registry, touch-mode
+// On-screen interactive chrome: built-in action registry, touch-mode
 // toggles, invisible keyboard capture, the "access from anywhere" wizard, the
 // in-app update banner, phone->PC image upload, the two D-pad control groups,
 // the category wheel, corner buttons and the toast pill. The whole LAYOUT
@@ -14,74 +14,8 @@
 "use strict";
 
 // --- Icons ----------------------------------------------------------------
-
-const ICONS = {
-  mouse: '<rect x="6" y="3" width="12" height="18" rx="6"/><path d="M12 7v4"/>',
-  right: '<rect x="6" y="3" width="12" height="18" rx="6"/><path d="M12 3v7"/><path d="M12 3h2a4 4 0 0 1 4 4v3h-6z" fill="currentColor" stroke="none"/>',
-  drag: '<polyline points="5 9 2 12 5 15"/><polyline points="9 5 12 2 15 5"/><polyline points="15 19 12 22 9 19"/><polyline points="19 9 22 12 19 15"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="12" y1="2" x2="12" y2="22"/>',
-  scroll: '<path d="m7 15 5 5 5-5"/><path d="m7 9 5-5 5 5"/>',
-  // Click = mirror of `right` (owner-approved icon set 2026-08-04); Middle =
-  // the filled wheel (variant A of the approved proposals).
-  click: '<rect x="6" y="3" width="12" height="18" rx="6"/><path d="M12 3v7"/><path d="M12 3h-2a4 4 0 0 0-4 4v3h6z" fill="currentColor" stroke="none"/>',
-  middle: '<rect x="6" y="3" width="12" height="18" rx="6"/><rect x="10.6" y="6" width="2.8" height="6" rx="1.4" fill="currentColor" stroke="none"/>',
-  // Side buttons (owner 2026-08-05): the same mouse body with the thumb pad
-  // filled — rear (Btn 4) and front (Btn 5). The button also carries its
-  // label, so the pad's position only has to be recognisable, not readable.
-  btn4: '<rect x="7" y="3" width="11" height="18" rx="5.5"/><rect x="3.6" y="11.4" width="3" height="4" rx="1.4" fill="currentColor" stroke="none"/><path d="M12.5 6.5v3.5"/>',
-  btn5: '<rect x="7" y="3" width="11" height="18" rx="5.5"/><rect x="3.6" y="6.6" width="3" height="4" rx="1.4" fill="currentColor" stroke="none"/><path d="M12.5 6.5v3.5"/>',
-  mic: '<rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><line x1="12" y1="18" x2="12" y2="22"/>',
-  enter: '<path d="M20 5v6a3 3 0 0 1-3 3H5"/><path d="m9 10-4 4 4 4"/>',
-  esc: '<path d="M18 13v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h5"/><path d="M15 4h5v5"/><path d="m20 4-8 8"/>',
-  // wrap-text: a line breaking onto the next row (the New row button)
-  newrow: '<line x1="3" y1="6" x2="21" y2="6"/><path d="M3 12h13a3 3 0 0 1 0 6h-4"/><polyline points="14 16 12 18 14 20"/><line x1="3" y1="18" x2="7" y2="18"/>',
-  // Navigate / Cursor sets (owner 2026-08-05)
-  nav: '<circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88" fill="currentColor" stroke="none"/>',
-  tab: '<line x1="20" y1="6" x2="20" y2="18"/><path d="M4 12h11"/><path d="m11 8 4 4-4 4"/>',
-  tabback: '<line x1="4" y1="6" x2="4" y2="18"/><path d="M20 12H9"/><path d="m13 8-4 4 4 4"/>',
-  leftright: '<polyline points="9 7 4 12 9 17"/><polyline points="15 7 20 12 15 17"/>',
-  arrowl: '<line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 5 5 12 12 19"/>',
-  arrowr: '<line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/>',
-  // Media set
-  play: '<polygon points="5 4 15 12 5 20"/><line x1="19" y1="5" x2="19" y2="19"/>',
-  volup: '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19"/><line x1="15" y1="12" x2="21" y2="12"/><line x1="18" y1="9" x2="18" y2="15"/>',
-  voldown: '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19"/><line x1="15" y1="12" x2="21" y2="12"/>',
-  mute: '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19"/><line x1="15" y1="9" x2="21" y2="15"/><line x1="21" y1="9" x2="15" y2="15"/>',
-  attach: '<path d="M21.44 11.05 12.25 20.24a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/>',
-  gallery: '<rect x="7" y="3" width="14" height="14" rx="2"/><circle cx="11" cy="7" r="1.5"/><path d="m21 12-3-3-7 7"/><path d="M3 7v11a3 3 0 0 0 3 3h11"/>',
-  shot: '<path d="M9 4H6a2 2 0 0 0-2 2v3"/><path d="M15 4h3a2 2 0 0 1 2 2v3"/><path d="M20 15v3a2 2 0 0 1-2 2h-3"/><path d="M4 15v3a2 2 0 0 0 2 2h3"/><circle cx="12" cy="12" r="3"/>',
-  folder: '<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>',
-  selall: '<rect x="4" y="4" width="16" height="16" rx="2" stroke-dasharray="3 3.2"/><rect x="9" y="9" width="6" height="6" rx="1" fill="currentColor" stroke="none"/>',
-  copy: '<rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
-  cut: '<circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/>',
-  paste: '<path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M12 10v7"/><path d="m9 14 3 3 3-3"/>',
-  monitor2: '<rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/><path d="m10 7.5-3 3 3 3"/><path d="m14 7.5 3 3-3 3"/>',
-  undo: '<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>',
-  redo: '<path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/>',
-  find: '<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.2" y2="16.2"/>',
-  del: '<path d="M9 5 2.6 12 9 19h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2z"/><line x1="17" y1="9.5" x2="12" y2="14.5"/><line x1="12" y1="9.5" x2="17" y2="14.5"/>',
-  keyboard: '<rect x="2" y="5" width="20" height="14" rx="2"/><path d="M6 9h.01M10 9h.01M14 9h.01M18 9h.01M6 13h.01M18 13h.01M9 13h6"/>',
-  monitor: '<rect x="2" y="4" width="14" height="10" rx="2"/><path d="M9 18h7"/><path d="M9 14v4"/><path d="m17 9 4 3-4 3"/>',
-  image: '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-4.5-4.5L5 21"/>',
-  snap: '<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/>',
-  edit: '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>',
-  grid: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
-  x: '<line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/>',
-  settings: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.09a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.09a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
-  target: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"/>',
-  list: '<rect x="4" y="2.5" width="16" height="19" rx="2"/><rect x="9" y="1" width="6" height="3.5" rx="1"/><path d="m7.5 9 1.2 1.2L11 7.8"/><line x1="13" y1="9" x2="17" y2="9"/><path d="m7.5 14 1.2 1.2L11 12.8"/><line x1="13" y1="14" x2="17" y2="14"/><line x1="13" y1="18" x2="17" y2="18"/>',
-  input: '<rect x="2" y="6" width="20" height="12" rx="2"/><line x1="6" y1="10" x2="6" y2="14"/><path d="m14 10 3 2-3 2"/>',
-  gauge: '<path d="M12 20a8 8 0 1 1 8-8"/><path d="m12 12 5-3"/><path d="M17 17l3 3"/>',
-  newwin: '<rect x="3" y="4" width="18" height="16" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><circle cx="6" cy="6.5" r="0.5" fill="currentColor"/><circle cx="8.5" cy="6.5" r="0.5" fill="currentColor"/><line x1="12" y1="11.5" x2="12" y2="17.5"/><line x1="9" y1="14.5" x2="15" y2="14.5"/>',
-  globe: '<circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>',
-  // region inside the screen — the layout aspect-ratio panel
-  aspect: '<rect x="2.5" y="4" width="19" height="16" rx="2"/><rect x="7" y="8" width="10" height="8" rx="1"/>',
-  desktop: '<rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/>',
-  // Four-way move (the aspect panel's Move handle). A drawn icon, not the
-  // "✥" character: that glyph is whatever the device's font makes of it, and
-  // on the owner's phone it came out a blunt cross with no arrowheads
-  // (owner 2026-08-05).
-  move: '<path d="M12 3.5v17"/><path d="M3.5 12h17"/><path d="m9 6.5 3-3 3 3"/><path d="m9 17.5 3 3 3-3"/><path d="m6.5 9-3 3 3 3"/><path d="m17.5 9 3 3-3 3"/>',
-};
+// The table itself moved to [icons.js](icons.js) (owner's approved icon round,
+// 2026-08-05 — THE STRUCTURE LAW); it loads first, so `ICONS` is already here.
 
 function svg(name) {
   return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICONS[name] || ""}</svg>`;
@@ -127,6 +61,10 @@ const BUILTINS = {
   camera:   { label: "Camera", icon: "snap",     kind: "pick", input: "pick-camera" },
   files:    { label: "Files",  icon: "folder",   kind: "pick", input: "pick-files" },
   pcshot:   { label: "Shot",   icon: "shot",     kind: "shot" },
+  // Region (owner 2026-08-05): a frame the finger sizes and moves anywhere,
+  // captured and PASTED like every other Attach source — Snipping Tool's
+  // rectangle, from the phone.
+  region:   { label: "Region", icon: "region",   kind: "region" },
   calibrate:{ label: "Calibrate", icon: "target", kind: "calibrate" },
   anywhere: { label: "Anywhere", icon: "globe",  kind: "anywhere" },
   // Dictation setup (owner round 2, 2026-08-05): replaces Anywhere in the
@@ -572,10 +510,15 @@ function setsPrefs() {
     const p = JSON.parse(prefGet("setsPrefs") || "{}");
     return {
       state: p.state && typeof p.state === "object" ? p.state : {},
+      // Per-app-set choice (owner 2026-08-05): `apps` is still the master
+      // switch, `appState` names the ones hidden inside it — two sets can now
+      // match the same process (VSCode + Claude), and hiding one of them is
+      // the whole point.
+      appState: p.appState && typeof p.appState === "object" ? p.appState : {},
       apps: p.apps !== false,
     };
   } catch {
-    return { state: {}, apps: true };
+    return { state: {}, appState: {}, apps: true };
   }
 }
 
@@ -595,11 +538,29 @@ function saveSetsPrefs(p) {
 // when the focused layout's app matches a set's `process`, that set appears
 // as an extra category in the wheel — nothing switches by itself, and the
 // category vanishes with the layout focus.
+function appSetOn(s) {
+  const choice = setsPrefs().appState[s.name];
+  return choice !== undefined ? choice : s.enabled !== false;
+}
+
+// A set may also demand a TITLE match (owner 2026-08-05): Claude Code runs
+// INSIDE VSCode, same process, so the process alone cannot tell the two
+// apart. `title` is matched against the layout's ORIGINAL window/tab title —
+// never its name, which the owner may have renamed to anything. A set with
+// no `title` matches the process as before, which is why VSCode and Claude
+// can ride together while only one of them knows it is Claude.
+function appSetMatches(s, lay) {
+  const proc = String(lay.process || "").toLowerCase();
+  if (!proc.includes(String(s.process || "").toLowerCase())) return false;
+  if (!s.title) return true;
+  return String(lay.title || "").toLowerCase().includes(String(s.title).toLowerCase());
+}
+
 function visibleAppSets() {
   if (!setsPrefs().apps) return [];
   if (layoutActive === null || !layouts[layoutActive]) return [];
-  const proc = String(layouts[layoutActive].process || "").toLowerCase();
-  return appSets.filter((s) => proc.includes(String(s.process || "").toLowerCase()));
+  const lay = layouts[layoutActive];
+  return appSets.filter((s) => appSetMatches(s, lay) && appSetOn(s));
 }
 
 // The wheel's composition (owner 2026-08-05, revised same day): Mouse, Input
@@ -725,7 +686,11 @@ function makeActionButton(btn, pos) {
   let el;
   if (btn.action && BUILTINS[btn.action]) {
     const b = BUILTINS[btn.action];
-    el = makeButton("ctl", b.icon, b.label);
+    // A built-in's NAME may be overridden per button (owner 2026-08-05): the
+    // side buttons Btn 4 / Btn 5 carry whatever the user's mouse driver put
+    // on them, so "Back", "Forward" or "Undo" must be sayable on the face.
+    // Only the name — what the button DOES stays ours.
+    el = makeButton("ctl", b.icon, btn.label || b.label);
     el.dataset.action = btn.action;
     if (b.kind === "mode") {
       el.dataset.mode = btn.action;
@@ -743,6 +708,8 @@ function makeActionButton(btn, pos) {
       keepFocus(el, toggleMic);
     } else if (b.kind === "shot") {
       keepFocus(el, () => send({ type: "screenshot", paste: true, ...shotRegion() }));
+    } else if (b.kind === "region") {
+      keepFocus(el, openRegionPanel);
     } else if (b.kind === "pick") {
       // The picker/camera hides the page — an EXCURSION, not the end of work:
       // the PC must keep the layout standing while the owner picks (owner
@@ -772,6 +739,20 @@ function makeActionButton(btn, pos) {
     } else if (b.kind === "dictation") {
       keepFocus(el, openDictationPanel);
     }
+  } else if (btn.text) {
+    // TYPED commands (owner 2026-08-05, for the Claude set): the things he
+    // wants — how much usage is left, switch model, set the thinking level —
+    // are not shortcuts at all, they are slash commands written into the
+    // app's own prompt. The PC pastes the text (clipboard + Ctrl+V, one
+    // atomic insert instead of a character storm through an autocomplete
+    // menu) and presses Enter when the command asks for it. `enter: false`
+    // leaves the line standing — that is the "/" button, which opens the
+    // command menu and lets the finger pick from it.
+    const icon = btn.icon && ICONS[btn.icon] ? btn.icon : null;
+    el = makeButton(icon ? "ctl" : "ctl text", icon, btn.label || btn.text);
+    keepFocus(el, () => send({
+      type: "paste_text", text: btn.text, enter: btn.enter !== false,
+    }));
   } else if (btn.chord) {
     // actions.json buttons may name an icon from ICONS (owner-approved icon
     // set 2026-08-04 — e.g. Edit's Copy/Cut/Paste/All); no icon = text button.

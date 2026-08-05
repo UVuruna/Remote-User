@@ -63,6 +63,28 @@ function setsRow(s, locked) {
   return row;
 }
 
+// One app-aware set (VSCode, Claude, Chrome, Explorer). It carries no wheel
+// count — it rides with a focused layout — so this row only says whether it
+// may appear at all, per device.
+function appSetRow(s) {
+  const row = document.createElement("label");
+  row.className = "sets-row app";
+  const cb = document.createElement("input");
+  cb.type = "checkbox";
+  cb.checked = appSetOn(s);
+  cb.addEventListener("change", () => {
+    const p = setsPrefs();
+    p.appState[s.name] = cb.checked;
+    saveSetsPrefs(p);
+    refreshCategories();
+  });
+  const ic = document.createElement("span");
+  ic.className = "sets-ic";
+  ic.innerHTML = svg(s.icon && ICONS[s.icon] ? s.icon : "newwin");
+  row.append(cb, ic, document.createTextNode(s.name));
+  return row;
+}
+
 function openSetsPanel() {
   setsPanel.innerHTML = "";
   const card = document.createElement("div");
@@ -76,8 +98,13 @@ function openSetsPanel() {
   customSets.forEach((s) => list.appendChild(setsRow(s, false)));
   card.appendChild(list);
 
-  const appRow = document.createElement("label");
-  appRow.className = "sets-row apps";
+  // App sets are ticked ONE BY ONE (owner 2026-08-05, when Claude joined
+  // VSCode on the same window): a single master switch could only say "all
+  // app shortcuts or none", and two sets riding the same process is exactly
+  // the case where you want one of them gone. The master switch stays as the
+  // heading's own checkbox — it still turns the whole group off in one tap.
+  const appHead = document.createElement("label");
+  appHead.className = "sets-row apps";
   const appCb = document.createElement("input");
   appCb.type = "checkbox";
   appCb.checked = setsPrefs().apps;
@@ -86,9 +113,18 @@ function openSetsPanel() {
     p.apps = appCb.checked;
     saveSetsPrefs(p);
     refreshCategories();
+    openSetsPanel();  // the per-app rows below follow the master switch
   });
-  appRow.append(appCb, document.createTextNode("App shortcuts while a layout is focused (VSCode, Chrome…)"));
-  card.appendChild(appRow);
+  appHead.append(appCb, document.createTextNode(
+    "App shortcuts while a layout is focused"));
+  card.appendChild(appHead);
+
+  if (setsPrefs().apps) {
+    const appList = document.createElement("div");
+    appList.className = "sets-list apps";
+    appSets.forEach((s) => appList.appendChild(appSetRow(s)));
+    card.appendChild(appList);
+  }
 
   const done = document.createElement("button");
   done.type = "button";

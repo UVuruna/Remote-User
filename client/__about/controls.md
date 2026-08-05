@@ -41,10 +41,11 @@ for the split's general load-order reasoning.
 
 ## Key Functions & Data
 
-- `ICONS` / `svg(name)` — inline SVG path fragments for control icons
-  (owner-approved set 2026-08-04: mouse-button faces for click/middle, mic,
-  enter/esc, attach/gallery/shot/folder, edit-set icons, monitor2,
-  undo/redo/find/del for hand-edited files).
+- `svg(name)` — wraps one fragment of the icon table in the shared `<svg>`
+  (viewBox, stroke width, caps). The TABLE itself moved to
+  [Icons](icons.md) on 2026-08-05, when the owner approved a face for every
+  pool command that had none — 97 icons, and the desktop editor parses the
+  same file.
 - `BUILTINS` — the registry of built-in actions — label, icon, and dispatch
   kind. Kinds: `hold` (Click/Right/Middle plus the side `x1`/`x2` — Btn 4 and
   Btn 5 on a 5-button mouse, owner 2026-08-05 — all CLICK/HOLD mouse buttons),
@@ -52,8 +53,12 @@ for the split's general load-order reasoning.
   keyboard+mic OFF, then press the real key; `newrow` is deliberately a plain
   `send` of shift+enter so a line break never interrupts dictation),
   `pick` (gallery/camera/files),
-  `shot` (region screenshot), `send`, `upload`, `calibrate`, `anywhere`,
-  `quality`.
+  `shot` (the viewed region), `region` (the free frame — see [Region](region.md)),
+  `send`, `upload`, `calibrate`, `anywhere`, `quality`, `dictation`, `sets`.
+  A button may override a built-in's NAME (`btn.label || b.label`, owner
+  2026-08-05): the side buttons carry whatever the user's mouse driver put on
+  them, so the face must be allowed to say "Back". Only the name — the
+  action stays ours.
 - `holdButton(el, button)` — the CLICK/HOLD primitive (owner 2026-08-04):
   `press {button, down:true}` on pointerdown, `down:false` on
   pointerup/pointercancel — a tap clicks, a held finger holds the PC button
@@ -71,13 +76,21 @@ for the split's general load-order reasoning.
   revised same day): `required` categories (Mouse/Input/Settings) ALWAYS +
   toggleable shipped sets and custom sets (`setOn`: phone choice from
   localStorage wins over the desktop `enabled` default) + the app set in
-  layout focus (`visibleAppSets`, owner 2026-08-04; charges nothing), hard
+  layout focus (`visibleAppSets`, owner 2026-08-04; charges nothing — and
+  since 2026-08-05 MORE THAN ONE may match: `appSetMatches` adds an optional
+  `title` test on top of `process`, which is how the Claude set singles out
+  Claude Code inside VSCode and rides beside the VSCode set; `appSetOn` is
+  each app set's own per-device switch in the picker), hard
   cap `WHEEL_MAX` (8) with non-required sets bumped from the END. The
   Settings → Sets overlay (`openSetsPanel`/`setsRow`) locks required rows and
   blocks enabling past the cap (`visibleCount`).
 - Command pools (`btnId`, `activeButtons`; owner 2026-08-05): a set's
   `buttons` list is its POOL and may hold more than the four a D-pad shows —
   the reserves (VSCode's Markdown preview, Explorer's tab hops, Edit's Save…).
+  A pool command may also be a TYPED one (owner 2026-08-05): `{text, enter}`
+  sends `paste_text`, which the PC pastes into the focused box and follows
+  with Enter — the Claude set's `/usage`, `/model`, `/effort`, which are not
+  shortcuts at all.
   `active` names the four that ride, BY ID (`id | action | chord | key |
   label`), so a later version inserting or reordering pool commands cannot
   silently re-point the owner's choice the way indices would; no `active` =

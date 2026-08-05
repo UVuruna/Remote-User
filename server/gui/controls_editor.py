@@ -87,12 +87,13 @@ def shipped_actions_path() -> Path:
     return (BUNDLE_DIR if FROZEN else PROJECT_ROOT) / "actions.json"
 
 
-def load_client_table(name: str, line_re: str) -> dict[str, tuple[str, ...]]:
-    """Parses a `const <name> = {...}` table out of client/controls.js — one
+def load_client_table(name: str, line_re: str,
+                      source: str = "controls.js") -> dict[str, tuple[str, ...]]:
+    """Parses a `const <name> = {...}` table out of a client script — one
     entry per line. Returns {} on any surprise (the editor then falls back to
     plain names — never a crash)."""
     try:
-        text = (SETTINGS.client_dir / "controls.js").read_text(encoding="utf-8")
+        text = (SETTINGS.client_dir / source).read_text(encoding="utf-8")
         block = re.search(r"const " + name + r" = \{(.*?)\n\};", text, re.S)
         if not block:
             return {}
@@ -108,8 +109,11 @@ def load_client_table(name: str, line_re: str) -> dict[str, tuple[str, ...]]:
 
 
 def load_client_icons() -> dict[str, str]:
-    """{icon name: svg fragment} — the phone's own icon set."""
-    table = load_client_table("ICONS", r"\s*([A-Za-z0-9_]+):\s*'(.*)',?\s*$")
+    """{icon name: svg fragment} — the phone's own icon set. It lives in
+    client/icons.js since the 2026-08-05 icon round (before that, in
+    controls.js beside the actions)."""
+    table = load_client_table("ICONS", r"\s*([A-Za-z0-9_]+):\s*'(.*)',?\s*$",
+                              source="icons.js")
     return {name: body[0] for name, body in table.items()}
 
 
@@ -142,11 +146,18 @@ def active_buttons(s: dict) -> list[dict]:
 
 def merge_shipped_pools(data: dict, shipped: dict) -> None:
     """Refreshes every built-in set's POOL from the shipped file while keeping
-    the owner's choices (`active`, `order_*`, `enabled`).
+    the owner's choices (`active`, `order_*`, `enabled`) — and his RENAMES.
 
     Without this, an owner who already has a %LOCALAPPDATA% copy would never
     see the reserve commands a new version adds — his copy is seeded once and
     then never touched by an update.
+
+    The renames are the second half of that promise (owner 2026-08-05): he may
+    rename any button of a built-in set — Btn 4 / Btn 5 carry whatever his
+    mouse driver puts on them — and a pool refresh that overwrote those names
+    would quietly undo the only thing he is allowed to change here. Names are
+    carried over BY COMMAND ID, so a reordered or extended pool keeps them
+    pointing at the right button.
     """
     for key, ident in (("categories", "name"), ("app_sets", "process")):
         mine = data.get(key) or []
@@ -156,8 +167,15 @@ def merge_shipped_pools(data: dict, shipped: dict) -> None:
             if s is None:
                 mine.append(json.loads(json.dumps(ship)))  # a set we newly ship
                 continue
-            s["buttons"] = json.loads(json.dumps(ship.get("buttons") or []))
-            for field in ("name", "icon", "required", "process"):
+            renamed = {button_id(b): b["label"] for b in (s.get("buttons") or [])
+                       if b.get("action") and b.get("label")}
+            fresh = json.loads(json.dumps(ship.get("buttons") or []))
+            for b in fresh:
+                name = renamed.get(button_id(b))
+                if name:
+                    b["label"] = name
+            s["buttons"] = fresh
+            for field in ("name", "icon", "required", "process", "title"):
                 if field in ship:
                     s[field] = ship[field]
         data[key] = mine
@@ -504,9 +522,15 @@ class ControlsEditor(QDialog):
             s["active"] = ids
 
     def _store_command(self) -> None:
-        """Writes the detail form back into the pool (custom sets only)."""
+        """Writes the detail form back into the pool.
+
+        Custom sets write everything; a built-in or app set writes exactly one
+        field — the button's NAME (owner 2026-08-05). `CommandDetail.dump()`
+        is what enforces that split, so this method only has to let the write
+        through for every kind of set.
+        """
         entry = self._current_entry()
-        if entry is None or entry[0] != "custom_sets":
+        if entry is None:
             return
         pool = entry[2].get("buttons") or []
         if not (0 <= self._detail_row < len(pool)):

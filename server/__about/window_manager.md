@@ -41,9 +41,17 @@ drag, probe-verified 2026-08-02) is step 2 and does not live here yet.
 ## Classes
 
 ### Layout
-One phone screen: `name` (target's title at creation), `process`, ordered
+One phone screen: `name` (target's title at creation, or the owner's own),
+`title` (the target window's OWN title, never renamed), `process`, ordered
 `members` (grid cell order; `[window]` for solo), `template` (None = solo),
 `orient` ("portrait" | "wide"), `aspect` (w/h last arranged for).
+
+`title` exists because a process is not always enough to say WHICH app the
+phone is looking at (owner 2026-08-05): Claude Code runs inside VSCode, same
+`Code.exe`, and only the title tells them apart — so an app-aware set may add
+a `title` match on top of `process`, and the Claude and VSCode sets ride
+together. It is kept separate from `name` so that renaming a layout never
+changes which set appears. It travels to the client inside `layout_state`.
 
 ### LayoutRegistry
 The session-scoped list. `create(...) -> index|None` arranges and registers;

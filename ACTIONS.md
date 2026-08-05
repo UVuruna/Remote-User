@@ -14,7 +14,7 @@ The two D-pad groups on the tablet are defined entirely by [actions.json](action
 
 - **Mouse** — Click / Right / Middle (CLICK/HOLD buttons, see below) + Scroll (mode toggle).
 - **Input** — Keys (keyboard toggle) / Enter / New row / Mic (direct voice input). New row replaced Esc in the defaults (owner 2026-08-04 — dictation has no keyboard, so line breaks need a button; Esc stays available as `{ "action": "esc" }` for hand-edited files).
-- **Attach** — Gallery / Shot (PC screenshot of the viewed region) / Camera / Files — every source ends as a paste on the PC.
+- **Attach** — Gallery / Shot (PC screenshot of the viewed region) / Camera / Files — every source ends as a paste on the PC. **Region** waits in the pool (owner 2026-08-05): a frame you size and move, captured and pasted like the rest.
 - **Edit** — All / Copy / Cut / Paste (chords with icons).
 - **Navigate** — Esc / Prev (Shift+Tab) / Next (Tab) / Find (Ctrl+F) — moving between and closing UI elements (owner 2026-08-05: Esc proved essential in live use).
 - **Cursor** — Undo / ← / → / Redo — text-caret steps and edit history.
@@ -68,6 +68,12 @@ commands. The four that actually sit on the D-pad are named by
 - You pick the four in the desktop app (**Controls…**): tick a command, untick
   another. A fifth tick is refused with the reason on screen — a D-pad has
   four positions.
+- **Any button may be RENAMED, in every set** (owner 2026-08-05): what a
+  button DOES stays ours, what it is CALLED is yours. `Btn 4` / `Btn 5` carry
+  whatever your mouse driver put on the side buttons, so the face has to be
+  able to say `Back` or `Undo`. Clear the name field to fall back to ours; a
+  new version's pool refresh keeps your names (matched by command, not by
+  position).
 - The pools of built-in and app sets are **ours** — you choose from them, and
   a new version's reserves are merged into your own copy of the file on the
   next opening of the editor (the reason `Anywhere` used to linger in Settings
@@ -79,7 +85,7 @@ Shipped reserves, off until you tick them:
 |-----|--------------|----------------------|
 | Mouse | Click · Right · Middle · Scroll | Drag · **Btn 4** · **Btn 5** (the side buttons) |
 | Input | Keys · Enter · New row · Mic | Esc · Next box · Language |
-| Attach | Gallery · Shot · Camera · Files | Image · Snap |
+| Attach | Gallery · Shot · Camera · Files | **Region** · Snap (Image was dropped 2026-08-05 — it was a single-picture Gallery) |
 | Edit | All · Copy · Cut · Paste | Undo · Redo · Save · Paste plain · Delete |
 | Navigate | Esc · Prev · Next · Find | Back · Forward · Find next · Top · Bottom · Page up · Page down |
 | Cursor | Undo · ← · → · Redo | Up · Down · Word ← · Word → · Home · End |
@@ -89,6 +95,7 @@ Shipped reserves, off until you tick them:
 | **VSCode** | Sidebar · Palette · Terminal · Find | **Preview (ctrl+shift+v)** · **Next tab** · **Prev tab** · Save · Go to file · Comment |
 | **Chrome** | New tab · Close · Next tab · Address | **Prev tab** · Reopen · Reload · Back · Forward · Find |
 | **Explorer** | Rename · New dir · Delete · Up | **Next tab** · **Prev tab** · New tab · Back · Forward · Copy path · Details · Search |
+| **Claude** | Usage · Model · Thinking · Stop | Menu · Mode · Compact · New chat · Rewind · Context · Agents · Resume · Focus |
 
 `Zones` is no longer shipped — zone chords are a **custom** category the owner
 adds when wanted (this file is hand-editable; a future desktop editor will
@@ -132,8 +139,9 @@ manage names/icons/shortcuts per zone).
 
 - **left / right** — index of the category each group shows on connect.
 - **name** — the category label (centre button + wheel).
-- **icon** — one of: `mouse`, `edit`, `keyboard`, `monitor`, `monitor2`, `grid`, `snap`, `click`, `middle`, `right`, `btn4`, `btn5`, `drag`, `scroll`, `settings`, `target`, `globe`, `mic`, `enter`, `esc`, `attach`, `gallery`, `shot`, `folder`, `selall`, `copy`, `cut`, `paste`, `undo`, `redo`, `find`, `del`, `newwin`, `image`, `input`, `gauge`.
-- **buttons** — up to 4, placed in order **up · left · right · down**.
+- **icon** — any name from the client's icon set, which lives in one place: [client/icons.js](client/icons.js) (97 of them since the owner's 2026-08-05 round — every pool command now has one). The desktop **Controls…** editor reads that same file, so its icon combo always offers exactly what the phone can draw. Families and house style: [client/__about/icons.md](client/__about/icons.md).
+- **buttons** — the set's POOL (see Pools above); the four on the D-pad are placed in order **up · left · right · down**.
+- **title** *(app sets only, owner 2026-08-05)* — an extra match against the layout window's OWN title, so a set can single out an app that shares another's process: `Claude` is `{"process": "code", "title": "claude"}` and rides beside `VSCode`, which matches the process alone. The title is the window's, never the layout's (owner-chosen) name, so renaming a layout never changes which set appears.
 
 ## App-aware sets (`app_sets`)
 
@@ -143,9 +151,20 @@ process name, e.g. `"code"` → `Code.exe`), the set appears as an **extra
 category in the wheel** — nothing switches by itself, and it vanishes when the
 layout focus ends. Shipped: **VSCode** (Sidebar, Palette, Terminal, Find),
 **Chrome** (New tab, Close, Next tab, Address), **Explorer** (Rename, New dir,
-Delete, Up) — each with a pool of reserves behind them (see Pools above).
-Buttons use the same chord/key/icon format as categories, and app sets are
-editable in the desktop Controls editor like any other set.
+Delete, Up) and **Claude** (Usage, Model, Thinking, Stop) — each with a pool of
+reserves behind them (see Pools above). Buttons use the same chord/key/icon
+format as categories, plus the **typed text** kind the Claude set needs, and
+app sets are editable in the desktop Controls editor like any other set.
+
+**Two sets may match the same window** (owner 2026-08-05). Claude Code runs
+INSIDE VSCode — same process, `Code.exe` — so `Claude` adds a `"title"` match
+on top of the process and both sets ride together while that layout is
+focused: six of your own sets plus these two still fit the wheel's cap of 8.
+The title is read when the layout is CREATED (it is the window's own title,
+not the layout's name), which is also why nothing switches by itself later —
+the same rule the app sets have followed since 2026-08-04. Each app set is
+ticked separately in the phone's **Settings → Sets**, so hiding Claude while
+keeping VSCode is one tap.
 
 ## Button kinds
 
@@ -163,6 +182,7 @@ A button is one of:
   - `camera` — open the camera, take a shot, paste it on the PC.
   - `files` — pick any file(s) (PDF…); pasted on the PC as **real files** (like Copy in Explorer).
   - `pcshot` — **Shot**: screenshot of exactly the REGION the phone is viewing (zoomed part / focused layout — never the whole desktop), pasted into the focused PC box.
+  - `region` — **Region** (owner 2026-08-05): a frame you size and move anywhere on the screen; Send captures what is inside it and pastes it on the PC. Snipping Tool's rectangle, from the phone. Unlike a layout's region it is bound to no edge and keeps no ratio.
   - `upload` — legacy single-image pick (kept for hand-edited files; `gallery` replaces it).
   - `monitor` — switch the streamed monitor (shipped in **Settings**).
   - `snap` — full-monitor screenshot into the PC clipboard only (no paste; not in the default layout).
@@ -174,6 +194,7 @@ A button is one of:
   - `calibrate` — retired (the pointer sits exactly under the finger since 2026-08-02).
 - **Chord** — `{ "label": "Copy", "chord": "ctrl+c" }` — fires a key combination (see below). An optional `"icon"` from the list above gives it an icon face.
 - **Special key** — `{ "label": "Esc", "key": "escape" }` — a single structural key; `"icon"` works here too.
+- **Typed text** — `{ "label": "Usage", "text": "/usage", "enter": true }` (owner 2026-08-05) — the PC pastes the text into whatever box has focus and presses Enter. Built for the **Claude** set, whose commands are not shortcuts at all but slash commands written into the app's own prompt. The paste goes through the clipboard (one atomic insert; a character-by-character type races the autocomplete menu that re-filters on every keystroke). `"enter": false` leaves the line standing — that is the `Menu` button, which types `/` and lets you pick from the list with the cursor.
 
 ## Chord syntax
 

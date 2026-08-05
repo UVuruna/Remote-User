@@ -20,6 +20,11 @@ Implementation notes that matter:
 - [Web Layer](web.md) — the `screenshot` message handler and the `/upload` route
 
 ## Functions
+- `copy_text(text)` — plain text as **CF_UNICODETEXT** (UTF-16LE + the
+  terminating NUL). What the phone's TYPED command buttons paste (owner
+  2026-08-05 — the Claude set's `/usage`, `/model`, `/effort`): one atomic
+  insert instead of a character storm through an autocomplete menu that
+  re-filters on every keystroke.
 - `copy_image(frame_bgr)`: numpy BGR frame → clipboard (`CF_DIB`); returns a success bool, never raises on a clipboard-busy condition
 - `copy_files(paths)`: real files → clipboard (`CF_HDROP`: `DROPFILES` header + UTF-16 double-NUL list); same success-bool contract
 - `_set_clipboard(fmt, payload, what)`: the shared open-retry / GlobalAlloc / SetClipboardData path both of the above use

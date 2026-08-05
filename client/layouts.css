@@ -1,0 +1,388 @@
+/* The LAYOUT feature's own styling: the top bar, the layout list, the aspect
+   panel with its Move handle, the creation panel and the loading cube.
+   Split out of style.css on 2026-08-05, when the Region grab pushed that file
+   over the STRUCTURE LAW's 1,000-line threshold — the seam mirrors the JS
+   modules exactly (layouts.js owns this feature, controls.js the rest).
+   Loads after style.css, so the tokens in :root are already defined.
+   Documented together with layouts.js in client/__about/layouts.md. */
+
+/* --- Layout bar + creation panel (Phase F+ step 1) ------------------------ */
+
+/* The bar lives STRICTLY between the two corner buttons (owner 2026-08-03 —
+   a long layout name used to push the › arrow and the ✕ off the screen). It
+   is bounded on both sides instead of centered-with-a-max-width, so the name
+   is the only thing that can give: it wraps to a second line. */
+#layout-bar {
+  position: fixed;
+  top: calc(var(--space-m) + var(--vtop));
+  left: calc(var(--space-m) + var(--corner) + var(--space-s));
+  right: calc(var(--space-m) + var(--corner) + var(--space-s));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  color: var(--text-primary);
+  font: 600 13px system-ui, sans-serif;
+  z-index: 30;
+}
+#layout-bar[hidden] { display: none; }
+#layout-bar button {
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  font: 700 20px/1 system-ui, sans-serif;
+  padding: 4px 8px;
+}
+/* Big SVG arrows OUTSIDE the name (owner 2026-08-03 — the old ‹ › glyphs sat
+   inside the label and were too small to hit reliably). */
+#layout-bar .lay-arrow {
+  padding: 2px 4px;
+  display: flex;
+  align-items: center;
+}
+/* The arrows stand on the bare stream now (the frame carries the background),
+   so they get the same shadow every control icon has. */
+#layout-bar .lay-arrow svg {
+  width: 32px;
+  height: 32px;
+  filter: drop-shadow(0 1px 3px rgb(0 0 0 / 0.85));
+}
+/* The frame is the rectangle: name + ✕ together, and it takes whatever width
+   the arrows leave — never more. */
+#lay-frame {
+  flex: 0 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 8px 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: rgb(15 23 42 / 0.85);
+}
+/* Tapping the name opens the full layout list. */
+#layout-bar #lay-pick {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0;
+  font: 600 14px/1.15 system-ui, sans-serif;
+  text-align: left;
+}
+#lay-name {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;   /* layout-law: exempt - the top bar owns one row of the phone screen, and the FULL name is one tap away in the layout list, which no longer elides */
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+#lay-icon { width: 18px; height: 18px; flex: none; }
+.lay-chip img { width: 16px; height: 16px; vertical-align: -3px; margin-right: 6px; }
+.lay-appicon { width: 22px; height: 22px; vertical-align: -4px; margin-right: 8px; }
+#layout-bar #lay-close {
+  flex: none;
+  align-self: stretch;
+  padding: 0 6px;
+  color: var(--text-secondary);
+  font: 700 15px/1 system-ui, sans-serif;
+}
+
+#layout-panel {
+  position: fixed;
+  inset: 0;
+  z-index: 45;
+  background: rgb(15 23 42 / 0.72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-m);
+}
+#layout-panel[hidden] { display: none; }
+
+.lay-card {
+  width: min(420px, 100%);
+  max-height: 92vh;
+  overflow-y: auto;
+  background: #1E293B;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 22px 20px;
+  color: var(--text-primary);
+  font: 400 14px/1.45 system-ui, sans-serif;
+  box-shadow: 0 12px 40px rgb(0 0 0 / 0.45);
+}
+.lay-card h2 { font-size: 19px; margin-bottom: 2px; }
+.lay-sub { color: var(--text-secondary); font-size: 13px; margin-bottom: 10px; }
+
+.lay-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 10px 0;
+}
+.lay-chip {
+  padding: 9px 15px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border);
+  background: rgb(51 65 85 / 0.6);
+  color: var(--text-primary);
+  font: 600 13px system-ui, sans-serif;
+}
+.lay-chip.sel {
+  border-color: var(--accent);
+  color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-glow);
+}
+.lay-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 14px;
+}
+
+/* Source chooser: two LARGE rounded squares (like the parent card — owner
+   2026-08-02: the pill radius turned them into circles that clipped the
+   labels), icon above text, sharing the row. */
+.lay-sources { justify-content: center; gap: 14px; }
+.lay-source {
+  flex: 1 1 0;
+  max-width: 46%;
+  border-radius: 18px;
+  padding: 26px 12px 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  font-size: 14px;
+}
+.lay-source svg { width: 62px; height: 62px; }
+.lay-list {
+  max-height: 38vh;
+  overflow-y: auto;
+  align-content: flex-start;
+}
+
+/* Layout list + aspect panel (owner 2026-08-03) — rows inside the same card
+   as the creation panel; the aspect button on a row carries its current W:H. */
+.lay-item {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  margin: 8px 0;
+}
+.lay-item-main {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: rgb(51 65 85 / 0.5);
+  color: var(--text-primary);
+  font: 600 14px system-ui, sans-serif;
+  text-align: left;
+}
+.lay-item-main img { width: 20px; height: 20px; flex: none; }
+/* The list is where a layout's FULL name must be readable — the top-bar chip
+   may clamp its two rows precisely because one tap opens this list (SPACE &
+   LEGIBILITY LAW, owner 2026-08-05). A long window title wraps here; the row
+   grows, and the card scrolls only when the phone screen is genuinely full. */
+.lay-item-main span {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.lay-item-main.sel { border-color: var(--accent); color: var(--accent); }
+.lay-ratio {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: rgb(51 65 85 / 0.5);
+  color: var(--text-secondary);
+  font: 600 12px system-ui, sans-serif;
+}
+.lay-ratio svg { width: 20px; height: 20px; }
+.lay-rename { padding: 0 10px; } /* icon only — the pencil needs no label */
+
+/* The layout's own name (owner 2026-08-05): typed when it is created, and
+   changeable later from the list. Full width — window titles are long. */
+.lay-name-in {
+  width: 100%;
+  box-sizing: border-box;
+  resize: none;
+  line-height: 1.35;
+  padding: 11px 13px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: rgb(51 65 85 / 0.6);
+  color: var(--text-primary);
+  font: 600 15px system-ui, sans-serif;
+}
+.lay-name-in:focus { outline: none; border-color: var(--accent); }
+
+/* Aspect panel — W : H fields over a live preview of the phone screen (dashed)
+   with the region inside it; the region can only ever SHRINK inside the
+   screen box (owner 2026-08-03), so the free axis is the only draggable one. */
+.asp-fields {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin: 14px 0 6px;
+  font: 700 15px system-ui, sans-serif;
+}
+.asp-fields input {
+  width: 74px;
+  padding: 9px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: rgb(51 65 85 / 0.6);
+  color: var(--text-primary);
+  font: 700 15px system-ui, sans-serif;
+  text-align: center;
+}
+.asp-fields input:disabled { color: var(--text-secondary); opacity: 0.7; }
+.asp-prev {
+  height: 190px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 6px 0;
+}
+.asp-screen {
+  position: relative;
+  max-width: 100%;
+  max-height: 100%;
+  border: 1px dashed var(--text-secondary);
+  border-radius: 4px;
+  /* The whole box is the drag surface (owner 2026-08-04) — `none` so a drag
+     never turns into a page scroll mid-gesture. */
+  touch-action: none;
+}
+.asp-region {
+  position: absolute;
+  pointer-events: none; /* the drag is captured by the screen box itself */
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  border: 2px solid var(--accent);
+  border-radius: 4px;
+  background: rgb(56 189 248 / 0.12);
+}
+.asp-h {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  margin: -9px 0 0 -9px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.asp-h.t { top: 0; left: 50%; }
+.asp-h.b { top: 100%; left: 50%; }
+.asp-h.l { top: 50%; left: 0; }
+.asp-h.r { top: 50%; left: 100%; }
+.asp-h.free { box-shadow: 0 0 0 6px var(--accent-glow); }
+/* The Move handle (owner 2026-08-05) — its own drag surface, so it must
+   accept pointer events although the region itself passes them through. */
+.asp-move {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #0F172A;
+  /* A drawn four-way arrow (ICONS.move), not a font glyph — see controls.js */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto;
+  touch-action: none;
+}
+.asp-move svg {
+  width: 26px;
+  height: 26px;
+  stroke-width: 2.2;
+  pointer-events: none; /* the handle owns the drag, not its drawing */
+}
+.asp-value {
+  text-align: center;
+  color: var(--text-secondary);
+  font: 600 13px system-ui, sans-serif;
+}
+
+/* FULLY opaque (owner: nothing behind may show) — the whole screen becomes
+   the animation while the server creates windows. It cross-fades in and out
+   (owner 2026-08-03, "like the theme switch in Prompt Painter"), so the
+   `hidden` attribute is NOT used here — visibility is the `open` class. */
+#lay-loading {
+  position: fixed;
+  inset: 0;
+  z-index: 48;
+  background: #0F172A;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 40px;
+  color: var(--text-primary);
+  font: 600 15px system-ui, sans-serif;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 280ms cubic-bezier(0.4, 0, 0.2, 1),
+              visibility 0s linear 280ms;
+}
+#lay-loading.open {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 280ms cubic-bezier(0.4, 0, 0.2, 1), visibility 0s;
+}
+/* NOTE: the fade is opacity-only on purpose — `.cube-scene`'s transform is
+   owned by the cube-bob animation AND by the JS spin, so a transition on it
+   would simply be overridden (and a scale on #lay-loading itself would expose
+   the screen behind its edges). */
+
+/* The cube: owner-specified faces — top gold, bottom purple-gray, left azure,
+   right orange, front green, back red. NO perspective = orthographic
+   projection (owner sketch 2026-08-02 — a corner view where the cube reads
+   as a cube, never a flat square); JS spins it continuously while loading
+   and adds a momentum burst for every window the server creates. */
+.cube-scene {
+  width: 110px;
+  height: 110px;
+  animation: cube-bob 2.6s ease-in-out infinite;
+}
+.cube {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  transform-style: preserve-3d;
+  transform: rotateX(-28deg) rotateY(40deg);
+}
+.cube-face {
+  position: absolute;
+  inset: 0;
+  border: 2px solid rgb(15 23 42 / 0.55);
+  border-radius: 10px;
+  opacity: 0.96;
+}
+.cf-front  { background: #22C55E; transform: rotateY(0deg)    translateZ(55px); }
+.cf-back   { background: #EF4444; transform: rotateY(180deg)  translateZ(55px); }
+.cf-left   { background: #38BDF8; transform: rotateY(-90deg)  translateZ(55px); }
+.cf-right  { background: #F97316; transform: rotateY(90deg)   translateZ(55px); }
+.cf-top    { background: #FFD700; transform: rotateX(90deg)   translateZ(55px); }
+.cf-bottom { background: #7E6B8F; transform: rotateX(-90deg)  translateZ(55px); }
+@keyframes cube-bob {
+  0%, 100% { transform: translateY(-6px); }
+  50% { transform: translateY(6px); }
+}
+

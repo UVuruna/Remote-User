@@ -131,6 +131,14 @@ def main() -> int:
                  " voiceState: () => '' };"
                  "renderDictationCard()",
                  "closeDictationPanel()", "#dictation-panel .sets-card"),
+                # The Region grab (owner 2026-08-05). Its bar is the part that
+                # can starve: hint + Send + ✕ on one line above the keyboard
+                # inset, on a 412 px phone. Opened with the frame pushed into
+                # the corner, which is where a bar overlap would show first.
+                ("Region grab",
+                 "openRegionPanel();"
+                 "rgBox.x = 4; rgBox.y = 4; rgBox.w = 60; rgBox.h = 60; rgApply()",
+                 "closeRegionPanel()", "#region-panel .rg-bar"),
                 ("Aspect panel + Move handle",
                  "layouts = [{name:'Audit', process:'x', orient:'portrait',"
                  " icon:null, ratio:[600,1000], pos:0.5}]; openAspectPanel(0)",

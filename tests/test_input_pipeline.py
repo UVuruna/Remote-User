@@ -268,6 +268,31 @@ def main():
     results["side buttons: x1/x2 -> XDOWN/XUP with the right mouseData"] = sent == [
         (0x0080, 0x0001), (0x0100, 0x0001), (0x0080, 0x0002), (0x0100, 0x0002)]
 
+    # 9d. TYPED command buttons (owner 2026-08-05 — the Claude set's /usage,
+    # /model, /effort). ORDER is the whole contract: the text reaches the
+    # clipboard, THEN Ctrl+V, THEN Enter. An Enter that overtakes the paste
+    # sends an empty prompt, which is exactly the kind of silent wrong that
+    # only shows up on the owner's screen.
+    import clipboard as clip
+    import web as web_mod
+    steps: list[tuple] = []
+    real_copy = clip.copy_text
+    clip.copy_text = lambda t: (steps.append(("clipboard", t)), True)[1]
+    typed = InputInjector((0, 0, 1920, 1080))
+    typed.press_chord = lambda c: steps.append(("chord", c))
+    typed.press_key = lambda k: steps.append(("key", k))
+    typed.type_text = lambda t: steps.append(("typed", t))
+    web_mod._paste_text(typed, "/usage", True)
+    web_mod._paste_text(typed, "/", False)          # the Menu button: no Enter
+    clip.copy_text = lambda t: False                # clipboard held by another app
+    web_mod._paste_text(typed, "/model", True)
+    clip.copy_text = real_copy
+    results["typed command: clipboard -> ctrl+v -> enter, in that order"] = steps == [
+        ("clipboard", "/usage"), ("chord", "ctrl+v"), ("key", "enter"),
+        ("clipboard", "/"), ("chord", "ctrl+v"),
+        ("typed", "/model"), ("key", "enter"),      # fallback still delivers
+    ]
+
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         ctx = browser.new_context(
