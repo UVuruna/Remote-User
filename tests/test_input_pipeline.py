@@ -123,11 +123,24 @@ class FakeStream:
     height = 1080
     monitor_index = 0
 
+    def __init__(self):
+        self.running = 0
+
     def output_count(self):
         return 1
 
     def set_viewport(self, x, y, w, h):
         pass
+
+    # JPEG capture is ON DEMAND since 2026-08-05 (nothing may be captured or
+    # encoded while no phone is watching), so start/stop are part of the duck
+    # interface the web layer calls — the gate caught their absence the moment
+    # they were added, which is exactly what it is for.
+    def start(self):
+        self.running += 1
+
+    def stop(self):
+        self.running -= 1
 
     def switch_to(self, index):
         return False

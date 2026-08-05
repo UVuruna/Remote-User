@@ -56,10 +56,22 @@ def generate_token() -> str:
 
 
 def get_lan_ip() -> str:
-    """The LAN IP the tablet must reach — found by routing a UDP socket outward (no traffic sent)."""
-    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
-        s.connect(("8.8.8.8", 80))
-        return s.getsockname()[0]
+    """The LAN IP the tablet must reach — found by routing a UDP socket outward
+    (no traffic sent).
+
+    Never raises: the GUI calls this from its once-a-second refresh, and with
+    no network at all `connect` fails — an OSError there used to escape into
+    the Qt timer and could abort the whole process, taking the daemon server
+    thread and every always-on-top window it held down with it (audit
+    2026-08-05). A loopback answer is a wrong address; a dead app is worse."""
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.settimeout(1.0)
+            s.connect(("8.8.8.8", 80))
+            return s.getsockname()[0]
+    except OSError as e:
+        logger.warning("LAN address not determinable (%s) — using loopback", e)
+        return "127.0.0.1"
 
 
 def get_tailscale_ip() -> str | None:
