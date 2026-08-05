@@ -87,6 +87,11 @@ function connect() {
         refreshCategories();
       } else if (msg.type === "toast") {
         showToast(msg.text);
+      } else if (msg.type === "notify") {
+        // A job on the PC finished and named itself (ROADMAP Phase H,
+        // owner 2026-08-05) — the phone raises a real notification
+        // with the AGENT's name, speaks it, and toasts if visible.
+        handleNotify(msg);
       } else if (msg.type === "layout_state") {
         // The server is done — but the PC is not: windows are still restoring
         // and sliding into place. The loading animation stays up until the
@@ -134,6 +139,7 @@ function connect() {
       // The token is refused — retrying with the same one only hammers the
       // server and stomps this message every 2 s. Stop until re-paired.
       authRejected = true;
+      layoutRestore = null;   // a dead link decides nothing about the layout
       if (IN_APP) {
         // In the APK the fix is one tap — the shell reopens the QR scanner.
         setStatus("disconnected", "Link expired — tap here to scan the new QR");
@@ -150,6 +156,10 @@ function connect() {
       // 2026-08-02). No auto-reconnect: that would steal the session back
       // in a loop. A deliberate tap takes over again.
       takenOver = true;
+      // This page is no longer the authority on what the session should show,
+      // so it must not silently re-raise "its" layout on some later reconnect
+      // and override whatever the other device chose (audit 2026-08-05).
+      layoutRestore = null;
       setStatus("disconnected", "Another device took over — tap here to use this one");
       statusEl.addEventListener("pointerup", () => {
         takenOver = false;
@@ -183,8 +193,33 @@ function socketReady() {
 }
 
 setInterval(() => {
-  if (socketReady() && !document.hidden) ws.send(JSON.stringify({ type: "hb" }));
+  if (!socketReady() || document.hidden) return;
+  // The beat carries the phone's own traffic counters (Android TrafficStats).
+  // The PC's Traffic window subtracts the reading before an absence from the
+  // one after it, which is the only measurement that can answer "did the app
+  // keep running while the screen was off" without either of us guessing
+  // (owner 2026-08-05).
+  const net = phoneNet();
+  ws.send(JSON.stringify(net ? { type: "hb", net } : { type: "hb" }));
 }, HEARTBEAT_MS);
+
+// The screen is held awake while the owner is actually working, and released
+// after KEEP_AWAKE_MS of no touch — the shell used to hold it forever, so the
+// tablet never slept on its own, never sent the leave signal, and burned
+// battery showing a stream nobody was looking at (audit 2026-08-05).
+let awakeUntil = 0;
+function touchedNow() {
+  awakeUntil = performance.now() + KEEP_AWAKE_MS;
+  if (IN_APP && window.Android.keepAwake) window.Android.keepAwake(true);
+}
+window.addEventListener("pointerdown", touchedNow, true);
+window.addEventListener("keydown", touchedNow, true);
+setInterval(() => {
+  if (!awakeUntil || performance.now() < awakeUntil) return;
+  awakeUntil = 0;
+  if (IN_APP && window.Android.keepAwake) window.Android.keepAwake(false);
+}, 5000);
+touchedNow();
 
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) {
@@ -193,11 +228,17 @@ document.addEventListener("visibilitychange", () => {
     // the shell cancels its listening round too (belt and braces).
     inputOff();
     if (socketReady()) {
-      // Say WHY we are going: an excursion (image picker, camera, voice) is
-      // the owner still working with us — the PC holds the layout as it is;
-      // anything else is the end of the session and the desk gets its
-      // windows back immediately instead of after the heartbeat runs out.
-      ws.send(JSON.stringify({ type: "away", excursion: inExcursion() }));
+      // Say WHY we are going, in the words of whoever actually knows —
+      // hideReason() asks the shell first (screen off / keyguard / its own
+      // picker) and only falls back to our timer in a dev browser. An
+      // excursion means the owner is still working with us and the PC holds
+      // the layout; ANYTHING else, above all a lock, hands his windows back
+      // at once. Getting this word wrong is the whole 2026-08-05 failure.
+      const reason = hideReason();
+      const net = phoneNet();
+      const bye = { type: "away", reason, excursion: reason === "excursion" };
+      if (net) bye.net = net;
+      ws.send(JSON.stringify(bye));
     }
     if (ws) ws.close();
   } else {
@@ -211,4 +252,10 @@ window.addEventListener("pageshow", ensureConnected);
 
 setInterval(ensureConnected, RECONNECT_MS);
 
-connect();
+// ensureConnected, NOT connect (audit 2026-08-05): every other entry point
+// checks document.hidden, and this one did not. The shell can load the page
+// while the activity is paused (a network event fires its resolver), and an
+// unguarded connect there opened a full 4K stream to a pocketed phone AND
+// re-raised the owner's layout windows on top of his desk. If the page really
+// is visible, this connects immediately, exactly as before.
+ensureConnected();
