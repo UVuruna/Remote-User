@@ -52,6 +52,20 @@ on aspect drift, raises members and returns the fresh monitor-normalized
 region; `remove(index)`; `prune()`; `state(active, region)` builds the
 `layout_state` payload (pruning first, so the phone never lists a dead layout).
 
+`rename(index, name) -> bool` gives a layout the OWNER's name (owner
+2026-08-05) — the target window's title is only the default the phone's
+creation panel prefills; an empty name or a dead index is refused.
+
+`last_focus` + `resume_index()` / `forget_focus()` are where a returning
+phone lands (owner 2026-08-05). Every successful `focus` records
+`(index, name)`; leaving work mode minimizes everything but keeps the
+pointer, so the next session resumes IN that layout instead of dumping the
+owner on the desktop. Both halves must still match — a list that changed
+while the phone was away resumes on the desktop rather than on the wrong
+window — `remove()` shifts/clears it with the list, `rename()` keeps it
+valid, and a deliberate Desktop choice (`forget_focus`, called by the web
+layer on `layout_focus -1`) means the desktop IS the state to resume into.
+
 ## Functions
 - `list_windows(exclude)`: visible, titled, non-cloaked, non-shell, non-tool,
   not-our-process top-level windows → `{hwnd, title, process}` dicts
@@ -69,7 +83,10 @@ region; `remove(index)`; `prune()`; `state(active, region)` builds the
   process
 - `drop_topmost(hwnd)` / `LayoutRegistry.clear_topmost()`: the other half of
   the TOPMOST lifecycle — back to the normal z-band on desktop focus, focus
-  of another layout, layout removal, and phone disconnect
+  of another layout, layout removal, and the phone leaving work mode. That
+  last one is what the [Web Layer](web.md)'s presence watchdog exists for:
+  the always-on-top band is only correct while the phone is really showing
+  the layout, and a locked phone cannot say so by itself (owner 2026-08-05)
 - `is_alive(hwnd)`: window exists, visible, not DWM-cloaked
 
 ## Per-layout aspect ratio + position (owner 2026-08-03, position 2026-08-05)

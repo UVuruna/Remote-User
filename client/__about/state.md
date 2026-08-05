@@ -77,6 +77,14 @@ pinch zoom/pan works in layout focus too, bottoming out at the layout's own
 framing.
 `send()` also refuses to auto-reconnect after a 4409 takeover (one device at a
 time — a background reconnect would steal the session back in a loop).
+`markExcursion()` / `inExcursion()` (owner 2026-08-05) mark the moments we
+leave the app on purpose — image picker, camera, voice — so the hide that
+follows within `EXCURSION_GRACE_MS` is announced to the server as an
+excursion instead of the end of work ([Connection](connection.md) sends it,
+and the PC keeps the layout standing while the owner picks). `HEARTBEAT_MS`
+is the other half: presence is a positive signal, and its silence is what
+tells the PC to hand the desk's windows back.
+
 `layoutRestore` (owner 2026-08-04) remembers the focused layout across the
 socket churn every excursion causes (gallery pick, permission dialog — the
 page hides, the socket closes by rule, the fresh connection's server-side

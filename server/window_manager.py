@@ -551,6 +551,12 @@ class LayoutRegistry:
 
     def __init__(self):
         self.layouts: list[Layout] = []
+        # The layout the phone was last working in (owner 2026-08-05): the app
+        # leaving work mode minimizes everything, and the next session comes
+        # back HERE instead of on the desktop. Server-side on purpose — the
+        # client's own memory dies with the page when the app is closed.
+        # (index, name) — the name guards against the list having shifted.
+        self.last_focus: tuple[int, str] | None = None
 
     def prune(self) -> None:
         """Closing a member at the desk removes it from its layout (owner
@@ -621,6 +627,7 @@ class LayoutRegistry:
                     drop_topmost(hwnd)
         for hwnd in lay.members:
             raise_window(hwnd)
+        self.last_focus = (index, lay.name)  # where the next session resumes
         if lay.template:
             cells = _cells(layout_region(mon_rect, lay.aspect, lay.ratio, lay.pos),
                            lay.template)
@@ -650,6 +657,36 @@ class LayoutRegistry:
         # Only report Desktop once they are ALL really gone (owner 2026-08-03).
         wait_minimized(members)
 
+    def forget_focus(self) -> None:
+        """The user DELIBERATELY chose the full desktop — that is the state the
+        next session must resume into, so there is nothing to come back to."""
+        self.last_focus = None
+
+    def resume_index(self) -> int | None:
+        """The layout a returning phone should land in (owner 2026-08-05), or
+        None for the desktop. Both the index AND the name must still match —
+        a list that changed while the phone was away resumes on the desktop
+        rather than on the wrong window."""
+        self.prune()
+        if self.last_focus is None:
+            return None
+        index, name = self.last_focus
+        if 0 <= index < len(self.layouts) and self.layouts[index].name == name:
+            return index
+        self.last_focus = None
+        return None
+
+    def rename(self, index: int, name: str) -> bool:
+        """Owner-typed name (owner 2026-08-05). The auto name — the target
+        window's title — is only the default; this replaces it for good."""
+        name = name.strip()[:80]
+        if not name or not 0 <= index < len(self.layouts):
+            return False
+        self.layouts[index].name = name
+        if self.last_focus and self.last_focus[0] == index:
+            self.last_focus = (index, name)  # keep the resume pointer valid
+        return True
+
     def set_ratio(self, index: int, w: int, h: int, pos: float = 0.5) -> bool:
         """Store this layout's owner-chosen W:H (0/0 = back to the phone's own
         shape) and the region's free-axis position (owner 2026-08-05 — the
@@ -677,6 +714,13 @@ class LayoutRegistry:
                 freeze_transitions(hwnd, False)
                 drop_topmost(hwnd)
             del self.layouts[index]
+            # The resume pointer rides on INDICES — the removed one is gone,
+            # every higher one shifted down by one.
+            if self.last_focus is not None:
+                last, name = self.last_focus
+                self.last_focus = (None if last == index
+                                   else (last - 1, name) if last > index
+                                   else (last, name))
 
     def clear_topmost(self) -> None:
         """Every member back to the normal z-band — the phone hung up, nothing

@@ -71,6 +71,11 @@ const ICONS = {
   // region inside the screen — the layout aspect-ratio panel
   aspect: '<rect x="2.5" y="4" width="19" height="16" rx="2"/><rect x="7" y="8" width="10" height="8" rx="1"/>',
   desktop: '<rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/>',
+  // Four-way move (the aspect panel's Move handle). A drawn icon, not the
+  // "✥" character: that glyph is whatever the device's font makes of it, and
+  // on the owner's phone it came out a blunt cross with no arrowheads
+  // (owner 2026-08-05).
+  move: '<path d="M12 3.5v17"/><path d="M3.5 12h17"/><path d="m9 6.5 3-3 3 3"/><path d="m9 17.5 3 3 3-3"/><path d="m6.5 9-3 3 3 3"/><path d="m17.5 9 3 3-3 3"/>',
 };
 
 function svg(name) {
@@ -347,6 +352,9 @@ function micStart() {
   if (keyboardOpen()) kbInput.blur();
   micOn = true;
   setMicActive(true);
+  // A microphone permission dialog (and Google's own voice UI) hides the page
+  // — an excursion, not the end of work (owner 2026-08-05).
+  markExcursion();
   window.Android.startVoice();
 }
 
@@ -781,13 +789,22 @@ function makeActionButton(btn, pos) {
     } else if (b.kind === "shot") {
       keepFocus(el, () => send({ type: "screenshot", paste: true, ...shotRegion() }));
     } else if (b.kind === "pick") {
-      keepFocus(el, () => document.getElementById(b.input).click());
+      // The picker/camera hides the page — an EXCURSION, not the end of work:
+      // the PC must keep the layout standing while the owner picks (owner
+      // 2026-08-05).
+      keepFocus(el, () => {
+        markExcursion();
+        document.getElementById(b.input).click();
+      });
     } else if (b.kind === "sets") {
       keepFocus(el, openSetsPanel);
     } else if (b.kind === "send") {
       keepFocus(el, () => send(b.msg));
     } else if (b.kind === "upload") {
-      keepFocus(el, () => filePick.click());
+      keepFocus(el, () => {
+        markExcursion();
+        filePick.click();
+      });
     } else if (b.kind === "calibrate") {
       // The offset/calibration system is gone (owner 2026-08-02 — the pointer
       // sits under the finger). The action stays registered so an owner
