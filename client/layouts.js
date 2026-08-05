@@ -278,7 +278,7 @@ keepFocus(layCloseBtn, () => {
 // height, landscape keeps its height and only loses width). Nothing moves on
 // the PC until "Apply" — dragging the handle re-arranges only the preview.
 
-function layRow(label, icon, selected, onTap, aspectBtn) {
+function layRow(label, icon, selected, onTap, ...trailing) {
   const row = document.createElement("div");
   row.className = "lay-item";
   const main = document.createElement("button");
@@ -297,7 +297,7 @@ function layRow(label, icon, selected, onTap, aspectBtn) {
   main.appendChild(name);
   keepFocus(main, onTap);
   row.appendChild(main);
-  if (aspectBtn) row.appendChild(aspectBtn);
+  trailing.filter(Boolean).forEach((el) => row.appendChild(el));
   return row;
 }
 
@@ -327,6 +327,13 @@ function openLayoutPicker() {
   }));
 
   layouts.forEach((lay, i) => {
+    // Rename (owner 2026-08-05): the auto name is only the window's title —
+    // this is where a layout gets the owner's own name, any time later.
+    const ren = document.createElement("button");
+    ren.type = "button";
+    ren.className = "lay-ratio lay-rename";
+    ren.innerHTML = svg("edit");
+    keepFocus(ren, () => openRenamePanel(i));
     const asp = document.createElement("button");
     asp.type = "button";
     asp.className = "lay-ratio";
@@ -335,7 +342,7 @@ function openLayoutPicker() {
     card.appendChild(layRow(lay.name, lay.icon, i === layoutActive, () => {
       closeLayoutPanel();
       focusLayout(i);
-    }, asp));
+    }, ren, asp));
   });
 
   const actions = document.createElement("div");
@@ -343,6 +350,58 @@ function openLayoutPicker() {
   actions.appendChild(layChip("Close", false, closeLayoutPanel));
   card.appendChild(actions);
   layPanel.appendChild(card);
+}
+
+// The name field. A WRAPPING textarea, not a one-line input: window titles
+// are long ("Claude Code - Remote User - Visual Studio Code [Administrator]")
+// and a single line hides most of one behind its own horizontal scroll —
+// exactly what THE SPACE & LEGIBILITY LAW forbids (caught by the layout
+// audit, 2026-08-05). Newlines are stripped: a name is one line of text.
+function nameField(value, placeholder) {
+  const el = document.createElement("textarea");
+  el.className = "lay-name-in";
+  el.rows = 3;
+  el.maxLength = 80;
+  el.autocapitalize = "off";
+  el.autocomplete = "off";
+  el.spellcheck = false;
+  el.placeholder = placeholder || "";
+  el.value = value || "";
+  el.addEventListener("input", () => {
+    if (el.value.includes("\n")) el.value = el.value.replace(/\n/g, " ");
+  });
+  return el;
+}
+
+// Renaming an existing layout (owner 2026-08-05). Nothing on the PC moves —
+// only what this layout is CALLED in the bar and the list changes.
+function openRenamePanel(index) {
+  const lay = layouts[index];
+  if (!lay) return;
+  layPanel.innerHTML = "";
+  layPanel.hidden = false;
+  const card = document.createElement("div");
+  card.className = "lay-card";
+  const h = document.createElement("h2");
+  h.textContent = "Layout name";
+  const sub = document.createElement("p");
+  sub.className = "lay-sub";
+  sub.textContent = "Call it whatever you like — the window's title is only the default.";
+  const field = nameField(lay.name || "");
+  card.append(h, sub, field);
+
+  const actions = document.createElement("div");
+  actions.className = "lay-actions";
+  actions.appendChild(layChip("Cancel", false, openLayoutPicker)); // back one step
+  actions.appendChild(layChip("Save", true, () => {
+    const name = field.value.trim();
+    if (name && name !== lay.name) send({ type: "layout_rename", index, name });
+    closeLayoutPanel();
+  }));
+  card.appendChild(actions);
+  layPanel.appendChild(card);
+  field.focus();
+  field.select();
 }
 
 // The phone's own side ratio as small whole numbers: raw pixels reduce to
@@ -477,7 +536,7 @@ function renderAspectPanel() {
   // double-tap re-centers it. Everything OUTSIDE the handle still resizes.
   const move = document.createElement("div");
   move.className = "asp-move";
-  move.textContent = "✥";
+  move.innerHTML = svg("move");
   dragMove(move, screenBox);
   region.appendChild(move);
   screenBox.appendChild(region);
@@ -651,6 +710,7 @@ function newCreation(source) {
     source,                 // "list" | "tap"
     entries: null,          // list source: [{kind, hwnd, title, process, icon, tab?, x?, y?}]
     slots: [],              // chosen cells, in order — slot 1 names the layout
+    name: null,             // owner-typed name; null = follow slot 1's title
     mode: "solo",
     grid: null,
     orient: window.innerHeight >= window.innerWidth ? "portrait" : "wide",
@@ -774,6 +834,18 @@ function renderCreationPanel() {
     card.appendChild(row);
   }
 
+  // The layout's NAME (owner 2026-08-05): the window/tab title is only the
+  // default offered here — whatever stands in this field is what the layout
+  // bar and the list will call it. Emptying it falls back to the title.
+  const nameLbl = document.createElement("p");
+  nameLbl.className = "lay-sub";
+  nameLbl.textContent = "Name:";
+  const nameIn = nameField(
+    c.name !== null ? c.name : (c.slots.length ? c.slots[0].title : ""),
+    c.slots.length ? c.slots[0].title : "The window's own title");
+  nameIn.addEventListener("input", () => { c.name = nameIn.value; });
+  card.append(nameLbl, nameIn);
+
   const modeRow = document.createElement("div");
   modeRow.className = "lay-row";
   modeRow.appendChild(layChip("Only one", c.mode === "solo", () => {
@@ -840,6 +912,7 @@ function renderCreationPanel() {
     send({
       type: "layout_create",
       slots: c.slots.map((s) => ({ hwnd: s.hwnd, tab: s.tab, x: s.x, y: s.y })),
+      name: (c.name || "").trim(), // "" = keep the window/tab title
       mode: c.mode,
       grid: c.grid,
       orient: c.orient,
