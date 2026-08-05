@@ -9,13 +9,14 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 # Directories never scanned by any guard: vendored/generated/build output,
-# the Python venv, VCS internals, and the owner's gitignored UV/ inbox.
+# the Python venv, VCS internals, the owner's gitignored UV/ inbox, and the
+# .claude/ harness config (hook scripts + session state — not product code).
 # PRUNED during the walk (never descended into) — .venv alone holds tens of
 # thousands of files; filtering them out AFTER an os.walk/rglob would blow
 # the guard runner's <~2s speed budget (rules/CODE.md -> Enforcement).
 EXCLUDE_DIR_NAMES = {
     ".venv", "venv", "node_modules", "build", "dist", ".git", "__pycache__",
-    "vendor", ".gradle", ".kotlin", "cert", "UV", ".pytest_cache",
+    "vendor", ".gradle", ".kotlin", "cert", "UV", ".pytest_cache", ".claude",
 }
 
 SOURCE_EXTENSIONS = {".py", ".js", ".ts", ".kt", ".html", ".css"}
