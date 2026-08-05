@@ -151,6 +151,34 @@ def main() -> int:
                 if not passed:
                     print(f"  DETAIL {name} @ {label}: {detail}")
 
+            # D-pad labels: a set's POOL may hold reserve commands with longer
+            # names than the shipped four ("Copy path", "Go to file"), and the
+            # law forbids eliding them — they wrap instead (owner 2026-08-05).
+            # The wrapped label must still stay INSIDE its 58 px button.
+            page.evaluate(
+                "categories.push({name:'Audit', icon:'grid', required:true,"
+                " buttons:[{label:'Copy path', chord:'ctrl+shift+c'},"
+                "          {label:'Go to file', chord:'ctrl+p'},"
+                "          {label:'Paste plain', chord:'ctrl+shift+v'},"
+                "          {label:'Find next', chord:'f3'}]});"
+                "groups.left = allCats().length - 1; renderGroup('left');")
+            results[f"D-pad labels inside their buttons @ {label}"] = page.evaluate(
+                """() => {
+                  const btns = document.querySelectorAll('#group-left .ctl');
+                  let ok = btns.length > 0;
+                  for (const b of btns) {
+                    const l = b.querySelector('.lbl');
+                    if (!l) continue;
+                    const br = b.getBoundingClientRect();
+                    const lr = l.getBoundingClientRect();
+                    if (lr.top < br.top - 1 || lr.bottom > br.bottom + 1 ||
+                        lr.left < br.left - 1 || lr.right > br.right + 1) ok = false;
+                    if (l.scrollWidth > l.clientWidth + 1) ok = false;  // no cut
+                  }
+                  return ok;
+                }""")
+            page.evaluate("categories.pop(); groups.left = 0; refreshCategories();")
+
             # The Move handle must be visible and inside the panel card.
             page.evaluate(
                 "layouts = [{name:'Audit', process:'x', orient:'portrait',"
