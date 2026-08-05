@@ -42,9 +42,17 @@ widest real entry (`sizeHintForColumn`) + the detail form (caption + the
 longest command name / chord / "Built-in: …" entry + the Record button);
 height = six pool rows + the detail form's four rows + the arrangement's
 caption and four slots + the fixed furniture. With the shipped actions.json
-that is **1224 × 646** (dev machine, Segoe UI 13 px, 2026-08-05); it moves
+that is **1311 × 665** (dev machine, theme font 13 px, 2026-08-05); it moves
 with the content, which is the point. `ChordRecorder` measures its own two
 lines: **406 × 58**.
+
+The measurement happens in `showEvent`, not in `__init__`: the theme reaches
+this dialog through its parent's stylesheet and Qt resolves the QSS font and
+padding only when the widget is polished. Measured in the constructor, every
+string came out in the DEFAULT font — about 8% narrower than the theme's —
+and the wheel checkbox and the set list were cut at the resulting minimum.
+The audit caught exactly that, once its factory started applying the theme
+the way the app does.
 
 The command table takes the window's free height (no widget carries a hard
 size), and every editor field owns a full-width row — the two failures the law

@@ -536,6 +536,7 @@ class ControlsEditor(QDialog):
         self.builtins = load_client_builtins()
         self.path = user_actions_path()
         self._detail_row = -1
+        self._settled = False  # the minimum is measured on first show
         try:
             self.data = json.loads(self.path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError) as e:
@@ -646,6 +647,33 @@ class ControlsEditor(QDialog):
 
     # -- the law's computed minimum -----------------------------------------
 
+    def showEvent(self, event) -> None:  # noqa: N802 — Qt override
+        """The minimum is SETTLED on first show, not in `__init__`.
+
+        The theme reaches this dialog through its parent's stylesheet, and Qt
+        resolves the QSS font and padding only when the widget is polished —
+        which happens on show. Measuring in the constructor therefore measured
+        every string in the DEFAULT font (~8% narrower than the theme's 13 px)
+        and produced a minimum in which the wheel checkbox and the set list
+        were cut. Here the metrics are real, so the measurement is real.
+        """
+        super().showEvent(event)
+        if self._settled:
+            return
+        self._settled = True
+        self._fit_set_list()
+        size = self._computed_minimum()
+        for _ in range(4):
+            self.setMinimumSize(size)
+            self.layout().activate()
+            needs = self.minimumSizeHint()
+            grown = QSize(max(size.width(), needs.width()),
+                          max(size.height(), needs.height()))
+            if grown == size:
+                break
+            size = grown
+        self.setMinimumSize(size)
+
     def _computed_minimum(self) -> QSize:
         """MEASURED, never guessed (THE SPACE & LEGIBILITY LAW).
 
@@ -732,12 +760,15 @@ class ControlsEditor(QDialog):
             self.set_list.addItem(item)
         self.set_list.blockSignals(False)
         self.set_list.setIconSize(QSize(22, 22))
-        # Ladder step 1: the list column is not stretched, so it must ASK for
-        # the width its longest real entry needs ("Explorer   (app · explorer)")
-        # — otherwise Qt hands it a default and the names are cut.
+        self._fit_set_list()
+        self.set_list.setCurrentRow(min(select, self.set_list.count() - 1))
+
+    def _fit_set_list(self) -> None:
+        """Ladder step 1: the list column is not stretched, so it must ASK for
+        the width its longest real entry needs ("Explorer   (app · explorer)")
+        — otherwise Qt hands it a default and the names are cut."""
         self.set_list.setMinimumWidth(
             self.set_list.sizeHintForColumn(0) + 2 * self.set_list.frameWidth() + 12)
-        self.set_list.setCurrentRow(min(select, self.set_list.count() - 1))
 
     def _select(self, index: int) -> None:
         self._store_current()
