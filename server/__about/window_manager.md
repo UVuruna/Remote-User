@@ -155,3 +155,47 @@ wait out the stream latency before judging the picture).
 member, so the full-desktop view shows only non-layout windows; focusing a
 layout later restores its own members. `window_at_hwnd(hwnd)` returns the
 list_windows-shaped info dict for a known handle (slot resolution).
+
+## The topmost ledger (owner decree 2026-08-05)
+
+The always-on-top band is ours only while we are running to take it back, and
+twice the owner came to his desk to find HIS Chrome and HIS VSCode nailed above
+everything with nothing left alive to lower them. So every hwnd we raise is
+written down (`mark_topmost`), and there are exactly two ways out — one for
+each way this process can end:
+
+1. **We get to run code** — tray Quit, server stop, Apply & restart, Ctrl+C, a
+   console close, an unhandled crash, Windows logoff: `release_all()` walks
+   the ledger. It is wired into `ServerController.release_windows()` (called
+   before every stop and in `_serve`'s `finally`), Qt's `aboutToQuit`,
+   `atexit` in both entry points, and a `SetConsoleCtrlHandler` in the CLI.
+   Idempotent — running all of them is the design.
+2. **We do NOT** — Task Manager, the installer's `taskkill`, a power cut:
+   nothing inside the process can help, so the ledger is mirrored to
+   `SETTINGS.topmost_ledger_path` on every change and `repair_stranded()`
+   reads it at the next start (`ServerController.__init__`). A recycled handle
+   could by then belong to a stranger's window, so an entry is acted on ONLY
+   while its window still runs the executable it ran when we raised it.
+
+`LayoutRegistry.clear_topmost()` now delegates to `release_all()`: it goes
+through the LEDGER, not the member lists, because a window that fell out of its
+layout (closed, cloaked, extracted as a tab) is exactly the one no member list
+can name — and exactly the one that used to stay stranded.
+
+Three more corrections from the same audit:
+
+- **`raise_window(hwnd, topmost=False)`** — the function was doing two jobs
+  under one name. `True` is "this is what the phone shows" (TOPMOST + a ledger
+  entry); `False` is "bring this forward for a moment" (HWND_TOP, no entry),
+  which is what [UIA](uia.md) needs for tab extraction and `next_input`.
+- **`drop_topmost` is VERIFIED and returns a bool.** SetWindowPos can be
+  refused (a higher-integrity window, a hung owning thread), and a window we
+  failed to lower KEEPS its ledger entry — that is precisely the record the
+  next start's repair needs.
+- **`prune()` drops CLOSED windows, not merely hidden ones**, and returns the
+  surviving original indices. Windows cloaks every window on another VIRTUAL
+  DESKTOP and Store apps while minimized, so pruning on `is_alive` meant the
+  owner pressing Win+Ctrl+Right silently DELETED his layout and abandoned its
+  members — still on screen, still always-on-top — in a list nothing could
+  reach. The returned index map is what lets `state()` follow the focused
+  layout through a prune instead of pointing at whatever slid into its place.

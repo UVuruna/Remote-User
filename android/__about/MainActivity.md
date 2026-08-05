@@ -163,3 +163,31 @@ manifest's `<queries>` entry and the page's Play Store link.
 
 `update(url)` falls back to an Intent chooser when no direct ACTION_VIEW
 handler resolves ("no app can open this" — owner report 2026-08-02).
+
+## The shell answers what the page could only guess (owner failure 2026-08-05)
+
+The page decided why it was hiding from a 90-second timer, so a screen LOCK
+moments after a Mic tap was reported to the PC as "back in a second" and the
+owner's windows stayed always-on-top for five minutes. The shell is the only
+component that can actually know, so the shell answers now.
+
+- **`hideReason()`** → `"lock"` when `PowerManager.isInteractive` is false or
+  the keyguard is locked · `"excursion"` when THIS shell launched a picker /
+  camera / voice / permission dialog and is still waiting for its result ·
+  `""` otherwise (switched away, closed). The lock test comes **first**: a
+  picker can be open when the screen goes off, and the screen wins.
+- **`beginExcursion()` / `endExcursion()`** — one counter, marked at every
+  launch site (`onShowFileChooser`, the audio-permission request) and cleared
+  in every result callback. The camera permission dialog is a step INSIDE the
+  chooser trip, not a separate one, so only a refusal ends it there.
+- **`netStats()`** → this app's and the whole device's `TrafficStats` counters
+  as JSON, for the PC's Traffic window.
+- **`keepAwake(on)`** — `FLAG_KEEP_SCREEN_ON` was set once in `onCreate` and
+  never cleared, so the tablet NEVER slept by itself: the presence signal the
+  layout design rests on could only fire if the owner locked it by hand, and
+  the screen burned battery over a stream nobody was watching. The page now
+  holds it while he works and releases it after 3 idle minutes.
+- **`onStart` / `onStop`** — nothing probes, retries or LOADS while there is no
+  window on screen. The resolver's 4 s timer and the network callback used to
+  run on regardless, and a `loadUrl` from either woke a pocketed phone into a
+  full session; `resolveAndLoad` now checks `started` before loading.

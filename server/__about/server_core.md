@@ -36,3 +36,23 @@ One instance per process; states `"stopped" → "starting" → "running" → "st
 - `stop(timeout=10.0)` — force-exits uvicorn (`force_exit` + `should_exit`, NOT graceful shutdown — see the flow doc for why) and joins the thread; waits briefly for the uvicorn instance to exist first when stopping mid-startup, so the exit flags always have something to land on
 - `run_blocking()` — CLI mode: runs `_serve()` on the calling thread until Ctrl+C/exit
 - `console_pairing=True` prints the QR to the console (CLI); the GUI renders it in-window from `pairing.qr_png()` instead
+
+## Windows never outlive the process (owner decree 2026-08-05)
+
+- **`self.layouts` is created once per PROCESS**, not per server run, and
+  handed to `create_app`. "Apply & restart" used to build a fresh empty
+  registry — throwing away the owner's layouts AND the only in-memory list of
+  which windows were still always-on-top.
+- **`repair_stranded()` runs in `__init__`**, before anything of ours can
+  raise a window: whatever a killed previous run left standing is put right
+  first (see [Window Manager](window_manager.md) — the topmost ledger).
+- **`release_windows()`** drops the whole band synchronously on the calling
+  thread. It runs FIRST in `stop()` — ahead of `force_exit` and a join that
+  can wait out its full 10 s while the server thread is mid-placement — and
+  FIRST in `_serve`'s `finally`, ahead of the encoder teardown, so a hanging
+  ffmpeg terminate cannot eat the one thing the owner notices.
+- **`traffic.METER.start()`** begins sampling with the first server start and
+  never stops: a stopped server has to read as a line of zeros on the owner's
+  graph, never as a hole where anything could have happened.
+- **Capture is on demand in both modes.** The unconditional `stream.start()`
+  for JPEG is gone; [Web Layer](web.md)'s `FrameHub.subscribers` owns it now.

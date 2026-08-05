@@ -21,3 +21,15 @@ A `--selfcheck` flag short-circuits `main()`: it imports the whole app graph (bo
 ## Functions
 - `_selfcheck()`: imports the full app graph and exits 0 (`"selfcheck OK"`) or 1 — the build's frozen-exe smoke test
 - `main()`: bootstrap → `QApplication` → `MainWindow(ServerController(console_pairing=False))` → `controller.start()` → `app.exec()`; jumps straight to `_selfcheck()` when `--selfcheck` is in `sys.argv`
+
+## Nothing outlives the process in the topmost band (owner decree 2026-08-05)
+
+`main()` wires two of the three nets that keep the owner's desk clear —
+`app.aboutToQuit` (the ordinary Qt exit: tray Quit, the self-update relaunch,
+Windows logging the session off) and `atexit` (anything that ends the
+interpreter without Qt, an unhandled exception included), both onto
+`ServerController.release_windows()`. The third net is the on-disk ledger,
+repaired at the next start, for the paths that run no code at all — Task
+Manager, the installer's `taskkill`, a power cut. See
+[Window Manager](window_manager.md) — the topmost ledger. `release_windows()`
+is idempotent, so all three firing is the design, not a bug.

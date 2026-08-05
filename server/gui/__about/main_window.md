@@ -90,3 +90,19 @@ was removed — the pointer sits under the finger); `config.hand` stays a
 legacy field the server still sends and nobody reads. Frame rate gained a
 "10 fps — light" choice. An old settings.json carrying "hand" is ignored on
 load with a warning (documented non-fatal path).
+
+## Round 6 (owner 2026-08-05)
+
+- **Traffic…** joins the bottom row beside Controls…, opening
+  [Traffic Window](traffic_window.md) — modeless, because the owner watches it
+  WHILE he locks the phone in his other hand. The computed minimum grew by one
+  button caption (THE SPACE & LEGIBILITY LAW: the floor is measured from the
+  widest real row, and the row just got wider).
+- **`_quit` releases the always-on-top band BEFORE stopping the controller.**
+  `stop()` joins the server thread for up to 10 s and a 2x2 placement in
+  flight can burn every one of them; the owner must not be left with windows
+  nailed above his desk because a quit was slow.
+- **`_refresh` is guarded as a whole** (the body moved to `_refresh_inner`).
+  It runs every second and reaches the network (pairing re-checks); an
+  `OSError` from a cosmetic refresh could abort the process — and take the
+  daemon server thread, and every always-on-top window it was holding, with it.

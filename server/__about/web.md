@@ -90,3 +90,42 @@ owner may type anything). A deliberate `layout_focus -1` also calls
 `forget_focus()` — the desktop is then the state to resume into.
 
 Proven by `tests/test_presence.py` — a fail-closed step in `build.py`.
+
+## Round 6 (owner report 2026-08-05, the second TOPMOST failure)
+
+Two responsibilities left this module under THE STRUCTURE LAW and now have
+their own docs: **[Presence](presence.md)** (heartbeat, the `away` reason, the
+excursion hold, the desk rule) and **[Layout API](layout_api.md)** (every
+`layout_*` handler). `web.py` keeps the routes, the stream dispatch, the input
+dispatch and the connection lifecycle. `toast` is imported from
+[Layout API](layout_api.md) — one definition, no copy.
+
+What changed inside the lifecycle itself:
+
+- **Everything that can raise a window is inside the `try`.** The resume-focus
+  puts members into the always-on-top band, and it used to run BEFORE the
+  block whose `finally` releases them — one exception during setup left them
+  stranded.
+- **Excursion holds are owned.** The backstop task handle is kept in `holds`
+  (a bare `create_task` is only referenced while it runs and can be collected
+  mid-sleep) and every new authenticated socket **cancels** the armed ones —
+  its only test was "no client connected", which is equally true in every
+  ordinary reconnect gap.
+- **`away` pauses the stream, whichever kind it is.** `conn["paused"]` stops
+  `_stream_h264` from opening the next session; any real message clears it.
+  The page normally closes the socket right behind its `away`, but when the
+  phone's Wi-Fi falls asleep first the socket lingers — and the encoder was
+  filling it for as long as the hold lasted.
+- **`conn["away"]` is cleared by a non-excursion `away`**, so an announced
+  leave is judged by the 12-second heartbeat budget, never the excursion one.
+- **A monitor switch leaves the layout.** Its members stand on the monitor the
+  phone stopped watching, still always-on-top over a desk it can no longer
+  see, so the switch minimizes them and clears the focus.
+- **JPEG capture is on demand.** `FrameHub.subscribers` starts it with the
+  first watcher and stops it with the last; it used to start with the SERVER,
+  so the fallback mode encoded 30 fps at an empty room all night.
+- **Every byte is counted.** `traffic.MeteredSocket` wraps the socket once at
+  accept, and the upload endpoints count their own bodies — see
+  [Traffic Meter](traffic.md).
+- **`hb` and `away` may carry `net`** — the phone's own Android TrafficStats
+  counters, forwarded to the meter.

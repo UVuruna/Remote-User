@@ -103,3 +103,24 @@ up instead of being squeezed ([Render](render.md)). Pointer events are
 reported against the VISIBLE viewport, so `toCanvasPx` adds `kbShift` back to
 land in canvas space — every gesture goes through it, so this is the single
 place that needs to know.
+
+## The hide reason comes from the shell (owner failure 2026-08-05)
+
+`inExcursion()` used to be the ONLY answer to "why is the page hiding", and its
+grace was 90 s armed by the last Mic/picker tap. Locking the tablet six seconds
+after dictating was therefore announced to the PC as an excursion, and the
+owner's Chrome and VSCode hovered over his desk for five minutes. The server
+log measured it twice, to the second.
+
+- **`hideReason()`** asks `Android.hideReason()` first — the shell reads the
+  screen and keyguard state and knows whether IT launched a picker / camera /
+  voice / permission dialog. Its answers are `"lock"`, `"excursion"` and `""`,
+  and an EMPTY answer is an answer: it means "switched away", i.e. a leave.
+- `EXCURSION_GRACE_MS` is down to 12 s and is now only the **dev-browser
+  fallback**, where there is nothing to ask.
+- **`phoneNet()`** returns Android's own TrafficStats counters (this app's UID
+  and the whole device) for the PC's Traffic window.
+- **`KEEP_AWAKE_MS`** (3 min) is how long the screen is held awake after the
+  last touch. The shell used to set `FLAG_KEEP_SCREEN_ON` once and never clear
+  it, so the tablet never slept by itself — the presence signal the whole
+  layout design rests on could only fire if the owner locked it by hand.
