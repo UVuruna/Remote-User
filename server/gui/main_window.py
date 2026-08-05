@@ -27,6 +27,7 @@ import updates
 from config import BUNDLE_DIR, FROZEN, PROJECT_ROOT, SETTINGS, app_version, save_user_settings
 from gui.controls_editor import ControlsEditor
 from gui.theme import QSS, card_shadow, repolish
+from gui.traffic_window import TrafficWindow
 from server_core import ServerController
 
 logger = logging.getLogger(__name__)
@@ -84,6 +85,7 @@ class MainWindow(QMainWindow):
         self._update = None
         self._update_state = None
         self._update_path = None
+        self._traffic = None         # the Traffic window, built on first open
 
         self.setWindowTitle("Remote User")
         self.setStyleSheet(QSS)
@@ -150,9 +152,10 @@ class MainWindow(QMainWindow):
         button_pad, spacing = 40, 8   # QSS padding 8/16 + border, layout spacing
         bottom_row = (widest(("Start server", "Stop server"))
                       + widest(("Controls…",))
+                      + widest(("Traffic…",))
                       + widest(("Set up Tailscale", "Sign in to Tailscale",
                                 "Install Tailscale"))
-                      + 3 * button_pad + 2 * spacing)
+                      + 4 * button_pad + 3 * spacing)
         update_row = widest((f"Update to v{app_version()} — download && install",)) + button_pad
         settings_row = (widest(("Frame rate", "Resolution", "Monitor", "Bitrate")) + 16
                         + widest([label for label, _ in RESOLUTIONS + BITRATES + FPS_CHOICES]
@@ -287,6 +290,9 @@ class MainWindow(QMainWindow):
         self.controls_btn = QPushButton("Controls…")
         self.controls_btn.clicked.connect(self._edit_controls)
         row.addWidget(self.controls_btn)
+        self.traffic_btn = QPushButton("Traffic…")
+        self.traffic_btn.clicked.connect(self._show_traffic)
+        row.addWidget(self.traffic_btn)
         self.tailscale_btn = QPushButton("Set up Tailscale")
         self.tailscale_btn.clicked.connect(self._setup_tailscale)
         row.addWidget(self.tailscale_btn)
@@ -301,6 +307,19 @@ class MainWindow(QMainWindow):
             ControlsEditor(self).exec()
         except OSError as e:
             logger.error("Controls editor failed: %s", e)
+
+    def _show_traffic(self) -> None:
+        """The owner's own instrument (2026-08-05): every byte to and from the
+        phone, over time, with a grey band wherever nobody was connected. He
+        asked for it to settle a question no amount of assurance could —
+        whether the app keeps talking to a locked phone. Modeless on purpose:
+        he watches this window WHILE he locks the phone in his other hand."""
+        if self._traffic is None:
+            self._traffic = TrafficWindow(self)
+            self._traffic.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, False)
+        self._traffic.show()
+        self._traffic.raise_()
+        self._traffic.activateWindow()
 
     def _build_update_button(self) -> QPushButton:
         """Hidden until the startup check finds a newer release; one click
@@ -409,6 +428,12 @@ class MainWindow(QMainWindow):
     def _quit(self) -> None:
         self._timer.stop()
         self.tray.hide()
+        # The desk gets its windows back FIRST — before anything that can
+        # block. controller.stop() joins the server thread for up to 10 s, and
+        # a 2x2 placement in flight can burn every one of them; the owner must
+        # not be left with windows nailed above his desk because a quit was
+        # slow (owner decree 2026-08-05).
+        self.controller.release_windows()
         self.controller.stop()
         QGuiApplication.instance().quit()
 
@@ -523,6 +548,16 @@ class MainWindow(QMainWindow):
     # -- refresh loop ------------------------------------------------------
 
     def _refresh(self) -> None:
+        """Guarded as a whole: this runs every second and reaches the network
+        (pairing re-checks). An OSError from a cosmetic refresh used to be
+        able to abort the process — and take the daemon server thread, and
+        every always-on-top window it was holding, down with it."""
+        try:
+            self._refresh_inner()
+        except Exception:
+            logger.exception("Window refresh failed")
+
+    def _refresh_inner(self) -> None:
         state = self.controller.state
         info = self.controller.info
 
