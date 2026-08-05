@@ -15,10 +15,12 @@ listening beeps" checkbox in the card, DEFAULT ON (AudioManager mute during
 listening, restored on cancel/background); (d) "More languages (N)…"
 collapsed section — downloadable models + online-service list; (e) pulse
 animation removed, dashed border stays. Verified: load test, guards (venv),
-INPUT GATE, layout audit re-run with the extended card. BUILD/RELEASE
-PENDING: a parallel session holds uncommitted gui/tests changes — building
-now would bundle their unfinished work; release follows the moment the tree
-is clean.
+INPUT GATE, layout audit re-run with the extended card. SHIPPED as
+v0.0.078: https://github.com/UVuruna/Remote-User/releases/tag/v0.0.078
+(the parallel session's v0.0.077 went out without round 4, so 0.0.078
+carries it; tree was clean at build time). Task 1 closes when the owner's
+device round confirms: lock silences everything, no beeps, Language in
+Settings without opening the editor.
 
 Round-3 owner report (2026-08-05): RECOGNITION
 WORKS (Serbian Latin chosen, text lands) — remaining: (a) Settings still
@@ -190,3 +192,15 @@ only (their commands stay ours, custom sets stay fully editable).
       Scope note: v0.0.077 carries THIS round only — the parallel session's
       dictation round 4 (0.0.182) landed after the tag and ships with theirs
       (verified in the built client: pools present, their card changes not).
+- [x] 18. FOLLOW-UP RELEASE v0.0.079 — the Stop gate flagged theme.py as
+      unproven, and chasing that found a REAL defect the guard had been blind
+      to: the audit built ControlsEditor bare, while the app builds it as a
+      child of MainWindow and it inherits the theme, so the guard measured a
+      dialog without the very QSS rule behind "ift+tab". With the theme
+      applied the audit failed at once (checkbox needing 780px in 758,
+      set list cut again). Root cause: the minimum was computed in __init__,
+      before Qt resolves the QSS font — every string measured ~8% too narrow.
+      Measurement moved to showEvent + settle; minimum 1224x646 -> 1311x665;
+      3/3 windows PASS. APK + desktop rebuilt, GIT RELEASE published:
+      https://github.com/UVuruna/Remote-User/releases/tag/v0.0.079
+      (includes v0.0.078's dictation round 4).
