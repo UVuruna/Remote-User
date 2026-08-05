@@ -241,6 +241,44 @@ edits on its next connection (already works). Bridge until built: the
 
 ---
 
+<a id="phase-h"></a>
+
+## 🔔 Phase H — "The PC calls you" notifications (owner question 2026-08-05)
+
+The owner's question, verbatim: *"da li možemo da pratimo stanje agenta — da
+li je završio ili nije posao — i da obaveštavamo nekim zvučnim signalom
+korisnika ako je završio"*. Answer: yes, and the cheap route is the RIGHT one.
+
+Two ways exist, and only one of them is honest:
+
+- **Guessing from the screen** (UIA reading the Claude panel, or watching
+  pixels for the spinner): fragile, version-dependent, and wrong in exactly
+  the case that matters — a long silent build looks identical to a finished
+  one.
+- **The tool TELLS us** (chosen): Claude Code fires a `Stop` hook when a turn
+  ends. A three-line hook POSTs to the server we already run on this PC, and
+  the phone gets the news over the socket it already holds. No polling, no
+  guessing, and it generalises far past Claude — anything that can run a
+  command on completion (a build, a test suite, a render) gets the same
+  notification for free.
+
+Scope when built (~½ session):
+
+- [ ] **H1 — `/notify` + the `notify` message.** An auth-token-protected
+  `POST /notify {title, text, sound}` on the server; a `notify` frame to the
+  connected phone; the page plays a short tone (the WebView may, the page has
+  had a user gesture), vibrates via the shell, and shows the toast. Silent by
+  default when the phone is not connected — the PC never queues alarms.
+- [ ] **H2 — the hook, installed for the owner, not explained to him.** The
+  desktop app writes the Claude Code `Stop` hook into his config from a button
+  ("Tell me when Claude finishes"), the same way it chain-installs everything
+  else — the end user never edits a config file (hard owner principle).
+- [ ] **H3 — which events deserve a sound.** Owner's call: agent finished /
+  agent is waiting for an answer (a permission prompt is the one worth
+  hearing) / build finished. Per-event on/off in the phone's Settings.
+
+---
+
 <a id="future"></a>
 
 ## 💡 Future Ideas

@@ -17,6 +17,14 @@ files. What it does:
   rewrite it (owner decision 2026-08-05).
 - Creates/deletes/renames CUSTOM sets, whose commands are fully editable (a
   built-in action or a RECORDED chord/special key, with an optional icon).
+- **Renames the BUTTONS of any set, shipped ones included** (owner
+  2026-08-05). What a button does stays ours; what it is called is his — the
+  side buttons `Btn 4` / `Btn 5` carry whatever the user's mouse driver put on
+  them, so the face has to be able to say "Back" or "Undo". The Name field is
+  the only live field on a built-in row; its placeholder shows the phone's own
+  name, and clearing the field drops the override instead of freezing today's
+  default into the file. `merge_shipped_pools` carries the renames across a
+  version's pool refresh, matched BY COMMAND ID.
 - Chooses which sets the phone's wheel shows by default (Mouse/Input/Settings
   are `required` and locked ON; every other shipped or custom set toggles,
   `WHEEL_MAX` = 8 total; app sets never charge the count — they ride with a
@@ -70,10 +78,11 @@ cannot recur here. Proof: [tests/test_layout_audit_qt.py](../../../tests/___test
 - [Config](../../__about/config.md) — `SETTINGS.actions_path`/`client_dir`,
   `USER_DIR`, `BUNDLE_DIR`, `PROJECT_ROOT`, `FROZEN`, `apply()` (repointing the
   running server at the user copy the first time it is seeded)
-- client/controls.js — `load_client_icons()` and `load_client_builtins()`
-  parse `const ICONS` / `const BUILTINS` out of it, so icons AND built-in
-  labels have exactly one source of truth
-  ([Controls](../../../client/__about/controls.md))
+- client/icons.js — `load_client_icons()` parses `const ICONS` out of it
+  ([Icons](../../../client/__about/icons.md)); client/controls.js —
+  `load_client_builtins()` parses `const BUILTINS`
+  ([Controls](../../../client/__about/controls.md)). Icons AND built-in labels
+  therefore have exactly one source of truth, the phone's own
 - the SHIPPED actions.json — `merge_shipped_pools()` refreshes every built-in
   pool from it on open ([Actions](../../../ACTIONS.md))
 
@@ -95,8 +104,9 @@ cannot recur here. Proof: [tests/test_layout_audit_qt.py](../../../tests/___test
   orientation; identity order is returned but written as "no entry" (the
   shipped default needs no JSON).
 - **`CommandDetail`** — the selected command, ONE field per full-width row
-  (Does / Shortcut + Record / Name / Icon). Read-only for built-in and app
-  sets, and always showing the real inherited values.
+  (Does / Shortcut + Record / Name / Icon). On a built-in or app-set row every
+  field is read-only EXCEPT the Name, which anyone may override (owner
+  2026-08-05); the fields always show the real inherited values.
 - **`CommandTable`** — the set's whole pool: tick, name (+ icon), does
   (built-in / chord / key), shortcut. Item truncation is turned OFF (the law),
   columns size to content except the name column, which stretches.
@@ -123,8 +133,9 @@ cannot recur here. Proof: [tests/test_layout_audit_qt.py](../../../tests/___test
   in a later version cannot silently re-point the owner's choice
 - `active_buttons(s)`: the ≤4 commands on the D-pad — mirrors the client's
   `activeButtons()`; no `active` = the first four (pre-pool behaviour)
-- `load_client_table(name, line_re)`: one `const NAME = {...}` table out of
-  client controls.js; `{}` on any surprise (never a crash)
+- `load_client_table(name, line_re, source)`: one `const NAME = {...}` table
+  out of a client script (`controls.js` by default, `icons.js` for the icon
+  set); `{}` on any surprise (never a crash)
 - `load_client_icons()` / `load_client_builtins()`: `{name: svg fragment}` and
   `{action: (label, icon)}` built on top of it
 - `icon_for(body)`: one fragment → `QIcon` via `QSvgRenderer` (48 px, stroke

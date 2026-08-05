@@ -365,7 +365,10 @@ class CommandDetail(QWidget):
             if action:
                 kind = action
                 shortcut = ""
-                label, icon = self.builtins.get(action, (action, ""))
+                # An own name wins over the phone's default — that override is
+                # exactly what the owner renames (2026-08-05).
+                _, icon = self.builtins.get(action, (action, ""))
+                label = btn.get("label", "")
             elif btn.get("key"):
                 kind, shortcut = KIND_KEY, btn.get("key", "")
                 label, icon = btn.get("label", ""), btn.get("icon", "")
@@ -383,16 +386,25 @@ class CommandDetail(QWidget):
     def _kind_changed(self) -> None:
         is_builtin = self.kind.currentData() not in (KIND_CHORD, KIND_KEY)
         self.kind.setEnabled(self._editable)
-        # A built-in action's name and icon come from the phone (BUILTINS) —
-        # they are shown, not typed.
-        for w in (self.chord, self.record, self.label, self.icon):
+        # A built-in action's icon and shortcut come from the phone (BUILTINS)
+        # — shown, not typed. Its NAME is the one thing anybody may change,
+        # in EVERY set including the shipped ones (owner 2026-08-05): the side
+        # buttons Btn 4 / Btn 5 do whatever the user's mouse driver assigned,
+        # so the face has to be allowed to say "Back" or "Undo".
+        self.label.setEnabled(True)
+        for w in (self.chord, self.record, self.icon):
             w.setEnabled(self._editable and not is_builtin)
-        if is_builtin and self._editable:
+        if is_builtin:
             label, icon = self.builtins.get(self.kind.currentData(),
                                             (self.kind.currentData(), ""))
-            self.label.setText(label)
+            self.label.setPlaceholderText(label)   # the phone's own name
             self.icon.setCurrentIndex(max(0, self.icon.findData(icon)))
             self.chord.clear()
+        else:
+            # Back on a chord/key row the placeholder must stop advertising
+            # the built-in's name, or dump() would read a leftover as "this
+            # equals the default" and drop a real name.
+            self.label.setPlaceholderText("Name on the button")
 
     def _record(self) -> None:
         rec = ChordRecorder(self.window())
@@ -403,11 +415,24 @@ class CommandDetail(QWidget):
         """The edited command as an actions.json entry — None when unusable."""
         if self._btn is None:
             return None
+        name = self.label.text().strip()
         if not self._editable:
-            return self._btn
+            # A built-in or app-set command: the command itself is ours, but
+            # the NAME travels back (owner 2026-08-05). An empty field means
+            # "use the phone's own name", so the override disappears rather
+            # than freezing today's default into his file.
+            out = dict(self._btn)
+            if name and name != self.label.placeholderText():
+                out["label"] = name
+            else:
+                out.pop("label", None)
+            return out
         kind = self.kind.currentData()
         if kind not in (KIND_CHORD, KIND_KEY):
-            return {"action": kind}
+            out = {"action": kind}
+            if name and name != self.label.placeholderText():
+                out["label"] = name
+            return out
         shortcut = self.chord.text().strip()
         if not shortcut:
             return None

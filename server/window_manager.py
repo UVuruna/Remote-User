@@ -17,9 +17,12 @@ SendInput drag, probe-verified 2026-08-02) is step 2.
 
 import ctypes
 import ctypes.wintypes as wintypes
+import json
 import logging
 import os
 import time
+
+from config import SETTINGS
 
 logger = logging.getLogger(__name__)
 
@@ -454,6 +457,7 @@ def place_window(hwnd: int, rect: tuple[int, int, int, int]) -> bool:
         user32.SetWindowPos(hwnd, HWND_TOPMOST,
                             x - bl, y - bt, w + bl + br, h + bt + bb,
                             SWP_NOACTIVATE)
+        mark_topmost(hwnd)  # the ledger owes this window a way back down
         if wait_landed(hwnd, rect):
             return True
     logger.warning("Window %#x refused rect %s (stands at %s)",
@@ -474,6 +478,7 @@ def raise_window(hwnd: int) -> None:
     user32.ShowWindow(hwnd, SW_RESTORE)
     user32.SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0,
                         SWP_NOSIZE | SWP_NOMOVE | SWP_SHOWWINDOW)
+    mark_topmost(hwnd)  # the ledger owes this window a way back down
     wait_settled(hwnd)
     if user32.SetForegroundWindow(hwnd):
         return
@@ -492,13 +497,106 @@ def raise_window(hwnd: int) -> None:
     user32.SetForegroundWindow(hwnd)
 
 
+# --- The topmost ledger (owner decree 2026-08-05) ---------------------------
+# The always-on-top band is ours only while we are running to take it back,
+# and twice now the owner has come to his desk to find HIS Chrome and HIS
+# VSCode nailed above everything with nothing left alive to fix them. So every
+# hwnd we push up there is written down, and there are exactly two ways out —
+# one for each way this process can end:
+#
+#   1. We get to run code (tray Quit, server stop, Apply & restart, Ctrl+C, an
+#      unhandled crash, Windows logoff): `release_all()` walks the ledger and
+#      hands every window back. It is wired into ALL of those paths and is
+#      idempotent — being called three times on the way out is the design.
+#   2. We do NOT (Task Manager kill, a power cut): nothing inside the process
+#      can help, so the ledger is mirrored to disk on every change and
+#      `repair_stranded()` reads it at the next start. By then a handle may
+#      have been recycled onto a stranger's window, so an entry is acted on
+#      ONLY while its window still runs the same executable it did when we
+#      raised it; anything else is forgotten, untouched.
+
+_topmost: dict[int, str] = {}   # hwnd -> exe path at the moment we raised it
+
+
+def _ledger_save() -> None:
+    """Mirror the ledger to disk. Best effort by design: a repair note we
+    cannot write must never stop the layout the owner just asked for."""
+    try:
+        SETTINGS.topmost_ledger_path.parent.mkdir(parents=True, exist_ok=True)
+        SETTINGS.topmost_ledger_path.write_text(
+            json.dumps({"pid": os.getpid(),
+                        "windows": [{"hwnd": hwnd, "exe": exe}
+                                    for hwnd, exe in _topmost.items()]}),
+            encoding="utf-8")
+    except OSError as e:
+        logger.warning("Topmost ledger not written: %s", e)
+
+
+def mark_topmost(hwnd: int) -> None:
+    """Write down that WE put this window into the always-on-top band."""
+    if hwnd in _topmost:
+        return
+    _topmost[hwnd] = _process_path(hwnd)
+    _ledger_save()
+
+
 def drop_topmost(hwnd: int) -> None:
     """Back to the normal z-band. Called whenever a window stops being what
-    the phone shows (desktop focus, another layout, removal, disconnect) — a
-    layout member must never stay always-on-top for the owner AT the desk."""
+    the phone shows (desktop focus, another layout, removal, disconnect, the
+    app exiting) — a layout member must never stay always-on-top for the owner
+    AT the desk."""
     if user32.IsWindow(hwnd):
         user32.SetWindowPos(hwnd, HWND_NOTOPMOST, 0, 0, 0, 0,
                             SWP_NOSIZE | SWP_NOMOVE | SWP_NOACTIVATE)
+    if _topmost.pop(hwnd, None) is not None:
+        _ledger_save()
+
+
+def release_all() -> None:
+    """Every window we ever raised, back to the normal band — THE exit call.
+    Wired into the server teardown, the GUI's Quit, Qt's aboutToQuit, atexit
+    and the CLI's signal handlers, because the owner's rule is that nothing
+    of ours may outlive us up there. Idempotent and cheap when empty."""
+    if not _topmost:
+        return
+    logger.info("Releasing %d window(s) from the always-on-top band", len(_topmost))
+    for hwnd in list(_topmost):
+        drop_topmost(hwnd)
+    _topmost.clear()
+    _ledger_save()
+
+
+def repair_stranded() -> None:
+    """Put right what a killed previous run left standing. Runs once at start,
+    before anything of ours can raise a window. Identity is checked first: an
+    hwnd is only touched while it still runs the executable it ran when we
+    raised it, so a recycled handle can never cost a stranger's window its
+    z-order."""
+    path = SETTINGS.topmost_ledger_path
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return
+    if data.get("pid") == os.getpid():
+        return  # our own file, this very run
+    repaired = 0
+    for entry in data.get("windows") or []:
+        try:
+            hwnd, exe = int(entry.get("hwnd", 0)), entry.get("exe") or ""
+        except (TypeError, ValueError):
+            continue
+        if not hwnd or not user32.IsWindow(hwnd) or _process_path(hwnd) != exe:
+            continue  # gone, or the handle now belongs to someone else
+        user32.SetWindowPos(hwnd, HWND_NOTOPMOST, 0, 0, 0, 0,
+                            SWP_NOSIZE | SWP_NOMOVE | SWP_NOACTIVATE)
+        repaired += 1
+    if repaired:
+        logger.warning("Repaired %d window(s) a previous run left always-on-top",
+                       repaired)
+    try:
+        path.unlink()
+    except OSError:
+        pass
 
 
 def _cells(region, template: str) -> list[tuple[int, int, int, int]]:
@@ -526,9 +624,14 @@ class Layout:
 
     def __init__(self, name: str, process: str, members: list[int],
                  template: str | None, orient: str, aspect: float,
-                 icon: str | None = None):
+                 icon: str | None = None, title: str = ""):
         self.name = name
         self.process = process
+        # The target window's OWN title, never renamed. `name` is what the
+        # owner calls this layout; `title` is what the app calls itself, and
+        # it is what an app-aware set matches when a process alone cannot
+        # tell two apps apart (Claude Code inside VSCode — owner 2026-08-05).
+        self.title = title or name
         self.members = members
         self.template = template  # None = solo
         self.orient = orient      # "portrait" | "wide"
@@ -560,9 +663,21 @@ class LayoutRegistry:
 
     def prune(self) -> None:
         """Closing a member at the desk removes it from its layout (owner
-        rule); a layout with no live members disappears."""
+        rule); a layout with no live members disappears.
+
+        A dropped member leaves the topmost band on the way out. `is_alive`
+        is false for a CLOAKED window too (a minimized Store app), and such a
+        window is very much still on screen for the owner — leaving it in the
+        always-on-top band while forgetting it belonged to a layout is exactly
+        how a window ends up stranded with nobody left to lower it."""
         for lay in self.layouts:
-            lay.members = [h for h in lay.members if is_alive(h)]
+            alive = []
+            for hwnd in lay.members:
+                if is_alive(hwnd):
+                    alive.append(hwnd)
+                else:
+                    drop_topmost(hwnd)
+            lay.members = alive
         self.layouts = [lay for lay in self.layouts if lay.members]
 
     def create(self, target: int, mode: str, template: str | None,
@@ -588,10 +703,15 @@ class LayoutRegistry:
             template = None
             members = members[:1]
             placed = place_window(target, layout_region(mon_rect, aspect))
-        name = name or _title(target) or "Window"
+        # The window's OWN title is kept beside the (possibly owner-chosen)
+        # name: app-aware sets match on it (owner 2026-08-05 — Claude Code
+        # lives inside VSCode, same process, and only the title tells them
+        # apart), and a rename must never change which set appears.
+        title = _title(target) or ""
+        name = name or title or "Window"
         self.layouts.append(Layout(name, _process_name(target), members,
                                    template, orient, aspect,
-                                   icon_data_uri(_process_path(target))))
+                                   icon_data_uri(_process_path(target)), title))
         return len(self.layouts) - 1, placed
 
     def focus(self, index: int, device_ratio: float,
@@ -723,11 +843,14 @@ class LayoutRegistry:
                                    else (last, name))
 
     def clear_topmost(self) -> None:
-        """Every member back to the normal z-band — the phone hung up, nothing
-        is being shown, no window may stay always-on-top at the desk."""
-        for lay in self.layouts:
-            for hwnd in lay.members:
-                drop_topmost(hwnd)
+        """Every window back to the normal z-band — the phone hung up, nothing
+        is being shown, no window may stay always-on-top at the desk.
+
+        Goes through the LEDGER, not through the member lists: a window that
+        fell out of its layout (closed, cloaked, extracted as a tab) is
+        exactly the one no member list can still name, and exactly the one
+        that used to stay stranded up there."""
+        release_all()
 
     def state(self, active: int | None, region: dict | None) -> dict:
         """The layout_state payload. Prune first so the phone never lists a
@@ -738,6 +861,7 @@ class LayoutRegistry:
         return {
             "type": "layout_state",
             "layouts": [{"name": lay.name, "process": lay.process,
+                         "title": lay.title,
                          "orient": lay.orient, "icon": lay.icon,
                          "ratio": list(lay.ratio) if lay.ratio else None,
                          "pos": round(lay.pos, 3)}

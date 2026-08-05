@@ -6,7 +6,8 @@ Protocol (see project CLAUDE.md):
   button — down on finger-land, up on lift, at the current cursor),
   pointer_move, scroll, viewport (JPEG mode only), key_text, key_special,
   chord, monitor_switch, screenshot (optionally with the region the phone
-  views + paste=true — crops and injects Ctrl+V)
+  views + paste=true — crops and injects Ctrl+V), paste_text (a typed
+  command: clipboard + Ctrl+V + Enter)
 - server → client, JSON text: `config` after auth and after every stream
   (re)start — monitor size plus `stream` ("h264" | "jpeg") and, in H.264 mode,
   the MSE `codec` string parsed from the live init segment; `actions` (radial
@@ -91,6 +92,13 @@ HEARTBEAT_TIMEOUT_S = 12.0   # ~3 missed heartbeats (the client beats at 4 s)
 # backstop is all that remains, for the excursion that never returns.
 EXCURSION_MAX_S = 300.0
 WATCHDOG_POLL_S = 2.0
+
+# --- Typed commands (owner 2026-08-05) --------------------------------------
+# A `paste_text` button pastes and then presses Enter. The pause between them
+# is not cosmetic: the target app (Claude's prompt, a search box) reacts to
+# the paste — filtering a command menu, resizing its input — and an Enter
+# delivered inside that reaction lands in the old state.
+PASTE_ENTER_DELAY = 0.12
 
 
 @dataclass
@@ -637,6 +645,27 @@ async def _screenshot(ws: WebSocket, stream, injector: InputInjector, msg: dict)
                      else "Clipboard busy — try again")
 
 
+def _paste_text(injector: InputInjector, text: str, enter: bool) -> None:
+    """Writes `text` into the focused box on the PC through the clipboard.
+
+    Blocking on purpose (the caller runs it in a thread): the clipboard write,
+    the paste and the Enter have to happen in that order, and Windows needs
+    the paste to land before the next key. Falls back to typing the text
+    character by character when the clipboard is busy — an owner watching his
+    phone would otherwise see a button that silently did nothing.
+    """
+    if not text:
+        return
+    if clipboard.copy_text(text):
+        injector.press_chord("ctrl+v")
+    else:
+        logger.warning("Clipboard busy — typing %r instead of pasting it", text[:40])
+        injector.type_text(text)
+    if enter:
+        time.sleep(PASTE_ENTER_DELAY)
+        injector.press_key("enter")
+
+
 def _mon_rect(stream) -> tuple[int, int, int, int]:
     return monitors.rect_for_size(stream.width, stream.height, stream.monitor_index)
 
@@ -862,6 +891,16 @@ async def _receive_input(ws: WebSocket, injector: InputInjector, stream, token: 
             injector.type_text(str(msg["text"]))
         elif kind == "key_special":
             injector.press_key(str(msg["key"]))
+        elif kind == "paste_text":
+            # A TYPED command button (owner 2026-08-05 — the Claude set's
+            # /usage, /model, /effort). The text goes through the CLIPBOARD
+            # and one Ctrl+V rather than key-by-key: a slash command types
+            # into an autocomplete menu that re-filters on every character,
+            # and one atomic insert cannot be raced by it. Enter is a separate
+            # press so `enter: false` can leave the menu standing for the
+            # finger to pick from.
+            await asyncio.to_thread(_paste_text, injector, str(msg.get("text", "")),
+                                    bool(msg.get("enter", True)))
         elif kind == "viewport":
             if stream.mode == "jpeg":
                 stream.set_viewport(

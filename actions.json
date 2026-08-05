@@ -38,7 +38,7 @@
         { "action": "pcshot" },
         { "action": "camera" },
         { "action": "files" },
-        { "action": "upload" },
+        { "action": "region" },
         { "action": "snap" }
       ]
     },
@@ -52,8 +52,8 @@
         { "label": "Paste", "icon": "paste",  "chord": "ctrl+v" },
         { "label": "Undo",  "icon": "undo",   "chord": "ctrl+z" },
         { "label": "Redo",  "icon": "redo",   "chord": "ctrl+y" },
-        { "label": "Save",  "chord": "ctrl+s" },
-        { "label": "Paste plain", "chord": "ctrl+shift+v" },
+        { "label": "Save",  "icon": "save",   "chord": "ctrl+s" },
+        { "label": "Paste plain", "icon": "pasteplain", "chord": "ctrl+shift+v" },
         { "label": "Delete", "icon": "del",   "key": "delete" }
       ]
     },
@@ -67,11 +67,11 @@
         { "label": "Find", "icon": "find",    "chord": "ctrl+f" },
         { "label": "Back",      "icon": "arrowl", "chord": "alt+left" },
         { "label": "Forward",   "icon": "arrowr", "chord": "alt+right" },
-        { "label": "Find next", "chord": "f3" },
-        { "label": "Top",       "chord": "ctrl+home" },
-        { "label": "Bottom",    "chord": "ctrl+end" },
-        { "label": "Page up",   "key": "pageup" },
-        { "label": "Page down", "key": "pagedown" }
+        { "label": "Find next", "icon": "findnext", "chord": "f3" },
+        { "label": "Top",       "icon": "totop",    "chord": "ctrl+home" },
+        { "label": "Bottom",    "icon": "tobottom", "chord": "ctrl+end" },
+        { "label": "Page up",   "icon": "pageup",   "key": "pageup" },
+        { "label": "Page down", "icon": "pagedown", "key": "pagedown" }
       ]
     },
     {
@@ -82,12 +82,12 @@
         { "label": "Left",  "icon": "arrowl", "key": "left" },
         { "label": "Right", "icon": "arrowr", "key": "right" },
         { "label": "Redo",  "icon": "redo",   "chord": "ctrl+y" },
-        { "label": "Up",     "key": "up" },
-        { "label": "Down",   "key": "down" },
-        { "label": "Word ←", "chord": "ctrl+left" },
-        { "label": "Word →", "chord": "ctrl+right" },
-        { "label": "Home",   "key": "home" },
-        { "label": "End",    "key": "end" }
+        { "label": "Up",     "icon": "arrowu", "key": "up" },
+        { "label": "Down",   "icon": "arrowd", "key": "down" },
+        { "label": "Word ←", "icon": "wordl",  "chord": "ctrl+left" },
+        { "label": "Word →", "icon": "wordr",  "chord": "ctrl+right" },
+        { "label": "Home",   "icon": "linestart", "key": "home" },
+        { "label": "End",    "icon": "lineend",   "key": "end" }
       ]
     },
     {
@@ -101,7 +101,7 @@
         { "label": "Mute",  "icon": "mute",    "key": "mute" },
         { "label": "Next",  "icon": "arrowr",  "key": "medianext" },
         { "label": "Prev",  "icon": "arrowl",  "key": "mediaprev" },
-        { "label": "Stop",  "key": "mediastop" }
+        { "label": "Stop",  "icon": "stop",    "key": "mediastop" }
       ]
     },
     {
@@ -109,17 +109,17 @@
       "icon": "grid",
       "enabled": false,
       "buttons": [
-        { "label": "Alt+Tab",  "chord": "alt+tab" },
+        { "label": "Alt+Tab",  "icon": "switchwin", "chord": "alt+tab" },
         { "label": "Win",  "icon": "grid", "chord": "win" },
         { "label": "Desktop",  "icon": "desktop", "chord": "win+d" },
-        { "label": "Tasks",    "chord": "win+tab" },
-        { "label": "Close",    "icon": "x",      "chord": "alt+f4" },
-        { "label": "Max",      "chord": "win+up" },
-        { "label": "Min",      "chord": "win+down" },
-        { "label": "Snap ←",   "chord": "win+left" },
-        { "label": "Snap →",   "chord": "win+right" },
-        { "label": "Explorer", "icon": "folder", "chord": "win+e" },
-        { "label": "Run",      "chord": "win+r" }
+        { "label": "Tasks",    "icon": "tasks",   "chord": "win+tab" },
+        { "label": "Close",    "icon": "x",       "chord": "alt+f4" },
+        { "label": "Max",      "icon": "maxwin",  "chord": "win+up" },
+        { "label": "Min",      "icon": "minwin",  "chord": "win+down" },
+        { "label": "Snap ←",   "icon": "snapl",   "chord": "win+left" },
+        { "label": "Snap →",   "icon": "snapr",   "chord": "win+right" },
+        { "label": "Explorer", "icon": "folder",  "chord": "win+e" },
+        { "label": "Run",      "icon": "run",     "chord": "win+r" }
       ]
     },
     {
@@ -142,16 +142,37 @@
       "name": "VSCode",
       "icon": "newwin",
       "buttons": [
-        { "label": "Sidebar",  "chord": "ctrl+b" },
-        { "label": "Palette",  "chord": "ctrl+shift+p" },
-        { "label": "Terminal", "chord": "ctrl+`" },
+        { "label": "Sidebar",  "icon": "sidebar",  "chord": "ctrl+b" },
+        { "label": "Palette",  "icon": "palette",  "chord": "ctrl+shift+p" },
+        { "label": "Terminal", "icon": "terminal", "chord": "ctrl+`" },
         { "label": "Find", "icon": "find", "chord": "ctrl+f" },
-        { "label": "Preview",    "chord": "ctrl+shift+v" },
+        { "label": "Preview",    "icon": "preview",  "chord": "ctrl+shift+v" },
         { "label": "Next tab",   "icon": "tab",     "chord": "ctrl+pagedown" },
         { "label": "Prev tab",   "icon": "tabback", "chord": "ctrl+shift+pagedown" },
-        { "label": "Save",       "chord": "ctrl+s" },
-        { "label": "Go to file", "chord": "ctrl+p" },
-        { "label": "Comment",    "chord": "ctrl+/" }
+        { "label": "Save",       "icon": "save",     "chord": "ctrl+s" },
+        { "label": "Go to file", "icon": "gotofile", "chord": "ctrl+p" },
+        { "label": "Comment",    "icon": "comment",  "chord": "ctrl+/" }
+      ]
+    },
+    {
+      "process": "code",
+      "title": "claude",
+      "name": "Claude",
+      "icon": "claude",
+      "buttons": [
+        { "label": "Usage",    "icon": "usage",    "text": "/usage",   "enter": true },
+        { "label": "Model",    "icon": "model",    "text": "/model",   "enter": true },
+        { "label": "Thinking", "icon": "thinking", "text": "/effort",  "enter": true },
+        { "label": "Stop",     "icon": "esc",      "key": "escape" },
+        { "label": "Menu",     "icon": "list",     "text": "/", "enter": false },
+        { "label": "Mode",     "icon": "cmode",    "chord": "shift+tab" },
+        { "label": "Compact",  "icon": "compact",  "text": "/compact", "enter": true },
+        { "label": "New chat", "icon": "newchat",  "text": "/clear",   "enter": true },
+        { "label": "Rewind",   "icon": "rewind",   "text": "/rewind",  "enter": true },
+        { "label": "Context",  "icon": "gauge",    "text": "/context", "enter": true },
+        { "label": "Agents",   "icon": "target",   "text": "/agents",  "enter": true },
+        { "label": "Resume",   "icon": "reopen",   "text": "/resume",  "enter": true },
+        { "label": "Focus",    "icon": "input",    "chord": "ctrl+esc" }
       ]
     },
     {
@@ -159,13 +180,13 @@
       "name": "Chrome",
       "icon": "newwin",
       "buttons": [
-        { "label": "New tab",  "chord": "ctrl+t" },
-        { "label": "Close",    "chord": "ctrl+w" },
+        { "label": "New tab",  "icon": "newtab",   "chord": "ctrl+t" },
+        { "label": "Close",    "icon": "closetab", "chord": "ctrl+w" },
         { "label": "Next tab", "icon": "tab", "chord": "ctrl+tab" },
-        { "label": "Address",  "chord": "ctrl+l" },
+        { "label": "Address",  "icon": "address",  "chord": "ctrl+l" },
         { "label": "Prev tab", "icon": "tabback", "chord": "ctrl+shift+tab" },
-        { "label": "Reopen",   "chord": "ctrl+shift+t" },
-        { "label": "Reload",   "chord": "f5" },
+        { "label": "Reopen",   "icon": "reopen",   "chord": "ctrl+shift+t" },
+        { "label": "Reload",   "icon": "reload",   "chord": "f5" },
         { "label": "Back",     "icon": "arrowl", "chord": "alt+left" },
         { "label": "Forward",  "icon": "arrowr", "chord": "alt+right" },
         { "label": "Find", "icon": "find", "chord": "ctrl+f" }
@@ -176,17 +197,17 @@
       "name": "Explorer",
       "icon": "newwin",
       "buttons": [
-        { "label": "Rename",  "chord": "f2" },
-        { "label": "New dir", "chord": "ctrl+shift+n" },
+        { "label": "Rename",  "icon": "edit",   "chord": "f2" },
+        { "label": "New dir", "icon": "newdir", "chord": "ctrl+shift+n" },
         { "label": "Delete", "icon": "del", "chord": "delete" },
-        { "label": "Up", "chord": "alt+up" },
+        { "label": "Up", "icon": "folderup", "chord": "alt+up" },
         { "label": "Next tab",  "icon": "tab",     "chord": "ctrl+tab" },
         { "label": "Prev tab",  "icon": "tabback", "chord": "ctrl+shift+tab" },
-        { "label": "New tab",   "chord": "ctrl+t" },
+        { "label": "New tab",   "icon": "newtab",   "chord": "ctrl+t" },
         { "label": "Back",      "icon": "arrowl", "chord": "alt+left" },
         { "label": "Forward",   "icon": "arrowr", "chord": "alt+right" },
-        { "label": "Copy path", "chord": "ctrl+shift+c" },
-        { "label": "Details",   "chord": "alt+enter" },
+        { "label": "Copy path", "icon": "copypath", "chord": "ctrl+shift+c" },
+        { "label": "Details",   "icon": "details",  "chord": "alt+enter" },
         { "label": "Search",    "icon": "find", "chord": "ctrl+e" }
       ]
     }

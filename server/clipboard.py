@@ -30,6 +30,7 @@ kernel32.GlobalFree.argtypes = [wintypes.HGLOBAL]
 user32.SetClipboardData.restype = wintypes.HANDLE
 user32.SetClipboardData.argtypes = [wintypes.UINT, wintypes.HANDLE]
 
+CF_UNICODETEXT = 13
 CF_DIB = 8
 CF_HDROP = 15
 GMEM_MOVEABLE = 0x0002
@@ -91,6 +92,18 @@ def _set_clipboard(fmt: int, payload: bytes, what: str) -> bool:
         return True
     finally:
         user32.CloseClipboard()
+
+
+def copy_text(text: str) -> bool:
+    """Writes plain text to the clipboard as CF_UNICODETEXT.
+
+    What the phone's TYPED command buttons paste (owner 2026-08-05 — the
+    Claude set's `/usage`, `/model`, `/effort`). One atomic insert, instead of
+    a character storm through an autocomplete menu that re-filters on every
+    keystroke. UTF-16LE with the terminating NUL, which is what the format is.
+    """
+    payload = text.encode("utf-16-le") + b"\x00\x00"
+    return _set_clipboard(CF_UNICODETEXT, payload, f"Text ({len(text)} chars)")
 
 
 def copy_image(frame_bgr: np.ndarray) -> bool:

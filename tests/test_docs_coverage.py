@@ -44,6 +44,8 @@ STANDARD = {
     "client/load_test.js",
     "client/state.js",
     "client/panels.js",
+    "client/icons.js",
+    "client/region.js",
     "client/quality.js",
     "setup/create_cert.py",
     "android/app/src/main/java/com/uvuruna/remoteuser/OnboardingActivity.kt",
@@ -66,6 +68,10 @@ ALGORITHMIC = {
     "server/gui/controls_editor.py",
     "server/gui/controls_widgets.py",
     "client/style.css",
+    # layouts.css is the layout feature's own styling, split out of style.css
+    # on 2026-08-05. It shares __about/__flow/layouts.md with layouts.js —
+    # one feature, one doc, two files (the doc names both).
+    "client/layouts.css",
     "client/render.js",
     "client/input-geometry.js",
     "client/controls.js",
