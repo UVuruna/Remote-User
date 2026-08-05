@@ -35,10 +35,14 @@ MOUSEEVENTF_RIGHTDOWN = 0x0008
 MOUSEEVENTF_RIGHTUP = 0x0010
 MOUSEEVENTF_MIDDLEDOWN = 0x0020
 MOUSEEVENTF_MIDDLEUP = 0x0040
+MOUSEEVENTF_XDOWN = 0x0080
+MOUSEEVENTF_XUP = 0x0100
 MOUSEEVENTF_WHEEL = 0x0800
 MOUSEEVENTF_ABSOLUTE = 0x8000
 MOUSEEVENTF_VIRTUALDESK = 0x4000
 WHEEL_DELTA = 120
+XBUTTON1 = 0x0001  # the rear side button — "Button 4" on a 5-button mouse
+XBUTTON2 = 0x0002  # the front side button — "Button 5"
 
 # GetSystemMetrics indices
 SM_XVIRTUALSCREEN = 76
@@ -47,10 +51,16 @@ SM_CXVIRTUALSCREEN = 78
 SM_CYVIRTUALSCREEN = 79
 
 # ═══════════════════════════ MOUSE/KEY MAPPING TABLES ═══════════════════════════
+# (down flag, up flag, mouseData). The three main buttons each own a flag
+# pair; the SIDE buttons share one pair and name themselves in mouseData —
+# which is why every call below passes it through (owner 2026-08-05: "Button 4
+# i Button 5, oni koji se nalaze bocno").
 BUTTON_FLAGS = {
-    "left": (MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP),
-    "right": (MOUSEEVENTF_RIGHTDOWN, MOUSEEVENTF_RIGHTUP),
-    "middle": (MOUSEEVENTF_MIDDLEDOWN, MOUSEEVENTF_MIDDLEUP),
+    "left": (MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP, 0),
+    "right": (MOUSEEVENTF_RIGHTDOWN, MOUSEEVENTF_RIGHTUP, 0),
+    "middle": (MOUSEEVENTF_MIDDLEDOWN, MOUSEEVENTF_MIDDLEUP, 0),
+    "x1": (MOUSEEVENTF_XDOWN, MOUSEEVENTF_XUP, XBUTTON1),
+    "x2": (MOUSEEVENTF_XDOWN, MOUSEEVENTF_XUP, XBUTTON2),
 }
 
 KEYEVENTF_KEYUP = 0x0002
@@ -294,34 +304,36 @@ class InputInjector:
         self._send(MOUSEEVENTF_MOVE | MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_VIRTUALDESK, abs_x, abs_y)
 
     def button_down(self, x_norm: float, y_norm: float, button: str) -> None:
-        down, _ = BUTTON_FLAGS[button]
+        down, _, data = BUTTON_FLAGS[button]
         abs_x, abs_y = self._to_absolute(x_norm, y_norm)
         self._send(
-            MOUSEEVENTF_MOVE | MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_VIRTUALDESK | down, abs_x, abs_y
+            MOUSEEVENTF_MOVE | MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_VIRTUALDESK | down,
+            abs_x, abs_y, data,
         )
 
     def button_up(self, x_norm: float, y_norm: float, button: str) -> None:
-        _, up = BUTTON_FLAGS[button]
+        _, up, data = BUTTON_FLAGS[button]
         abs_x, abs_y = self._to_absolute(x_norm, y_norm)
         self._send(
-            MOUSEEVENTF_MOVE | MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_VIRTUALDESK | up, abs_x, abs_y
+            MOUSEEVENTF_MOVE | MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_VIRTUALDESK | up,
+            abs_x, abs_y, data,
         )
 
     def click(self, button: str) -> None:
         """Down+up at the CURRENT cursor position, no move — the client's
         Click button (the finger only steers the cursor). Two presses inside
         Windows' double-click time land as a double click naturally."""
-        down, up = BUTTON_FLAGS[button]
-        self._send(down)
-        self._send(up)
+        down, up, data = BUTTON_FLAGS[button]
+        self._send(down, mouse_data=data)
+        self._send(up, mouse_data=data)
 
     def press(self, button: str, down: bool) -> None:
         """One half of a CLICK/HOLD button (owner 2026-08-04 — the phone's
         mouse buttons behave like a real mouse): DOWN when the finger lands
         on the button, UP when it lifts, always at the CURRENT cursor. A tap
         is a click; a held finger is a held PC button (drag/select)."""
-        flags = BUTTON_FLAGS[button]
-        self._send(flags[0] if down else flags[1])
+        down_flag, up_flag, data = BUTTON_FLAGS[button]
+        self._send(down_flag if down else up_flag, mouse_data=data)
 
     def wheel(self, x_norm: float, y_norm: float, ticks: float) -> None:
         """Moves the cursor to the gesture point (the wheel targets the window

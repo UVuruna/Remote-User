@@ -46,7 +46,8 @@ for the split's general load-order reasoning.
   enter/esc, attach/gallery/shot/folder, edit-set icons, monitor2,
   undo/redo/find/del for hand-edited files).
 - `BUILTINS` — the registry of built-in actions — label, icon, and dispatch
-  kind. Kinds: `hold` (Click/Right/Middle — CLICK/HOLD mouse buttons),
+  kind. Kinds: `hold` (Click/Right/Middle plus the side `x1`/`x2` — Btn 4 and
+  Btn 5 on a 5-button mouse, owner 2026-08-05 — all CLICK/HOLD mouse buttons),
   `mode` (scroll/drag toggles), `kb`, `mic`, `key-off` (enter/esc — switch
   keyboard+mic OFF, then press the real key; `newrow` is deliberately a plain
   `send` of shift+enter so a line break never interrupts dictation),

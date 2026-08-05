@@ -77,7 +77,7 @@ Shipped reserves, off until you tick them:
 
 | Set | On the D-pad | Reserves in the pool |
 |-----|--------------|----------------------|
-| Mouse | Click · Right · Middle · Scroll | Drag |
+| Mouse | Click · Right · Middle · Scroll | Drag · **Btn 4** · **Btn 5** (the side buttons) |
 | Input | Keys · Enter · New row · Mic | Esc · Next box · Language |
 | Attach | Gallery · Shot · Camera · Files | Image · Snap |
 | Edit | All · Copy · Cut · Paste | Undo · Redo · Save · Paste plain · Delete |
@@ -85,7 +85,7 @@ Shipped reserves, off until you tick them:
 | Cursor | Undo · ← · → · Redo | Up · Down · Word ← · Word → · Home · End |
 | Media | Play · Vol− · Vol+ · Mute | Next · Prev · Stop |
 | Windows | Alt+Tab · Win · Desktop · Tasks | Close · Max · Min · Snap ← · Snap → · Explorer · Run |
-| Settings | Monitor · Sets · Quality · Language | Anywhere · Next box · Snap |
+| Settings | Monitor · Sets · Quality · Language | Anywhere (owner 2026-08-05: Next box and Snap left this pool — Next box lives in Input, Snap in Attach) |
 | **VSCode** | Sidebar · Palette · Terminal · Find | **Preview (ctrl+shift+v)** · **Next tab** · **Prev tab** · Save · Go to file · Comment |
 | **Chrome** | New tab · Close · Next tab · Address | **Prev tab** · Reopen · Reload · Back · Forward · Find |
 | **Explorer** | Rename · New dir · Delete · Up | **Next tab** · **Prev tab** · New tab · Back · Forward · Copy path · Details · Search |
@@ -132,7 +132,7 @@ manage names/icons/shortcuts per zone).
 
 - **left / right** — index of the category each group shows on connect.
 - **name** — the category label (centre button + wheel).
-- **icon** — one of: `mouse`, `edit`, `keyboard`, `monitor`, `monitor2`, `grid`, `snap`, `click`, `middle`, `right`, `drag`, `scroll`, `settings`, `target`, `globe`, `mic`, `enter`, `esc`, `attach`, `gallery`, `shot`, `folder`, `selall`, `copy`, `cut`, `paste`, `undo`, `redo`, `find`, `del`, `newwin`, `image`, `input`, `gauge`.
+- **icon** — one of: `mouse`, `edit`, `keyboard`, `monitor`, `monitor2`, `grid`, `snap`, `click`, `middle`, `right`, `btn4`, `btn5`, `drag`, `scroll`, `settings`, `target`, `globe`, `mic`, `enter`, `esc`, `attach`, `gallery`, `shot`, `folder`, `selall`, `copy`, `cut`, `paste`, `undo`, `redo`, `find`, `del`, `newwin`, `image`, `input`, `gauge`.
 - **buttons** — up to 4, placed in order **up · left · right · down**.
 
 ## App-aware sets (`app_sets`)
@@ -153,6 +153,7 @@ A button is one of:
 
 - **Built-in action** — `{ "action": "<name>" }`, where `<name>` is:
   - `click`, `right`, `middle` — **CLICK/HOLD mouse buttons** (owner 2026-08-04, like a real mouse): a tap is a click at the current cursor position (the finger only steers the cursor); **keeping the finger on the button holds the PC button down** — steer with the other hand to drag/select, lift to release. Press twice fast for a double click.
+  - `x1`, `x2` — the **side buttons** of a 5-button mouse (owner 2026-08-05): Btn 4 (rear) and Btn 5 (front), Windows' XBUTTON1/XBUTTON2 — Back/Forward in most apps. Same CLICK/HOLD behaviour; they sit in the Mouse pool as reserves, so tick one in place of another when you want it.
   - `scroll`, `drag` — **mouse modes** (toggle on/off, one active at a time): the mode decides what one finger on the screen does. Default (no mode) = the finger only moves the PC cursor. Two fingers always pinch-zoom. (`drag` is redundant with holding `click` and is not shipped.)
   - `keyboard` — toggle the phone keyboard; typing/dictation lands in the focused box on the PC. **A tap on the stream switches it OFF by itself** (owner 2026-08-04). The keyboard's ↵ makes a new row (never "send"); the real Enter is its own button.
   - `enter`, `esc` — press the real Enter/Escape **and switch keyboard + mic OFF first** (owner 2026-08-04). `esc` left the default layout (New row took its slot) but stays available here.

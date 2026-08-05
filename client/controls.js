@@ -24,6 +24,11 @@ const ICONS = {
   // the filled wheel (variant A of the approved proposals).
   click: '<rect x="6" y="3" width="12" height="18" rx="6"/><path d="M12 3v7"/><path d="M12 3h-2a4 4 0 0 0-4 4v3h6z" fill="currentColor" stroke="none"/>',
   middle: '<rect x="6" y="3" width="12" height="18" rx="6"/><rect x="10.6" y="6" width="2.8" height="6" rx="1.4" fill="currentColor" stroke="none"/>',
+  // Side buttons (owner 2026-08-05): the same mouse body with the thumb pad
+  // filled — rear (Btn 4) and front (Btn 5). The button also carries its
+  // label, so the pad's position only has to be recognisable, not readable.
+  btn4: '<rect x="7" y="3" width="11" height="18" rx="5.5"/><rect x="3.6" y="11.4" width="3" height="4" rx="1.4" fill="currentColor" stroke="none"/><path d="M12.5 6.5v3.5"/>',
+  btn5: '<rect x="7" y="3" width="11" height="18" rx="5.5"/><rect x="3.6" y="6.6" width="3" height="4" rx="1.4" fill="currentColor" stroke="none"/><path d="M12.5 6.5v3.5"/>',
   mic: '<rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><line x1="12" y1="18" x2="12" y2="22"/>',
   enter: '<path d="M20 5v6a3 3 0 0 1-3 3H5"/><path d="m9 10-4 4 4 4"/>',
   esc: '<path d="M18 13v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h5"/><path d="M15 4h5v5"/><path d="m20 4-8 8"/>',
@@ -94,6 +99,11 @@ const BUILTINS = {
   click:    { label: "Click",  icon: "click",    kind: "hold", button: "left" },
   right:    { label: "Right",  icon: "right",    kind: "hold", button: "right" },
   middle:   { label: "Middle", icon: "middle",   kind: "hold", button: "middle" },
+  // The SIDE buttons of a 5-button mouse (owner 2026-08-05) — Windows'
+  // XBUTTON1/2, "Back"/"Forward" in most apps. Reserves in the Mouse pool:
+  // the owner ticks one in place of another when he wants it.
+  x1:       { label: "Btn 4",  icon: "btn4",     kind: "hold", button: "x1" },
+  x2:       { label: "Btn 5",  icon: "btn5",     kind: "hold", button: "x2" },
   drag:     { label: "Drag",   icon: "drag",     kind: "mode" },
   scroll:   { label: "Scroll", icon: "scroll",   kind: "mode" },
   keyboard: { label: "Keys",   icon: "keyboard", kind: "kb" },
@@ -162,63 +172,8 @@ function prefSet(key, value) {
   try { localStorage.setItem(key, String(value)); } catch {}
 }
 
-// --- Stream quality (Phase F+ step 3; panel — owner 2026-08-05) ------------
-// The Quality button no longer cycles full/reduced/auto: it opens a panel of
-// per-DEVICE overrides of the desktop defaults — fps, resolution (full, 2/3,
-// 1/2 — half PER AXIS is quarter pixels, so the middle step is 2/3, owner),
-// bitrate level, plus "save data on mobile networks". The EFFECTIVE values go
-// to the server, which re-opens this client's encoder.
-
-const QUALITY_FPS = [0, 10, 15, 30, 60]; // 0 = server default (max)
-const QUALITY_RES = ["full", "2/3", "1/2"];
-const QUALITY_BR = ["high", "mid", "low"];
-const QUALITY_DEFAULTS = { fps: 0, res: "full", bitrate: "high", auto: false };
-
-function qualityPrefs() {
-  try {
-    const p = JSON.parse(prefGet("qualityPrefs") || "{}");
-    return {
-      fps: QUALITY_FPS.includes(p.fps) ? p.fps : 0,
-      res: QUALITY_RES.includes(p.res) ? p.res : "full",
-      bitrate: QUALITY_BR.includes(p.bitrate) ? p.bitrate : "high",
-      auto: p.auto === true,
-    };
-  } catch {
-    return { ...QUALITY_DEFAULTS };
-  }
-}
-
-function transportCellular() {
-  try {
-    return IN_APP && window.Android.transport && window.Android.transport() === "cellular";
-  } catch {
-    return false;
-  }
-}
-
-// What the server should actually run for this device right now: the saved
-// choices, except that auto-on-mobile-data overrides them with the saving
-// profile while on cellular (re-evaluated on every (re)connect — a network
-// switch reconnects by rule).
-function effectiveQuality() {
-  const p = qualityPrefs();
-  if (p.auto && transportCellular()) return { fps: 10, res: "1/2", bitrate: "low" };
-  return { fps: p.fps, res: p.res, bitrate: p.bitrate };
-}
-
-function qualityOverridden() {
-  const e = effectiveQuality();
-  return e.fps !== 0 || e.res !== "full" || e.bitrate !== "high";
-}
-
-function sendQuality() {
-  send({ type: "quality", ...effectiveQuality() });
-}
-
-function refreshQualityButtons() {
-  document.querySelectorAll('[data-action="quality"]').forEach((el) =>
-    el.classList.toggle("active", qualityOverridden()));
-}
+// Stream quality (per-device overrides of the PC's own settings) lives in
+// client/quality.js — prefs and panel are one responsibility.
 
 // --- Touch-mode toggles ---------------------------------------------------
 
