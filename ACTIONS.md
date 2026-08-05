@@ -95,7 +95,15 @@ Shipped reserves, off until you tick them:
 | **VSCode** | Sidebar · Palette · Terminal · Find | **Preview (ctrl+shift+v)** · **Next tab** · **Prev tab** · Save · Go to file · Comment |
 | **Chrome** | New tab · Close · Next tab · Address | **Prev tab** · Reopen · Reload · Back · Forward · Find |
 | **Explorer** | Rename · New dir · Delete · Up | **Next tab** · **Prev tab** · New tab · Back · Forward · Copy path · Details · Search |
-| **Claude** | Usage · Model · Thinking · Stop | Menu · Mode · Compact · New chat · Rewind · Context · Agents · Resume · Focus |
+| **Claude** | Usage · Model · **Thinking** · Stop | Menu · Mode · Compact · New chat · Rewind · Context · Agents · Resume · Focus |
+
+**Thinking does not RUN a command** (owner correction 2026-08-05, with the
+screenshot): `/effort` takes a level (`low|medium|high|xhigh|max|…`), and
+typing it alone would only print its usage. The button therefore types
+`/effort` and stops — the panel with the Effort slider and the level list is
+then on screen, and the level is picked with the cursor. That is the same
+`"enter": false` trick as the Menu button; anything whose ANSWER is a choice
+belongs in this shape.
 
 `Zones` is no longer shipped — zone chords are a **custom** category the owner
 adds when wanted (this file is hand-editable; a future desktop editor will

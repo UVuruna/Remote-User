@@ -202,6 +202,13 @@ def input_gate() -> None:
     # under hovering windows. Pure logic — no browser needed.
     step("0c/6  PRESENCE GATE — leaving work mode frees the desk (tests/test_presence.py)")
     run([sys.executable, str(PROJECT_DIR / "tests" / "test_presence.py")])
+    # And the same for the notices (owner 2026-08-05): the whole value of
+    # "the PC calls you" is that it names WHICH agent finished. A release
+    # where the name went missing, the token check slipped, or the phone
+    # stopped raising a banner would be a feature the owner cannot trust —
+    # and he only finds out by NOT being told something.
+    step("0d/6  NOTIFY GATE — the PC names the agent, the phone says it (tests/test_notify.py)")
+    run([sys.executable, str(PROJECT_DIR / "tests" / "test_notify.py")])
 
 
 def generate_icons() -> None:

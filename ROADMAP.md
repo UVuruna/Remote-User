@@ -264,15 +264,17 @@ Two ways exist, and only one of them is honest:
 
 Scope when built (~½ session):
 
-- [ ] **H1 — `/notify` + the `notify` message.** An auth-token-protected
+- [x] **H1 — `/notify` + the `notify` message** (done 2026-08-05, owner go): An auth-token-protected
   `POST /notify {title, text, sound}` on the server; a `notify` frame to the
   connected phone; the page plays a short tone (the WebView may, the page has
   had a user gesture), vibrates via the shell, and shows the toast. Silent by
   default when the phone is not connected — the PC never queues alarms.
-- [ ] **H2 — the hook, installed for the owner, not explained to him.** The
-  desktop app writes the Claude Code `Stop` hook into his config from a button
-  ("Tell me when Claude finishes"), the same way it chain-installs everything
-  else — the end user never edits a config file (hard owner principle).
+- [~] **H2 — the hook.** `setup/agent_hook.py` exists and installs itself
+  (`--install` writes the `Stop` hook into `~/.claude/settings.json`,
+  `--test` sends one notice now). What is still owed is the desktop BUTTON
+  that runs it — the end user must never type a command (hard owner
+  principle). It waits only because `main_window.py` was being rewritten by a
+  parallel session on the day this landed.
 - [ ] **H3 — which events deserve a sound.** Owner's call: agent finished /
   agent is waiting for an answer (a permission prompt is the one worth
   hearing) / build finished. Per-event on/off in the phone's Settings.

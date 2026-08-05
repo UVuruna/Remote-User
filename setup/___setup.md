@@ -17,6 +17,7 @@ chain-installs Tailscale itself.
 | `build.py` | Algorithmic | 7-step build pipeline orchestrator + the fail-closed `verify_build` gate — [about](__about/build.md) · [flow](__flow/build.md) |
 | `build_apk.py` | Algorithmic | Android release-APK build protocol — toolchain, keystore, Gradle — [about](__about/build_apk.md) · [flow](__flow/build_apk.md) |
 | `svg_to_ico.py` | Algorithmic | SVG → multi-resolution ICO, supersampled Lanczos downscale — [about](__about/svg_to_ico.md) · [flow](__flow/svg_to_ico.md) |
+| `agent_hook.py` | Standard | the Claude Code `Stop` hook: names the agent that finished and POSTs it to the running server, which notifies the phone (ROADMAP Phase H) — [about](__about/agent_hook.md) |
 | `create_cert.py` | Standard | one-time self-signed code-signing certificate generator — [about](__about/create_cert.md) |
 | `installer.nsi` | *(not in this doc pass)* | NSIS installer script — sections Main / Tailscale / Desktop shortcut / Autostart; see Design Decisions below |
 | `app_info.json` | *(data, not code)* | project metadata (version, names, exe/installer filenames) read by every script above |

@@ -162,7 +162,7 @@
       "buttons": [
         { "label": "Usage",    "icon": "usage",    "text": "/usage",   "enter": true },
         { "label": "Model",    "icon": "model",    "text": "/model",   "enter": true },
-        { "label": "Thinking", "icon": "thinking", "text": "/effort",  "enter": true },
+        { "label": "Thinking", "icon": "thinking", "text": "/effort",  "enter": false },
         { "label": "Stop",     "icon": "esc",      "key": "escape" },
         { "label": "Menu",     "icon": "list",     "text": "/", "enter": false },
         { "label": "Mode",     "icon": "cmode",    "chord": "shift+tab" },
