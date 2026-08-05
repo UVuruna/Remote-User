@@ -184,6 +184,10 @@ setInterval(() => {
 
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) {
+    // The LOCK button stops EVERYTHING that was switched ON (owner round 4,
+    // 2026-08-05): mic and keyboard go OFF the moment the screen goes away —
+    // the shell cancels its listening round too (belt and braces).
+    inputOff();
     if (socketReady()) {
       // Say WHY we are going: an excursion (image picker, camera, voice) is
       // the owner still working with us — the PC holds the layout as it is;

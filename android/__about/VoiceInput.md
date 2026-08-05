@@ -24,6 +24,23 @@ owner's Serbian as English garbage — his phone lists English first. So:
   everywhere: the round-1 silent gap was a wanted-but-missing language
   riding the on-device switch lists and hearing NOTHING with no error.
 
+## Round 4 (owner 2026-08-05): lock, beeps, more languages
+
+- **The LOCK button stops everything** — `onBackground()` (activity
+  `onPause`) cancels the running round, unmutes, and refuses new `listen()`
+  calls until `onForeground()`; the rounds used to keep cycling and beeping
+  under a locked screen (the page's own visibility handler switches the mic
+  OFF too — belt and braces).
+- **Listening beeps muted by default** — Android tones every round
+  start/stop and rounds cycle on each silence; `muteBeepsPref()` (default
+  true, the card's checkbox flips it) mutes MUSIC/SYSTEM/NOTIFICATION for
+  the listening session, restored on cancel/deny/background/destroy. Each
+  stream is best-effort (DND policies may refuse one).
+- **More languages** — `candidates()` marks with `extra: true` every
+  language beyond the phone's own: all downloadable on-device models plus
+  whatever the online service reports via the `ACTION_GET_LANGUAGE_DETAILS`
+  broadcast (queried once); the card keeps them behind "More languages…".
+
 ## Engine choice + silent model download
 
 `makeRecognizer`: on-device only when the chosen language's model is KNOWN

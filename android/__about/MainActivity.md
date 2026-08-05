@@ -113,11 +113,14 @@ The page's only way to reach the shell.
   subsystem — user-CHOSEN dictation language, engine choice, silent model
   download, silent diagnostics — lives in [VoiceInput](VoiceInput.md)
   (split 2026-08-05, THE STRUCTURE LAW).
-- `voiceLangs()` / `voiceChosen()` / `voiceSetLang(tag)` / `voiceState()`:
-  the dictation setup card's bridge (owner round 2, 2026-08-05) — candidate
-  languages with statuses, the stored single choice, and the
-  `"downloading"` state that styles the Mic button. Delegates to
-  [VoiceInput](VoiceInput.md). Note the hard platform limit: an app
+- `voiceLangs()` / `voiceChosen()` / `voiceSetLang(tag)` / `voiceState()` /
+  `voiceMuteBeeps()` / `voiceSetMuteBeeps(on)`: the dictation setup card's
+  bridge (owner rounds 2 and 4, 2026-08-05) — candidate languages with
+  statuses (`extra` = beyond the phone's own), the stored single choice,
+  the `"downloading"` state that styles the Mic button, and the
+  listening-beeps mute (default ON). Delegates to
+  [VoiceInput](VoiceInput.md); `onPause`/`onResume` gate the whole
+  subsystem — LOCK stops everything (owner round 4). Note the hard platform limit: an app
   cannot open the KEYBOARD's own voice typing (Gboard mic) — no API switches
   another IME into voice mode; this in-place recognizer is the closest
   invisible equivalent, and the visible Google dialog

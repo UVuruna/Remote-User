@@ -518,6 +518,7 @@ class MainActivity : AppCompatActivity() {
      *  answering, re-resolve — the other stored address takes over. */
     override fun onResume() {
         super.onResume()
+        voice.onForeground()
         if (!::web.isInitialized) return
         web.onResume()
         val current = web.url
@@ -542,6 +543,11 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onPause() {
+        // The LOCK button stops EVERYTHING (owner round 4, 2026-08-05):
+        // the mic lives in this shell, not in the page, and its round loop
+        // kept cycling and beeping under a locked screen. Cancel the running
+        // round here and refuse new ones until onResume.
+        voice.onBackground()
         if (::web.isInitialized) web.onPause()
         super.onPause()
     }
@@ -641,6 +647,17 @@ class MainActivity : AppCompatActivity() {
 
         @JavascriptInterface
         fun voiceState(): String = voice.state()
+
+        /** Listening beeps (owner round 4, 2026-08-05): Android tones every
+         *  round start/stop and rounds cycle on each silence — muted by
+         *  default while dictating, the card's checkbox flips it. */
+        @JavascriptInterface
+        fun voiceMuteBeeps(): Boolean = voice.muteBeepsPref()
+
+        @JavascriptInterface
+        fun voiceSetMuteBeeps(on: Boolean) {
+            runOnUiThread { voice.setMuteBeepsPref(on) }
+        }
 
         /** Update tap: open /app.apk (on the SAME PC) in the system browser —
          *  it downloads and Android installs over this app (same signature).

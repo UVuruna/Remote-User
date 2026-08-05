@@ -234,12 +234,19 @@ function dictRow(lang, chosen) {
   return row;
 }
 
+// The "More languages" section stays collapsed until asked (owner round 4:
+// the phone's own languages first, everything downloadable/online behind
+// one row) — remembered while the card is open, reset on close.
+let dictMoreOpen = false;
+
 function renderDictationCard() {
   let langs = [];
   let chosen = "";
+  let muted = true;
   try {
     langs = JSON.parse(window.Android.voiceLangs());
     chosen = window.Android.voiceChosen();
+    if (window.Android.voiceMuteBeeps) muted = window.Android.voiceMuteBeeps();
   } catch {}
   dictPanel.innerHTML = "";
   const card = document.createElement("div");
@@ -248,8 +255,41 @@ function renderDictationCard() {
     <p class="sets-sub">Pick the language you speak — dictation understands that one. Change it any time: Settings wheel → Language.</p>`;
   const list = document.createElement("div");
   list.className = "sets-list";
-  langs.forEach((lang) => list.appendChild(dictRow(lang, chosen)));
+  const mine = langs.filter((l) => !l.extra);
+  const extra = langs.filter((l) => l.extra);
+  // A chosen extra language surfaces with the phone's own — the current
+  // choice must never hide behind the collapsed section.
+  mine.concat(extra.filter((l) => l.tag === chosen))
+    .forEach((lang) => list.appendChild(dictRow(lang, chosen)));
+
+  const rest = extra.filter((l) => l.tag !== chosen);
+  if (rest.length && !dictMoreOpen) {
+    const more = document.createElement("button");
+    more.type = "button";
+    more.className = "sets-row dict-more";
+    more.textContent = `More languages (${rest.length})…`;
+    keepFocus(more, () => {
+      dictMoreOpen = true;
+      renderDictationCard();
+    });
+    list.appendChild(more);
+  } else if (dictMoreOpen) {
+    rest.forEach((lang) => list.appendChild(dictRow(lang, chosen)));
+  }
   card.appendChild(list);
+
+  // Listening beeps (owner round 4): Android tones every round start/stop
+  // and rounds cycle on each silence — muted while dictating by default.
+  const muteRow = document.createElement("label");
+  muteRow.className = "sets-row apps";
+  const muteCb = document.createElement("input");
+  muteCb.type = "checkbox";
+  muteCb.checked = muted !== false;
+  muteCb.addEventListener("change", () => {
+    try { window.Android.voiceSetMuteBeeps(muteCb.checked); } catch {}
+  });
+  muteRow.append(muteCb, document.createTextNode("Mute listening beeps while dictating"));
+  card.appendChild(muteRow);
 
   const done = document.createElement("button");
   done.type = "button";
@@ -274,6 +314,7 @@ function openDictationPanel() {
 function closeDictationPanel() {
   dictPanel.hidden = true;
   dictPanel.innerHTML = "";
+  dictMoreOpen = false;
   refreshMicButtons(); // a download may have started — show it on the Mic
 }
 

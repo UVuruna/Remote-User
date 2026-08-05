@@ -477,10 +477,43 @@ async def _send_cursor(ws: WebSocket, injector: InputInjector) -> None:
         await asyncio.sleep(interval)
 
 
+_shipped_pools_merged = False
+
+
+def _merge_shipped_actions() -> None:
+    """Owner round 4 (2026-08-05): the Controls editor merges a NEW version's
+    shipped pools into the owner's %LOCALAPPDATA% actions.json — but only
+    when the editor is OPENED, so a phone-visible default change (Language
+    replacing Anywhere in Settings) never arrived without a desktop click.
+    The same merge runs here, once per server start. FROZEN-only: in a dev
+    checkout the repo file IS the shipped file and there is nothing to merge
+    (which also keeps the PySide6 import below out of the headless CLI)."""
+    global _shipped_pools_merged
+    if _shipped_pools_merged:
+        return
+    _shipped_pools_merged = True
+    from config import BUNDLE_DIR, FROZEN
+    if not FROZEN:
+        return
+    user_path = Path(SETTINGS.actions_path)
+    shipped_path = BUNDLE_DIR / "actions.json"
+    if not user_path.exists() or user_path == shipped_path:
+        return
+    try:
+        from gui.controls_editor import merge_shipped_pools
+        data = json.loads(user_path.read_text(encoding="utf-8"))
+        merge_shipped_pools(data, json.loads(shipped_path.read_text(encoding="utf-8")))
+        user_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        logger.info("Shipped action pools merged into the user actions.json")
+    except Exception as e:  # a failed merge must never stop the server
+        logger.warning("Shipped-pools merge skipped: %s", e)
+
+
 def _load_actions() -> dict:
     """Reads the owner's action categories fresh (edits apply on the next
     connect). A missing or invalid file is logged and yields no categories —
     never a crash."""
+    _merge_shipped_actions()
     empty = {"categories": [], "app_sets": [], "custom_sets": [], "left": 0, "right": 0}
     try:
         data = json.loads(SETTINGS.actions_path.read_text(encoding="utf-8"))
