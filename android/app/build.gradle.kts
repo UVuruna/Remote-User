@@ -55,6 +55,11 @@ android {
 
 dependencies {
     implementation("androidx.appcompat:appcompat:1.7.0")
+    // NotificationCompat + NotificationManagerCompat (ROADMAP Phase H). It
+    // already arrives transitively through appcompat; named explicitly
+    // because Notifier.kt compiles against it directly, and a transitive
+    // version bump must never be what decides whether the app builds.
+    implementation("androidx.core:core-ktx:1.13.1")
     // Embedded QR scanner (no Google Play Services dependency)
     implementation("com.journeyapps:zxing-android-embedded:4.3.0")
 }

@@ -47,8 +47,11 @@ STANDARD = {
     "client/panels.js",
     "client/icons.js",
     "client/region.js",
+    "client/notify.js",
     "client/quality.js",
     "setup/create_cert.py",
+    "setup/agent_hook.py",
+    "android/app/src/main/java/com/uvuruna/remoteuser/Notifier.kt",
     "android/app/src/main/java/com/uvuruna/remoteuser/OnboardingActivity.kt",
     "android/app/src/main/java/com/uvuruna/remoteuser/VoiceInput.kt",
 }
@@ -69,6 +72,7 @@ ALGORITHMIC = {
     # phone's layout protocol. Both are algorithmic — they carry a flow.
     "server/presence.py",
     "server/layout_api.py",
+    "server/notify.py",
     "server/gui/theme.py",
     "server/gui/traffic_window.py",
     "server/gui/main_window.py",

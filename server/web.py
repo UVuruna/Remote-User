@@ -49,7 +49,6 @@ import clipboard
 import config
 import layout_api
 import monitors
-import notify
 import pairing
 import presence
 import traffic
@@ -269,11 +268,6 @@ def create_app(stream, hub: FrameHub | None, injector: InputInjector, token: str
     # drive the PC together): the newest authenticated socket wins, the
     # previous one is closed with 4409 and its client stops auto-reconnecting.
     active_client: dict = {"ws": None}
-    # "The PC calls you" (ROADMAP Phase H, owner 2026-08-05): anything on this
-    # machine that finishes a job POSTs /notify, and the phone raises a real
-    # notification naming the AGENT. It rides the same one-device slot above,
-    # so a device that took the session over is the one that hears about it.
-    notify.register(app, token, active_client)
 
     # An excursion hold outlives the socket that announced it, so its task
     # needs an owner here — a bare create_task is only referenced by the event
