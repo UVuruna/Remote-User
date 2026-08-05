@@ -81,7 +81,12 @@ def make_main_window() -> QWidget:
 
 def make_controls_editor() -> QWidget:
     from gui.controls_editor import ControlsEditor
+    from gui.theme import QSS
     editor = ControlsEditor()
+    # In the app this dialog is a child of MainWindow and inherits the theme;
+    # a bare instance would be measured WITHOUT it — and the QSS is where the
+    # combo min-width that caused "ift+tab" lives. Measure what ships.
+    editor.setStyleSheet(QSS)
     # Fullest state: the set with the longest command pool selected.
     entries = editor._entries()
     if entries:
