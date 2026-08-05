@@ -33,6 +33,8 @@ Frozen dataclass — the module-level `SETTINGS` instance is the only one. See t
 - `load_user_settings()`: applies `settings.json` overrides onto `SETTINGS` once at startup (after logging is configured); missing file = defaults, unreadable file logs and keeps defaults
 - `save_user_settings(changes)`: the GUI's only write path — merges `changes` over the existing file (rejects keys outside `USER_ADJUSTABLE` with `ValueError`), writes it, and applies them to the running `SETTINGS`
 - `_coerced(key, value)`: validates one override against the dataclass field's declared type (bool checked before int — bool is an int subclass); returns `None` (logged) for an unusable value
+- `bitrate_bps(text)`: `"12M"` / `"1200k"` / `"900000"` → bits per second; unparsable text logs and falls back to 12 Mbps rather than killing a stream
+- `bitrate_for_level(level)`: the phone's bitrate step resolved against the DESKTOP choice — `"high"` is `h264_bitrate` itself, `"mid"`/`"low"` are `h264_bitrate_mid_pct` / `_low_pct` percent of it. Percentages replaced the absolute `"5M"`/`"1200k"` on 2026-08-05: fixed numbers meant the desktop Bitrate combo applied only while the phone sat on "High", so the PC's choice was silently discarded the moment the phone picked Mid
 
 ## Settings trim (owner 2026-08-02)
 "Phone hand" is gone from the Settings form (the cursor-offset system it fed

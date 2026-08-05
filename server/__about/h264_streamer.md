@@ -49,9 +49,16 @@ What the [Web Layer](web.md) talks to (duck interface shared with `JpegStreamer`
 bitrate INSIDE that client's own ffmpeg — capture and other clients untouched:
 `res` `"2/3"`/`"1/2"` scales both axes (`trunc(iw*n/d/2)*2` keeps dimensions
 even for yuv420p; half per axis = quarter pixels, hence ⅔ as the middle
-step), `fps` < `target_fps` appends an `fps=` filter, `bitrate` `"mid"`/
-`"low"` swaps in `h264_bitrate_mid`/`h264_bitrate_low` (`"high"`/`0`/`"full"`
-= the desktop Settings defaults). The web layer resets the running session
+step), `fps` < `target_fps` appends an `fps=` filter, and `bitrate` goes
+through `config.bitrate_for_level` — `"high"` is the desktop's own bitrate,
+`"mid"`/`"low"` are PERCENTAGES of it (`h264_bitrate_mid_pct` /
+`_low_pct`). Percentages, not the old absolute `"5M"`/`"1200k"`: fixed
+numbers meant the desktop Bitrate combo applied only while the phone sat on
+"High", so picking "Mid" silently discarded the PC's choice — half of the
+owner's 2026-08-05 "the desktop settings do nothing" report. `"high"`/`0`/
+`"full"` all mean "no override — the desktop Settings defaults". The base the
+phone displays is published as `config.base` (`_stream_base` in web.py, fed
+by `H264Manager.stream_size`). The web layer resets the running session
 when the client's `quality` message changes the dict; the loop reopens with
 the new settings (same machinery as a monitor switch). Legacy
 `quality {reduced: true}` maps in web.py to the saving profile.

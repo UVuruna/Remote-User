@@ -103,9 +103,14 @@ class Settings:
     # fps / resolution (full, 2/3, 1/2 — half PER AXIS is quarter pixels,
     # so the middle step is 2/3) / bitrate level, or auto-reduces on mobile
     # data; the desktop Settings combos stay the DEFAULTS every level maps
-    # against). "mid"/"low" bitrate levels:
-    h264_bitrate_mid: str = "5M"
-    h264_bitrate_low: str = "1200k"
+    # against). "mid"/"low" are PERCENTAGES of the desktop bitrate, not fixed
+    # numbers (owner 2026-08-05): absolute constants meant the desktop combo
+    # applied only while the phone sat on "High" — picking "Mid" silently
+    # threw the PC's own choice away, which is exactly the "the desktop
+    # setting does nothing" report. As fractions the hierarchy holds on all
+    # three steps: the phone can only ever go BELOW what the PC allows.
+    h264_bitrate_mid_pct: int = 40
+    h264_bitrate_low_pct: int = 10
     # The auto-on-mobile-data profile (legacy `reduced` maps to this too):
     h264_reduced_scale: int = 2     # halve width and height
     h264_reduced_fps: int = 10
@@ -201,6 +206,34 @@ def apk_version() -> str:
 
 # ═══════════════════════════ SHARED INSTANCE & MUTATION ═══════════════════════════
 SETTINGS = Settings()
+
+
+def bitrate_bps(text: str) -> int:
+    """"12M" / "1200k" / "900000" → bits per second. Unparsable text falls
+    back to the 12 Mbps default rather than killing a stream."""
+    raw = str(text).strip()
+    factor = 1
+    if raw and raw[-1] in "kK":
+        factor, raw = 1_000, raw[:-1]
+    elif raw and raw[-1] in "mM":
+        factor, raw = 1_000_000, raw[:-1]
+    try:
+        return max(1, int(float(raw) * factor))
+    except ValueError:
+        logger.warning("Unparsable bitrate %r — using 12M", text)
+        return 12_000_000
+
+
+def bitrate_for_level(level: str | None) -> str:
+    """The phone's bitrate step resolved against the DESKTOP choice (owner
+    2026-08-05). "high" is the PC's own value; "mid"/"low" are percentages of
+    it — so lowering the PC's bitrate lowers all three steps and the phone can
+    never out-bid the PC's ceiling."""
+    pct = {"mid": SETTINGS.h264_bitrate_mid_pct,
+           "low": SETTINGS.h264_bitrate_low_pct}.get(str(level or ""))
+    if pct is None:
+        return SETTINGS.h264_bitrate
+    return f"{max(1, bitrate_bps(SETTINGS.h264_bitrate) * pct // 100_000)}k"
 
 
 def apply(**changes) -> None:

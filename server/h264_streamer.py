@@ -20,6 +20,7 @@ import logging
 import subprocess
 import threading
 
+import config
 import encoders
 from capture import FrameSink, RawFrameSource
 from config import SETTINGS
@@ -100,10 +101,7 @@ class H264Session:
         if 0 < fps < SETTINGS.target_fps:
             chain.append(f"fps={fps}")
         filters = ["-vf", ",".join(chain)] if chain else []
-        bitrate = {
-            "mid": SETTINGS.h264_bitrate_mid,
-            "low": SETTINGS.h264_bitrate_low,
-        }.get(self._quality.get("bitrate"), SETTINGS.h264_bitrate)
+        bitrate = config.bitrate_for_level(self._quality.get("bitrate"))
         return [
             SETTINGS.ffmpeg_path, "-hide_banner", "-loglevel", "error",
             "-f", "rawvideo", "-pix_fmt", "bgr24",
@@ -230,6 +228,12 @@ class H264Manager:
     @property
     def monitor_index(self) -> int:
         return self._source.monitor_index
+
+    @property
+    def stream_size(self) -> tuple[int, int]:
+        """What the encoder is actually fed — the monitor capped at the
+        desktop's Resolution setting. The phone shows this as its baseline."""
+        return self._source.stream_w, self._source.stream_h
 
     def output_count(self) -> int:
         return RawFrameSource.output_count()
