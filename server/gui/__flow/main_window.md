@@ -2,14 +2,22 @@
 
 **About:** [description](../__about/main_window.md)
 
-Layout sketch — the window is one fixed-width (400px) column, cards stacked
-top to bottom in the exact order `__init__` adds them to `root` (a
-`QVBoxLayout`). This is a zone map, not a control-flow diagram.
+Layout sketch — the window is one column of cards, stacked top to bottom in
+the exact order `__init__` adds them to `root` (a `QVBoxLayout`). This is a
+zone map, not a control-flow diagram.
+
+The column used to be pinned at a hard 400 px. It is now RESIZABLE with a
+COMPUTED minimum (`_computed_minimum()` + a settle loop, THE SPACE &
+LEGIBILITY LAW): the widest real row it can show — the three bottom buttons at
+their longest captions, the update button's full sentence, the widest settings
+row, the QR — plus the height its longest guidance text (`REACH_TEXT`) needs
+once wrapped at that width. With the shipped strings that is **676 × 787**
+(dev machine, Segoe UI 13 px, 2026-08-05).
 
 ```mermaid
 %%{init: {'flowchart': {'subGraphTitleMargin': {'top': 0, 'bottom': 35}}}}%%
 flowchart TB
-    subgraph WIN["MainWindow — fixed width 400px"]
+    subgraph WIN["MainWindow — resizable, computed minimum 676x787"]
         direction TB
         subgraph HEADER["Header row"]
             direction LR

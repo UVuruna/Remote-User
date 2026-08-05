@@ -95,12 +95,18 @@ QPushButton#danger {{
 }}
 QPushButton#danger:hover {{ background: rgba(239, 68, 68, 0.24); color: {error}; }}
 
+/* min-width is a FLOOR for an empty combo, never a claim on space: at 140px
+   two combos in one row held 280px while the shortcut field beside them was
+   squeezed to "ift+tab" (owner screenshot 2026-08-05). Qt already sizes a
+   combo to its longest item; the floor only keeps an empty one clickable.
+   THE SPACE & LEGIBILITY LAW — no neighbour holds slack next to a starving
+   element. */
 QComboBox {{
     background: {surface2};
     border: 1px solid {border};
     border-radius: {radiusControl};
     padding: 6px 10px;
-    min-width: 140px;
+    min-width: 92px;
 }}
 QComboBox:hover {{ border-color: {accent}; }}
 QComboBox::drop-down {{ border: none; width: 24px; }}
