@@ -35,6 +35,11 @@ with plain-language statuses: "ready on this phone" / "model will download —
 online until it arrives" / "recognized over the internet"; a radio tap calls
 `Android.voiceSetLang(tag)` and re-renders (a download may have just
 started). Never a transient toast — the card stays until Done/backdrop.
+Round 4 (owner 2026-08-05): languages beyond the phone's own (`extra` —
+downloadable models + the online service's list) sit behind a collapsed
+"More languages (N)…" row (the chosen one always surfaces), and a
+"Mute listening beeps" checkbox (default ON) drives
+`Android.voiceSetMuteBeeps` — the round tones stay quiet while dictating.
 
 ## Ghost-click armor (all panels)
 

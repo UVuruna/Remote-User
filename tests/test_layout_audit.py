@@ -113,7 +113,10 @@ def main() -> int:
                  " voiceLangs: () => JSON.stringify(["
                  "  {tag:'sr-RS', name:'Srpski (Srbija)', status:'download'},"
                  "  {tag:'en-US', name:'English (United States)', status:'ready'},"
-                 "  {tag:'de-DE', name:'Deutsch (Deutschland)', status:'online'}]),"
+                 "  {tag:'de-DE', name:'Deutsch (Deutschland)', status:'online'},"
+                 "  {tag:'pt-BR', name:'Português (Brasil)', status:'download', extra:true},"
+                 "  {tag:'ja-JP', name:'日本語 (日本)', status:'online', extra:true}]),"
+                 " voiceMuteBeeps: () => true, voiceSetMuteBeeps: () => {},"
                  " voiceChosen: () => 'sr-RS', voiceSetLang: () => {},"
                  " voiceState: () => '' };"
                  "renderDictationCard()",

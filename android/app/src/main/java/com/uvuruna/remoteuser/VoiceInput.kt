@@ -42,8 +42,23 @@ class VoiceInput(private val activity: Activity, private val js: (String) -> Uni
      *  icon look, dictation keeps working online meanwhile). */
     private var downloading = false
 
+    /** True while the app is not on screen (owner round 4, 2026-08-05: the
+     *  LOCK button must stop everything — rounds kept cycling and beeping
+     *  under a locked screen). Set from the activity's onPause/onResume;
+     *  while true no round may start and any running one is cancelled. */
+    private var background = false
+
+    /** True while the beep-carrying streams are muted for a listening
+     *  session (owner round 4: the round beeps irritate — mutable via the
+     *  card's checkbox, default muted). */
+    private var beepsMuted = false
+
     private val prefs
         get() = activity.getSharedPreferences("voice", Context.MODE_PRIVATE)
+
+    private val audio
+        get() = activity.getSystemService(Context.AUDIO_SERVICE)
+            as android.media.AudioManager
 
     // ── The user's choice ────────────────────────────────────────────────
 
@@ -63,31 +78,129 @@ class VoiceInput(private val activity: Activity, private val js: (String) -> Uni
     }
 
     /** Candidate languages for the setup card, as JSON
-     *  `[{tag, name, status}]` — status: "ready" (on-device model
+     *  `[{tag, name, status, extra}]` — status: "ready" (on-device model
      *  installed) / "download" (model exists and will be fetched) /
      *  "online" (no on-device model — internet recognition only). Before
-     *  the async support result lands, statuses default to "online". */
+     *  the async support result lands, statuses default to "online".
+     *  `extra: true` marks languages BEYOND the phone's own (owner round 4:
+     *  everything downloadable or understood online rides in the card's
+     *  collapsed "More languages" section). */
     fun candidates(): String {
+        queryOnlineLangs()
         val arr = JSONArray()
-        for (tag in candidateTags()) {
-            val locale = java.util.Locale.forLanguageTag(tag)
-            val name = locale.getDisplayName(locale)
-                .replaceFirstChar { it.uppercase(locale) }
-            val status = when {
-                installed.any { sameLang(it, tag) } -> "ready"
-                supported.any { sameLang(it, tag) } -> "download"
-                else -> "online"
-            }
-            arr.put(JSONObject().put("tag", tag).put("name", name).put("status", status))
+        val base = candidateTags()
+        for (tag in base) arr.put(langEntry(tag, extra = false))
+        val extras = LinkedHashSet<String>()
+        (supported + onlineLangs).forEach { tag ->
+            if (tag.isNotBlank() && base.none { sameLang(it, tag) } &&
+                extras.none { sameLang(it, tag) }
+            ) extras.add(tag)
         }
+        extras.sortedBy { java.util.Locale.forLanguageTag(it).getDisplayName() }
+            .forEach { arr.put(langEntry(it, extra = true)) }
         return arr.toString()
+    }
+
+    private fun langEntry(tag: String, extra: Boolean): JSONObject {
+        val locale = java.util.Locale.forLanguageTag(tag)
+        val name = locale.getDisplayName(locale)
+            .replaceFirstChar { it.uppercase(locale) }
+        val status = when {
+            installed.any { sameLang(it, tag) } -> "ready"
+            supported.any { sameLang(it, tag) } -> "download"
+            else -> "online"
+        }
+        return JSONObject().put("tag", tag).put("name", name)
+            .put("status", status).put("extra", extra)
+    }
+
+    // Languages the ONLINE service understands — asked once from the speech
+    // service (the classic details broadcast; empty when nothing answers).
+    private var onlineLangs: List<String> = emptyList()
+    private var onlineQueried = false
+
+    private fun queryOnlineLangs() {
+        if (onlineQueried) return
+        onlineQueried = true
+        try {
+            activity.sendOrderedBroadcast(
+                RecognizerIntent.getVoiceDetailsIntent(activity)
+                    ?: Intent(RecognizerIntent.ACTION_GET_LANGUAGE_DETAILS),
+                null,
+                object : android.content.BroadcastReceiver() {
+                    override fun onReceive(c: Context?, i: Intent?) {
+                        onlineLangs = getResultExtras(true)
+                            ?.getStringArrayList(RecognizerIntent.EXTRA_SUPPORTED_LANGUAGES)
+                            ?: emptyList()
+                    }
+                },
+                null, Activity.RESULT_OK, null, null
+            )
+        } catch (e: Exception) {
+            // No service answering the details broadcast — the base list stands.
+        }
     }
 
     fun state(): String = if (downloading) "downloading" else ""
 
+    // ── Beeps (owner round 4, 2026-08-05) ────────────────────────────────
+    // Android plays start/stop tones around every listening round, and the
+    // rounds cycle on every silence. Default: muted while dictating; the
+    // card's checkbox flips it. Mute covers the streams the tones ride on;
+    // each is best-effort (Do-Not-Disturb policies may refuse one).
+
+    fun muteBeepsPref(): Boolean = prefs.getBoolean("mute_beeps", true)
+
+    fun setMuteBeepsPref(on: Boolean) {
+        prefs.edit().putBoolean("mute_beeps", on).apply()
+        if (!on) unmuteBeeps()
+    }
+
+    private val beepStreams = intArrayOf(
+        android.media.AudioManager.STREAM_MUSIC,
+        android.media.AudioManager.STREAM_SYSTEM,
+        android.media.AudioManager.STREAM_NOTIFICATION,
+    )
+
+    private fun muteBeeps() {
+        if (beepsMuted || !muteBeepsPref()) return
+        beepsMuted = true
+        for (s in beepStreams) {
+            try {
+                audio.adjustStreamVolume(s, android.media.AudioManager.ADJUST_MUTE, 0)
+            } catch (e: Exception) {
+                // DND security policy can refuse a stream — the rest still mute.
+            }
+        }
+    }
+
+    private fun unmuteBeeps() {
+        if (!beepsMuted) return
+        beepsMuted = false
+        for (s in beepStreams) {
+            try {
+                audio.adjustStreamVolume(s, android.media.AudioManager.ADJUST_UNMUTE, 0)
+            } catch (e: Exception) {
+            }
+        }
+    }
+
+    // ── Screen state (owner round 4: LOCK stops everything) ──────────────
+
+    fun onBackground() {
+        background = true
+        recognizer?.cancel()
+        unmuteBeeps()
+    }
+
+    fun onForeground() {
+        background = false
+    }
+
     // ── Listening ────────────────────────────────────────────────────────
 
     fun listen() {
+        if (background) return // locked/hidden — nothing may listen (owner)
         if (!SpeechRecognizer.isRecognitionAvailable(activity)) {
             end("unavailable")
             return
@@ -98,6 +211,7 @@ class VoiceInput(private val activity: Activity, private val js: (String) -> Uni
             return
         }
         checkSupport(chosen)
+        muteBeeps()
         val r = recognizer ?: makeRecognizer(chosen).also { rec ->
             rec.setRecognitionListener(listener)
             recognizer = rec
@@ -120,6 +234,7 @@ class VoiceInput(private val activity: Activity, private val js: (String) -> Uni
 
     fun cancel() {
         recognizer?.cancel()
+        unmuteBeeps()
     }
 
     fun deny() = end("denied")
@@ -127,6 +242,7 @@ class VoiceInput(private val activity: Activity, private val js: (String) -> Uni
     fun destroy() {
         recognizer?.destroy()
         recognizer = null
+        unmuteBeeps()
     }
 
     // ── Internals ────────────────────────────────────────────────────────
