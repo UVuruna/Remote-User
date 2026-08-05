@@ -251,6 +251,18 @@ only (their commands stay ours, custom sets stay fully editable).
       Sets picker listing app sets one by one instead of one master toggle.
       Two app sets showing together already works (`visibleAppSets` filters,
       it does not pick one). WAITING on the owner's yes.
+- [x] 27. Quality hierarchy (owner report: "desktop settings do nothing") —
+      diagnosed as a real but INVISIBLE hierarchy plus one genuine bypass.
+      Owner chose option A (keep the hierarchy, put the truth in the UI).
+      Server: bitrate Mid/Low became percentages of the desktop bitrate
+      (`config.bitrate_for_level`, was absolute "5M"/"1200k" — that was the
+      bypass), and `config` now carries `base`. Client: quality split into
+      `client/quality.js`, panel states the PC's live values and strikes out
+      unreachable fps steps. Evidence: guards full PASS, load test PASS,
+      INPUT GATE + PRESENCE GATE PASS, bitrate derivation checked
+      (20M→8000k/2000k, 12M→4800k/1200k, 6M→2400k/600k).
+      Commits 0.0.193–0.0.195, app v0.0.080.
 - [ ] 26. Round close — build + GIT RELEASE once 23–25 land (single release
-      for the whole round; the parallel session's tree state is the reason
-      this turn did not build).
+      for the whole round). Superseded for task 27: it ships now as v0.0.080
+      so the owner can test the fix he reported; 23–25 follow when he
+      answers.
