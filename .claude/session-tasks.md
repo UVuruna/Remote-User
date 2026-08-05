@@ -342,12 +342,26 @@ NOWHERE in the repo — no exit path drops the topmost band.
       on built-in rows, empty = back to ours, merge_shipped_pools carries
       renames by command ID. Round-trip probe PASS. DONE 0.0.198.
 - [x] 27. Image dropped from the Attach pool. DONE 0.0.198.
-- [ ] 33. Sound when the agent finishes (owner question) — ANSWERED and
-      phased, not built: ROADMAP Phase H (`/notify` + a `notify` frame ->
-      tone/vibration/toast on the phone, fed by a Claude Code `Stop` hook the
-      desktop app installs for him). Waiting on his go.
-- [ ] 34. Round close — APK + full desktop build + GIT RELEASE. BLOCKED on the
-      parallel session: server/web.py is being rewritten right now
-      (presence.py / traffic.py split, a .tmp file in the tree) and its own
-      presence gate is red, so a build would package a half-finished refactor.
-      This round's code is committed as 0.0.198 with a clean web.py.
+- [x] 33. "The PC calls you" (owner go + refinement 2026-08-05: several
+      agents run at once, so the notice must NAME the one that finished —
+      "ime agenta je ime sesije"). DONE 0.0.206, ROADMAP Phase H1:
+      setup/agent_hook.py (Claude Code `Stop` hook, self-installing, names the
+      agent and never fails the turn) -> POST /notify -> server/notify.py ->
+      `notify` frame -> client/notify.js -> Android notification TAGGED with
+      the agent + TextToSpeech + toast. Notifier.kt does the Android half.
+      Evidence: NOTIFY GATE 11/11 (bad token refused, no-phone answered not
+      queued, two agents = two banners with their own tags, spoken line names
+      the agent, hook naming rule), wired into build.py fail-closed; APK
+      built so the Kotlin is proven to compile.
+      STILL OWED (H2): the desktop BUTTON that installs the hook — the end
+      user must never type a command. It waited only because main_window.py
+      was being rewritten by the parallel session.
+- [x] 33b. Thinking button (owner correction with the screenshot): `/effort`
+      takes a level, so the button now types it WITHOUT Enter and the level is
+      picked from the chooser with the cursor. DONE 0.0.206.
+- [ ] 34. Round close — full desktop build + GIT RELEASE. The owner said not
+      to release until the parallel agent finishes ("ne moras release dok ne
+      zavrsi taj drugi agent"); their topmost/traffic round has landed
+      (0.0.201-0.0.205, app 0.0.081) but they may still be building. The APK
+      is already built from this tree. Everything of mine is committed
+      (0.0.198-0.0.200, 0.0.206) and every gate is green.
