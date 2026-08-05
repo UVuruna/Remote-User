@@ -21,6 +21,8 @@ import uvicorn
 import encoders
 import monitors
 import pairing
+import traffic
+import window_manager
 from config import SETTINGS
 from input_injector import InputInjector
 from web import FrameHub, ServerStats, create_app
@@ -57,6 +59,13 @@ class ServerController:
         self.state = "stopped"
         self.error: str | None = None
         self.info: ServerInfo | None = None
+        # One registry for the PROCESS, not per server run: "Apply & restart"
+        # used to build a fresh empty one, which threw away the owner's
+        # layouts and the only list of windows still standing always-on-top.
+        self.layouts = window_manager.LayoutRegistry()
+        # Whatever a previous run was killed holding, put right before we can
+        # possibly raise anything of our own.
+        window_manager.repair_stranded()
 
     # -- lifecycle ---------------------------------------------------------
 
@@ -69,6 +78,18 @@ class ServerController:
         self._thread = threading.Thread(target=self._run, name="server-core", daemon=True)
         self._thread.start()
 
+    def release_windows(self) -> None:
+        """Hand every window we raised back to the normal z-band, NOW, on the
+        calling thread. Deliberately not part of the async teardown: dropping
+        the topmost band is a handful of SetWindowPos calls that need no event
+        loop, and the event loop is exactly what may be busy placing a 2x2
+        layout when the owner hits Quit. Called before every stop, and again
+        from the process-exit hooks — it is idempotent."""
+        try:
+            window_manager.release_all()
+        except Exception:  # nothing on the way out may raise
+            logger.exception("Releasing the always-on-top windows failed")
+
     def stop(self, timeout: float = 10.0) -> None:
         """Stops uvicorn and waits for the thread to unwind.
 
@@ -78,6 +99,11 @@ class ServerController:
         still bound to the port, and the next start() failed with
         port-in-use. That was the live "Apply & restart does nothing"
         failure; a client must never be able to hold the server hostage."""
+        # BEFORE anything can block: the join below may wait out its full
+        # timeout while the server thread is mid-placement, and the owner must
+        # never be left with windows nailed above his desk because a stop took
+        # too long (audit 2026-08-05).
+        self.release_windows()
         thread = self._thread
         if thread and thread.is_alive() and self._uvicorn is None:
             # stop() during startup — wait for the uvicorn instance to exist
@@ -152,12 +178,20 @@ class ServerController:
             tailscale_ip=urls["tailscale_ip"],
             stats=stats,
         )
-        app = create_app(stream, hub, injector, token, stats=stats)
+        app = create_app(stream, hub, injector, token, stats=stats,
+                         layouts=self.layouts)
+        # The traffic meter samples for the life of the PROCESS once started:
+        # a stopped server has to read as a line of zeros on the owner's
+        # graph, never as a hole where anything could have happened.
+        traffic.METER.start()
         if self._console_pairing:
             pairing.show_pairing(token)
 
-        if stream.mode == "jpeg":
-            stream.start()  # H.264 capture starts when the first client connects
+        # Capture is ON DEMAND in both modes now: H.264 starts it with the
+        # first session, and the JPEG fallback starts it with the first
+        # subscriber (web.FrameHub.subscribers). Nothing is captured, encoded
+        # or sent while no phone is watching — which is the flat line the
+        # owner's traffic graph has to be able to show.
         try:
             # log_level info so every HTTP/WS access is visible — with "warning" a
             # failing client is invisible in the log, which already cost us a debug
@@ -176,6 +210,9 @@ class ServerController:
             await self._uvicorn.serve()
         finally:
             self._uvicorn = None
+            # FIRST, ahead of the encoder teardown: a hanging ffmpeg terminate
+            # must not be able to eat the one thing the owner notices.
+            self.release_windows()
             if stream.mode == "jpeg":
                 stream.stop()
             else:

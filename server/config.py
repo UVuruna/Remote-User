@@ -133,6 +133,25 @@ class Settings:
     # `config` for protocol stability, ignored by the client, no GUI control.
     hand: str = "right"
 
+    # Layouts — the always-on-top ledger (owner decree 2026-08-05). Layout
+    # members are forced above every other window while the phone shows them,
+    # and that band is ours only while we are running to take it back. Every
+    # raised window is written to this file, so a run that is KILLED (Task
+    # Manager, a crash, a power cut) cannot strand the owner's Chrome and
+    # VSCode above everything with nothing left to fix them: the next start
+    # reads the file and repairs them. Deleting it by hand is always safe.
+    topmost_ledger_path: Path = USER_DIR / "topmost.json"
+
+    # Traffic monitor (owner request 2026-08-05) — every byte to and from the
+    # phone, sampled once a second for the desktop window's graph and appended
+    # to a CSV so an overnight test can be read back in the morning. The
+    # history is what the window can draw; the CSV is what survives a restart.
+    traffic_sample_s: float = 1.0
+    traffic_history_samples: int = 3600      # one hour of one-second samples
+    traffic_csv_path: Path = USER_DIR / "traffic.csv"
+    traffic_csv_max_bytes: int = 20_000_000  # ~4 months of idle sampling
+    traffic_csv_backups: int = 1
+
     # Pairing
     token_bytes: int = 16           # entropy of the pairing token
     persist_token: bool = True      # reuse the token across restarts (no re-scan after

@@ -47,6 +47,8 @@ SWP_SHOWWINDOW = 0x0040
 # pointer-width value on x64 (a bare -1 would be a 32-bit int argument).
 HWND_TOPMOST = wintypes.HWND(-1)
 HWND_NOTOPMOST = wintypes.HWND(-2)
+HWND_TOP = wintypes.HWND(0)       # front of the NORMAL band — a momentary raise
+WS_EX_TOPMOST = 0x00000008
 VK_MENU = 0x12
 KEYEVENTF_KEYUP = 0x0002
 PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
@@ -465,20 +467,34 @@ def place_window(hwnd: int, rect: tuple[int, int, int, int]) -> bool:
     return False
 
 
-def raise_window(hwnd: int) -> None:
+def raise_window(hwnd: int, topmost: bool = True) -> None:
     """Bring to front + give focus. Windows refuses SetForegroundWindow to a
     background process under some timings (a freshly created layout stayed
     BEHIND — owner report 2026-08-02), so this stacks every known unlock:
     explicit z-top first (works regardless of focus rules), then plain
     SetForegroundWindow, then the AttachThreadInput trick, then the Alt
-    nudge. TOPMOST, not HWND_TOP (owner decree 2026-08-04): HWND_TOP cannot
-    pass an always-on-top window (Task Manager, players) — a raised layout
-    member must be above EVERYTHING while it is what the phone shows."""
+    nudge.
+
+    `topmost` is the difference between the two jobs this function was doing
+    under one name, and conflating them cost the owner a second stranded
+    window (audit 2026-08-05):
+
+    - True — "this is what the phone shows". TOPMOST, not HWND_TOP (owner
+      decree 2026-08-04): HWND_TOP cannot pass an always-on-top window (Task
+      Manager, a player), and a layout member must be above EVERYTHING.
+    - False — "bring this forward for a moment": tab extraction raising the
+      source window, `next_input` moving keyboard focus. Those windows are in
+      no layout, so NOTHING would ever have lowered them again; they simply
+      stayed nailed above the owner's desk for the rest of the Windows
+      session. A momentary raise gets HWND_TOP and no ledger entry."""
     freeze_transitions(hwnd)  # no slide-up out of the taskbar to watch
     user32.ShowWindow(hwnd, SW_RESTORE)
-    user32.SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0,
+    user32.SetWindowPos(hwnd, HWND_TOPMOST if topmost else HWND_TOP, 0, 0, 0, 0,
                         SWP_NOSIZE | SWP_NOMOVE | SWP_SHOWWINDOW)
-    mark_topmost(hwnd)  # the ledger owes this window a way back down
+    if topmost:
+        mark_topmost(hwnd)  # the ledger owes this window a way back down
+    else:
+        freeze_transitions(hwnd, False)  # not ours to keep animation-free
     wait_settled(hwnd)
     if user32.SetForegroundWindow(hwnd):
         return
@@ -540,16 +556,31 @@ def mark_topmost(hwnd: int) -> None:
     _ledger_save()
 
 
-def drop_topmost(hwnd: int) -> None:
+def drop_topmost(hwnd: int) -> bool:
     """Back to the normal z-band. Called whenever a window stops being what
     the phone shows (desktop focus, another layout, removal, disconnect, the
     app exiting) — a layout member must never stay always-on-top for the owner
-    AT the desk."""
-    if user32.IsWindow(hwnd):
-        user32.SetWindowPos(hwnd, HWND_NOTOPMOST, 0, 0, 0, 0,
-                            SWP_NOSIZE | SWP_NOMOVE | SWP_NOACTIVATE)
+    AT the desk.
+
+    VERIFIED, and the ledger entry survives a failure on purpose: SetWindowPos
+    can be refused (a window at a higher integrity level, a hung owning
+    thread), and a window we failed to lower is exactly the one the next
+    start's repair has to know about. Forgetting it because we asked once is
+    how "solved" becomes "still topmost" (owner, twice)."""
+    if not user32.IsWindow(hwnd):
+        if _topmost.pop(hwnd, None) is not None:
+            _ledger_save()   # the window is gone; nothing left to lower
+        return True
+    user32.SetWindowPos(hwnd, HWND_NOTOPMOST, 0, 0, 0, 0,
+                        SWP_NOSIZE | SWP_NOMOVE | SWP_NOACTIVATE)
+    if user32.GetWindowLongW(hwnd, GWL_EXSTYLE) & WS_EX_TOPMOST:
+        logger.warning("Window %#x REFUSED to leave the always-on-top band "
+                       "(%r) — kept in the ledger for the next repair",
+                       hwnd, _title(hwnd))
+        return False
     if _topmost.pop(hwnd, None) is not None:
         _ledger_save()
+    return True
 
 
 def release_all() -> None:
@@ -561,8 +592,11 @@ def release_all() -> None:
         return
     logger.info("Releasing %d window(s) from the always-on-top band", len(_topmost))
     for hwnd in list(_topmost):
-        drop_topmost(hwnd)
-    _topmost.clear()
+        drop_topmost(hwnd)   # a refusal keeps its own entry — see drop_topmost
+        # These windows stop being layout material here, so they also get
+        # their own DWM minimize/restore animation back — we only ever froze
+        # it to keep the phone from watching them slide around.
+        freeze_transitions(hwnd, False)
     _ledger_save()
 
 
@@ -661,24 +695,32 @@ class LayoutRegistry:
         # (index, name) — the name guards against the list having shifted.
         self.last_focus: tuple[int, str] | None = None
 
-    def prune(self) -> None:
+    def prune(self) -> list[int]:
         """Closing a member at the desk removes it from its layout (owner
-        rule); a layout with no live members disappears.
+        rule); a layout with no live members disappears. Returns the surviving
+        layouts' ORIGINAL indices, so a caller holding one (the focused
+        layout) can follow it instead of pointing at whatever slid into its
+        place.
 
-        A dropped member leaves the topmost band on the way out. `is_alive`
-        is false for a CLOAKED window too (a minimized Store app), and such a
-        window is very much still on screen for the owner — leaving it in the
-        always-on-top band while forgetting it belonged to a layout is exactly
-        how a window ends up stranded with nobody left to lower it."""
+        CLOSED, not merely HIDDEN (audit 2026-08-05). This used to prune on
+        `is_alive`, which is also false for a CLOAKED window — and Windows
+        cloaks every window sitting on another VIRTUAL DESKTOP, and Store apps
+        while minimized. So the owner pressing Win+Ctrl+Right at his desk
+        silently DELETED his layout, and its members — still on screen, still
+        always-on-top — were forgotten by the only list that could have
+        lowered them. Only a window that no longer exists is pruned now, and
+        even that one is handed back clean on the way out."""
         for lay in self.layouts:
             alive = []
             for hwnd in lay.members:
-                if is_alive(hwnd):
+                if user32.IsWindow(hwnd):
                     alive.append(hwnd)
                 else:
                     drop_topmost(hwnd)
             lay.members = alive
-        self.layouts = [lay for lay in self.layouts if lay.members]
+        kept = [i for i, lay in enumerate(self.layouts) if lay.members]
+        self.layouts = [self.layouts[i] for i in kept]
+        return kept
 
     def create(self, target: int, mode: str, template: str | None,
                fill: list[int], orient: str, device_ratio: float,
@@ -721,8 +763,17 @@ class LayoutRegistry:
         the connecting device's aspect drifted from what the layout was built
         for (tablet vs phone — owner 2026-08-02). Returns None when the layout
         is gone (pruned). Members of every OTHER layout drop out of the
-        topmost band — only what the phone shows is above the world."""
+        topmost band — only what the phone shows is above the world.
+
+        The drop pass runs FIRST, before any early return (audit 2026-08-05):
+        it used to sit after them, so focusing a layout whose window had been
+        closed at the desk returned None with the PREVIOUS layout still nailed
+        above everything, and the phone then showed the desktop over it."""
         self.prune()
+        for other in self.layouts:
+            for hwnd in other.members:
+                if not (0 <= index < len(self.layouts)) or other is not self.layouts[index]:
+                    drop_topmost(hwnd)
         if not 0 <= index < len(self.layouts):
             return None
         lay = self.layouts[index]
@@ -741,10 +792,6 @@ class LayoutRegistry:
                     placed = place_window(hwnd, cell) and placed
             else:
                 placed = place_window(lay.members[0], region)
-        for other in self.layouts:
-            if other is not lay:
-                for hwnd in other.members:
-                    drop_topmost(hwnd)
         for hwnd in lay.members:
             raise_window(hwnd)
         self.last_focus = (index, lay.name)  # where the next session resumes
@@ -772,6 +819,8 @@ class LayoutRegistry:
             freeze_transitions(hwnd)  # no slide-down to watch
             # Out of the topmost band FIRST — a member the owner later restores
             # from the taskbar at the desk must come back as a normal window.
+            # (drop_topmost gives its DWM animation back at the same time; the
+            # freeze above only has to outlive this one minimize.)
             drop_topmost(hwnd)
             user32.ShowWindow(hwnd, SW_MINIMIZE)
         # Only report Desktop once they are ALL really gone (owner 2026-08-03).
@@ -854,8 +903,18 @@ class LayoutRegistry:
 
     def state(self, active: int | None, region: dict | None) -> dict:
         """The layout_state payload. Prune first so the phone never lists a
-        dead layout."""
-        self.prune()
+        dead layout — and FOLLOW the focused layout through that prune.
+
+        The focus used to be a bare index, so closing a window at the desk
+        slid the list down under it and the phone was suddenly focused on —
+        and one ✕ away from removing — a layout it had never chosen (audit
+        2026-08-05). `prune` returns the surviving original indices, which is
+        exactly the map the focus needs."""
+        kept = self.prune()
+        if active is not None:
+            active = kept.index(active) if active in kept else None
+            if active is None:
+                region = None
         if active is not None and not 0 <= active < len(self.layouts):
             active, region = None, None
         return {

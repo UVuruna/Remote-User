@@ -167,6 +167,33 @@ class INPUT(ctypes.Structure):
     _fields_ = [("type", wintypes.DWORD), ("u", _U)]
 
 
+class LASTINPUTINFO(ctypes.Structure):
+    _fields_ = [("cbSize", wintypes.UINT), ("dwTime", wintypes.DWORD)]
+
+
+def last_input_tick() -> int:
+    """GetTickCount of the last input this PC saw (mouse or keyboard), or 0
+    when Windows will not say.
+
+    Windows counts INJECTED input here too, so this reading only means
+    something while we are not injecting — which is exactly the case it exists
+    for (owner decree 2026-08-05). When the phone has gone away and layout
+    windows are still standing above everything, any tick NEWER than the
+    moment the phone left is the OWNER sitting down at his desk, and nothing
+    of ours may hover over him for a second longer.
+    """
+    info = LASTINPUTINFO(ctypes.sizeof(LASTINPUTINFO), 0)
+    if not user32.GetLastInputInfo(ctypes.byref(info)):
+        return 0
+    return int(info.dwTime)
+
+
+def tick_now() -> int:
+    """The same clock `last_input_tick` speaks — the baseline a caller takes
+    when the phone leaves, to tell later input apart from earlier."""
+    return int(ctypes.windll.kernel32.GetTickCount())
+
+
 class InjectionMonitor:
     """Detects silently-eaten injection by its EFFECT (Rule #1: no silent
     failures — a dead mouse must scream, never mystify).
