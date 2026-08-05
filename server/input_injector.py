@@ -79,11 +79,19 @@ VK_CODES = {
     # VK_OEM_3 — the backquote/tilde key (VSCode's integrated-terminal chord)
     "`": 0xC0,
     "backquote": 0xC0,
-    # Media keys (the shipped Media set, owner 2026-08-05)
+    # Media keys (the shipped Media set, owner 2026-08-05; next/prev/stop
+    # joined them with the Media set's reserve commands, owner 2026-08-05)
     "playpause": 0xB3,
     "mute": 0xAD,
     "voldown": 0xAE,
     "volup": 0xAF,
+    "medianext": 0xB0,
+    "mediaprev": 0xB1,
+    "mediastop": 0xB2,
+    # VK_OEM_2 — the /? key. VSCode's comment chord (ctrl+/) is a reserve
+    # command, and a chord token the injector cannot press is a dead button.
+    "/": 0xBF,
+    "slash": 0xBF,
     # Main-row -/= keys (the layout font-zoom staircase, owner 2026-08-05:
     # Ctrl+'-' shrinks an app's content, Ctrl+'=' — the +/= key — grows it).
     "minus": 0xBD,

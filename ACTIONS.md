@@ -39,9 +39,56 @@ The two D-pad groups on the tablet are defined entirely by [actions.json](action
   from the END (they return when the app set goes away).
 
 Any set (shipped or custom) may carry `"order_land"` / `"order_port"` — the
-button arrangement per orientation (indices into `buttons`; landscape slots
-are top·left·right·bottom, portrait is the column top→bottom). The shipped
-order is the default; the desktop editor's "Reset arrangement" restores it.
+button arrangement per orientation (indices into the ACTIVE four; landscape
+slots are top·left·right·bottom, portrait is the column top→bottom). The
+shipped order is the default; the desktop editor's "Reset arrangement"
+restores it.
+
+## Pools and reserves (owner 2026-08-05)
+
+A set's `"buttons"` list is its **POOL** — it may hold **more than four**
+commands. The four that actually sit on the D-pad are named by
+`"active"`, a list of command IDs:
+
+```json
+{
+  "name": "Navigate",
+  "icon": "nav",
+  "buttons": [ … 11 commands … ],
+  "active": ["esc", "shift+tab", "tab", "ctrl+f"]
+}
+```
+
+- **ID** of a command = its `"id"` if it has one, else its `action`, `chord`,
+  `key` or `label` — unique inside one set. IDs and not indices, so a later
+  version inserting a command into the pool can never silently re-point your
+  choice.
+- **No `"active"` key = the first four** — every file written before pools
+  keeps working unchanged.
+- You pick the four in the desktop app (**Controls…**): tick a command, untick
+  another. A fifth tick is refused with the reason on screen — a D-pad has
+  four positions.
+- The pools of built-in and app sets are **ours** — you choose from them, and
+  a new version's reserves are merged into your own copy of the file on the
+  next opening of the editor (the reason `Anywhere` used to linger in Settings
+  after an update). Your **custom sets** are fully editable, pool and all.
+
+Shipped reserves, off until you tick them:
+
+| Set | On the D-pad | Reserves in the pool |
+|-----|--------------|----------------------|
+| Mouse | Click · Right · Middle · Scroll | Drag |
+| Input | Keys · Enter · New row · Mic | Esc · Next box · Language |
+| Attach | Gallery · Shot · Camera · Files | Image · Snap |
+| Edit | All · Copy · Cut · Paste | Undo · Redo · Save · Paste plain · Delete |
+| Navigate | Esc · Prev · Next · Find | Back · Forward · Find next · Top · Bottom · Page up · Page down |
+| Cursor | Undo · ← · → · Redo | Up · Down · Word ← · Word → · Home · End |
+| Media | Play · Vol− · Vol+ · Mute | Next · Prev · Stop |
+| Windows | Alt+Tab · Win · Desktop · Tasks | Close · Max · Min · Snap ← · Snap → · Explorer · Run |
+| Settings | Monitor · Sets · Quality · Language | Anywhere · Next box · Snap |
+| **VSCode** | Sidebar · Palette · Terminal · Find | **Preview (ctrl+shift+v)** · **Next tab** · **Prev tab** · Save · Go to file · Comment |
+| **Chrome** | New tab · Close · Next tab · Address | **Prev tab** · Reopen · Reload · Back · Forward · Find |
+| **Explorer** | Rename · New dir · Delete · Up | **Next tab** · **Prev tab** · New tab · Back · Forward · Copy path · Details · Search |
 
 `Zones` is no longer shipped — zone chords are a **custom** category the owner
 adds when wanted (this file is hand-editable; a future desktop editor will
@@ -96,7 +143,9 @@ process name, e.g. `"code"` → `Code.exe`), the set appears as an **extra
 category in the wheel** — nothing switches by itself, and it vanishes when the
 layout focus ends. Shipped: **VSCode** (Sidebar, Palette, Terminal, Find),
 **Chrome** (New tab, Close, Next tab, Address), **Explorer** (Rename, New dir,
-Delete, Up). Buttons use the same chord/key/icon format as categories.
+Delete, Up) — each with a pool of reserves behind them (see Pools above).
+Buttons use the same chord/key/icon format as categories, and app sets are
+editable in the desktop Controls editor like any other set.
 
 ## Button kinds
 
@@ -130,7 +179,7 @@ A button is one of:
 `modifier+…+key` — modifiers held while the last key is tapped.
 
 - **Modifiers:** `ctrl`, `alt`, `shift`, `win`
-- **Keys:** letters, digits, `f1`–`f24`, `` ` `` (backquote), or named: `enter`, `esc`, `tab`, `space`, `backspace`, `delete`, `insert`, `home`, `end`, `pageup`, `pagedown`, `left`, `up`, `right`, `down`, and the media keys `playpause`, `mute`, `volup`, `voldown`
+- **Keys:** letters, digits, `f1`–`f24`, `` ` `` (backquote), `/` (`slash`), or named: `enter`, `esc`, `tab`, `space`, `backspace`, `delete`, `insert`, `home`, `end`, `pageup`, `pagedown`, `left`, `up`, `right`, `down`, `minus`, `plus`, and the media keys `playpause`, `mute`, `volup`, `voldown`, `medianext`, `mediaprev`, `mediastop`
 
 Examples: `ctrl+c` · `alt+tab` · `ctrl+win+alt+1` · `shift+enter` · `win` · ``ctrl+` ``
 

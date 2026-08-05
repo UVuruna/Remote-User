@@ -10,7 +10,8 @@
         { "action": "click" },
         { "action": "right" },
         { "action": "middle" },
-        { "action": "scroll" }
+        { "action": "scroll" },
+        { "action": "drag" }
       ]
     },
     {
@@ -21,7 +22,10 @@
         { "action": "keyboard" },
         { "action": "enter" },
         { "action": "newrow" },
-        { "action": "mic" }
+        { "action": "mic" },
+        { "action": "esc" },
+        { "action": "next_input" },
+        { "action": "dictation" }
       ]
     },
     {
@@ -31,7 +35,9 @@
         { "action": "gallery" },
         { "action": "pcshot" },
         { "action": "camera" },
-        { "action": "files" }
+        { "action": "files" },
+        { "action": "upload" },
+        { "action": "snap" }
       ]
     },
     {
@@ -41,7 +47,12 @@
         { "label": "All",   "icon": "selall", "chord": "ctrl+a" },
         { "label": "Copy",  "icon": "copy",   "chord": "ctrl+c" },
         { "label": "Cut",   "icon": "cut",    "chord": "ctrl+x" },
-        { "label": "Paste", "icon": "paste",  "chord": "ctrl+v" }
+        { "label": "Paste", "icon": "paste",  "chord": "ctrl+v" },
+        { "label": "Undo",  "icon": "undo",   "chord": "ctrl+z" },
+        { "label": "Redo",  "icon": "redo",   "chord": "ctrl+y" },
+        { "label": "Save",  "chord": "ctrl+s" },
+        { "label": "Paste plain", "chord": "ctrl+shift+v" },
+        { "label": "Delete", "icon": "del",   "key": "delete" }
       ]
     },
     {
@@ -51,7 +62,14 @@
         { "action": "esc" },
         { "label": "Prev", "icon": "tabback", "chord": "shift+tab" },
         { "label": "Next", "icon": "tab",     "chord": "tab" },
-        { "label": "Find", "icon": "find",    "chord": "ctrl+f" }
+        { "label": "Find", "icon": "find",    "chord": "ctrl+f" },
+        { "label": "Back",      "icon": "arrowl", "chord": "alt+left" },
+        { "label": "Forward",   "icon": "arrowr", "chord": "alt+right" },
+        { "label": "Find next", "chord": "f3" },
+        { "label": "Top",       "chord": "ctrl+home" },
+        { "label": "Bottom",    "chord": "ctrl+end" },
+        { "label": "Page up",   "key": "pageup" },
+        { "label": "Page down", "key": "pagedown" }
       ]
     },
     {
@@ -61,7 +79,13 @@
         { "label": "Undo",  "icon": "undo",   "chord": "ctrl+z" },
         { "label": "Left",  "icon": "arrowl", "key": "left" },
         { "label": "Right", "icon": "arrowr", "key": "right" },
-        { "label": "Redo",  "icon": "redo",   "chord": "ctrl+y" }
+        { "label": "Redo",  "icon": "redo",   "chord": "ctrl+y" },
+        { "label": "Up",     "key": "up" },
+        { "label": "Down",   "key": "down" },
+        { "label": "Word ←", "chord": "ctrl+left" },
+        { "label": "Word →", "chord": "ctrl+right" },
+        { "label": "Home",   "key": "home" },
+        { "label": "End",    "key": "end" }
       ]
     },
     {
@@ -72,7 +96,10 @@
         { "label": "Play",  "icon": "play",    "key": "playpause" },
         { "label": "Vol −", "icon": "voldown", "key": "voldown" },
         { "label": "Vol +", "icon": "volup",   "key": "volup" },
-        { "label": "Mute",  "icon": "mute",    "key": "mute" }
+        { "label": "Mute",  "icon": "mute",    "key": "mute" },
+        { "label": "Next",  "icon": "arrowr",  "key": "medianext" },
+        { "label": "Prev",  "icon": "arrowl",  "key": "mediaprev" },
+        { "label": "Stop",  "key": "mediastop" }
       ]
     },
     {
@@ -83,7 +110,14 @@
         { "label": "Alt+Tab",  "chord": "alt+tab" },
         { "label": "Win",  "icon": "grid", "chord": "win" },
         { "label": "Desktop",  "icon": "desktop", "chord": "win+d" },
-        { "label": "Tasks",    "chord": "win+tab" }
+        { "label": "Tasks",    "chord": "win+tab" },
+        { "label": "Close",    "icon": "x",      "chord": "alt+f4" },
+        { "label": "Max",      "chord": "win+up" },
+        { "label": "Min",      "chord": "win+down" },
+        { "label": "Snap ←",   "chord": "win+left" },
+        { "label": "Snap →",   "chord": "win+right" },
+        { "label": "Explorer", "icon": "folder", "chord": "win+e" },
+        { "label": "Run",      "chord": "win+r" }
       ]
     },
     {
@@ -94,7 +128,10 @@
         { "action": "monitor" },
         { "action": "sets" },
         { "action": "quality" },
-        { "action": "dictation" }
+        { "action": "dictation" },
+        { "action": "anywhere" },
+        { "action": "next_input" },
+        { "action": "snap" }
       ]
     }
   ],
@@ -108,7 +145,13 @@
         { "label": "Sidebar",  "chord": "ctrl+b" },
         { "label": "Palette",  "chord": "ctrl+shift+p" },
         { "label": "Terminal", "chord": "ctrl+`" },
-        { "label": "Find", "icon": "find", "chord": "ctrl+f" }
+        { "label": "Find", "icon": "find", "chord": "ctrl+f" },
+        { "label": "Preview",    "chord": "ctrl+shift+v" },
+        { "label": "Next tab",   "icon": "tab",     "chord": "ctrl+pagedown" },
+        { "label": "Prev tab",   "icon": "tabback", "chord": "ctrl+shift+pagedown" },
+        { "label": "Save",       "chord": "ctrl+s" },
+        { "label": "Go to file", "chord": "ctrl+p" },
+        { "label": "Comment",    "chord": "ctrl+/" }
       ]
     },
     {
@@ -118,8 +161,14 @@
       "buttons": [
         { "label": "New tab",  "chord": "ctrl+t" },
         { "label": "Close",    "chord": "ctrl+w" },
-        { "label": "Next tab", "chord": "ctrl+tab" },
-        { "label": "Address",  "chord": "ctrl+l" }
+        { "label": "Next tab", "icon": "tab", "chord": "ctrl+tab" },
+        { "label": "Address",  "chord": "ctrl+l" },
+        { "label": "Prev tab", "icon": "tabback", "chord": "ctrl+shift+tab" },
+        { "label": "Reopen",   "chord": "ctrl+shift+t" },
+        { "label": "Reload",   "chord": "f5" },
+        { "label": "Back",     "icon": "arrowl", "chord": "alt+left" },
+        { "label": "Forward",  "icon": "arrowr", "chord": "alt+right" },
+        { "label": "Find", "icon": "find", "chord": "ctrl+f" }
       ]
     },
     {
@@ -130,7 +179,15 @@
         { "label": "Rename",  "chord": "f2" },
         { "label": "New dir", "chord": "ctrl+shift+n" },
         { "label": "Delete", "icon": "del", "chord": "delete" },
-        { "label": "Up", "chord": "alt+up" }
+        { "label": "Up", "chord": "alt+up" },
+        { "label": "Next tab",  "icon": "tab",     "chord": "ctrl+tab" },
+        { "label": "Prev tab",  "icon": "tabback", "chord": "ctrl+shift+tab" },
+        { "label": "New tab",   "chord": "ctrl+t" },
+        { "label": "Back",      "icon": "arrowl", "chord": "alt+left" },
+        { "label": "Forward",   "icon": "arrowr", "chord": "alt+right" },
+        { "label": "Copy path", "chord": "ctrl+shift+c" },
+        { "label": "Details",   "chord": "alt+enter" },
+        { "label": "Search",    "icon": "find", "chord": "ctrl+e" }
       ]
     }
   ]
