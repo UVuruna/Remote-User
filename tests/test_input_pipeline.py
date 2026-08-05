@@ -253,6 +253,21 @@ def main():
         real.move(0.9, 0.9)                      # big jumps, none of them land
     results["injection tripwire: move() raises the client alarm"] = real.take_input_alarm()
     results["injection tripwire: alarm clears after reading"] = not real.take_input_alarm()
+
+    # 9c. the SIDE buttons (owner 2026-08-05 — "Button 4 i Button 5"): both
+    # share ONE flag pair and name themselves in mouseData, so a wrong
+    # mouseData presses the other side button (or none) with no error at all.
+    # The client path is the proven hold path; this pins the Win32 mapping.
+    sent: list[tuple[int, int]] = []
+    side = InputInjector((0, 0, 1920, 1080))
+    side._send = lambda flags, ax=0, ay=0, mouse_data=0: sent.append((flags, mouse_data))
+    side.press("x1", True)
+    side.press("x1", False)
+    side.press("x2", True)
+    side.press("x2", False)
+    results["side buttons: x1/x2 -> XDOWN/XUP with the right mouseData"] = sent == [
+        (0x0080, 0x0001), (0x0100, 0x0001), (0x0080, 0x0002), (0x0100, 0x0002)]
+
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         ctx = browser.new_context(

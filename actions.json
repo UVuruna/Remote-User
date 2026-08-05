@@ -11,7 +11,9 @@
         { "action": "right" },
         { "action": "middle" },
         { "action": "scroll" },
-        { "action": "drag" }
+        { "action": "drag" },
+        { "action": "x1" },
+        { "action": "x2" }
       ]
     },
     {
@@ -129,9 +131,7 @@
         { "action": "sets" },
         { "action": "quality" },
         { "action": "dictation" },
-        { "action": "anywhere" },
-        { "action": "next_input" },
-        { "action": "snap" }
+        { "action": "anywhere" }
       ]
     }
   ],
