@@ -152,16 +152,20 @@ html, body {
   filter: drop-shadow(0 1px 2px rgb(0 0 0 / 0.7));
 }
 
+/* A pool's reserve commands carry longer names than the shipped four
+   ("Copy path", "Find next", "Go to file"), so the label WRAPS onto a second
+   row instead of eliding — THE SPACE & LEGIBILITY LAW: nothing the user must
+   read is ever cut off (owner 2026-08-05). */
 .ctl .lbl {
-  font: 600 9px/1 system-ui, sans-serif;
+  font: 600 9px/1.15 system-ui, sans-serif;
   letter-spacing: 0.02em;
   color: var(--text-primary);
   text-shadow: 0 1px 2px rgb(0 0 0 / 0.85);
   pointer-events: none;
   max-width: 54px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  text-align: center;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 /* Chord buttons carry no icon — the label is the whole face */
@@ -571,7 +575,7 @@ body.hidden-controls #update-banner { display: none; }
 }
 #lay-name {
   display: -webkit-box;
-  -webkit-line-clamp: 2;   /* two rows, then ellipsis — never past the frame */
+  -webkit-line-clamp: 2;   /* layout-law: exempt - the top bar owns one row of the phone screen, and the FULL name is one tap away in the layout list, which no longer elides */
   -webkit-box-orient: vertical;
   overflow: hidden;
   overflow-wrap: anywhere;
@@ -685,10 +689,13 @@ body.hidden-controls #update-banner { display: none; }
   text-align: left;
 }
 .lay-item-main img { width: 20px; height: 20px; flex: none; }
+/* The list is where a layout's FULL name must be readable — the top-bar chip
+   may clamp its two rows precisely because one tap opens this list (SPACE &
+   LEGIBILITY LAW, owner 2026-08-05). A long window title wraps here; the row
+   grows, and the card scrolls only when the phone screen is genuinely full. */
 .lay-item-main span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 .lay-item-main.sel { border-color: var(--accent); color: var(--accent); }
 .lay-ratio {

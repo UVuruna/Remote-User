@@ -74,6 +74,17 @@ for the split's general load-order reasoning.
   cap `WHEEL_MAX` (8) with non-required sets bumped from the END. The
   Settings → Sets overlay (`openSetsPanel`/`setsRow`) locks required rows and
   blocks enabling past the cap (`visibleCount`).
+- Command pools (`btnId`, `activeButtons`; owner 2026-08-05): a set's
+  `buttons` list is its POOL and may hold more than the four a D-pad shows —
+  the reserves (VSCode's Markdown preview, Explorer's tab hops, Edit's Save…).
+  `active` names the four that ride, BY ID (`id | action | chord | key |
+  label`), so a later version inserting or reordering pool commands cannot
+  silently re-point the owner's choice the way indices would; no `active` =
+  the first four, which is the pre-pool behaviour. The desktop Controls editor
+  is where the four are ticked ([Controls Editor](../../server/gui/__about/controls_editor.md)).
+  Reserve names are longer than the shipped four, so `.ctl .lbl` WRAPS onto a
+  second row instead of eliding (THE SPACE & LEGIBILITY LAW; the phone audit
+  proves the wrapped label stays inside its 58 px button).
 - Per-orientation button arrangement (owner 2026-08-05): a set may carry
   `order_land` (slots T·L·R·B) / `order_port` (column top→bottom) from the
   desktop editor; `renderGroup` applies the one matching the current

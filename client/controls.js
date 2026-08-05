@@ -834,6 +834,30 @@ function makeActionButton(btn, pos) {
   return el;
 }
 
+// --- Command pools (owner 2026-08-05) --------------------------------------
+// A set's `buttons` list is its POOL — it may hold more commands than the
+// four a D-pad shows (the reserves: VSCode's Markdown preview, Explorer's
+// tab hops, …). `active` names the four that ride on the D-pad, by ID, so
+// that adding or reordering pool entries in a later version never silently
+// re-points the owner's choice the way indices would. No `active` = the
+// first four, which is exactly the pre-pool behaviour.
+
+function btnId(b) {
+  return b.id || b.action || b.chord || b.key || b.label || "";
+}
+
+function activeButtons(cat) {
+  const pool = cat.buttons || [];
+  if (!Array.isArray(cat.active)) return pool.slice(0, 4);
+  const picked = [];
+  for (const id of cat.active) {
+    const found = pool.find((b) => btnId(b) === id);
+    if (found && !picked.includes(found)) picked.push(found);
+    if (picked.length === 4) break;
+  }
+  return picked.length ? picked : pool.slice(0, 4);
+}
+
 function renderGroup(side) {
   const host = groupEls[side];
   host.innerHTML = "";
@@ -848,7 +872,7 @@ function renderGroup(side) {
   // Per-set, per-orientation button arrangement (owner 2026-08-05): the set
   // may carry order_land (slots T·L·R·B) and order_port (top→bottom column)
   // from the desktop editor; ours is the default and always restorable there.
-  const btns = (cat.buttons || []).slice(0, 4);
+  const btns = activeButtons(cat);
   const raw = matchMedia("(orientation: portrait)").matches ? cat.order_port : cat.order_land;
   const order = Array.isArray(raw) && raw.length === btns.length &&
     [...raw].sort().join() === btns.map((_, i) => i).join()
