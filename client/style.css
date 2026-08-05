@@ -340,7 +340,8 @@ body.hidden-controls #update-banner { display: none; }
 /* Settings → Sets: the wheel-composition picker (owner 2026-08-05).
    Same overlay pattern as the wizard. */
 #sets-panel,
-#quality-panel {
+#quality-panel,
+#dictation-panel {
   position: fixed;
   inset: 0;
   z-index: 50;
@@ -351,7 +352,26 @@ body.hidden-controls #update-banner { display: none; }
   padding: var(--space-m);
 }
 #sets-panel[hidden],
-#quality-panel[hidden] { display: none; }
+#quality-panel[hidden],
+#dictation-panel[hidden] { display: none; }
+
+/* Dictation setup card rows (owner round 2, 2026-08-05) */
+.sets-row.dict { justify-content: flex-start; }
+.sets-row.dict input { width: 20px; height: 20px; accent-color: var(--accent); }
+.dict-name { font-weight: 600; }
+.dict-status { margin-left: auto; color: var(--text-secondary); font-size: 12px; text-align: right; }
+.sets-row.dict.sel .dict-name { color: var(--accent); }
+
+/* Mic while the chosen language's model downloads: dictation works online,
+   the button says a better engine is on its way (owner: alternate look). */
+[data-action="mic"].dl {
+  border: 1px dashed var(--accent);
+  animation: mic-dl 1.6s ease-in-out infinite;
+}
+@keyframes mic-dl {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
 
 /* Quality panel segments (owner 2026-08-05) */
 .q-row { display: flex; align-items: center; gap: 10px; padding: 7px 0; }

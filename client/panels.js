@@ -195,3 +195,88 @@ function closeQualityPanel() {
 qualityPanel.addEventListener("pointerdown", (e) => {
   if (e.target === qualityPanel) closeQualityPanel(); // backdrop tap = done
 });
+
+// --- Dictation setup card (owner round 2, 2026-08-05) ----------------------
+// The dictation language is a USER CHOICE — pinning to the phone's first
+// system locale transcribed the owner's Serbian as English garbage (his
+// phone lists English first). Opens on the FIRST Mic tap and from the
+// Settings set's Language button; plain language, persistent until closed,
+// the row states say exactly what will happen (Tailscale-card pattern).
+
+const dictPanel = document.getElementById("dictation-panel");
+const dictOpened = { t: 0 };
+ghostClickArmor(dictPanel, dictOpened);
+
+const DICT_STATUS = {
+  ready: "ready on this phone",
+  download: "model will download — online until it arrives",
+  online: "recognized over the internet",
+};
+
+function dictRow(lang, chosen) {
+  const row = document.createElement("label");
+  row.className = "sets-row dict" + (lang.tag === chosen ? " sel" : "");
+  const rb = document.createElement("input");
+  rb.type = "radio";
+  rb.name = "dict-lang";
+  rb.checked = lang.tag === chosen;
+  rb.addEventListener("change", () => {
+    try { window.Android.voiceSetLang(lang.tag); } catch {}
+    renderDictationCard(); // statuses may change (download starts)
+  });
+  const txt = document.createElement("span");
+  txt.className = "dict-name";
+  txt.textContent = lang.name;
+  const st = document.createElement("span");
+  st.className = "dict-status";
+  st.textContent = DICT_STATUS[lang.status] || "";
+  row.append(rb, txt, st);
+  return row;
+}
+
+function renderDictationCard() {
+  let langs = [];
+  let chosen = "";
+  try {
+    langs = JSON.parse(window.Android.voiceLangs());
+    chosen = window.Android.voiceChosen();
+  } catch {}
+  dictPanel.innerHTML = "";
+  const card = document.createElement("div");
+  card.className = "sets-card";
+  card.innerHTML = `<h2>Dictation language</h2>
+    <p class="sets-sub">Pick the language you speak — dictation understands that one. Change it any time: Settings wheel → Language.</p>`;
+  const list = document.createElement("div");
+  list.className = "sets-list";
+  langs.forEach((lang) => list.appendChild(dictRow(lang, chosen)));
+  card.appendChild(list);
+
+  const done = document.createElement("button");
+  done.type = "button";
+  done.className = "sets-done";
+  done.textContent = "Done";
+  keepFocus(done, closeDictationPanel);
+  card.appendChild(done);
+
+  dictPanel.appendChild(card);
+  dictPanel.hidden = false;
+}
+
+function openDictationPanel() {
+  if (!IN_APP || !window.Android.voiceLangs) {
+    showToast("Voice input needs the updated app — update from the banner");
+    return;
+  }
+  renderDictationCard();
+  dictOpened.t = performance.now();
+}
+
+function closeDictationPanel() {
+  dictPanel.hidden = true;
+  dictPanel.innerHTML = "";
+  refreshMicButtons(); // a download may have started — show it on the Mic
+}
+
+dictPanel.addEventListener("pointerdown", (e) => {
+  if (e.target === dictPanel) closeDictationPanel(); // backdrop tap = done
+});

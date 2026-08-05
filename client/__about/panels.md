@@ -24,7 +24,19 @@ controls.js) and sends the EFFECTIVE values to the server, which re-opens
 this client's encoder; "Max/Full/High" mean "no override — the desktop
 Settings defaults apply".
 
-## Ghost-click armor (both panels)
+## Dictation setup card (`openDictationPanel`, owner round 2 2026-08-05)
+
+The dictation language is a USER CHOICE — round-1 evidence: pinning to the
+phone's first system locale transcribed the owner's Serbian as English
+garbage (his phone lists English first). Opens on the FIRST Mic tap (no
+choice stored, or `__voiceEnd("nolang")`) and from Settings → Language.
+Rows come from `Android.voiceLangs()` (system locales + keyboard languages)
+with plain-language statuses: "ready on this phone" / "model will download —
+online until it arrives" / "recognized over the internet"; a radio tap calls
+`Android.voiceSetLang(tag)` and re-renders (a download may have just
+started). Never a transient toast — the card stays until Done/backdrop.
+
+## Ghost-click armor (all panels)
 
 The tap that OPENS a panel can deliver a late synthetic click that lands on
 whichever row opened under the finger, silently toggling it. A capture-phase

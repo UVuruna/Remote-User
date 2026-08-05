@@ -226,6 +226,10 @@ edits on its next connection (already works). Bridge until built: the
   Mouse/Input/Settings `required`; Edit/Attach/Navigate/Cursor + Media/
   Windows (off by default) + customs toggleable; hard cap 8.
   Deferred from G1: a live D-pad preview inside the editor.
+  Deferred 2026-08-05 (owner): **set/preset combining** — the desktop editor
+  lets the user compose sets from the FULL action pool (incl. `anywhere`,
+  `next_input`, which left the phone defaults) and combine presets; the
+  `anywhere` action deliberately stays registered for this.
 - [ ] **G2 — App sets** (½ session): same editor over `app_sets`, with the
   process picked from the list of running programs (real app icons — the
   server already extracts them for layouts).

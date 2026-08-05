@@ -94,7 +94,7 @@
         { "action": "monitor" },
         { "action": "sets" },
         { "action": "quality" },
-        { "action": "anywhere" }
+        { "action": "dictation" }
       ]
     }
   ],

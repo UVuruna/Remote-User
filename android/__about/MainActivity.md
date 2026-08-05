@@ -109,26 +109,15 @@ The page's only way to reach the shell.
   — one `SpeechRecognizer` listening round per call; results reach the page
   via `__voiceResult(text)`, round-end via `__voiceEnd(reason)` (`"denied"` /
   `"unavailable"` / `""`), and the page restarts rounds while its switcher is
-  ON. First use asks the `RECORD_AUDIO` runtime permission once.
-  **LANGUAGE-AGNOSTIC** (owner decree 2026-08-05 — a hardcoded `"sr-RS"` was
-  the owner's own case leaking into the product): `voiceLanguages()` is the
-  PHONE'S configured locale list, nothing hardcoded. Recognizer choice
-  (`makeRecognizer()`): first the **on-device recognizer** (Android 13+) —
-  the ONLY Android API with real language auto-switching, run with
-  `EXTRA_ENABLE_LANGUAGE_DETECTION`/`_SWITCH` over the user's languages —
-  but ONLY when it actually holds a model for the user's primary language:
-  `checkVoiceSupport()` (`checkRecognitionSupport`, once per run) delivers
-  the EVIDENCE of what is installed — the 2026-08-05 silent gap was exactly
-  here: the on-device model list simply lacked the user's language, no error
-  ever fired, and dictation in it heard NOTHING while English worked. A
-  missing-but-downloadable model auto-triggers `triggerModelDownload` (the
-  app drives its dependencies — owner principle) and demotes to **Google's
-  cloud service** (`googleRecognitionService()`; the phone default —
-  Samsung's — garbled dictation outright) pinned to the phone's own locale,
-  never a silent English default; the language-error demotion path stays as
-  backstop. Every engine choice/support result/error is reported to the page
-  via `__voiceInfo(text)` (shown on the status pill while the mic is ON) —
-  owner demand 2026-08-05: no silent voice failures, evidence over guesses. Note the hard platform limit: an app
+  ON. First use asks the `RECORD_AUDIO` runtime permission once. The whole
+  subsystem — user-CHOSEN dictation language, engine choice, silent model
+  download, silent diagnostics — lives in [VoiceInput](VoiceInput.md)
+  (split 2026-08-05, THE STRUCTURE LAW).
+- `voiceLangs()` / `voiceChosen()` / `voiceSetLang(tag)` / `voiceState()`:
+  the dictation setup card's bridge (owner round 2, 2026-08-05) — candidate
+  languages with statuses, the stored single choice, and the
+  `"downloading"` state that styles the Mic button. Delegates to
+  [VoiceInput](VoiceInput.md). Note the hard platform limit: an app
   cannot open the KEYBOARD's own voice typing (Gboard mic) — no API switches
   another IME into voice mode; this in-place recognizer is the closest
   invisible equivalent, and the visible Google dialog
@@ -152,8 +141,8 @@ The page's only way to reach the shell.
 `cache/camera/` via FileProvider — CAMERA runtime permission required because
 the manifest declares it for the QR scanner); `multiple` →
 `GetMultipleContents`; otherwise a single `GetContent` of the input's accept
-type. Voice input lives in `beginListening()` / `voiceEnd()` (one
-`SpeechRecognizer` owned by the activity, destroyed in `onDestroy`).
+type. Voice input lives in [VoiceInput](VoiceInput.md) (the `voice` field,
+destroyed in `onDestroy`).
 
 ### Fail (private enum)
 The five causes the phone can honestly distinguish, in decision order:

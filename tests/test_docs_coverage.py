@@ -46,6 +46,7 @@ STANDARD = {
     "client/panels.js",
     "setup/create_cert.py",
     "android/app/src/main/java/com/uvuruna/remoteuser/OnboardingActivity.kt",
+    "android/app/src/main/java/com/uvuruna/remoteuser/VoiceInput.kt",
 }
 
 # Algorithmic: real algorithm, GUI window/widget, config/data table, or
