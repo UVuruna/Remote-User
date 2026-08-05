@@ -101,10 +101,31 @@ def make_chord_recorder() -> QWidget:
     return ChordRecorder()
 
 
+def make_traffic_window() -> QWidget:
+    import traffic
+    from gui.theme import QSS
+    from gui.traffic_window import TrafficWindow
+    # FULLEST state (the 2026-08-05 lesson: an empty panel measures nothing):
+    # a phone connected and reporting its own counters, and an absence long
+    # enough for the away-gap line to carry its longest sentence.
+    traffic.METER.reset()
+    traffic.METER.set_clients(1)
+    traffic.METER.note_phone({"app_rx": 1, "app_tx": 1, "dev_rx": 1, "dev_tx": 1})
+    traffic.METER.set_clients(0)
+    traffic.METER.set_clients(1)
+    traffic.METER.note_phone({"app_rx": 9 << 20, "app_tx": 9 << 20,
+                              "dev_rx": 9 << 30, "dev_tx": 9 << 30})
+    window = TrafficWindow()
+    window.setStyleSheet(QSS)   # in the app it inherits MainWindow's theme
+    window._refresh()
+    return window
+
+
 WINDOWS: list[tuple[str, object]] = [
     ("MainWindow", make_main_window),
     ("ControlsEditor", make_controls_editor),
     ("ChordRecorder", make_chord_recorder),
+    ("TrafficWindow", make_traffic_window),
 ]
 
 
