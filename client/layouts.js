@@ -380,7 +380,7 @@ function devicePair(orient) {
 const ASP_MIN_FRAC = 0.15; // never let the region collapse to a slit
 const ASP_SCALE = 1000;    // ratios are sent as round(a * 1000) : 1000
 
-let aspecting = null; // {index, portrait, devA, a, els}
+let aspecting = null; // {index, portrait, devA, a, pos, els}
 
 function openAspectPanel(index) {
   const lay = layouts[index];
@@ -388,7 +388,8 @@ function openAspectPanel(index) {
   const portrait = lay.orient === "portrait";
   const dev = devicePair(lay.orient);
   const devA = dev[0] / dev[1];
-  aspecting = { index, portrait, devA, a: devA };
+  aspecting = { index, portrait, devA, a: devA,
+                pos: typeof lay.pos === "number" ? lay.pos : 0.5 };
   if (lay.ratio && lay.ratio[1] > 0) aspecting.a = clampAspect(lay.ratio[0] / lay.ratio[1]);
   renderAspectPanel();
 }
@@ -471,6 +472,14 @@ function renderAspectPanel() {
     dot.className = `asp-h ${side}${isFree ? " free" : ""}`;
     region.appendChild(dot);
   });
+  // The Move handle (owner 2026-08-05): dragging it slides the shrunken
+  // region along the free axis — it no longer has to sit centered; a
+  // double-tap re-centers it. Everything OUTSIDE the handle still resizes.
+  const move = document.createElement("div");
+  move.className = "asp-move";
+  move.textContent = "✥";
+  dragMove(move, screenBox);
+  region.appendChild(move);
   screenBox.appendChild(region);
   // The WHOLE preview drags, not just the two 18px dots — on a tablet those
   // dots were nearly unhittable, which is what read as "barely responsive".
@@ -495,10 +504,13 @@ function renderAspectPanel() {
   actions.appendChild(layChip("Apply", true, () => {
     // The full screen is "no override" (0/0); anything else goes as a fine
     // 1000-scale pair, so the server region is exactly what the preview showed.
+    // `pos` (0–1000, 500 = centered) is the Move handle's position along the
+    // free axis (owner 2026-08-05).
     const full = aspFrac(a.a) > 0.999;
     send({
       type: "layout_aspect", index: a.index,
       w: full ? 0 : Math.round(a.a * ASP_SCALE), h: full ? 0 : ASP_SCALE,
+      pos: full ? 500 : Math.round(a.pos * 1000),
     });
     aspecting = null;
     closeLayoutPanel();
@@ -517,9 +529,17 @@ function updateAspectPreview() {
   const [n, d] = ratioPair(a.a, 40);
   if (a.typing !== a.els.inW) a.els.inW.value = n;
   if (a.typing !== a.els.inH) a.els.inH.value = d;
-  const pct = `${aspFrac(a.a) * 100}%`;
-  a.els.region.style.width = a.portrait ? "100%" : pct;
-  a.els.region.style.height = a.portrait ? pct : "100%";
+  // The region sits at fraction `pos` of the free-axis slack (the Move
+  // handle) — positioned explicitly, replacing the old centered transform.
+  const frac = aspFrac(a.a);
+  const pct = `${frac * 100}%`;
+  const off = `${a.pos * (1 - frac) * 100}%`;
+  const st = a.els.region.style;
+  st.transform = "none";
+  st.width = a.portrait ? "100%" : pct;
+  st.height = a.portrait ? pct : "100%";
+  st.left = a.portrait ? "0" : off;
+  st.top = a.portrait ? off : "0";
   a.els.value.textContent = `${a.a.toFixed(3)}:1   (${n}:${d})`;
 }
 
@@ -546,6 +566,44 @@ function dragAspect(screenBox) {
   });
   screenBox.addEventListener("pointermove", (e) => {
     if (screenBox.hasPointerCapture(e.pointerId)) apply(e);
+  });
+}
+
+// The Move handle's own drag (owner 2026-08-05): slides the region along the
+// free axis; a double-tap re-centers. stopPropagation keeps the screen box's
+// resize drag out of the gesture.
+let moveTapAt = 0;
+function dragMove(handle, screenBox) {
+  const apply = (e) => {
+    const a = aspecting;
+    if (!a) return;
+    const r = screenBox.getBoundingClientRect();
+    const frac = aspFrac(a.a);
+    const freePx = (a.portrait ? r.height : r.width) * (1 - frac);
+    if (freePx < 1) return; // full-size region — nowhere to go
+    const finger = a.portrait ? e.clientY - r.top : e.clientX - r.left;
+    const regionPx = (a.portrait ? r.height : r.width) * frac;
+    a.pos = Math.min(1, Math.max(0, (finger - regionPx / 2) / freePx));
+    updateAspectPreview();
+  };
+  handle.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const now = performance.now();
+    if (now - moveTapAt < 350) {
+      // Double-tap = back to the middle (owner 2026-08-05).
+      moveTapAt = 0;
+      if (aspecting) {
+        aspecting.pos = 0.5;
+        updateAspectPreview();
+      }
+      return;
+    }
+    moveTapAt = now;
+    handle.setPointerCapture(e.pointerId);
+  });
+  handle.addEventListener("pointermove", (e) => {
+    if (handle.hasPointerCapture(e.pointerId)) apply(e);
   });
 }
 

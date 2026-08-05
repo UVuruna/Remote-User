@@ -11,6 +11,22 @@ function firstTwoPointers() {
   return [it.next().value, it.next().value];
 }
 
+// Font-zoom staircase (owner 2026-08-05, LAYOUT FOCUS ONLY): pinching out at
+// the fitted view keeps "zooming out" by shrinking the window's own content —
+// Ctrl+'-' to the PC, step by step — so an article wider than the region
+// becomes fully visible. Pinching back in first restores the content toward
+// 100% (Ctrl+'='), and only then continues as normal visual zoom. The steps
+// already sent are tracked per layout; the effect is whatever the focused app
+// does with Ctrl+-/= (browsers/editors scale, some apps ignore it — owner
+// accepted). Desktop pinch is untouched.
+const FONT_ZOOM_STEP = 1.2; // pinch factor worth one Ctrl+-/= step
+const FONT_ZOOM_MAX = 10;
+// fontZoomByLayout (index -> steps applied) lives in state.js.
+
+function fontZoomSteps() {
+  return (layoutActive !== null && fontZoomByLayout.get(layoutActive)) || 0;
+}
+
 function beginPinch() {
   if (primary && primary.type === "drag") {
     send({ type: "pointer_up", x: primary.pos.x, y: primary.pos.y, button: "left" });
@@ -26,6 +42,7 @@ function beginPinch() {
   pinch = {
     startDist: Math.hypot(p1.x - p2.x, p1.y - p2.y),
     startScale: view.scale,
+    startFont: viewLocked() ? fontZoomSteps() : 0,
     qx: (mid.x - D.x) / D.w,
     qy: (mid.y - D.y) / D.h,
   };
@@ -99,10 +116,29 @@ canvas.addEventListener("pointermove", (e) => {
     const [p1, p2] = firstTwoPointers();
     const dist = Math.hypot(p1.x - p2.x, p1.y - p2.y);
     const mid = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
-    const s = Math.min(
-      Math.max(pinch.startScale * (dist / pinch.startDist), viewHome.scale),
-      viewHome.scale * ZOOM_MAX
-    );
+    const raw = pinch.startScale * (dist / pinch.startDist);
+    let s = Math.min(Math.max(raw, viewHome.scale), viewHome.scale * ZOOM_MAX);
+    if (viewLocked()) {
+      // The staircase: `z` is the finger position in steps relative to the
+      // fitted view (negative = below it). Fingers below the floor turn
+      // into Ctrl+- steps; on the way back the same steps are undone with
+      // Ctrl+= BEFORE any visual zoom resumes.
+      const z = Math.log(raw / viewHome.scale) / Math.log(FONT_ZOOM_STEP);
+      const desired = Math.min(FONT_ZOOM_MAX,
+        Math.max(0, Math.round(pinch.startFont - z)));
+      const current = fontZoomSteps();
+      if (desired !== current) {
+        const chord = desired > current ? "ctrl+minus" : "ctrl+plus";
+        for (let i = 0; i < Math.abs(desired - current); i++) {
+          send({ type: "chord", chord });
+        }
+        fontZoomByLayout.set(layoutActive, desired);
+      }
+      s = Math.min(
+        viewHome.scale * Math.pow(FONT_ZOOM_STEP, Math.max(0, z - pinch.startFont)),
+        viewHome.scale * ZOOM_MAX
+      );
+    }
     view.scale = s;
     view.tx = mid.x - (baseRect.x + pinch.qx * baseRect.w) * s;
     view.ty = mid.y - (baseRect.y + pinch.qy * baseRect.h) * s;

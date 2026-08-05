@@ -23,10 +23,10 @@ function connect() {
       type: "auth", token,
       screen: { w: window.screen.width, h: window.screen.height },
     }));
-    // The server starts every connection at full quality — restate the saved
-    // preference (a network switch reconnects, so auto mode re-evaluates
-    // here too).
-    if (effectiveReduced()) sendQuality();
+    // The server starts every connection at default quality — restate the
+    // saved overrides (a network switch reconnects, so auto-on-mobile-data
+    // re-evaluates here too).
+    if (qualityOverridden()) sendQuality();
     lastSentViewport = { x: 0, y: 0, w: 1, h: 1 };
     scheduleViewport();
     setStatus("connected", "Connected");

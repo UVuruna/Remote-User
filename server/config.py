@@ -98,9 +98,15 @@ class Settings:
     h264_queue_chunks: int = 256    # per-client outbound chunk queue (~4 s at full bitrate); a
                                     # full queue means the client cannot keep up — its session
                                     # is reset instead of building latency
-    # Reduced-quality mode (owner spec 2026-08-02: save mobile data — the
-    # phone chooses full / reduced / auto-on-mobile-data and reports the
-    # effective state; these are the reduced encoder settings):
+    # Per-client quality overrides (owner spec 2026-08-05, growing the
+    # 2026-08-02 full/reduced pair into a picker: the phone panel chooses
+    # fps / resolution (full, 2/3, 1/2 — half PER AXIS is quarter pixels,
+    # so the middle step is 2/3) / bitrate level, or auto-reduces on mobile
+    # data; the desktop Settings combos stay the DEFAULTS every level maps
+    # against). "mid"/"low" bitrate levels:
+    h264_bitrate_mid: str = "5M"
+    h264_bitrate_low: str = "1200k"
+    # The auto-on-mobile-data profile (legacy `reduced` maps to this too):
     h264_reduced_scale: int = 2     # halve width and height
     h264_reduced_fps: int = 10
     h264_reduced_bitrate: str = "1200k"

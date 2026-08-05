@@ -81,6 +81,10 @@ let layoutArm = false;   // one-shot: the next canvas tap picks a window
 // in). Armed by every layout_state that carries a focus; cleared by a
 // DELIBERATE focus change/removal the user sends (see send() below).
 let layoutRestore = null; // {index, name} or null
+// Font-zoom staircase steps already applied per layout index (owner
+// 2026-08-05 — gestures.js sends Ctrl+-/= past the fitted view). Kept here
+// with the rest of the layout state; removal shifts the indices in send().
+const fontZoomByLayout = new Map();
 
 function viewLocked() {
   return layoutRegion !== null;
@@ -118,6 +122,17 @@ function send(msg) {
   // reconnect may restore a layout, never a user's explicit choice of the
   // desktop. (A focus of a real index re-arms via its layout_state reply.)
   if (msg.type === "layout_focus" || msg.type === "layout_remove") layoutRestore = null;
+  if (msg.type === "layout_remove") {
+    // The font-zoom steps ride on layout INDICES — removing one shifts every
+    // higher index down by one.
+    fontZoomByLayout.delete(msg.index);
+    [...fontZoomByLayout.keys()].sort((a, b) => a - b).forEach((k) => {
+      if (k > msg.index) {
+        fontZoomByLayout.set(k - 1, fontZoomByLayout.get(k));
+        fontZoomByLayout.delete(k);
+      }
+    });
+  }
   if (ws && ws.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify(msg));
     return;

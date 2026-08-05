@@ -4,7 +4,7 @@
 // commit:
 //   node client/load_test.js
 //
-// The app was split (god-file refactor) into 7 classic scripts that share
+// The app was split (god-file refactor) into 8 classic scripts that share
 // ONE global scope in the browser (multiple <script> tags evaluated in
 // document order = the same semantics as one concatenated file). FILES below
 // must list them in the EXACT order index.html loads them in — concatenating
@@ -55,6 +55,10 @@ global.document = {
   activeElement: null,
 };
 global.window = { addEventListener() {}, innerWidth: 1280, innerHeight: 800 };
+// controls.js listens for orientation changes at load time (order_port,
+// 0.0.166) — the stub was missing this and the load test was failing on
+// HEAD too (found 2026-08-05).
+global.matchMedia = () => ({ matches: false, addEventListener() {} });
 global.devicePixelRatio = 2;
 global.location = { search: "?token=test", host: "test:1" };
 global.WebSocket = class WebSocket {
@@ -72,6 +76,7 @@ const FILES = [
   "render.js",
   "input-geometry.js",
   "controls.js",
+  "panels.js",
   "layouts.js",
   "gestures.js",
   "connection.js",

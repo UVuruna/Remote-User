@@ -127,7 +127,24 @@ for the split's general load-order reasoning.
 
 ## Step 3 additions (owner spec 2026-08-02)
 `next_input` builtin (jump to the next text box — dictation workflow) and the
-`quality` cycle (full → reduced → auto-on-mobile-data via
-`Android.transport()`; persisted in localStorage, restated on every connect).
-The update banner compares against `config.apk_version` — the APK the PC
-actually serves.
+`quality` state. The update banner compares against `config.apk_version` — the
+APK the PC actually serves.
+
+## Device prefs bridge + Quality overrides (owner 2026-08-05)
+
+- `prefGet`/`prefSet` — per-device storage through the shell's
+  `Android.prefGet/prefSet` (SharedPreferences), with localStorage as the
+  dev-browser fallback and migration source. Root cause it kills: localStorage
+  is keyed by ORIGIN and the shell alternates between the LAN and Tailscale
+  addresses, so bare localStorage silently split the device's saved state into
+  two diverging copies (the sets picker "rotated" between two states). Used by
+  `setsPrefs`, `qualityPrefs` and the anywhere-banner flag.
+- The Quality button opens a PANEL (panels.js) instead of cycling:
+  `qualityPrefs` (fps/res/bitrate/auto) → `effectiveQuality` (auto on cellular
+  = the saving profile) → `quality {fps, res, bitrate}` to the server, which
+  re-opens this client's encoder; restated on every connect.
+- **The overlay panels moved out** (2026-08-05, same STRUCTURE-LAW split as
+  layouts): Sets picker + Quality panel live in [Panels](panels.md); this file
+  keeps their state/prefs logic, panels.js keeps their DOM.
+- `__voiceInfo(text)` — diagnostic line from the shell shown as a toast while
+  the mic is ON (owner: no silent voice failures).

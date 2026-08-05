@@ -72,19 +72,23 @@ region; `remove(index)`; `prune()`; `state(active, region)` builds the
   of another layout, layout removal, and phone disconnect
 - `is_alive(hwnd)`: window exists, visible, not DWM-cloaked
 
-## Per-layout aspect ratio (owner decision 2026-08-03)
-Each layout carries its own `ratio` (W:H, `None` = the phone's own shape),
-set from the phone's aspect panel via `set_ratio(index, w, h)` and applied by
-the next `focus` (which is what re-places the windows — `arranged_ratio`
-records what they currently stand in, so a changed ratio forces the rebuild).
+## Per-layout aspect ratio + position (owner 2026-08-03, position 2026-08-05)
+Each layout carries its own `ratio` (W:H, `None` = the phone's own shape) and
+`pos` (0–1 fraction of the free-axis slack, 0.5 = centered — the phone's Move
+handle), set from the phone's aspect panel via `set_ratio(index, w, h, pos)`
+and applied by the next `focus` (which is what re-places the windows —
+`arranged_ratio`/`arranged_pos` record what they currently stand in, so a
+change forces the rebuild). Both ride in `layout_state` entries.
 
-`layout_region(mon_rect, aspect, ratio)` is the single place the rule lives:
-the DEVICE shape gives the outer box (`_region_rect`), and the override is the
-largest rect of that W:H fitted INSIDE it (`_fit_rect`). The region can
-therefore only ever shrink — portrait keeps the phone's full width and only
-loses height, landscape keeps its height and only loses width; anything that
-would grow past the phone's shape is clamped by the same fit. The unused strip
-stays black on the phone.
+`layout_region(mon_rect, aspect, ratio, pos)` is the single place the rule
+lives: the DEVICE shape gives the outer box (`_region_rect`), and the override
+is the largest rect of that W:H fitted INSIDE it (`_fit_rect`), placed at
+fraction `pos` of the leftover slack (only one axis ever has slack, so a
+single fraction covers both orientations). The region can therefore only ever
+shrink — portrait keeps the phone's full width and only loses height,
+landscape keeps its height and only loses width; anything that would grow past
+the phone's shape is clamped by the same fit. The unused strip stays black on
+the phone.
 
 `member_hwnds()` returns every window that already belongs to some layout —
 [Web Layer](web.md) leaves those out of the creation list, because one window

@@ -43,6 +43,7 @@ STANDARD = {
     "client/install.html",
     "client/load_test.js",
     "client/state.js",
+    "client/panels.js",
     "setup/create_cert.py",
     "android/app/src/main/java/com/uvuruna/remoteuser/OnboardingActivity.kt",
 }

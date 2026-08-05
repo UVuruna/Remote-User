@@ -44,9 +44,14 @@ What the [Web Layer](web.md) talks to (duck interface shared with `JpegStreamer`
 - Region-of-interest streaming (send only the zoomed area) is intentionally dropped on this path — inter-frame compression already makes the full-frame stream cheap, so the crop/re-init complexity isn't worth it. The JPEG fallback keeps it.
 - Frames the sink drops (encoder slower than capture) compress the video timeline slightly; the client chases the live edge, so this never accumulates as latency.
 
-## Reduced-quality mode (Phase F+ step 3, owner spec 2026-08-02)
-`H264Session(reduced=True)` appends `-vf scale=…/2,fps=10` and swaps in the
-low bitrate (`h264_reduced_*` settings) INSIDE that client's own ffmpeg —
-capture and other clients untouched. The web layer resets the running session
-when the client's `quality` message flips the state; the loop reopens with
-the new settings (same machinery as a monitor switch).
+## Per-client quality overrides (owner 2026-08-05, growing the 2026-08-02 full/reduced pair)
+`H264Session(quality={"fps", "res", "bitrate"})` builds the `-vf` chain and
+bitrate INSIDE that client's own ffmpeg — capture and other clients untouched:
+`res` `"2/3"`/`"1/2"` scales both axes (`trunc(iw*n/d/2)*2` keeps dimensions
+even for yuv420p; half per axis = quarter pixels, hence ⅔ as the middle
+step), `fps` < `target_fps` appends an `fps=` filter, `bitrate` `"mid"`/
+`"low"` swaps in `h264_bitrate_mid`/`h264_bitrate_low` (`"high"`/`0`/`"full"`
+= the desktop Settings defaults). The web layer resets the running session
+when the client's `quality` message changes the dict; the loop reopens with
+the new settings (same machinery as a monitor switch). Legacy
+`quality {reduced: true}` maps in web.py to the saving profile.
