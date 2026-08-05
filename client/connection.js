@@ -87,6 +87,11 @@ function connect() {
         refreshCategories();
       } else if (msg.type === "toast") {
         showToast(msg.text);
+      } else if (msg.type === "notify") {
+        // A job on the PC finished and named itself (ROADMAP Phase H,
+        // owner 2026-08-05) — the phone raises a real notification
+        // with the AGENT's name, speaks it, and toasts if visible.
+        handleNotify(msg);
       } else if (msg.type === "layout_state") {
         // The server is done — but the PC is not: windows are still restoring
         // and sliding into place. The loading animation stays up until the

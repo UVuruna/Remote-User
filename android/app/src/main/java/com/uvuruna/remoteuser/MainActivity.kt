@@ -177,10 +177,72 @@ class MainActivity : AppCompatActivity() {
             if (granted) voice.listen() else voice.deny()
         }
 
+    /** Android 13+ asks before ANY app may raise a notification. Requested on
+     *  the first notice rather than at startup: a user who never turns the
+     *  feature on is never asked, and the ask arrives with its reason
+     *  visible on screen (owner principle — nothing unexplained). */
+    private val notifyPermission =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            if (!granted) {
+                web.evaluateJavascript(
+                    "window.__notifyDenied && __notifyDenied()", null)
+            }
+        }
+
+    @SuppressLint("SetJavaScriptEnabled")
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        if (Prefs.lanUrl(this) == null) {
+            repair()
+            return
+        }
+        setContentView(R.layout.activity_main)
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        hideSystemBars()
+
+        errorView = findViewById(R.id.error_view)
+        errorTitle = findViewById(R.id.error_title)
+        errorBody = findViewById(R.id.error_body)
+        errorAction = findViewById(R.id.btn_action) // label + action set per cause
+        loadingView = findViewById(R.id.loading_view)
+        findViewById<Button>(R.id.btn_repair).setOnClickListener { repair() }
+
+        web = findViewById(R.id.web)
+        web.settings.apply {
+            javaScriptEnabled = true
+            domStorageEnabled = true
+            mediaPlaybackRequiresUserGesture = false // MSE video must start by itself
+            // The server routes plain Android browsers to the install funnel;
+            // this marker is how the app itself gets the real client page.
+            userAgentString = "$userAgentString RemoteUserApp"
+        }
+        // No framework focus rectangle over our content: the page's keyboard
+        // capture field is deliberately invisible, and any highlight drawn
+        // around it is a bright bar across the top of the stream (owner
+        // reported it five times — the page kills the CSS focus ring, this
+        // kills the platform one). API 26 = our minSdk, so no guard needed.
+        web.defaultFocusHighlightEnabled = false
+        web.addJavascriptInterface(Bridge(), "Android")
+        web.webViewClient = Client()
+        web.webChromeClient = Chrome()
+
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                moveTaskToBack(true) // back = background, never kill the session by accident
+            }
+        })
+
+        connectivity = (getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager)
+            .also { it.registerDefaultNetworkCallback(netCallback) }
+
+        resolveAndLoad()
+    }
+
     override fun onDestroy() {
         connectivity?.unregisterNetworkCallback(netCallback)
         connectivity = null
         voice.destroy()
+        notifier.release()
         handler.removeCallbacksAndMessages(null)
         super.onDestroy()
     }
@@ -193,6 +255,11 @@ class MainActivity : AppCompatActivity() {
             if (::web.isInitialized) web.evaluateJavascript(code, null)
         }
     }
+
+    // ── Notifications ── lives in Notifier.kt (ROADMAP Phase H, owner
+    // 2026-08-05): a job on the PC finished, and the phone says WHICH agent.
+    // Lazy, because most sessions never receive one.
+    private val notifier by lazy { Notifier(this) }
 
     private fun launchCamera() {
         val dir = File(cacheDir, "camera").apply { mkdirs() }
@@ -733,6 +800,29 @@ class MainActivity : AppCompatActivity() {
         @JavascriptInterface
         fun voiceSetMuteBeeps(on: Boolean) {
             runOnUiThread { voice.setMuteBeepsPref(on) }
+        }
+
+        /** A job on the PC finished (ROADMAP Phase H, owner 2026-08-05). The
+         *  AGENT's name leads, and it is also the notification TAG, so the
+         *  same agent replaces its own line while several agents keep one
+         *  line each. */
+        @JavascriptInterface
+        fun notify(title: String, text: String, tag: String) {
+            runOnUiThread {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                    checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) !=
+                    PackageManager.PERMISSION_GRANTED) {
+                    notifyPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    return@runOnUiThread   // this one is lost; the next lands
+                }
+                notifier.post(title, text, tag)
+            }
+        }
+
+        /** Says the notice out loud (owner: "izgovori neku reč"). */
+        @JavascriptInterface
+        fun speak(text: String) {
+            runOnUiThread { notifier.speak(text) }
         }
 
         /** Update tap: open /app.apk (on the SAME PC) in the system browser —
