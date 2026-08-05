@@ -54,7 +54,7 @@ def _check_panel(page, name, open_js, close_js, card_sel):
           const noPageScroll =
             document.scrollingElement.scrollWidth <= innerWidth + 1;
           let noClip = card.scrollWidth <= card.clientWidth + 1;
-          for (const el of card.querySelectorAll('button, .q-row, .sets-row')) {
+          for (const el of card.querySelectorAll('button, .q-row, .sets-row, input')) {
             if (el.scrollWidth > el.clientWidth + 2) noClip = false;
           }
           return { inView, noPageScroll, noClip };
@@ -122,6 +122,29 @@ def main() -> int:
                  "layouts = [{name:'Audit', process:'x', orient:'portrait',"
                  " icon:null, ratio:[600,1000], pos:0.5}]; openAspectPanel(0)",
                  "closeLayoutPanel()", "#layout-panel .lay-card"),
+                # The layout list carries a rename button per row (owner
+                # 2026-08-05) — a long window title must not push the row's
+                # buttons off the card.
+                ("Layout list with rename",
+                 "layouts = [{name:'Claude Code - Remote User - Visual Studio "
+                 "Code [Administrator]', process:'x', orient:'portrait',"
+                 " icon:null, ratio:[600,1000], pos:0.5}]; openLayoutPicker()",
+                 "closeLayoutPanel()", "#layout-panel .lay-card"),
+                ("Rename card",
+                 "layouts = [{name:'Claude Code - Remote User - Visual Studio "
+                 "Code [Administrator]', process:'x', orient:'portrait',"
+                 " icon:null, ratio:null, pos:0.5}]; openRenamePanel(0)",
+                 "closeLayoutPanel()", "#layout-panel .lay-card"),
+                # Creation panel: the Name field is prefilled with the chosen
+                # window's (long) title and must fit the card.
+                ("Creation panel + Name field",
+                 "creating = newCreation('tap');"
+                 "creating.slots = [{hwnd:1, title:'Claude Code - Remote User"
+                 " - Visual Studio Code [Administrator]', process:'x',"
+                 " icon:null, tab:null, x:0.5, y:0.5}];"
+                 "renderCreationPanel()",
+                 "creating = null; closeLayoutPanel()",
+                 "#layout-panel .lay-card"),
             ):
                 passed, detail = _check_panel(page, name, open_js, close_js, sel)
                 results[f"{name} @ {label}"] = passed

@@ -704,6 +704,23 @@ body.hidden-controls #update-banner { display: none; }
   font: 600 12px system-ui, sans-serif;
 }
 .lay-ratio svg { width: 20px; height: 20px; }
+.lay-rename { padding: 0 10px; } /* icon only — the pencil needs no label */
+
+/* The layout's own name (owner 2026-08-05): typed when it is created, and
+   changeable later from the list. Full width — window titles are long. */
+.lay-name-in {
+  width: 100%;
+  box-sizing: border-box;
+  resize: none;
+  line-height: 1.35;
+  padding: 11px 13px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: rgb(51 65 85 / 0.6);
+  color: var(--text-primary);
+  font: 600 15px system-ui, sans-serif;
+}
+.lay-name-in:focus { outline: none; border-color: var(--accent); }
 
 /* Aspect panel — W : H fields over a live preview of the phone screen (dashed)
    with the region inside it; the region can only ever SHRINK inside the
@@ -779,10 +796,18 @@ body.hidden-controls #update-banner { display: none; }
   border-radius: 50%;
   background: var(--accent);
   color: #0F172A;
-  font: 700 24px/44px system-ui, sans-serif;
-  text-align: center;
+  /* A drawn four-way arrow (ICONS.move), not a font glyph — see controls.js */
+  display: flex;
+  align-items: center;
+  justify-content: center;
   pointer-events: auto;
   touch-action: none;
+}
+.asp-move svg {
+  width: 26px;
+  height: 26px;
+  stroke-width: 2.2;
+  pointer-events: none; /* the handle owns the drag, not its drawing */
 }
 .asp-value {
   text-align: center;

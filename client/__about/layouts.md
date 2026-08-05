@@ -47,8 +47,17 @@ everything here composes and frames WINDOWS on it.
   (index −1 = full desktop), `applyOrientationLock` (drives the shell's
   `Android.lockOrientation`: layout focus = locked, desktop = free).
 - **Layout list** — `openLayoutPicker`, `layRow`, `ratioLabel`: every layout
-  at once (Desktop first), a row taps to focus, its trailing button opens the
-  aspect panel.
+  at once (Desktop first), a row taps to focus, its trailing buttons open the
+  RENAME card (pencil) and the aspect panel.
+- **Naming** — `nameField(value, placeholder)`, `openRenamePanel(index)`
+  (owner 2026-08-05). A layout's auto name is the target window's title; the
+  creation panel offers it prefilled in an editable Name field (`creating.name`
+  — `null` follows the title, `""` sent means "keep it"), and the list's
+  pencil renames an existing one via `layout_rename {index, name}` without
+  moving anything on the PC. The field is a WRAPPING textarea, not a one-line
+  input: window titles are long enough that a single line hid most of one
+  behind its own horizontal scroll (caught by `tests/test_layout_audit.py`,
+  THE SPACE & LEGIBILITY LAW); newlines are stripped as they are typed.
 - **Aspect panel** — `openAspectPanel`, `renderAspectPanel`,
   `updateAspectPreview`, `aspFrac`, `clampAspect`, `dragAspect`, `ratioPair`,
   `devicePair`: W : H fields over a dashed phone-screen preview with the region
@@ -124,7 +133,10 @@ everything here composes and frames WINDOWS on it.
 - **"Screen" resets the override entirely** (`w = h = 0` on the wire — also
   sent when a drag lands back on the full screen), so an approximation error
   can never accumulate into a shrinking region.
-- **The Move handle** (owner 2026-08-05): a ✥ button in the region's center.
+- **The Move handle** (owner 2026-08-05): a round button in the region's
+  center, drawn as `ICONS.move` — a four-way arrow with real arrowheads.
+  (It was the "✥" character until the owner saw what his phone's font made of
+  it: a blunt cross. A control's shape must not depend on the device's fonts.)
   Dragging it slides the shrunken region along the free axis (portrait:
   up/down, landscape: left/right) — the region no longer has to sit centered;
   a double-tap re-centers it. `dragMove` owns the gesture (pointer capture on

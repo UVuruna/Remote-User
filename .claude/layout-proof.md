@@ -1,0 +1,9 @@
+SESSION: c06e67a0-3082-48c1-a699-1053f9d49fe3
+- Quality panel (client/panels.js + client/style.css) - phone 412x915 portrait + 915x412 landscape - audit: PASS - .venv python tests/test_layout_audit.py (real page, headless Chromium: card fully in viewport, no page horizontal overflow, no element clipped)
+- Sets picker (client/panels.js + client/style.css) - phone 412x915 + 915x412 - audit: PASS - tests/test_layout_audit.py (same three checks)
+- Dictation setup card (client/panels.js + client/style.css) - phone 412x915 + 915x412 - audit: PASS - tests/test_layout_audit.py (card in viewport, no overflow, no clipped rows; 3-language stub incl. long names)
+- Aspect panel + Move handle (client/layouts.js + client/style.css) - phone 412x915 + 915x412 - audit: PASS - tests/test_layout_audit.py (card in viewport, no clipping, handle >= 40px and fully inside the card, zero page errors; the handle is now the drawn ICONS.move arrow, not a font glyph)
+- Layout list with rename button (client/layouts.js + client/style.css) - phone 412x915 + 915x412 - audit: PASS - tests/test_layout_audit.py (a 70-char window title row keeps its pencil + ratio buttons on the card, nothing clipped)
+- Rename card (client/layouts.js + client/style.css) - phone 412x915 + 915x412 - audit: PASS - tests/test_layout_audit.py (FIRST RUN FAILED: the one-line <input> hid most of a long window title behind its own horizontal scroll -> fixed with a wrapping 3-row textarea, box-sizing: border-box; re-run PASS)
+- Creation panel + Name field (client/layouts.js + client/style.css) - phone 412x915 + 915x412 - audit: PASS - tests/test_layout_audit.py (same failure and same fix as the rename card; the prefilled long title is fully readable)
+- Layout region placement (server/window_manager.py, no window of its own) - audit: PASS - tests/test_layout_audit.py `_fit_rect_audit`: the region stays inside its box and keeps positive size for every pos 0..1 and aspect 0.4..3.2
