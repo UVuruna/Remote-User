@@ -243,7 +243,11 @@ def focus_next_input(scope_hwnds: list[int] | None) -> str | None:
                     except Exception:  # noqa: BLE001
                         continue
             hwnd, nxt = fields[(idx + 1) % len(fields)]
-            window_manager.raise_window(hwnd)
+            # FOREGROUND, not always-on-top (audit 2026-08-05): this window
+            # belongs to no layout, so a topmost raise here left an arbitrary
+            # third-party window nailed above the owner's desk for the rest of
+            # the Windows session, with no list that could ever name it again.
+            window_manager.raise_window(hwnd, topmost=False)
             nxt.SetFocus()
             return nxt.Name or window_manager.window_at_hwnd(hwnd)["title"]
         except Exception as e:  # noqa: BLE001 — must fail soft
@@ -399,11 +403,14 @@ def _try_explorer_path(auto, tab_rect, target: dict, before: set[int]) -> int | 
         return None
     # Close the original tab (Ctrl+W on the original window) — the content
     # now lives in its own window.
-    window_manager.raise_window(target["hwnd"])
+    # Both raises are stage directions, not layout membership: the SOURCE
+    # window keeps its other tabs and the new window is not registered yet.
+    # A topmost raise here stranded them both (audit 2026-08-05).
+    window_manager.raise_window(target["hwnd"], topmost=False)
     time.sleep(0.25)
     auto.SendKeys("{Ctrl}w")
     time.sleep(0.2)
-    window_manager.raise_window(hwnd)
+    window_manager.raise_window(hwnd, topmost=False)
     return hwnd
 
 
@@ -431,7 +438,10 @@ def extract_tab(mon_rect: tuple[int, int, int, int], nx: float, ny: float,
         if auto is None:
             return None
         try:
-            window_manager.raise_window(target["hwnd"])
+            # The SOURCE window — it stays behind with its remaining tabs
+            # and never becomes a layout member, so it must never be left in
+            # the always-on-top band (audit 2026-08-05).
+            window_manager.raise_window(target["hwnd"], topmost=False)
             time.sleep(0.15)
             tab_rect = _find_tab_rect(auto, mon_rect, nx, ny,
                                       target["hwnd"], tab_name)
