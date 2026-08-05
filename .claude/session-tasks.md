@@ -1,13 +1,24 @@
 # Session Tasks — 2026-08-05 (owner-defined, enforced by the root Stop hook)
 
-ISPORUKA (round 5): kod = arrangement-ladder fix, portrait ordinals, mouse
-side buttons, Settings pool cleanup · dokument = icon proposal page + answers
-on Image/Gallery, Region and a Claude app set · build + GIT RELEASE rides the
-END of round 5 (a parallel session holds uncommitted work in this same tree —
-client/quality.js, web.py, style.css — so a build now would package their
-half-finished state).
+ISPORUKA (round 6): kod = the TOPMOST leak killed at its two proven roots
+(lock is never an excursion — the reason comes from the Android shell, not a
+90 s JS timer; and no window stays topmost on ANY exit path, with a
+next-start repair for crash/kill) + a desktop TRAFFIC MONITOR window that
+makes the owner's suspicion measurable (bytes to/from the phone over time, so
+a locked screen must read as a flat line) · dokument = updated __about docs
+of every changed module + the CLAUDE.md protocol entry · build + GIT RELEASE
+closes the round.
 
-WAITING_ON_OWNER: yes
+ISPORUKA (round 7, the Controls round — parallel session, keep the line
+above): kod = the 97-icon set the owner approved (client/icons.js), the
+Region grab (client/region.js), the Claude app set with TYPED command
+buttons (`paste_text` protocol + clipboard.copy_text), renameable built-in
+buttons, the per-app-set Sets picker, Image dropped from Attach, and the
+style.css/layouts.css split · dokument = __about/__flow of every module
+touched, ACTIONS.md, CLAUDE.md's protocol, and the answer on sound
+notification when the agent finishes.
+
+WAITING_ON_OWNER: no
 
 ROUND 4 IMPLEMENTED (owner approved "moze sve i bipovi kao checkbox"):
 (a) shipped-pools merge now ALSO runs once at server start
@@ -266,3 +277,75 @@ only (their commands stay ours, custom sets stay fully editable).
       for the whole round). Superseded for task 27: it ships now as v0.0.080
       so the owner can test the fix he reported; 23–25 follow when he
       answers.
+
+## Round 6 (owner brief 2026-08-05, night — TOPMOST leak + traffic proof)
+
+Owner report, verbatim intent: he built a GRID from the tablet, locked it,
+turned the screen off, came to the PC — Chrome and VSCode were STILL TOPMOST.
+Second demand: nothing may stay topmost when the app CLOSES. Third: he is
+convinced the app keeps talking with the screen locked (battery), and wants a
+desktop window that RECORDS all transfer and graphs it over time, so a locked
+phone must be a provable FLAT LINE. He explicitly refused another "solved"
+that is not solved.
+
+ROOT CAUSE, PROVEN FROM THE LIVE LOG (%LOCALAPPDATA%/RemoteUser/server.log)
+— not a theory: the LOCK was reported to the server as an EXCURSION.
+client/state.js EXCURSION_GRACE_MS = 90000, and markExcursion() fires on
+every Mic tap and every picker tap; the owner had been dictating seconds
+before locking. So `away {excursion:true}` went out and web.py held the
+layout topmost for EXCURSION_MAX_S = 300 s. The log shows it twice, to the
+second: excursion 18:41:56 -> "Phone left work mode" 18:46:56, and excursion
+18:43:11 -> 18:48:11. Exactly 300 s each.
+SECOND ROOT CAUSE: LayoutRegistry.clear_topmost() exists and is called
+NOWHERE in the repo — no exit path drops the topmost band.
+
+- [ ] 28. Lock must never be an excursion. The page's 90 s timer is a GUESS;
+      the Android shell KNOWS (PowerManager/Keyguard: screen off / device
+      locked) and knows whether IT launched the picker/camera/voice. Make the
+      reason platform-authoritative, and make an excursion expire in seconds,
+      not 300.
+- [ ] 29. No window may stay topmost when the app closes — every exit path
+      (tray Quit, GUI close, Apply & restart, Ctrl+C, crash, kill, self-update
+      relaunch, Windows logoff) plus a NEXT-START repair for the paths that
+      cannot run code (kill/crash), validated against process identity so we
+      can never touch an unrelated window.
+- [ ] 30. Traffic monitor window on the desktop (the owner's own instrument):
+      opened like Controls..., one live graph of bytes/s OUT to the phone and
+      bytes/s IN from the phone over time + session totals, recorded so a
+      locked-screen night can be read back. A locked phone must be a flat
+      line, and if it is NOT, this window is what proves it.
+- [ ] 31. Whatever the audit confirms beyond 28/29 — every remaining hole
+      where a window enters the topmost band and never leaves it.
+- [ ] 32. Round close — docs of every changed module, APK + full desktop
+      build, GIT RELEASE.
+
+## Round 7 (owner answers 2026-08-05, night — Controls FIX accepted)
+
+- [x] 23. ICONS — the whole proposal page accepted by the owner. 40 new faces
+      (set now 97), moved into `client/icons.js`; the desktop editor parses
+      that file. Wired onto every command in actions.json. DONE 0.0.198.
+- [x] 24. REGION — free-size/free-position frame, captured and pasted at once
+      (owner: "odmah lepi"). `client/region.js` + `.rg-*`; server unchanged —
+      `screenshot {x,y,w,h,paste:true}` already crops any rect. Phone audit
+      case added + self-tested (planted 620px button -> portrait FAIL ->
+      removed -> PASS). DONE 0.0.198.
+- [x] 25. CLAUDE app set — `title` match beside `process` (Layout keeps the
+      window's own title, renames cannot break it), per-app-set ticks in the
+      Sets picker, and the TYPED command kind: `paste_text {text, enter}` ->
+      clipboard.copy_text + Ctrl+V + Enter. Usage / Model / Thinking / Stop on
+      the D-pad; Menu types "/" without Enter. Gate case pins the order.
+      DONE 0.0.198.
+- [x] 26. RENAME any button of any shipped set (owner's new requirement — the
+      side buttons carry whatever the user's driver assigned). Name field live
+      on built-in rows, empty = back to ours, merge_shipped_pools carries
+      renames by command ID. Round-trip probe PASS. DONE 0.0.198.
+- [x] 27. Image dropped from the Attach pool. DONE 0.0.198.
+- [ ] 28. Sound when the agent finishes (owner question) — ANSWERED and
+      phased, not built: ROADMAP Phase H (`/notify` + a `notify` frame ->
+      tone/vibration/toast on the phone, fed by a Claude Code `Stop` hook the
+      desktop app installs for him). Waiting on his go.
+- [ ] 29. Round close — APK + full desktop build + GIT RELEASE. BLOCKED on the
+      parallel session: server/web.py is being rewritten right now
+      (presence.py / traffic.py split, a .tmp file in the tree) and its own
+      presence gate is red, so a build would package a half-finished refactor.
+      This round's code is committed as 0.0.198 with a clean web.py.
