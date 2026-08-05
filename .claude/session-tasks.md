@@ -1,8 +1,11 @@
 # Session Tasks — 2026-08-05 (owner-defined, enforced by the root Stop hook)
 
-ISPORUKA: kod = mic language-agnostic debug/fix, layout Move handle, sets
-picker fix, quality panel, layout zoom-font, build + GIT RELEASE · dokument =
-docs of every changed module + this checklist.
+ISPORUKA (round 5): kod = arrangement-ladder fix, portrait ordinals, mouse
+side buttons, Settings pool cleanup · dokument = icon proposal page + answers
+on Image/Gallery, Region and a Claude app set · build + GIT RELEASE rides the
+END of round 5 (a parallel session holds uncommitted work in this same tree —
+client/quality.js, web.py, style.css — so a build now would package their
+half-finished state).
 
 WAITING_ON_OWNER: yes
 
@@ -204,3 +207,50 @@ only (their commands stay ours, custom sets stay fully editable).
       3/3 windows PASS. APK + desktop rebuilt, GIT RELEASE published:
       https://github.com/UVuruna/Remote-User/releases/tag/v0.0.079
       (includes v0.0.078's dictation round 4).
+
+## Round 5 (owner brief 2026-08-05, night — Controls FIX)
+
+- [x] 19. Arrangement ladder (owner 1A) — raising a command must move the
+      COMMAND, not the slot name. Root cause: `OrderList.set_order` baked the
+      slot name INTO the item's text, so `takeItem/insertItem` carried
+      "Bottom" up with it and the left column read Top·Left·Bottom·Right.
+      Fix: the item holds only the command (INDEX_ROLE + LABEL_ROLE) and
+      `_relabel()` re-draws the ladder from the row numbers after every move.
+      Evidence: shot of the group after a move — ladder fixed, `order()`
+      = [0,1,3,2]; Qt layout audit 3/3 PASS.
+- [x] 20. Portrait ordinals (owner 1B) — a column has no left/right: the
+      portrait ladder is now 1st/2nd/3rd/4th with REAL superscript, drawn by
+      a rich-text delegate out of the dialog's own font (never an exotic
+      glyph — the ✥ lesson). Evidence: same shot.
+      Forced by both: `controls_editor.py` sat at 996/1000 lines, so the
+      widgets moved into `server/gui/controls_widgets.py` (STRUCTURE LAW) —
+      editor 639, widgets 474, docs + tier classification written.
+- [x] 21. Mouse side buttons (owner 2) — Btn 4 / Btn 5 (XBUTTON1/2) as
+      CLICK/HOLD reserves in the Mouse pool. `BUTTON_FLAGS` grew a mouseData
+      column (both side buttons share one flag pair), client BUILTINS x1/x2 +
+      two icons. Evidence: INPUT GATE, new case "side buttons: x1/x2 ->
+      XDOWN/XUP with the right mouseData" PASS.
+- [x] 22. Settings pool (owner 4) — Next box and Snap removed; the five that
+      stay are Monitor · Sets · Quality · Language · Anywhere. They reach the
+      owner's own %LOCALAPPDATA% copy through `merge_shipped_pools`, which
+      runs at server start.
+- [ ] 23. Icons for the commands that have none (owner 5) — proposal page
+      published (35 icons + Btn 4/5 + Region + a Claude set preview), each
+      drawn as the real 58 px button next to its text-only alternative.
+      WAITING on the owner's rejections; the accepted ones go into
+      `ICONS` + `actions.json` in one pass.
+- [ ] 24. Region (owner 3) — free-size/free-position rectangle on the phone,
+      that crop pasted on the PC (Snipping-Tool equivalent). Server side is
+      already there (`screenshot {x,y,w,h,paste:true}` crops any rect), so it
+      is a client-side selection overlay reusing the aspect panel's drag
+      mechanics. WAITING on the owner's yes.
+- [ ] 25. Claude app set (owner 6) — feasible; answer delivered. Needs (a) a
+      title/tab matcher next to `process` in `app_sets` so the set appears for
+      a Claude window inside VSCode, (b) a new button kind `text` (type a
+      slash command + Enter — the commands he named are not chords), (c) the
+      Sets picker listing app sets one by one instead of one master toggle.
+      Two app sets showing together already works (`visibleAppSets` filters,
+      it does not pick one). WAITING on the owner's yes.
+- [ ] 26. Round close — build + GIT RELEASE once 23–25 land (single release
+      for the whole round; the parallel session's tree state is the reason
+      this turn did not build).
