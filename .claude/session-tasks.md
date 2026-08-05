@@ -301,25 +301,63 @@ second: excursion 18:41:56 -> "Phone left work mode" 18:46:56, and excursion
 SECOND ROOT CAUSE: LayoutRegistry.clear_topmost() exists and is called
 NOWHERE in the repo — no exit path drops the topmost band.
 
-- [ ] 28. Lock must never be an excursion. The page's 90 s timer is a GUESS;
-      the Android shell KNOWS (PowerManager/Keyguard: screen off / device
-      locked) and knows whether IT launched the picker/camera/voice. Make the
-      reason platform-authoritative, and make an excursion expire in seconds,
-      not 300.
-- [ ] 29. No window may stay topmost when the app closes — every exit path
-      (tray Quit, GUI close, Apply & restart, Ctrl+C, crash, kill, self-update
-      relaunch, Windows logoff) plus a NEXT-START repair for the paths that
-      cannot run code (kill/crash), validated against process identity so we
-      can never touch an unrelated window.
-- [ ] 30. Traffic monitor window on the desktop (the owner's own instrument):
-      opened like Controls..., one live graph of bytes/s OUT to the phone and
-      bytes/s IN from the phone over time + session totals, recorded so a
-      locked-screen night can be read back. A locked phone must be a flat
-      line, and if it is NOT, this window is what proves it.
-- [ ] 31. Whatever the audit confirms beyond 28/29 — every remaining hole
-      where a window enters the topmost band and never leaves it.
-- [ ] 32. Round close — docs of every changed module, APK + full desktop
-      build, GIT RELEASE.
+- [x] 28. DONE 0.0.200 — a LOCK is never an excursion. ROOT CAUSE from the
+      live log, not reasoning: client/state.js EXCURSION_GRACE_MS=90000 armed
+      by every Mic/picker tap, so locking six seconds after dictating was
+      announced as an excursion and web.py held the layout for
+      EXCURSION_MAX_S=300 (18:41:56 -> 18:46:56 and 18:43:11 -> 18:48:11,
+      exactly 300 s each). The reason now comes from the shell
+      (Android.hideReason() reads PowerManager/Keyguard + its own excursion
+      counter; lock is tested FIRST); the hold is 45 s; and THE DESK WINS —
+      local input at this PC ends it at once. Presence moved to presence.py.
+      Evidence: PRESENCE GATE 14/14 incl. "a LOCK is never an excursion" and
+      "the owner's own keyboard at this PC ends the hold".
+
+- [x] 29. DONE 0.0.201 — the topmost ledger. clear_topmost() existed and was
+      called NOWHERE. Every raised hwnd is written down; release_all() is
+      wired into ServerController.release_windows() (first in stop(), first in
+      _serve's finally), Qt aboutToQuit, atexit in both entry points and a
+      SetConsoleCtrlHandler; the ledger is mirrored to
+      %LOCALAPPDATA%/RemoteUser/topmost.json and repair_stranded() fixes a
+      killed run at the next start, identity-checked against the process
+      image. drop_topmost is verified and keeps refused windows on the books.
+      Evidence: PRESENCE GATE ledger checks; guards 4/4.
+
+- [x] 30. DONE 0.0.203 — the Traffic window. MeteredSocket wraps the socket
+      ONCE at accept (complete by construction), uploads counted too; one
+      second per sample, an hour in memory, every sample appended to
+      traffic.csv; a GREY BAND wherever no client was connected, so a locked
+      phone must be a flat line inside it; the phone's own TrafficStats ride
+      the heartbeat and the away-gap line reports what the app spent while it
+      was gone. QPainter, no new dependency. Evidence: Qt layout audit 4/4 at
+      minimum and +50%, the window built in its fullest state.
+
+- [x] 31. DONE 0.0.202 — the audit's remaining leaks, none of them reachable
+      from any member list: uia raised the tab's SOURCE window and next_input's
+      target TOPMOST (now topmost=False); prune() deleted layouts whose members
+      were merely CLOAKED (a virtual-desktop switch) and abandoned them up
+      there; focus()'s drop-others pass ran after its early returns; a monitor
+      switch left the layout on top of the monitor the phone had left; the
+      resume-focus ran outside ws_endpoint's try; pairing.get_lan_ip could
+      abort the process from the GUI's 1 s refresh. Evidence: INPUT GATE 19/19
+      (it caught the JPEG duck-interface change the moment it landed).
+
+- [x] 32. DONE — SHIPPED as v0.0.081:
+      https://github.com/UVuruna/Remote-User/releases/tag/v0.0.081
+      APK 0.0.081 + full desktop build (INPUT GATE + PRESENCE GATE +
+      PyInstaller smoke test + signed exe and installer, "OK: exe + installer
+      signed"). Docs: presence/layout_api/traffic/traffic_window about+flow,
+      folder indexes, dated sections on web/window_manager/uia/server_core/
+      gui_main/main_window/state/connection/MainActivity, CLAUDE.md constraint
+      10 + the rewritten Presence paragraph.
+      TWO-SESSION NOTE: my commits staged three files round 7 was editing, and
+      de-staging their hunks to keep HEAD compilable meant their 0.0.206 lost
+      the notify wiring; 0.0.208 restored it. Nothing was lost. Next time,
+      shared files are staged by whoever owns the change.
+      OPEN ON THE OWNER'S DEVICE: install v0.0.081, make a grid, lock the
+      tablet, walk to the PC — the windows must already be gone. Then open
+      Traffic… and lock the phone again: the line must be flat inside the grey
+      band. If it is not, that window is now the evidence.
 
 ## Round 7 (owner answers 2026-08-05, night — Controls FIX accepted)
 
@@ -342,12 +380,31 @@ NOWHERE in the repo — no exit path drops the topmost band.
       on built-in rows, empty = back to ours, merge_shipped_pools carries
       renames by command ID. Round-trip probe PASS. DONE 0.0.198.
 - [x] 27. Image dropped from the Attach pool. DONE 0.0.198.
-- [ ] 33. Sound when the agent finishes (owner question) — ANSWERED and
-      phased, not built: ROADMAP Phase H (`/notify` + a `notify` frame ->
-      tone/vibration/toast on the phone, fed by a Claude Code `Stop` hook the
-      desktop app installs for him). Waiting on his go.
-- [ ] 34. Round close — APK + full desktop build + GIT RELEASE. BLOCKED on the
-      parallel session: server/web.py is being rewritten right now
-      (presence.py / traffic.py split, a .tmp file in the tree) and its own
-      presence gate is red, so a build would package a half-finished refactor.
-      This round's code is committed as 0.0.198 with a clean web.py.
+- [x] 33. "The PC calls you" (owner go + refinement 2026-08-05: several
+      agents run at once, so the notice must NAME the one that finished —
+      "ime agenta je ime sesije"). DONE 0.0.206, ROADMAP Phase H1:
+      setup/agent_hook.py (Claude Code `Stop` hook, self-installing, names the
+      agent and never fails the turn) -> POST /notify -> server/notify.py ->
+      `notify` frame -> client/notify.js -> Android notification TAGGED with
+      the agent + TextToSpeech + toast. Notifier.kt does the Android half.
+      Evidence: NOTIFY GATE 11/11 (bad token refused, no-phone answered not
+      queued, two agents = two banners with their own tags, spoken line names
+      the agent, hook naming rule), wired into build.py fail-closed; APK
+      built so the Kotlin is proven to compile.
+      STILL OWED (H2): the desktop BUTTON that installs the hook — the end
+      user must never type a command. It waited only because main_window.py
+      was being rewritten by the parallel session.
+- [x] 33b. Thinking button (owner correction with the screenshot): `/effort`
+      takes a level, so the button now types it WITHOUT Enter and the level is
+      picked from the chooser with the cursor. DONE 0.0.206.
+- [x] 34. DONE — the round close both rounds were waiting for. One release
+      carries them: v0.0.081,
+      https://github.com/UVuruna/Remote-User/releases/tag/v0.0.081
+      (APK 0.0.081 + signed exe and installer). Built from the tree that has
+      BOTH rounds in it, with every gate green on the committed state: guards
+      4/4, INPUT GATE 19/19, PRESENCE GATE 14/14, NOTIFY GATE 4/4, Qt layout
+      audit 4/4, phone layout audit 19/19.
+      Note for round 7: 0.0.206 went out missing its own call sites — the
+      topmost round had staged those three shared files and de-staged the
+      in-flight hunks to keep HEAD compilable. 0.0.208 put the wiring back and
+      the release contains it. Nothing was lost.
