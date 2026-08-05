@@ -45,6 +45,7 @@ from fastapi.staticfiles import StaticFiles
 from PIL import Image, ImageOps
 
 import clipboard
+import config
 import monitors
 import pairing
 import uia
@@ -538,6 +539,22 @@ def _load_actions() -> dict:
         return empty
 
 
+def _stream_base(stream) -> dict:
+    """The desktop Settings card, as the phone needs to read it: the fps and
+    the encoded size the PC allows, plus the bitrate every phone step is a
+    percentage of. JPEG mode has no encoder size of its own — fall back to the
+    monitor size."""
+    width, height = getattr(stream, "stream_size", (stream.width, stream.height))
+    return {
+        "fps": SETTINGS.target_fps,
+        "width": width,
+        "height": height,
+        "bitrate": SETTINGS.h264_bitrate,
+        "bitrate_mid": config.bitrate_for_level("mid"),
+        "bitrate_low": config.bitrate_for_level("low"),
+    }
+
+
 async def _send_config(ws: WebSocket, stream, token: str, codec: str | None = None) -> None:
     # tailscale_url feeds the client's guided "access from anywhere" wizard:
     # null when the PC has no Tailscale yet (the desktop window guides that
@@ -556,6 +573,12 @@ async def _send_config(ws: WebSocket, stream, token: str, codec: str | None = No
         # releases); app_version stays for display/diagnostics.
         "app_version": app_version(),
         "apk_version": apk_version(),
+        # What the PC ITSELF is set to (desktop Settings card) — the phone's
+        # quality panel is a set of overrides that may only go BELOW this, so
+        # it has to be able to SAY what "Max / Full / High" currently mean and
+        # to grey out the steps that can never take effect (owner 2026-08-05:
+        # picking 30 fps under a 10 fps PC changed nothing and said nothing).
+        "base": _stream_base(stream),
     }
     if codec:
         payload["codec"] = codec
