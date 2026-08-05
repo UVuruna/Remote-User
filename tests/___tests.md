@@ -50,6 +50,37 @@ Run directly:
 Requires `pip install playwright` + `playwright install chromium` (dev/build
 machine only — nothing of this ships in the app).
 
+### `test_layout_audit.py` — Layout Audit (THE SPACE & LEGIBILITY LAW)
+The real page in a real headless Chromium at phone sizes (portrait 412×915,
+landscape 915×412): every overlay panel is opened and measured — the card
+fully inside the viewport, no horizontal page overflow, nothing clipped
+inside it. Covers the Quality panel, the Sets picker, the Dictation card,
+the Aspect panel (incl. the Move handle's hit size), the layout list with
+its rename button, the Rename card and the creation panel's Name field.
+Also checks `window_manager._fit_rect` purely: the placed region never
+leaves its box, at any aspect or `pos`. Proof source for
+`.claude/layout-proof.md`. The Name fields are WRAPPING textareas because
+this audit caught the one-line version hiding most of a window title behind
+its own horizontal scroll (2026-08-05).
+
+Run: `.venv\Scripts\python tests/test_layout_audit.py`
+
+### `test_presence.py` — Presence Gate
+Proves that the phone leaving work mode frees the owner's desk: layout
+members are always-on-top while the phone shows them, and before 2026-08-05
+only a CLEAN socket close ever ended that — which a locked phone rarely
+manages (Wi-Fi sleeps, the connection just goes quiet), so the windows kept
+hovering over everything at the desk. Checks the heartbeat holding a
+session, the watchdog ending a silent one (members minimized, socket closed
+4408), an announced excursion (image picker, camera, voice) NOT counting as
+a leave, an announced leave acting at once, `_leave_session` being
+idempotent, and the resume pointer (`LayoutRegistry.last_focus`) surviving
+rename/remove and forgetting on a deliberate Desktop choice. No browser and
+no real windows — the window calls are stubbed.
+
+Run: `.venv\Scripts\python tests/test_presence.py` — also a fail-closed step
+in `build.py` (0c/6).
+
 ### Guard tests (THE LAWS — rules/CODE.md → Enforcement, rules/DOCS.md → Enforcement)
 Four standard-named guard tests, a fast runner, and a small shared helper —
 installed 2026-08-01 alongside the MD-First 2.0 docs migration:

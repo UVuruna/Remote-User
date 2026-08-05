@@ -82,6 +82,23 @@ restore) means "reconnect reset us", and the client re-sends
 `layout_focus {index}` once; a user's deliberate desktop/remove choice clears
 the memory in `send()` and is never overridden.
 
+## Presence: the beat and the parting word (owner 2026-08-05)
+The PC holds layout windows always-on-top while we are showing them, so it
+must know the moment we stop — and a locked phone cannot even close its
+socket (Wi-Fi sleeps, the connection goes quiet). The live symptom was the
+owner sitting down at his PC with every layout window hovering above
+everything. Two signals fix it, both from here:
+
+- **`hb` every `HEARTBEAT_MS` (4 s)** while the page is visible. A paused or
+  dead page stops beating all by itself, which is exactly the point — the
+  server ends the session after 12 s of silence (its close code is 4408,
+  retried like any other drop).
+- **`away {excursion}` right before the hide-close.** `inExcursion()`
+  ([State](state.md)) answers whether we are leaving for an image picker /
+  camera / voice / permission dialog — the owner still working with us, so
+  the PC keeps the layout standing — or for good (lock, app closed), which
+  frees the desk at once instead of waiting out the heartbeat.
+
 ## Creation flow rework (owner feedback 2026-08-02, same day)
 `layout_offer` is delegated to `handleLayoutOffer` (list arrival or one tap's
 slot — same creation session); `layout_state` ARMS the loading overlay's settle watcher (`settleLayLoading`) instead of hiding it — the server being done is not the screen being still (owner 2026-08-03; see [Layouts](layouts.md)).

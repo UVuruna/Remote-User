@@ -32,6 +32,7 @@ import logging
 import shutil
 import struct
 import tempfile
+import time
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -72,6 +73,23 @@ def decode_upload(data: bytes):
     except Exception as e:
         logger.warning("Pillow could not decode upload (%s) — trying OpenCV", e)
     return cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_COLOR)
+
+
+# --- Presence (owner 2026-08-05) -------------------------------------------
+# Layout members are always-on-top while the phone is showing them, so the
+# server MUST know the moment the phone stops working with us — otherwise
+# those windows keep hovering over everything for the owner AT THE DESK. A
+# clean socket close cannot carry that news: a locked phone lets its Wi-Fi
+# sleep and the TCP connection just goes quiet (the live symptom — "kada
+# sednem za desktop ostane topmost na svima"). So presence is a positive
+# signal: the client sends `hb` every few seconds, and silence IS the leave.
+HEARTBEAT_TIMEOUT_S = 12.0   # ~3 missed heartbeats (the client beats at 4 s)
+# An excursion (image picker, camera, voice, a permission dialog) pauses the
+# page — its heartbeats stop while the owner is very much still there — so the
+# client announces it first (`away {excursion: true}`) and this much longer
+# backstop is all that remains, for the excursion that never returns.
+EXCURSION_MAX_S = 300.0
+WATCHDOG_POLL_S = 2.0
 
 
 @dataclass
@@ -256,10 +274,21 @@ def create_app(stream, hub: FrameHub | None, injector: InputInjector, token: str
             ratio = min(w, h) / max(w, h) if w > 0 and h > 0 else 9 / 16
         except (TypeError, ValueError):
             ratio = 9 / 16
-        conn = {"ratio": ratio, "active": None, "region": None, "quality": None}
+        conn = {"ratio": ratio, "active": None, "region": None, "quality": None,
+                # presence: when we last heard from the phone, and whether it
+                # announced an excursion (see HEARTBEAT_TIMEOUT_S above)
+                "seen": time.monotonic(), "away": None, "left": False}
         await ws.send_text(json.dumps({"type": "actions", **_load_actions()}))
         await _send_layout_state(ws, layouts, conn)
-        tasks = [asyncio.create_task(_send_cursor(ws, injector))]
+        # Coming back resumes the layout the phone was last working in (owner
+        # 2026-08-05) — leaving work mode minimized them, and the desktop is
+        # NOT where the owner left off. Only a deliberate desktop choice
+        # (which forgets the pointer) resumes on the desktop.
+        resume = await asyncio.to_thread(layouts.resume_index)
+        if resume is not None:
+            await _layout_focus(ws, layouts, stream, conn, resume)
+        tasks = [asyncio.create_task(_send_cursor(ws, injector)),
+                 asyncio.create_task(_presence_watchdog(ws, layouts, conn))]
         queue = None
         if stream.mode == "jpeg":
             await _send_config(ws, stream, token)
@@ -275,11 +304,17 @@ def create_app(stream, hub: FrameHub | None, injector: InputInjector, token: str
             stats.clients -= 1
             if active_client["ws"] is ws:
                 active_client["ws"] = None
-                # Nobody is watching any layout now — no member may stay
-                # always-on-top at the desk. Only the LAST socket does this:
-                # on a 4409 takeover the new device may be mid-focus.
-                if conn["active"] is not None:
-                    await asyncio.to_thread(layouts.clear_topmost)
+                # Nobody is watching any layout now. Only the LAST socket does
+                # this: on a 4409 takeover the new device may be mid-focus.
+                # An announced EXCURSION is not a leave — the owner is picking
+                # an image and comes right back; the watchdog's long backstop
+                # covers the excursion that never returns.
+                if conn.get("away"):
+                    logger.info("Phone away on an excursion — layout held")
+                    asyncio.create_task(
+                        _excursion_backstop(layouts, active_client))
+                else:
+                    await _leave_session(layouts, conn)
             for task in tasks:
                 task.cancel()
             if queue is not None:
@@ -301,6 +336,50 @@ async def _authenticate(ws: WebSocket, token: str) -> dict | None:
         logger.warning("Auth failed (bad token) from %s", ws.client)
         return None
     return first
+
+
+async def _leave_session(layouts, conn: dict) -> None:
+    """The phone stopped working with us — screen locked, app closed, killed,
+    network gone (owner 2026-08-05). Everything the layouts hold on the PC is
+    handed back to the desk: every member leaves the always-on-top band and
+    gets minimized, exactly like choosing Desktop. Which layout was being used
+    stays remembered in the registry — the next session resumes there.
+    Idempotent: the watchdog and the socket's own teardown both call it."""
+    if conn.get("left"):
+        return
+    conn["left"] = True
+    conn["active"], conn["region"] = None, None
+    logger.info("Phone left work mode — layout members minimized")
+    await asyncio.to_thread(layouts.minimize_members)
+
+
+async def _excursion_backstop(layouts, active_client: dict) -> None:
+    """An excursion (image picker, camera, voice) legitimately keeps the layout
+    alive with the socket closed — but only while the owner really comes back.
+    This is the far end of that patience; a phone still absent by then left."""
+    await asyncio.sleep(EXCURSION_MAX_S)
+    if active_client["ws"] is None:
+        await _leave_session(layouts, {})
+
+
+async def _presence_watchdog(ws: WebSocket, layouts, conn: dict) -> None:
+    """Silence is the leave signal (see HEARTBEAT_TIMEOUT_S). A locked phone
+    rarely manages a clean socket close — its Wi-Fi sleeps and the connection
+    just goes quiet — so the layout's always-on-top windows would hover over
+    the owner's desk forever. Missing heartbeats end the session instead."""
+    while True:
+        await asyncio.sleep(WATCHDOG_POLL_S)
+        silent = time.monotonic() - conn["seen"]
+        if silent < (EXCURSION_MAX_S if conn.get("away") else HEARTBEAT_TIMEOUT_S):
+            continue
+        logger.info("No signal from the phone for %.0fs (%s) — session ends",
+                    silent, "excursion" if conn.get("away") else "heartbeat")
+        await _leave_session(layouts, conn)
+        try:
+            await ws.close(code=4408)  # gone quiet — the phone reconnects fresh
+        except RuntimeError:
+            pass
+        return
 
 
 async def _send_frames(ws: WebSocket, queue: asyncio.Queue) -> None:
@@ -610,6 +689,10 @@ async def _layout_create(ws: WebSocket, layouts, stream, conn: dict, msg: dict) 
         await _send_layout_state(ws, layouts, conn)
         return
     target, name = resolved[0]
+    # The phone may carry the owner's own name (owner 2026-08-05); the tab /
+    # window title stays the default the panel prefilled it with.
+    typed = str(msg.get("name", "")).strip()[:80]
+    name = typed or name
     created = await asyncio.to_thread(
         layouts.create, target, str(msg.get("mode", "solo")),
         msg.get("grid"), [h for h, _ in resolved[1:]],
@@ -666,11 +749,34 @@ async def _layout_focus(ws: WebSocket, layouts, stream, conn: dict, index: int) 
 
 async def _receive_input(ws: WebSocket, injector: InputInjector, stream, token: str,
                          layouts=None, conn: dict | None = None) -> None:
-    conn = conn if conn is not None else {"ratio": 9 / 16, "active": None, "region": None}
+    conn = conn if conn is not None else {"ratio": 9 / 16, "active": None,
+                                          "region": None, "seen": time.monotonic(),
+                                          "away": None, "left": False}
     layouts = layouts if layouts is not None else window_manager.LayoutRegistry()
     while True:
         msg = json.loads(await ws.receive_text())
         kind = msg.get("type")
+        # Every message is proof the phone is still with us — `away` is the one
+        # message that deliberately says otherwise (presence, owner 2026-08-05).
+        conn["seen"] = time.monotonic()
+        if kind != "away":
+            conn["away"] = None
+        if kind not in ("away", "hb"):
+            conn["left"] = False  # real work on this socket = the phone is back
+        if kind == "hb":
+            continue  # heartbeat: the timestamp above IS the whole payload
+        if kind == "away":
+            # The page is about to be hidden. An EXCURSION (image picker,
+            # camera, voice, a permission dialog) means the owner is still
+            # working with us and comes straight back — hold everything.
+            # Anything else (lock, app closed) hands the desk its windows back
+            # immediately, without waiting for the heartbeat to run out.
+            if msg.get("excursion"):
+                conn["away"] = True
+                logger.info("Phone announced an excursion — layout held")
+            else:
+                await _leave_session(layouts, conn)
+            continue
         if kind in ("pointer_down", "pointer_up", "click"):
             button = msg.get("button", "left")
             if button not in BUTTON_FLAGS:
@@ -761,7 +867,19 @@ async def _receive_input(ws: WebSocket, injector: InputInjector, stream, token: 
         elif kind == "layout_aspect":
             await _layout_aspect(ws, layouts, stream, conn, msg)
         elif kind == "layout_focus":
-            await _layout_focus(ws, layouts, stream, conn, int(msg["index"]))
+            index = int(msg["index"])
+            if index < 0:
+                # A DELIBERATE desktop choice is the state to resume into —
+                # nothing to come back to (owner 2026-08-05).
+                await asyncio.to_thread(layouts.forget_focus)
+            await _layout_focus(ws, layouts, stream, conn, index)
+        elif kind == "layout_rename":
+            # The owner's own name for a layout (owner 2026-08-05) — the window
+            # title is only the default the creation panel offers.
+            if not await asyncio.to_thread(
+                    layouts.rename, int(msg["index"]), str(msg.get("name", ""))):
+                await _toast(ws, "That layout is gone")
+            await _send_layout_state(ws, layouts, conn)
         elif kind == "layout_remove":
             index = int(msg["index"])
             await asyncio.to_thread(layouts.remove, index)

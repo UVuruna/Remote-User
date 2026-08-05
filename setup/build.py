@@ -196,6 +196,12 @@ def input_gate() -> None:
     fails the build too (install it; never skip the gate silently)."""
     step("0b/6  INPUT GATE — end-to-end click path (tests/test_input_pipeline.py)")
     run([sys.executable, str(PROJECT_DIR / "tests" / "test_input_pipeline.py")])
+    # Same fail-closed reasoning for presence (owner 2026-08-05): layout
+    # members are always-on-top while the phone watches them, so a release
+    # that forgets to notice the phone leaving locks the owner's own desk
+    # under hovering windows. Pure logic — no browser needed.
+    step("0c/6  PRESENCE GATE — leaving work mode frees the desk (tests/test_presence.py)")
+    run([sys.executable, str(PROJECT_DIR / "tests" / "test_presence.py")])
 
 
 def generate_icons() -> None:

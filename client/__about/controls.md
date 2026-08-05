@@ -96,7 +96,10 @@ for the split's general load-order reasoning.
   image POSTs to `/upload` (bitmap paste); several files or any non-image
   POST to `/upload_files` (pasted as REAL files via CF_HDROP). Gallery and
   Files inputs allow multi-select; Camera captures directly (owner
-  2026-08-04). The server injects the Ctrl+V itself.
+  2026-08-04). The server injects the Ctrl+V itself. Opening any picker —
+  and starting the mic — calls `markExcursion()` ([State](state.md)) first,
+  so the hide that follows is announced as an excursion and the PC does not
+  pack the layout away underneath a gallery pick (owner 2026-08-05).
 - `keepFocus(el, onTap)` — the shared button-press primitive: fires on
   `pointerup` (touch grants transient user activation only at UP — needed by
   the file picker/IME) plus a `pointercancel` rescue when travel stayed under

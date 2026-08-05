@@ -19,6 +19,18 @@ const SCROLL_FLING_DECAY = 0.004;
 const VIEWPORT_MARGIN = 0.15;
 const VIEWPORT_THROTTLE_MS = 150;
 const RECONNECT_MS = 2000;
+// Presence (owner 2026-08-05): the server holds layout windows always-on-top
+// while we are watching, so it must learn the instant we stop. A locked phone
+// often cannot even close the socket (its Wi-Fi sleeps), so PRESENCE IS THE
+// SIGNAL — this beat, and its silence when the page is frozen or gone. The
+// server's patience is 12 s (three missed beats).
+const HEARTBEAT_MS = 4000;
+// An excursion — image picker, camera, voice, a permission dialog — hides the
+// page while the owner is very much still working with us. Anything that
+// leaves the app on purpose marks it, and the hide that follows within this
+// window is announced as an excursion instead of a leave, so the PC does not
+// pack the layout away underneath a gallery pick.
+const EXCURSION_GRACE_MS = 90000;
 const LIVE_MAX_BEHIND_S = 0.5;   // jump to the live edge when this far behind
 const LIVE_TARGET_BEHIND_S = 0.1;
 const BUFFER_KEEP_S = 8;         // decoded history kept in MSE before trimming
@@ -115,6 +127,19 @@ function toCanvasPx(e) {
     x: e.clientX * devicePixelRatio,
     y: (e.clientY + kbShift) * devicePixelRatio,
   };
+}
+
+// Set by everything that deliberately leaves the app for a moment (image
+// picker, camera, voice, a permission dialog): the hide that follows is an
+// EXCURSION, not the end of work — the PC keeps the layout standing.
+let excursionUntil = 0;
+
+function markExcursion() {
+  excursionUntil = performance.now() + EXCURSION_GRACE_MS;
+}
+
+function inExcursion() {
+  return performance.now() < excursionUntil;
 }
 
 function send(msg) {

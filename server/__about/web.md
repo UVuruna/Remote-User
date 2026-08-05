@@ -54,3 +54,37 @@ JPEG mode only: fans frames from the capture thread out to per-client `asyncio.Q
 
 `config` additionally carries `apk_version` (the served APK's real version —
 the phone's update-banner comparison; `app_version` stays for display).
+
+## Presence — the phone leaving work mode (owner 2026-08-05)
+Layout members sit in the always-on-top band while the phone is showing them
+([Window Manager](window_manager.md)), which is only correct while somebody
+is actually looking. The server used to learn otherwise ONLY from a clean
+socket close — and a locked phone rarely manages one: its Wi-Fi sleeps and
+the connection just goes quiet. The live symptom was the owner sitting down
+at his own PC with every layout window hovering over everything else.
+
+Presence is therefore a POSITIVE signal:
+
+- `hb` — the client beats every 4 s while the page is visible. Any message
+  refreshes `conn["seen"]`; silence is what means something.
+- `_presence_watchdog(ws, layouts, conn)` — polls every `WATCHDOG_POLL_S`;
+  `HEARTBEAT_TIMEOUT_S` (12 s, three missed beats) of silence ends the
+  session and closes the socket with 4408.
+- `away {excursion}` — the client's parting word when the page is hidden.
+  An EXCURSION (image picker, camera, voice, a permission dialog) is the
+  owner still working with us: the layout stands, guarded only by
+  `EXCURSION_MAX_S` (5 min) — as a live socket via the watchdog, or after
+  the socket closes via `_excursion_backstop`. Anything else (lock, app
+  closed) is a leave and acts immediately.
+- `_leave_session(layouts, conn)` — idempotent (watchdog and socket teardown
+  both call it): every layout member leaves the topmost band and is
+  minimized, exactly like choosing Desktop. WHICH layout was in use stays
+  remembered in the registry, and the next authenticated connection resumes
+  there (`layouts.resume_index()` right after the first `layout_state`).
+
+`layout_rename {index, name}` renames a layout; `layout_create` accepts an
+optional `name` (the phone's creation panel prefills the window title, the
+owner may type anything). A deliberate `layout_focus -1` also calls
+`forget_focus()` — the desktop is then the state to resume into.
+
+Proven by `tests/test_presence.py` — a fail-closed step in `build.py`.

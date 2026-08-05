@@ -26,6 +26,12 @@ function connect() {
     // The server starts every connection at default quality — restate the
     // saved overrides (a network switch reconnects, so auto-on-mobile-data
     // re-evaluates here too).
+    // Nothing may reach the server before `auth` — the handler rejects the
+    // whole connection if the first message is anything else. The heartbeat
+    // and the `away` word therefore wait for this flag, never for readyState
+    // alone (a timer task can run between the socket opening and this
+    // handler).
+    sock.authSent = true;
     if (qualityOverridden()) sendQuality();
     lastSentViewport = { x: 0, y: 0, w: 1, h: 1 };
     scheduleViewport();
@@ -163,8 +169,28 @@ function ensureConnected() {
   connect();
 }
 
+// The heartbeat IS how the PC knows we are still working (owner 2026-08-05).
+// Layout windows are always-on-top while we watch them, so the moment this
+// beat stops — screen locked, app closed, killed, network gone — the server
+// hands those windows back to the desk and minimizes them. A page that is
+// merely paused stops beating all by itself, which is exactly the point.
+function socketReady() {
+  return ws && ws.readyState === WebSocket.OPEN && ws.authSent;
+}
+
+setInterval(() => {
+  if (socketReady() && !document.hidden) ws.send(JSON.stringify({ type: "hb" }));
+}, HEARTBEAT_MS);
+
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) {
+    if (socketReady()) {
+      // Say WHY we are going: an excursion (image picker, camera, voice) is
+      // the owner still working with us — the PC holds the layout as it is;
+      // anything else is the end of the session and the desk gets its
+      // windows back immediately instead of after the heartbeat runs out.
+      ws.send(JSON.stringify({ type: "away", excursion: inExcursion() }));
+    }
     if (ws) ws.close();
   } else {
     // Reconnect the moment the user comes back (app switch, image picker,
