@@ -1,0 +1,31 @@
+# panels.js — Settings overlay panels (Sets picker + Quality)
+
+Split out of `controls.js` on 2026-08-05 (THE STRUCTURE LAW): `controls.js`
+owns the D-pad groups, the wheel and the button actions; this module owns the
+full-screen card overlays those actions open. Loads right after `controls.js`
+(same global scope — it uses its prefs helpers, wheel state and `keepFocus`).
+
+## Sets picker (`openSetsPanel`)
+
+Chooses which sets ride in the wheel on THIS phone: required built-ins are
+locked on; optional shipped sets and desktop-made custom sets toggle up to
+`WHEEL_MAX` total, plus the app-shortcuts toggle. Stored per device via the
+prefs bridge (`prefGet`/`prefSet` in controls.js) — origin-independent, see
+the bridge note there (owner bug 2026-08-05: pure localStorage split state
+between the LAN and Tailscale origins, the picker "rotated").
+
+## Quality panel (`openQualityPanel`)
+
+Owner 2026-08-05 — replaces the old full/reduced cycler. Segment rows for
+FPS (Max/10/15/30/60), resolution (Full/⅔/½ — half per axis is quarter
+pixels, so the middle step is ⅔) and bitrate (High/Mid/Low), plus the
+"save data on mobile networks" checkbox. Every tap saves (`qualityPrefs` in
+controls.js) and sends the EFFECTIVE values to the server, which re-opens
+this client's encoder; "Max/Full/High" mean "no override — the desktop
+Settings defaults apply".
+
+## Ghost-click armor (both panels)
+
+The tap that OPENS a panel can deliver a late synthetic click that lands on
+whichever row opened under the finger, silently toggling it. A capture-phase
+click handler swallows every click within `GHOST_CLICK_MS` of opening.

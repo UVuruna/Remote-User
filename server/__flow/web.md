@@ -102,7 +102,10 @@ Pseudocode:
             push(item): put_nowait; ON QueueFull -> drain queue, put None
                         (a full queue means the client cannot keep up -- the WHOLE
                         session resets; H.264 bytes cannot be dropped individually)
-            TRY: session = manager.open_session(on_data=push, on_end=lambda: push(None))
+            TRY: session = manager.open_session(on_data=push, on_end=lambda: push(None),
+                                                quality=conn["quality"])  # phone panel overrides
+                 # (a changed `quality` message resets the session via conn["reset_stream"];
+                 #  the loop reopens here with the new fps/res/bitrate)
             EXCEPT (RuntimeError, OSError): toast "stream failed", close(1011), return
             send config (with the session's parsed codec)
             WHILE (chunk := queue.get()) is not None:

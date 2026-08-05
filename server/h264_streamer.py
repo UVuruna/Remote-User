@@ -65,16 +65,19 @@ class H264Session:
     reacts by opening a fresh session."""
 
     def __init__(self, source: RawFrameSource, encoder: str, on_data, on_end,
-                 reduced: bool = False):
+                 quality: dict | None = None):
         """on_data(bytes) / on_end() are called from the read thread and must
         be cheap and thread-safe (the web layer bridges them to asyncio).
-        reduced = the client asked for the data-saving stream (half
-        resolution, ~10 fps, low bitrate — owner spec 2026-08-02)."""
+        quality = this client's overrides from the phone's quality panel
+        (owner spec 2026-08-05): {"fps": int, "res": "full"|"2/3"|"1/2",
+        "bitrate": "high"|"mid"|"low"}. fps 0 / "full" / "high" mean "no
+        override" — the desktop Settings defaults apply. None = all
+        defaults."""
         self._source = source
         self._encoder = encoder
         self._on_data = on_data
         self._on_end = on_end
-        self._reduced = reduced
+        self._quality = quality or {}
         self._sink = FrameSink()
         self._proc: subprocess.Popen | None = None
         self._running = False
@@ -85,16 +88,22 @@ class H264Session:
         self.width, self.height = source.stream_w, source.stream_h
 
     def _ffmpeg_cmd(self) -> list[str]:
-        # Reduced mode downscales + drops fps INSIDE this client's own ffmpeg
-        # (capture and other clients stay untouched); dimensions must stay
-        # even for yuv420p.
-        filters = []
-        bitrate = SETTINGS.h264_bitrate
-        if self._reduced:
-            s = max(1, SETTINGS.h264_reduced_scale)
-            filters = ["-vf", f"scale=trunc(iw/{s}/2)*2:trunc(ih/{s}/2)*2,"
-                              f"fps={SETTINGS.h264_reduced_fps}"]
-            bitrate = SETTINGS.h264_reduced_bitrate
+        # Quality overrides downscale / drop fps INSIDE this client's own
+        # ffmpeg (capture and other clients stay untouched); dimensions must
+        # stay even for yuv420p.
+        chain = []
+        num, den = {"2/3": (2, 3), "1/2": (1, 2)}.get(
+            self._quality.get("res"), (1, 1))
+        if den != num:
+            chain.append(f"scale=trunc(iw*{num}/{den}/2)*2:trunc(ih*{num}/{den}/2)*2")
+        fps = int(self._quality.get("fps") or 0)
+        if 0 < fps < SETTINGS.target_fps:
+            chain.append(f"fps={fps}")
+        filters = ["-vf", ",".join(chain)] if chain else []
+        bitrate = {
+            "mid": SETTINGS.h264_bitrate_mid,
+            "low": SETTINGS.h264_bitrate_low,
+        }.get(self._quality.get("bitrate"), SETTINGS.h264_bitrate)
         return [
             SETTINGS.ffmpeg_path, "-hide_banner", "-loglevel", "error",
             "-f", "rawvideo", "-pix_fmt", "bgr24",
@@ -230,7 +239,7 @@ class H264Manager:
         connected (capture idles otherwise and the request times out)."""
         return self._source.take_screenshot()
 
-    def open_session(self, on_data, on_end, reduced: bool = False) -> H264Session:
+    def open_session(self, on_data, on_end, quality: dict | None = None) -> H264Session:
         """Starts capture with the first client. Blocking (ffmpeg spawn + init
         segment wait). Raises RuntimeError when the encoder fails to start."""
         with self._lock:
@@ -238,7 +247,7 @@ class H264Manager:
                 self._source.start()
                 self._source_running = True
             session = H264Session(self._source, self.encoder, on_data, on_end,
-                                  reduced=reduced)
+                                  quality=quality)
             try:
                 session.start()
             except Exception:  # RuntimeError (no head) or OSError (Popen) — same cleanup

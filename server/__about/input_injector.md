@@ -45,7 +45,7 @@ Maps monitor-normalized coordinates to virtual-desktop absolutes and injects.
 - `set_monitor_rect(rect)`: called when the streamed monitor changes
 
 ## Module-level data and helpers
-- `VK_CODES`: name → virtual-key code for structural keys (`enter`, `backspace`, `tab`, `escape`/`esc`, `delete`/`del`, `insert`, `home`, `end`, `pageup`, `pagedown`, `space`, arrow keys, `` ` ``/`backquote` — VSCode's terminal chord)
+- `VK_CODES`: name → virtual-key code for structural keys (`enter`, `backspace`, `tab`, `escape`/`esc`, `delete`/`del`, `insert`, `home`, `end`, `pageup`, `pagedown`, `space`, arrow keys, `` ` ``/`backquote` — VSCode's terminal chord; media keys; `minus`/`-` and `plus`/`=` — the main-row OEM keys for the layout font-zoom chords `ctrl+minus`/`ctrl+plus`, owner 2026-08-05)
 - `MODIFIER_VKS`: `ctrl`/`control`, `alt`, `shift`, `win`/`meta`/`super` → VK code
 - `BUTTON_FLAGS`: `left`/`right`/`middle` → `(down flag, up flag)` — imported directly by [Web Layer](web.md) to validate the client's `button` field
 - `vk_for_key(token)`: a single chord token (a single letter/digit, a name in `VK_CODES`, a bare modifier, or `f1`–`f24`) → VK code, or `None`

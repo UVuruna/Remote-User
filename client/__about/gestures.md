@@ -70,6 +70,21 @@ scale is clamped to `[viewHome.scale, viewHome.scale * ZOOM_MAX]` instead of
 desktop. Panning is bounded by `clampView()` to the region rect — see
 [Render](render.md).
 
+## Font-zoom staircase (owner 2026-08-05, layout focus ONLY)
+
+Pinching out PAST the fitted view no longer dead-ends: the finger position is
+mapped to steps (`FONT_ZOOM_STEP` = 1.2× pinch per step, `FONT_ZOOM_MAX` cap)
+and each step below the floor sends `chord ctrl+minus` — the layout window's
+own content shrinks, so an article wider than the region becomes fully
+visible. Pinching back in first undoes the applied steps with `ctrl+plus`
+(the `=`/`+` key) BEFORE any visual zoom resumes, so the sequence is always
+content-back-to-100% → then visual zoom, exactly mirroring the way out.
+Steps already applied are tracked per layout in `fontZoomByLayout`
+([State](state.md); indices shift on `layout_remove`). The effect is whatever
+the focused app does with Ctrl+-/= — browsers and editors scale, Explorer
+cycles its view modes, image viewers may ignore it (owner accepted). The
+desktop pinch path is untouched (`viewLocked()` gates the whole branch).
+
 ## Input switchers auto-OFF (owner 2026-08-04)
 The primary `pointerdown` on the canvas calls `inputOff()` — tapping the
 stream is the natural "done typing/dictating", so the keyboard and mic

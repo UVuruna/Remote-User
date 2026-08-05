@@ -122,15 +122,60 @@ const BUILTINS = {
   // Settings defaults): choose WHICH custom sets ride in the wheel (max 3)
   // and whether app-aware sets appear at all. Creation stays desktop-only.
   sets:     { label: "Sets",   icon: "grid",   kind: "sets" },
-  // full → reduced (half res, ~10 fps — saves data) → auto (reduced only on
-  // mobile data, via the shell's transport bridge)
+  // Opens the quality panel (fps / resolution / bitrate + auto-save on
+  // mobile data — owner 2026-08-05, replacing the full/reduced cycler)
   quality:  { label: "Quality", icon: "gauge",  kind: "quality" },
 };
 
-// --- Stream quality (Phase F+ step 3) --------------------------------------
+// --- Device prefs (owner bug report 2026-08-05) ----------------------------
+// localStorage is keyed by ORIGIN, and the shell deliberately alternates
+// between two addresses (LAN / Tailscale) — pure localStorage therefore
+// splits the device's saved state into two silently diverging copies (the
+// sets picker "rotated" between two states). The shell's SharedPreferences
+// bridge is the real store; localStorage stays as the dev-browser fallback
+// and as migration source for state saved before the bridge existed.
 
-function qualityMode() {
-  return localStorage.getItem("qualityMode") || "full";
+function prefGet(key) {
+  try {
+    if (IN_APP && window.Android.prefGet) {
+      const v = window.Android.prefGet(key);
+      if (v !== "") return v;
+    }
+  } catch {}
+  try { return localStorage.getItem(key); } catch { return null; }
+}
+
+function prefSet(key, value) {
+  try {
+    if (IN_APP && window.Android.prefSet) window.Android.prefSet(key, String(value));
+  } catch {}
+  try { localStorage.setItem(key, String(value)); } catch {}
+}
+
+// --- Stream quality (Phase F+ step 3; panel — owner 2026-08-05) ------------
+// The Quality button no longer cycles full/reduced/auto: it opens a panel of
+// per-DEVICE overrides of the desktop defaults — fps, resolution (full, 2/3,
+// 1/2 — half PER AXIS is quarter pixels, so the middle step is 2/3, owner),
+// bitrate level, plus "save data on mobile networks". The EFFECTIVE values go
+// to the server, which re-opens this client's encoder.
+
+const QUALITY_FPS = [0, 10, 15, 30, 60]; // 0 = server default (max)
+const QUALITY_RES = ["full", "2/3", "1/2"];
+const QUALITY_BR = ["high", "mid", "low"];
+const QUALITY_DEFAULTS = { fps: 0, res: "full", bitrate: "high", auto: false };
+
+function qualityPrefs() {
+  try {
+    const p = JSON.parse(prefGet("qualityPrefs") || "{}");
+    return {
+      fps: QUALITY_FPS.includes(p.fps) ? p.fps : 0,
+      res: QUALITY_RES.includes(p.res) ? p.res : "full",
+      bitrate: QUALITY_BR.includes(p.bitrate) ? p.bitrate : "high",
+      auto: p.auto === true,
+    };
+  } catch {
+    return { ...QUALITY_DEFAULTS };
+  }
 }
 
 function transportCellular() {
@@ -141,29 +186,28 @@ function transportCellular() {
   }
 }
 
-function effectiveReduced() {
-  const m = qualityMode();
-  return m === "reduced" || (m === "auto" && transportCellular());
+// What the server should actually run for this device right now: the saved
+// choices, except that auto-on-mobile-data overrides them with the saving
+// profile while on cellular (re-evaluated on every (re)connect — a network
+// switch reconnects by rule).
+function effectiveQuality() {
+  const p = qualityPrefs();
+  if (p.auto && transportCellular()) return { fps: 10, res: "1/2", bitrate: "low" };
+  return { fps: p.fps, res: p.res, bitrate: p.bitrate };
+}
+
+function qualityOverridden() {
+  const e = effectiveQuality();
+  return e.fps !== 0 || e.res !== "full" || e.bitrate !== "high";
 }
 
 function sendQuality() {
-  send({ type: "quality", reduced: effectiveReduced() });
+  send({ type: "quality", ...effectiveQuality() });
 }
 
 function refreshQualityButtons() {
   document.querySelectorAll('[data-action="quality"]').forEach((el) =>
-    el.classList.toggle("active", effectiveReduced()));
-}
-
-function cycleQuality() {
-  const order = ["full", "reduced", "auto"];
-  const m = order[(order.indexOf(qualityMode()) + 1) % order.length];
-  localStorage.setItem("qualityMode", m);
-  showToast(m === "full" ? "Quality: full"
-    : m === "reduced" ? "Quality: reduced — saves data"
-    : "Quality: auto — reduced on mobile data");
-  sendQuality();
-  refreshQualityButtons();
+    el.classList.toggle("active", qualityOverridden()));
 }
 
 // --- Touch-mode toggles ---------------------------------------------------
@@ -311,6 +355,12 @@ window.__voiceResult = (text) => {
   if (text) sendTyped(text + " ");
 };
 
+// Diagnostic line from the shell (owner 2026-08-05 — evidence on the pill:
+// which engine/languages dictation runs and what errors come back).
+window.__voiceInfo = (text) => {
+  if (micOn) showToast(text);
+};
+
 // One listening round ended (silence, error, permission). Restart while ON.
 window.__voiceEnd = (reason) => {
   if (!micOn) return;
@@ -361,8 +411,8 @@ let anywhereOffer = null; // null = undecided for this load, then true/false
 function updateAnywhereBanner() {
   const onAnywhere = tailscaleUrl && new URL(tailscaleUrl).host === location.host;
   if (anywhereOffer === null && tailscaleUrl && !onAnywhere) {
-    anywhereOffer = localStorage.getItem("anywhereOffered") !== "1";
-    localStorage.setItem("anywhereOffered", "1");
+    anywhereOffer = prefGet("anywhereOffered") !== "1";
+    prefSet("anywhereOffered", "1");
   }
   anywhereBanner.hidden = !(tailscaleUrl && !onAnywhere && anywhereOffer === true &&
                             sessionStorage.getItem("wizDismissed") !== "1");
@@ -521,7 +571,7 @@ const groups = { left: 0, right: 0 };
 // purpose — the desktop editor sets the defaults, the phone overrides them.
 function setsPrefs() {
   try {
-    const p = JSON.parse(localStorage.getItem("setsPrefs") || "{}");
+    const p = JSON.parse(prefGet("setsPrefs") || "{}");
     return {
       state: p.state && typeof p.state === "object" ? p.state : {},
       apps: p.apps !== false,
@@ -540,7 +590,7 @@ function setOn(s) {
 }
 
 function saveSetsPrefs(p) {
-  localStorage.setItem("setsPrefs", JSON.stringify(p));
+  prefSet("setsPrefs", JSON.stringify(p));
 }
 
 // App-aware sets exist ONLY in layout focus (owner decision 2026-08-04):
@@ -711,7 +761,7 @@ function makeActionButton(btn, pos) {
     } else if (b.kind === "anywhere") {
       keepFocus(el, openWizard); // the banner shows only once — this is the permanent way in
     } else if (b.kind === "quality") {
-      keepFocus(el, cycleQuality);
+      keepFocus(el, openQualityPanel);
     }
   } else if (btn.chord) {
     // actions.json buttons may name an icon from ICONS (owner-approved icon
@@ -806,87 +856,9 @@ function closeWheel() {
   wheelEl.innerHTML = "";
 }
 
-// --- Sets picker (Settings → Sets, owner 2026-08-05) ----------------------
-// Chooses WHICH sets ride in the wheel on THIS phone: the five built-ins are
-// always on; the rest toggle up to WHEEL_MAX total (creation on the desktop —
-// creation never happens here) plus the app-shortcuts toggle. Stored in
-// localStorage — per device, overriding the desktop editor's defaults.
-
-const setsPanel = document.getElementById("sets-panel");
-
-function setsRow(s, locked) {
-  const row = document.createElement("label");
-  row.className = "sets-row";
-  const cb = document.createElement("input");
-  cb.type = "checkbox";
-  cb.checked = locked || setOn(s);
-  cb.disabled = locked;
-  if (!locked) {
-    cb.addEventListener("change", () => {
-      if (cb.checked && visibleCount() >= WHEEL_MAX) {
-        cb.checked = false;
-        showToast(`The wheel holds ${WHEEL_MAX} sets — untick one first`);
-        return;
-      }
-      const p = setsPrefs();
-      p.state[s.name] = cb.checked;
-      saveSetsPrefs(p);
-      refreshCategories();
-    });
-  }
-  const ic = document.createElement("span");
-  ic.className = "sets-ic";
-  ic.innerHTML = svg(s.icon && ICONS[s.icon] ? s.icon : "grid");
-  row.append(cb, ic, document.createTextNode(s.name + (locked ? " — always on" : "")));
-  return row;
-}
-
-function openSetsPanel() {
-  setsPanel.innerHTML = "";
-  const card = document.createElement("div");
-  card.className = "sets-card";
-  card.innerHTML = `<h2>Wheel sets</h2>
-    <p class="sets-sub">Mouse, Input and Settings are always in the wheel. Pick the rest — up to ${WHEEL_MAX} in total. New sets are made on the PC (Remote User window → Controls…).</p>`;
-
-  const list = document.createElement("div");
-  list.className = "sets-list";
-  categories.forEach((s) => list.appendChild(setsRow(s, !!s.required)));
-  customSets.forEach((s) => list.appendChild(setsRow(s, false)));
-  card.appendChild(list);
-
-  const appRow = document.createElement("label");
-  appRow.className = "sets-row apps";
-  const appCb = document.createElement("input");
-  appCb.type = "checkbox";
-  appCb.checked = setsPrefs().apps;
-  appCb.addEventListener("change", () => {
-    const p = setsPrefs();
-    p.apps = appCb.checked;
-    saveSetsPrefs(p);
-    refreshCategories();
-  });
-  appRow.append(appCb, document.createTextNode("App shortcuts while a layout is focused (VSCode, Chrome…)"));
-  card.appendChild(appRow);
-
-  const done = document.createElement("button");
-  done.type = "button";
-  done.className = "sets-done";
-  done.textContent = "Done";
-  keepFocus(done, closeSetsPanel);
-  card.appendChild(done);
-
-  setsPanel.appendChild(card);
-  setsPanel.hidden = false;
-}
-
-function closeSetsPanel() {
-  setsPanel.hidden = true;
-  setsPanel.innerHTML = "";
-}
-
-setsPanel.addEventListener("pointerdown", (e) => {
-  if (e.target === setsPanel) closeSetsPanel(); // backdrop tap = done
-});
+// The Sets picker and Quality panel overlays live in panels.js (split out
+// 2026-08-05, THE STRUCTURE LAW) — openSetsPanel/openQualityPanel are called
+// only at runtime, after every script has loaded.
 
 // Rotation may carry a different button order per set (order_port).
 matchMedia("(orientation: portrait)").addEventListener("change", () => {

@@ -85,6 +85,10 @@ focus starts at desktop): armed by each focused `layout_state`, cleared in
 [Connection](connection.md)'s handler which re-sends `layout_focus` so the
 app comes back into the layout it was working in.
 
+`fontZoomByLayout` (owner 2026-08-05) — Ctrl+-/= steps the font-zoom
+staircase ([Gestures](gestures.md)) has applied, per layout index; `send()`
+shifts the indices down when a `layout_remove` goes out.
+
 ## `kbShift` (owner 2026-08-03)
 The canvas keeps its full height when the soft keyboard opens and is shifted
 up instead of being squeezed ([Render](render.md)). Pointer events are

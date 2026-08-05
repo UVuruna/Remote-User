@@ -256,7 +256,7 @@ def create_app(stream, hub: FrameHub | None, injector: InputInjector, token: str
             ratio = min(w, h) / max(w, h) if w > 0 and h > 0 else 9 / 16
         except (TypeError, ValueError):
             ratio = 9 / 16
-        conn = {"ratio": ratio, "active": None, "region": None, "reduced": False}
+        conn = {"ratio": ratio, "active": None, "region": None, "quality": None}
         await ws.send_text(json.dumps({"type": "actions", **_load_actions()}))
         await _send_layout_state(ws, layouts, conn)
         tasks = [asyncio.create_task(_send_cursor(ws, injector))]
@@ -343,7 +343,7 @@ async def _stream_h264(ws: WebSocket, manager, token: str,
                 manager.open_session,
                 lambda chunk, p=push: loop.call_soon_threadsafe(p, chunk),
                 lambda p=push: loop.call_soon_threadsafe(p, None),
-                conn.get("reduced", False),
+                conn.get("quality"),
             )
         except (RuntimeError, OSError) as e:
             logger.error("H.264 session failed to open: %s", e)
@@ -629,11 +629,13 @@ async def _layout_create(ws: WebSocket, layouts, stream, conn: dict, msg: dict) 
 
 async def _layout_aspect(ws: WebSocket, layouts, stream, conn: dict, msg: dict) -> None:
     """The phone's Aspect panel (owner 2026-08-03): store this layout's W:H
-    (0/0 = back to the phone's own shape) and focus it — the focus is what
-    re-places the windows into the new region."""
+    (0/0 = back to the phone's own shape) and free-axis position (owner
+    2026-08-05 — the Move handle; 0–1000, 500 = centered), then focus it —
+    the focus is what re-places the windows into the new region."""
     index = int(msg["index"])
     w, h = int(msg.get("w") or 0), int(msg.get("h") or 0)
-    if not await asyncio.to_thread(layouts.set_ratio, index, w, h):
+    pos = int(msg.get("pos") if msg.get("pos") is not None else 500) / 1000
+    if not await asyncio.to_thread(layouts.set_ratio, index, w, h, pos):
         await _toast(ws, "That layout is gone")
         await _send_layout_state(ws, layouts, conn)
         return
@@ -724,15 +726,32 @@ async def _receive_input(ws: WebSocket, injector: InputInjector, stream, token: 
             label = (name or "")[:40]
             await _toast(ws, f"→ {label}" if name else "No text boxes found")
         elif kind == "quality":
-            # Full vs reduced stream (owner spec: lower resolution + ~10 fps,
-            # chosen always or only on mobile data — the CLIENT decides when
-            # and just tells us the effective state). H.264: the running
-            # session is reset and reopens with the reduced encoder settings.
-            conn["reduced"] = bool(msg.get("reduced"))
-            if stream.mode == "h264" and conn.get("reset_stream"):
+            # Per-client quality overrides (owner spec 2026-08-05: the phone's
+            # panel picks fps / resolution / bitrate level, or auto-reduces on
+            # mobile data — the CLIENT decides when and sends the EFFECTIVE
+            # values). H.264: the running session is reset and reopens with
+            # the new encoder settings. Legacy `reduced: true` (older client
+            # pages) maps to the auto-save profile.
+            if "reduced" in msg and "res" not in msg:
+                quality = ({"fps": SETTINGS.h264_reduced_fps, "res": "1/2",
+                            "bitrate": "low"} if msg.get("reduced") else None)
+            else:
+                quality = {
+                    "fps": int(msg.get("fps") or 0),
+                    "res": str(msg.get("res") or "full"),
+                    "bitrate": str(msg.get("bitrate") or "high"),
+                }
+                if quality == {"fps": 0, "res": "full", "bitrate": "high"}:
+                    quality = None  # pure defaults — same as no override
+            changed = quality != conn.get("quality")
+            conn["quality"] = quality
+            if changed and stream.mode == "h264" and conn.get("reset_stream"):
                 conn["reset_stream"]()
-            await _toast(ws, "Reduced quality — saving data" if conn["reduced"]
-                         else "Full quality")
+            if changed:
+                await _toast(ws, "Stream: " + (
+                    "default quality" if quality is None else
+                    f"{quality['fps'] or 'max'} fps · {quality['res']} res · "
+                    f"{quality['bitrate']} bitrate"))
         elif kind == "layout_create":
             await _layout_create(ws, layouts, stream, conn, msg)
         elif kind == "layout_aspect":

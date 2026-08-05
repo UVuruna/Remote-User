@@ -339,7 +339,8 @@ body.hidden-controls #update-banner { display: none; }
 
 /* Settings → Sets: the wheel-composition picker (owner 2026-08-05).
    Same overlay pattern as the wizard. */
-#sets-panel {
+#sets-panel,
+#quality-panel {
   position: fixed;
   inset: 0;
   z-index: 50;
@@ -349,7 +350,27 @@ body.hidden-controls #update-banner { display: none; }
   justify-content: center;
   padding: var(--space-m);
 }
-#sets-panel[hidden] { display: none; }
+#sets-panel[hidden],
+#quality-panel[hidden] { display: none; }
+
+/* Quality panel segments (owner 2026-08-05) */
+.q-row { display: flex; align-items: center; gap: 10px; padding: 7px 0; }
+.q-cap { width: 84px; color: var(--text-secondary); font-size: 14px; }
+.q-seg { display: flex; flex: 1; gap: 6px; }
+.q-seg button {
+  flex: 1;
+  padding: 9px 0;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-primary);
+  font: 500 14px system-ui, sans-serif;
+}
+.q-seg button.on {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgb(56 189 248 / 0.08);
+}
 .sets-card {
   width: min(420px, 100%);
   max-height: 92vh;
@@ -726,6 +747,23 @@ body.hidden-controls #update-banner { display: none; }
 .asp-h.l { top: 50%; left: 0; }
 .asp-h.r { top: 50%; left: 100%; }
 .asp-h.free { box-shadow: 0 0 0 6px var(--accent-glow); }
+/* The Move handle (owner 2026-08-05) — its own drag surface, so it must
+   accept pointer events although the region itself passes them through. */
+.asp-move {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #0F172A;
+  font: 700 24px/44px system-ui, sans-serif;
+  text-align: center;
+  pointer-events: auto;
+  touch-action: none;
+}
 .asp-value {
   text-align: center;
   color: var(--text-secondary);

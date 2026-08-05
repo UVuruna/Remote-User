@@ -84,6 +84,12 @@ VK_CODES = {
     "mute": 0xAD,
     "voldown": 0xAE,
     "volup": 0xAF,
+    # Main-row -/= keys (the layout font-zoom staircase, owner 2026-08-05:
+    # Ctrl+'-' shrinks an app's content, Ctrl+'=' — the +/= key — grows it).
+    "minus": 0xBD,
+    "-": 0xBD,
+    "plus": 0xBB,
+    "=": 0xBB,
 }
 
 # Modifiers usable in a chord ("ctrl+win+alt+1").

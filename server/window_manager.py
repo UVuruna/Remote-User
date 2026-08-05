@@ -295,15 +295,19 @@ def _work_area(mon_rect: tuple[int, int, int, int]) -> tuple[int, int, int, int]
     return (w.left, w.top, w.right - w.left, w.bottom - w.top)
 
 
-def _fit_rect(box, aspect: float) -> tuple[int, int, int, int]:
-    """Largest rect of the given aspect (w/h) centered inside `box`."""
+def _fit_rect(box, aspect: float, pos: float = 0.5) -> tuple[int, int, int, int]:
+    """Largest rect of the given aspect (w/h) inside `box`, placed at
+    fraction `pos` of the slack along the free axis (0 = top/left edge,
+    0.5 = centered, 1 = bottom/right edge — owner 2026-08-05: a shrunken
+    region no longer has to sit in the middle). Only one axis ever has
+    slack, so a single fraction covers both orientations."""
     bl, bt, bw, bh = box
     w = min(bw, int(bh * aspect))
     h = int(w / aspect)
     if h > bh:
         h = bh
         w = int(h * aspect)
-    return (bl + (bw - w) // 2, bt + (bh - h) // 2, w, h)
+    return (bl + int((bw - w) * pos), bt + int((bh - h) * pos), w, h)
 
 
 def _region_rect(mon_rect, aspect: float) -> tuple[int, int, int, int]:
@@ -313,16 +317,19 @@ def _region_rect(mon_rect, aspect: float) -> tuple[int, int, int, int]:
 
 
 def layout_region(mon_rect, aspect: float,
-                  ratio: tuple[int, int] | None = None) -> tuple[int, int, int, int]:
+                  ratio: tuple[int, int] | None = None,
+                  pos: float = 0.5) -> tuple[int, int, int, int]:
     """The rect the phone frames. The DEVICE shape (`aspect`) gives the outer
     box; a per-layout ratio override may only make the region SMALLER inside
     it (owner decision 2026-08-03: portrait keeps the phone's width and the
     region may only get shorter, landscape keeps its height and the region may
     only get narrower — the unused strip stays black on the phone). Anything
-    that would grow past the phone's own shape is clamped by the same fit."""
+    that would grow past the phone's own shape is clamped by the same fit.
+    `pos` places the shrunken region along the free axis (owner 2026-08-05 —
+    the Move handle in the phone's resize panel; 0.5 = centered)."""
     box = _region_rect(mon_rect, aspect)
     if ratio and ratio[0] > 0 and ratio[1] > 0:
-        return _fit_rect(box, ratio[0] / ratio[1])
+        return _fit_rect(box, ratio[0] / ratio[1], pos)
     return box
 
 
@@ -527,11 +534,15 @@ class Layout:
         self.orient = orient      # "portrait" | "wide"
         self.aspect = aspect      # w/h the layout was last arranged for
         self.icon = icon          # target app's icon (PNG data URI) for the bar
-        # Owner-chosen W:H for THIS layout (None = the phone's own shape).
-        # `arranged` is what the windows currently stand in — a changed ratio
-        # is what makes the next focus re-place them (owner 2026-08-03).
+        # Owner-chosen W:H for THIS layout (None = the phone's own shape) and
+        # the region's position along the free axis (0–1, 0.5 = centered —
+        # owner 2026-08-05, the Move handle). `arranged_*` is what the windows
+        # currently stand in — a change is what makes the next focus re-place
+        # them (owner 2026-08-03).
         self.ratio: tuple[int, int] | None = None
+        self.pos: float = 0.5
         self.arranged_ratio: tuple[int, int] | None = None
+        self.arranged_pos: float = 0.5
 
 
 class LayoutRegistry:
@@ -591,12 +602,14 @@ class LayoutRegistry:
         lay = self.layouts[index]
         placed = True
         aspect = device_ratio if lay.orient == "portrait" else 1.0 / device_ratio
-        if abs(aspect - lay.aspect) > 0.05 or lay.arranged_ratio != lay.ratio:
-            # A different device, or the owner changed this layout's aspect —
-            # rebuild the arrangement.
+        if (abs(aspect - lay.aspect) > 0.05 or lay.arranged_ratio != lay.ratio
+                or lay.arranged_pos != lay.pos):
+            # A different device, or the owner changed this layout's aspect
+            # or position — rebuild the arrangement.
             lay.aspect = aspect
             lay.arranged_ratio = lay.ratio
-            region = layout_region(mon_rect, aspect, lay.ratio)
+            lay.arranged_pos = lay.pos
+            region = layout_region(mon_rect, aspect, lay.ratio, lay.pos)
             if lay.template:
                 for hwnd, cell in zip(lay.members, _cells(region, lay.template)):
                     placed = place_window(hwnd, cell) and placed
@@ -609,7 +622,8 @@ class LayoutRegistry:
         for hwnd in lay.members:
             raise_window(hwnd)
         if lay.template:
-            cells = _cells(layout_region(mon_rect, lay.aspect, lay.ratio), lay.template)
+            cells = _cells(layout_region(mon_rect, lay.aspect, lay.ratio, lay.pos),
+                           lay.template)
             region = cells[0]
             x2 = max(c[0] + c[2] for c in cells[:len(lay.members)])
             y2 = max(c[1] + c[3] for c in cells[:len(lay.members)])
@@ -636,13 +650,15 @@ class LayoutRegistry:
         # Only report Desktop once they are ALL really gone (owner 2026-08-03).
         wait_minimized(members)
 
-    def set_ratio(self, index: int, w: int, h: int) -> bool:
+    def set_ratio(self, index: int, w: int, h: int, pos: float = 0.5) -> bool:
         """Store this layout's owner-chosen W:H (0/0 = back to the phone's own
-        shape). Only stored — the next focus re-places the windows, which is
-        what the caller does right after (owner 2026-08-03)."""
+        shape) and the region's free-axis position (owner 2026-08-05 — the
+        Move handle; 0.5 = centered). Only stored — the next focus re-places
+        the windows, which is what the caller does right after."""
         if not 0 <= index < len(self.layouts):
             return False
         self.layouts[index].ratio = (w, h) if w > 0 and h > 0 else None
+        self.layouts[index].pos = max(0.0, min(1.0, pos))
         return True
 
     def member_hwnds(self) -> set[int]:
@@ -679,7 +695,8 @@ class LayoutRegistry:
             "type": "layout_state",
             "layouts": [{"name": lay.name, "process": lay.process,
                          "orient": lay.orient, "icon": lay.icon,
-                         "ratio": list(lay.ratio) if lay.ratio else None}
+                         "ratio": list(lay.ratio) if lay.ratio else None,
+                         "pos": round(lay.pos, 3)}
                         for lay in self.layouts],
             "active": active,
             "region": region,

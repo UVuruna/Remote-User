@@ -99,21 +99,36 @@ The page's only way to reach the shell.
   full-desktop view rotates freely (owner 2026-08-02)
 - `transport()`: `"cellular"` / `"wifi"` / `""` — the page's auto quality
   mode reduces the stream only on mobile data (owner spec 2026-08-02)
+- `prefGet(key)` / `prefSet(key, value)`: origin-independent per-device
+  storage (SharedPreferences `client_prefs`) for the page's preferences —
+  localStorage is keyed by ORIGIN and this shell deliberately alternates
+  between the LAN and Tailscale addresses, which silently split saved state
+  into two diverging copies (owner bug 2026-08-05: the sets picker "rotated"
+  between two states). `""` = absent, so the page falls back to localStorage
 - `startVoice()` / `stopVoice()`: the page's Mic switcher (owner 2026-08-04)
   — one `SpeechRecognizer` listening round per call; results reach the page
   via `__voiceResult(text)`, round-end via `__voiceEnd(reason)` (`"denied"` /
   `"unavailable"` / `""`), and the page restarts rounds while its switcher is
-  ON. First use asks the `RECORD_AUDIO` runtime permission once. Recognizer
-  choice (`makeRecognizer()`, owner reports 2026-08-04): first the
-  **on-device recognizer** (Android 13+, `isOnDeviceRecognitionAvailable`) —
+  ON. First use asks the `RECORD_AUDIO` runtime permission once.
+  **LANGUAGE-AGNOSTIC** (owner decree 2026-08-05 — a hardcoded `"sr-RS"` was
+  the owner's own case leaking into the product): `voiceLanguages()` is the
+  PHONE'S configured locale list, nothing hardcoded. Recognizer choice
+  (`makeRecognizer()`): first the **on-device recognizer** (Android 13+) —
   the ONLY Android API with real language auto-switching, run with
-  `EXTRA_ENABLE_LANGUAGE_DETECTION`/`_SWITCH` over `voiceLanguages()` (phone
-  locale + sr-RS + en-US), because the cloud service transcribed Serbian
-  speech as English gibberish (it runs one language); a language error
-  (`ERROR_LANGUAGE_NOT_SUPPORTED`/`_UNAVAILABLE` — model missing) demotes to
-  **Google's cloud service** (`googleRecognitionService()`; the phone default
-  — Samsung's — garbled dictation outright) pinned to the phone's own locale,
-  never a silent English default. Note the hard platform limit: an app
+  `EXTRA_ENABLE_LANGUAGE_DETECTION`/`_SWITCH` over the user's languages —
+  but ONLY when it actually holds a model for the user's primary language:
+  `checkVoiceSupport()` (`checkRecognitionSupport`, once per run) delivers
+  the EVIDENCE of what is installed — the 2026-08-05 silent gap was exactly
+  here: the on-device model list simply lacked the user's language, no error
+  ever fired, and dictation in it heard NOTHING while English worked. A
+  missing-but-downloadable model auto-triggers `triggerModelDownload` (the
+  app drives its dependencies — owner principle) and demotes to **Google's
+  cloud service** (`googleRecognitionService()`; the phone default —
+  Samsung's — garbled dictation outright) pinned to the phone's own locale,
+  never a silent English default; the language-error demotion path stays as
+  backstop. Every engine choice/support result/error is reported to the page
+  via `__voiceInfo(text)` (shown on the status pill while the mic is ON) —
+  owner demand 2026-08-05: no silent voice failures, evidence over guesses. Note the hard platform limit: an app
   cannot open the KEYBOARD's own voice typing (Gboard mic) — no API switches
   another IME into voice mode; this in-place recognizer is the closest
   invisible equivalent, and the visible Google dialog

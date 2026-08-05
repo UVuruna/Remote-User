@@ -236,24 +236,103 @@ class MainActivity : AppCompatActivity() {
         return android.content.ComponentName(g.serviceInfo.packageName, g.serviceInfo.name)
     }
 
-    /** The languages dictation must understand WITHOUT a manual switch (owner
-     *  2026-08-04: Serbian and English in the same session, like the
-     *  keyboard's voice typing does): the phone's own locale + the pair. */
-    private fun voiceLanguages(): ArrayList<String> =
-        arrayListOf(java.util.Locale.getDefault().toLanguageTag(), "sr-RS", "en-US")
-            .distinct().let { ArrayList(it) }
+    /** The languages dictation must understand WITHOUT a manual switch, like
+     *  the keyboard's voice typing does. LANGUAGE-AGNOSTIC (owner decree
+     *  2026-08-05, angrily — a hardcoded "sr-RS" was the owner's case leaking
+     *  into the product): the PHONE'S configured languages, whatever they
+     *  are, in the user's own priority order. */
+    private fun voiceLanguages(): ArrayList<String> {
+        val list = android.os.LocaleList.getAdjustedDefault()
+        return ArrayList((0 until list.size()).map { list[it].toLanguageTag() }.distinct())
+    }
+
+    /** Debug/diagnostic line for the page's status pill (owner demand
+     *  2026-08-05: REAL debugging with evidence, not blind tweaks — the
+     *  phone SAYS which engine/languages run and what errors come back). */
+    private fun voiceInfo(text: String) {
+        if (::web.isInitialized) {
+            web.evaluateJavascript(
+                "window.__voiceInfo && __voiceInfo(${JSONObject.quote(text)})", null
+            )
+        }
+    }
+
+    /** True when the two BCP-47 tags speak the same language ("sr-RS" vs
+     *  "sr-Latn-RS" vs "sr") — the model lists and the locale list write the
+     *  same language differently. */
+    private fun sameLang(a: String, b: String): Boolean =
+        java.util.Locale.forLanguageTag(a).language ==
+            java.util.Locale.forLanguageTag(b).language
+
+    // What checkRecognitionSupport reported for the on-device recognizer
+    // (empty until the async result lands; checked once per app run).
+    private var voiceSupportChecked = false
+    private var voiceInstalled: List<String> = emptyList()
+
+    /** Asks the on-device recognizer WHAT it can actually do — the missing
+     *  evidence behind every earlier blind fix (owner 2026-08-05): English
+     *  worked, the owner's own language produced NOTHING, because the
+     *  on-device model list simply did not contain it and no error ever
+     *  fired. If the user's language is supported but not installed, the
+     *  model download is triggered HERE (the app drives its dependencies —
+     *  owner principle); until it is installed the cloud service pinned to
+     *  the user's language takes over. */
+    private fun checkVoiceSupport(intent: Intent) {
+        if (android.os.Build.VERSION.SDK_INT < 33 || voiceSupportChecked) return
+        voiceSupportChecked = true
+        if (!SpeechRecognizer.isOnDeviceRecognitionAvailable(this)) return
+        val probe = SpeechRecognizer.createOnDeviceSpeechRecognizer(this)
+        probe.checkRecognitionSupport(intent, mainExecutor,
+            object : android.speech.RecognitionSupportCallback {
+                override fun onSupportResult(support: android.speech.RecognitionSupport) {
+                    voiceInstalled = support.installedOnDeviceLanguages
+                    val wanted = voiceLanguages()
+                    val primary = wanted.first()
+                    val downloadable = support.supportedOnDeviceLanguages
+                        .filterNot { s -> voiceInstalled.any { sameLang(it, s) } }
+                    if (voiceInstalled.none { sameLang(it, primary) }) {
+                        if (downloadable.any { sameLang(it, primary) }) {
+                            probe.triggerModelDownload(intent)
+                            voiceInfo("Downloading the $primary voice model — using online recognition meanwhile")
+                        } else {
+                            voiceInfo("This phone has no on-device model for $primary — using online recognition")
+                        }
+                        // The on-device engine cannot hear the user's own
+                        // language — demote NOW instead of waiting for an
+                        // error that never fires.
+                        voiceCloudOnly = true
+                        recognizer?.destroy()
+                        recognizer = null
+                    } else {
+                        voiceInfo("Voice: on-device, languages " +
+                            wanted.filter { w -> voiceInstalled.any { sameLang(it, w) } }
+                                .joinToString(", "))
+                    }
+                    probe.destroy()
+                }
+
+                override fun onError(error: Int) {
+                    voiceInfo("Voice support check failed (code $error)")
+                    probe.destroy()
+                }
+            })
+    }
 
     /** Owner report 2026-08-04 (round two): the cloud recognizer transcribed
      *  Serbian speech as English gibberish — it runs ONE language. The only
      *  Android API with real language auto-switching is the ON-DEVICE
      *  recognizer (Android 13+, the same models voice typing uses), so it is
-     *  first choice; a language error (model missing) demotes to the Google
-     *  cloud service pinned to the phone's own language. */
+     *  first choice — but ONLY when it actually holds a model for the user's
+     *  primary language (checkVoiceSupport above; the silent gap of
+     *  2026-08-05). Otherwise the Google cloud service pinned to the phone's
+     *  own language. */
     private fun makeRecognizer(): SpeechRecognizer {
         voiceOnDevice = android.os.Build.VERSION.SDK_INT >= 33 && !voiceCloudOnly &&
             SpeechRecognizer.isOnDeviceRecognitionAvailable(this)
         if (voiceOnDevice) return SpeechRecognizer.createOnDeviceSpeechRecognizer(this)
         val google = googleRecognitionService()
+        voiceInfo("Voice: " + (if (google != null) "Google online" else "system service") +
+            " @ " + java.util.Locale.getDefault().toLanguageTag())
         return if (google != null) SpeechRecognizer.createSpeechRecognizer(this, google)
         else SpeechRecognizer.createSpeechRecognizer(this)
     }
@@ -286,7 +365,15 @@ class MainActivity : AppCompatActivity() {
                 return
             }
             // NO_MATCH / SPEECH_TIMEOUT are a quiet room, not failures —
-            // the page simply starts the next round while ON.
+            // the page simply starts the next round while ON. Every OTHER
+            // error is said out loud (owner 2026-08-05: no silent voice
+            // failures ever again).
+            if (error != SpeechRecognizer.ERROR_NO_MATCH &&
+                error != SpeechRecognizer.ERROR_SPEECH_TIMEOUT
+            ) {
+                voiceInfo("Voice error $error (" +
+                    (if (voiceOnDevice) "on-device" else "online") + ")")
+            }
             voiceEnd(
                 if (error == SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS) "denied"
                 else ""
@@ -307,6 +394,15 @@ class MainActivity : AppCompatActivity() {
             voiceEnd("unavailable")
             return
         }
+        // First round of a run: ask the on-device engine what it REALLY
+        // supports (async — may demote to cloud and trigger a model
+        // download; this round still runs on the current choice).
+        checkVoiceSupport(
+            Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).putExtra(
+                RecognizerIntent.EXTRA_LANGUAGE_MODEL,
+                RecognizerIntent.LANGUAGE_MODEL_FREE_FORM
+            )
+        )
         val r = recognizer ?: makeRecognizer().also { rec ->
             rec.setRecognitionListener(voiceListener)
             recognizer = rec
@@ -319,20 +415,25 @@ class MainActivity : AppCompatActivity() {
                 )
                 putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false)
                 if (voiceOnDevice && android.os.Build.VERSION.SDK_INT >= 33) {
-                    // Real auto-switching between the owner's languages —
+                    // Real auto-switching between the user's languages —
                     // only the on-device recognizer understands these.
+                    // Restricted to languages a model actually EXISTS for
+                    // (once known): a wanted-but-missing language used to
+                    // ride along silently and hear nothing.
+                    val wanted = voiceLanguages()
+                    val usable = wanted.filter { w ->
+                        voiceInstalled.any { sameLang(it, w) }
+                    }.ifEmpty { wanted }.let { ArrayList(it) }
                     putExtra(RecognizerIntent.EXTRA_ENABLE_LANGUAGE_DETECTION, true)
                     putExtra(
                         RecognizerIntent.EXTRA_ENABLE_LANGUAGE_SWITCH,
                         RecognizerIntent.LANGUAGE_SWITCH_BALANCED
                     )
                     putStringArrayListExtra(
-                        RecognizerIntent.EXTRA_LANGUAGE_SWITCH_ALLOWED_LANGUAGES,
-                        voiceLanguages()
+                        RecognizerIntent.EXTRA_LANGUAGE_SWITCH_ALLOWED_LANGUAGES, usable
                     )
                     putStringArrayListExtra(
-                        RecognizerIntent.EXTRA_LANGUAGE_DETECTION_ALLOWED_LANGUAGES,
-                        voiceLanguages()
+                        RecognizerIntent.EXTRA_LANGUAGE_DETECTION_ALLOWED_LANGUAGES, usable
                     )
                 } else {
                     // One-language cloud round: at least the phone's OWN
@@ -700,6 +801,24 @@ class MainActivity : AppCompatActivity() {
         @JavascriptInterface
         fun appVersion(): String =
             packageManager.getPackageInfo(packageName, 0).versionName ?: "0"
+
+        /** Origin-independent per-device storage for the page's preferences
+         *  (sets picker, quality, one-time banners). localStorage is keyed
+         *  by ORIGIN, and this shell deliberately alternates between two
+         *  addresses (LAN / Tailscale) — pure localStorage silently split
+         *  the page's saved state into two diverging copies (owner bug
+         *  report 2026-08-05: the sets picker "rotated" between states).
+         *  "" = absent, so the page can fall back to localStorage. */
+        @JavascriptInterface
+        fun prefGet(key: String): String =
+            getSharedPreferences("client_prefs", MODE_PRIVATE)
+                .getString("p_$key", "") ?: ""
+
+        @JavascriptInterface
+        fun prefSet(key: String, value: String) {
+            getSharedPreferences("client_prefs", MODE_PRIVATE)
+                .edit().putString("p_$key", value).apply()
+        }
 
         /** The page's auto quality mode: reduced stream only on mobile data
          *  (owner spec 2026-08-02). "cellular" / "wifi" / "". */

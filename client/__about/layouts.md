@@ -124,3 +124,13 @@ everything here composes and frames WINDOWS on it.
 - **"Screen" resets the override entirely** (`w = h = 0` on the wire — also
   sent when a drag lands back on the full screen), so an approximation error
   can never accumulate into a shrinking region.
+- **The Move handle** (owner 2026-08-05): a ✥ button in the region's center.
+  Dragging it slides the shrunken region along the free axis (portrait:
+  up/down, landscape: left/right) — the region no longer has to sit centered;
+  a double-tap re-centers it. `dragMove` owns the gesture (pointer capture on
+  the handle, `stopPropagation` so the surrounding resize drag stays out);
+  state is `aspecting.pos` (0–1 fraction of the free-axis slack, 0.5 =
+  centered, initialized from the server's `layout_state` `pos`). Everything
+  OUTSIDE the handle still resizes as before. Apply sends `pos` (0–1000) in
+  `layout_aspect`; the server places the region with the same fraction — see
+  [Window Manager](../../server/__about/window_manager.md).
