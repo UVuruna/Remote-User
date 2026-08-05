@@ -6,10 +6,19 @@ docs of every changed module + this checklist.
 
 WAITING_ON_OWNER: yes
 
-Round 2 SHIPPED as v0.0.075 (dictation setup card + Settings Language +
-silent download state + client_log diagnostics to the server log; layout
-audit 13/13 incl. the card). Task 1 stays open until the owner's on-device
-round confirms recognition in his language — that round is what we wait on.
+Round 2 SHIPPED as v0.0.075. Round-3 owner report (2026-08-05): RECOGNITION
+WORKS (Serbian Latin chosen, text lands) — remaining: (a) Settings still
+shows Anywhere — ROOT CAUSE FOUND: the desktop Controls editor snapshots
+actions.json into the USER copy which wins forever, bundled default updates
+never propagate (needs a defaults-version merge that keeps user tweaks);
+(b) listening beeps every round — add a mute option in the dictation card
+(AudioManager mute during rounds); (c) beeps continue with the phone LOCKED
+— lock must stop EVERYTHING (shell onPause cancels voice + suppresses
+restarts; page micStop/inputOff on visibilitychange hidden); (d) language
+list should also offer downloadable/online languages, not just the phone's;
+(e) drop the pulse animation, dashed border alone (owner). Plan presented,
+waiting on the owner's approval; three agents on the repo — rebase before
+touching layouts/controls files.
 
 Round 2 (owner approved 2026-08-05): dictation setup CARD (first Mic tap) +
 language CHANGE entry in the Settings set REPLACING the Anywhere button
@@ -111,4 +120,51 @@ work resumes. Enforced machine-wide by rules/hooks/session_tasks_guard.py.
 - [x] 11. Session close — DONE: APK 0.0.076 built, full desktop build passed
       (INPUT GATE + PRESENCE GATE + signed installer), layout audit 19/19,
       GIT RELEASE published. Session close — docs of every changed module, APK + desktop build,
+      GIT RELEASE.
+
+## Round 4 (owner brief 2026-08-05, night — desktop Controls editor)
+
+Presented to the owner (rendered page, 2026-08-05): field-by-field explanation,
+the two law violations with their exact causes, the new dialog layout, the
+buttons-pool data model, the per-set reserve commands. OWNER ANSWERED: all
+three Qt windows in the audit registry; built-in presets get the pool CHOICE
+only (their commands stay ours, custom sets stay fully editable).
+
+- [x] 12. DONE — Controls editor obeys THE SPACE & LEGIBILITY LAW. Causes found:
+      OrderList setFixedHeight(96) (controls_editor.py:240) + right.addStretch()
+      (:343) = BUG A (list scrolls, ~300 px empty); theme.py
+      `QComboBox {min-width:140px}` + a QGridLayout with no column stretch =
+      BUG B ("shift+tab" → "ift+tab"). Fixed by the ladder: stretch removed and
+      the table given the free height, SlotList sizes to its rows, fields moved
+      to full-width rows, combo min-width 140→92, set list asks for
+      sizeHintForColumn(0), minimum COMPUTED (1224x646) and documented.
+      MainWindow lost setFixedWidth(400) for a computed+settled 676x787;
+      ChordRecorder 406x58. Evidence: audit 3/3 PASS at minimum and +50%.
+- [x] 13. DONE — Teeth: tests/test_layout_law.py (static, in --fast) +
+      tests/test_layout_audit_qt.py (runtime registry of all three Qt windows,
+      full run) wired into run_guards.py. SELF-TEST SHOWN: planted
+      setFixedHeight(40) → static failed at controls_editor.py:310, runtime
+      failed with "CLIPPED SlotList: has 285x40, needs at least 70x52"; plant
+      removed → both PASS. The phone audit gained a D-pad label check, also
+      shown failing on an over-long label. .claude/layout-proof.md written.
+- [x] 14. DONE — Presets carry more than 4 commands: `buttons` is the pool,
+      `active` names the four BY ID (no `active` = first four, old files
+      unchanged); client activeButtons() + editor pool table with the tick,
+      per-command detail panel, app_sets editable for the first time, and
+      merge_shipped_pools() refreshing built-in pools from the shipped file —
+      which is also the root cause of "Settings still shows Anywhere".
+      Evidence: functional round-trip (Navigate 11-command pool: tick swap →
+      active ['esc','shift+tab','tab','alt+left'], fifth tick refused; custom
+      set: 5 commands, first four on the D-pad, no redundant key).
+- [x] 15. DONE — Reserve commands per set (ACTIONS.md table), incl. the
+      owner's: VSCode Preview ctrl+shift+v + next/prev tab, Chrome prev tab,
+      Explorer next/prev tab. Injector gained `/` (VK_OEM_2) and
+      medianext/mediaprev/mediastop.
+- [x] 16. DONE — Built-in rows tell the truth: load_client_builtins() parses
+      the client's BUILTINS, so the row shows "Built-in: Esc (esc)", name
+      "Esc", icon "esc" — greyed because inherited, never a placeholder.
+      Also fixed while proving it: the detail form kept the PREVIOUS set's
+      command when both selections sat on row 0 (setCurrentCell is silent when
+      the index does not change).
+- [ ] 17. Session close — docs of every changed module, APK + desktop build,
       GIT RELEASE.

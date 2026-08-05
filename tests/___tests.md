@@ -61,9 +61,38 @@ Also checks `window_manager._fit_rect` purely: the placed region never
 leaves its box, at any aspect or `pos`. Proof source for
 `.claude/layout-proof.md`. The Name fields are WRAPPING textareas because
 this audit caught the one-line version hiding most of a window title behind
-its own horizontal scroll (2026-08-05).
+its own horizontal scroll (2026-08-05). Also checks the D-PAD BUTTONS: a set's
+pool may hold reserve commands whose names are longer than the shipped four
+("Copy path", "Go to file"), the law forbids eliding them, so the label wraps —
+and the wrapped label must still sit fully inside its 58 px button.
 
 Run: `.venv\Scripts\python tests/test_layout_audit.py`
+
+### `test_layout_audit_qt.py` — Layout Audit, Qt windows (THE SPACE & LEGIBILITY LAW)
+The runtime half of the law for the DESKTOP app (MIGRATE-LAYOUT.md step 2,
+owner go 2026-08-05). Every Qt window the project has — `MainWindow`,
+`ControlsEditor`, `ChordRecorder` — is built offscreen in its FULLEST
+realistic state (a running server with a Tailscale URL and the longest guided
+text; the set with the longest command pool), shown at its DECLARED minimum
+and at +50%, and its whole widget tree measured for: CLIPPED (a widget with
+less room than it minimally needs), ELIDED (text wider than its element),
+ITEM CUT (a list/table row wider than its column — Qt's item views truncate
+silently, and an item is not a QWidget, so the widget checks cannot see it),
+SCROLL+SLACK (something scrolling while a spacer in the same window holds
+unused space), plus the law's precondition: a declared, computed minimum size.
+
+Three measurement notes, each about measuring the RIGHT thing rather than
+loosening a tolerance: a `QHeaderView`'s `minimumSizeHint` is an
+orientation-blind square (68×68 whatever its sections hold), so only the
+header's own axis is compared, against Qt's size hint and the font; a `QLabel`
+is charged no control padding, because it paints straight into its
+contentsRect; and a container of WRAPPING children has no single minimum
+height (`minimumSizeHint` quotes it at the narrowest width), so only its width
+is checked there — the vertical truth is measured element by element by the
+wrapped-text branch.
+
+Run: `.venv\Scripts\python tests/test_layout_audit_qt.py` — also a full-run
+guard in `run_guards.py`.
 
 ### `test_presence.py` — Presence Gate
 Proves that the phone leaving work mode frees the owner's desk: layout
@@ -82,8 +111,9 @@ Run: `.venv\Scripts\python tests/test_presence.py` — also a fail-closed step
 in `build.py` (0c/6).
 
 ### Guard tests (THE LAWS — rules/CODE.md → Enforcement, rules/DOCS.md → Enforcement)
-Four standard-named guard tests, a fast runner, and a small shared helper —
-installed 2026-08-01 alongside the MD-First 2.0 docs migration:
+Five standard-named guard tests, a fast runner, and a small shared helper —
+four installed 2026-08-01 alongside the MD-First 2.0 docs migration, the fifth
+(the layout law) on 2026-08-05:
 
 - `_guards_common.py` — `iter_source_files()` / `iter_doc_files()`, pruning
   `.venv`/`build`/`dist`/etc. during the walk (not after) so the guards stay
@@ -100,10 +130,17 @@ installed 2026-08-01 alongside the MD-First 2.0 docs migration:
   source of truth (update this file in the same commit as any tier change).
 - `test_doc_links.py` — every relative link in every `.md` resolves to a
   real file, and every `.md` is reachable from `README.md`.
-- `run_guards.py` — runs all four (or, with `--fast`, just structure +
-  config-sections — the PostToolUse hook's speed budget); exits 2 on any
-  failure. Wired into `.claude/settings.json` (PostToolUse `--fast`,
-  Stop full). Run directly: `python tests/run_guards.py`.
+- `test_layout_law.py` — THE SPACE & LEGIBILITY LAW, static half: no banned
+  API in a GUI source (`server/gui`, `client`) — elision, forced scrollbars,
+  disabled wrapping, hard pixel sizes on text-bearing widgets, CSS
+  `text-overflow: ellipsis` and `-webkit-line-clamp`. One line may opt out
+  with `layout-law: exempt - <reason>` ON that line; `RATCHET` is empty.
+- `run_guards.py` — runs all guards (or, with `--fast`, structure +
+  config-sections + the static layout law — a grep costs nothing, so it
+  belongs in the PostToolUse hook's budget; the Qt audit is full-run only,
+  it builds a QApplication); exits 2 on any failure. Wired into
+  `.claude/settings.json` (PostToolUse `--fast`, Stop full). Run directly:
+  `python tests/run_guards.py`.
 
 These are plain `assert`-based functions (pytest-discoverable, but
 `run_guards.py` calls them directly — no pytest dependency, since neither
