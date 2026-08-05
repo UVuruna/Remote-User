@@ -15,8 +15,8 @@ import urllib.request
 import webbrowser
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QAction, QGuiApplication, QIcon, QPixmap
+from PySide6.QtCore import QSize, Qt, QTimer
+from PySide6.QtGui import QAction, QFontMetrics, QGuiApplication, QIcon, QPixmap
 from PySide6.QtWidgets import (
     QComboBox, QFormLayout, QFrame, QHBoxLayout, QLabel, QMainWindow, QMenu,
     QPushButton, QSystemTrayIcon, QVBoxLayout, QWidget,
@@ -47,6 +47,27 @@ FPS_CHOICES = [("10 fps — light", 10), ("30 fps", 30), ("60 fps", 60)]
 
 PILL_TEXT = {"running": "RUNNING", "starting": "STARTING…",
              "stopped": "STOPPED", "failed": "FAILED"}
+
+# The three guided states under the QR, in one place: the refresh loop shows
+# them, and the window's COMPUTED minimum size measures them (THE SPACE &
+# LEGIBILITY LAW — the minimum comes from the fullest real content, and that
+# content is the longest of these).
+REACH_TEXT = {
+    "ready": ("On the phone, first time only:\n"
+              "1.  Join THIS same Wi-Fi\n"
+              "2.  Scan this QR with the camera\n"
+              "3.  Tap Install, then Open the app\n"
+              "Done — after that it works from anywhere, no QR."),
+    "signin": ("One step left for away-from-home use: sign in to Tailscale. "
+               "A browser will open — pick your account and press Connect, "
+               "then come back here; this window continues by itself. "
+               "(Tailscale may ask a few one-time questions — any answers are fine.)"),
+    "lan": ("On the phone, first time only:\n"
+            "1.  Join THIS same Wi-Fi\n"
+            "2.  Scan this QR with the camera\n"
+            "3.  Tap Install, then Open the app\n"
+            "For use away from home too, add Tailscale (free, guided)."),
+}
 
 
 class MainWindow(QMainWindow):
@@ -83,14 +104,75 @@ class MainWindow(QMainWindow):
         root.addWidget(self._build_footer())
 
         self._build_tray(icon)
-        self.setFixedWidth(400)
 
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._refresh)
         self._timer.start(REFRESH_MS)
-        self._refresh()
+        self._refresh()  # fills the guided text — the fullest state to measure
+
+        # The wrapped guidance text makes height depend on width, so the
+        # minimum is SETTLED: measure at the candidate size, grow, measure
+        # again — until Qt stops asking for more. (One pass would under-shoot
+        # by exactly the row a narrower window adds.)
+        size = self._computed_minimum()
+        for _ in range(4):
+            self.resize(size)
+            self.layout().activate()
+            needs = self.minimumSizeHint()
+            grown = QSize(max(size.width(), needs.width()),
+                          max(size.height(), needs.height()))
+            if grown == size:
+                break
+            size = grown
+        self.setMinimumSize(size)
 
         threading.Thread(target=self._check_updates, daemon=True).start()
+
+    # -- the law's computed minimum ----------------------------------------
+
+    def _computed_minimum(self) -> QSize:
+        """MEASURED, never guessed (THE SPACE & LEGIBILITY LAW, rules/GUI.md).
+
+        The window used to be pinned at a hard 400 px, which is exactly the
+        "element can no longer take the free space" the law forbids. The floor
+        below is the widest real row it can show — the three bottom buttons at
+        their longest captions, the update button's full sentence, the widest
+        settings row, and the QR — plus the height its longest guidance text
+        needs once wrapped at that width. The caller takes the LARGER of this
+        and Qt's own layout minimum, so neither measurement can undercut the
+        other.
+        """
+        metrics = QFontMetrics(self.font())
+
+        def widest(strings) -> int:
+            return max(metrics.horizontalAdvance(s) for s in strings)
+
+        button_pad, spacing = 40, 8   # QSS padding 8/16 + border, layout spacing
+        bottom_row = (widest(("Start server", "Stop server"))
+                      + widest(("Controls…",))
+                      + widest(("Set up Tailscale", "Sign in to Tailscale",
+                                "Install Tailscale"))
+                      + 3 * button_pad + 2 * spacing)
+        update_row = widest((f"Update to v{app_version()} — download && install",)) + button_pad
+        settings_row = (widest(("Frame rate", "Resolution", "Monitor", "Bitrate")) + 16
+                        + widest([label for label, _ in RESOLUTIONS + BITRATES + FPS_CHOICES]
+                                 + ["Monitor 1"]) + 56)
+
+        card_pad, root_pad = 36, 48   # card contents margins, window margins
+        inner = max(QR_SIZE, settings_row, bottom_row - card_pad, update_row - card_pad)
+        width = inner + card_pad + root_pad
+
+        guidance = max(
+            metrics.boundingRect(0, 0, inner, 10_000,
+                                 int(Qt.TextFlag.TextWordWrap), text).height()
+            for text in REACH_TEXT.values())
+        rows = metrics.height() + 20
+        height = (QR_SIZE + guidance          # the QR card's two tall parts
+                  + rows * 2                  # url label (wraps) + its buttons
+                  + rows * 5                  # four settings rows + Apply
+                  + rows * 4                  # header, bottom row, update, footer
+                  + 120)                      # card frames, spacings, margins
+        return QSize(width, height)
 
     # -- layout builders ---------------------------------------------------
 
@@ -135,7 +217,7 @@ class MainWindow(QMainWindow):
 
         self.qr_label = QLabel("Server stopped")
         self.qr_label.setObjectName("qr")
-        self.qr_label.setFixedSize(QR_SIZE, QR_SIZE)
+        self.qr_label.setFixedSize(QR_SIZE, QR_SIZE)  # layout-law: exempt - a QR is an IMAGE that must stay square at its scan size; it carries no text to reflow
         self.qr_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         box.addWidget(self.qr_label, alignment=Qt.AlignmentFlag.AlignHCenter)
 
@@ -234,6 +316,7 @@ class MainWindow(QMainWindow):
         footer = QLabel(f"v{app_version()}  ·  closing hides to tray — server keeps running")
         footer.setObjectName("caption")
         footer.setAlignment(Qt.AlignmentFlag.AlignHCenter)
+        footer.setWordWrap(True)  # ladder step 2: reflow instead of a wider window
         return footer
 
     def _build_tray(self, icon: QIcon) -> None:
@@ -465,28 +548,14 @@ class MainWindow(QMainWindow):
             # Tailscale's site (owner principle: no confusing third-party
             # screens; we say exactly what happens next).
             if info.tailscale_ip:
-                self.reach_label.setText(
-                    "On the phone, first time only:\n"
-                    "1.  Join THIS same Wi-Fi\n"
-                    "2.  Scan this QR with the camera\n"
-                    "3.  Tap Install, then Open the app\n"
-                    "Done — after that it works from anywhere, no QR.")
+                self.reach_label.setText(REACH_TEXT["ready"])
                 self.tailscale_btn.hide()
             elif pairing.tailscale_exe():
-                self.reach_label.setText(
-                    "One step left for away-from-home use: sign in to Tailscale. "
-                    "A browser will open — pick your account and press Connect, "
-                    "then come back here; this window continues by itself. "
-                    "(Tailscale may ask a few one-time questions — any answers are fine.)")
+                self.reach_label.setText(REACH_TEXT["signin"])
                 self.tailscale_btn.setText("Sign in to Tailscale")
                 self.tailscale_btn.show()
             else:
-                self.reach_label.setText(
-                    "On the phone, first time only:\n"
-                    "1.  Join THIS same Wi-Fi\n"
-                    "2.  Scan this QR with the camera\n"
-                    "3.  Tap Install, then Open the app\n"
-                    "For use away from home too, add Tailscale (free, guided).")
+                self.reach_label.setText(REACH_TEXT["lan"])
                 self.tailscale_btn.setText("Install Tailscale")
                 self.tailscale_btn.show()
             mode = "H.264 · " + (info.encoder or "?") if info.mode == "h264" else "JPEG fallback"

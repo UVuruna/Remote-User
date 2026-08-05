@@ -4,23 +4,48 @@
 
 ## Dialog layout
 
+The command LIST replaced the four fixed button rows (owner 2026-08-05: a set
+may hold more commands than a D-pad shows), and the per-command fields moved
+into their own full-width rows — which is also what removed the two SPACE &
+LEGIBILITY violations the owner photographed.
+
 ```
-┌─ Controls — sets on the phone ─────────────────────────────────┐
-│ Sets                │ Name [........]        Icon [▾ preview]  │
-│ ┌─────────────────┐ │ [x] Shown in the wheel by default (≤3)   │
-│ │ Mouse (built-in)│ │ ┌ Buttons ───────────────────────────┐   │
-│ │ Input (built-in)│ │ │ Top    [kind▾][label][icon▾][chord][Record…] │
-│ │ …               │ │ │ Left   …                            │   │
-│ │ My VSCode       │ │ │ Right  …                            │   │
-│ └─────────────────┘ │ │ Bottom …                            │   │
-│ [New set] [Delete]  │ └─────────────────────────────────────┘   │
-│                     │ ┌ Arrangement ───────────────────────┐    │
-│                     │ │ Landscape T·L·R·B │ Portrait ↑→↓   │    │
-│                     │ │ [list + ↑ ↓]      │ [list + ↑ ↓]   │    │
-│                     │ │              [Reset arrangement]   │    │
-│                     │ └────────────────────────────────────┘    │
-│ [Open the file]                              [Save] [Cancel]    │
-└────────────────────────────────────────────────────────────────┘
+┌─ Controls — sets on the phone ──────────────────────────────────────────┐
+│ Sets                 │ Name [Navigate.....]        Icon [▾ nav]         │
+│ ┌──────────────────┐ │ [x] Shown in the wheel by default (≤ 8 sets)     │
+│ │ Mouse (built-in) │ │ ┌ Commands — tick the 4 on the D-pad ─────────┐  │
+│ │ Input (built-in) │ │ │ On │ Name         │ Does     │ Shortcut     │  │
+│ │ …                │ │ │ [x]│ Esc          │ built-in │ esc          │  │
+│ │ VSCode (app·code)│ │ │ [x]│ Prev         │ chord    │ shift+tab    │  │
+│ │ Chrome (app·…)   │ │ │ [x]│ Next         │ chord    │ tab          │  │
+│ │ My set           │ │ │ [x]│ Find         │ chord    │ ctrl+f       │  │
+│ └──────────────────┘ │ │ [ ]│ Back         │ chord    │ alt+left     │  │
+│ [New set] [Delete]   │ │ [ ]│ Find next    │ chord    │ f3      ↕    │  │
+│                      │ │ [Add command][Remove]      4 of 4 on D-pad  │  │
+│                      │ └────────────────────────────────────────────┘  │
+│                      │ ┌ The selected command ──────────────────────┐   │
+│                      │ │ Does     [Shortcut (chord) ▾]              │   │
+│                      │ │ Shortcut [shift+tab.............][Record…] │   │
+│                      │ │ Name     [Prev..........................]  │   │
+│                      │ │ Icon     [▾ tabback]                       │   │
+│                      │ └────────────────────────────────────────────┘   │
+│                      │ ┌ Arrangement ───────────────────────────────┐   │
+│                      │ │ Landscape T·L·R·B │ Portrait ↑→↓           │   │
+│                      │ │ [list + ↑ ↓]      │ [list + ↑ ↓]  [Reset]  │   │
+│                      │ └────────────────────────────────────────────┘   │
+│ [Open the file]                                    [Save] [Cancel]      │
+└─────────────────────────────────────────────────────────────────────────┘
+   ▲ list asks for its widest entry   ▲ the table takes ALL the free height
+```
+
+## Where the space goes (SPACE & LEGIBILITY LAW)
+
+```
+free height ──▶ the command table            (the only stretched widget)
+set list    ──▶ sizeHintForColumn(0)         "Explorer   (app · explorer)"
+order lists ──▶ exactly their 4 rows         SlotList.sizeHint = rows + frame
+detail form ──▶ one field per row, column 1 stretched, Record fixed
+window min  ──▶ _computed_minimum()          measured strings, never a round number
 ```
 
 ## Data flow
@@ -29,12 +54,25 @@
 open
  ├─ user_actions_path()          seed %LOCALAPPDATA% copy (installed) + config.apply
  ├─ load_client_icons()          client/controls.js → {name: svg}
- └─ json.loads(actions.json)     → self.data (categories + custom_sets)
+ ├─ load_client_builtins()       client/controls.js → {action: (label, icon)}
+ ├─ json.loads(actions.json)     → self.data (categories + custom_sets + app_sets)
+ ├─ merge_shipped_pools()        built-in pools ← the SHIPPED file
+ │                               (owner's active / order_* / enabled survive)
+ └─ _reload_list() ─▶ _computed_minimum()    measure the filled widgets
 
 select set S (currentRowChanged)
  ├─ _store_current()             previous set: screen → self.data (RAM)
- └─ widgets ← S                  built-in: only arrangement enabled
-                                 custom: name/icon/enabled/buttons too
+ ├─ table.fill(pool, active…)    every pool command, four ticked
+ └─ widgets ← S                  built-in / app: pool + arrangement only
+                                 custom: name/icon/enabled/commands too
+
+tick a command (itemChanged)
+ ├─ >4 ticked → refuse the fifth, say "A D-pad holds 4 — untick one first"
+ └─ else       → active = [button_id(...)], arrangement reset to shipped order
+
+select a row (currentCellChanged)
+ ├─ _store_command()             the previous row: form → pool (custom only)
+ └─ detail.show_button(btn, editable)
 
 Record… ──▶ ChordRecorder.keyPressEvent
              modifiers (ctrl/win/alt/shift) + main key → "ctrl+shift+p"
@@ -44,14 +82,19 @@ Save
  ├─ _store_current()
  ├─ warn: custom sets with zero finished buttons
  ├─ clamp: shown-by-default sets > WHEEL_MAX → non-required extras enabled=false
+ │         (app sets are never counted — they ride with a focused layout)
  └─ write actions.json (indent=2)  ──▶ phone re-reads on next connection
 ```
 
-## Arrangement semantics
+## Pool semantics
 
 ```
-order_land[slot] = button index      slots: 0=top 1=left 2=right 3=bottom
-order_port[slot] = button index      slots: column top → bottom
-identity order   = key removed       (shipped default needs no JSON)
-invalid order    = ignored by client (falls back to default)
+buttons     = the whole POOL of a set        (4 or more commands)
+active      = ["click", "right", …]          IDs of the ≤4 on the D-pad
+              missing  → the first four      (pre-pool files keep working)
+button_id   = id | action | chord | key | label
+order_land[slot] = index into ACTIVE         slots: 0=top 1=left 2=right 3=bottom
+order_port[slot] = index into ACTIVE         slots: column top → bottom
+identity order   = key removed               (shipped default needs no JSON)
+invalid order    = ignored by client         (falls back to default)
 ```

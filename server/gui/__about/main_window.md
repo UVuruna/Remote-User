@@ -12,6 +12,19 @@ never blocks — server start/stop/restart run on worker threads, and a 1 s
 `QTimer` pulls state from the `ServerController` and repaints. Closing the
 window hides it to the tray; the server keeps running until Quit.
 
+**Sizing** (THE SPACE & LEGIBILITY LAW, 2026-08-05): the window is resizable
+with a COMPUTED minimum — `_computed_minimum()` measures the widest real row
+(the three bottom buttons at their longest captions, the update button's full
+sentence, the widest settings row, the QR) and the height its longest guidance
+text needs wrapped at that width, then a settle loop takes the larger of that
+and Qt's own layout minimum. With the shipped strings: **676 × 787** (dev
+machine, Segoe UI 13 px). The old hard `setFixedWidth(400)` is gone — it was
+exactly the "element can no longer take the free space" the law forbids. The
+QR label keeps its fixed 216 px square (an image at scan size, exempted on the
+line with its reason). The three guided reachability texts live in one place,
+`REACH_TEXT`, because the refresh loop shows them and the minimum size
+measures them.
+
 ## Connections
 
 ### Uses
