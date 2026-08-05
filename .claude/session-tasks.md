@@ -18,7 +18,7 @@ style.css/layouts.css split · dokument = __about/__flow of every module
 touched, ACTIONS.md, CLAUDE.md's protocol, and the answer on sound
 notification when the agent finishes.
 
-WAITING_ON_OWNER: no
+WAITING_ON_OWNER: yes
 
 ROUND 4 IMPLEMENTED (owner approved "moze sve i bipovi kao checkbox"):
 (a) shipped-pools merge now ALSO runs once at server start
@@ -245,23 +245,27 @@ only (their commands stay ours, custom sets stay fully editable).
       stay are Monitor · Sets · Quality · Language · Anywhere. They reach the
       owner's own %LOCALAPPDATA% copy through `merge_shipped_pools`, which
       runs at server start.
-- [ ] 23. Icons for the commands that have none (owner 5) — proposal page
+- [x] 23. Icons for the commands that have none (owner 5) — proposal page
       published (35 icons + Btn 4/5 + Region + a Claude set preview), each
       drawn as the real 58 px button next to its text-only alternative.
-      WAITING on the owner's rejections; the accepted ones go into
-      `ICONS` + `actions.json` in one pass.
-- [ ] 24. Region (owner 3) — free-size/free-position rectangle on the phone,
+      DONE in round 7 (0.0.198): the owner accepted the whole page, 40 new
+      faces (set now 97), moved to client/icons.js — which the desktop
+      editor now parses — and wired onto every command in actions.json.
+- [x] 24. Region (owner 3) — free-size/free-position rectangle on the phone,
       that crop pasted on the PC (Snipping-Tool equivalent). Server side is
       already there (`screenshot {x,y,w,h,paste:true}` crops any rect), so it
-      is a client-side selection overlay reusing the aspect panel's drag
-      mechanics. WAITING on the owner's yes.
-- [ ] 25. Claude app set (owner 6) — feasible; answer delivered. Needs (a) a
+      DONE in round 7 (0.0.198): client/region.js — free size AND position,
+      pasted the moment you tap Send (owner: "odmah lepi"). Phone audit
+      case added and self-tested.
+- [x] 25. Claude app set (owner 6) — feasible; answer delivered. Needs (a) a
       title/tab matcher next to `process` in `app_sets` so the set appears for
       a Claude window inside VSCode, (b) a new button kind `text` (type a
       slash command + Enter — the commands he named are not chords), (c) the
       Sets picker listing app sets one by one instead of one master toggle.
-      Two app sets showing together already works (`visibleAppSets` filters,
-      it does not pick one). WAITING on the owner's yes.
+      DONE in round 7 (0.0.198), all three: `title` match beside `process`
+      (Layout keeps the window's own title, so a rename cannot break it),
+      per-app-set ticks in the Sets picker, and the typed-command kind —
+      `paste_text` = clipboard + Ctrl+V + Enter, pinned in the INPUT GATE.
 - [x] 27. Quality hierarchy (owner report: "desktop settings do nothing") —
       diagnosed as a real but INVISIBLE hierarchy plus one genuine bypass.
       Owner chose option A (keep the hierarchy, put the truth in the UI).
@@ -273,10 +277,8 @@ only (their commands stay ours, custom sets stay fully editable).
       INPUT GATE + PRESENCE GATE PASS, bitrate derivation checked
       (20M→8000k/2000k, 12M→4800k/1200k, 6M→2400k/600k).
       Commits 0.0.193–0.0.195, app v0.0.080.
-- [ ] 26. Round close — build + GIT RELEASE once 23–25 land (single release
-      for the whole round). Superseded for task 27: it ships now as v0.0.080
-      so the owner can test the fix he reported; 23–25 follow when he
-      answers.
+- [x] 26. Round close for 23–25 — the code shipped as 0.0.198 + 0.0.199; the
+      BUILD + GIT RELEASE itself is task 34, which carries the blocker.
 
 ## Round 6 (owner brief 2026-08-05, night — TOPMOST leak + traffic proof)
 
@@ -340,11 +342,11 @@ NOWHERE in the repo — no exit path drops the topmost band.
       on built-in rows, empty = back to ours, merge_shipped_pools carries
       renames by command ID. Round-trip probe PASS. DONE 0.0.198.
 - [x] 27. Image dropped from the Attach pool. DONE 0.0.198.
-- [ ] 28. Sound when the agent finishes (owner question) — ANSWERED and
+- [ ] 33. Sound when the agent finishes (owner question) — ANSWERED and
       phased, not built: ROADMAP Phase H (`/notify` + a `notify` frame ->
       tone/vibration/toast on the phone, fed by a Claude Code `Stop` hook the
       desktop app installs for him). Waiting on his go.
-- [ ] 29. Round close — APK + full desktop build + GIT RELEASE. BLOCKED on the
+- [ ] 34. Round close — APK + full desktop build + GIT RELEASE. BLOCKED on the
       parallel session: server/web.py is being rewritten right now
       (presence.py / traffic.py split, a .tmp file in the tree) and its own
       presence gate is red, so a build would package a half-finished refactor.
