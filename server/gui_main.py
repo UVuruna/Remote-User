@@ -55,6 +55,22 @@ def main() -> None:
     if "--minimized" not in sys.argv:
         window.show()
 
+    # NOTHING of ours may outlive this process in the always-on-top band
+    # (owner decree 2026-08-05, after finding his Chrome and VSCode nailed
+    # above everything twice). Three nets, deliberately overlapping, because
+    # each one alone has a hole:
+    #   - aboutToQuit  — the ordinary Qt exit (tray Quit, the self-update
+    #     relaunch, Windows logging the session off).
+    #   - atexit       — anything that ends the interpreter without Qt, an
+    #     unhandled exception included.
+    #   - the ledger on disk — the paths that run NO code at all (Task
+    #     Manager, the installer's taskkill, a power cut) are repaired by the
+    #     next start (ServerController.__init__ -> repair_stranded).
+    # release_windows() is idempotent, so running all three is the design.
+    import atexit
+    app.aboutToQuit.connect(controller.release_windows)
+    atexit.register(controller.release_windows)
+
     controller.start()
     sys.exit(app.exec())
 

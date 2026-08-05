@@ -13,7 +13,27 @@ def main() -> None:
     init_process()
 
     from server_core import ServerController
-    ServerController(console_pairing=True).run_blocking()
+    controller = ServerController(console_pairing=True)
+
+    # A console run ends in ways Python never hears about: closing the console
+    # window, a logoff, a shutdown — all of them CTRL_* console events, none of
+    # them SIGINT. Any window this run raised would simply stay always-on-top
+    # (owner decree 2026-08-05: nothing of ours outlives us up there). Ctrl+C
+    # is already covered by uvicorn's own handler; this catches the rest, and
+    # the handler stays tiny because Windows gives it only seconds.
+    import atexit
+    import ctypes
+    atexit.register(controller.release_windows)
+    handler_type = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_uint)
+
+    def _console_event(_event: int) -> bool:
+        controller.release_windows()
+        return False  # let the default handler end the process
+
+    _keep_alive = handler_type(_console_event)   # must outlive the call
+    ctypes.windll.kernel32.SetConsoleCtrlHandler(_keep_alive, True)
+
+    controller.run_blocking()
 
 
 if __name__ == "__main__":
