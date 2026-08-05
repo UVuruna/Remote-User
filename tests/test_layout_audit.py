@@ -104,8 +104,18 @@ def main() -> int:
             page.wait_for_selector("#group-left button", timeout=8000)
 
             for name, open_js, close_js, sel in (
-                ("Quality panel", "openQualityPanel()", "closeQualityPanel()",
-                 "#quality-panel .sets-card"),
+                # FULLEST state (owner 2026-08-05): the panel states the PC's
+                # own settings and strikes out the fps steps that PC puts out
+                # of reach. A base must therefore be set before opening —
+                # without it the header is the short "Waiting for the PC's own
+                # settings…" and the audit would measure the empty case. 4K +
+                # a 10 fps PC is the longest header AND the most struck-out
+                # steps this panel can show.
+                ("Quality panel",
+                 "setStreamBase({fps:10, width:3840, height:2160,"
+                 " bitrate:'6M', bitrate_mid:'2400k', bitrate_low:'600k'});"
+                 "openQualityPanel()",
+                 "closeQualityPanel()", "#quality-panel .sets-card"),
                 ("Sets picker", "openSetsPanel()", "closeSetsPanel()",
                  "#sets-panel .sets-card"),
                 ("Dictation card",
