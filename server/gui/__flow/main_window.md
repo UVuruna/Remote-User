@@ -12,7 +12,14 @@ LEGIBILITY LAW): the widest real row it can show — the three bottom buttons at
 their longest captions, the update button's full sentence, the widest settings
 row, the QR — plus the height its longest guidance text (`REACH_TEXT`) needs
 once wrapped at that width. With the shipped strings that is **676 × 787**
-(dev machine, Segoe UI 13 px, 2026-08-05).
+(dev machine, Segoe UI 13 px, 2026-08-05) for the window as it is BORN.
+
+That measurement is redone whenever the content changes (`_resettle`, and once
+more on the first `showEvent`), because two zones below grow after the window
+is on screen: `UPDATE` appears when the GitHub check finds a newer release, and
+`NOTIFY` reports a failure in three lines where it normally speaks in one. Both
+were measured only at construction until 2026-08-06, and the rows they needed
+were painted over the QR card above them.
 
 ```mermaid
 %%{init: {'flowchart': {'subGraphTitleMargin': {'top': 0, 'bottom': 35}}}}%%
@@ -36,11 +43,15 @@ flowchart TB
             direction TB
             FORM["Form: Monitor · Resolution · Bitrate ·\nFrame rate (combo boxes)"]
             APPLY["Apply && restart button (right-aligned)"]
+            NOTIFY["notify_check 'Tell my phone when an agent finishes'\n+ notify_caption — one line, three when it reports a failure"]
+            FORM --> APPLY --> NOTIFY
         end
         subgraph BOTTOM["Bottom row"]
             direction LR
             POWER["power_btn\n'Start server' / 'Stop server'\n(#primary / #danger)"]
             SPACER[" "]
+            CTRL["controls_btn 'Controls…'"]
+            TRAF["traffic_btn 'Traffic…'"]
             TS["tailscale_btn\n'Set up' / 'Sign in' — hidden when connected"]
         end
         UPDATE["update_btn — hidden until a newer\nGitHub release is found"]
@@ -76,8 +87,11 @@ Widget inventory per zone (nested-list form, for a quick text scan):
   - `QFormLayout`: `self.monitor_combo`, `self.resolution_combo`,
     `self.bitrate_combo`, `self.fps_combo`
   - `self.apply_btn`
+  - `self.notify_check` + `self.notify_caption` (the agent-hook switch; takes
+    effect at once, which is why it sits BELOW the Apply row)
 - Bottom row
   - `self.power_btn` (`#primary`/`#danger`)
+  - `self.controls_btn`, `self.traffic_btn`
   - `self.tailscale_btn`
 - `self.update_btn` (`#primary`, hidden by default)
 - Footer `QLabel#caption`

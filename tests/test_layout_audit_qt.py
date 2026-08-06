@@ -70,12 +70,35 @@ def _fake_controller() -> SimpleNamespace:
                            start=lambda: None, stop=lambda: None)
 
 
+# The longest sentence the notify switch can print under itself: the switch
+# reports its own failures there, and a failure names a PATH. Measured, not
+# guessed - this exact string is what the owner photographed on 2026-08-06
+# with the QR and its link overlapping each other above it.
+NOTIFY_WORST = ("[Errno 2] No such file or directory: 'C:\\\\Program Files\\\\"
+                "Remote User\\\\_internal\\\\setup\\\\agent_hook.py'")
+
+
 def make_main_window() -> QWidget:
+    """The window in the state that CONTAINS every other one.
+
+    Two things arrive AFTER the window is built and its minimum measured - an
+    update offer (the button is hidden until GitHub answers) and the notify
+    switch's own caption (one line normally, three when it has to report a
+    failure). Both were absent from this factory, so the audit measured a
+    window the owner never sees, and both of his 2026-08-06 screenshots showed
+    the same overlap: content that arrived later had nowhere to go.
+    """
     import updates
     from gui.main_window import MainWindow
     updates.check = lambda: None  # no network inside a guard run
     window = MainWindow(_fake_controller())
-    window._refresh()  # the guided text + QR, exactly as the owner sees it
+    window.show()                 # …and only THEN does the later content arrive
+    window._refresh()             # the guided text + QR, as the owner sees it
+    window._update = SimpleNamespace(version="9.9.999", installer_url="http://x/y.exe",
+                                     page_url="http://x")
+    window._update_state = "found"
+    window.notify_caption.setText(NOTIFY_WORST)
+    window._refresh()             # the refresh tick that shows both of them
     return window
 
 
