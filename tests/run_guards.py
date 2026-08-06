@@ -34,6 +34,15 @@ FAST_CHECKS = [
     ("layout law (ratchet)", layout_law.test_ratchet_entries_still_exist),
 ]
 
+def _control_sets() -> None:
+    """Imported lazily for the same reason as the Qt audit below: it builds
+    the real Controls dialog offscreen. Guards the owner's actions.json
+    against being silently rewritten (both failures of 2026-08-05)."""
+    import test_controls_sets
+    for _, check in test_controls_sets.CHECKS:
+        check()
+
+
 def _layout_audit_qt() -> None:
     """Imported lazily: it pulls in PySide6 and builds an offscreen
     QApplication, which the --fast path must never pay for."""
@@ -51,6 +60,7 @@ FULL_ONLY_CHECKS = [
     # The runtime half: opens every Qt window offscreen and measures it.
     # Full run only — it builds a QApplication (~1 s), too slow for the
     # PostToolUse budget.
+    ("control sets (never silently rewritten)", _control_sets),
     ("layout audit (Qt windows)", _layout_audit_qt),
 ]
 
@@ -73,7 +83,7 @@ def main() -> int:
             print(file=sys.stderr)
         return 2
 
-    scope = "fast (structure + config-sections)" if fast_only else "full (all four guards)"
+    scope = "fast (structure + config-sections)" if fast_only else "full (all guards)"
     print(f"GUARDS PASSED — {scope}")
     return 0
 
