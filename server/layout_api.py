@@ -83,7 +83,14 @@ async def layout_list(ws, layouts, stream) -> None:
     alone hid its tabs, the exact reported gap. Windows that already belong to
     a layout are LEFT OUT (owner 2026-08-03): one window cannot be shown in
     two places, so it stays off the list for as long as it is in a layout."""
-    mon_rect = mon_rect(stream)
+    # NOT `mon_rect = mon_rect(stream)`: that name is this module's own
+    # function, and assigning to it makes it a LOCAL for the whole function —
+    # so the call on the right-hand side raises UnboundLocalError and the
+    # phone's list NEVER ARRIVES. That is exactly what killed "create from a
+    # list" (owner report 2026-08-06; his server log carried the traceback
+    # three times, the phone showed a spinner forever). tests/test_layout_protocol.py
+    # walks this path now — it did not exist, which is why nothing caught it.
+    rect = mon_rect(stream)
     used = await asyncio.to_thread(layouts.member_hwnds)
     windows = await asyncio.to_thread(window_manager.list_windows, used)
     entries = []
@@ -96,7 +103,7 @@ async def layout_list(ws, layouts, stream) -> None:
                         "agents": agents.agents_for(w["title"])})
         if not uia.has_tabs(w["process"]):
             continue  # its TabItems are internal sections, not real tabs
-        for tab in await asyncio.to_thread(uia.list_tabs, mon_rect, w["hwnd"]):
+        for tab in await asyncio.to_thread(uia.list_tabs, rect, w["hwnd"]):
             entries.append({"kind": "tab", "hwnd": w["hwnd"],
                             "tab": {"name": tab["name"]},
                             "x": tab["x"], "y": tab["y"],
