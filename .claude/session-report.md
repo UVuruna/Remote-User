@@ -34,7 +34,7 @@ which for him is the other agent's session.
 
 ## Per task
 
-- [x] 61. Focus never leaves the box he is dictating into — DONE.
+### 61 — the focus guard (see the line above for status + evidence)
   `server/focus_guard.py`: the target is decided BEFORE every message that
   types. In a layout the fence is the layout (a foreign foreground is refused
   and focus handed back to the member he was typing in); at the desktop the
@@ -56,13 +56,15 @@ which for him is the other agent's session.
   through the real `web._receive_input` dispatcher, fail-closed as step 0e of
   `build.py`. Commits 0.0.280, 0.0.283.
 
-- [x] 63. The tray toast that constantly opened and closed — DONE. The "already
+### 63 — the tray toast (status + evidence above)
+  The "already
   told" flag lived only in the window object, so every start of the app
   produced it again. A marker file (`SETTINGS.tray_notice_path`) makes once
   mean once. Noted for him: his screenshot showed the sender as **Python**, so
   that one came from a dev instance, not the installed app. Commit 0.0.281.
 
-- [x] 62. Round close — DONE. APK 0.0.089 (Kotlin changed) + full desktop
+### 62 — round close (status + evidence above)
+  APK 0.0.089 (Kotlin changed) + full desktop
   build and GIT RELEASE v0.0.089.
 
 ## Gates on the released tree
