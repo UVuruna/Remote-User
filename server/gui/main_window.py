@@ -26,6 +26,7 @@ import pairing
 import updates
 from config import BUNDLE_DIR, FROZEN, PROJECT_ROOT, SETTINGS, app_version, save_user_settings
 from gui.controls_editor import ControlsEditor
+from gui.sizing import settle_minimum
 from gui.theme import QSS, card_shadow, repolish
 from gui.traffic_window import TrafficWindow
 from notify import agent_hook_installed, set_agent_hook
@@ -139,22 +140,8 @@ class MainWindow(QMainWindow):
         with it. `keep` is the size never to shrink below — the owner's own
         window size at runtime, nothing at construction.
         """
-        keep = self.size() if keep is None else keep
-        size = self._computed_minimum()
-        for _ in range(4):
-            self.resize(size)
-            self.layout().activate()
-            needs = self.minimumSizeHint()
-            grown = QSize(max(size.width(), needs.width()),
-                          max(size.height(), needs.height()))
-            if grown == size:
-                break
-            size = grown
-        self.setMinimumSize(size)
+        settle_minimum(self, self._computed_minimum(), keep)
         self._settled_for = self._content_signature()
-        if not (self.isMaximized() or self.isFullScreen()):
-            self.resize(max(keep.width(), size.width()),
-                        max(keep.height(), size.height()))
 
     def _content_signature(self) -> tuple:
         """Everything on this window whose LENGTH can change after it was
@@ -171,7 +158,7 @@ class MainWindow(QMainWindow):
         """
         return (self.update_btn.isHidden(), self.update_btn.text(),
                 self.notify_caption.text(), self.reach_label.text(),
-                self.url_label.text(), self.qr_label.text())
+                self.qr_label.text())
 
     def _resettle(self) -> None:
         if self._settled_for is None:
@@ -275,13 +262,12 @@ class MainWindow(QMainWindow):
         self.qr_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         box.addWidget(self.qr_label, alignment=Qt.AlignmentFlag.AlignHCenter)
 
-        self.url_label = QLabel("—")
-        self.url_label.setObjectName("url")
-        self.url_label.setAlignment(Qt.AlignmentFlag.AlignHCenter)
-        self.url_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-        self.url_label.setWordWrap(True)
-        box.addWidget(self.url_label)
-
+        # The pairing URL is NOT printed here. It was a 60-character line of
+        # random token that nobody reads and nobody can type — the QR already
+        # carries it and "Copy link" already copies it — and it was the one
+        # element that landed on the QR when the column ran short (owner
+        # 2026-08-06: "ja ne znam zašto stoji taj link tu"). What the card
+        # owes the user is the STATE, and that is `reach_label`'s job below.
         buttons = QHBoxLayout()
         self.copy_btn = QPushButton("Copy link")
         self.copy_btn.clicked.connect(self._copy_link)
@@ -671,7 +657,6 @@ class MainWindow(QMainWindow):
                     QR_SIZE - 16, QR_SIZE - 16,
                     Qt.AspectRatioMode.KeepAspectRatio,
                     Qt.TransformationMode.SmoothTransformation))
-                self.url_label.setText(info.qr_url)
             # Three guided states — the user follows THIS window, never
             # Tailscale's site (owner principle: no confusing third-party
             # screens; we say exactly what happens next).
@@ -694,12 +679,16 @@ class MainWindow(QMainWindow):
             self._shown_qr_url = None
             self.qr_label.setPixmap(QPixmap())
             self.qr_label.setText("Server stopped" if state != "failed" else "Server failed")
-            self.url_label.setText(self.controller.error or "—")
+            # The reason a stopped server gives goes where the guidance goes —
+            # one place under the QR that speaks, instead of two.
+            self.reach_label.setText(self.controller.error or "")
             self.tray.setToolTip("Remote User — stopped")
 
         self._refresh_buttons()
         if state == "failed":
-            self.reach_label.setText("See the log for details.")
+            self.reach_label.setText(
+                (self.controller.error + "\n" if self.controller.error else "")
+                + "See the log for details.")
         self._resettle()  # content that grew since the last tick raises the floor
 
     def _refresh_buttons(self) -> None:

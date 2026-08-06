@@ -25,6 +25,21 @@ line with its reason). The three guided reachability texts live in one place,
 `REACH_TEXT`, because the refresh loop shows them and the minimum size
 measures them.
 
+**The settle itself lives in [Sizing](sizing.md)** (2026-08-06, second pass):
+the loop this window used to own asked `minimumSizeHint()`, which quotes a
+WRAPPING label at ONE line — 48 px short here — and Qt spends a shortfall by
+OVERLAPPING, which is why v0.0.086 still drew the pairing link across the QR on
+the owner's screen while every widget reported its full size. The honest
+question is `heightForWidth`, and it is asked in one place for all three
+windows now.
+
+**The pairing URL is no longer printed under the QR** (owner: *"ja ne znam
+zašto stoji taj link tu"*). Sixty characters of random token that nobody reads
+and nobody can type: the QR carries it and "Copy link" copies it. It was also
+the one element that landed on the QR when the column ran short. A stopped or
+failed server puts its reason in `reach_label`, so the card has ONE place that
+speaks instead of two.
+
 **The minimum is re-declared whenever the content changes** (owner screenshots
 2026-08-06 — the QR's link drawn over the QR, and the guidance text over the
 settings card below it). Measuring once, at construction, was the bug: two

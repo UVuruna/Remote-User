@@ -13,6 +13,7 @@ client (see [Theme](__about/theme.md) for the verified overlap).
 |------|------|----------|
 | `main_window.py` | Algorithmic | window shell, tray, layout, wiring — [about](__about/main_window.md) · [flow](__flow/main_window.md) |
 | `theme.py` | Algorithmic | design tokens + QSS + effect helpers — [about](__about/theme.md) · [flow](__flow/theme.md) |
+| `sizing.py` | Algorithmic | how a window declares the minimum it TRULY needs — `heightForWidth`, not `minimumSizeHint`, because a short layout overlaps instead of clipping — [about](__about/sizing.md) · [flow](__flow/sizing.md) |
 | `controls_editor.py` | Algorithmic | the Controls dialog: load/assemble/save `actions.json` — [about](__about/controls_editor.md) · [flow](__flow/controls_editor.md) |
 | `controls_widgets.py` | Algorithmic | its widgets: chord recorder, pool table, command form, arrangement ladders — [about](__about/controls_widgets.md) · [flow](__flow/controls_widgets.md) |
 | `traffic_window.py` | Algorithmic | the Traffic window: bytes to and from the phone over time, with a grey band wherever nobody was connected — [about](__about/traffic_window.md) · [flow](__flow/traffic_window.md) |
