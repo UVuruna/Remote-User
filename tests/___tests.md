@@ -135,6 +135,22 @@ four installed 2026-08-01 alongside the MD-First 2.0 docs migration, the fifth
   disabled wrapping, hard pixel sizes on text-bearing widgets, CSS
   `text-overflow: ellipsis` and `-webkit-line-clamp`. One line may opt out
   with `layout-law: exempt - <reason>` ON that line; `RATCHET` is empty.
+- `test_controls_sets.py` — the owner's `actions.json` is never silently
+  rewritten: two sets of one process both survive a pool merge, renames are
+  carried across it, a pool corrupted by an older build repairs itself, and
+  switching sets in the editor never writes into another set's pool (both
+  failures of 2026-08-05). Builds the real Controls dialog offscreen, so it
+  is a full-run guard.
+- `test_app_set_wheel.py` — the app-aware sets appear for the RIGHT window
+  and pay for their seat (owner's two rules of 2026-08-06): only the Claude
+  conversation wears the Claude set — never an open `CLAUDE.md`, a transcript
+  or any other document carrying the word — and an app set charges a wheel
+  slot, the charge being the largest group that can appear together (VSCode +
+  Claude = 2, Chrome + Explorer + VSCode = 1). The functions under test are
+  pure but live in a browser script, so the guard lifts the block out of
+  `client/controls.js` and runs it in **node** with stubs — the same
+  parse-the-client trick the desktop editor uses for `ICONS`/`BUILTINS`.
+  Skipped, not failed, when node is absent.
 - `run_guards.py` — runs all guards (or, with `--fast`, structure +
   config-sections + the static layout law — a grep costs nothing, so it
   belongs in the PostToolUse hook's budget; the Qt audit is full-run only,

@@ -76,14 +76,28 @@ for the split's general load-order reasoning.
   revised same day): `required` categories (Mouse/Input/Settings) ALWAYS +
   toggleable shipped sets and custom sets (`setOn`: phone choice from
   localStorage wins over the desktop `enabled` default) + the app set in
-  layout focus (`visibleAppSets`, owner 2026-08-04; charges nothing — and
-  since 2026-08-05 MORE THAN ONE may match: `appSetMatches` adds an optional
-  `title` test on top of `process`, which is how the Claude set singles out
-  Claude Code inside VSCode and rides beside the VSCode set; `appSetOn` is
-  each app set's own per-device switch in the picker), hard
+  layout focus (`visibleAppSets`, owner 2026-08-04 — and since 2026-08-05
+  MORE THAN ONE may match: `appSetMatches` adds an optional `title` test on
+  top of `process`, which is how the Claude set singles out Claude Code
+  inside VSCode and rides BESIDE the VSCode set — the one case where two app
+  sets are on the wheel at once, and both are wanted; `appSetOn` is each app
+  set's own per-device switch in the picker), hard
   cap `WHEEL_MAX` (8) with non-required sets bumped from the END. The
   Settings → Sets overlay (`openSetsPanel`/`setsRow`) locks required rows and
   blocks enabling past the cap (`visibleCount`).
+- **The title test is a WORD, and a document never matches** (`titleMatches`,
+  `DOC_TITLE`; owner 2026-08-06): the Claude set may appear for the Claude
+  CONVERSATION and for nothing else. Substring matching gave it to an open
+  `CLAUDE.md`, to a transcript, to any file whose name carries the word. The
+  test now needs a word boundary, `title` may be a LIST of spellings
+  (`["claude code", "claude"]`), and a title that looks like a file name —
+  an extension, with or without a `— App Name` tail — is refused outright.
+- **App sets pay for their seat** (`appSetReserve`; owner 2026-08-06): they
+  used to charge nothing, so the picker promised eight while the wheel
+  silently dropped two. The charge is not "how many are ticked" but the
+  largest group that can appear TOGETHER — sets are grouped by `process`, so
+  ticking Chrome, Explorer and VSCode costs one slot while VSCode + Claude
+  costs two. Tick both and six of the eight slots are left for the rest.
 - Command pools (`btnId`, `activeButtons`; owner 2026-08-05): a set's
   `buttons` list is its POOL and may hold more than the four a D-pad shows —
   the reserves (VSCode's Markdown preview, Explorer's tab hops, Edit's Save…).
