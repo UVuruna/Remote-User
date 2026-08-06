@@ -165,7 +165,13 @@ def main() -> int:
         payload = json.loads(sys.stdin.read() or "{}")
     except (json.JSONDecodeError, ValueError):
         payload = {}
-    send(agent_name(payload), "finished", "")
+    # "waiting", not "finished" (owner 2026-08-06: *"rekao mi je da si završio…
+    # ali vidim da još radiš"*). A `Stop` hook fires when the agent ENDS A
+    # TURN, which happens every time it answers — including mid-job, when it
+    # stops to ask something. What is always true at that moment is that it is
+    # no longer working and the next move is his, and that is what the phone
+    # now says: "<agent> needs you".
+    send(agent_name(payload), "waiting", "")
     return 0   # a hook must never fail the turn it reports on
 
 
