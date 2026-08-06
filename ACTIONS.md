@@ -216,13 +216,17 @@ Chrome while VSCode and Claude hold two between them changes nothing.
 
 ### How an app set knows it belongs (owner 2026-08-06)
 
-`title` above is now the **fallback**, kept only for layouts made before this
-version. What decides is the owner's own tick, made when the layout is created
-(and changeable any time from the layout list's pencil) and carried in
-`layout_state` as `app_sets`.
+What decides is `"agent"`: the PC looks at its own **process table** and tells
+the phone which agent tools are LIVE in that window's project, as `agents` in
+`layout_state` (and per entry in `layout_offer`, so the creation panel
+pre-ticks with no tap). The owner's own tick — `app_sets`, made at creation or
+from the layout list's pencil — still WINS over it; detection is the default,
+never a cage. `title` survives underneath as the fallback for a server too old
+to send `agents`.
 
-The ticks exist because the automatic test was **proven impossible**. Probing
-the owner's PC with a Claude Code conversation open found:
+It took that route because the STRING test really is impossible, and the
+previous round stopped one source too early. Probing the owner's PC with a
+Claude Code conversation open found:
 
 ```
 WIN 'Ispravka UI dizajna meni… - Remote User - Visual Studio Code [Administrator]'
@@ -237,9 +241,28 @@ and `HelpText` are empty; and a walk of the extracted window's whole tree
 webview content to accessibility. The only string that ever matched the old
 test was `CLAUDE.md` — the document case the owner banned.
 
-The creation panel pre-ticks every set whose `process` matches and that has no
-`title` demand, which is right for Chrome, Explorer and plain VSCode. Claude
-is the one tap he adds himself.
+…but the PROCESS TABLE was never read, and it answers outright (owner
+2026-08-06: *"naravno da hoću da prepozna"*):
+
+```
+claude.exe  parent Code.exe 37624  --resume=0eb7cbe2-…   ← a live conversation
+      └─ ~/.claude/projects/<slug>/0eb7cbe2-….jsonl
+            └─ "cwd": "u:\…\Remote User"   →  folder "remote user"
+                                                     ↕
+     window title "… - Remote User - Visual Studio Code [Administrator]"
+```
+
+The creation panel pre-ticks every set whose `process` matches and that either
+has no `title` demand (Chrome, Explorer, plain VSCode) or is an `agent` set the
+PC reports as live (Claude). **Every slot is read**, not just the first — a
+grid's second cell used to pre-tick nothing. Nothing is left for the owner to
+tick.
+
+The honest limit, on the record: every VS Code window belongs to one Electron
+process, so a window handle cannot be tied to one extension host and the match
+is per PROJECT FOLDER. Two windows open on the same folder both get the Claude
+set even if only one shows the conversation — and that is the case his own tick
+is still there to correct.
 
 ## Button kinds
 

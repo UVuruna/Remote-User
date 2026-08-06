@@ -97,15 +97,17 @@ class SectionDelegate(QStyledItemDelegate):
     shouted — it had been asked for once already and not delivered): WHICH of
     these twelve sets are actually on the phone's wheel? The state was
     readable only by clicking every set in turn and watching one checkbox on
-    the other side of the dialog. Now the list says it, at a glance, in the
-    accent — and it is DRAWN, not a font glyph (this project has already paid
+    the other side of the dialog. Now the list says it at a glance, in a strip
+    of its own on the LEFT — grey where he cannot switch the set, white where
+    he can — and it is DRAWN, not a font glyph (this project has already paid
     for a glyph that came out a blunt cross on the owner's device).
     """
 
     GAP = 16   # breathing room above a heading, where the rule is drawn
     TOP = 6    # …and above the very first one, which has nothing to divide
-    MARK = 22  # the tick's own column on the right — reserved, never shared,
-               # so a long set name can never be drawn underneath it
+    MARK = 22  # the tick's own column on the LEFT — reserved, never shared,
+               # so a set's icon and name are indented past it and nothing is
+               # ever drawn underneath the mark
 
     def initStyleOption(self, option, index) -> None:
         super().initStyleOption(option, index)

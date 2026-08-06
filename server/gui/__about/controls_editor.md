@@ -70,17 +70,25 @@ The list named twelve sets and said nothing about which of them the phone
 shows. The state existed only in one checkbox on the other side of the dialog,
 so reading it meant clicking every set in turn — and the owner had asked for
 the mark once already, in the round before. Each set row now carries its own
-answer at the right edge: `CHECK_ROLE` holds it, `SectionDelegate._paint_tick`
-draws it in the accent, and `MARK` reserves the column so a long set name can
-never be painted underneath it (THE SPACE & LEGIBILITY LAW — the width the
+answer: `CHECK_ROLE` holds it, `SectionDelegate._paint_tick` draws it, and
+`MARK` reserves its column so a set name can never be painted underneath it (THE SPACE & LEGIBILITY LAW — the width the
 list asks for grows with it). The mark is DRAWN, three points and a round pen,
 never a font glyph: this project has already paid for a glyph that came out a
 blunt cross on the owner's own device.
 
-What the tick claims is exactly `_rides()`: **Standard** and **Custom** sets
-show it when they are `required` (Mouse/Input/Settings, never hideable) or
-`enabled`; **App-aware** sets never wear one, because they do not ride on their
-own — they come and go with the focused layout, by the owner's ticks *there*.
+The tick sits in its own strip on the **left**, with the icon and name
+indented past it, and it has two colours — the owner's own rule (2026-08-06):
+**grey** where the set is `required` and he could not turn it off if he wanted
+to (Mouse, Input, Settings), **white** where it is on and his to switch. A tick
+that looked the same in both cases would promise him a choice he does not have.
+The row's background is painted across the full width first, so the strip
+belongs to the selected row instead of leaving a gap beside it.
+
+**App-aware sets are ticked too**, and their checkbox is live. They were left
+blank on the reasoning that they ride only in layout focus — but the phone
+reads the SAME `enabled` flag for them (`appSetOn` in client/sets.js), so a
+blank row hid a switch that already worked, and a dead checkbox refused an edit
+the file accepted. A switched-off app set also stops charging a wheel slot.
 The list's caption says it once ("Sets — ticked = on the phone's wheel"), and
 `_mark_current()` keeps the row and the form's checkbox saying the same thing
 the instant either changes (the form writes into `self.data` only on the way
