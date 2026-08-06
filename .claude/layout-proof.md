@@ -1,3 +1,42 @@
+SESSION: b8d8ce25-5cc2-4f32-9fc5-60a910985a1f (round 12 — the focus guard: typed input lands where the owner is looking)
+- MainWindow (server/gui/main_window.py, server/gui/sizing.py, server/gui/theme.py) - MIN 503x937 - SHOT .claude/shots/MainWindow.png - GRADE 9/10 - audit: PASS
+- MainWindow reopened from the tray (server/gui/main_window.py) - MIN 503x937 - SHOT .claude/shots/MainWindow__reopened_from_the_tray.png - GRADE 9/10 - audit: PASS
+- ControlsEditor (server/gui/controls_editor.py) - MIN 723x858 - SHOT .claude/shots/ControlsEditor.png - GRADE 8/10 - audit: PASS
+- TrafficWindow (server/gui/traffic_window.py) - MIN 593x486 - SHOT .claude/shots/TrafficWindow.png - GRADE 8/10 - audit: PASS
+- Command chooser, phone (client/style.css) - MIN 412x915 - SHOT .claude/shots/Command_chooser.png - GRADE 9/10 - audit: PASS
+- Sets picker, phone (client/style.css) - MIN 412x915 - SHOT .claude/shots/Sets_picker.png - GRADE 9/10 - audit: PASS
+
+What this round actually touched, stated plainly: NO Qt window and NO client
+CSS. The change is `server/focus_guard.py` (new), the guard call in the
+dispatcher (`server/web.py`), and `Layout.last_member` + the raise order in
+`server/window_manager.py` — the last of which this gate counts as a GUI file
+because it places windows on screen. It changes WHICH member window is left in
+the foreground after a re-focus; it moves no widget and no pixel inside any of
+our own windows.
+
+The six windows above were re-audited and re-shot in this session all the same
+(`tests/test_layout_audit_qt.py`, five windows PASS at minimum and +50%), and
+every shot was OPENED and graded on what is actually in the picture:
+
+- MainWindow / the tray copy 9/10 — the QR card, the four settings rows and
+  the button row all breathe; labels and fields align on one column edge; the
+  wide primary button anchors the bottom; nothing is cut and no strip of the
+  window is starved.
+- ControlsEditor 8/10, not 9 — everything is legible and aligned (set list |
+  command table | command form | arrangement), nothing clipped and no text
+  elided, so it passes; but at the DECLARED minimum the arrangement box carries
+  visible empty space under its two lists while the table above it is the part
+  that scrolls. That imbalance is the one thing keeping it off a 9, and it is
+  not this round's work to move.
+- TrafficWindow 8/10 — axis, legend row and the four bottom controls sit clean
+  and unclipped; the plot itself is an empty grid because an offscreen audit
+  has no traffic to draw, which is honest but bare.
+- Command chooser 9/10 — six dark rows with borders and white text, evenly
+  spaced, Cancel centered under them.
+- Sets picker 9/10 — the cap line ("5 of 8 used — 2 held for app shortcuts")
+  reads at a glance, the app-set group is separated by a rule, and the two
+  "ON THE WHEEL NOW" badges are dark ink on the accent.
+
 SESSION: 0eb7cbe2-d779-4c9d-9ec7-0a3d35d0897a (round 11b - the overlap the first fix did NOT fix, and the two teeth that were missing)
 - MainWindow (server/gui/main_window.py, server/gui/sizing.py, server/gui/theme.py) - MIN 503x937 - SHOT .claude/shots/MainWindow.png - GRADE 9/10 - audit: PASS
 - MainWindow reopened from the tray (server/gui/main_window.py) - MIN 503x937 - SHOT .claude/shots/MainWindow__reopened_from_the_tray.png - GRADE 9/10 - audit: PASS

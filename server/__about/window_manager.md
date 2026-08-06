@@ -60,6 +60,15 @@ on aspect drift, raises members and returns the fresh monitor-normalized
 region; `remove(index)`; `prune()`; `state(active, region)` builds the
 `layout_state` payload (pruning first, so the phone never lists a dead layout).
 
+`Layout.last_member` is WHICH member holds the keyboard (owner 2026-08-06).
+`focus()` raises it **last**, so it is the window left in the foreground; the
+[Focus Guard](focus_guard.md) updates it whenever the phone legitimately types
+in another member, and `prune()` moves it off a window closed at the desk.
+Raising in plain list order was half of the dictation bug: one excursion
+closes the socket, the page re-focuses the layout, and the keyboard went to
+whichever window sat last in the grid — so his sentence continued in the other
+pane.
+
 `rename(index, name) -> bool` gives a layout the OWNER's name (owner
 2026-08-05) — the target window's title is only the default the phone's
 creation panel prefills; an empty name or a dead index is refused.
