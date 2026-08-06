@@ -49,12 +49,24 @@ the only thing that separates them. `SECTIONS` is the display order and the
 headings: **Standard** (always in the wheel) → **App-aware** (only while a
 matching layout is focused) → **Custom** (made here). The names match the
 vocabulary of CLAUDE.md and ACTIONS.md, so the editor and the docs speak one
-language, and an empty section still says what it is for instead of showing a
-blank gap.
+language.
+
+A heading is a TITLE, not a bold set name: `SectionDelegate` paints it
+centered, a quarter larger than the rows it governs, and draws the horizontal
+**rule** that separates it from the section above (owner 2026-08-06 — "LINIJA
+KOJA RAZDVAJA"; the first heading divides nothing, so it gets no rule). The
+rule's colour comes from the palette's TEXT with alpha, never `mid()` — on
+this dialog's dark theme `mid()` is a hair off the background and the line was
+invisible.
+
+A section in `HIDE_WHEN_EMPTY` (**Custom**) is not shown at all while it holds
+nothing — owner 2026-08-06: a heading over an apologetic "(none yet)" line is
+a placeholder, not information. The **New set** button is the invitation; the
+section is born with its first set.
 
 Headings are rows with `NoItemFlags` — Qt may never let the selection land on
 one. `self._rows` is the bridge that makes that safe: row → entry index, or
-`None` for a heading/hint. The list's `currentRowChanged` goes to
+`None` for a heading. The list's `currentRowChanged` goes to
 `_row_selected`, the ONLY place that translates rows into entry indices;
 everything else in the dialog (`_current`, `_reload_list(select=…)`,
 `_select`) speaks entries. Mixing the two is what would put one set's data on
