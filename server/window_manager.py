@@ -658,7 +658,8 @@ class Layout:
 
     def __init__(self, name: str, process: str, members: list[int],
                  template: str | None, orient: str, aspect: float,
-                 icon: str | None = None, title: str = ""):
+                 icon: str | None = None, title: str = "",
+                 app_sets: list[str] | None = None):
         self.name = name
         self.process = process
         # The target window's OWN title, never renamed. `name` is what the
@@ -666,6 +667,20 @@ class Layout:
         # it is what an app-aware set matches when a process alone cannot
         # tell two apps apart (Claude Code inside VSCode — owner 2026-08-05).
         self.title = title or name
+        # WHICH app-aware sets this layout carries, chosen by the owner at
+        # creation (owner 2026-08-06). The title test it replaces was PROVEN
+        # unable to identify Claude Code: the probe of the owner's own PC
+        # found the tab named after the CONVERSATION and nothing else —
+        #   TAB 'Ispravka UI dizajna meni…, Window 2: Editor Group 1'
+        #   TAB 'prompt.txt, Editor Group 1'
+        # identical UIA class, empty AutomationId/HelpText, and a full walk of
+        # the extracted window's tree (20 elements) with zero hits for
+        # "claude"/"anthropic" — VSCode does not expose webview content. So no
+        # string on this machine can tell a Claude conversation from a file,
+        # and the mark has to come from the owner. None = never chosen, in
+        # which case the automatic process/title match still applies (layouts
+        # made before this version keep working).
+        self.app_sets: list[str] | None = list(app_sets) if app_sets is not None else None
         self.members = members
         self.template = template  # None = solo
         self.orient = orient      # "portrait" | "wide"
@@ -725,7 +740,8 @@ class LayoutRegistry:
     def create(self, target: int, mode: str, template: str | None,
                fill: list[int], orient: str, device_ratio: float,
                mon_rect: tuple[int, int, int, int],
-               name: str | None = None) -> tuple[int, bool] | None:
+               name: str | None = None,
+               app_sets: list[str] | None = None) -> tuple[int, bool] | None:
         """Arrange the windows and register the layout. Returns (index, all
         members verified on their rects), or None when the target window died
         between pick and create. device_ratio = the phone's short/long side
@@ -753,7 +769,8 @@ class LayoutRegistry:
         name = name or title or "Window"
         self.layouts.append(Layout(name, _process_name(target), members,
                                    template, orient, aspect,
-                                   icon_data_uri(_process_path(target)), title))
+                                   icon_data_uri(_process_path(target)), title,
+                                   app_sets))
         return len(self.layouts) - 1, placed
 
     def focus(self, index: int, device_ratio: float,
@@ -856,6 +873,18 @@ class LayoutRegistry:
             self.last_focus = (index, name)  # keep the resume pointer valid
         return True
 
+    def set_app_sets(self, index: int, names: list[str]) -> bool:
+        """Which app-aware sets ride with THIS layout (owner 2026-08-06).
+        Chosen at creation and changeable from the layout list — nothing on
+        the PC moves, only what the wheel offers while this layout is focused.
+        An empty list is a real answer ("no app shortcuts here") and is NOT
+        the same as never having chosen, which stays None and keeps the
+        automatic process match."""
+        if not 0 <= index < len(self.layouts):
+            return False
+        self.layouts[index].app_sets = [str(n)[:40] for n in names][:16]
+        return True
+
     def set_ratio(self, index: int, w: int, h: int, pos: float = 0.5) -> bool:
         """Store this layout's owner-chosen W:H (0/0 = back to the phone's own
         shape) and the region's free-axis position (owner 2026-08-05 — the
@@ -922,6 +951,8 @@ class LayoutRegistry:
             "layouts": [{"name": lay.name, "process": lay.process,
                          "title": lay.title,
                          "orient": lay.orient, "icon": lay.icon,
+                         "app_sets": (list(lay.app_sets)
+                                      if lay.app_sets is not None else None),
                          "ratio": list(lay.ratio) if lay.ratio else None,
                          "pos": round(lay.pos, 3)}
                         for lay in self.layouts],

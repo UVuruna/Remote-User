@@ -852,6 +852,16 @@ async def _receive_input(ws: WebSocket, injector: InputInjector, stream, token: 
                     layouts.rename, int(msg["index"]), str(msg.get("name", ""))):
                 await _toast(ws, "That layout is gone")
             await layout_api.send_layout_state(ws, layouts, conn)
+        elif kind == "layout_apps":
+            # Which app-aware sets ride with this layout (owner 2026-08-06).
+            # Nothing on the PC moves — only what the phone's wheel offers
+            # while the layout is focused.
+            names = msg.get("sets")
+            if not await asyncio.to_thread(
+                    layouts.set_app_sets, int(msg["index"]),
+                    list(names) if isinstance(names, list) else []):
+                await _toast(ws, "That layout is gone")
+            await layout_api.send_layout_state(ws, layouts, conn)
         elif kind == "layout_remove":
             index = int(msg["index"])
             await asyncio.to_thread(layouts.remove, index)

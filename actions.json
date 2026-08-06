@@ -77,6 +77,7 @@
     {
       "name": "Cursor",
       "icon": "leftright",
+      "enabled": false,
       "buttons": [
         { "label": "Undo",  "icon": "undo",   "chord": "ctrl+z" },
         { "label": "Left",  "icon": "arrowl", "key": "left" },
