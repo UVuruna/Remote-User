@@ -27,8 +27,11 @@ TOKENS
     └─ radiusCard     14px
 ```
 
-`FONT_STACK` sits outside `TOKENS` (not a color/shape token) and is spliced in
-at format time: `QSS.format(font=FONT_STACK, **TOKENS)`.
+`FONT_STACK` and `ASSET_URL` sit outside `TOKENS` (neither is a color/shape
+token) and are spliced in at format time:
+`QSS.format(font=FONT_STACK, assets=ASSET_URL, **TOKENS)`. `ASSET_URL` is the
+assets folder as a POSIX path — the checked checkbox reaches `check.svg`
+through it, quoted, because the installed path holds spaces.
 
 ## `QSS` — rule blocks, in file order
 
@@ -56,6 +59,10 @@ QSS
 │   ├─ (base) / :hover
 │   ├─ ::drop-down / ::down-arrow
 │   └─ QAbstractItemView          popup list (accentDim selection)
+├─ QCheckBox                      transparent label (never the window's surface0)
+│   ├─ ::indicator                surface2 + border + 5px radius — a control, like a combo
+│   ├─ ::indicator:checked        accent fill + assets/check.svg (dark ink tick)
+│   └─ ::indicator:disabled / :checked:disabled
 ├─ QMenu                          tray/context menu shell
 │   └─ ::item / ::item:selected
 └─ QToolTip
