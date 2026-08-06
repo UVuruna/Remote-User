@@ -649,9 +649,39 @@ NOWHERE in the repo — no exit path drops the topmost band.
 
 ## Round 11c (owner's go on detection + his tick spec + the notification demand)
 
-- [ ] 57. THE TICKS: left of the name, indented; grey where he cannot switch it,
-      white where he can — and App-aware ticked too
-- [ ] 58. CLAUDE DETECTED, not ticked (his go: "naravno da hoću da prepozna")
-- [ ] 59. NOTIFICATIONS both ways: sound AND a real notification, and one that
-      survives the app being minimized or closed
-- [ ] 60. Round close — APK + desktop build + GIT RELEASE
+- [x] 57. THE TICKS — done exactly as specified: own strip on the LEFT with the
+      icon and name indented past it, GREY for `required` (Mouse/Input/Settings,
+      not his to switch) and WHITE for the rest. App-aware rows are ticked too,
+      and their checkbox is LIVE: the phone already read the same `enabled`
+      flag for them (client/sets.js appSetOn), so a blank row hid a working
+      switch and a dead box refused an edit the file accepted; a switched-off
+      app set also stops charging a wheel slot. Evidence: the set list rendered
+      to PNG and inspected — six grey/white ticks where they belong, four on
+      App-aware. Commit 0.0.265.
+- [x] 58. CLAUDE DETECTED — server/agents.py reads the process table: a live
+      claude.exe carries `--resume=<session-id>`, the id names a transcript
+      whose `cwd` names the project, and the VS Code title ends in that
+      project's folder. Sent as `agents` in layout_state and per layout_offer
+      entry; the Claude set claims it with `"agent": "claude"`. His own ticks
+      still win. Verified on HIS machine: {remote user, uvuruna, domy watch}
+      matched his three titles, "Some Folder - Notepad" matched nothing. Two
+      guard cases, self-tested (the PC's "no" outranks a title saying "Claude
+      Code"). Honest limit recorded everywhere: one Electron process for all
+      windows, so the match is per project FOLDER. Commit 0.0.266.
+- [x] 59. NOTIFICATIONS — three fixes. (a) POST_NOTIFICATIONS asked once at app
+      START, not when the first notice arrives (which spent that notice on the
+      dialog — the code said so itself: "this one is lost; the next lands"),
+      and a notice that arrives before the answer is held and posted on grant.
+      (b) A notice for an absent phone WAITS: 30 min, 20 deep, delivered
+      oldest-first on the next connection, with "8 min ago" appended so it
+      never pretends it just landed. (c) The hook says "needs you", not
+      "finished" — a Stop hook fires at every TURN end, which is what made the
+      owner ask why it said I was done while I was still working. Three guard
+      cases, one replacing a name that had become a lie. Commits 0.0.267,
+      0.0.269. OPEN, by design and stated to him: with the app fully closed
+      nothing arrives AT THAT MOMENT — only on his return — unless he wants a
+      foreground service.
+- [x] 60. Round close — APK 0.0.088 (Kotlin changed) + full desktop build
+      (payload gate, INPUT/PRESENCE/NOTIFY gates, smoke test, signed exe and
+      installer, VERIFY FileVersion 0.0.088) and GIT RELEASE published:
+      https://github.com/UVuruna/Remote-User/releases/tag/v0.0.088
