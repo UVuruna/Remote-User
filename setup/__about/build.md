@@ -37,6 +37,8 @@ Run: `python setup/build.py` (auto re-execs under `.venv`) or directly
 - `setup/installer.nsi` — Step 5, invoked via `makensis`
 - `setup/app_info.json` — version, names, description, exe/installer
   filenames
+- [Agent Hook](agent_hook.md) — bundled via `--add-data` into
+  `_internal/setup/`, where the desktop window's notify switch finds it
 - root `company.json` — publisher/copyright, read for the version resource
   and the installer's version info
 - `android/app/build/outputs/apk/release/app-release.apk` — bundled into
@@ -64,7 +66,15 @@ One line each; the full call sequence is in [flow](../__flow/build.md).
   (Step 2)
 - `build_pyinstaller()` — runs PyInstaller `--onedir --windowed
   --uac-admin` around `server/gui_main.py`; copies ffmpeg, `icon.ico`, and
-  the Android APK (if built) into `dist/RemoteUser/` (Step 3)
+  the Android APK (if built) into `dist/RemoteUser/` (Step 3). Ends with the
+  **PAYLOAD GATE**: every path the frozen code resolves under `BUNDLE_DIR`
+  (`client/index.html`, `actions.json`, `assets/logo.svg`,
+  `assets/check.svg`, `setup/app_info.json`, `setup/agent_hook.py`) must
+  exist in `_internal/`, or the build stops. A file left out of `--add-data`
+  breaks nothing here and nothing in the smoke test — which imports the
+  module graph, not the data — it breaks on the owner's PC, as a switch that
+  cannot be turned on (v0.0.085 shipped exactly that: the notifier hook was
+  missing, see [Notify](../../server/__about/notify.md))
 - `smoke_test(exe_path)` — runs the FROZEN exe with `--selfcheck`; a
   missing bundled module fails the build here, not the user's first
   launch (Step 3b, fail-closed)

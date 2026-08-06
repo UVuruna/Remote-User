@@ -54,6 +54,7 @@ ICON_SETUP_PATH = SETUP_DIR / "icon-setup.ico"
 PASSWORD_PATH = SETUP_DIR / "cert" / "password.txt"
 NSI_PATH = SETUP_DIR / "installer.nsi"
 APP_INFO_PATH = SETUP_DIR / "app_info.json"
+AGENT_HOOK_PATH = SETUP_DIR / "agent_hook.py"
 COMPANY_JSON_PATH = PROJECT_DIR.parent.parent / "company.json"
 VERSION_INFO_PATH = SETUP_DIR / "version_info.txt"
 
@@ -273,6 +274,12 @@ def build_pyinstaller() -> Path:
         "--add-data", f"{PROJECT_DIR / 'actions.json'};.",
         "--add-data", f"{PROJECT_DIR / 'assets'};assets",
         "--add-data", f"{APP_INFO_PATH};setup",
+        # The notifier hook the Settings switch installs. It was missing from
+        # the bundle, so the switch could not be turned on in the INSTALLED app
+        # at all — it printed "[Errno 2] No such file or directory:
+        # …\\_internal\\setup\\agent_hook.py" and stayed off (owner screenshot
+        # 2026-08-06). notify._hook_module() looks for exactly this path.
+        "--add-data", f"{AGENT_HOOK_PATH};setup",
     ]
     for mod in HIDDEN_IMPORTS:
         cmd += ["--hidden-import", mod]
@@ -289,6 +296,21 @@ def build_pyinstaller() -> Path:
     if not exe_path.exists():
         print(f"  ERROR: expected exe not found: {exe_path}")
         sys.exit(1)
+
+    # PAYLOAD GATE — fail-closed on data that only the INSTALLED app misses.
+    # A file left out of --add-data breaks nothing here and nothing in the
+    # smoke test (which imports the module graph, not the data): it breaks on
+    # the owner's PC, as a switch that cannot be turned on. Every path the
+    # frozen code resolves under BUNDLE_DIR is listed here.
+    missing = [rel for rel in ("client/index.html", "actions.json",
+                               "assets/logo.svg", "assets/check.svg",
+                               "setup/app_info.json", "setup/agent_hook.py")
+               if not (app_dir / "_internal" / rel).exists()]
+    if missing:
+        print("  ERROR: bundled payload missing — the installed app would fail "
+              "where this build cannot: " + ", ".join(missing))
+        sys.exit(1)
+    print("  OK: bundled payload complete (client, actions, assets, setup)")
 
     # ffmpeg next to the exe — config._default_ffmpeg() finds it there.
     (app_dir / "ffmpeg").mkdir()

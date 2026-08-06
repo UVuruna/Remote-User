@@ -130,9 +130,20 @@ def _hook_module():
     path = PROJECT_ROOT / "setup" / "agent_hook.py"
     if not path.exists():                      # frozen: bundled beside the exe
         path = BUNDLE_DIR / "setup" / "agent_hook.py"
+    if not path.exists():
+        # v0.0.085 shipped without this file in the bundle, and the switch
+        # answered the owner with a raw "[Errno 2] No such file or directory:
+        # …\\_internal\\setup\\agent_hook.py". A path is not an explanation,
+        # and it is not something HE can act on — the app is what is broken,
+        # so the app says so in his words. (The build now refuses to package
+        # without it: setup/build.py's payload gate.)
+        logger.error("agent hook script missing from this build (%s)", path)
+        raise OSError("This copy of Remote User is missing its notifier "
+                      "script. Reinstalling the app from the latest release "
+                      "puts it back.")
     spec = importlib.util.spec_from_file_location("agent_hook", path)
     if spec is None or spec.loader is None:
-        raise OSError(f"agent_hook.py not found (looked in {path})")
+        raise OSError("The notifier script could not be loaded on this PC.")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
