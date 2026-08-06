@@ -646,3 +646,12 @@ NOWHERE in the repo — no exit path drops the topmost band.
       https://github.com/UVuruna/Remote-User/releases/tag/v0.0.087
       No APK rebuild: the shell embeds no client assets (no android assets dir,
       no file:///android_asset), so the colour fixes are served from this PC.
+
+## Round 11c (owner's go on detection + his tick spec + the notification demand)
+
+- [ ] 57. THE TICKS: left of the name, indented; grey where he cannot switch it,
+      white where he can — and App-aware ticked too
+- [ ] 58. CLAUDE DETECTED, not ticked (his go: "naravno da hoću da prepozna")
+- [ ] 59. NOTIFICATIONS both ways: sound AND a real notification, and one that
+      survives the app being minimized or closed
+- [ ] 60. Round close — APK + desktop build + GIT RELEASE
