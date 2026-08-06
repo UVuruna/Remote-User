@@ -69,10 +69,20 @@ function notifyTone() {
 
 // One incoming notice. `msg` is the server's `notify` frame:
 // {agent, event, title, text, speak}.
+// How long ago it happened, in words — only when that is not "just now".
+// A notice held while the phone was away (server/notify.py) must not pretend
+// it has only this second arrived (owner 2026-08-06).
+function notifyWhen(at) {
+  const mins = Math.floor((Date.now() / 1000 - Number(at || 0)) / 60);
+  if (!Number.isFinite(mins) || mins < 1) return "";
+  return mins < 60 ? `${mins} min ago` : `${Math.floor(mins / 60)} h ago`;
+}
+
 function handleNotify(msg) {
   const prefs = notifyPrefs();
   const title = String(msg.title || msg.agent || "Agent");
-  const body = String(msg.text || "");
+  const when = notifyWhen(msg.at);
+  const body = [String(msg.text || ""), when].filter(Boolean).join(" · ");
 
   if (prefs.banner && window.Android && Android.notify) {
     try {

@@ -47,10 +47,36 @@ EVENT_WORDS = {
     "failed": "failed",
 }
 
-# The phone is asleep in the owner's pocket most of the time, so a notice is
-# NOT queued when nobody is connected — an alarm that arrives an hour late is
-# worse than none. The answer says so, and the caller decides what to do.
-NO_CLIENT = {"ok": False, "reason": "no phone connected"}
+# A notice for a phone that is not here WAITS (owner 2026-08-06). The rule
+# used to be "never queue — an alarm an hour late is worse than none", and for
+# an alarm that is right; for "your agent finished" it is exactly wrong. The
+# owner's own case: two agents finished while he was on the phone with someone,
+# the app minimized or closed, and both notices were thrown away — he asked
+# what he had to turn on and the answer was "be looking at it already".
+#
+# So the queue is SHORT and it is HONEST: nothing older than QUEUE_TTL_S is
+# ever delivered (a five-minute-old "finished" is useful, an hour-old one is
+# noise), at most QUEUE_MAX are held, and each carries the time it happened so
+# the phone can say "8 minutes ago" instead of pretending it just landed.
+QUEUE_TTL_S = 30 * 60
+QUEUE_MAX = 20
+_pending: list[dict] = []
+
+NO_CLIENT = {"ok": False, "reason": "no phone connected — held for its return"}
+
+
+def queue(notice: dict) -> None:
+    """Hold a notice for the phone's next connection."""
+    _pending.append(notice)
+    del _pending[:-QUEUE_MAX]
+
+
+def drain(now: float) -> list[dict]:
+    """Everything still worth showing, oldest first — and the queue is emptied
+    whether or not anything survived, because a notice that timed out has no
+    second chance either."""
+    held, _pending[:] = list(_pending), []
+    return [n for n in held if now - n.get("at", 0) <= QUEUE_TTL_S]
 
 
 def clean(value, limit: int, fallback: str = "") -> str:
@@ -94,25 +120,47 @@ def register(app, token: str, active_client: dict) -> None:
         title, body = compose(agent, event, text)
         logger.info("Notify: %s | %s", title, body or "-")
 
+        notice = {
+            "type": "notify",
+            "agent": agent,
+            "event": event,
+            "title": title,
+            "text": body,
+            "speak": bool(data.get("speak", True)),
+            "at": time.time(),
+        }
         ws = active_client.get("ws")
         if ws is None:
+            queue(notice)
             return JSONResponse(NO_CLIENT)
         try:
-            await ws.send_text(json.dumps({
-                "type": "notify",
-                "agent": agent,
-                "event": event,
-                "title": title,
-                "text": body,
-                "speak": bool(data.get("speak", True)),
-                "at": time.time(),
-            }))
+            await ws.send_text(json.dumps(notice))
         except RuntimeError:
             # The socket died between the check and the send — the phone left
-            # mid-notice. Nothing to repair, and nothing to hide either.
-            logger.warning("Notify dropped — the phone's socket closed mid-send")
+            # mid-notice. It is held for its return rather than dropped.
+            logger.warning("Notify held — the phone's socket closed mid-send")
+            queue(notice)
             return JSONResponse(NO_CLIENT)
         return JSONResponse({"ok": True})
+
+
+async def send_pending(ws) -> int:
+    """Everything that happened while the phone was away, on its return.
+
+    Called once per authenticated connection. Oldest first, so the order the
+    agents finished in is the order he reads.
+    """
+    held = drain(time.time())
+    for notice in held:
+        try:
+            await ws.send_text(json.dumps(notice))
+        except RuntimeError:
+            queue(notice)          # gone again mid-drain — keep what is left
+            break
+    if held:
+        logger.info("Delivered %d notice(s) held while the phone was away",
+                    len(held))
+    return len(held)
 
 
 # ═══════════════════ THE SWITCH THAT TURNS IT ON (ROADMAP H2) ═══════════════
