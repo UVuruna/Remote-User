@@ -604,3 +604,15 @@ NOWHERE in the repo — no exit path drops the topmost band.
       payload gate, PyInstaller smoke test, signed exe and installer) and GIT
       RELEASE published:
       https://github.com/UVuruna/Remote-User/releases/tag/v0.0.086
+
+## Round 11b (owner: the fix did NOT fix it, + colours, + Claude, + notifications)
+
+- [ ] 52. THE OVERLAP IS STILL THERE ON v0.0.086 — find the REAL cause, and a
+      tooth that cannot pass over it again
+- [ ] 53. COLOURS: the Thinking chooser is six white bars with white labels —
+      and a tooth for contrast, because nothing checked colour at all
+- [ ] 54. NOTIFICATIONS: what must line up for one to arrive — answered with
+      his own log; the Android permission is the broken link
+- [ ] 55. CLAUDE: prove whether VS Code really gives NO signal — and if it
+      does, stop making the owner tick what we used to detect
+- [ ] 56. Round close — build + GIT RELEASE
