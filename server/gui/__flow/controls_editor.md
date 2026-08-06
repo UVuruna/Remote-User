@@ -13,16 +13,18 @@ LEGIBILITY violations the owner photographed.
 ┌─ Controls — sets on the phone ──────────────────────────────────────────┐
 │ Sets                 │ Name [Navigate.....]        Icon [▾ nav]         │
 │ ┌──────────────────┐ │ [x] Shown in the wheel by default (≤ 8 sets)     │
-│ │ Mouse (built-in) │ │ ┌ Commands — tick the 4 on the D-pad ─────────┐  │
-│ │ Input (built-in) │ │ │ On │ Name         │ Does     │ Shortcut     │  │
-│ │ …                │ │ │ [x]│ Esc          │ built-in │ esc          │  │
-│ │ VSCode (app·code)│ │ │ [x]│ Prev         │ chord    │ shift+tab    │  │
-│ │ Chrome (app·…)   │ │ │ [x]│ Next         │ chord    │ tab          │  │
-│ │ My set           │ │ │ [x]│ Find         │ chord    │ ctrl+f       │  │
-│ └──────────────────┘ │ │ [ ]│ Back         │ chord    │ alt+left     │  │
-│ [New set] [Delete]   │ │ [ ]│ Find next    │ chord    │ f3      ↕    │  │
-│                      │ │ [Add command][Remove]      4 of 4 on D-pad  │  │
-│                      │ └────────────────────────────────────────────┘  │
+│ │ STANDARD         │ │ ┌ Commands — tick the 4 on the D-pad ─────────┐  │
+│ │  Mouse           │ │ │ On │ Name         │ Does     │ Shortcut     │  │
+│ │  Input           │ │ │ [x]│ Esc          │ built-in │ esc          │  │
+│ │  …               │ │ │ [x]│ Prev         │ chord    │ shift+tab    │  │
+│ │ APP-AWARE        │ │ │ [x]│ Next         │ chord    │ tab          │  │
+│ │  VSCode (code)   │ │ │ [x]│ Find         │ chord    │ ctrl+f       │  │
+│ │  Claude (code·…) │ │ │ [ ]│ Back         │ chord    │ alt+left     │  │
+│ │  Chrome (chrome) │ │ │ [ ]│ Find next    │ chord    │ f3      ↕    │  │
+│ │ CUSTOM           │ │ │ [Add command][Remove]      4 of 4 on D-pad  │  │
+│ │  My set          │ │ └────────────────────────────────────────────┘  │
+│ └──────────────────┘ │                                                 │
+│ [New set] [Delete]   │                                                 │
 │                      │ ┌ The selected command ──────────────────────┐   │
 │                      │ │ Does     [Shortcut (chord) ▾]              │   │
 │                      │ │ Shortcut [shift+tab.............][Record…] │   │
@@ -30,8 +32,9 @@ LEGIBILITY violations the owner photographed.
 │                      │ │ Icon     [▾ tabback]                       │   │
 │                      │ └────────────────────────────────────────────┘   │
 │                      │ ┌ Arrangement ───────────────────────────────┐   │
-│                      │ │ Landscape T·L·R·B │ Portrait ↑→↓           │   │
-│                      │ │ [list + ↑ ↓]      │ [list + ↑ ↓]  [Reset]  │   │
+│                      │ │ D-pad (landscape) │ Stack (portrait)       │   │
+│                      │ │ [list + ↑ ↓]      │ [list + ↑ ↓]           │   │
+│                      │ │                                  [Default] │   │
 │                      │ └────────────────────────────────────────────┘   │
 │ [Open the file]                                    [Save] [Cancel]      │
 └─────────────────────────────────────────────────────────────────────────┘
@@ -60,7 +63,8 @@ open
  │                               (owner's active / order_* / enabled survive)
  └─ _reload_list() ─▶ _computed_minimum()    measure the filled widgets
 
-select set S (currentRowChanged)
+select set S (currentRowChanged → _row_selected → _select)
+ ├─ _rows[row]                   list ROW → entry index (None = a heading)
  ├─ _store_current()             previous set: screen → self.data (RAM)
  ├─ table.fill(pool, active…)    every pool command, four ticked
  └─ widgets ← S                  built-in / app: pool + arrangement only

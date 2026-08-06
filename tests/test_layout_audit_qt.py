@@ -92,7 +92,11 @@ def make_controls_editor() -> QWidget:
     if entries:
         biggest = max(range(len(entries)),
                       key=lambda i: len(entries[i][2].get("buttons") or []))
-        editor.set_list.setCurrentRow(biggest)
+        # `_entries()` counts SETS; the list also holds section headings
+        # (owner 2026-08-06), so the entry index has to be translated into a
+        # list row — otherwise this measures whatever set happens to sit
+        # `biggest` rows down, not the fullest one.
+        editor.set_list.setCurrentRow(editor._row_of(biggest))
     return editor
 
 
