@@ -329,6 +329,12 @@ def create_app(stream, hub: FrameHub | None, injector: InputInjector, token: str
         # anywhere in the setup left them there with no finally to lower them.
         try:
             await ws.send_text(json.dumps({"type": "actions", **_load_actions()}))
+            # Whatever finished while the phone was away (owner 2026-08-06):
+            # two agents finished while he was on a call with the app closed
+            # and both notices were thrown away. They wait now, briefly, and
+            # arrive the moment he comes back — each carrying the time it
+            # actually happened.
+            await notify.send_pending(ws)
             await layout_api.send_layout_state(ws, layouts, conn)
             # Coming back resumes the layout the phone was last working in
             # (owner 2026-08-05) — leaving work mode minimized them, and the

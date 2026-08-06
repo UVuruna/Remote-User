@@ -181,13 +181,32 @@ class MainActivity : AppCompatActivity() {
      *  the first notice rather than at startup: a user who never turns the
      *  feature on is never asked, and the ask arrives with its reason
      *  visible on screen (owner principle — nothing unexplained). */
+    // A notice that arrived before the permission did (see `notify` below).
+    private var pendingNotice: Triple<String, String, String>? = null
+
     private val notifyPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-            if (!granted) {
+            val held = pendingNotice
+            pendingNotice = null
+            if (granted) {
+                held?.let { notifier.post(it.first, it.second, it.third) }
+            } else {
                 web.evaluateJavascript(
                     "window.__notifyDenied && __notifyDenied()", null)
             }
         }
+
+    /** Android 13+ needs POST_NOTIFICATIONS before a single notice can be
+     *  shown, and asking for it when the FIRST one arrives is too late twice
+     *  over: that notice is spent on the dialog, and if the app is in the
+     *  background the dialog cannot even appear. So it is asked for once, at
+     *  start, while the owner is looking at the app. */
+    private fun askNotificationPermission() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
+        if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) ==
+            PackageManager.PERMISSION_GRANTED) return
+        notifyPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+    }
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -199,6 +218,7 @@ class MainActivity : AppCompatActivity() {
         setContentView(R.layout.activity_main)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         hideSystemBars()
+        askNotificationPermission()
 
         errorView = findViewById(R.id.error_view)
         errorTitle = findViewById(R.id.error_title)
@@ -812,8 +832,14 @@ class MainActivity : AppCompatActivity() {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
                     checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) !=
                     PackageManager.PERMISSION_GRANTED) {
+                    // Ask, and REMEMBER what was being said — the notice used
+                    // to be dropped here ("this one is lost; the next lands"),
+                    // which is how the owner's first agent finish arrived as a
+                    // toast and never reached his notification tray
+                    // (2026-08-06). It is posted the moment he grants it.
+                    pendingNotice = Triple(title, text, tag)
                     notifyPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
-                    return@runOnUiThread   // this one is lost; the next lands
+                    return@runOnUiThread
                 }
                 notifier.post(title, text, tag)
             }

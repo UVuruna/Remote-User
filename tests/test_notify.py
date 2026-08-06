@@ -94,9 +94,43 @@ def main() -> int:
     status, _ = post(gate.PORT, {"agent": "X"}, "wrong-token")
     results["/notify refuses a bad token"] = status == 403
 
-    status, answer = post(gate.PORT, {"agent": "X"}, gate.TOKEN)
-    results["no phone connected -> says so, queues nothing"] = (
-        status == 200 and answer.get("ok") is False)
+    # A notice with nobody to hand it to is HELD, not thrown away (owner
+    # 2026-08-06: two agents finished while he was on a call with the app
+    # closed, and both were silently discarded). The answer still says the
+    # phone was not there, so the caller is never misled.
+    status, answer = post(gate.PORT, {"agent": "Held", "text": "while away"},
+                          gate.TOKEN)
+    results["no phone connected -> says so, and HOLDS the notice"] = (
+        status == 200 and answer.get("ok") is False
+        and "held" in str(answer.get("reason", "")).lower())
+
+    # …and a notice older than the queue's own patience is dropped instead of
+    # arriving as stale news.
+    import notify as notify_mod
+    notify_mod.queue({"type": "notify", "agent": "Ancient", "title": "Ancient",
+                      "text": "", "at": time.time() - notify_mod.QUEUE_TTL_S - 60})
+    results["a notice too old to matter is dropped, not delivered"] = (
+        [n["agent"] for n in notify_mod.drain(time.time())] == ["Held"])
+
+    # …and what is held really is handed over on the phone's next connection,
+    # oldest first. A fake socket, because the real one belongs to the page
+    # below and a leftover notice would arrive there and be counted twice.
+    class _FakeWS:
+        def __init__(self):
+            self.sent = []
+
+        async def send_text(self, payload):
+            self.sent.append(json.loads(payload))
+
+    for i in range(3):
+        notify_mod.queue({"type": "notify", "agent": f"A{i}", "title": f"A{i}",
+                          "text": "", "at": time.time()})
+    fake = _FakeWS()
+    delivered = asyncio.run(notify_mod.send_pending(fake))
+    results["what was held arrives on the phone's return, oldest first"] = (
+        delivered == 3
+        and [n["agent"] for n in fake.sent] == ["A0", "A1", "A2"]
+        and notify_mod.drain(time.time()) == [])   # …and the queue is empty after
 
     from playwright.sync_api import sync_playwright
     with sync_playwright() as p:
