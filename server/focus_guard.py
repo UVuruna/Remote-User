@@ -41,11 +41,28 @@ input land" is one responsibility with its own rules and its own gate
 (`tests/test_focus_guard.py`), not an `if` in the message dispatcher.
 """
 
+import asyncio
 import logging
+import time
 
 import window_manager
 
 logger = logging.getLogger(__name__)
+
+
+# ═══════════════════════════ TIMINGS ═══════════════════════════
+# How often the layout's focus is DEFENDED, not merely checked when a key
+# arrives (owner 2026-08-06, shouting, after the guard below was not enough:
+# "kada uhvatimo fokus lejauta ne može nikakav program da izbaci fokus".
+# Dictation is the case that proves it — Android's recognizer hands over a
+# whole utterance at the END of a round, so a program that grabs focus while
+# he speaks does not misplace one character, it silently discards half an
+# hour of speech; by the time a key finally arrives there is nothing left to
+# put anywhere. A defence that waits for a keystroke is therefore too late.)
+WATCH_POLL_S = 0.25
+# One thief, one log line per this many seconds. An app that fights for the
+# foreground every 100 ms must not turn the server log into its own diary.
+STEAL_LOG_QUIET_S = 5.0
 
 
 # ═══════════════════════════ WINDOWS FACTS ═══════════════════════════
@@ -68,6 +85,32 @@ def _owner_root(hwnd: int) -> int:
             break
         seen = nxt
     return seen
+
+
+def _refocus(hwnd: int) -> None:
+    """Put the keyboard back on `hwnd` as cheaply as it can be done. A layout
+    member is already placed and already topmost, so the full
+    `raise_window` — restore, reposition, wait for the frame to settle — is
+    both unnecessary and too slow to run four times a second. The full stack
+    is still the fallback: it is what beats Windows' foreground lock when a
+    plain call is refused."""
+    u = window_manager.user32
+    if u.IsIconic(hwnd):
+        window_manager.raise_window(hwnd)   # minimized: it needs the full job
+        return
+    if u.SetForegroundWindow(hwnd):
+        return
+    fg = u.GetForegroundWindow()
+    if fg:
+        fg_tid = u.GetWindowThreadProcessId(fg, None)
+        our_tid = window_manager.kernel32.GetCurrentThreadId()
+        u.AttachThreadInput(our_tid, fg_tid, True)
+        u.BringWindowToTop(hwnd)
+        ok = u.SetForegroundWindow(hwnd)
+        u.AttachThreadInput(our_tid, fg_tid, False)
+        if ok:
+            return
+    window_manager.raise_window(hwnd)
 
 
 def describe(hwnd: int) -> str:
@@ -103,13 +146,33 @@ def _accept(conn: dict, lay, hwnd: int) -> int:
     return hwnd
 
 
-def guard(layouts, conn: dict) -> int:
-    """Make sure the next keystroke lands on the owner's target, and return
-    that target's hwnd. Blocking (Win32 + a possible raise) — call it through
-    `asyncio.to_thread`, before the injection, on every message that TYPES."""
+def _log_steal(conn: dict, fg: int, target: int, where: str) -> None:
+    """Name the thief — throttled per thief, because one that fights for the
+    foreground in a loop would otherwise write the log by itself."""
+    now = time.monotonic()
+    last_hwnd, last_at = conn.get("steal_log", (0, 0.0))
+    if fg == last_hwnd and now - last_at < STEAL_LOG_QUIET_S:
+        return
+    conn["steal_log"] = (fg, now)
+    logger.error("Focus left %s — %s took it; handing it back to %s",
+                 where, describe(fg), describe(target))
+
+
+def guard(layouts, conn: dict, typing: bool = True) -> int:
+    """Make sure the keyboard sits on the owner's target, and return that
+    target's hwnd. Blocking (Win32 + a possible raise) — call it through
+    `asyncio.to_thread`.
+
+    `typing=True` — before injecting, on every message that TYPES.
+    `typing=False` — the watcher below, four times a second. A layout is
+    defended continuously; the DESKTOP pin is not, because outside a layout
+    there is no fence to defend, only a memory of where typing began, and
+    fighting the whole desktop for it would be us stealing focus."""
     fg = _foreground()
     root = _owner_root(fg)
     lay = _active_layout(layouts, conn)
+    if lay is None and not typing:
+        return fg
 
     if lay is not None:
         members = lay.members
@@ -123,9 +186,8 @@ def guard(layouts, conn: dict) -> int:
         pin = conn.get("pin")
         target = pin if pin in members else (
             lay.last_member if lay.last_member in members else members[0])
-        logger.error("Focus left the layout while the phone was typing — %s took "
-                     "it; handing it back to %s", describe(fg), describe(target))
-        window_manager.raise_window(target)   # a member: topmost + ledger, as always
+        _log_steal(conn, fg, target, "the layout the phone is showing")
+        _refocus(target)
         return _accept(conn, lay, target)
 
     pin = conn.get("pin")
@@ -135,10 +197,32 @@ def guard(layouts, conn: dict) -> int:
         return _accept(conn, None, pin)
     if root == pin:
         return fg          # a dialog of the target — the owner opened it himself
-    logger.error("Focus left the typing target — %s took it from %s; handing it back",
-                 describe(fg), describe(pin))
+    _log_steal(conn, fg, pin, "the window the phone was typing in")
     # NOT topmost: this window is nobody's layout member, and a topmost raise
     # here would strand it above the desk for the rest of the Windows session
     # (window_manager.raise_window, owner decree 2026-08-05).
     window_manager.raise_window(pin, topmost=False)
     return _accept(conn, None, pin)
+
+
+# ═══════════════════════════ THE DEFENCE ═══════════════════════════
+async def watch(layouts, conn: dict) -> None:
+    """While the phone is showing a layout, NOTHING may take the keyboard out
+    of it (owner decree 2026-08-06). One task per connection, cancelled with
+    it.
+
+    Why this exists beside `guard`: dictation. Android's recognizer hands over
+    a whole utterance at the END of a listening round, so a program that grabs
+    focus while the owner is speaking does not misplace a character — it takes
+    the window his half hour of speech was meant for, and by the time the text
+    finally arrives there is nothing to give it back to. The defence has to
+    stand while he speaks, not wake up when he stops.
+
+    It sleeps while the phone is away (an excursion or a leave): those windows
+    belong to the desk again, and pulling focus back to them there would be
+    exactly the sin this project spent two rounds fixing."""
+    while True:
+        await asyncio.sleep(WATCH_POLL_S)
+        if conn.get("active") is None or conn.get("away") or conn.get("left"):
+            continue
+        await asyncio.to_thread(guard, layouts, conn, False)
