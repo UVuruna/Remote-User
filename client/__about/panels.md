@@ -14,6 +14,15 @@ prefs bridge (`prefGet`/`prefSet` in controls.js) — origin-independent, see
 the bridge note there (owner bug 2026-08-05: pure localStorage split state
 between the LAN and Tailscale origins, the picker "rotated").
 
+App-shortcut rows are ticked one by one under a master switch — and since
+2026-08-06 they are **counted**: `visibleCount()` includes `appSetReserve()`,
+the card states `N of 8 used — M held for app shortcuts`, and a tick that
+would overflow is refused with the same toast an optional set gets. The rule
+is the owner's: "ako označi oba … onda može samo još 6 dodatnih umesto 7" —
+VSCode and Claude ride together on a Claude tab, so both ticked reserve two
+slots. The tick is applied first and rolled back on refusal, because the
+reserve is computed from the stored prefs, not from the checkbox.
+
 ## Quality panel — moved out
 
 Lives in [quality.js](quality.md) since 2026-08-05: it edits the quality

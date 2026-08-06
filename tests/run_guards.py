@@ -43,6 +43,18 @@ def _control_sets() -> None:
         check()
 
 
+def _app_set_wheel() -> None:
+    """The owner's two app-set rules of 2026-08-06: only the Claude
+    conversation wears the Claude set (never a document that merely carries
+    the word), and an app set costs a wheel slot like every other set. Runs
+    the pure client functions in node — skipped when node is absent."""
+    import test_app_set_wheel
+    if not test_app_set_wheel.shutil.which("node"):
+        return
+    for _, check in test_app_set_wheel.TESTS:
+        check()
+
+
 def _layout_audit_qt() -> None:
     """Imported lazily: it pulls in PySide6 and builds an offscreen
     QApplication, which the --fast path must never pay for."""
@@ -61,6 +73,7 @@ FULL_ONLY_CHECKS = [
     # Full run only — it builds a QApplication (~1 s), too slow for the
     # PostToolUse budget.
     ("control sets (never silently rewritten)", _control_sets),
+    ("app sets (right window, and they pay for their seat)", _app_set_wheel),
     ("layout audit (Qt windows)", _layout_audit_qt),
 ]
 
