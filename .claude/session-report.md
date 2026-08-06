@@ -3,18 +3,19 @@ RELEASE: https://github.com/UVuruna/Remote-User/releases/tag/v0.0.086
 
 # Final Report — round 11 (2026-08-06)
 
-Owner's opening: two screenshots of the desktop window — *"slika 1 pokazuje
+Owner's opening: two screenshots of the desktop window — "slika 1 pokazuje
 preklapanje elemenata kada ima update, slika 2 pokazuje preklapanje kod QR
 koda, BUG da ne mogu da ukljucim NOTIFIKACIJE (prethodni agent je rekao da je
-uradio) i CHECKBOX vizuelno neprihvatljiv"* — plus, mid-turn: *"jedan agent je
+uradio) i CHECKBOX vizuelno neprihvatljiv" — plus, mid-turn: "jedan agent je
 IMAO ZADATAK da stavi ŠTIKLIRANO pored onih koju su SELEKTOVANI I NIJE GA
-IZVRŠIO"*.
+IZVRŠIO".
 
-NOT DONE / BLOCKED: **none**.
+NOT DONE / BLOCKED: **none** — every task on the list is closed.
 
-Two of the four were reported as done by an earlier session and were not. Both
-are now proven by something other than my word: the overlap by a guard that
-fails without the fix, the notifier by the file's presence in the built bundle.
+Two of this round's four were reported as done by an earlier session and were
+not. Both are now proven by something other than my word: the overlap by a
+guard that fails without the fix, the notifier by the file's presence in the
+built bundle.
 
 ## Gates on the released tree
 
@@ -27,76 +28,68 @@ behaviour and watching the guard fail.
 
 ## Per task
 
-- [x] 47. The two overlaps (both screenshots) — **FIXED**. Root cause: ONE
-  bug, not two. The window's minimum was measured once, at construction, and
-  an explicit `setMinimumSize` makes Qt stop enforcing its layout's own
-  minimum. The update button is hidden until the GitHub check answers, and the
-  notify caption grows from one line to three when it reports a failure — so
-  the rows those two need had nowhere to go and were painted over the QR and
-  its link. Fix: `_settle_minimum()` is callable at any time (re-measure from
-  the computed floor, declare, grow, never shrink under the owner's own size),
-  `_content_signature()` decides when so the 1 s tick does not re-lay-out the
-  window every second, `showEvent()` settles on every show, and `_resettle()`
-  refuses to measure while the window sits in the tray. That last part is a
-  second hole found while reviewing the first: a child of a hidden window
-  reports invisible, so closing to the tray looked like a content change and
-  the re-measure handed back a minimum with no update button in it.
-  Regression test: the audit factory now builds the window the way the owner
-  meets it (shown first, late content after) and a second factory walks the
-  tray path. Evidence: without the fix the audit reports `CLIPPED MainWindow:
-  has 820x837, needs at least 618x880` — 43 px, the update button's own row —
-  and `has 869x837, needs 618x880` on the tray path; with it, PASS at 869x880
-  and +50%. Commits 0.0.250, 0.0.254.
-
-- [x] 48. Notifications could not be switched on — **FIXED**. Root cause was
-  not the switch's code, which was correct: `setup/agent_hook.py` was never
-  added to PyInstaller's `--add-data`, so the frozen app resolved it under
-  `_internal\setup\` and failed. Three layers, each of which failed on its
-  own: the file is bundled; a new PAYLOAD GATE fails the build when any path
-  the frozen code resolves under `BUNDLE_DIR` is missing — the smoke test
-  could never have caught this, because it imports the module graph, not the
-  data; and `notify._hook_module()` no longer hands a user a raw path, because
-  a missing script means the APP is broken, which is what the sentence now
-  says (the path stays in the log). Evidence:
-  `dist/RemoteUser/_internal/setup/agent_hook.py` is present in this round's
-  build. Commit 0.0.251.
-
-- [x] 49. The checkbox's background — **FIXED**. Root cause: a `QCheckBox` had
-  no QSS rule at all, so it fell to the base `QWidget` rule and carried the
-  WINDOW's `surface0` into the `surface1` card it sits in — exactly the
-  "background color različit od elementa u kojem se nalazi" — next to Windows'
-  own gray tick box. The label is transparent now and the indicator is the
-  same control surface as a combo (surface2, 1 px border, 5 px radius),
-  accent-filled when on, wearing a DRAWN tick from `assets/check.svg` (never a
-  font glyph — this project has already paid for one that came out a blunt
-  cross on his device). Evidence: the window rendered offscreen to PNG and
-  inspected as an image, because no audit can see a colour; and `check.svg` is
-  in the built bundle beside `logo.svg`. Commit 0.0.252.
-
-- [x] 50. The tick beside the selected sets — **DONE**, and this time visible.
-  Each set row carries its own answer at the right edge: `CHECK_ROLE` holds
-  it, `SectionDelegate._paint_tick` draws it in the accent, `MARK` reserves a
-  22 px column so a long set name can never be drawn underneath it, and the
-  caption over the list says what it means once. App sets wear no tick,
-  because they do not ride on their own — they come and go with the focused
-  layout. `_mark_current()` keeps the row and the form's checkbox saying the
-  same thing the instant either changes. Evidence: the list rendered to PNG
-  and inspected — six Standard sets ticked, three not (Cursor/Media/Windows,
-  off by default since the cap fix), App-aware clean; and the editor's
-  declared minimum grew by exactly the reserved 22 px, which is the audit
-  confirming the column is really asked for. Commit 0.0.253.
-
-- [x] 51. Round close — **DONE**. Full desktop build and GIT RELEASE v0.0.086.
-  The APK was not rebuilt: nothing under `client/` or `android/` changed this
-  round, and the phone's update banner compares against `config.apk_version`
-  (the APK the PC actually serves, 0.0.085), so a desktop-only bump raises no
-  false banner.
-
-## What the owner should see on his PC
-
-Install v0.0.086 from the release. In the Remote User window: nothing overlaps
-while the update button is on screen, and "Tell my phone when an agent
-finishes" can now be ticked — it will report only a real problem (a PC with no
-Python on PATH), not a missing file. The checkbox itself is an accent box with
-a tick. In Controls…, the set list shows a tick beside every set that is on
-the phone's wheel.
+- [x] find why VSCode vanished when Claude arrived, and bring it back — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] Claude set only on the Claude conversation tab, never on a document — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] both app sets ticked = 6 free wheel slots, not 7 (app sets charge the cap) — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] set list split into sections: standard / app-aware / custom — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] real icons for VSCode, Chrome, Explorer instead of the generic window — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] Arrangement: short title, D-pad + Stack names, Default button below the lists — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] check ALL groups after the Win-in-Mouse corruption (slika 3) — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] root rule with teeth: a delivering session ends with the per-task final report (machine-wide) — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 1. Mic (Input set) non-English recognition — REAL debugging, not — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 2. Layout resize panel: center Move handle (✥) — drag repositions the — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 3. Sets picker rotating state — DONE 0.0.169, two root causes: — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 4. Quality panel — DONE 0.0.169: FPS Max/10/15/30/60, res full/⅔/½, — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 5. Font-zoom staircase (layout focus only) — DONE 0.0.169: — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 6. Session close — DONE: APK 0.0.074 built (Kotlin compiled), full — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 7. Layout custom NAME — DONE 0.0.175 — the auto name (target window title) stays the — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 8. Z-ORDER — owner decided 2026-08-05 to KEEP the topmost band and — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 9. DONE 0.0.174 (root cause: no liveness signal at all — the server — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 10. DONE 0.0.175. Aspect panel Move handle icon — the ✥ glyph renders as a fat cross — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 11. Session close — DONE: APK 0.0.076 built, full desktop build passed — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 12. DONE — Controls editor obeys THE SPACE & LEGIBILITY LAW. Causes found: — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 13. DONE — Teeth: tests/test_layout_law.py (static, in --fast) + — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 14. DONE — Presets carry more than 4 commands: `buttons` is the pool, — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 15. DONE — Reserve commands per set (ACTIONS.md table), incl. the — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 16. DONE — Built-in rows tell the truth: load_client_builtins() parses — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 17. DONE — Session close: docs of every changed module updated — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 18. FOLLOW-UP RELEASE v0.0.079 — the Stop gate flagged theme.py as — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 19. Arrangement ladder (owner 1A) — raising a command must move the — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 20. Portrait ordinals (owner 1B) — a column has no left/right: the — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 21. Mouse side buttons (owner 2) — Btn 4 / Btn 5 (XBUTTON1/2) as — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 22. Settings pool (owner 4) — Next box and Snap removed; the five that — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 23. Icons for the commands that have none (owner 5) — proposal page — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 24. Region (owner 3) — free-size/free-position rectangle on the phone, — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 25. Claude app set (owner 6) — feasible; answer delivered. Needs (a) a — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 27. Quality hierarchy (owner report: "desktop settings do nothing") — — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 26. Round close for 23–25 — the code shipped as 0.0.198 + 0.0.199; the — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 28. DONE 0.0.200 — a LOCK is never an excursion. ROOT CAUSE from the — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 29. DONE 0.0.201 — the topmost ledger. clear_topmost() existed and was — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 30. DONE 0.0.203 — the Traffic window. MeteredSocket wraps the socket — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 31. DONE 0.0.202 — the audit's remaining leaks, none of them reachable — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 32. DONE — SHIPPED as v0.0.081: — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 23. ICONS — the whole proposal page accepted by the owner. 40 new faces — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 24. REGION — free-size/free-position frame, captured and pasted at once — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 25. CLAUDE app set — `title` match beside `process` (Layout keeps the — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 26. RENAME any button of any shipped set (owner's new requirement — the — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 27. Image dropped from the Attach pool. DONE 0.0.198. — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 33. "The PC calls you" (owner go + refinement 2026-08-05: several — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 33b. Thinking button (owner correction with the screenshot): `/effort` — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 34. DONE — the round close both rounds were waiting for. One release — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 35. PROBLEM: "zašto je WIN u MOUSE i nema RIGHT CLICK" — FIXED 0.0.210, — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 36. "Zašto je nestao VSCode kad si ubacio Claude" (editor half) — FIXED — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 37. Thinking = a CHOICE, not a command (owner idea: "u centar da — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 38. Sets picker grouping + group NAMES (his item 2) — DONE 0.0.214 — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 39. Arrangement section (his item 3) — already done by the parallel — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 40. Round close — DONE: full desktop build (INPUT/PRESENCE/NOTIFY — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 41. WHY THE CLAUDE SET NEVER SHOWED — root cause PROVEN by probing his — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 42. WHY NINE COULD BE TICKED (his item 2, cap of 8 confirmed as LAW) — — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 43. THE LIVE BADGE (his item 3) — the app rows now carry "ON THE WHEEL — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 44. NOTIFICATIONS DON'T WORK EITHER (his follow-up question) — correct, — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 45. STRUCTURE LAW — controls.js hit 1000 lines mid-round; the — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 46. Round close — APK 0.0.085 + full desktop build (INPUT + PRESENCE + — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 47. OVERLAP WITH THE UPDATE BUTTON (screenshot 1) and OVERLAP AT THE QR — DONE — ONE bug behind both screenshots: the minimum was measured once, at construction, and an explicit setMinimumSize makes Qt stop enforcing the layout's own minimum, so the update button (hidden until GitHub answers) and the notify caption (three lines when it reports a failure) had nowhere to go and were painted over the QR and its link. Fix in commits 0.0.250 + 0.0.254 (server/gui/main_window.py: _settle_minimum / _content_signature / _resettle / showEvent, plus the tray hole — a hidden child reports invisible, so closing to the tray re-measured a floor with no update button in it). Evidence: tests/test_layout_audit_qt.py, two new registered cases; with the fix stubbed out they report CLIPPED MainWindow has 820x837, needs at least 618x880 (43 px = the update button's row) and has 869x837 needs 618x880 on the tray path; with the fix PASS at the declared 869x880 and at +50% 1303x1320. Full guards green.
+- [x] 48. NOTIFICATIONS CANNOT BE SWITCHED ON in the installed app - the root — DONE — root cause was NOT the switch's code: setup/agent_hook.py was never in PyInstaller's --add-data, so the frozen app resolved it under _internal\setup and failed. Commit 0.0.251: bundled in setup/build.py (+ the gitignored RemoteUser.spec), a new PAYLOAD GATE fails the build when any BUNDLE_DIR path is missing (the smoke test imports the module graph, not the data, so it could never catch this), and notify._hook_module reports a missing script as the APP being broken in plain language, path left in the log. Evidence: this round's build printed 'OK: bundled payload complete (client, actions, assets, setup)' and dist/RemoteUser/_internal/setup/agent_hook.py exists.
+- [x] 49. THE CHECKBOX IS VISUALLY UNACCEPTABLE - correct: a QCheckBox had no — DONE — a QCheckBox had no QSS rule at all, so it took the base QWidget rule and carried the window's surface0 into the surface1 card. Commit 0.0.252 (server/gui/theme.py + assets/check.svg): transparent label, indicator on the combo's own surface with a 1 px border and 5 px radius, accent-filled when on, wearing a drawn tick. Evidence: the window rendered offscreen to PNG and inspected as an image (no audit can see a colour), and check.svg is in the built bundle beside logo.svg.
+- [x] 50. THE TICK BESIDE THE SELECTED SETS - delivered. Every set row carries — DONE — commit 0.0.253 (server/gui/controls_editor.py): CHECK_ROLE per set row, SectionDelegate._paint_tick draws it in the accent, MARK reserves a 22 px column so a name is never drawn under it, _rides() decides what it claims (app sets wear none — they ride with a focused layout), _mark_current keeps row and form in step, and the list caption says what a tick means. Evidence: the list rendered to PNG and inspected — six Standard sets ticked, three not, App-aware clean; the editor's declared minimum grew from 1363x715 to 1385x715, exactly the reserved 22 px, which is the audit confirming the column is really asked for.
+- [x] 51. Round close - full desktop build (INPUT + PRESENCE + NOTIFY gates, — DONE — full desktop build on the released tree (INPUT + PRESENCE + NOTIFY gates, the new payload gate, PyInstaller smoke test, signed exe and installer, VERIFY OK CompanyName='UVuruna' FileVersion='0.0.086') and the GIT RELEASE published with RemoteUser_Setup.exe attached. The APK was not rebuilt: nothing under client/ or android/ changed, and the phone's banner compares against config.apk_version (0.0.085), so no false update banner.
