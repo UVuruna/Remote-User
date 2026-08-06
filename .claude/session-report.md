@@ -1,30 +1,29 @@
 SESSION: 0eb7cbe2-d779-4c9d-9ec7-0a3d35d0897a
-RELEASE: https://github.com/UVuruna/Remote-User/releases/tag/v0.0.087
+RELEASE: https://github.com/UVuruna/Remote-User/releases/tag/v0.0.088
 
-# Final Report — round 11b (2026-08-06)
+# Final Report — rounds 11 / 11b / 11c (2026-08-06)
 
-Owner, after installing v0.0.086: *"uradio nista, preklapanje i dalje stoji"* —
-plus the colours of the Thinking chooser, what must line up for a notification
-to arrive, and whether VS Code really gives no signal that a Claude window is
-open.
+One session, three rounds, because twice what I reported as fixed was not.
 
-NOT DONE / BLOCKED: **one** — task 55's BUILD. The investigation is finished and
-the answer reverses an earlier "impossible", but replacing the owner's manual
-tick with real detection changes how app sets are chosen, so it was presented
-and is waiting on his go. Nothing else is open.
+NOT DONE / BLOCKED: **none**. One limit remains open by design and was stated
+to him, not hidden: with the phone app FULLY CLOSED a notice cannot arrive at
+the moment it happens — it arrives on his return — unless he asks for an
+Android foreground service, which costs a permanent tray entry and battery.
 
-WHAT I GOT WRONG THIS ROUND, plainly: I reported v0.0.086 as fixing his overlap
-on the strength of a guard that measures SIZES and an audit run with substitute
-fonts. Both were green; his screen was not. The measurement, not the belief, is
-what changed here.
+WHAT I GOT WRONG, twice, plainly: I reported v0.0.086 as fixing his overlap on
+the strength of a guard that measured SIZES and an audit run with substitute
+FONTS. Both were green; his screen was not. And the round before this one told
+him that detecting a Claude conversation was impossible after probing exactly
+one source. Neither was a coding error — both were stopping too early and
+reporting the stop as an answer.
 
 ## Gates on the released tree
 
-guards 4/4 · APP-SET WHEEL · CONTROL SETS · INPUT · PRESENCE · NOTIFY · Qt
-layout audit 5/5 at minimum and +50%, on the REAL platform fonts · phone layout
-audit incl. the new contrast check · client load test · PyInstaller smoke test ·
-payload gate · signed exe + installer. Both new checks self-tested by replanting
-the defect and watching them fail.
+guards 4/4 · APP-SET WHEEL 8/8 (two new) · CONTROL SETS · INPUT · PRESENCE ·
+NOTIFY 15/15 (three new) · Qt layout audit 5/5 on the REAL platform fonts,
+now with an OVERLAP check · phone layout audit with a CONTRAST check · client
+load test · PyInstaller smoke test · payload gate · signed exe + installer.
+Every new check self-tested by replanting the defect and watching it fail.
 
 ## Per task
 
@@ -93,8 +92,12 @@ the defect and watching them fail.
 - [x] 49. THE CHECKBOX IS VISUALLY UNACCEPTABLE - correct: a QCheckBox had no — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
 - [x] 50. THE TICK BESIDE THE SELECTED SETS - delivered. Every set row carries — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
 - [x] 51. Round close - full desktop build (INPUT + PRESENCE + NOTIFY gates, — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
-- [x] 52. THE OVERLAP IS STILL THERE ON v0.0.086 — REAL cause found and fixed: — DONE — the v0.0.086 fix was real but was not HIS bug. Reproduced on his machine at his 125% scaling with the real Segoe UI: qr_label y=17..233, url_label y=195, Copy link y=221 — all inside the QR. Cause: minimumSizeHint() quotes a WRAPPING label at ONE line, so the column was 48 px short (hint 835, truth 883), and Qt spends a shortfall by OVERLAPPING, not clipping — every widget reported its full size, which is exactly why the guard stayed green. Fixed with heightForWidth in one shared module (server/gui/sizing.py, used by all three windows — the broken loop had been copied into all three) and the 60-character URL label deleted. Commit 0.0.258, release v0.0.087. Evidence: before/after renders, and the audit's own numbers.
-- [x] 53. COLOURS — cause: .sets-row sets no background, harmless on a <label> — DONE — .sets-row declares no background, harmless on a <label> and fatal on a <button>: the WebView paints its light default under near-white theme ink. Fixed in client/style.css; commit 0.0.259. The tooth: WCAG contrast against the COMPOSITED backdrop (< 3.0 fails), self-tested by replanting the defect — all six chooser rows report 1.05:1 with it back. It found two more nobody had reported: the Sets picker live badge at 1.96:1 (var(--bg) is not a token in this project) and its own first version's false 1.00:1 on translucent selected states, which is why alpha is composited.
-- [x] 54. NOTIFICATIONS — answered from HIS log, not from belief: the hook — DONE — answered from his own server.log, not from belief: 17:30:51 'Notify: Remote User · 0eb7cb finished' and 17:33:02 'Notify: UVuruna · ed8163 finished', both HTTP 200, with the phone authenticated since 17:30:03. The PC half works end to end. The broken link is Android POST_NOTIFICATIONS — MainActivity.kt:816 requests it only when the FIRST notice arrives and drops that one ('this one is lost; the next lands'). He confirmed the same evening: it arrived as a toast, not in the tray. Two gaps named for the next round (permission up front; queue for an absent phone).
-- [x] 55. CLAUDE — the earlier 'impossible' was WRONG, and proven wrong on his — DONE (investigation) / OPEN (build) — the earlier 'no signal exists' was WRONG and is now disproven on his own PC: round 10 probed UIA only and never read the process table. Ten claude.exe processes, each a child of a specific VSCode extension host, each carrying --resume=<session-id>; that id maps to ~/.claude/projects/<slug>/<id>.jsonl and the slug IS the project path, which the window title also carries. Deterministic, no ticking. Also checked his 'we went backwards' claim: autoAppSets already pre-ticks VSCode/Chrome/Explorer (layouts.js:754), so it does not hold — but it reads slots[0] only, so a grid's second cell is never pre-ticked, which IS a real defect. Design presented; WAITING on the owner's go before building.
-- [x] 56. Round close — full desktop build (payload gate, INPUT/PRESENCE/NOTIFY — DONE — full desktop build on the released tree (payload gate, INPUT + PRESENCE + NOTIFY gates, PyInstaller smoke test, signed exe and installer, VERIFY OK FileVersion='0.0.087') and the GIT RELEASE published with RemoteUser_Setup.exe attached. No APK rebuild: the shell embeds no client assets, so the colour fixes are served from this PC.
+- [x] 52. THE OVERLAP IS STILL THERE ON v0.0.086 — REAL cause found and fixed: — DONE — v0.0.086's fix was real but not HIS bug. Cause: minimumSizeHint() quotes a WRAPPING label at ONE line, so the column was 48 px short and Qt spends a shortfall by OVERLAPPING, not clipping — every widget reported full size, which is why the guard was green. Reproduced at his 125% scaling before (qr 17..233, url at 195) and clean after. heightForWidth in one shared module (server/gui/sizing.py); the URL label deleted. Commit 0.0.258, shipped v0.0.087.
+- [x] 53. COLOURS — cause: .sets-row sets no background, harmless on a <label> — DONE — .sets-row sets no background, harmless on a <label>, fatal on a <button>: the WebView paints its light default under near-white ink. Fixed; contrast tooth added (WCAG against the COMPOSITED backdrop). Self-test: all six chooser rows report 1.05:1 with the defect replanted. Found two more nobody reported. Commit 0.0.259.
+- [x] 54. NOTIFICATIONS — answered from HIS log, not from belief: the hook — DONE — answered from his own server.log: 17:30:51 and 17:33:02, both 200, phone connected since 17:30:03. The PC half worked; the broken link was Android POST_NOTIFICATIONS. He confirmed the same evening. Fixed properly in task 59.
+- [x] 55. CLAUDE — the earlier 'impossible' was WRONG, and proven wrong on his — DONE — the investigation reversed an earlier 'impossible'; he gave the go the same evening and it is BUILT in task 58.
+- [x] 56. Round close — full desktop build (payload gate, INPUT/PRESENCE/NOTIFY — DONE — v0.0.087 released with the overlap fix, the colour fixes and the three new guards.
+- [x] 57. THE TICKS — done exactly as specified: own strip on the LEFT with the — DONE — ticks in their own strip on the LEFT, icon and name indented past them; GREY where the set is `required`, WHITE where it is his to switch; App-aware rows ticked and their checkbox made live (the phone already read the same `enabled` flag, so a blank row hid a working switch). Evidence: the list rendered to PNG and inspected. Commit 0.0.265.
+- [x] 58. CLAUDE DETECTED — server/agents.py reads the process table: a live — DONE — server/agents.py: a live claude.exe carries --resume=<session-id>, the id names a transcript whose `cwd` names the project, the VS Code title ends in that folder. Sent as `agents` per layout and per creation entry; the Claude set claims it with "agent": "claude"; his own ticks still win. Verified on HIS machine (three live projects matched his three titles; a Notepad title matched nothing) and pinned by two guard cases, self-tested. Commit 0.0.266.
+- [x] 59. NOTIFICATIONS — three fixes. (a) POST_NOTIFICATIONS asked once at app — DONE, with one limit stated — permission asked at START (and a notice arriving before the answer is held, not dropped), an absent phone's notice WAITS 30 min and arrives oldest-first with '8 min ago', and the hook says 'needs you' because a Stop hook fires at every turn end. Three guard cases. What remains, by design and told to him: with the app fully closed nothing arrives at that moment, only on his return, unless he wants a foreground service. Commits 0.0.267, 0.0.269.
+- [x] 60. Round close — APK 0.0.088 (Kotlin changed) + full desktop build — DONE — APK 0.0.088 (Kotlin changed) + full desktop build with every gate, signed, VERIFY FileVersion 0.0.088, and the GIT RELEASE published: https://github.com/UVuruna/Remote-User/releases/tag/v0.0.088
