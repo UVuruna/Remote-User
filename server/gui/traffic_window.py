@@ -36,6 +36,7 @@ from PySide6.QtWidgets import (
 import traffic
 from config import SETTINGS
 from gui.theme import TOKENS, card_shadow
+from gui.sizing import settle_minimum
 
 logger = logging.getLogger(__name__)
 
@@ -234,17 +235,20 @@ class TrafficWindow(QDialog):
         if self._settled:
             return
         self._settled = True
-        size = self._computed_minimum()
-        for _ in range(4):
-            self.setMinimumSize(size)
-            self.layout().activate()
-            needs = self.minimumSizeHint()
-            grown = QSize(max(size.width(), needs.width()),
-                          max(size.height(), needs.height()))
-            if grown == size:
-                break
-            size = grown
-        self.setMinimumSize(size)
+        # The theme's `min-width: 92px` is a floor for an EMPTY combo, and Qt
+        # takes it as permission to shrink this one under its own longest
+        # entry — "Last 10 minutes" came out cut at 131 px against the 140 it
+        # needs. Measured here, after the polish that resolves the QSS font:
+        # in the constructor the same call pinned the UNTHEMED 114 and made it
+        # worse. The control asks for what its content needs (ladder step 1);
+        # the settle below then has to honour it (step 3).
+        self.span_combo.setMinimumWidth(self.span_combo.sizeHint().width())
+        # One implementation for every window (gui/sizing.py): the loop that
+        # used to live here asked `minimumSizeHint`, which quotes a WRAPPING
+        # label at one line — and this window's away-gap sentence is exactly
+        # such a label. It cost this window 16 px, and Qt spends a shortfall by
+        # OVERLAPPING: the chart was drawn across the caption underneath it.
+        size = settle_minimum(self, self._computed_minimum(), QSize(760, 520))
         self.resize(max(size.width(), 760), max(size.height(), 520))
 
     def _computed_minimum(self) -> QSize:

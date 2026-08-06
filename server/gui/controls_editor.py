@@ -56,6 +56,7 @@ from gui.controls_widgets import (
     button_id, icon_for,
 )
 from gui.theme import TOKENS
+from gui.sizing import settle_minimum
 
 logger = logging.getLogger(__name__)
 
@@ -457,17 +458,10 @@ class ControlsEditor(QDialog):
             return
         self._settled = True
         self._fit_set_list()
-        size = self._computed_minimum()
-        for _ in range(4):
-            self.setMinimumSize(size)
-            self.layout().activate()
-            needs = self.minimumSizeHint()
-            grown = QSize(max(size.width(), needs.width()),
-                          max(size.height(), needs.height()))
-            if grown == size:
-                break
-            size = grown
-        self.setMinimumSize(size)
+        # gui/sizing.py — one settle for every window. The loop that used to
+        # live here trusted `minimumSizeHint`, and this dialog's wrapping
+        # captions made it quote 59 px less than the dialog needs.
+        settle_minimum(self, self._computed_minimum(), QSize(0, 0))
 
     def _computed_minimum(self) -> QSize:
         """MEASURED, never guessed (THE SPACE & LEGIBILITY LAW).

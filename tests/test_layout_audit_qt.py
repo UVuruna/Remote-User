@@ -36,13 +36,21 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 
-os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-
+# THE PLATFORM IS THE MEASUREMENT (owner 2026-08-06, after this guard passed
+# over a window whose link was drawn across its QR). "offscreen" has none of
+# the machine's fonts and falls back to substitutes with different metrics: it
+# reported the main window needing 869x880 where the REAL Segoe UI at his 125%
+# scaling needs 524x857 - different enough that the defect lived on the other
+# side of the difference. So the native platform is used whenever there is a
+# desktop, and each window is shown with WA_DontShowOnScreen: the full layout
+# machinery runs with the real fonts and DPI, and nothing appears on screen.
+# offscreen stays the fallback so the guard still runs where there is no
+# session at all.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "server"))
 
 from PySide6.QtCore import QSize, Qt  # noqa: E402
 from PySide6.QtWidgets import (  # noqa: E402
-    QAbstractScrollArea, QApplication, QCheckBox, QHeaderView, QLabel,
+    QAbstractScrollArea, QApplication, QCheckBox, QHeaderView, QLabel, QLayout,
     QLineEdit, QListWidget, QPushButton, QSpacerItem, QTableWidget, QWidget,
 )
 
@@ -51,6 +59,23 @@ SLACK_TOLERANCE = 24
 
 # px of padding assumed between an element's frame and its text
 TEXT_PADDING = 8
+
+# Where the screenshots the layout gate demands are written (one per window,
+# taken at its DECLARED minimum - the size the grade has to hold at).
+SHOT_DIR = Path(__file__).resolve().parent.parent / ".claude" / "shots"
+
+
+def make_app() -> QApplication:
+    """Native platform first (real fonts, real DPI), offscreen if there is no
+    desktop to talk to."""
+    existing = QApplication.instance()
+    if existing is not None:
+        return existing
+    try:
+        return QApplication([])
+    except Exception:                       # no session - measure what we can
+        os.environ["QT_QPA_PLATFORM"] = "offscreen"
+        return QApplication([])
 
 
 # --- the window registry ---------------------------------------------------
@@ -200,6 +225,58 @@ def check_declared_minimum(window: QWidget) -> list[str]:
             "the longest real content (setMinimumSize / setMinimumWidth)"]
 
 
+def layout_cells(layout: QLayout, path: str = ""):
+    """Every cell a layout hands out, with the name of what sits in it —
+    recursing into nested layouts, because a row inside a column is where the
+    siblings that can collide actually live."""
+    for i in range(layout.count()):
+        item = layout.itemAt(i)
+        if item is None:
+            continue
+        child = item.layout()
+        if child is not None:
+            yield from layout_cells(child, f"{path}/layout{i}")
+            continue
+        widget = item.widget()
+        if widget is None or widget.isHidden():
+            continue                        # spacers own no pixels to collide
+        name = widget.objectName() or widget.__class__.__name__
+        yield f"{path}/{name}", item.geometry()
+
+
+def check_overlap(window: QWidget) -> list[str]:
+    """E. OVERLAP - two elements of the same layout drawn ON TOP of each other.
+
+    THE CHECK THIS FILE WAS MISSING, and the reason it could report PASS over
+    the window the owner photographed twice (2026-08-06). Every other check
+    here asks whether an element got its own SIZE; none asked where it was
+    PUT. Qt does not clip a layout that is short of space - it overlaps it, so
+    every widget can report its full size while the pairing link is painted
+    across the QR code. Sizes were green; the window was broken.
+
+    Layout cells are compared, not arbitrary siblings: a layout's own cells
+    may never intersect, while unmanaged children (a scrollbar over a
+    viewport, a combo's popup) legitimately do.
+    """
+    problems = []
+    for widget in walk(window):
+        layout = widget.layout()
+        if layout is None:
+            continue
+        cells = list(layout_cells(layout))
+        for i, (name_a, rect_a) in enumerate(cells):
+            for name_b, rect_b in cells[i + 1:]:
+                if rect_a.intersects(rect_b):
+                    hit = rect_a.intersected(rect_b)
+                    problems.append(
+                        f"OVERLAP in {widget.objectName() or widget.__class__.__name__}: "
+                        f"'{name_a}' {rect_a.x()},{rect_a.y()} {rect_a.width()}x{rect_a.height()} "
+                        f"is drawn over '{name_b}' {rect_b.x()},{rect_b.y()} "
+                        f"{rect_b.width()}x{rect_b.height()} "
+                        f"({hit.width()}x{hit.height()} px of the two on the same pixels)")
+    return problems
+
+
 def check_clipping(window: QWidget) -> list[str]:
     problems = []
     for widget in walk(window):
@@ -221,14 +298,15 @@ def check_clipping(window: QWidget) -> list[str]:
             layout = widget.layout()
             if layout is not None and layout.hasHeightForWidth():
                 # A container of WRAPPING children has no single minimum
-                # height: minimumSizeHint quotes the height needed at its
-                # NARROWEST width, and heightForWidth quotes the PREFERRED
-                # height — comparing either with the height it got at its
-                # actual width invents a shortfall. Its width is still
-                # checked here; its vertical truth is measured element by
-                # element, at the real width, by the wrapped-text branch of
-                # check_elision below.
-                need = QSize(need.width(), 0)
+                # height - minimumSizeHint quotes a wrapping label at ONE
+                # line. This branch used to zero the height out and check only
+                # the width, and that blind spot is half of the 2026-08-06
+                # bug: the QR card was handed 332 px against a minimum of 348
+                # and nothing said a word. heightForWidth at the width the
+                # container ACTUALLY has is the honest question - how tall
+                # must this be, here, now - so it is asked instead of skipped.
+                need = QSize(need.width(),
+                             max(need.height(), layout.heightForWidth(widget.width())))
         if need.width() > widget.width() or need.height() > widget.height():
             problems.append(
                 f"CLIPPED {widget.__class__.__name__} "
@@ -355,14 +433,22 @@ def check_scroll_with_free_space(window: QWidget) -> list[str]:
 
 def audit(window: QWidget, label: str) -> list[str]:
     return [f"[{label}] {problem}" for problem in (
-        check_clipping(window)
+        check_overlap(window)
+        + check_clipping(window)
         + check_elision(window)
         + check_item_views(window)
         + check_scroll_with_free_space(window))]
 
 
+def shot_name(name: str) -> str:
+    return "".join(c if c.isalnum() else "_" for c in name).strip("_") + ".png"
+
+
 def audit_window(app: QApplication, name: str, factory) -> list[str]:
     window: QWidget = factory()
+    # The layout runs for real - real fonts, real DPI - but nothing appears on
+    # the owner's screen while a guard runs.
+    window.setAttribute(Qt.WidgetAttribute.WA_DontShowOnScreen, True)
     window.show()
     app.processEvents()
 
@@ -377,13 +463,19 @@ def audit_window(app: QApplication, name: str, factory) -> list[str]:
         window.resize(width, height)
         app.processEvents()
         problems += audit(window, f"{name} @ {label} {width}x{height}")
+        if label == "minimum":
+            # The gate's SHOT: the window at the size the grade has to hold
+            # at. Written by the audit itself so the picture can never be of
+            # a different build than the one just measured.
+            SHOT_DIR.mkdir(parents=True, exist_ok=True)
+            window.grab().save(str(SHOT_DIR / shot_name(name)))
 
     window.close()
     return problems
 
 
 def test_layout_audit() -> None:
-    app = QApplication.instance() or QApplication([])
+    app = make_app()
     problems: list[str] = []
     for name, factory in WINDOWS:
         problems += audit_window(app, name, factory)
@@ -397,7 +489,7 @@ def test_layout_audit() -> None:
 
 
 def main() -> int:
-    app = QApplication.instance() or QApplication([])
+    app = make_app()
     failed = False
     for name, factory in WINDOWS:
         problems = audit_window(app, name, factory)

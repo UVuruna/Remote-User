@@ -54,7 +54,21 @@ machine only — nothing of this ships in the app).
 The real page in a real headless Chromium at phone sizes (portrait 412×915,
 landscape 915×412): every overlay panel is opened and measured — the card
 fully inside the viewport, no horizontal page overflow, nothing clipped
-inside it. Covers the Quality panel, the Sets picker, the Dictation card,
+inside it.
+
+**CONTRAST** (owner 2026-08-06: *"je l' moguće da prođe situacija sa dizajnom
+elemenata i bojama"* — six white buttons carrying near-white labels, and every
+geometric check green). Text nobody can read is not a style opinion; it is
+unreadable content, which is this law's whole subject. Every leaf text node is
+measured against its **composited** backdrop — each translucent layer painted
+over the one below, down to the page — and anything under a 3.0:1 WCAG ratio
+fails, naming the element and the ratio. Compositing is not a detail: the first
+version of this check ignored alpha and called this project's own translucent
+selected states 1.00:1, and a guard that cries wolf gets switched off. It found
+two real defects on its first honest run — the Sets picker's live badge at
+1.96:1 (`var(--bg)` is not a token here, so the declaration was invalid and the
+badge inherited near-white ink) and the command chooser's rows at 1.05:1 (a
+`<button>` with no background of its own takes the WebView's light default). Covers the Quality panel, the Sets picker, the Dictation card,
 the Aspect panel (incl. the Move handle's hit size), the layout list with
 its rename button, the Rename card and the creation panel's Name field.
 Also checks `window_manager._fit_rect` purely: the placed region never
@@ -109,6 +123,34 @@ arrive, and hands it back for the audit to show again — proving the minimum is
 re-measured on the way BACK. Self-tested the same way (signature on
 `isVisible()` + a settle-once `showEvent` restored): `CLIPPED … has 869x837,
 needs at least 618x880`.
+
+**E. OVERLAP, and REAL FONTS** (owner 2026-08-06, after this guard reported
+PASS over the window he had photographed twice). Two holes, both closed:
+
+- Every check here asked whether an element got its own SIZE; none asked where
+  it was PUT. Qt does not clip a layout that is short of space — it OVERLAPS
+  it, so every widget reports its full size while the pairing link is painted
+  across the QR. `check_overlap` compares the cells of each layout (not
+  arbitrary siblings: a scrollbar over a viewport is legitimate) and fails on
+  any intersection. It immediately caught one nobody had reported — the
+  Traffic window's chart drawn 4 px over the caption beneath it.
+- The platform WAS the measurement error: `offscreen` has none of the
+  machine's fonts and substitutes metrics, reporting the main window at
+  869x880 where the owner's real Segoe UI at 125% scaling needs 503x937 — the
+  defect lived in the difference. The native platform is used whenever there
+  is a desktop, with `WA_DontShowOnScreen` so the full layout machinery runs
+  with real fonts and DPI while nothing appears on screen; offscreen remains
+  the fallback. That switch alone surfaced two more genuine defects: the
+  Controls editor 59 px short, and a Traffic combo cut to "Last 10 minut" by
+  the theme's own 92 px combo floor.
+- The container-height blind spot is gone with them. This file used to zero
+  out the height of any container with wrapping children and check only its
+  width; that is how the QR card could be handed 332 px against a minimum of
+  348 in silence. It is now asked `heightForWidth` at the width it actually
+  has.
+- Each window's screenshot at its DECLARED minimum is written to
+  `.claude/shots/` by the audit itself, so the picture the layout gate grades
+  can never be of a different build than the one just measured.
 
 Run: `.venv\Scripts\python tests/test_layout_audit_qt.py` — also a full-run
 guard in `run_guards.py`.

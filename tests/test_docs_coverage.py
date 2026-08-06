@@ -78,6 +78,11 @@ ALGORITHMIC = {
     "server/layout_api.py",
     "server/notify.py",
     "server/gui/theme.py",
+    # Split out of the three windows on 2026-08-06 (THE STRUCTURE LAW): the
+    # same settle loop was copied three times and carried the same lie in
+    # every copy — how a window declares its true minimum is one rule, and it
+    # is algorithmic (a circular measurement that has to converge).
+    "server/gui/sizing.py",
     "server/gui/traffic_window.py",
     "server/gui/main_window.py",
     "server/gui/controls_editor.py",
