@@ -146,3 +146,21 @@ everything here composes and frames WINDOWS on it.
   OUTSIDE the handle still resizes as before. Apply sends `pos` (0–1000) in
   `layout_aspect`; the server places the region with the same fraction — see
   [Window Manager](../../server/__about/window_manager.md).
+
+## App shortcuts are chosen here (owner 2026-08-06)
+
+The creation panel and the rename card both carry the row **"App shortcuts on
+the wheel for this layout"** — the ticks that decide which app-aware sets ride
+while this layout is focused. `autoAppSets()` pre-ticks every set whose
+`process` matches the first slot and that demands no title, which is correct
+for Chrome, Explorer and plain VSCode; Claude is the single tap the owner adds
+himself, because nothing on the PC can identify a Claude Code conversation
+(the probe is in [sets](sets.md)).
+
+They sit in the rename card rather than as a third button in each list row:
+the row already carries rename and ratio, and a fourth control is what THE
+SPACE & LEGIBILITY LAW keeps catching. Both panels are audited at their
+fullest — long title AND four chips — in `tests/test_layout_audit.py`.
+
+`layout_create` carries the list; `layout_apps {index, sets}` changes it
+later, and nothing on the PC moves when it does.

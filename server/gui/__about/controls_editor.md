@@ -181,3 +181,15 @@ cannot recur here. Proof: [tests/test_layout_audit_qt.py](../../../tests/___test
   `{action: (label, icon)}` built on top of it
 - `icon_for(body)`: one fragment → `QIcon` via `QSvgRenderer` (48 px, stroke
   `ICON_STROKE`)
+
+## App sets charge the wheel here too (owner 2026-08-06)
+
+`_save()` used to state that app sets never charge the wheel count — written
+2026-08-05 and reversed by the owner the next day. That line was the DESKTOP
+half of what he found on his phone: nine sets ticked under a cap of eight.
+
+The editor now computes the same reserve the phone does — the largest group of
+app sets sharing a `process`, because Chrome, Explorer and VSCode can never
+appear together while VSCode and Claude always do — and leaves
+`WHEEL_MAX - reserve` for everything else. The message says which, and why,
+instead of quietly switching sets off.

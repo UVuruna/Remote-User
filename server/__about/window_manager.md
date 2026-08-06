@@ -199,3 +199,28 @@ Three more corrections from the same audit:
   members — still on screen, still always-on-top — in a list nothing could
   reach. The returned index map is what lets `state()` follow the focused
   layout through a prune instead of pointing at whatever slid into its place.
+
+## The layout carries its own app sets (owner 2026-08-06)
+
+`Layout.app_sets` is the list of app-aware sets the owner ticked for that
+layout, and it settles a question no amount of string matching could. Probing
+his PC with a Claude Code conversation open found the window titled
+`Ispravka UI dizajna meni… - Remote User - Visual Studio Code [Administrator]`
+and its tab `Ispravka UI dizajna meni…, Window 2: Editor Group 1` — Claude
+Code names itself after the CONVERSATION. Beside it sat `prompt.txt` with an
+identical UIA class, empty `AutomationId` and `HelpText`; a walk of the whole
+extracted window (20 elements) found no "claude" anywhere, VSCode keeping its
+webview content out of accessibility. So `title` could never identify it, and
+the mark comes from the owner instead.
+
+Three states, and the difference matters:
+
+| `app_sets` | meaning |
+|---|---|
+| `None` | never chosen — a layout made before this version; the client falls back to the process/title guess |
+| `[]` | a real answer: **no** app shortcuts on this layout |
+| `["VSCode", "Claude"]` | exactly these ride while it is focused |
+
+Set at creation (`create(..., app_sets=...)`), changed later by
+`set_app_sets()` behind the `layout_apps` message, and carried in `state()`.
+`title` stays on the Layout — it is what the fallback still reads.

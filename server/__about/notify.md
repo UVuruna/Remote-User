@@ -67,3 +67,26 @@ that does it.
 - **Its own module, not another branch in `web.py`.** One responsibility with
   its own route and its own gate; `web.py` is the busiest file in the project
   and was being split for exactly this reason on the same day.
+
+## The switch that turns it on (ROADMAP H2, owner 2026-08-06)
+
+The feature shipped working in v0.0.081 and then stayed silent on the owner's
+own PC for a day: `agent_hook.py --install` had never been run. The rule is
+that an end user never types a command, so the desktop window carries a
+checkbox and `agent_hook_installed()` / `set_agent_hook()` are what it
+operates. They live here rather than in the GUI because this is the
+notification feature's module — the window only owns the checkbox.
+
+The switch shows the REAL state (it reads `~/.claude/settings.json` every
+time) instead of remembering a setting of its own, so a hook removed by hand
+is reflected the next time the window opens.
+
+Two things the packaged app must handle and a dev checkout need not:
+
+- **the script would vanish with the next update** — inside the bundle it is
+  replaced wholesale, so turning the switch on copies it to the user directory
+  and registers that permanent path;
+- **there is no interpreter in the EXE** — `sys.executable` is the app itself,
+  so a real `python` is looked up on PATH. A PC with none is TOLD so, plainly,
+  in the caption under the switch. A switch that silently fails to arm is the
+  same failure this whole task exists to end.
