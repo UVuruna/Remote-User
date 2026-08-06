@@ -94,12 +94,38 @@ def make_main_window() -> QWidget:
     window = MainWindow(_fake_controller())
     window.show()                 # …and only THEN does the later content arrive
     window._refresh()             # the guided text + QR, as the owner sees it
+    _late_content(window)
+    return window
+
+
+def _late_content(window) -> None:
+    """The update offer and the notify switch's failure line — the two things
+    that reach this window after it was built and measured."""
     window._update = SimpleNamespace(version="9.9.999", installer_url="http://x/y.exe",
                                      page_url="http://x")
     window._update_state = "found"
     window.notify_caption.setText(NOTIFY_WORST)
     window._refresh()             # the refresh tick that shows both of them
-    return window
+
+
+def make_main_window_from_tray() -> QWidget:
+    """The same window, reached the way the owner actually reaches it.
+
+    Closing this app does not close it — `closeEvent` hides it to the tray and
+    the server keeps running, so the update offer that arrives at 3 a.m. lands
+    on a window nobody is looking at. Qt gives a hidden window no real metrics;
+    anything measured there is a smaller, wrong floor. This case proves the
+    window is measured again on its way BACK.
+    """
+    import updates
+    from gui.main_window import MainWindow
+    updates.check = lambda: None
+    window = MainWindow(_fake_controller())
+    window.show()
+    window._refresh()
+    window.hide()                 # to the tray — the refresh timer keeps ticking
+    _late_content(window)
+    return window                 # …and audit_window shows it again
 
 
 def make_controls_editor() -> QWidget:
@@ -150,6 +176,7 @@ def make_traffic_window() -> QWidget:
 
 WINDOWS: list[tuple[str, object]] = [
     ("MainWindow", make_main_window),
+    ("MainWindow (reopened from the tray)", make_main_window_from_tray),
     ("ControlsEditor", make_controls_editor),
     ("ChordRecorder", make_chord_recorder),
     ("TrafficWindow", make_traffic_window),

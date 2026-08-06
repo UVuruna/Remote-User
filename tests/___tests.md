@@ -101,6 +101,15 @@ does. Self-tested: with the fix disabled the audit reports
 `CLIPPED MainWindow: has 820x837, needs at least 618x880` — 43 px, the update
 button's own row, which was being drawn over the QR's link.
 
+**MainWindow (reopened from the tray)** is the same window reached the way the
+owner actually reaches it: closing this app hides it to the tray, so the update
+offer lands on a window nobody is looking at, and Qt gives a hidden window no
+real metrics. The case shows the window, hides it, lets the late content
+arrive, and hands it back for the audit to show again — proving the minimum is
+re-measured on the way BACK. Self-tested the same way (signature on
+`isVisible()` + a settle-once `showEvent` restored): `CLIPPED … has 869x837,
+needs at least 618x880`.
+
 Run: `.venv\Scripts\python tests/test_layout_audit_qt.py` — also a full-run
 guard in `run_guards.py`.
 
