@@ -25,6 +25,22 @@ line with its reason). The three guided reachability texts live in one place,
 `REACH_TEXT`, because the refresh loop shows them and the minimum size
 measures them.
 
+**The minimum is re-declared whenever the content changes** (owner screenshots
+2026-08-06 — the QR's link drawn over the QR, and the guidance text over the
+settings card below it). Measuring once, at construction, was the bug: two
+things arrive later — the update button (hidden until the GitHub check answers)
+and the notify switch's caption (three lines when it reports a failure instead
+of one) — and an explicit `setMinimumSize()` makes Qt stop enforcing its
+layout's own minimum, so the extra rows had nowhere to go and were painted on
+top of what was already there. `_settle_minimum()` is now callable at any time:
+it re-measures from the computed floor, declares the result, and grows the
+window without ever shrinking below the size the owner gave it (a maximized
+window is left alone). `_content_signature()` is what decides WHEN — the six
+strings/visibilities that can change length — so the 1 s refresh tick does not
+re-lay-out the window every second. `showEvent()` settles once more the first
+time the window is realized: a widget measured while hidden can under-report by
+whole rows (43 px of update button, here).
+
 ## Connections
 
 ### Uses
@@ -81,6 +97,11 @@ measures them.
   `_refresh_update_button()` — the self-update flow; download runs chunked
   with a socket timeout (`urlretrieve` has none) so a stalled CDN can't leave
   the button stuck on "Downloading…" forever
+- `_settle_minimum()` / `_content_signature()` / `_resettle()` — the law's
+  ladder step 3 kept LIVE (see Sizing above): measure, declare, grow — on every
+  change to content that can arrive after the window was built
+- `showEvent()` — one more settle the first time the window is realized, where
+  Qt finally gives every widget its real metrics
 - `closeEvent()` — overridden to `event.ignore()` + `hide()` instead of
   closing; shows a one-time tray balloon explaining the app is still running
 
@@ -123,3 +144,11 @@ must never type one.
 
 The logic lives in [notify](../../__about/notify.md); this window owns the
 checkbox and its caption.
+
+**Why it could not be switched on in v0.0.085** (owner screenshot 2026-08-06):
+`setup/agent_hook.py` was never added to the PyInstaller bundle, so the
+installed app answered the tick with a raw `[Errno 2] No such file or
+directory: …\_internal\setup\agent_hook.py` and sprang back. Three fixes, one
+per layer: the file is bundled (`setup/build.py`), the build now REFUSES to
+package without it (the payload gate), and the message the user can see is
+plain language about the app, not a path (`notify._hook_module`).

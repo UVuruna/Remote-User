@@ -91,6 +91,16 @@ height (`minimumSizeHint` quotes it at the narrowest width), so only its width
 is checked there — the vertical truth is measured element by element by the
 wrapped-text branch.
 
+**"Fullest state" includes what arrives LATE** (owner screenshots 2026-08-06).
+`MainWindow`'s factory used to build the window and stop there — but two things
+reach it only after it is on screen: the update button (hidden until GitHub
+answers) and the notify switch's caption (one line normally, three when it has
+to report a failure, and a failure names a path). The factory now `show()`s the
+window first and lets both arrive afterwards, exactly as the owner's evening
+does. Self-tested: with the fix disabled the audit reports
+`CLIPPED MainWindow: has 820x837, needs at least 618x880` — 43 px, the update
+button's own row, which was being drawn over the QR's link.
+
 Run: `.venv\Scripts\python tests/test_layout_audit_qt.py` — also a full-run
 guard in `run_guards.py`.
 

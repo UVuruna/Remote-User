@@ -87,6 +87,7 @@ class MainWindow(QMainWindow):
         self._update_state = None
         self._update_path = None
         self._traffic = None         # the Traffic window, built on first open
+        self._settled_for = None     # content the declared minimum was measured against
 
         self.setWindowTitle("Remote User")
         self.setStyleSheet(QSS)
@@ -113,10 +114,32 @@ class MainWindow(QMainWindow):
         self._timer.start(REFRESH_MS)
         self._refresh()  # fills the guided text — the fullest state to measure
 
-        # The wrapped guidance text makes height depend on width, so the
-        # minimum is SETTLED: measure at the candidate size, grow, measure
-        # again — until Qt stops asking for more. (One pass would under-shoot
-        # by exactly the row a narrower window adds.)
+        self._settle_minimum(keep=QSize(0, 0))
+
+        threading.Thread(target=self._check_updates, daemon=True).start()
+
+    # -- the law's computed minimum ----------------------------------------
+
+    def _settle_minimum(self, keep: QSize | None = None) -> None:
+        """Declare the minimum this window's CURRENT content needs (ladder
+        step 3, rules/GUI.md) — and re-declare it whenever that content grows.
+
+        The wrapped guidance text makes height depend on width, so the minimum
+        is SETTLED: measure at the candidate size, grow, measure again — until
+        Qt stops asking for more. (One pass would under-shoot by exactly the
+        row a narrower window adds.)
+
+        Measuring ONCE, at construction, was the owner's 2026-08-06 bug in both
+        screenshots: two things arrive later — the update button (hidden until
+        GitHub answers) and the notify switch's caption (three lines when it
+        reports a failure instead of one) — and an explicit `setMinimumSize`
+        makes Qt stop enforcing the layout's own minimum, so the extra rows had
+        nowhere to go and were drawn ON TOP of the QR and its link. Every
+        content change now re-settles: the floor rises, and the window rises
+        with it. `keep` is the size never to shrink below — the owner's own
+        window size at runtime, nothing at construction.
+        """
+        keep = self.size() if keep is None else keep
         size = self._computed_minimum()
         for _ in range(4):
             self.resize(size)
@@ -128,10 +151,25 @@ class MainWindow(QMainWindow):
                 break
             size = grown
         self.setMinimumSize(size)
+        self._settled_for = self._content_signature()
+        if not (self.isMaximized() or self.isFullScreen()):
+            self.resize(max(keep.width(), size.width()),
+                        max(keep.height(), size.height()))
 
-        threading.Thread(target=self._check_updates, daemon=True).start()
+    def _content_signature(self) -> tuple:
+        """Everything on this window whose LENGTH can change after it was
+        built. When one of these differs from what the minimum was measured
+        against, the minimum is measured again — and only then, so the refresh
+        timer does not re-lay-out the window once a second."""
+        return (self.update_btn.isVisible(), self.update_btn.text(),
+                self.notify_caption.text(), self.reach_label.text(),
+                self.url_label.text(), self.qr_label.text())
 
-    # -- the law's computed minimum ----------------------------------------
+    def _resettle(self) -> None:
+        if self._settled_for is None:
+            return  # still being built — the first settle has not run yet
+        if self._content_signature() != self._settled_for:
+            self._settle_minimum()
 
     def _computed_minimum(self) -> QSize:
         """MEASURED, never guessed (THE SPACE & LEGIBILITY LAW, rules/GUI.md).
@@ -302,6 +340,7 @@ class MainWindow(QMainWindow):
             "it to your phone by name."
             if self.notify_check.isChecked() else
             "Off — the phone stays quiet when a job on this PC finishes.")
+        self._resettle()  # a longer caption gets its room NOW, not in a second
 
     def _toggle_agent_hook(self, on: bool) -> None:
         """Install or remove the Claude Code Stop hook. The packaged EXE has no
@@ -318,6 +357,7 @@ class MainWindow(QMainWindow):
             self.notify_check.setChecked(agent_hook_installed())
             self.notify_check.blockSignals(False)
             self.notify_caption.setText(detail)
+            self._resettle()  # a reported failure is the caption's longest state
             return
         self._show_notify_state()
 
@@ -648,6 +688,7 @@ class MainWindow(QMainWindow):
         self._refresh_buttons()
         if state == "failed":
             self.reach_label.setText("See the log for details.")
+        self._resettle()  # content that grew since the last tick raises the floor
 
     def _refresh_buttons(self) -> None:
         state = self.controller.state
@@ -662,6 +703,20 @@ class MainWindow(QMainWindow):
         self.tray_toggle.setText("Stop server" if running else "Start server")
 
     # -- window behavior ---------------------------------------------------
+
+    def showEvent(self, event) -> None:
+        """Re-measure the minimum the first time the window is realized.
+
+        A window measured while still hidden can under-report by whole rows —
+        Qt hands a widget its real metrics when it is shown, and a button that
+        was `show()`n on a hidden parent counts for nothing until then. That is
+        43 px of update button in this window, which is exactly the strip that
+        was drawn over the QR's link.
+        """
+        super().showEvent(event)
+        if not getattr(self, "_shown_once", False):
+            self._shown_once = True
+            self._settle_minimum()
 
     def closeEvent(self, event) -> None:
         """Close = hide to tray (the server keeps running). Quit lives in the
