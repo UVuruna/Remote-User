@@ -683,6 +683,13 @@ class Layout:
         # made before this version keep working).
         self.app_sets: list[str] | None = list(app_sets) if app_sets is not None else None
         self.members = members
+        # WHICH member holds the keyboard (owner 2026-08-06). The phone types
+        # into one window of a grid, and every re-focus used to hand the
+        # keyboard to whichever member sat LAST in this list — so a dictation
+        # interrupted by one excursion continued in the other agent's session.
+        # Kept in the registry, not in the connection: an excursion closes the
+        # socket, and the target must outlive it. See focus_guard.
+        self.last_member: int = members[0] if members else 0
         self.template = template  # None = solo
         self.orient = orient      # "portrait" | "wide"
         self.aspect = aspect      # w/h the layout was last arranged for
@@ -734,6 +741,8 @@ class LayoutRegistry:
                 else:
                     drop_topmost(hwnd)
             lay.members = alive
+            if alive and lay.last_member not in alive:
+                lay.last_member = alive[0]  # the typing target closed at the desk
         kept = [i for i, lay in enumerate(self.layouts) if lay.members]
         self.layouts = [self.layouts[i] for i in kept]
         return kept
@@ -810,7 +819,15 @@ class LayoutRegistry:
                     placed = place_window(hwnd, cell) and placed
             else:
                 placed = place_window(lay.members[0], region)
-        for hwnd in lay.members:
+        # The member that holds the KEYBOARD is raised last, so it is the one
+        # left in the foreground (owner 2026-08-06). Raising in plain list
+        # order handed the keyboard to whatever sat last in the grid, and an
+        # excursion — a picker, a permission dialog — re-focuses the layout on
+        # every reconnect: his dictation resumed in the other window.
+        order = [h for h in lay.members if h != lay.last_member]
+        if lay.last_member in lay.members:
+            order.append(lay.last_member)
+        for hwnd in order:
             raise_window(hwnd)
         self.last_focus = (index, lay.name)  # where the next session resumes
         if lay.template:
