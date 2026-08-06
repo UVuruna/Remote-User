@@ -45,7 +45,8 @@ checkbox form per the new Final Report gate):
 - [x] check ALL groups after the Win-in-Mouse corruption (slika 3)
 - [x] root rule with teeth: a delivering session ends with the per-task final report (machine-wide)
 
-WAITING_ON_OWNER: no
+WAITING_ON_OWNER: yes   (round 13 — the owner's three questions are answered
+and the choice between C / A / B is his; nothing is built until he answers)
 
 ROUND 4 IMPLEMENTED (owner approved "moze sve i bipovi kao checkbox"):
 (a) shipped-pools merge now ALSO runs once at server start
@@ -713,3 +714,53 @@ another project that landed in THIS session):
       gate, INPUT/PRESENCE/NOTIFY/FOCUS gates, smoke test, signed exe + installer,
       VERIFY FileVersion 0.0.089) and GIT RELEASE published:
       https://github.com/UVuruna/Remote-User/releases/tag/v0.0.089
+
+## Round 13 (owner's three questions about the focus defence, 2026-08-06 —
+## ANSWER ROUND, nothing built; his choice decides what gets built)
+
+He asked three things about proposals A (SetWinEventHook) and B
+(SPI_SETFOREGROUNDLOCKTIMEOUT), and the third one uncovered a real hole in
+what shipped as v0.0.089. Answered in chat this session; NOTHING was written
+to the codebase, on purpose — the build follows his decision.
+
+WHAT THE ANSWERS WERE, so the next session does not re-derive them:
+  Q1 (does B run only while Remote User is on): no — SPI_SETFOREGROUNDLOCKTIMEOUT
+  is a per-USER Windows setting (HKCU\Control Panel\Desktop\ForegroundLockTimeout),
+  in force for every app until reverted. Our only lever is HOW LONG we hold it
+  (while the server runs / while the phone is present / only in layout focus).
+  Called WITHOUT SPIF_UPDATEINIFILE it lives in the running session only, so a
+  reboot restores his value even if a hard kill beats our ledger.
+  Q2 (does it look like a virus): no new detection class from either. A uses
+  WINEVENT_OUTOFCONTEXT — explicitly NO code in other processes, the same
+  accessibility API screen readers use; B is one documented SystemParametersInfo
+  call. What SmartScreen actually objects to is already true and unchanged:
+  unsigned binary + elevation + heavy SendInput. Only a bought certificate
+  fixes that, and it is out of scope by his no-payment rule.
+  Q3 (does the 250 ms steal erase what he dictated): NO for the common case,
+  and this was read out of the code, not assumed. The recognizer holds the
+  whole utterance ON THE PHONE until the end of a round
+  (VoiceInput.kt:372 deliver()), so a steal while he SPEAKS costs nothing, and
+  when the text arrives web.py:773 runs focus_guard.guard BEFORE injecting.
+
+- [ ] 64. THE HOLE Q3 FOUND — the guard runs before every typing MESSAGE but
+      not INSIDE one. `InputInjector.type_text` (server/input_injector.py:378-385)
+      is a per-code-unit SendInput loop with no re-read of the foreground, so a
+      600-character dictated sentence is ~20-60 ms during which a thief that
+      takes focus gets the REST of the sentence — and injected characters are
+      not replayed by anything. Neither the 0.25 s watcher nor proposal A closes
+      this; only chunking does. Proposed as option C (guard between chunks of
+      ~40 chars; GetForegroundWindow costs microseconds). NOT BUILT — waiting on
+      his answer. Recommendation given: C + A, with B as an optional Settings
+      switch (default off, no SPIF_UPDATEINIFILE, ledger-reverted).
+
+Round 12b (mid-turn, furious — a REGRESSION he hit while this round was closing):
+- [x] 64. "layout, kreiraj iz liste, nista se ne desava" — the loading cube spun
+      forever. ROOT CAUSE from his own server log, three times over:
+      UnboundLocalError at layout_api.py:86, `mon_rect = mon_rect(stream)` — the
+      module's own function name assigned to, so it became a LOCAL for the whole
+      function and the call on the right raised before a byte was sent.
+      Introduced in 0.0.266 (the app-sets/ticks round), shipped in v0.0.088 and
+      v0.0.089. Fix: `rect = mon_rect(stream)`. The real finding: the phone's
+      ENTIRE layout protocol had no test — tests/test_layout_protocol.py now
+      drives every layout message through the real dispatcher (build step 0f),
+      self-tested by replanting the defect. Commit 0.0.290, released v0.0.090.
