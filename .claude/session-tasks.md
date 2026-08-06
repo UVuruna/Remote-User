@@ -45,7 +45,7 @@ checkbox form per the new Final Report gate):
 - [x] check ALL groups after the Win-in-Mouse corruption (slika 3)
 - [x] root rule with teeth: a delivering session ends with the per-task final report (machine-wide)
 
-WAITING_ON_OWNER: yes
+WAITING_ON_OWNER: no
 
 ROUND 4 IMPLEMENTED (owner approved "moze sve i bipovi kao checkbox"):
 (a) shipped-pools merge now ALSO runs once at server start
@@ -90,7 +90,7 @@ evidence). WAITING_ON_OWNER may be `yes` ONLY when the turn genuinely ends
 with questions/presentation the owner must answer; back to `no` the moment
 work resumes. Enforced machine-wide by rules/hooks/session_tasks_guard.py.
 
-- [ ] 1. Mic (Input set) non-English recognition — REAL debugging, not
+- [x] 1. Mic (Input set) non-English recognition — REAL debugging, not
       micro-tweaks. LANGUAGE-AGNOSTIC (owner, angrily): the app works with
       the PHONE'S languages, never hardcodes any language — remove the
       hardcoded "sr-RS" in voiceLanguages(). Instrument: status pill shows
@@ -136,8 +136,17 @@ work resumes. Enforced machine-wide by rules/hooks/session_tasks_guard.py.
       If all three hold the task is FIXED = VERIFIED and closes; if any
       fails, that failure is the next round's evidence and the server log
       around it (client_log lines) says which of the three causes it is.
-      Not checked, because a task is checked only on evidence — and the
-      evidence is on his phone, not here.
+      CLOSED 2026-08-06 by the owner himself, and his word IS the evidence
+      this task was waiting for: "nije otvoreno, to je odavno zavrseno i radi
+      kako treba sve vezano za MIC i setup". The three checks above are
+      confirmed on his device. Root cause of the original failure, for the
+      record: the engine was pinned to the phone's FIRST system locale, which
+      on his phone is English, so Serbian speech came back as English garbage
+      ("Be a Valley key In football lalinesis"). Fix: the language is a USER
+      CHOICE made in the dictation setup card, never guessed — shipped in
+      v0.0.075, with the five follow-ups (shipped-pools merge at server start,
+      LOCK stopping every listening round, mute-beeps default ON, More
+      languages…, pulse animation dropped) in v0.0.078.
 - [x] 2. Layout resize panel: center Move handle (✥) — drag repositions the
       shrunken region along the free axis; applied on Apply; double-tap
       re-centers. DONE 0.0.169: layout_aspect {pos} + Layout.pos/_fit_rect

@@ -11,6 +11,7 @@ https://github.com/UVuruna/Remote-User/releases/tag/v0.0.085
 | 44 | "ni sistem notifikacija ne radi ???" | **FIXED** | Correct — `agent_hook.py` was never registered. Installed, and ROADMAP H2 closed with the Settings-card switch (reads the real state; handles frozen bundle + missing python honestly). |
 | 45 | THE STRUCTURE LAW (controls.js hit 1000) | **FIXED** | `client/sets.js` + about/flow + client index + load-test order + docs tier. |
 | 46 | Round close | **DONE** | APK 0.0.085, INPUT + PRESENCE + NOTIFY gates, PyInstaller smoke test, signed exe + installer, release published. |
+| 1 | Mic — non-English dictation (open since round 1) | **FIXED — CLOSED** | Owner's own confirmation, 2026-08-06: *"nije otvoreno, to je odavno zavrseno i radi kako treba sve vezano za MIC i setup"*. Root cause was pinning the engine to the phone's FIRST system locale (English on his phone → Serbian came back as garbage); the language became a USER CHOICE in the dictation setup card (v0.0.075) with the five follow-ups in v0.0.078. **No open tasks remain.** |
 
 ## Gates on the released tree
 
