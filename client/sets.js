@@ -83,15 +83,48 @@ function titleMatches(want, title) {
 // string test can ever find it. Only layouts made before this version (list
 // = null) still fall through to the process/title guess below.
 function appSetMatches(s, lay) {
+  // The owner's own ticks still win, wherever he made them — detection is the
+  // default, never a cage.
   if (Array.isArray(lay.app_sets)) return lay.app_sets.includes(s.name);
   const proc = String(lay.process || "").toLowerCase();
   if (!proc.includes(String(s.process || "").toLowerCase())) return false;
+  // An AGENT set asks the PC, not the window text (owner 2026-08-06, after
+  // the manual ticking he called what it was). The server reads the process
+  // table — a running claude.exe carries its session id, the session id names
+  // its project, and this window's title names the same project — and sends
+  // the answer as `agents`. A title guess could never have done this: Claude
+  // Code names its tab after the CONVERSATION and VS Code hides webview
+  // content from accessibility. `title` stays underneath as the fallback for
+  // a server too old to send `agents`.
+  if (s.agent) {
+    if (Array.isArray(lay.agents)) return lay.agents.includes(s.agent);
+    return s.title ? titleMatches(s.title, lay.title) : false;
+  }
   // No title test = the whole app. VSCode therefore rides ALONGSIDE Claude on
   // a Claude tab — the owner's rule of 2026-08-06: this is the one case where
   // two app sets appear at once, and both are wanted (the editor's own
   // shortcuts stay reachable while Claude's commands are there).
   if (!s.title) return true;
   return titleMatches(s.title, lay.title);
+}
+
+// Which app sets a new layout starts out carrying. Two fixes on 2026-08-06:
+// EVERY slot is considered, not just the first (a 2x2 with Chrome in cell two
+// never pre-ticked Chrome — the owner's "we went backwards" was wrong about
+// VSCode, which was always pre-ticked, and right that something was missing),
+// and an AGENT set is included when the server says that agent is live in the
+// window's project, so Claude needs no tap either.
+function autoAppSets(slots) {
+  const procs = slots.map((s) => String(s.process || "").toLowerCase());
+  const agents = slots.flatMap((s) => (Array.isArray(s.agents) ? s.agents : []));
+  return appSets
+    .filter((s) => {
+      const proc = String(s.process || "").toLowerCase();
+      if (!procs.some((p) => p.includes(proc))) return false;
+      if (s.agent) return agents.includes(s.agent);
+      return !s.title;
+    })
+    .map((s) => s.name);
 }
 
 function visibleAppSets() {

@@ -260,6 +260,68 @@ console.log(JSON.stringify({ before, dropped, after: visibleCount(),
         f"the LAST optional basic gives way, not an arbitrary one: {got2['dropped']}")
 
 
+
+# -- C. the PC's own answer, not a guess about the title ---------------------
+
+def test_the_pc_decides_whether_claude_is_live():
+    """The whole point of server/agents.py (owner 2026-08-06, after he called
+    the manual ticking what it was).
+
+    The Claude set carries `agent: "claude"`, and the server sends each layout
+    the agents it found RUNNING in that window's project — a live claude.exe
+    carrying its session id, the session id naming its project. So the set
+    appears on a window whose title says nothing about Claude, and it stays
+    away from one whose title screams it while nothing is running. The title
+    guess could never do either.
+    """
+    sets = shipped_app_sets()
+    body = ('const lay = JSON.parse(process.argv[2]);'
+            'console.log(JSON.stringify(appSets.filter((s) => appSetMatches(s, lay))'
+            '.map((s) => s.name)));')
+    prefs = {"apps": True, "appState": {}, "state": {}}
+
+    def names_for(lay):
+        return run_js(body.replace("JSON.parse(process.argv[2])", json.dumps(lay)),
+                      sets, prefs)
+
+    # His real window: the tab is named after the CONVERSATION, and there is
+    # not one letter of "claude" anywhere in it.
+    live = {"process": "code.exe", "agents": ["claude"],
+            "title": "Ispravka UI dizajna meni… - Remote User - Visual Studio Code"}
+    got = names_for(live)
+    assert "Claude" in got, f"a LIVE session must bring the Claude set out: {got}"
+    assert "VSCode" in got, f"VSCode rides alongside it as always: {got}"
+
+    # Nothing running: the PC's "no" outranks a title that says otherwise.
+    dead = {"process": "code.exe", "agents": [], "title": "Claude Code"}
+    got = names_for(dead)
+    assert "Claude" not in got, (
+        f"no live session means no Claude set, whatever the title claims: {got}")
+    assert got == ["VSCode"], got
+
+    # An older server sends no `agents` at all — the title guess still answers,
+    # so an update of one side alone never blanks the wheel.
+    legacy = {"process": "code.exe", "title": "Claude Code"}
+    assert "Claude" in names_for(legacy), "the pre-agents fallback must survive"
+
+
+def test_the_window_title_names_the_project():
+    """The server half, pure: which folder a VS Code title names. Measured
+    against the owner's own titles."""
+    sys.path.insert(0, str(PROJECT / "server"))
+    import agents as agents_mod
+    cases = {
+        "Ispravka UI dizajna meni… - Remote User - Visual Studio Code [Administrator]": "remote user",
+        "Kreiraj GUI smernice i p… - UVuruna - Visual Studio Code [Administrator]": "uvuruna",
+        "ubacio sam 3 nove letter… - DOMY Watch - Visual Studio Code": "domy watch",
+        "Some Folder - Notepad": "",
+        "": "",
+    }
+    for title, want in cases.items():
+        got = agents_mod.title_folder(title)
+        assert got == want, f"{title!r} -> {got!r}, expected {want!r}"
+
+
 TESTS = [
     ("only the Claude conversation wears the Claude set",
      test_only_the_claude_conversation_matches_the_claude_set),
@@ -273,6 +335,10 @@ TESTS = [
      test_a_document_never_matches_even_a_process_only_set),
     ("the reserve is the largest group that can appear at once",
      test_the_reserve_is_the_largest_group_that_can_appear_at_once),
+    ("the PC decides whether Claude is live, not the title",
+     test_the_pc_decides_whether_claude_is_live),
+    ("a VS Code title names its project folder",
+     test_the_window_title_names_the_project),
 ]
 
 
