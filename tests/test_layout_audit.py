@@ -60,12 +60,74 @@ def _check_panel(page, name, open_js, close_js, card_sel):
           for (const el of card.querySelectorAll('button, .q-row, .sets-row, input')) {
             if (el.scrollWidth > el.clientWidth + 2) noClip = false;
           }
-          return { inView, noPageScroll, noClip };
+
+          // CONTRAST - the check that was missing (owner screenshot
+          // 2026-08-06: six white bars with near-white labels on them, and
+          // every geometric check green). Text that cannot be read is not a
+          // style opinion, it is unreadable content, and the law's whole
+          // subject is content the user must read. A <button> with no
+          // background of its own inherits the WebView's light default while
+          // the theme keeps its light text - which is exactly how it happened.
+          // ALPHA IS COMPOSITED, never ignored: this project's own selected
+          // states are translucent accent over a card (rgb(56 189 248 /
+          // 0.08)), and reading that as solid accent under accent text
+          // reports 1.00:1 on a button that is perfectly readable. A guard
+          // that cries wolf gets switched off, so it measures what the eye
+          // gets: every layer painted over the one below it.
+          const parse = (c) => {
+            const m = (c || '').match(/[\\d.]+/g);
+            if (!m || m.length < 3) return null;
+            return [+m[0], +m[1], +m[2], m.length > 3 ? +m[3] : 1];
+          };
+          const over = (top, bottom) =>
+            [0, 1, 2].map((i) => top[i] * top[3] + bottom[i] * (1 - top[3]));
+          const PAGE = [15, 23, 42];            // --surface-0, the floor
+          const bgOf = (el) => {
+            const layers = [];
+            for (let n = el; n; n = n.parentElement) {
+              const c = parse(getComputedStyle(n).backgroundColor);
+              if (!c || c[3] === 0) continue;
+              layers.push(c);
+              if (c[3] === 1) break;
+            }
+            let base = PAGE;
+            for (let i = layers.length - 1; i >= 0; i--) base = over(layers[i], base);
+            return base;
+          };
+          const lumOf = (rgb) => {
+            const [r, g, b] = rgb.map((v) => {
+              const s = v / 255;
+              return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+            });
+            return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+          };
+          let contrast = [];
+          for (const el of card.querySelectorAll('*')) {
+            const text = (el.textContent || '').trim();
+            if (!text || el.children.length) continue;   // leaf text only
+            const style = getComputedStyle(el);
+            if (style.visibility === 'hidden' || style.display === 'none') continue;
+            if (parseFloat(style.opacity) < 0.5) continue;  // deliberately inert
+            const ink = parse(style.color);
+            if (!ink || ink[3] === 0) continue;
+            const bgRgb = bgOf(el);
+            const fg = lumOf(over(ink, bgRgb));
+            const bg = lumOf(bgRgb);
+            const ratio = (Math.max(fg, bg) + 0.05) / (Math.min(fg, bg) + 0.05);
+            if (ratio < 3.0) {   // WCAG AA for large/bold UI text; below this
+                                 // the owner cannot read his own buttons
+              contrast.push(text.slice(0, 20) + ' [' + el.tagName.toLowerCase() +
+                            '.' + (el.className || '-') + '] ' +
+                            style.color + ' on ' + ratio.toFixed(2) + ':1');
+            }
+          }
+          return { inView, noPageScroll, noClip, contrast };
         }""",
         card_sel,
     )
     page.evaluate(close_js)
-    passed = ok["inView"] and ok["noPageScroll"] and ok["noClip"]
+    passed = (ok["inView"] and ok["noPageScroll"] and ok["noClip"]
+              and not ok["contrast"])
     return passed, ok
 
 
