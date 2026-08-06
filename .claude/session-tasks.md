@@ -18,6 +18,22 @@ style.css/layouts.css split · dokument = __about/__flow of every module
 touched, ACTIONS.md, CLAUDE.md's protocol, and the answer on sound
 notification when the agent finishes.
 
+ISPORUKA (round 9, the Controls FIX round — his prompt.txt list + the mid-turn
+message): kod = the Claude set matches the CONVERSATION only (word test, list
+of spellings, a document never matches) · app sets charge the wheel's cap of 8
+by the largest group that can appear together (VSCode+Claude = 2, so six left)
+· the Controls set list in three sections (Standard / App-aware / Custom) ·
+vscode/chrome/explorer icons instead of the generic window · Arrangement
+rebuilt (caption "Arrangement", lists "D-pad (landscape)" / "Stack (portrait)",
+the lone reset renamed "Default" and moved under the lists) · dokument =
+ACTIONS.md, CLAUDE.md protocol, controls/panels/icons/controls_editor
+__about+__flow, ___tests.md · guard = tests/test_app_set_wheel.py (node-backed,
+in run_guards.py). SHIPPED as v0.0.082:
+https://github.com/UVuruna/Remote-User/releases/tag/v0.0.082
+The two corruption bugs he shouted about (VSCode gone, Win in Mouse) were
+diagnosed here and fixed by the parallel session in 0.0.210 — both are in this
+release, and the guard proves them.
+
 WAITING_ON_OWNER: yes
 
 ROUND 4 IMPLEMENTED (owner approved "moze sve i bipovi kao checkbox"):
