@@ -408,3 +408,34 @@ NOWHERE in the repo — no exit path drops the topmost band.
       topmost round had staged those three shared files and de-staged the
       in-flight hunks to keep HEAD compilable. 0.0.208 put the wiring back and
       the release contains it. Nothing was lost.
+
+## Round 8 (owner report + questions 2026-08-05, night)
+
+- [x] 35. PROBLEM: "zašto je WIN u MOUSE i nema RIGHT CLICK" — FIXED 0.0.210,
+      my regression. `_select` called setCurrentCell BEFORE invalidating the
+      detail form, and that signal fires synchronously, so the handler wrote
+      the PREVIOUS set's command into the NEW set's pool at the old row index
+      (Windows' Win sat at row 1; Mouse's row 1 is right). Harmless until this
+      session allowed renaming shipped sets. Fixed twice: invalidate before
+      the signal, and the form now remembers WHICH set it belongs to.
+      Evidence: tests/test_controls_sets.py, self-tested by re-planting the
+      shipped code — "set switching rewrote these pools: Mouse".
+- [x] 36. "Zašto je nestao VSCode kad si ubacio Claude" (editor half) — FIXED
+      0.0.210: merge_shipped_pools keyed app sets by PROCESS and both VSCode
+      and Claude are `code`, so Claude merged on top of VSCode. Keyed by NAME
+      now; a corrupted user copy repairs itself (a stale `active` is dropped).
+      The PHONE half (the wheel's cap of 8 with two app sets) is the parallel
+      session's — they added the per-set cap check in panels.js.
+- [x] 37. Thinking = a CHOICE, not a command (owner idea: "u centar da
+      prikažemo opcije pa korisnik odabere") — DONE 0.0.211: a pool command
+      may carry `options`; the phone shows them centred and one tap sends the
+      finished `/effort xhigh` + Enter. Generic, not a Claude special case.
+      Evidence: 2 new checks in the NOTIFY GATE + a layout-audit case.
+- [ ] 38. Sets picker grouping + group NAMES (his item 2) — the parallel
+      session is inside `openSetsPanel`/`appSetRow` right now; names proposed
+      in chat, implementation left to them to avoid two agents in one function.
+- [x] 39. Arrangement section (his item 3) — already done by the parallel
+      session (title shortened, "D-pad (landscape)" / "Stack (portrait)",
+      Default button moved below). Not duplicated.
+- [ ] 40. Round close — build + GIT RELEASE once the parallel session's round
+      is finished (owner: "ne moras release dok ne zavrsi taj drugi agent").
