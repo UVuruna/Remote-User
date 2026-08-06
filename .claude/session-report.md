@@ -1,33 +1,81 @@
-# Final Report — Round 10 (2026-08-06)
+SESSION: bed684c5-10c5-4b8f-9f53-cd011ed9074c
+RELEASE: https://github.com/UVuruna/Remote-User/releases/tag/v0.0.085
 
-Shipped as **v0.0.085**:
-https://github.com/UVuruna/Remote-User/releases/tag/v0.0.085
+# Final Report — round 10 (2026-08-06)
 
-| # | Task (owner's words) | Status | Evidence |
-|---|---|---|---|
-| 41 | "zašto mi se ne pokazuje Claude controls" | **FIXED** | Root cause probed live on his PC: the Claude tab is named after the CONVERSATION ('Ispravka UI dizajna meni…'), identical UIA class to `prompt.txt`, empty AutomationId/HelpText, 20-element tree with zero "claude" hits. Fixed by `Layout.app_sets` — his own tick. Guard case "the layout's own ticks win over the title guess" pins his real title. |
-| 42 | "zašto mogu 9 opcija da uključim" — 8 is LAW | **FIXED** | Two sources: the cap ran only on a tap (now `enforceWheelCap()` normalizes stored state) and the SHIPPED actions.json ticked 9 (Cursor off by default). Desktop editor counts the same reserve. Self-test: re-enabling Cursor → "ticks 9 sets by default". |
-| 43 | "hoću da bude štiklirano pored onoga koji je aktivan" | **FIXED** | "ON THE WHEEL NOW" badge on the app rows; phone audit measures the picker with two badges lit. Self-test: 210px badge padding → FAIL at both orientations. |
-| 44 | "ni sistem notifikacija ne radi ???" | **FIXED** | Correct — `agent_hook.py` was never registered. Installed, and ROADMAP H2 closed with the Settings-card switch (reads the real state; handles frozen bundle + missing python honestly). |
-| 45 | THE STRUCTURE LAW (controls.js hit 1000) | **FIXED** | `client/sets.js` + about/flow + client index + load-test order + docs tier. |
-| 46 | Round close | **DONE** | APK 0.0.085, INPUT + PRESENCE + NOTIFY gates, PyInstaller smoke test, signed exe + installer, release published. |
-| 1 | Mic — non-English dictation (open since round 1) | **FIXED — CLOSED** | Owner's own confirmation, 2026-08-06: *"nije otvoreno, to je odavno zavrseno i radi kako treba sve vezano za MIC i setup"*. Root cause was pinning the engine to the phone's FIRST system locale (English on his phone → Serbian came back as garbage); the language became a USER CHOICE in the dictation setup card (v0.0.075) with the five follow-ups in v0.0.078. **No open tasks remain.** |
+Owner's opening question: *"glavno pitanje zašto mi se ne pokazuje Claude
+controls"*, plus the wheel count, the Sets-panel marking, and *"ako claude
+uopste ne radi onda pretpostavljam da ni sistem notifikacija ne radi"*.
+
+NOT DONE / BLOCKED: **none** — every task on the list is closed.
 
 ## Gates on the released tree
 
-guards 4/4 · APP-SET WHEEL 6/6 · INPUT GATE · PRESENCE GATE · NOTIFY GATE 13/13
-· Qt layout audit 4/4 · phone layout audit 19/19 · client load test.
+guards 4/4 (structure, config sections, docs coverage, doc links) · APP-SET
+WHEEL 6/6 · INPUT GATE · PRESENCE GATE · NOTIFY GATE 13/13 · CONTROL SETS
+guard · Qt layout audit 4/4 at minimum and +50% · phone layout audit 19/19 at
+412x915 and 915x412 · client load test. Both new rules self-tested by planting
+the regression and watching the guard fail, then reverting.
 
-## Open on the owner's device
+## Per task
 
-Install v0.0.085 → make the Claude layout → tick **Claude** in the creation
-panel → the Claude set must ride beside VSCode. Then Settings → Sets: the
-counter must read 8 of 8, never 9, and both live sets must wear the badge.
-
-## Two-session note
-
-The parallel session took 0.0.223 and shipped v0.0.084 mid-round, so my five
-commits were renumbered to 0.0.230–0.0.235 before anything was pushed. Two
-files that were not mine (`.claude/settings.json`, `e.txt`) were swept into a
-`git add -A` and taken back out — staged files belong to whoever owns the
-change.
+- [x] find why VSCode vanished when Claude arrived, and bring it back — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] Claude set only on the Claude conversation tab, never on a document — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] both app sets ticked = 6 free wheel slots, not 7 (app sets charge the cap) — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] set list split into sections: standard / app-aware / custom — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] real icons for VSCode, Chrome, Explorer instead of the generic window — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] Arrangement: short title, D-pad + Stack names, Default button below the lists — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] check ALL groups after the Win-in-Mouse corruption (slika 3) — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] root rule with teeth: a delivering session ends with the per-task final report (machine-wide) — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 1. Mic (Input set) non-English recognition — REAL debugging, not — DONE — closed 2026-08-06 by the owner's own confirmation, which is the evidence this task was waiting for: 'nije otvoreno, to je odavno zavrseno i radi kako treba sve vezano za MIC i setup'. Root cause on record: the engine was pinned to the phone's FIRST system locale (English on his phone), so Serbian returned as garbage; the language became a USER CHOICE in the dictation card (v0.0.075) with five follow-ups in v0.0.078. Commit 0.0.239.
+- [x] 2. Layout resize panel: center Move handle (✥) — drag repositions the — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 3. Sets picker rotating state — DONE 0.0.169, two root causes: — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 4. Quality panel — DONE 0.0.169: FPS Max/10/15/30/60, res full/⅔/½, — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 5. Font-zoom staircase (layout focus only) — DONE 0.0.169: — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 6. Session close — DONE: APK 0.0.074 built (Kotlin compiled), full — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 7. Layout custom NAME — DONE 0.0.175 — the auto name (target window title) stays the — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 8. Z-ORDER — owner decided 2026-08-05 to KEEP the topmost band and — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 9. DONE 0.0.174 (root cause: no liveness signal at all — the server — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 10. DONE 0.0.175. Aspect panel Move handle icon — the ✥ glyph renders as a fat cross — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 11. Session close — DONE: APK 0.0.076 built, full desktop build passed — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 12. DONE — Controls editor obeys THE SPACE & LEGIBILITY LAW. Causes found: — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 13. DONE — Teeth: tests/test_layout_law.py (static, in --fast) + — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 14. DONE — Presets carry more than 4 commands: `buttons` is the pool, — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 15. DONE — Reserve commands per set (ACTIONS.md table), incl. the — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 16. DONE — Built-in rows tell the truth: load_client_builtins() parses — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 17. DONE — Session close: docs of every changed module updated — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 18. FOLLOW-UP RELEASE v0.0.079 — the Stop gate flagged theme.py as — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 19. Arrangement ladder (owner 1A) — raising a command must move the — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 20. Portrait ordinals (owner 1B) — a column has no left/right: the — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 21. Mouse side buttons (owner 2) — Btn 4 / Btn 5 (XBUTTON1/2) as — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 22. Settings pool (owner 4) — Next box and Snap removed; the five that — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 23. Icons for the commands that have none (owner 5) — proposal page — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 24. Region (owner 3) — free-size/free-position rectangle on the phone, — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 25. Claude app set (owner 6) — feasible; answer delivered. Needs (a) a — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it. NOTE: its `title` matcher was proven this session to be unable to fire for a real Claude conversation — superseded by task 41's per-layout tick.
+- [x] 27. Quality hierarchy (owner report: "desktop settings do nothing") — — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 26. Round close for 23–25 — the code shipped as 0.0.198 + 0.0.199; the — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 28. DONE 0.0.200 — a LOCK is never an excursion. ROOT CAUSE from the — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 29. DONE 0.0.201 — the topmost ledger. clear_topmost() existed and was — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 30. DONE 0.0.203 — the Traffic window. MeteredSocket wraps the socket — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 31. DONE 0.0.202 — the audit's remaining leaks, none of them reachable — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 32. DONE — SHIPPED as v0.0.081: — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 23. ICONS — the whole proposal page accepted by the owner. 40 new faces — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 24. REGION — free-size/free-position frame, captured and pasted at once — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 25. CLAUDE app set — `title` match beside `process` (Layout keeps the — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it. NOTE: same — the `title` match shipped here could never identify the conversation; task 41 replaced it with the owner's tick.
+- [x] 26. RENAME any button of any shipped set (owner's new requirement — the — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 27. Image dropped from the Attach pool. DONE 0.0.198. — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 33. "The PC calls you" (owner go + refinement 2026-08-05: several — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 33b. Thinking button (owner correction with the screenshot): `/effort` — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 34. DONE — the round close both rounds were waiting for. One release — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 35. PROBLEM: "zašto je WIN u MOUSE i nema RIGHT CLICK" — FIXED 0.0.210, — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 36. "Zašto je nestao VSCode kad si ubacio Claude" (editor half) — FIXED — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it. NOTE: the editor half holds; the phone half is what task 42 finished.
+- [x] 37. Thinking = a CHOICE, not a command (owner idea: "u centar da — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 38. Sets picker grouping + group NAMES (his item 2) — DONE 0.0.214 — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 39. Arrangement section (his item 3) — already done by the parallel — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 40. Round close — DONE: full desktop build (INPUT/PRESENCE/NOTIFY — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
+- [x] 41. WHY THE CLAUDE SET NEVER SHOWED — root cause PROVEN by probing his — DONE — root cause PROVEN by probing the owner's live PC, not reasoned: the Claude tab is named 'Ispravka UI dizajna meni…, Window 2: Editor Group 1' (the conversation), identical UIA ClassName to 'prompt.txt' beside it, empty AutomationId/HelpText, and a walk of the extracted window's whole tree (20 elements) with zero hits for claude/anthropic. Fixed by Layout.app_sets + layout_create.app_sets + layout_apps + client sets.js appSetMatches. Commits 0.0.230-0.0.231. Guard case 'the layout's own ticks win over the title guess' pins his real title.
+- [x] 42. WHY NINE COULD BE TICKED (his item 2, cap of 8 confirmed as LAW) — — DONE — two sources found and both closed: the cap ran only at tick time (now enforceWheelCap() normalizes the stored state, connection.js toasts what gave way) and the SHIPPED actions.json itself ticked 9 (Cursor now enabled:false); controls_editor._save() counts the same per-process reserve. Commits 0.0.230-0.0.231. Self-test: re-enabling Cursor -> guard FAILED 'the shipped actions.json ticks 9 sets by default'; reverted -> PASS 6/6.
+- [x] 43. THE LIVE BADGE (his item 3) — the app rows now carry "ON THE WHEEL — DONE — .sets-live badge on the app rows, refreshSetsMeta() updating counter+badges in place (rebuilding would re-arm GHOST_CLICK_MS and swallow the next tick); both tick paths made write-then-measure. Commit 0.0.230. Phone audit case rebuilt to open the picker at its widest (4 app sets, 2 badges lit, real names from actions.json) — PASS at 412x915 and 915x412. Self-test: padding 3px 210px -> FAIL both orientations, noClip:False; reverted -> PASS 19/19.
+- [x] 44. NOTIFICATIONS DON'T WORK EITHER (his follow-up question) — correct, — DONE — cause was not the code: ~/.claude/settings.json Stop hooks held only the four rules/hooks guards, agent_hook.py was never registered. Installed (verified via notify.agent_hook_installed() -> True) and ROADMAP H2 closed: main_window Settings-card checkbox + notify.set_agent_hook(), which copies the script out of the bundle when FROZEN and names a real python, saying so plainly when the PC has none. Commit 0.0.232. NOTIFY GATE 13/13.
+- [x] 45. STRUCTURE LAW — controls.js hit 1000 lines mid-round; the — DONE — controls.js hit 1019 lines and the PostToolUse guard blocked mid-round; the composition rules became client/sets.js (201 lines) with __about + __flow, client index rows + load order renumbered, load_test.js FILES order, docs-coverage tier. Commits 0.0.230, 0.0.234. Guards full PASS; client load test PASS with sets.js in place.
+- [x] 46. Round close — APK 0.0.085 + full desktop build (INPUT + PRESENCE + — DONE — APK 0.0.085 built (Kotlin compiled, 2.9 MB), full desktop build passed (INPUT + PRESENCE + NOTIFY gates, PyInstaller --selfcheck smoke test, signed exe + installer, 'OK: CompanyName=UVuruna FileVersion=0.0.085', 'OK: exe + installer signed'), GIT RELEASE published. Commits 0.0.235-0.0.239. Renumbered from 0.0.223 before pushing because the parallel session took that number and shipped v0.0.084 mid-round.
