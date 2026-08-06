@@ -53,3 +53,25 @@ is pending: a missing-but-supported model auto-triggers
 styles the Mic button via `__voiceState`, dictation keeps working online on
 the SAME language, and the moment the model lands the engine silently
 rebuilds on-device (owner approved the silent switch).
+
+## Nothing spoken is ever thrown away (owner 2026-08-06)
+His words, shouted: *"izgovorim 10 rečenica, mikrofon nije ništa upisao... ja
+pričam pola sata i neki program preseče i obriše sve što sam pričao"*.
+
+A listening round delivers its text **only at the end** (`onResults`). Every
+way a round can die before that — `ERROR_CLIENT` when something else takes the
+recognition service, a network drop, the engine restarting — used to take
+every word of that round with it, and the server log is full of exactly those
+lines (`Voice error 5 (online)`, over and over).
+
+So `EXTRA_PARTIAL_RESULTS` is ON, and `onPartialResults` keeps the running
+hypothesis in `partial` as a **rescue copy**. Nothing is sent from it while the
+round is alive — typing as he speaks would re-type the same sentence on every
+update. `deliver()` is the only exit: a final result wins and clears the copy;
+a round that dies without one types the copy instead. Either way the copy is
+dropped, so no sentence can be typed twice.
+
+This is the phone's half of the same failure the PC's
+[Focus Guard](../../server/__about/focus_guard.md) answers: there, a program
+that steals focus mid-dictation takes the window the words were meant for;
+here, the same interruption used to take the words themselves.

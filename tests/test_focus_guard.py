@@ -192,6 +192,75 @@ def check_the_thief_is_named_in_the_log() -> bool:
     return any(f"{THIEF:#x}" in line and "app99.exe" in line for line in records)
 
 
+# ═══════════════════ 2b. the layout is DEFENDED, not merely checked ═══════════════════
+def check_the_watcher_defends_without_a_keystroke() -> bool:
+    """Owner decree 2026-08-06: while the phone shows a layout, nothing may
+    take the keyboard out of it. Dictation is why waiting for a keystroke is
+    too late — the recognizer hands over a whole utterance at the END of a
+    round, so a thief mid-sentence destroys it instead of misplacing it."""
+    with_win32(fg=THIEF, alive=(MEMBER_A, THIEF))
+    raises = Raises().install()
+    reg = layout_with([MEMBER_A])
+    target = focus_guard.guard(reg, fresh_conn(active=0), False)
+    return target == MEMBER_A and raises == [(MEMBER_A, True)]
+
+
+def check_the_watcher_leaves_the_desktop_alone() -> bool:
+    """Outside a layout there is no fence to defend — only a memory of where
+    typing began. Fighting the whole desktop for it would be US stealing
+    focus, so the watcher does nothing there."""
+    with_win32(fg=THIEF, alive=(MEMBER_A, THIEF))
+    raises = Raises().install()
+    conn = fresh_conn()
+    conn["pin"], conn["pin_stale"] = MEMBER_A, False
+    focus_guard.guard(None, conn, False)
+    return not raises
+
+
+def check_the_watcher_sleeps_while_the_phone_is_away() -> bool:
+    """An excursion or a leave hands those windows back to the desk; pulling
+    focus to them there is the sin two earlier rounds were spent fixing."""
+    with_win32(fg=THIEF, alive=(MEMBER_A, THIEF))
+    raises = Raises().install()
+    reg = layout_with([MEMBER_A])
+
+    async def run(conn):
+        task = asyncio.ensure_future(focus_guard.watch(reg, conn))
+        await asyncio.sleep(focus_guard.WATCH_POLL_S * 3)
+        task.cancel()
+
+    away = fresh_conn(active=0)
+    away["away"] = True
+    asyncio.run(run(away))
+    if raises:
+        return False
+    # ...and it DOES defend the same layout when the phone is present.
+    asyncio.run(run(fresh_conn(active=0)))
+    return raises and raises[0] == (MEMBER_A, True)
+
+
+def check_one_thief_is_logged_once_not_every_poll() -> bool:
+    """Four polls a second against an app that fights back must not write the
+    server log by itself."""
+    with_win32(fg=THIEF, alive=(MEMBER_A, THIEF))
+    Raises().install()
+    records: list[str] = []
+
+    class Catch(logging.Handler):
+        def emit(self, record):
+            records.append(record.getMessage())
+
+    handler = Catch()
+    focus_guard.logger.addHandler(handler)
+    reg, conn = layout_with([MEMBER_A]), fresh_conn(active=0)
+    try:
+        for _ in range(5):
+            focus_guard.guard(reg, conn, False)
+    finally:
+        focus_guard.logger.removeHandler(handler)
+    return len(records) == 1
+
+
 # ═══════════════════ 3. the other half: the re-focus order ═══════════════════
 def check_refocus_leaves_the_keyboard_member_in_front() -> bool:
     """One excursion closes the socket, the page re-focuses the layout — and
@@ -298,6 +367,13 @@ CHECKS = [
      check_the_desktop_arms_on_the_first_key),
     ("the owner's own click re-arms the target", check_the_owners_own_click_re_arms_it),
     ("the thief is named in the log", check_the_thief_is_named_in_the_log),
+    ("the layout is DEFENDED without waiting for a keystroke",
+     check_the_watcher_defends_without_a_keystroke),
+    ("the watcher leaves the desktop alone", check_the_watcher_leaves_the_desktop_alone),
+    ("the watcher sleeps while the phone is away, defends while it is here",
+     check_the_watcher_sleeps_while_the_phone_is_away),
+    ("one thief is logged once, not on every poll",
+     check_one_thief_is_logged_once_not_every_poll),
     ("re-focus leaves the keyboard member in front",
      check_refocus_leaves_the_keyboard_member_in_front),
     ("prune moves the target off a closed window",

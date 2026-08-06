@@ -50,6 +50,30 @@ aiming at, and the phone had no way to be told.
    the last to find out is what made this bug cost three reports; a restored
    keystroke that logged nothing would only hide the next cause.
 
+## The layout is DEFENDED, not merely checked (owner decree 2026-08-06)
+His second message the same evening, shouting: *"kada uhvatimo fokus lejauta ne
+može nikakav program da izbaci fokus"* — and the reason a guard that only runs
+on a keystroke is not enough is dictation. Android's recognizer hands over a
+whole utterance **at the end** of a listening round, so a program that grabs
+focus while he speaks does not misplace one character: it takes the window his
+half hour of speech was meant for, and the round often dies with it (the phone
+now keeps a rescue copy of what it heard — [VoiceInput](../../android/__about/VoiceInput.md)).
+
+`watch(layouts, conn)` is therefore one task per connection, polling every
+`WATCH_POLL_S` (0.25 s): while the phone is showing a layout, a foreground
+outside its members is put back at once, by the cheapest route that works
+(`_refocus` — plain `SetForegroundWindow`, then the `AttachThreadInput` unlock,
+and only a minimized window pays for the full `raise_window`). The thief is
+logged once per `STEAL_LOG_QUIET_S`, so an app that fights back cannot write
+the log by itself.
+
+Two deliberate limits: the watcher **sleeps while the phone is away** (an
+excursion or a leave hands those windows back to the desk — pulling focus to
+them there is the sin two earlier rounds were spent fixing), and it **does not
+defend the desktop pin**, because outside a layout there is no fence, only a
+memory of where typing began; fighting the whole desktop for it would be us
+stealing focus.
+
 ## Which member holds the keyboard
 The target survives the connection, because the connection does not survive an
 excursion: a picker or a permission dialog closes the socket by rule

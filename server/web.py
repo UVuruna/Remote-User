@@ -350,6 +350,12 @@ def create_app(stream, hub: FrameHub | None, injector: InputInjector, token: str
             tasks.append(asyncio.create_task(_send_cursor(ws, injector)))
             tasks.append(asyncio.create_task(
                 presence.watchdog(ws, layouts, conn, active_client)))
+            # Nothing may take the keyboard out of the layout the phone is
+            # showing (owner decree 2026-08-06) — defended continuously, not
+            # only when a key arrives: dictation delivers at the END of a
+            # round, so a thief that strikes mid-sentence destroys the whole
+            # utterance instead of misplacing it.
+            tasks.append(asyncio.create_task(focus_guard.watch(layouts, conn)))
             if stream.mode == "jpeg":
                 await _send_config(ws, stream, token)
                 queue = hub.subscribe()

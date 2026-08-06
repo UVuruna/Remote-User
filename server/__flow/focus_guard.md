@@ -70,6 +70,27 @@ Before this, `focus()` raised members in list order, so the keyboard went to
 whichever window sat last in the grid — one excursion moved the owner's
 dictation into the other pane.
 
+## Algorithm — the defence (one task per connection)
+
+```mermaid
+flowchart TB
+    A["every WATCH_POLL_S (0.25 s)"] --> B{"a layout focused?"}
+    B -- no --> A2["sleep — the desktop pin is not defended"]
+    B -- yes --> C{"phone away / left?"}
+    C -- yes --> D["sleep — those windows belong to the desk now"]
+    C -- no --> E["guard(..., typing=False)"]
+    E --> F{"foreground inside the layout?"}
+    F -- yes --> A
+    F -- no --> G["_refocus(target) — SetForegroundWindow → AttachThreadInput<br/>→ full raise only if minimized"]
+    G --> H["log the thief, at most once per STEAL_LOG_QUIET_S"]
+    H --> A
+```
+
+Why the poll and not the keystroke: a listening round delivers its text only
+when it ENDS, so a thief that strikes mid-sentence takes the window half an
+hour of speech was meant for. A defence that waits for a key arrives after the
+damage.
+
 ## Gate
 `tests/test_focus_guard.py` (FOCUS GATE, step 0e of [build.py](../../setup/build.py)) —
 11 checks, no Windows and no browser: the fence, the fresh-connection case,

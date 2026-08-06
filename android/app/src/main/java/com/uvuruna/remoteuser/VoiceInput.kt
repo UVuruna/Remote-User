@@ -48,6 +48,16 @@ class VoiceInput(private val activity: Activity, private val js: (String) -> Uni
      *  while true no round may start and any running one is cancelled. */
     private var background = false
 
+    /** What has been recognized SO FAR in the running round (owner 2026-08-06,
+     *  shouting: "izgovorim 10 rečenica, mikrofon nije ništa upisao... neki
+     *  program preseče i obriše sve što sam pričao"). A round delivers its
+     *  text only at the END, so a round that dies — ERROR_CLIENT when
+     *  something else takes over, a network drop, a service restart — used to
+     *  take every spoken word with it. The partial hypothesis is kept here and
+     *  typed out when a round dies without a final, so speech is never simply
+     *  deleted. Cleared by a final result, which always wins over it. */
+    private var partial = ""
+
     /** True while the beep-carrying streams are muted for a listening
      *  session (owner round 4: the round beeps irritate — mutable via the
      *  card's checkbox, default muted). */
@@ -222,7 +232,11 @@ class VoiceInput(private val activity: Activity, private val js: (String) -> Uni
                     RecognizerIntent.EXTRA_LANGUAGE_MODEL,
                     RecognizerIntent.LANGUAGE_MODEL_FREE_FORM
                 )
-                putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false)
+                // ON since 2026-08-06, and not to type as he speaks: the
+                // partial is the RESCUE COPY of a round that may never reach
+                // its final result (see `partial`). Nothing is sent from it
+                // while the round is alive.
+                putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
                 // ONE language everywhere — the chosen one. (The on-device
                 // language-switch extras exist, but a wanted-but-missing
                 // language riding along silently heard NOTHING — the round-1
@@ -351,18 +365,31 @@ class VoiceInput(private val activity: Activity, private val js: (String) -> Uni
             })
     }
 
+    /** Type what this round produced. The final result wins; if there is none,
+     *  the kept partial is used, because losing what he already said is the
+     *  one outcome this whole subsystem may not have. Either way the rescue
+     *  copy is dropped afterwards, so nothing is ever typed twice. */
+    private fun deliver(text: String?) {
+        val out = if (!text.isNullOrBlank()) text else partial
+        partial = ""
+        if (out.isNotBlank()) {
+            js("window.__voiceResult && __voiceResult(${JSONObject.quote(out)})")
+        }
+    }
+
     private val listener = object : RecognitionListener {
         override fun onResults(results: Bundle?) {
-            val text = results
+            deliver(results
                 ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                ?.firstOrNull()
-            if (!text.isNullOrBlank()) {
-                js("window.__voiceResult && __voiceResult(${JSONObject.quote(text)})")
-            }
+                ?.firstOrNull())
             end("")
         }
 
         override fun onError(error: Int) {
+            // The round died. Whatever was already recognized is typed out
+            // instead of being thrown away with it (owner 2026-08-06) — the
+            // ERROR_CLIENT lines that fill his log are exactly these rounds.
+            deliver(null)
             // NO_MATCH / SPEECH_TIMEOUT are a quiet room, not failures — the
             // page starts the next round while ON. Every OTHER error goes to
             // the server log (never the screen).
@@ -382,7 +409,12 @@ class VoiceInput(private val activity: Activity, private val js: (String) -> Uni
         override fun onRmsChanged(rmsdB: Float) {}
         override fun onBufferReceived(buffer: ByteArray?) {}
         override fun onEndOfSpeech() {}
-        override fun onPartialResults(partialResults: Bundle?) {}
+        override fun onPartialResults(partialResults: Bundle?) {
+            val text = partialResults
+                ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                ?.firstOrNull()
+            if (!text.isNullOrBlank()) partial = text   // the rescue copy, nothing sent
+        }
         override fun onEvent(eventType: Int, params: Bundle?) {}
     }
 
