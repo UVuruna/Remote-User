@@ -111,12 +111,26 @@ SETTINGS = Path.home() / ".claude" / "settings.json"
 MARKER = "agent_hook.py"
 
 
-def hook_entry() -> dict:
-    command = f'"{sys.executable}" "{Path(__file__).resolve()}"'
+def hook_entry(script: Path | None = None, python: str | None = None) -> dict:
+    """The Stop-hook line. `script`/`python` are given by the desktop app's
+    own switch (ROADMAP H2): the packaged EXE has no interpreter inside it, so
+    it copies this file somewhere permanent and names a real python."""
+    command = f'"{python or sys.executable}" "{(script or Path(__file__)).resolve()}"'
     return {"matcher": "*", "hooks": [{"type": "command", "command": command}]}
 
 
-def install(remove: bool = False) -> int:
+def is_installed() -> bool:
+    """Whether THIS hook is currently registered — the desktop switch shows
+    the truth rather than remembering a setting of its own."""
+    try:
+        data = json.loads(SETTINGS.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return False
+    return MARKER in json.dumps(data.get("hooks", {}).get("Stop") or [])
+
+
+def install(remove: bool = False, script: Path | None = None,
+            python: str | None = None) -> int:
     try:
         data = json.loads(SETTINGS.read_text(encoding="utf-8")) if SETTINGS.exists() else {}
     except (OSError, json.JSONDecodeError) as e:
@@ -126,7 +140,7 @@ def install(remove: bool = False) -> int:
     stop = [h for h in hooks.get("Stop") or []
             if MARKER not in json.dumps(h)]          # drop any earlier copy
     if not remove:
-        stop.append(hook_entry())
+        stop.append(hook_entry(script, python))
     if stop:
         hooks["Stop"] = stop
     else:

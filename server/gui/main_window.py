@@ -18,8 +18,8 @@ from pathlib import Path
 from PySide6.QtCore import QSize, Qt, QTimer
 from PySide6.QtGui import QAction, QFontMetrics, QGuiApplication, QIcon, QPixmap
 from PySide6.QtWidgets import (
-    QComboBox, QFormLayout, QFrame, QHBoxLayout, QLabel, QMainWindow, QMenu,
-    QPushButton, QSystemTrayIcon, QVBoxLayout, QWidget,
+    QCheckBox, QComboBox, QFormLayout, QFrame, QHBoxLayout, QLabel, QMainWindow,
+    QMenu, QPushButton, QSystemTrayIcon, QVBoxLayout, QWidget,
 )
 
 import pairing
@@ -28,6 +28,7 @@ from config import BUNDLE_DIR, FROZEN, PROJECT_ROOT, SETTINGS, app_version, save
 from gui.controls_editor import ControlsEditor
 from gui.theme import QSS, card_shadow, repolish
 from gui.traffic_window import TrafficWindow
+from notify import agent_hook_installed, set_agent_hook
 from server_core import ServerController
 
 logger = logging.getLogger(__name__)
@@ -278,7 +279,47 @@ class MainWindow(QMainWindow):
         self.apply_btn.clicked.connect(self._apply_settings)
         apply_row.addWidget(self.apply_btn)
         box.addLayout(apply_row)
+
+        # ROADMAP H2 — the switch that installs the agent hook (owner
+        # 2026-08-06). The feature shipped in v0.0.081 and then sat silent on
+        # his own PC for a day because nobody had run `agent_hook.py
+        # --install`: an end user must never type a command, so the app does
+        # it. Takes effect at once — no Apply, nothing restarts.
+        self.notify_check = QCheckBox("Tell my phone when an agent finishes")
+        self.notify_check.setChecked(agent_hook_installed())
+        self.notify_check.toggled.connect(self._toggle_agent_hook)
+        box.addWidget(self.notify_check)
+        self.notify_caption = QLabel("")
+        self.notify_caption.setObjectName("caption")
+        self.notify_caption.setWordWrap(True)
+        box.addWidget(self.notify_caption)
+        self._show_notify_state()
         return card
+
+    def _show_notify_state(self) -> None:
+        self.notify_caption.setText(
+            "Claude Code will call this PC when a turn ends, and the PC passes "
+            "it to your phone by name."
+            if self.notify_check.isChecked() else
+            "Off — the phone stays quiet when a job on this PC finishes.")
+
+    def _toggle_agent_hook(self, on: bool) -> None:
+        """Install or remove the Claude Code Stop hook. The packaged EXE has no
+        interpreter inside it, so the script is copied somewhere permanent
+        (it must outlive an app update) and a real python is named — and when
+        this PC has none, the switch SAYS so instead of failing quietly."""
+        try:
+            ok, detail = set_agent_hook(on)
+        except OSError as e:  # noqa: BLE001 — a switch may never crash the app
+            ok, detail = False, str(e)
+            logger.error("agent hook switch failed: %s", e)
+        if not ok:
+            self.notify_check.blockSignals(True)
+            self.notify_check.setChecked(agent_hook_installed())
+            self.notify_check.blockSignals(False)
+            self.notify_caption.setText(detail)
+            return
+        self._show_notify_state()
 
     def _build_bottom_row(self) -> QHBoxLayout:
         row = QHBoxLayout()
