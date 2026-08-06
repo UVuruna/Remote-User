@@ -1,13 +1,32 @@
-SESSION: 2152f192-e6bb-4b94-b363-e35bd39777cd
-RELEASE: https://github.com/UVuruna/Remote-User/releases/tag/v0.0.082
+# Final Report — Round 10 (2026-08-06)
 
-- [x] find why VSCode vanished when Claude arrived, and bring it back — DONE — root cause: merge_shipped_pools keyed app sets by `process`; VSCode and Claude both carry `code`, so Claude merged ON TOP of VSCode and renamed it away. Fixed (keyed by name) in 0.0.210 by the parallel session after this session's diagnosis; guarded by tests/test_controls_sets.py "two sets of one process both survive a merge" (PASS); the %LOCALAPPDATA% copy self-heals at next server start. Verified on the real dialog offscreen: VSCode listed beside Claude.
-- [x] Claude set only on the Claude conversation tab, never on a document — DONE — client/controls.js titleMatches/DOC_TITLE (commit 0.0.213): word-boundary match, `title` list ["claude code","claude"], file-looking titles refused. Guard tests/test_app_set_wheel.py "only the Claude conversation wears the Claude set" (PASS: CLAUDE.md/transcript/claude.md all stay plain VSCode; the real Claude tab shows BOTH sets, as decreed).
-- [x] both app sets ticked = 6 free wheel slots, not 7 (app sets charge the cap) — DONE — appSetReserve() in client/controls.js + refusal toast and "N of 8 used — M held for app shortcuts" line in client/panels.js (commit 0.0.213). Guard "the reserve is the largest group that can appear at once" (PASS: VSCode+Claude=2, Chrome+Explorer+VSCode=1, master off=0).
-- [x] set list split into sections: standard / app-aware / custom — DONE — SECTIONS in server/gui/controls_editor.py, heading rows NoItemFlags, `_rows` row↔entry map, `_row_selected` translator (commit 0.0.214). Offscreen smoke: rows map [None,0..8,None,9..12,None,None]; empty Custom shows "(none yet — New set)".
-- [x] real icons for VSCode, Chrome, Explorer instead of the generic window — DONE — three stroke icons in client/icons.js, actions.json app sets repointed (commit 0.0.214); same table feeds the phone wheel and the desktop editor list.
-- [x] Arrangement: short title, D-pad + Stack names, Default button below the lists — DONE — caption "Arrangement", lists "D-pad (landscape)"/"Stack (portrait)", lone "Default" button in its own row under them; minimum RE-MEASURED 1363x715 and audited at min + 1.5x (tests/test_layout_audit_qt.py PASS; layout proof in .claude/layout-proof.md names this session).
-- [x] check ALL groups after the Win-in-Mouse corruption (slika 3) — DONE — root cause: _select wrote the PREVIOUS set's detail form into the NEW set's pool (setCurrentCell fired before the form was invalidated); fixed twice (order + ownership check) in 0.0.210, guard "switching sets never writes into another pool" (PASS). Pools regenerate from the shipped file on merge; verified offscreen: Mouse = click · right · middle · scroll · drag · x1 · x2 — Right is back, Win is out.
-- [x] root rule with teeth: a delivering session ends with the per-task final report (machine-wide) — DONE — rules/hooks/report_guard.py + rules/PLAN.md "The Final Report" (GATE) + root CLAUDE.md line, wired into ~/.claude/settings.json Stop hooks for ALL projects; root commit 0.1.032 pushed. Self-tested nine outcomes incl. block-on-missing-report, block-on-stale-session, block-on-DONE-without-evidence; this very file is the first live report it accepts.
+Shipped as **v0.0.085**:
+https://github.com/UVuruna/Remote-User/releases/tag/v0.0.085
 
-NOT DONE: nothing — every task above is DONE with evidence; the owner's device round on v0.0.082 remains his side (WAITING_ON_OWNER stays yes for rounds 6/7 confirmations).
+| # | Task (owner's words) | Status | Evidence |
+|---|---|---|---|
+| 41 | "zašto mi se ne pokazuje Claude controls" | **FIXED** | Root cause probed live on his PC: the Claude tab is named after the CONVERSATION ('Ispravka UI dizajna meni…'), identical UIA class to `prompt.txt`, empty AutomationId/HelpText, 20-element tree with zero "claude" hits. Fixed by `Layout.app_sets` — his own tick. Guard case "the layout's own ticks win over the title guess" pins his real title. |
+| 42 | "zašto mogu 9 opcija da uključim" — 8 is LAW | **FIXED** | Two sources: the cap ran only on a tap (now `enforceWheelCap()` normalizes stored state) and the SHIPPED actions.json ticked 9 (Cursor off by default). Desktop editor counts the same reserve. Self-test: re-enabling Cursor → "ticks 9 sets by default". |
+| 43 | "hoću da bude štiklirano pored onoga koji je aktivan" | **FIXED** | "ON THE WHEEL NOW" badge on the app rows; phone audit measures the picker with two badges lit. Self-test: 210px badge padding → FAIL at both orientations. |
+| 44 | "ni sistem notifikacija ne radi ???" | **FIXED** | Correct — `agent_hook.py` was never registered. Installed, and ROADMAP H2 closed with the Settings-card switch (reads the real state; handles frozen bundle + missing python honestly). |
+| 45 | THE STRUCTURE LAW (controls.js hit 1000) | **FIXED** | `client/sets.js` + about/flow + client index + load-test order + docs tier. |
+| 46 | Round close | **DONE** | APK 0.0.085, INPUT + PRESENCE + NOTIFY gates, PyInstaller smoke test, signed exe + installer, release published. |
+
+## Gates on the released tree
+
+guards 4/4 · APP-SET WHEEL 6/6 · INPUT GATE · PRESENCE GATE · NOTIFY GATE 13/13
+· Qt layout audit 4/4 · phone layout audit 19/19 · client load test.
+
+## Open on the owner's device
+
+Install v0.0.085 → make the Claude layout → tick **Claude** in the creation
+panel → the Claude set must ride beside VSCode. Then Settings → Sets: the
+counter must read 8 of 8, never 9, and both live sets must wear the badge.
+
+## Two-session note
+
+The parallel session took 0.0.223 and shipped v0.0.084 mid-round, so my five
+commits were renumbered to 0.0.230–0.0.235 before anything was pushed. Two
+files that were not mine (`.claude/settings.json`, `e.txt`) were swept into a
+`git add -A` and taken back out — staged files belong to whoever owns the
+change.
