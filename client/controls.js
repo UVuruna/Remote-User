@@ -549,11 +549,30 @@ function appSetOn(s) {
 // never its name, which the owner may have renamed to anything. A set with
 // no `title` matches the process as before, which is why VSCode and Claude
 // can ride together while only one of them knows it is Claude.
+//
+// The test is a WORD, not a substring, and a DOCUMENT never matches (owner
+// 2026-08-06, shouted): the Claude set may appear for the Claude conversation
+// tab and for nothing else — an open `CLAUDE.md`, a transcript, any text file
+// is still plain VSCode. Substring matching gave every one of those the
+// Claude wheel. `title` may be a list, so one set can name several spellings.
+const DOC_TITLE = /\.[a-z0-9]{1,6}(\s*[-—•]\s*.*)?$/i;  // "CLAUDE.md", "notes.txt — Visual Studio Code"
+
+function titleMatches(want, title) {
+  const t = String(title || "").toLowerCase().trim();
+  if (!t || DOC_TITLE.test(t)) return false;  // a file tab is a document
+  const words = (Array.isArray(want) ? want : [want]).map((w) => String(w).toLowerCase());
+  return words.some((w) => w && new RegExp(`(^|[^a-z0-9])${w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}([^a-z0-9]|$)`).test(t));
+}
+
 function appSetMatches(s, lay) {
   const proc = String(lay.process || "").toLowerCase();
   if (!proc.includes(String(s.process || "").toLowerCase())) return false;
+  // No title test = the whole app. VSCode therefore rides ALONGSIDE Claude on
+  // a Claude tab — the owner's rule of 2026-08-06: this is the one case where
+  // two app sets appear at once, and both are wanted (the editor's own
+  // shortcuts stay reachable while Claude's commands are there).
   if (!s.title) return true;
-  return String(lay.title || "").toLowerCase().includes(String(s.title).toLowerCase());
+  return titleMatches(s.title, lay.title);
 }
 
 function visibleAppSets() {
@@ -561,6 +580,23 @@ function visibleAppSets() {
   if (layoutActive === null || !layouts[layoutActive]) return [];
   const lay = layouts[layoutActive];
   return appSets.filter((s) => appSetMatches(s, lay) && appSetOn(s));
+}
+
+// How many wheel slots the ticked app sets RESERVE (owner 2026-08-06). Not
+// simply "how many are ticked": Chrome, Explorer and VSCode can never appear
+// together, so ticking all of them costs one slot, not three. What costs two
+// is VSCode + Claude — the one case where two sets share a process and both
+// are meant to ride. The charge is therefore the largest group of ticked sets
+// that CAN match at the same time, which is the group per process.
+function appSetReserve() {
+  if (!setsPrefs().apps) return 0;
+  const perProcess = {};
+  for (const s of appSets) {
+    if (!appSetOn(s)) continue;
+    const key = String(s.process || "").toLowerCase();
+    perProcess[key] = (perProcess[key] || 0) + 1;
+  }
+  return Math.max(0, ...Object.values(perProcess));
 }
 
 // The wheel's composition (owner 2026-08-05, revised same day): Mouse, Input
@@ -572,9 +608,13 @@ function visibleAppSets() {
 const WHEEL_MAX = 8;
 
 function visibleCount() {
-  // What the picker charges against the cap — the transient app set is free.
+  // What the picker charges against the cap. App sets are NOT free (owner
+  // 2026-08-06): a Claude tab puts BOTH VSCode and Claude on the wheel, so
+  // ticking both leaves room for six others, not seven. Counting them as
+  // free let the picker promise eight while the wheel silently dropped two.
   return categories.filter((c) => c.required || setOn(c)).length +
-    customSets.filter(setOn).length;
+    customSets.filter(setOn).length +
+    appSetReserve();
 }
 
 function allCats() {
@@ -739,6 +779,13 @@ function makeActionButton(btn, pos) {
     } else if (b.kind === "dictation") {
       keepFocus(el, openDictationPanel);
     }
+  } else if (btn.text && btn.options) {
+    // A command whose answer is a CHOICE (owner idea 2026-08-05): the phone
+    // shows the options itself and sends the finished command, instead of
+    // typing a bare `/effort` and leaving another app's menu to be poked at.
+    const icon = btn.icon && ICONS[btn.icon] ? btn.icon : null;
+    el = makeButton(icon ? "ctl" : "ctl text", icon, btn.label || btn.text);
+    keepFocus(el, () => openChoicePanel(btn));
   } else if (btn.text) {
     // TYPED commands (owner 2026-08-05, for the Claude set): the things he
     // wants — how much usage is left, switch model, set the thinking level —

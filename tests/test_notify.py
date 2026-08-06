@@ -138,6 +138,30 @@ def main() -> int:
             and notifs[1][3] != notifs[0][3])               # ...so they never merge
         results["the phone speaks the agent's name"] = (
             len(speaks) == 2 and "Remote User" in speaks[0][1])
+        # The command CHOOSER (owner idea 2026-08-05): picking a level must
+        # send the FINISHED command, not the bare one. This is the same page
+        # and socket, so it rides along here rather than paying for a second
+        # browser launch.
+        # NB: the snippet must not EVALUATE to the wrapper function —
+        # Playwright would try to serialise it and call it with null.
+        page.evaluate("""() => {
+          window.__sent = [];
+          const real = window.send;
+          window.send = (m) => { window.__sent.push(m); return real(m); };
+        }""")
+        page.evaluate("openChoicePanel({label:'Thinking', text:'/effort',"
+                      " options:['low','medium','high','xhigh','max','auto']})")
+        page.wait_for_selector("#choice-panel .sets-row.choice", timeout=4000)
+        page.locator("#choice-panel .sets-row.choice", has_text="xhigh").first.tap()
+        page.wait_for_function("window.__sent.some(m => m.type === 'paste_text')",
+                               timeout=4000)
+        sent = [m for m in page.evaluate("window.__sent") if m["type"] == "paste_text"]
+        results["a picked option sends the finished command"] = (
+            len(sent) == 1 and sent[0]["text"] == "/effort xhigh"
+            and sent[0]["enter"] is True)
+        results["the chooser closes on the pick"] = page.evaluate(
+            "document.getElementById('choice-panel').hidden") is True
+
         errors = page.evaluate("window.__pageErrors || []")
         results["no page errors"] = not errors
         browser.close()

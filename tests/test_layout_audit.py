@@ -139,6 +139,12 @@ def main() -> int:
                  "openRegionPanel();"
                  "rgBox.x = 4; rgBox.y = 4; rgBox.w = 60; rgBox.h = 60; rgApply()",
                  "closeRegionPanel()", "#region-panel .rg-bar"),
+                # The command chooser (owner idea 2026-08-05): the longest
+                # real case is the Claude Thinking button's six levels.
+                ("Command chooser",
+                 "openChoicePanel({label:'Thinking', text:'/effort',"
+                 " options:['low','medium','high','xhigh','max','auto']})",
+                 "closeChoicePanel()", "#choice-panel .sets-card"),
                 ("Aspect panel + Move handle",
                  "layouts = [{name:'Audit', process:'x', orient:'portrait',"
                  " icon:null, ratio:[600,1000], pos:0.5}]; openAspectPanel(0)",

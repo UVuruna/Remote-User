@@ -97,13 +97,14 @@ Shipped reserves, off until you tick them:
 | **Explorer** | Rename · New dir · Delete · Up | **Next tab** · **Prev tab** · New tab · Back · Forward · Copy path · Details · Search |
 | **Claude** | Usage · Model · **Thinking** · Stop | Menu · Mode · Compact · New chat · Rewind · Context · Agents · Resume · Focus |
 
-**Thinking does not RUN a command** (owner correction 2026-08-05, with the
-screenshot): `/effort` takes a level (`low|medium|high|xhigh|max|…`), and
-typing it alone would only print its usage. The button therefore types
-`/effort` and stops — the panel with the Effort slider and the level list is
-then on screen, and the level is picked with the cursor. That is the same
-`"enter": false` trick as the Menu button; anything whose ANSWER is a choice
-belongs in this shape.
+**Thinking asks, it does not run** (owner correction 2026-08-05, with the
+screenshot — then his better idea the same evening): `/effort` takes a level
+(`low|medium|high|xhigh|max|auto`), so sending it alone only prints its usage.
+The first fix typed `/effort` and stopped, leaving Claude's own menu on screen
+for the finger. The shipped answer is his: the button carries `options`, the
+PHONE shows the levels in the middle of the screen, and one tap sends the
+finished `/effort xhigh` + Enter. Anything whose answer is a small fixed set
+belongs in that shape — `options`, not a half-typed line.
 
 `Zones` is no longer shipped — zone chords are a **custom** category the owner
 adds when wanted (this file is hand-editable; a future desktop editor will
@@ -208,6 +209,7 @@ A button is one of:
 
 `modifier+…+key` — modifiers held while the last key is tapped.
 
+- **A choice** — `{ "label": "Thinking", "text": "/effort", "options": ["low", "medium", "high", "xhigh", "max", "auto"] }` (owner idea 2026-08-05). Some commands are not an action but a QUESTION: `/effort` takes a level, so sending it alone only prints its usage. A button with `options` shows the choices ON THE PHONE, in the middle of the screen, and one tap sends the finished command (`/effort xhigh` + Enter). It beats leaving another app's menu open for the finger to poke at, because it does not depend on that menu staying where it is. Options may be plain strings or `{ "label": …, "value": … }` when the two differ.
 - **Modifiers:** `ctrl`, `alt`, `shift`, `win`
 - **Keys:** letters, digits, `f1`–`f24`, `` ` `` (backquote), `/` (`slash`), or named: `enter`, `esc`, `tab`, `space`, `backspace`, `delete`, `insert`, `home`, `end`, `pageup`, `pagedown`, `left`, `up`, `right`, `down`, `minus`, `plus`, and the media keys `playpause`, `mute`, `volup`, `voldown`, `medianext`, `mediaprev`, `mediastop`
 
