@@ -463,10 +463,12 @@ def audit_window(app: QApplication, name: str, factory) -> list[str]:
         window.resize(width, height)
         app.processEvents()
         problems += audit(window, f"{name} @ {label} {width}x{height}")
-        if label == "minimum":
+        if label == "minimum" and width * height >= 40_000:
             # The gate's SHOT: the window at the size the grade has to hold
             # at. Written by the audit itself so the picture can never be of
-            # a different build than the one just measured.
+            # a different build than the one just measured. A window too small
+            # to be a designed surface (the chord recorder is 219x66 of "press
+            # a key now") gets no shot rather than a strip nobody can grade.
             SHOT_DIR.mkdir(parents=True, exist_ok=True)
             window.grab().save(str(SHOT_DIR / shot_name(name)))
 

@@ -1,9 +1,23 @@
 SESSION: 0eb7cbe2-d779-4c9d-9ec7-0a3d35d0897a (round 11b - the overlap the first fix did NOT fix, and the two teeth that were missing)
-- MainWindow (server/gui/main_window.py) - MIN 503x937 - SHOT .claude/shots/MainWindow.png - GRADE 9/10 - audit: PASS
+- MainWindow (server/gui/main_window.py, server/gui/sizing.py, server/gui/theme.py) - MIN 503x937 - SHOT .claude/shots/MainWindow.png - GRADE 9/10 - audit: PASS
 - MainWindow reopened from the tray (server/gui/main_window.py) - MIN 503x937 - SHOT .claude/shots/MainWindow__reopened_from_the_tray.png - GRADE 9/10 - audit: PASS
 - ControlsEditor (server/gui/controls_editor.py) - MIN 723x858 - SHOT .claude/shots/ControlsEditor.png - GRADE 9/10 - audit: PASS
 - TrafficWindow (server/gui/traffic_window.py) - MIN 593x486 - SHOT .claude/shots/TrafficWindow.png - GRADE 8/10 - audit: PASS
-- ChordRecorder (server/gui/controls_widgets.py) - MIN 219x66 - SHOT .claude/shots/ChordRecorder.png - GRADE 8/10 - audit: PASS
+- Command chooser, phone (client/style.css) - MIN 412x915 - SHOT .claude/shots/Command_chooser.png - GRADE 9/10 - audit: PASS
+- Sets picker, phone (client/style.css) - MIN 412x915 - SHOT .claude/shots/Sets_picker.png - GRADE 9/10 - audit: PASS
+
+The ChordRecorder is NOT listed: it was not touched this round, and its shot is
+a 378-byte strip because the window genuinely is one - 219x66 of "Press the key
+combination now...". A line claiming to grade that as a designed window would be
+the kind of paperwork this gate exists to stop.
+
+The two phone lines are new here, and they are the point of this round's second
+half: a colour verdict can only be given on a PICTURE, which is why the owner
+had to report it by eye. The phone audit now writes its own screenshots at
+portrait size, so every panel it measures can also be looked at. Command chooser
+9/10 - the six rows the owner photographed as white-on-white now read as dark
+rows with a border and white text, aligned, evenly spaced. Sets picker 9/10 -
+"ON THE WHEEL NOW" is dark ink on the accent instead of near-white at 1.96:1.
 
 WHAT THE FIRST FIX GOT WRONG, and how it was found: the owner installed v0.0.086
 and the link was STILL drawn across the QR. Reproduced here at his real 125%

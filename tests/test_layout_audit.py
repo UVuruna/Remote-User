@@ -42,7 +42,14 @@ def _fit_rect_audit() -> bool:
     return True
 
 
-def _check_panel(page, name, open_js, close_js, card_sel):
+SHOT_DIR = PROJECT / ".claude" / "shots"
+
+
+def _shot_name(name: str) -> str:
+    return "".join(c if c.isalnum() else "_" for c in name).strip("_") + ".png"
+
+
+def _check_panel(page, name, open_js, close_js, card_sel, shot=False):
     """Opens one overlay panel and verifies: the card sits fully inside the
     viewport, the page gained no horizontal overflow, and no element inside
     the card is clipped horizontally."""
@@ -125,6 +132,14 @@ def _check_panel(page, name, open_js, close_js, card_sel):
         }""",
         card_sel,
     )
+    if shot:
+        # The layout gate grades a PICTURE, and a picture of the phone's own
+        # panels is the only thing that can carry a colour verdict — the very
+        # thing the owner had to report by eye on 2026-08-06. Written by the
+        # audit itself, so it can never be of a different build than the one
+        # just measured.
+        SHOT_DIR.mkdir(parents=True, exist_ok=True)
+        page.screenshot(path=str(SHOT_DIR / _shot_name(name)))
     page.evaluate(close_js)
     passed = (ok["inView"] and ok["noPageScroll"] and ok["noClip"]
               and not ok["contrast"])
@@ -261,7 +276,8 @@ def main() -> int:
                  "creating = null; closeLayoutPanel()",
                  "#layout-panel .lay-card"),
             ):
-                passed, detail = _check_panel(page, name, open_js, close_js, sel)
+                passed, detail = _check_panel(page, name, open_js, close_js, sel,
+                                              shot=(label == "portrait 412x915"))
                 results[f"{name} @ {label}"] = passed
                 if not passed:
                     print(f"  DETAIL {name} @ {label}: {detail}")
