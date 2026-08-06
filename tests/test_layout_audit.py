@@ -13,10 +13,13 @@ Run:  .venv\\Scripts\\python tests/test_layout_audit.py
 Requires the same toolchain as the input gate (playwright + chromium).
 """
 
+import json
 import sys
 import threading
 import time
 from pathlib import Path
+
+PROJECT = Path(__file__).resolve().parent.parent
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "server"))
@@ -102,6 +105,12 @@ def main() -> int:
             page.on("pageerror", lambda e: errors.append(str(e)))
             page.goto(f"http://127.0.0.1:{gate.PORT}/?token={gate.TOKEN}")
             page.wait_for_selector("#group-left button", timeout=8000)
+            # The REAL app sets, from the shipped actions.json — the panels
+            # that list them must be measured with the names the owner will
+            # actually see, not with invented short ones.
+            page.evaluate("(sets) => { window.APP_SETS = sets; }",
+                          json.loads((PROJECT / "actions.json")
+                                     .read_text(encoding="utf-8"))["app_sets"])
 
             for name, open_js, close_js, sel in (
                 # FULLEST state (owner 2026-08-05): the panel states the PC's
@@ -116,7 +125,19 @@ def main() -> int:
                  " bitrate:'6M', bitrate_mid:'2400k', bitrate_low:'600k'});"
                  "openQualityPanel()",
                  "closeQualityPanel()", "#quality-panel .sets-card"),
-                ("Sets picker", "openSetsPanel()", "closeSetsPanel()",
+                # FULLEST state (owner 2026-08-06): every app set listed AND
+                # two of them wearing the live badge, which is the widest a
+                # row in this card can get — checkbox + icon + the longest set
+                # name + "ON THE WHEEL NOW". The badge exists because he asked
+                # to SEE which app set is actually riding, so it is exactly
+                # the thing that must not be cut off.
+                ("Sets picker",
+                 "appSets = APP_SETS;"
+                 "layouts = [{name:'Claude', process:'code.exe',"
+                 " title:'Ispravka UI dizajna meni…', orient:'portrait',"
+                 " icon:null, app_sets:['VSCode','Claude'], ratio:null, pos:0.5}];"
+                 "layoutActive = 0; openSetsPanel()",
+                 "layoutActive = null; layouts = []; closeSetsPanel()",
                  "#sets-panel .sets-card"),
                 ("Dictation card",
                  "window.Android = {"
@@ -157,17 +178,22 @@ def main() -> int:
                  "Code [Administrator]', process:'x', orient:'portrait',"
                  " icon:null, ratio:[600,1000], pos:0.5}]; openLayoutPicker()",
                  "closeLayoutPanel()", "#layout-panel .lay-card"),
+                # The rename card also carries the per-layout app-shortcut
+                # ticks (owner 2026-08-06) — the long title AND four chips.
                 ("Rename card",
+                 "appSets = APP_SETS;"
                  "layouts = [{name:'Claude Code - Remote User - Visual Studio "
-                 "Code [Administrator]', process:'x', orient:'portrait',"
-                 " icon:null, ratio:null, pos:0.5}]; openRenamePanel(0)",
+                 "Code [Administrator]', process:'code.exe', orient:'portrait',"
+                 " icon:null, app_sets:['VSCode','Claude'], ratio:null, pos:0.5}];"
+                 "openRenamePanel(0)",
                  "closeLayoutPanel()", "#layout-panel .lay-card"),
                 # Creation panel: the Name field is prefilled with the chosen
                 # window's (long) title and must fit the card.
                 ("Creation panel + Name field",
+                 "appSets = APP_SETS;"
                  "creating = newCreation('tap');"
                  "creating.slots = [{hwnd:1, title:'Claude Code - Remote User"
-                 " - Visual Studio Code [Administrator]', process:'x',"
+                 " - Visual Studio Code [Administrator]', process:'code.exe',"
                  " icon:null, tab:null, x:0.5, y:0.5}];"
                  "renderCreationPanel()",
                  "creating = null; closeLayoutPanel()",
