@@ -45,15 +45,23 @@ function setsRow(s, locked) {
   cb.disabled = locked;
   if (!locked) {
     cb.addEventListener("change", () => {
-      if (cb.checked && visibleCount() >= WHEEL_MAX) {
+      // Both tick paths ask the SAME question the same way (owner 2026-08-06):
+      // write the choice, then measure — the two used to disagree (this one
+      // measured before saving with >=, the app one after saving with >), and
+      // a rule the code states twice is a rule the code will break once.
+      const p = setsPrefs();
+      const was = p.state[s.name];
+      p.state[s.name] = cb.checked;
+      saveSetsPrefs(p);
+      if (cb.checked && visibleCount() > WHEEL_MAX) {
         cb.checked = false;
+        if (was === undefined) delete p.state[s.name]; else p.state[s.name] = was;
+        saveSetsPrefs(p);
         showToast(`The wheel holds ${WHEEL_MAX} sets — untick one first`);
         return;
       }
-      const p = setsPrefs();
-      p.state[s.name] = cb.checked;
-      saveSetsPrefs(p);
       refreshCategories();
+      refreshSetsMeta();  // the counter and the live badges follow every tick
     });
   }
   const ic = document.createElement("span");
@@ -63,9 +71,11 @@ function setsRow(s, locked) {
   return row;
 }
 
-// One app-aware set (VSCode, Claude, Chrome, Explorer). It carries no wheel
-// count — it rides with a focused layout — so this row only says whether it
-// may appear at all, per device.
+// One app-aware set (VSCode, Claude, Chrome, Explorer). It costs a wheel slot
+// like any other set, and it also carries a LIVE badge: which of them is on
+// the wheel right now, for the layout currently focused (owner 2026-08-06 —
+// "hoću da bude štiklirano pored onoga koji je aktivan, da bude uočljivo").
+// Ticked means allowed; the badge means actually riding this second.
 function appSetRow(s) {
   const row = document.createElement("label");
   row.className = "sets-row app";
@@ -89,12 +99,33 @@ function appSetRow(s) {
       return;
     }
     refreshCategories();
+    refreshSetsMeta();
   });
   const ic = document.createElement("span");
   ic.className = "sets-ic";
   ic.innerHTML = svg(s.icon && ICONS[s.icon] ? s.icon : "newwin");
-  row.append(cb, ic, document.createTextNode(s.name));
+  const badge = document.createElement("span");
+  badge.className = "sets-live";
+  badge.dataset.set = s.name;
+  badge.textContent = "on the wheel now";
+  row.append(cb, ic, document.createTextNode(s.name), badge);
   return row;
+}
+
+// The two things that change without a re-render: the counter line and which
+// app sets are live. Updated in place — rebuilding the card would re-arm the
+// ghost-click armor and swallow the owner's next tick.
+function refreshSetsMeta() {
+  const count = setsPanel.querySelector(".sets-count");
+  if (count) {
+    const reserve = appSetReserve();
+    count.textContent = `${visibleCount()} of ${WHEEL_MAX} used`
+      + (reserve ? ` — ${reserve} held for app shortcuts` : "");
+  }
+  const live = new Set(visibleAppSets().map((s) => s.name));
+  for (const b of setsPanel.querySelectorAll(".sets-live")) {
+    b.classList.toggle("on", live.has(b.dataset.set));
+  }
 }
 
 function openSetsPanel() {
@@ -104,7 +135,7 @@ function openSetsPanel() {
   const reserve = appSetReserve();
   card.innerHTML = `<h2>Wheel sets</h2>
     <p class="sets-sub">Mouse, Input and Settings are always in the wheel. Pick the rest — up to ${WHEEL_MAX} in total, app shortcuts included. New sets are made on the PC (Remote User window → Controls…).</p>
-    <p class="sets-sub">${visibleCount()} of ${WHEEL_MAX} used${reserve ? ` — ${reserve} held for app shortcuts` : ""}.</p>`;
+    <p class="sets-sub sets-count">${visibleCount()} of ${WHEEL_MAX} used${reserve ? ` — ${reserve} held for app shortcuts` : ""}</p>`;
 
   const list = document.createElement("div");
   list.className = "sets-list";
@@ -149,6 +180,7 @@ function openSetsPanel() {
 
   setsPanel.appendChild(card);
   setsPanel.hidden = false;
+  refreshSetsMeta();
   setsOpened.t = performance.now();
 }
 

@@ -15,14 +15,15 @@ The phone side of Remote User — a plain web page served by the PC server, load
 | `render.js` | Algorithmic | canvas drawing, view transform, dual-mode (H.264 MSE / JPEG) frame decode — loads 2nd — [about](__about/render.md) · [flow](__flow/render.md) |
 | `input-geometry.js` | Algorithmic | finger→PC coordinate mapping (pointer under the finger since 2026-08-02), scroll inertia — loads 3rd — [about](__about/input-geometry.md) · [flow](__flow/input-geometry.md) |
 | `icons.js` | Standard | the icon set both the phone and the desktop Controls editor draw from — loads 4th — [about](__about/icons.md) |
-| `controls.js` | Algorithmic | on-screen chrome: keyboard capture, anywhere wizard, update banner, upload, D-pad groups, wheel, corner buttons, toast — loads 5th — [about](__about/controls.md) · [flow](__flow/controls.md) |
-| `panels.js` | Standard | Settings overlays: Sets picker + dictation setup card (split from controls.js 2026-08-05) — loads 6th — [about](__about/panels.md) |
-| `quality.js` | Standard | stream quality: this device's overrides of the PC's settings — prefs + panel, hierarchy-aware (split 2026-08-05) — loads 7th — [about](__about/quality.md) |
-| `region.js` | Standard | the Region grab: a free frame the finger sizes, captured and pasted on the PC — loads 8th — [about](__about/region.md) |
-| `notify.js` | Standard | the PC's notices: Android notification + speech + toast, named per agent — loads 9th — [about](__about/notify.md) |
-| `layouts.js` | Algorithmic | layout bar, layout list, aspect-ratio panel (+ Move handle), creation flow, loading cube — loads 10th — [about](__about/layouts.md) · [flow](__flow/layouts.md) |
-| `gestures.js` | Algorithmic | canvas pointer-event dispatch: pinch-zoom + font-zoom staircase + the single-finger touchMode gestures — loads 11th — [about](__about/gestures.md) · [flow](__flow/gestures.md) |
-| `connection.js` | Algorithmic | WebSocket lifecycle, protocol message handlers, visibility-gated session — loads 12th (starts the page) — [about](__about/connection.md) · [flow](__flow/connection.md) |
+| `sets.js` | Algorithmic | which sets ride the wheel: per-device prefs, app-aware matching by the owner's per-layout ticks, THE CAP OF 8 (split from controls.js 2026-08-06) — loads 5th — [about](__about/sets.md) · [flow](__flow/sets.md) |
+| `controls.js` | Algorithmic | on-screen chrome: keyboard capture, anywhere wizard, update banner, upload, D-pad groups, wheel, corner buttons, toast — loads 6th — [about](__about/controls.md) · [flow](__flow/controls.md) |
+| `panels.js` | Standard | Settings overlays: Sets picker + dictation setup card (split from controls.js 2026-08-05) — loads 7th — [about](__about/panels.md) |
+| `quality.js` | Standard | stream quality: this device's overrides of the PC's settings — prefs + panel, hierarchy-aware (split 2026-08-05) — loads 8th — [about](__about/quality.md) |
+| `region.js` | Standard | the Region grab: a free frame the finger sizes, captured and pasted on the PC — loads 9th — [about](__about/region.md) |
+| `notify.js` | Standard | the PC's notices: Android notification + speech + toast, named per agent — loads 10th — [about](__about/notify.md) |
+| `layouts.js` | Algorithmic | layout bar, layout list, aspect-ratio panel (+ Move handle), creation flow, loading cube — loads 11th — [about](__about/layouts.md) · [flow](__flow/layouts.md) |
+| `gestures.js` | Algorithmic | canvas pointer-event dispatch: pinch-zoom + font-zoom staircase + the single-finger touchMode gestures — loads 12th — [about](__about/gestures.md) · [flow](__flow/gestures.md) |
+| `connection.js` | Algorithmic | WebSocket lifecycle, protocol message handlers, visibility-gated session — loads 13th (starts the page) — [about](__about/connection.md) · [flow](__flow/connection.md) |
 
 ## Connections
 

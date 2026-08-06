@@ -447,6 +447,28 @@ body.hidden-controls #update-banner { display: none; }
 .sets-row.apps { border-top: 1px solid var(--border); margin-top: 6px; padding-top: 14px; }
 .sets-ic { width: 22px; height: 22px; color: var(--text-secondary); }
 .sets-ic svg { width: 22px; height: 22px; }
+/* Which app set is riding the wheel RIGHT NOW, for the focused layout (owner
+   2026-08-06 — the tick says "allowed", this says "live", and he asked for it
+   to be unmissable). Reserved even when off so a row never changes height. */
+.sets-live {
+  margin-left: auto;
+  flex: 0 0 auto;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .02em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: transparent;
+  background: transparent;
+  border: 1px solid transparent;
+}
+.sets-live.on {
+  color: var(--bg);
+  background: var(--accent);
+  border-color: var(--accent);
+}
 .sets-done {
   display: block;
   margin: 14px auto 0;

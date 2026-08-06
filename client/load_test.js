@@ -76,6 +76,7 @@ const FILES = [
   "render.js",
   "input-geometry.js",
   "icons.js",
+  "sets.js",
   "controls.js",
   "panels.js",
   "quality.js",

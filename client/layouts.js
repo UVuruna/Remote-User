@@ -390,12 +390,39 @@ function openRenamePanel(index) {
   const field = nameField(lay.name || "");
   card.append(h, sub, field);
 
+  // The same app-shortcut ticks the creation panel offers, changeable for
+  // good (owner 2026-08-06). They live here rather than as a third button in
+  // every list row — the row already carries rename and ratio, and a fourth
+  // control is what THE SPACE & LEGIBILITY LAW keeps catching.
+  const picked = Array.isArray(lay.app_sets)
+    ? lay.app_sets.slice()
+    : appSets.filter((s) => appSetMatches(s, lay)).map((s) => s.name);
+  if (appSets.length) {
+    const appLbl = document.createElement("p");
+    appLbl.className = "lay-sub";
+    appLbl.textContent = "App shortcuts on the wheel for this layout:";
+    const appRow = document.createElement("div");
+    appRow.className = "lay-row";
+    const draw = () => {
+      appRow.innerHTML = "";
+      appSets.forEach((s) => appRow.appendChild(
+        layChip(s.name, picked.includes(s.name), () => {
+          const i = picked.indexOf(s.name);
+          if (i >= 0) picked.splice(i, 1); else picked.push(s.name);
+          draw();
+        })));
+    };
+    draw();
+    card.append(appLbl, appRow);
+  }
+
   const actions = document.createElement("div");
   actions.className = "lay-actions";
   actions.appendChild(layChip("Cancel", false, openLayoutPicker)); // back one step
   actions.appendChild(layChip("Save", true, () => {
     const name = field.value.trim();
     if (name && name !== lay.name) send({ type: "layout_rename", index, name });
+    if (appSets.length) send({ type: "layout_apps", index, sets: picked });
     closeLayoutPanel();
   }));
   card.appendChild(actions);
@@ -711,11 +738,24 @@ function newCreation(source) {
     entries: null,          // list source: [{kind, hwnd, title, process, icon, tab?, x?, y?}]
     slots: [],              // chosen cells, in order — slot 1 names the layout
     name: null,             // owner-typed name; null = follow slot 1's title
+    apps: null,             // app sets ticked for it; null = follow the process
     mode: "solo",
     grid: null,
     orient: window.innerHeight >= window.innerWidth ? "portrait" : "wide",
     awaitingTap: false,
   };
+}
+
+// What the app-shortcut ticks start out as: every set whose `process` matches
+// the layout's first window, EXCEPT one that also demands a title — Claude is
+// exactly that case, and pre-ticking it for every VSCode window would put its
+// slash commands on the wheel of a plain editor. The owner adds it with one
+// tap on the Claude layout; everything else is right without him.
+function autoAppSets(slots) {
+  const proc = String(slots.length ? slots[0].process || "" : "").toLowerCase();
+  return appSets
+    .filter((s) => !s.title && proc.includes(String(s.process || "").toLowerCase()))
+    .map((s) => s.name);
 }
 
 function openSourceChooser() {
@@ -891,6 +931,29 @@ function renderCreationPanel() {
     card.appendChild(row);
   }
 
+  // WHICH app shortcuts this layout carries (owner 2026-08-06). This exists
+  // because no string on the PC can identify Claude Code: it names its VSCode
+  // tab after the conversation ("Ispravka UI dizajna meni…"), wears the same
+  // UIA class as a file tab, and hides its content from accessibility — so
+  // the automatic title test could never fire, and the owner marks it here
+  // instead. Pre-ticked from the process match, which is right for Chrome,
+  // Explorer and plain VSCode and only ever needs a correction for Claude.
+  if (appSets.length) {
+    const appLbl = document.createElement("p");
+    appLbl.className = "lay-sub";
+    appLbl.textContent = "App shortcuts on the wheel for this layout:";
+    const appRow = document.createElement("div");
+    appRow.className = "lay-row";
+    if (c.apps === null) c.apps = autoAppSets(c.slots);
+    appSets.forEach((s) => appRow.appendChild(
+      layChip(s.name, c.apps.includes(s.name), () => {
+        const i = c.apps.indexOf(s.name);
+        if (i >= 0) c.apps.splice(i, 1); else c.apps.push(s.name);
+        renderCreationPanel();
+      })));
+    card.append(appLbl, appRow);
+  }
+
   const orientRow = document.createElement("div");
   orientRow.className = "lay-row";
   orientRow.appendChild(layChip("Portrait", c.orient === "portrait", () => {
@@ -913,6 +976,9 @@ function renderCreationPanel() {
       type: "layout_create",
       slots: c.slots.map((s) => ({ hwnd: s.hwnd, tab: s.tab, x: s.x, y: s.y })),
       name: (c.name || "").trim(), // "" = keep the window/tab title
+      // An empty list is a real answer ("no app shortcuts here") — the server
+      // only falls back to the process guess when the key is missing entirely.
+      app_sets: c.apps || autoAppSets(c.slots),
       mode: c.mode,
       grid: c.grid,
       orient: c.orient,
