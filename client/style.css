@@ -362,14 +362,24 @@ body.hidden-controls #update-banner { display: none; }
 #choice-panel[hidden] { display: none; }
 
 /* A chooser row is a BUTTON, not a checkbox row — one tap picks and closes
-   (owner 2026-08-05: "korisnik odabere a program automatski odradi"). */
+   (owner 2026-08-05: "korisnik odabere a program automatski odradi").
+
+   And BECAUSE it is a button it must say what it is made of. `.sets-row`
+   declares no background, which is harmless on a <label> and a disaster on a
+   <button>: the WebView paints its own light default chrome underneath, and
+   this rule's near-white text landed on it — six unreadable white bars
+   (owner screenshot 2026-08-06, "dizajn elemenata i bojama"). Surface and
+   border are stated here, never inherited from the platform. */
 .sets-row.choice {
   justify-content: flex-start;
   font: 600 16px system-ui, sans-serif;
+  background: var(--glass-fill);
+  border: 1px solid var(--border);
   color: var(--text-primary);
   text-align: left;
   padding: 14px var(--space-m);
 }
+.sets-row.choice:active { background: var(--accent-glow); border-color: var(--accent); }
 
 /* Dictation setup card rows (owner round 2, 2026-08-05) */
 .sets-row.dict { justify-content: flex-start; }
@@ -464,8 +474,12 @@ body.hidden-controls #update-banner { display: none; }
   background: transparent;
   border: 1px solid transparent;
 }
+/* `var(--bg)` did not exist — this project's dark token is `--surface-0`, and
+   an undefined variable makes the whole declaration invalid, so the badge
+   inherited the row's near-white ink and sat at 1.96:1 on the accent (owner
+   2026-08-06; found by the audit's new contrast check, not by eye). */
 .sets-live.on {
-  color: var(--bg);
+  color: var(--surface-0);
   background: var(--accent);
   border-color: var(--accent);
 }
