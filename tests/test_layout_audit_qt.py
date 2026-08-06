@@ -389,8 +389,11 @@ def check_item_views(window: QWidget) -> list[str]:
     return problems
 
 
-def ancestor_spacer_slack(widget: QWidget, window: QWidget) -> list[str]:
-    """Spacers between `widget` and `window` that were handed real space."""
+def ancestor_spacer_slack(widget: QWidget, window: QWidget,
+                          vertical: bool) -> list[str]:
+    """Spacers between `widget` and `window` handed real space IN THE
+    SCROLLING AXIS - a 328x0 stretch holds no vertical space and must
+    not convict a legitimately scrolling list (Aviator, 2026-08-06)."""
     slack = []
     node = widget.parentWidget()
     while node is not None:
@@ -400,7 +403,9 @@ def ancestor_spacer_slack(widget: QWidget, window: QWidget) -> list[str]:
                 item = layout.itemAt(index)
                 if isinstance(item, QSpacerItem):
                     geometry = item.geometry()
-                    if max(geometry.width(), geometry.height()) > SLACK_TOLERANCE:
+                    extent = (geometry.height() if vertical
+                              else geometry.width())
+                    if extent > SLACK_TOLERANCE:
                         slack.append(
                             f"{node.__class__.__name__}"
                             f"'{node.objectName() or '-'}' holds a spacer of "
@@ -420,7 +425,8 @@ def check_scroll_with_free_space(window: QWidget) -> list[str]:
                           ("horizontally", widget.horizontalScrollBar())):
             if bar is None or bar.maximum() <= 0:
                 continue
-            slack = ancestor_spacer_slack(widget, window)
+            slack = ancestor_spacer_slack(
+                widget, window, vertical=(name == "vertically"))
             if slack:
                 problems.append(
                     f"SCROLL+SLACK {widget.__class__.__name__} "
