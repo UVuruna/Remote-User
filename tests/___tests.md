@@ -171,6 +171,31 @@ no real windows — the window calls are stubbed.
 Run: `.venv\Scripts\python tests/test_presence.py` — also a fail-closed step
 in `build.py` (0c/6).
 
+### `test_focus_guard.py` — Focus Gate
+Proves that what the phone types lands where the owner is LOOKING. `SendInput`
+has no target, so before 2026-08-06 every dictated character went to whatever
+window Windows called the foreground at that instant — and when something on
+the PC took focus mid-sentence (an app starting, a dialog, another agent's
+editor window), the rest of the sentence went there, silently, with the stream
+still showing the PC. The owner reported it three times in one evening, and
+the fourth report WAS the bug: a sentence dictated for another project arrived
+in this project's session.
+
+Eleven checks, no Windows and no browser (every user32 call is answered by a
+fake): the layout fence refusing a foreign foreground and handing focus back
+to the member being typed into; the fence holding on a fresh connection with
+no pin yet; a move the owner made INSIDE the layout being followed, not
+fought; a dialog of a member (Save As…) counting as that member; the desktop
+pin arming on the burst's first key and restoring `topmost=False`; a click /
+`next_input` / layout switch re-arming it while a thief arms nothing; the
+thief being NAMED in the log; `LayoutRegistry.focus()` raising the keyboard
+member LAST (one excursion used to move dictation into the other pane);
+`prune` moving the target off a window closed at the desk; and the whole path
+through the real `web._receive_input` dispatcher.
+
+Run: `.venv\Scripts\python tests/test_focus_guard.py` — also a fail-closed
+step in `build.py` (0e/6).
+
 ### Guard tests (THE LAWS — rules/CODE.md → Enforcement, rules/DOCS.md → Enforcement)
 Five standard-named guard tests, a fast runner, and a small shared helper —
 four installed 2026-08-01 alongside the MD-First 2.0 docs migration, the fifth

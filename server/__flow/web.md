@@ -26,7 +26,11 @@ flowchart TB
 
 ```mermaid
 flowchart TB
-    A["msg = json.loads(ws.receive_text())"] --> B{msg.type}
+    A["msg = json.loads(ws.receive_text())"] --> A2{"kind in TYPING_KINDS?"}
+    A2 -- yes --> A3["focus_guard.guard — the target is decided BEFORE the keys<br/>(layout = fence · desktop = pin · thief named in the log)"]
+    A2 -- "no, in RETARGET_KINDS" --> A4["focus_guard.retarget — the owner chose a window himself"]
+    A3 --> B{msg.type}
+    A4 --> B
     B -- pointer_down/up/click --> C{button in BUTTON_FLAGS?}
     C -- no --> Z[log error, ignore]
     C -- yes, click --> D["injector.click(button) — current cursor position"]
