@@ -52,3 +52,12 @@ current one is written, so re-running after a move never leaves two.
   would make every agent's last word an exception.
 - **Paths are read at call time, not baked in.** A rotated token or a changed
   port keeps working without reinstalling the hook.
+
+## Installed by a switch, not a command (owner 2026-08-06)
+
+`install()` takes `script` and `python` now, and `is_installed()` reports the
+current state. Both exist for the desktop app's own switch (ROADMAP H2): the
+packaged EXE has no interpreter inside it and its copy of this file is
+replaced by every update, so the app copies the script to the user directory
+and names a real interpreter. Run from a checkout, the defaults are still
+"this file, this python" and `--install` behaves exactly as before.

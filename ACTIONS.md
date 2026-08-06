@@ -196,6 +196,51 @@ The picker states it — `N of 8 used — M held for app shortcuts` — and refu
 the tick that would overflow instead of letting the wheel drop a set you
 already chose.
 
+### The cap is a LAW over the stored state (owner 2026-08-06)
+
+He found **nine sets ticked by default** on his own phone. Two things fed
+that, and both are now guarded:
+
+1. the cap was tested only at the MOMENT of a tick, so anything that arrived
+   another way walked past it — prefs saved before app sets started charging,
+   and this file's own defaults. `enforceWheelCap()` normalizes the stored
+   state when the sets arrive, and the phone toasts what had to give way;
+2. **this file** shipped seven categories enabled with two slots reserved —
+   nine. `Cursor` is off by default now, and `tests/test_app_set_wheel.py`
+   refuses a shipped `actions.json` that ticks past the cap.
+
+Which set gives way is his own rule — *"ako samo 7 osnovnih onda mora jedan od
+claude i vscode da bude iskljucen"*: the app-aware set first, then the last
+optional basic. Only a set in the **charging group** frees a slot; unticking
+Chrome while VSCode and Claude hold two between them changes nothing.
+
+### How an app set knows it belongs (owner 2026-08-06)
+
+`title` above is now the **fallback**, kept only for layouts made before this
+version. What decides is the owner's own tick, made when the layout is created
+(and changeable any time from the layout list's pencil) and carried in
+`layout_state` as `app_sets`.
+
+The ticks exist because the automatic test was **proven impossible**. Probing
+the owner's PC with a Claude Code conversation open found:
+
+```
+WIN 'Ispravka UI dizajna meni… - Remote User - Visual Studio Code [Administrator]'
+     TAB 'Ispravka UI dizajna meni…, Window 2: Editor Group 1'   ← Claude
+     TAB 'prompt.txt, Editor Group 1'                            ← a file
+```
+
+Claude Code names its tab after the **conversation**. "claude" appears
+nowhere; the UIA `ClassName` matches the file tab's exactly; `AutomationId`
+and `HelpText` are empty; and a walk of the extracted window's whole tree
+(20 elements) finds no "claude" or "anthropic", because VSCode does not expose
+webview content to accessibility. The only string that ever matched the old
+test was `CLAUDE.md` — the document case the owner banned.
+
+The creation panel pre-ticks every set whose `process` matches and that has no
+`title` demand, which is right for Chrome, Explorer and plain VSCode. Claude
+is the one tap he adds himself.
+
 ## Button kinds
 
 A button is one of:

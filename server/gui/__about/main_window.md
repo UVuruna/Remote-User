@@ -106,3 +106,20 @@ load with a warning (documented non-fatal path).
   It runs every second and reaches the network (pairing re-checks); an
   `OSError` from a cosmetic refresh could abort the process — and take the
   daemon server thread, and every always-on-top window it was holding, with it.
+
+## "Tell my phone when an agent finishes" (ROADMAP H2, owner 2026-08-06)
+
+A checkbox in the Settings card, below Apply. It installs or removes the Claude
+Code `Stop` hook, and it takes effect **at once** — nothing restarts, which is
+why it sits below the Apply row rather than in the form above it.
+
+It reads the real hook state on every open (`agent_hook_installed()`), so it
+can never claim an installation that is not there. When the switch cannot be
+armed — a packaged app on a PC with no Python for the hook host to run — the
+checkbox springs back and the caption says why. This whole control exists
+because the feature shipped working in v0.0.081 and stayed silent for a day
+on the owner's own PC: nobody had run the install command, and an end user
+must never type one.
+
+The logic lives in [notify](../../__about/notify.md); this window owns the
+checkbox and its caption.

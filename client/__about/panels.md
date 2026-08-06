@@ -50,3 +50,25 @@ downloadable models + the online service's list) sit behind a collapsed
 The tap that OPENS a panel can deliver a late synthetic click that lands on
 whichever row opened under the finger, silently toggling it. A capture-phase
 click handler swallows every click within `GHOST_CLICK_MS` of opening.
+
+## The live badge (owner 2026-08-06)
+
+*"hoću da bude štiklirano pored onoga koji je aktivan tj koji može da se
+prikaže — da bude uočljivo bolje"*
+
+The app rows carry two different facts, and the picker used to show only one:
+
+- the **tick** = this set is ALLOWED on this phone;
+- the **badge** = it is on the wheel RIGHT NOW, for the layout in focus.
+
+`refreshSetsMeta()` updates the badges and the counter line **in place** after
+every tick. It deliberately does not rebuild the card: re-rendering re-arms the
+ghost-click armor (`GHOST_CLICK_MS`) and would swallow the next tap — the
+picker feeling like it "rotates" is a bug this project has already paid for
+once. The badge keeps its box when off (transparent, not removed), so a row
+never changes height as focus moves.
+
+Both tick handlers now **write, then measure**. They used to disagree — the
+basic row measured before saving with `>=`, the app row after saving with `>`
+— and a rule the code states twice is a rule the code will break once. The
+cap itself moved to [sets.js](sets.md); this module only renders it.

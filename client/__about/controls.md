@@ -197,3 +197,11 @@ APK the PC actually serves.
 - `micStart()` opens the dictation setup card ([Panels](panels.md)) instead
   of listening when no language was ever chosen; the `dictation` builtin
   (Settings → Language, replacing `anywhere` in the defaults) reopens it.
+
+## The composition rules left (2026-08-06)
+
+`controls.js` hit 1 000 lines, so everything that answers *"which sets exist
+on this phone right now, and may they all fit"* — the per-device prefs, the
+app-aware matching, the cap of 8 — moved to **[sets.js](sets.md)**, loaded
+before this file. What stays here is the wheel, the D-pad groups and what a
+button DOES. `groups` (which category each side shows) stayed with them.

@@ -146,11 +146,19 @@ four installed 2026-08-01 alongside the MD-First 2.0 docs migration, the fifth
   conversation wears the Claude set — never an open `CLAUDE.md`, a transcript
   or any other document carrying the word — and an app set charges a wheel
   slot, the charge being the largest group that can appear together (VSCode +
-  Claude = 2, Chrome + Explorer + VSCode = 1). The functions under test are
-  pure but live in a browser script, so the guard lifts the block out of
-  `client/controls.js` and runs it in **node** with stubs — the same
-  parse-the-client trick the desktop editor uses for `ICONS`/`BUILTINS`.
-  Skipped, not failed, when node is absent.
+  Claude = 2, Chrome + Explorer + VSCode = 1). Two more rules from the same
+  day: **the owner's per-layout ticks beat the guess** — the guard pins his
+  real title, `Ispravka UI dizajna meni…`, on which the automatic test can
+  only ever find VSCode (Claude Code names its tab after the conversation, and
+  nothing else on the window identifies it) — and **the cap of 8 is a law over
+  the STORED state**: the SHIPPED `actions.json` may not tick past it, and a
+  state that already does is brought back by dropping the app set first.
+  It runs `client/sets.js` **whole** in node behind stubs for the prefs bridge
+  and the focused layout, rather than lifting a block out of it: the cap is
+  enforced across storage, so stubbing the storage away would prove the
+  arithmetic and miss the law. Skipped, not failed, when node is absent.
+  Self-tested by re-enabling `Cursor` in the shipped file — "the shipped
+  actions.json ticks 9 sets by default".
 - `run_guards.py` — runs all guards (or, with `--fast`, structure +
   config-sections + the static layout law — a grep costs nothing, so it
   belongs in the PostToolUse hook's budget; the Qt audit is full-run only,
