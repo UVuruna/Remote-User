@@ -556,3 +556,50 @@ NOWHERE in the repo — no exit path drops the topmost band.
       tick Claude in the creation panel, and the Claude set must be on the
       wheel beside VSCode. Then open Settings → Sets: the counter must read
       8 of 8, never 9, and the two live sets must wear the badge.
+
+## Round 11 (owner's two screenshots + his mid-turn message, 2026-08-06)
+
+- [x] 47. OVERLAP WITH THE UPDATE BUTTON (screenshot 1) and OVERLAP AT THE QR
+      (screenshot 2) - ONE bug: the declared minimum was measured once, at
+      construction, and an explicit setMinimumSize makes Qt stop enforcing the
+      layout's own minimum. The update button (hidden until GitHub answers) and
+      the notify caption (three lines when it reports a failure) arrive later,
+      so their rows had nowhere to go and were painted over the QR and its
+      link. `_settle_minimum` is callable any time now, `_content_signature`
+      decides when, `showEvent` settles on every show, and `_resettle` refuses
+      to measure while the window is in the tray (a second hole: a hidden child
+      reports invisible, so closing to the tray looked like a content change
+      and re-measured a floor with no update button in it).
+      EVIDENCE: the audit reproduces the bug at 43 px - "CLIPPED MainWindow:
+      has 820x837, needs at least 618x880" - and passes at 869x880 with the
+      fix; the tray path is its own registered case, self-tested the same way
+      (869x837 against a needed 880). Commits 0.0.250, 0.0.254.
+- [x] 48. NOTIFICATIONS CANNOT BE SWITCHED ON in the installed app - the root
+      cause was NOT the switch's code: setup/agent_hook.py was never in
+      PyInstaller's --add-data, so the frozen app resolved it under
+      _internal\setup and failed with [Errno 2]. Bundled now; a PAYLOAD GATE
+      fails the build when any BUNDLE_DIR path is missing (the smoke test
+      could never catch this - it imports the module graph, not the data); and
+      a missing script is reported as the APP being broken, in plain language,
+      with the path left in the log.
+      EVIDENCE: dist/RemoteUser/_internal/setup/agent_hook.py exists in this
+      round's build. Commit 0.0.251.
+- [x] 49. THE CHECKBOX IS VISUALLY UNACCEPTABLE - correct: a QCheckBox had no
+      QSS rule at all, so it took the base QWidget rule and carried the
+      WINDOW's surface0 into the surface1 card. Transparent label now, and an
+      indicator that is the same control surface as a combo, accent-filled
+      when on, wearing a DRAWN tick (assets/check.svg, bundled and verified in
+      the build).
+      EVIDENCE: the window rendered offscreen to PNG and inspected as an image
+      - an audit cannot see a colour. Commit 0.0.252.
+- [x] 50. THE TICK BESIDE THE SELECTED SETS - delivered. Every set row carries
+      it at the right edge (CHECK_ROLE + SectionDelegate._paint_tick, drawn,
+      never a font glyph), in a reserved 22 px column so no name can be
+      painted under it; app sets wear none, because they ride with a focused
+      layout and not on their own.
+      EVIDENCE: the list rendered to PNG and inspected - six Standard sets
+      ticked, three not, App-aware clean; the editor's declared minimum grew
+      by exactly those 22 px. Commit 0.0.253.
+- [x] 51. Round close - full desktop build (INPUT + PRESENCE + NOTIFY gates,
+      payload gate, PyInstaller smoke test, signed exe and installer) and GIT
+      RELEASE v0.0.086.
