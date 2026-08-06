@@ -117,6 +117,10 @@ def make_main_window() -> QWidget:
     from gui.main_window import MainWindow
     updates.check = lambda: None  # no network inside a guard run
     window = MainWindow(_fake_controller())
+    # BEFORE the show below: without this, every guard run FLASHED the real
+    # main window on the owner's screen and stole his keyboard focus
+    # (reported 2026-08-06 - "iskaču ekrani... prekidaju komunikaciju").
+    window.setAttribute(Qt.WidgetAttribute.WA_DontShowOnScreen, True)
     window.show()                 # …and only THEN does the later content arrive
     window._refresh()             # the guided text + QR, as the owner sees it
     _late_content(window)
@@ -146,6 +150,7 @@ def make_main_window_from_tray() -> QWidget:
     from gui.main_window import MainWindow
     updates.check = lambda: None
     window = MainWindow(_fake_controller())
+    window.setAttribute(Qt.WidgetAttribute.WA_DontShowOnScreen, True)  # same flash guard as above
     window.show()
     window._refresh()
     window.hide()                 # to the tray — the refresh timer keeps ticking
