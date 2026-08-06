@@ -43,11 +43,11 @@ import re
 from pathlib import Path
 
 from PySide6.QtCore import QSize, Qt
-from PySide6.QtGui import QFontMetrics
+from PySide6.QtGui import QColor, QFontMetrics, QPen
 from PySide6.QtWidgets import (
     QCheckBox, QComboBox, QDialog, QGridLayout, QGroupBox, QHBoxLayout, QLabel,
     QLineEdit, QListWidget, QListWidgetItem, QMessageBox, QPushButton,
-    QTableWidgetItem, QVBoxLayout, QWidget,
+    QStyledItemDelegate, QTableWidgetItem, QVBoxLayout, QWidget,
 )
 
 from config import BUNDLE_DIR, FROZEN, PROJECT_ROOT, SETTINGS, USER_DIR, apply as apply_settings
@@ -68,6 +68,60 @@ SECTIONS = (
     ("app_sets", "App-aware"),     # appear only while a matching layout is focused
     ("custom_sets", "Custom"),     # made here by the owner
 )
+
+# Sections that simply DO NOT EXIST while they hold nothing (owner 2026-08-06:
+# "CUSTOM SAM REKAO DA NE SME DA SE VIDI ako je PRAZAN"). A heading over an
+# apologetic "(none yet)" line is a placeholder, not information — the "New
+# set" button is what invites; the section appears with its first set.
+HIDE_WHEN_EMPTY = {"custom_sets"}
+
+HEADER_ROLE = Qt.ItemDataRole.UserRole + 1  # marks a section-heading row
+
+
+class SectionDelegate(QStyledItemDelegate):
+    """Paints the set list's section headings.
+
+    A heading is not a small bold set name — it is a TITLE: centered, a size
+    larger than the rows it governs, and separated from the section above by a
+    real horizontal LINE (owner 2026-08-06). Qt's own item painting gives none
+    of that, so both the metrics (`sizeHint`) and the rule (`paint`) live here
+    rather than in per-item font fiddling that only made the text bold.
+    """
+
+    GAP = 16   # breathing room above a heading, where the rule is drawn
+    TOP = 6    # …and above the very first one, which has nothing to divide
+
+    def initStyleOption(self, option, index) -> None:
+        super().initStyleOption(option, index)
+        if not index.data(HEADER_ROLE):
+            return
+        option.displayAlignment = Qt.AlignmentFlag.AlignCenter
+        font = option.font
+        font.setBold(True)
+        font.setPointSizeF(font.pointSizeF() * 1.25)
+        option.font = font
+        option.fontMetrics = QFontMetrics(font)
+
+    def sizeHint(self, option, index) -> QSize:
+        size = super().sizeHint(option, index)
+        if index.data(HEADER_ROLE):
+            size.setHeight(size.height() + (self.GAP if index.row() else self.TOP))
+        return size
+
+    def paint(self, painter, option, index) -> None:
+        super().paint(painter, option, index)
+        if not index.data(HEADER_ROLE) or not index.row():
+            return  # the first heading divides nothing — no rule above it
+        painter.save()
+        # Derived from the TEXT colour, not `palette.mid()`: on the dark theme
+        # this dialog actually runs in, mid() is a hair off the background and
+        # the rule was invisible — a line nobody can see is no line at all.
+        rule = QColor(option.palette.text().color())
+        rule.setAlpha(110)
+        painter.setPen(QPen(rule))
+        y = option.rect.top() + self.GAP // 2
+        painter.drawLine(option.rect.left() + 6, y, option.rect.right() - 6, y)
+        painter.restore()
 
 WHEEL_MAX = 8  # sets in the phone's wheel at once; Mouse/Input/Settings are
                # `required` (never hidden), everything else toggles
@@ -241,6 +295,8 @@ class ControlsEditor(QDialog):
         left = QVBoxLayout()
         left.addWidget(QLabel("Sets"))
         self.set_list = QListWidget()
+        self._section_delegate = SectionDelegate(self.set_list)
+        self.set_list.setItemDelegate(self._section_delegate)
         self.set_list.currentRowChanged.connect(self._row_selected)
         left.addWidget(self.set_list, 1)
         row = QHBoxLayout()
@@ -464,14 +520,13 @@ class ControlsEditor(QDialog):
         return f"   ({s.get('process', '?')})"
 
     def _header_item(self, text: str) -> QListWidgetItem:
-        """A section heading: readable, and NOT a set — Qt must never let the
+        """A section heading: a title, and NOT a set — Qt must never let the
         selection land on it, or `_select` would be handed a row that has no
-        entry behind it."""
+        entry behind it. How it LOOKS is `SectionDelegate`'s job; the role is
+        what tells the delegate this row is a heading."""
         item = QListWidgetItem(text)
         item.setFlags(Qt.ItemFlag.NoItemFlags)
-        font = item.font()
-        font.setBold(True)
-        item.setFont(font)
+        item.setData(HEADER_ROLE, True)
         return item
 
     def _reload_list(self, select: int = 0) -> None:
@@ -486,9 +541,11 @@ class ControlsEditor(QDialog):
         self._rows: list[int | None] = []
         entry = 0
         for key, heading in SECTIONS:
+            sets = self.data.get(key) or []
+            if not sets and key in HIDE_WHEN_EMPTY:
+                continue  # the section is born with its first set
             self.set_list.addItem(self._header_item(heading))
             self._rows.append(None)
-            sets = self.data.get(key) or []
             for s in sets:
                 item = QListWidgetItem(f"{s.get('name', '?')}{self._set_suffix(key, s)}")
                 body = self.icons.get(s.get("icon", ""))
@@ -497,13 +554,6 @@ class ControlsEditor(QDialog):
                 self.set_list.addItem(item)
                 self._rows.append(entry)
                 entry += 1
-            if not sets:
-                # An empty section still has to say what it is FOR — a blank
-                # gap under "Custom" reads as a bug, not as an invitation.
-                hint = self._header_item("      (none yet — “New set”)")
-                hint.setFont(self.set_list.font())
-                self.set_list.addItem(hint)
-                self._rows.append(None)
         self.set_list.blockSignals(False)
         self.set_list.setIconSize(QSize(22, 22))
         self._fit_set_list()
