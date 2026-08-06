@@ -140,7 +140,7 @@
     {
       "process": "code",
       "name": "VSCode",
-      "icon": "newwin",
+      "icon": "vscode",
       "buttons": [
         { "label": "Sidebar",  "icon": "sidebar",  "chord": "ctrl+b" },
         { "label": "Palette",  "icon": "palette",  "chord": "ctrl+shift+p" },
@@ -156,13 +156,14 @@
     },
     {
       "process": "code",
-      "title": "claude",
+      "title": ["claude code", "claude"],
       "name": "Claude",
       "icon": "claude",
       "buttons": [
         { "label": "Usage",    "icon": "usage",    "text": "/usage",   "enter": true },
         { "label": "Model",    "icon": "model",    "text": "/model",   "enter": true },
-        { "label": "Thinking", "icon": "thinking", "text": "/effort",  "enter": false },
+        { "label": "Thinking", "icon": "thinking", "text": "/effort",
+          "options": ["low", "medium", "high", "xhigh", "max", "auto"] },
         { "label": "Stop",     "icon": "esc",      "key": "escape" },
         { "label": "Menu",     "icon": "list",     "text": "/", "enter": false },
         { "label": "Mode",     "icon": "cmode",    "chord": "shift+tab" },
@@ -178,7 +179,7 @@
     {
       "process": "chrome",
       "name": "Chrome",
-      "icon": "newwin",
+      "icon": "chrome",
       "buttons": [
         { "label": "New tab",  "icon": "newtab",   "chord": "ctrl+t" },
         { "label": "Close",    "icon": "closetab", "chord": "ctrl+w" },
@@ -195,7 +196,7 @@
     {
       "process": "explorer",
       "name": "Explorer",
-      "icon": "newwin",
+      "icon": "explorer",
       "buttons": [
         { "label": "Rename",  "icon": "edit",   "chord": "f2" },
         { "label": "New dir", "icon": "newdir", "chord": "ctrl+shift+n" },

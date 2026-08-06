@@ -345,7 +345,8 @@ body.hidden-controls #update-banner { display: none; }
    Same overlay pattern as the wizard. */
 #sets-panel,
 #quality-panel,
-#dictation-panel {
+#dictation-panel,
+#choice-panel {
   position: fixed;
   inset: 0;
   z-index: 50;
@@ -357,7 +358,18 @@ body.hidden-controls #update-banner { display: none; }
 }
 #sets-panel[hidden],
 #quality-panel[hidden],
-#dictation-panel[hidden] { display: none; }
+#dictation-panel[hidden],
+#choice-panel[hidden] { display: none; }
+
+/* A chooser row is a BUTTON, not a checkbox row — one tap picks and closes
+   (owner 2026-08-05: "korisnik odabere a program automatski odradi"). */
+.sets-row.choice {
+  justify-content: flex-start;
+  font: 600 16px system-ui, sans-serif;
+  color: var(--text-primary);
+  text-align: left;
+  padding: 14px var(--space-m);
+}
 
 /* Dictation setup card rows (owner round 2, 2026-08-05) */
 .sets-row.dict { justify-content: flex-start; }

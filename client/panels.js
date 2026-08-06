@@ -74,8 +74,20 @@ function appSetRow(s) {
   cb.checked = appSetOn(s);
   cb.addEventListener("change", () => {
     const p = setsPrefs();
+    const was = p.appState[s.name];
     p.appState[s.name] = cb.checked;
     saveSetsPrefs(p);
+    // An app set costs a wheel slot like any other (owner 2026-08-06) — and
+    // VSCode + Claude cost two, because a Claude tab shows both. Refuse the
+    // tick that would overflow instead of letting the wheel drop a set the
+    // owner already chose, and say why.
+    if (cb.checked && visibleCount() > WHEEL_MAX) {
+      cb.checked = false;
+      if (was === undefined) delete p.appState[s.name]; else p.appState[s.name] = was;
+      saveSetsPrefs(p);
+      showToast(`The wheel holds ${WHEEL_MAX} sets — untick one first`);
+      return;
+    }
     refreshCategories();
   });
   const ic = document.createElement("span");
@@ -89,8 +101,10 @@ function openSetsPanel() {
   setsPanel.innerHTML = "";
   const card = document.createElement("div");
   card.className = "sets-card";
+  const reserve = appSetReserve();
   card.innerHTML = `<h2>Wheel sets</h2>
-    <p class="sets-sub">Mouse, Input and Settings are always in the wheel. Pick the rest — up to ${WHEEL_MAX} in total. New sets are made on the PC (Remote User window → Controls…).</p>`;
+    <p class="sets-sub">Mouse, Input and Settings are always in the wheel. Pick the rest — up to ${WHEEL_MAX} in total, app shortcuts included. New sets are made on the PC (Remote User window → Controls…).</p>
+    <p class="sets-sub">${visibleCount()} of ${WHEEL_MAX} used${reserve ? ` — ${reserve} held for app shortcuts` : ""}.</p>`;
 
   const list = document.createElement("div");
   list.className = "sets-list";
@@ -116,7 +130,7 @@ function openSetsPanel() {
     openSetsPanel();  // the per-app rows below follow the master switch
   });
   appHead.append(appCb, document.createTextNode(
-    "App shortcuts while a layout is focused"));
+    "App shortcuts while a layout is focused — they take wheel slots too"));
   card.appendChild(appHead);
 
   if (setsPrefs().apps) {
@@ -274,4 +288,75 @@ function closeDictationPanel() {
 
 dictPanel.addEventListener("pointerdown", (e) => {
   if (e.target === dictPanel) closeDictationPanel(); // backdrop tap = done
+});
+
+// --- Command chooser (owner idea 2026-08-05) -------------------------------
+// His question, and it is the better design: *"jel ne možemo u centar da
+// prikažemo opcije pa korisnik odabere a program automatski odradi selekciju"*.
+//
+// Some commands are not an ACTION but a CHOICE — `/effort` takes a level, so
+// sending it alone only prints its usage, and the first version left Claude's
+// own menu on screen for the finger to pick from. That worked, but it made the
+// phone depend on another app's menu staying where it is. A button with
+// `options` now shows the choices HERE, on the phone, and sends the finished
+// command in one go: `/effort` + `high` → `paste_text "/effort high"`.
+//
+// Any future command of this shape gets it for free — it is a property of the
+// button, not a special case for Claude.
+
+const choicePanel = document.getElementById("choice-panel");
+const choiceOpened = { t: 0 };
+ghostClickArmor(choicePanel, choiceOpened);
+
+function openChoicePanel(btn) {
+  const options = (btn.options || []).map((o) =>
+    (typeof o === "string" ? { label: o, value: o } : o));
+  if (!options.length) return;
+
+  choicePanel.innerHTML = "";
+  const card = document.createElement("div");
+  card.className = "sets-card";
+  const title = btn.label || btn.text;
+  card.innerHTML = `<h2>${title}</h2>` +
+    `<p class="sets-sub">Pick one — the PC types it and runs it.</p>`;
+
+  const list = document.createElement("div");
+  list.className = "sets-list";
+  for (const option of options) {
+    const row = document.createElement("button");
+    row.type = "button";
+    row.className = "sets-row choice";
+    row.textContent = option.label;
+    keepFocus(row, () => {
+      send({
+        type: "paste_text",
+        text: `${btn.text} ${option.value}`.trim(),
+        enter: true,
+      });
+      showToast(`${title}: ${option.label}`);
+      closeChoicePanel();
+    });
+    list.appendChild(row);
+  }
+  card.appendChild(list);
+
+  const cancel = document.createElement("button");
+  cancel.type = "button";
+  cancel.className = "sets-done";
+  cancel.textContent = "Cancel";
+  keepFocus(cancel, closeChoicePanel);
+  card.appendChild(cancel);
+
+  choicePanel.appendChild(card);
+  choicePanel.hidden = false;
+  choiceOpened.t = performance.now();
+}
+
+function closeChoicePanel() {
+  choicePanel.hidden = true;
+  choicePanel.innerHTML = "";
+}
+
+choicePanel.addEventListener("pointerdown", (e) => {
+  if (e.target === choicePanel) closeChoicePanel(); // backdrop tap = cancel
 });
