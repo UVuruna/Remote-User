@@ -17,6 +17,7 @@ import asyncio
 import json
 import logging
 
+import agents
 import uia
 import window_manager
 from monitors import rect_for_size
@@ -65,6 +66,8 @@ async def layout_pick(ws, layouts, stream, msg: dict) -> None:
     tab = None
     if uia.has_tabs(target["process"]):
         tab = await asyncio.to_thread(uia.tab_at, mon_rect(stream), x, y)
+    if isinstance(target, dict):
+        target["agents"] = agents.agents_for(target.get("title", ""))
     await ws.send_text(json.dumps({
         "type": "layout_offer",
         "target": target,
@@ -85,8 +88,12 @@ async def layout_list(ws, layouts, stream) -> None:
     windows = await asyncio.to_thread(window_manager.list_windows, used)
     entries = []
     for w in windows:
+        # `agents` is what makes the creation panel pre-tick Claude without a
+        # single tap (owner 2026-08-06): the PC reads its own process table,
+        # the phone cannot.
         entries.append({"kind": "window", "hwnd": w["hwnd"], "title": w["title"],
-                        "process": w["process"], "icon": w["icon"]})
+                        "process": w["process"], "icon": w["icon"],
+                        "agents": agents.agents_for(w["title"])})
         if not uia.has_tabs(w["process"]):
             continue  # its TabItems are internal sections, not real tabs
         for tab in await asyncio.to_thread(uia.list_tabs, mon_rect, w["hwnd"]):
@@ -94,7 +101,8 @@ async def layout_list(ws, layouts, stream) -> None:
                             "tab": {"name": tab["name"]},
                             "x": tab["x"], "y": tab["y"],
                             "title": tab["name"],
-                            "process": w["process"], "icon": w["icon"]})
+                            "process": w["process"], "icon": w["icon"],
+                            "agents": agents.agents_for(w["title"])})
     await ws.send_text(json.dumps({
         "type": "layout_offer",
         "target": None,

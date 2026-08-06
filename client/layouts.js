@@ -751,12 +751,6 @@ function newCreation(source) {
 // exactly that case, and pre-ticking it for every VSCode window would put its
 // slash commands on the wheel of a plain editor. The owner adds it with one
 // tap on the Claude layout; everything else is right without him.
-function autoAppSets(slots) {
-  const proc = String(slots.length ? slots[0].process || "" : "").toLowerCase();
-  return appSets
-    .filter((s) => !s.title && proc.includes(String(s.process || "").toLowerCase()))
-    .map((s) => s.name);
-}
 
 function openSourceChooser() {
   layPanel.innerHTML = "";
@@ -815,6 +809,9 @@ function slotFromOffer(msg) {
     title: msg.tab ? msg.tab.name : msg.target.title,
     process: msg.target.process,
     icon: msg.target.icon,
+    // What the PC found running in this window's project — the whole reason
+    // Claude no longer needs a tick (owner 2026-08-06).
+    agents: msg.target.agents || [],
     tab: msg.tab || null,
     x: msg.x,
     y: msg.y,
@@ -824,6 +821,7 @@ function slotFromOffer(msg) {
 function slotFromEntry(e) {
   return {
     hwnd: e.hwnd, title: e.title, process: e.process, icon: e.icon,
+    agents: e.agents || [],
     tab: e.tab || null, x: e.x, y: e.y,
   };
 }

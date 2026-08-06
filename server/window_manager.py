@@ -22,6 +22,7 @@ import logging
 import os
 import time
 
+import agents
 from config import SETTINGS
 
 logger = logging.getLogger(__name__)
@@ -950,6 +951,12 @@ class LayoutRegistry:
             "type": "layout_state",
             "layouts": [{"name": lay.name, "process": lay.process,
                          "title": lay.title,
+                         # Which agent tools are LIVE in this window's project
+                         # right now (server/agents.py). This is what replaced
+                         # the owner ticking "this window has Claude open" by
+                         # hand: the PC can see its own process table, and the
+                         # phone cannot.
+                         "agents": agents.agents_for(lay.title),
                          "orient": lay.orient, "icon": lay.icon,
                          "app_sets": (list(lay.app_sets)
                                       if lay.app_sets is not None else None),

@@ -17,6 +17,7 @@ The PC side of Remote User: captures the screen, streams it over WebSocket as H.
 | `input_injector.py` | Algorithmic | Win32 `SendInput` injection + the `InjectionMonitor` self-check tripwire — [about](__about/input_injector.md) · [flow](__flow/input_injector.md) |
 | `web.py` | Algorithmic | FastAPI app — the WebSocket protocol handler, HTTP routes, stream dispatch — [about](__about/web.md) · [flow](__flow/web.md) |
 | `presence.py` | Algorithmic | is the owner still working with us, and whose desk are we on — heartbeat, the `away` reason, the excursion hold, and the rule that local input at THIS PC outranks all of it — [about](__about/presence.md) · [flow](__flow/presence.md) |
+| `agents.py` | Algorithmic | which agent tools are LIVE on this PC and in which project — the process table answers what UI Automation could not, so the Claude set appears by itself instead of being ticked by hand — [about](__about/agents.md) · [flow](__flow/agents.md) |
 | `layout_api.py` | Algorithmic | the phone's layout protocol — pick, list, create, focus, aspect, state — [about](__about/layout_api.md) · [flow](__flow/layout_api.md) |
 | `traffic.py` | Standard | every byte to and from the phone, sampled per second and recorded — the owner's instrument for "does it run while the screen is off" — [about](__about/traffic.md) |
 | `window_manager.py` | Standard | window layouts (Phase F+ step 1) — enumerate/hit-test/arrange/raise windows, app icons, the session-scoped `LayoutRegistry` — [about](__about/window_manager.md) |

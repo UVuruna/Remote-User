@@ -77,6 +77,10 @@ ALGORITHMIC = {
     "server/presence.py",
     "server/layout_api.py",
     "server/notify.py",
+    # New 2026-08-06: which agent tools are LIVE on this PC and in which
+    # project. Algorithmic — a process table read, a session-id -> transcript
+    # -> project mapping, and a cache, all of which have to be explained.
+    "server/agents.py",
     "server/gui/theme.py",
     # Split out of the three windows on 2026-08-06 (THE STRUCTURE LAW): the
     # same settle loop was copied three times and carried the same lie in
