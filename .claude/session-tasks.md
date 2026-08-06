@@ -45,7 +45,7 @@ checkbox form per the new Final Report gate):
 - [x] check ALL groups after the Win-in-Mouse corruption (slika 3)
 - [x] root rule with teeth: a delivering session ends with the per-task final report (machine-wide)
 
-WAITING_ON_OWNER: yes
+WAITING_ON_OWNER: no
 
 ROUND 4 IMPLEMENTED (owner approved "moze sve i bipovi kao checkbox"):
 (a) shipped-pools merge now ALSO runs once at server start
@@ -473,3 +473,61 @@ NOWHERE in the repo — no exit path drops the topmost band.
       gates green, signed exe + installer, APK bundled) and GIT RELEASE
       v0.0.082 published:
       https://github.com/UVuruna/Remote-User/releases/tag/v0.0.082
+
+## Round 10 (owner report + questions 2026-08-06 — "zašto mi se ne pokazuje Claude controls")
+
+- [x] 41. WHY THE CLAUDE SET NEVER SHOWED — root cause PROVEN by probing his
+      own PC, not reasoned: Claude Code names its VSCode tab after the
+      CONVERSATION ('Ispravka UI dizajna meni…'), the word "claude" appears
+      nowhere, the UIA ClassName is identical to the 'prompt.txt' tab beside
+      it, AutomationId/HelpText are empty, and a walk of the extracted
+      window's whole tree (20 elements) finds no "claude"/"anthropic" —
+      VSCode hides webview content from accessibility. The title test could
+      NEVER have fired for a conversation; it only ever matched CLAUDE.md,
+      the document case he banned. FIXED by the owner's own tick:
+      Layout.app_sets, chosen in the creation panel (pre-ticked from the
+      process, so only Claude needs a tap) and changeable from the layout
+      list's pencil; layout_create.app_sets + layout_apps + layout_state.
+      Evidence: test_app_set_wheel case "the layout's own ticks win over the
+      title guess" pins his real title.
+- [x] 42. WHY NINE COULD BE TICKED (his item 2, cap of 8 confirmed as LAW) —
+      two sources found: (a) the cap was tested only at the moment of a tap,
+      so prefs and defaults arriving another way sailed past it —
+      enforceWheelCap() normalizes the stored state and the phone toasts what
+      gave way; (b) the SHIPPED actions.json had seven categories enabled
+      under a two-slot reserve = nine — Cursor is off by default now. The
+      desktop Controls editor was claiming app sets are free (its own line
+      from 08-05, reversed by him on 08-06) and now counts the same
+      per-process reserve. Victim order is his rule: app set first, then the
+      last optional basic. Evidence: two new guard cases, self-tested by
+      re-enabling Cursor ("ticks 9 sets by default").
+- [x] 43. THE LIVE BADGE (his item 3) — the app rows now carry "ON THE WHEEL
+      NOW" for the sets matching the focused layout; tick = allowed, badge =
+      riding. Updated in place (rebuilding the card would re-arm the
+      ghost-click armor and swallow the next tick). Both tick paths made to
+      write-then-measure — they disagreed before. Phone audit measures the
+      picker at its fullest with two badges lit; self-tested with a 210px
+      badge padding failing at both orientations.
+- [x] 44. NOTIFICATIONS DON'T WORK EITHER (his follow-up question) — correct,
+      and the cause was not the code: agent_hook.py was never registered in
+      ~/.claude/settings.json. Installed for him this round, and ROADMAP H2
+      closed — the Settings card carries "Tell my phone when an agent
+      finishes", reading the REAL hook state, copying the script out of the
+      bundle and naming a real python when frozen (and SAYING so when the PC
+      has none).
+- [x] 45. STRUCTURE LAW — controls.js hit 1000 lines mid-round; the
+      composition rules became client/sets.js (about + flow + client index +
+      load test order + docs coverage tier).
+- [x] 46. Round close — APK 0.0.085 + full desktop build (INPUT + PRESENCE +
+      NOTIFY gates, PyInstaller smoke test, signed exe and installer) and
+      GIT RELEASE published:
+      https://github.com/UVuruna/Remote-User/releases/tag/v0.0.085
+      TWO-SESSION NOTE: the parallel session took 0.0.223 and shipped v0.0.084
+      while this round was in flight, so my five commits were renumbered to
+      0.0.230–0.0.235 before anything was pushed. Two files that were NOT
+      mine (.claude/settings.json, e.txt) were swept into a `git add -A` and
+      taken back out — staged files belong to whoever owns the change.
+      OPEN ON THE OWNER'S DEVICE: install v0.0.085, make the Claude layout,
+      tick Claude in the creation panel, and the Claude set must be on the
+      wheel beside VSCode. Then open Settings → Sets: the counter must read
+      8 of 8, never 9, and the two live sets must wear the badge.
