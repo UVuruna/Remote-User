@@ -1,3 +1,48 @@
+SESSION: 0eb7cbe2-d779-4c9d-9ec7-0a3d35d0897a (round 11b - the overlap the first fix did NOT fix, and the two teeth that were missing)
+- MainWindow (server/gui/main_window.py) - MIN 503x937 - SHOT .claude/shots/MainWindow.png - GRADE 9/10 - audit: PASS
+- MainWindow reopened from the tray (server/gui/main_window.py) - MIN 503x937 - SHOT .claude/shots/MainWindow__reopened_from_the_tray.png - GRADE 9/10 - audit: PASS
+- ControlsEditor (server/gui/controls_editor.py) - MIN 723x858 - SHOT .claude/shots/ControlsEditor.png - GRADE 9/10 - audit: PASS
+- TrafficWindow (server/gui/traffic_window.py) - MIN 593x486 - SHOT .claude/shots/TrafficWindow.png - GRADE 8/10 - audit: PASS
+- ChordRecorder (server/gui/controls_widgets.py) - MIN 219x66 - SHOT .claude/shots/ChordRecorder.png - GRADE 8/10 - audit: PASS
+
+WHAT THE FIRST FIX GOT WRONG, and how it was found: the owner installed v0.0.086
+and the link was STILL drawn across the QR. Reproduced here at his real 125%
+scaling with the real Segoe UI - qr_label y=17..233, url_label y=195, Copy link
+y=221 - all inside the QR. Root cause: `minimumSizeHint()` quotes a WRAPPING
+label at ONE line, so the column's minimum came out 48 px short (hint 835, truth
+883), and Qt spends a shortfall by OVERLAPPING, not clipping. Every widget still
+reported its full size, which is why the guard was green over a broken window.
+The measurement is now `layout.heightForWidth(width)` in one shared module
+(server/gui/sizing.py) used by all three windows, and the pairing URL label -
+60 characters of token nobody reads, the element that landed on the QR - is
+gone; the QR carries it and Copy link copies it.
+
+TWO TEETH ADDED, both self-tested by replanting the defect:
+- OVERLAP (tests/test_layout_audit_qt.py): no two cells of one layout may
+  intersect. Nothing here had ever checked POSITION, only size. Self-test: with
+  the fix stubbed the audit reports the main window CLIPPED 820x837 needs
+  618x880; it also caught a real one nobody had reported - TrafficWindow drew
+  its chart 4 px over the caption beneath it.
+- REAL FONTS: the Qt audit no longer forces the offscreen platform (whose
+  substitute fonts measured 869x880 where the owner's machine needs 503x937).
+  Native platform + WA_DontShowOnScreen: full layout, real DPI, nothing on
+  screen. That switch alone surfaced two more genuine defects - the Controls
+  editor 59 px short, and a Traffic combo cut to "Last 10 minut" by the theme's
+  own 92 px floor.
+- CONTRAST (tests/test_layout_audit.py, phone): WCAG ratio of every leaf text
+  against its composited backdrop, < 3.0 fails. This is the owner's "kako
+  dizajn los prolazi" - six white buttons with near-white labels passed every
+  geometric check. Self-test: replanting the missing background reports all six
+  rows at 1.05:1. It found two MORE that nobody had reported: the Sets picker's
+  live badge at 1.96:1 (`var(--bg)` is not a token in this project, so the
+  declaration was invalid and the badge inherited near-white ink), and it
+  proved its own first version wrong - translucent selected states read as
+  1.00:1 until the check composited alpha, so it now paints every layer.
+
+FLOOR: .claude/layout-frame.json raises the height floor to 1000 with its
+reason. The width, 503, is well under 1280; the height is content-driven (QR at
+scan size + guided pairing text + settings + the notify caption's worst case).
+
 SESSION: 0eb7cbe2-d779-4c9d-9ec7-0a3d35d0897a (round 11 — the two overlap screenshots, the notify switch that could not be armed, the checkbox's own colour, the tick in the set list)
 - Main window (server/gui/main_window.py — the declared minimum is no longer measured ONCE: `_settle_minimum` re-runs on every content change and once more on the first `showEvent`) - Qt window at its DECLARED minimum 869x880 and at +50% 1303x1320 - audit: PASS - .venv\Scripts\python tests/test_layout_audit_qt.py, this session's own run. This is the state the owner photographed and the audit had never measured: the update button VISIBLE (it is hidden until the GitHub check answers) and the notify caption reporting a failure (three lines where it normally speaks one). 880 is 43 px taller than round 10's 837 — the update button's own row, the strip that was being painted over the QR's link — and 869 wide because the failure sentence names a path with no space in it, which cannot be wrapped and must therefore be given its width (the law: never elide content the user must read).
 - GUARD SELF-TEST (on the mechanism this round actually added, not a neighbour): with `_resettle` and `showEvent` stubbed out, the same audit FAILS — "CLIPPED MainWindow: has 820x837, needs at least 618x880" — and passes with them restored. The 43 px in that message is the bug, measured. The audit factory itself was corrected in the same commit: it now `show()`s the window FIRST and lets the update button and the long caption arrive afterwards, which is the owner's actual sequence; built the old way, a window that is still hidden reports the button as costing nothing.

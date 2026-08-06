@@ -1,0 +1,5 @@
+{
+  "floor_width": 1280,
+  "floor_height": 1000,
+  "reason": "Desktop-only app, single column by design. The main window's height is content-driven and every part of it is required: a QR at scan size (216 px fixed, exempted on its own line), the three-step guided pairing text that THE SPACE & LEGIBILITY LAW forbids truncating, four settings rows, and the notify switch whose caption grows to three lines when it reports a failure. Measured at the owner's real 125% display scaling the fullest state needs 503x937 - the WIDTH stays far under the 1280 floor, and no element holds slack. Reflowing a QR + a settings form into two columns was considered and rejected: it would put the pairing QR beside the settings, which is not the reading order of a first-time pairing."
+}
