@@ -19,8 +19,18 @@ function firstTwoPointers() {
 // already sent are tracked per layout; the effect is whatever the focused app
 // does with Ctrl+-/= (browsers/editors scale, some apps ignore it — owner
 // accepted). Desktop pinch is untouched.
+// ONE PINCH, ONE SIDE (owner 2026-08-06): the fitted view with the content at
+// 100% is a WALL, not a point on a continuous scale. A single pinch may only
+// travel on the side it started on — zooming out stops at the fitted view, and
+// pinching back in stops at 100% content. Crossing costs a finger lift: the
+// next pinch starts on the other side. Sliding through in one motion made the
+// state the owner actually wants most — text exactly at 100% — nearly
+// impossible to land on.
 const FONT_ZOOM_STEP = 1.2; // pinch factor worth one Ctrl+-/= step
 const FONT_ZOOM_MAX = 10;
+// Finger travel (in steps) before a pinch that STARTS on the wall commits to a
+// side. Small enough to feel immediate, large enough that jitter cannot pick.
+const PINCH_SIDE_DEADZONE = 0.25;
 // fontZoomByLayout (index -> steps applied) lives in state.js.
 
 function fontZoomSteps() {
@@ -39,10 +49,18 @@ function beginPinch() {
   const [p1, p2] = firstTwoPointers();
   const mid = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
   const D = drawnRect();
+  const startFont = viewLocked() ? fontZoomSteps() : 0;
   pinch = {
     startDist: Math.hypot(p1.x - p2.x, p1.y - p2.y),
     startScale: view.scale,
-    startFont: viewLocked() ? fontZoomSteps() : 0,
+    startFont,
+    // Which side of the wall this whole gesture belongs to. Null = it starts
+    // ON the wall (fitted view, content at 100%) and the first direction the
+    // fingers take decides — spread = zoom, close = font.
+    side: !viewLocked() ? "zoom"
+      : startFont > 0 ? "font"
+      : view.scale > viewHome.scale * 1.001 ? "zoom"
+      : null,
     qx: (mid.x - D.x) / D.w,
     qy: (mid.y - D.y) / D.h,
   };
@@ -120,24 +138,34 @@ canvas.addEventListener("pointermove", (e) => {
     let s = Math.min(Math.max(raw, viewHome.scale), viewHome.scale * ZOOM_MAX);
     if (viewLocked()) {
       // The staircase: `z` is the finger position in steps relative to the
-      // fitted view (negative = below it). Fingers below the floor turn
-      // into Ctrl+- steps; on the way back the same steps are undone with
-      // Ctrl+= BEFORE any visual zoom resumes.
+      // fitted view (negative = below it). Fingers below the wall turn into
+      // Ctrl+- steps; spreading undoes them with Ctrl+= — but only ever one
+      // of the two per gesture (see ONE PINCH, ONE SIDE above).
       const z = Math.log(raw / viewHome.scale) / Math.log(FONT_ZOOM_STEP);
-      const desired = Math.min(FONT_ZOOM_MAX,
-        Math.max(0, Math.round(pinch.startFont - z)));
-      const current = fontZoomSteps();
-      if (desired !== current) {
-        const chord = desired > current ? "ctrl+minus" : "ctrl+plus";
-        for (let i = 0; i < Math.abs(desired - current); i++) {
-          send({ type: "chord", chord });
-        }
-        fontZoomByLayout.set(layoutActive, desired);
+      if (pinch.side === null) {
+        // Started on the wall: the first deliberate direction picks the mode.
+        if (z > PINCH_SIDE_DEADZONE) pinch.side = "zoom";
+        else if (z < -PINCH_SIDE_DEADZONE) pinch.side = "font";
       }
-      s = Math.min(
-        viewHome.scale * Math.pow(FONT_ZOOM_STEP, Math.max(0, z - pinch.startFont)),
-        viewHome.scale * ZOOM_MAX
-      );
+      if (pinch.side === "font") {
+        // Font side: the view never leaves the fitted framing; spreading only
+        // walks the content back UP to 100% and stops dead there.
+        const desired = Math.min(FONT_ZOOM_MAX,
+          Math.max(0, Math.round(pinch.startFont - z)));
+        const current = fontZoomSteps();
+        if (desired !== current) {
+          const chord = desired > current ? "ctrl+minus" : "ctrl+plus";
+          for (let i = 0; i < Math.abs(desired - current); i++) {
+            send({ type: "chord", chord });
+          }
+          fontZoomByLayout.set(layoutActive, desired);
+        }
+        s = viewHome.scale;
+      } else if (pinch.side === null) {
+        s = viewHome.scale; // still inside the deadzone — nothing moves yet
+      }
+      // "zoom" side: `s` keeps the clamp above — floored at the fitted view,
+      // so pinching in stops at the wall instead of shrinking the content.
     }
     view.scale = s;
     view.tx = mid.x - (baseRect.x + pinch.qx * baseRect.w) * s;
