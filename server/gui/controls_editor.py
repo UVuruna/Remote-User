@@ -159,11 +159,18 @@ def merge_shipped_pools(data: dict, shipped: dict) -> None:
     carried over BY COMMAND ID, so a reordered or extended pool keeps them
     pointing at the right button.
     """
-    for key, ident in (("categories", "name"), ("app_sets", "process")):
+    # Both lists are keyed by NAME. App sets used to be keyed by `process`,
+    # and that was the 2026-08-05 bug the owner hit within the hour: Claude
+    # runs inside VSCode, so BOTH shipped sets carry process "code", the map
+    # held one entry for that key, and merging Claude on top of it renamed his
+    # VSCode set out of existence ("zašto je nestao VSCode kad si ubacio
+    # Claude"). A name is what tells two sets of one process apart — it is
+    # also what the phone's picker and the wheel show.
+    for key in ("categories", "app_sets"):
         mine = data.get(key) or []
-        by_ident = {s.get(ident): s for s in mine}
+        by_ident = {s.get("name"): s for s in mine}
         for ship in shipped.get(key) or []:
-            s = by_ident.get(ship.get(ident))
+            s = by_ident.get(ship.get("name"))
             if s is None:
                 mine.append(json.loads(json.dumps(ship)))  # a set we newly ship
                 continue
@@ -178,6 +185,14 @@ def merge_shipped_pools(data: dict, shipped: dict) -> None:
             for field in ("name", "icon", "required", "process", "title"):
                 if field in ship:
                     s[field] = ship[field]
+            # A pool refresh can leave `active` pointing at a command that is
+            # no longer in it — from a version that dropped one, or from a
+            # file this editor corrupted before the write-guard below existed.
+            # A choice that cannot be honoured is not a choice: fall back to
+            # the shipped four rather than to a two-button D-pad.
+            ids = {button_id(b) for b in fresh}
+            if not set(s.get("active") or []) <= ids:
+                s.pop("active", None)
         data[key] = mine
 
 
@@ -193,6 +208,7 @@ class ControlsEditor(QDialog):
         self.builtins = load_client_builtins()
         self.path = user_actions_path()
         self._detail_row = -1
+        self._detail_set: dict | None = None
         self._settled = False  # the minimum is measured on first show
         try:
             self.data = json.loads(self.path.read_text(encoding="utf-8"))
@@ -455,10 +471,14 @@ class ControlsEditor(QDialog):
         self._refresh_count()
         # setCurrentCell stays silent when the cell index does not change
         # (set A row 0 → set B row 0), which left the detail form showing the
-        # PREVIOUS set's command. Load it explicitly; _detail_row = -1 first
-        # so the reload cannot write a stale form back into the new pool.
-        self.table.setCurrentCell(0, 1)
+        # PREVIOUS set's command. Load it explicitly — and invalidate the form
+        # BEFORE setCurrentCell, not after: that call fires currentCellChanged
+        # synchronously, and the handler would otherwise write the OLD set's
+        # command into the NEW set's pool at the old row index. That is the
+        # owner's "zašto je WIN u MOUSE i nema RIGHT CLICK" of 2026-08-05.
         self._detail_row = -1
+        self._detail_set = None
+        self.table.setCurrentCell(0, 1)
         self._row_changed(self.table.currentRow())
         self._refresh_orders(s)
         self.del_btn.setEnabled(custom)
@@ -480,6 +500,7 @@ class ControlsEditor(QDialog):
         self._store_command()
         pool = s.get("buttons") or []
         self._detail_row = row
+        self._detail_set = s
         self.detail.show_button(pool[row] if 0 <= row < len(pool) else None,
                                 kind == "custom_sets")
 
@@ -530,7 +551,12 @@ class ControlsEditor(QDialog):
         through for every kind of set.
         """
         entry = self._current_entry()
-        if entry is None:
+        if entry is None or entry[2] is not self._detail_set:
+            # The form belongs to a DIFFERENT set than the one selected now —
+            # a set switch in flight. Writing here put one set's command into
+            # another's pool at the same row number (owner report 2026-08-05:
+            # Win landed in Mouse, on top of Right). Identity, not index: a
+            # row number means nothing across two pools.
             return
         pool = entry[2].get("buttons") or []
         if not (0 <= self._detail_row < len(pool)):
@@ -609,6 +635,7 @@ class ControlsEditor(QDialog):
         if not (0 <= row < len(pool)):
             return
         self._detail_row = -1  # the row is going away — do not write it back
+        self._detail_set = None
         del pool[row]
         self._store_active(entry[2])
         self._select(self._current)
