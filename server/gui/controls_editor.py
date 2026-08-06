@@ -47,7 +47,8 @@ from PySide6.QtGui import QColor, QFontMetrics, QPainter, QPen, QPolygonF
 from PySide6.QtWidgets import (
     QCheckBox, QComboBox, QDialog, QGridLayout, QGroupBox, QHBoxLayout, QLabel,
     QLineEdit, QListWidget, QListWidgetItem, QMessageBox, QPushButton,
-    QStyledItemDelegate, QTableWidgetItem, QVBoxLayout, QWidget,
+    QApplication, QStyle, QStyledItemDelegate, QStyleOptionViewItem,
+    QTableWidgetItem, QVBoxLayout, QWidget,
 )
 
 from config import BUNDLE_DIR, FROZEN, PROJECT_ROOT, SETTINGS, USER_DIR, apply as apply_settings
@@ -78,7 +79,9 @@ SECTIONS = (
 HIDE_WHEN_EMPTY = {"custom_sets"}
 
 HEADER_ROLE = Qt.ItemDataRole.UserRole + 1  # marks a section-heading row
-CHECK_ROLE = Qt.ItemDataRole.UserRole + 2   # True = this set rides in the wheel
+CHECK_ROLE = Qt.ItemDataRole.UserRole + 2   # "" | LOCKED | ON — see _rides()
+LOCKED = "locked"   # on the wheel and NOT the owner's to switch (`required`)
+ON = "on"           # on the wheel by his choice, and switchable
 
 
 class SectionDelegate(QStyledItemDelegate):
@@ -124,11 +127,23 @@ class SectionDelegate(QStyledItemDelegate):
         return size
 
     def paint(self, painter, option, index) -> None:
-        super().paint(painter, option, index)
         if not index.data(HEADER_ROLE):
-            if index.data(CHECK_ROLE):
-                self._paint_tick(painter, option.rect)
+            # The tick sits in its own strip on the LEFT, and the set's icon
+            # and name are indented past it (owner 2026-08-06: "ispred Mouse
+            # levo da bude štiklirano"). The row's background is drawn across
+            # the FULL width first, so the strip is part of the selected row
+            # rather than a gap beside it; the content is then painted into
+            # what is left.
+            opt = QStyleOptionViewItem(option)
+            self.initStyleOption(opt, index)
+            style = opt.widget.style() if opt.widget else QApplication.style()
+            style.drawPrimitive(QStyle.PrimitiveElement.PE_PanelItemViewItem,
+                                opt, painter, opt.widget)
+            opt.rect = option.rect.adjusted(self.MARK, 0, 0, 0)
+            super().paint(painter, opt, index)
+            self._paint_tick(painter, option.rect, index.data(CHECK_ROLE))
             return
+        super().paint(painter, option, index)
         if not index.row():
             return  # the first heading divides nothing — no rule above it
         painter.save()
@@ -142,18 +157,26 @@ class SectionDelegate(QStyledItemDelegate):
         painter.drawLine(option.rect.left() + 6, y, option.rect.right() - 6, y)
         painter.restore()
 
-    def _paint_tick(self, painter, rect) -> None:
-        """The check itself: three points, the accent, round ends — the same
-        mark the checkboxes wear (assets/check.svg), drawn here because an
-        item view has no widget to style."""
+    def _paint_tick(self, painter, rect, state) -> None:
+        """The check itself: three points, round ends — drawn, never a font
+        glyph, because an item view has no widget for QSS to style.
+
+        Two colours, and the difference is the owner's own rule (2026-08-06):
+        GREY where the set is `required` and he could not turn it off if he
+        wanted to (Mouse, Input, Settings), WHITE where it is on and his to
+        switch. A tick that looks the same in both cases would promise him a
+        choice he does not have.
+        """
+        if not state:
+            return
         painter.save()
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-        pen = QPen(QColor(TOKENS["accent"]))
+        pen = QPen(QColor(TOKENS["text2"] if state == LOCKED else TOKENS["text"]))
         pen.setWidthF(2.0)
         pen.setCapStyle(Qt.PenCapStyle.RoundCap)
         pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
         painter.setPen(pen)
-        left = rect.right() - self.MARK + 5
+        left = rect.left() + 7
         mid = rect.center().y() + 1
         painter.drawPolyline(QPolygonF([QPointF(left, mid),
                                         QPointF(left + 3.5, mid + 3.5),
@@ -552,14 +575,20 @@ class ControlsEditor(QDialog):
             return f"   ({s.get('process', '?')} · “{names[0]}”)"
         return f"   ({s.get('process', '?')})"
 
-    def _rides(self, kind: str, s: dict) -> bool:
-        """Does this set ride in the phone's wheel? — the one thing the tick
-        claims. An app set never does on its own (it comes and goes with the
-        focused layout, by the owner's ticks THERE), so it wears no tick;
-        Mouse/Input/Settings always do and cannot be turned off."""
-        if kind == "app_sets":
-            return False
-        return bool(s.get("required") or s.get("enabled", True))
+    def _rides(self, kind: str, s: dict) -> str:
+        """What the tick claims: LOCKED (on the wheel and not his to switch),
+        ON (allowed on the wheel, switchable) or nothing.
+
+        App sets are ticked exactly like the rest (owner 2026-08-06: "zašto ne
+        stoji štiklirano pored ovih APP AWARE"). They were left blank on the
+        reasoning that they ride only in layout focus — but the phone reads
+        the SAME `enabled` flag for them (`appSetOn` in client/sets.js), so a
+        blank row was hiding a switch that exists and works. What the tick
+        claims here is the honest thing: this set is ALLOWED on the wheel.
+        When it actually appears is the layout's business."""
+        if s.get("required"):
+            return LOCKED
+        return ON if s.get("enabled", True) else ""
 
     def _mark_current(self, on: bool) -> None:
         """Keeps the list's tick and the form's checkbox saying the same thing
@@ -567,9 +596,12 @@ class ControlsEditor(QDialog):
         only on the way out, so the row cannot be re-read from there."""
         item = self.set_list.currentItem()
         entry = self._current_entry()
-        if item is None or entry is None or entry[0] == "app_sets":
+        if item is None or entry is None:
             return
-        item.setData(CHECK_ROLE, bool(on))
+        # `required` stays LOCKED whatever the checkbox says — its box is
+        # disabled precisely because that set cannot leave the wheel.
+        item.setData(CHECK_ROLE,
+                     LOCKED if entry[2].get("required") else (ON if on else ""))
         self.set_list.viewport().update()
 
     def _header_item(self, text: str) -> QListWidgetItem:
@@ -649,9 +681,11 @@ class ControlsEditor(QDialog):
         self.name_edit.setEnabled(custom)
         self.icon_combo.setEnabled(custom)
         self.icon_combo.setCurrentIndex(max(0, self.icon_combo.findData(s.get("icon", ""))))
-        # Mouse/Input/Settings are always in the wheel; app sets ride with the
-        # focused layout and have no wheel toggle at all.
-        self.enabled_check.setEnabled(not required and kind != "app_sets")
+        # Mouse/Input/Settings are always in the wheel and cannot be switched.
+        # Everything else can — INCLUDING the app sets: the phone reads the
+        # same `enabled` flag for them (client/sets.js appSetOn), so leaving
+        # this box dead for them hid a switch that was already working.
+        self.enabled_check.setEnabled(not required)
         self.enabled_check.setChecked(required or s.get("enabled", True))
         self.add_cmd.setEnabled(custom)
         self.del_cmd.setEnabled(custom)
@@ -766,7 +800,7 @@ class ControlsEditor(QDialog):
             s["name"] = self.name_edit.text().strip() or s.get("name", "Set")
             if self.icon_combo.currentData():
                 s["icon"] = self.icon_combo.currentData()
-        if kind != "app_sets" and not s.get("required"):
+        if not s.get("required"):
             if self.enabled_check.isChecked():
                 s.pop("enabled", None)  # shown by default needs no entry
             else:
@@ -872,7 +906,7 @@ class ControlsEditor(QDialog):
         # do. Same rule, same arithmetic as sets.js on the phone.
         per_process: dict[str, int] = {}
         for kind, _, s in self._entries():
-            if kind == "app_sets":
+            if kind == "app_sets" and s.get("enabled", True):
                 key = str(s.get("process", "")).lower()
                 per_process[key] = per_process.get(key, 0) + 1
         reserve = max(per_process.values(), default=0)
