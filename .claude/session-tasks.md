@@ -607,12 +607,42 @@ NOWHERE in the repo — no exit path drops the topmost band.
 
 ## Round 11b (owner: the fix did NOT fix it, + colours, + Claude, + notifications)
 
-- [ ] 52. THE OVERLAP IS STILL THERE ON v0.0.086 — find the REAL cause, and a
-      tooth that cannot pass over it again
-- [ ] 53. COLOURS: the Thinking chooser is six white bars with white labels —
-      and a tooth for contrast, because nothing checked colour at all
-- [ ] 54. NOTIFICATIONS: what must line up for one to arrive — answered with
-      his own log; the Android permission is the broken link
-- [ ] 55. CLAUDE: prove whether VS Code really gives NO signal — and if it
-      does, stop making the owner tick what we used to detect
-- [ ] 56. Round close — build + GIT RELEASE
+- [x] 52. THE OVERLAP IS STILL THERE ON v0.0.086 — REAL cause found and fixed:
+      minimumSizeHint() quotes a WRAPPING label at one line, so the column was
+      48 px short (hint 835, truth 883), and Qt spends a shortfall by
+      OVERLAPPING, not clipping — every widget reported full size, which is why
+      the guard was green. Reproduced at his 125% scaling before the fix
+      (qr 17..233, url at 195) and clean after. heightForWidth in one shared
+      module (gui/sizing.py); the URL label deleted. Teeth: OVERLAP check +
+      REAL-FONT platform, self-tested by stubbing the fix. Commits 0.0.258.
+- [x] 53. COLOURS — cause: .sets-row sets no background, harmless on a <label>
+      and fatal on a <button> (the WebView paints its own light default under
+      near-white ink). Fixed, and the tooth added: WCAG contrast against the
+      COMPOSITED backdrop, < 3.0 fails. Self-test: replanted, all six rows
+      report 1.05:1. Found two more nobody reported — the live badge at 1.96:1
+      (var(--bg) is not a token here). Commit 0.0.259.
+- [x] 54. NOTIFICATIONS — answered from HIS log, not from belief: the hook
+      fired and the server forwarded (17:30:51 'Remote User · 0eb7cb finished',
+      17:33:02 'UVuruna · ed8163 finished', both 200, phone connected from
+      17:30:03). The broken link is Android's POST_NOTIFICATIONS: the shell
+      asks for it only when the FIRST notice arrives and drops that one
+      (MainActivity.kt:816 says so in a comment). He confirmed the same
+      evening: it arrived as a toast, not in the notification tray. Two real
+      gaps named for the next round: ask the permission up front, and queue a
+      notice for a phone that is away.
+- [x] 55. CLAUDE — the earlier 'impossible' was WRONG, and proven wrong on his
+      own PC: round 10 probed only UIA and never looked at the process table.
+      Ten claude.exe processes, each a child of a specific VSCode
+      extension-host, each carrying --resume=<session-id>; the session id maps
+      to ~/.claude/projects/<slug>, and the slug IS the project path, which the
+      window title also carries ('… - Remote User - Visual Studio Code'). A
+      deterministic bridge with no ticking. Also found: autoAppSets pre-ticks
+      VSCode/Chrome/Explorer already (his 'we went backwards' does not hold),
+      but only from slots[0] — a grid's second cell is never pre-ticked. Design
+      presented to the owner and WAITING on his go before building.
+- [x] 56. Round close — full desktop build (payload gate, INPUT/PRESENCE/NOTIFY
+      gates, smoke test, signed exe + installer, VERIFY FileVersion 0.0.087)
+      and GIT RELEASE published:
+      https://github.com/UVuruna/Remote-User/releases/tag/v0.0.087
+      No APK rebuild: the shell embeds no client assets (no android assets dir,
+      no file:///android_asset), so the colour fixes are served from this PC.
