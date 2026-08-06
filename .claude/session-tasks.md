@@ -602,4 +602,5 @@ NOWHERE in the repo — no exit path drops the topmost band.
       by exactly those 22 px. Commit 0.0.253.
 - [x] 51. Round close - full desktop build (INPUT + PRESENCE + NOTIFY gates,
       payload gate, PyInstaller smoke test, signed exe and installer) and GIT
-      RELEASE v0.0.086.
+      RELEASE published:
+      https://github.com/UVuruna/Remote-User/releases/tag/v0.0.086

@@ -1,5 +1,5 @@
 SESSION: 0eb7cbe2-d779-4c9d-9ec7-0a3d35d0897a
-RELEASE: PENDING — filled in when the tag is published
+RELEASE: https://github.com/UVuruna/Remote-User/releases/tag/v0.0.086
 
 # Final Report — round 11 (2026-08-06)
 
