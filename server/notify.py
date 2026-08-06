@@ -21,10 +21,15 @@ otherwise grow into is the busiest one in the project.
 
 import json
 import logging
+import pathlib
+import shutil
+import sys
 import time
 
 from fastapi import Request
 from fastapi.responses import JSONResponse
+
+from config import BUNDLE_DIR, FROZEN, PROJECT_ROOT, USER_DIR
 
 logger = logging.getLogger(__name__)
 
@@ -108,3 +113,62 @@ def register(app, token: str, active_client: dict) -> None:
             logger.warning("Notify dropped — the phone's socket closed mid-send")
             return JSONResponse(NO_CLIENT)
         return JSONResponse({"ok": True})
+
+
+# ═══════════════════ THE SWITCH THAT TURNS IT ON (ROADMAP H2) ═══════════════
+# The hook shipped working in v0.0.081 and then said nothing for a day on the
+# owner's own PC, because it had never been registered — `agent_hook.py
+# --install` is a command, and the rule is that an end user never types one.
+# So the desktop window carries a switch, and these two functions are what it
+# operates. They live here because this is the notification feature's module;
+# the GUI only owns the checkbox.
+
+def _hook_module():
+    """`setup/agent_hook.py` imported by path — it is deliberately outside the
+    server package (it must run standalone under any interpreter)."""
+    import importlib.util
+    path = PROJECT_ROOT / "setup" / "agent_hook.py"
+    if not path.exists():                      # frozen: bundled beside the exe
+        path = BUNDLE_DIR / "setup" / "agent_hook.py"
+    spec = importlib.util.spec_from_file_location("agent_hook", path)
+    if spec is None or spec.loader is None:
+        raise OSError(f"agent_hook.py not found (looked in {path})")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def agent_hook_installed() -> bool:
+    try:
+        return bool(_hook_module().is_installed())
+    except OSError as e:  # noqa: BLE001 — a missing script is "not installed"
+        logger.warning("agent hook state unreadable: %s", e)
+        return False
+
+
+def set_agent_hook(on: bool) -> tuple[bool, str]:
+    """Register or remove the Claude Code Stop hook. Returns (ok, what to tell
+    the user). Two things the packaged app must handle and the dev checkout
+    need not: the script lives inside the bundle and would vanish with the
+    next update, so it is copied to the user directory; and there is no
+    interpreter in the EXE, so a real python has to be found — if this PC has
+    none, that is said plainly instead of leaving a switch that lies."""
+    module = _hook_module()
+    if not on:
+        module.install(remove=True)
+        return True, ""
+    script = pathlib.Path(module.__file__)
+    python = sys.executable
+    if FROZEN:
+        target = USER_DIR / "agent_hook.py"
+        USER_DIR.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(script, target)
+        script = target
+        python = shutil.which("python") or shutil.which("py") or ""
+        if not python:
+            return False, ("This PC has no Python on PATH, and Claude Code's "
+                           "hooks need one to run the notifier. Install Python "
+                           "and switch this on again.")
+    module.install(script=script, python=python)
+    logger.info("agent hook installed (%s %s)", python, script)
+    return True, ""
