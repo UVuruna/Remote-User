@@ -47,6 +47,7 @@ from PIL import Image, ImageOps
 
 import clipboard
 import config
+import focus_guard
 import layout_api
 import monitors
 import notify
@@ -320,7 +321,10 @@ def create_app(stream, hub: FrameHub | None, injector: InputInjector, token: str
         conn = {"ratio": ratio, "active": None, "region": None, "quality": None,
                 # presence: when we last heard from the phone, and whether it
                 # announced an excursion on its way out (see presence.py)
-                "seen": time.monotonic(), "away": None, "left": False}
+                "seen": time.monotonic(), "away": None, "left": False,
+                # focus_guard: which window this connection's typed input goes
+                # to. Stale = the next key re-reads the foreground and arms it.
+                "pin": None, "pin_stale": True}
         tasks: list = []
         queue = None
         # EVERYTHING that can raise a window lives inside this try (audit
@@ -687,6 +691,16 @@ def _paste_text(injector: InputInjector, text: str, enter: bool) -> None:
         injector.press_key("enter")
 
 
+# Which messages TYPE (their effect lands in whatever window holds the
+# keyboard) and which ones legitimately CHOOSE a window. The focus guard needs
+# both lists: it fences the first and re-arms on the second (owner 2026-08-06
+# — dictation that continued in another agent's session; see focus_guard).
+TYPING_KINDS = frozenset({"key_text", "key_special", "chord", "paste_text",
+                          "screenshot"})
+RETARGET_KINDS = frozenset({"pointer_down", "click", "press", "next_input",
+                            "layout_focus", "monitor_switch"})
+
+
 async def _receive_input(ws: WebSocket, injector: InputInjector, stream, token: str,
                          layouts=None, conn: dict | None = None) -> None:
     conn = conn if conn is not None else {"ratio": 9 / 16, "active": None,
@@ -745,6 +759,15 @@ async def _receive_input(ws: WebSocket, injector: InputInjector, stream, token: 
                             msg.get("reason") or "no reason given")
                 await presence.leave_session(layouts, conn)
             continue
+        # WHERE typed input lands is decided HERE, before a single key is
+        # injected — never by whatever window happened to take focus while the
+        # owner was speaking (owner 2026-08-06). In a layout the fence is the
+        # layout's own members; at the desktop it is the window the burst
+        # started in, re-armed by anything the owner did on purpose.
+        if kind in TYPING_KINDS:
+            await asyncio.to_thread(focus_guard.guard, layouts, conn)
+        elif kind in RETARGET_KINDS:
+            focus_guard.retarget(conn)
         if kind in ("pointer_down", "pointer_up", "click"):
             button = msg.get("button", "left")
             if button not in BUTTON_FLAGS:
@@ -792,6 +815,11 @@ async def _receive_input(ws: WebSocket, injector: InputInjector, stream, token: 
             # H.264 streams the full frame — a viewport from a stale client is noise
         elif kind == "chord":
             injector.press_chord(str(msg["chord"]))
+            # A chord is guarded on the way IN (Ctrl+V must land in his box)
+            # but may itself MOVE the window — Alt+Tab, Win+arrow, Ctrl+W. So
+            # the target is re-read on the next key instead of being dragged
+            # back to where the chord just left (focus_guard).
+            focus_guard.retarget(conn)
         elif kind == "monitor_switch":
             await _switch_monitor(ws, injector, stream, token, layouts, conn)
         elif kind == "screenshot":

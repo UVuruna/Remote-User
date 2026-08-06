@@ -76,6 +76,10 @@ ALGORITHMIC = {
     # phone's layout protocol. Both are algorithmic — they carry a flow.
     "server/presence.py",
     "server/layout_api.py",
+    # Split out of web.py on 2026-08-06 (THE STRUCTURE LAW): WHERE typed input
+    # lands is a decision with its own rules (the layout fence, the desktop
+    # pin, dialogs, what re-arms it) and its own gate — algorithmic.
+    "server/focus_guard.py",
     "server/notify.py",
     # New 2026-08-06: which agent tools are LIVE on this PC and in which
     # project. Algorithmic — a process table read, a session-id -> transcript

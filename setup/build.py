@@ -210,6 +210,13 @@ def input_gate() -> None:
     # and he only finds out by NOT being told something.
     step("0d/6  NOTIFY GATE — the PC names the agent, the phone says it (tests/test_notify.py)")
     run([sys.executable, str(PROJECT_DIR / "tests" / "test_notify.py")])
+    # And for WHERE typed input lands (owner 2026-08-06): `SendInput` has no
+    # target, so a release that lets the foreground decide sends the owner's
+    # dictation into whatever window happened to take focus mid-sentence —
+    # which is how a sentence for another project ended up in this one. He
+    # cannot see it happen: the stream still shows the PC.
+    step("0e/6  FOCUS GATE — typed input lands where he is looking (tests/test_focus_guard.py)")
+    run([sys.executable, str(PROJECT_DIR / "tests" / "test_focus_guard.py")])
 
 
 def generate_icons() -> None:
