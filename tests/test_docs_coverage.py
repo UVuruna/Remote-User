@@ -67,6 +67,10 @@ ALGORITHMIC = {
     "server/encoders.py",
     "server/input_injector.py",
     "server/web.py",
+    # Split out of controls.js on 2026-08-06 (THE STRUCTURE LAW): which sets
+    # ride the wheel is a rule set of its own — the cap of 8, the per-process
+    # reserve, and the owner's per-layout app ticks.
+    "client/sets.js",
     # Split out of web.py on 2026-08-05 (THE STRUCTURE LAW): presence is a
     # state machine with its own rules and its own gate, layout_api is the
     # phone's layout protocol. Both are algorithmic — they carry a flow.
