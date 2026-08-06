@@ -160,14 +160,26 @@ class MainWindow(QMainWindow):
         """Everything on this window whose LENGTH can change after it was
         built. When one of these differs from what the minimum was measured
         against, the minimum is measured again — and only then, so the refresh
-        timer does not re-lay-out the window once a second."""
-        return (self.update_btn.isVisible(), self.update_btn.text(),
+        timer does not re-lay-out the window once a second.
+
+        `isHidden()`, never `isVisible()`: a child of a hidden window is not
+        visible either, so a signature built on visibility would change the
+        moment the owner closes the window to the tray — and the re-measure
+        that followed would hand back a minimum with no update button in it,
+        putting the overlap back on the next open. `isHidden()` asks the only
+        question this window actually decides: was the button shown or not.
+        """
+        return (self.update_btn.isHidden(), self.update_btn.text(),
                 self.notify_caption.text(), self.reach_label.text(),
                 self.url_label.text(), self.qr_label.text())
 
     def _resettle(self) -> None:
         if self._settled_for is None:
             return  # still being built — the first settle has not run yet
+        if not self.isVisible():
+            return  # in the tray: Qt gives no real metrics, so any measurement
+                    # taken here would be a smaller, wrong floor. `showEvent`
+                    # settles whatever changed while the window was away.
         if self._content_signature() != self._settled_for:
             self._settle_minimum()
 
@@ -705,18 +717,21 @@ class MainWindow(QMainWindow):
     # -- window behavior ---------------------------------------------------
 
     def showEvent(self, event) -> None:
-        """Re-measure the minimum the first time the window is realized.
+        """Re-measure the minimum every time the window is shown.
 
         A window measured while still hidden can under-report by whole rows —
         Qt hands a widget its real metrics when it is shown, and a button that
         was `show()`n on a hidden parent counts for nothing until then. That is
         43 px of update button in this window, which is exactly the strip that
         was drawn over the QR's link.
+
+        EVERY show, not just the first: closing to the tray is this app's
+        normal close, `_resettle` deliberately does nothing while the window is
+        away, and an update found during those hours must not be handed a
+        window that was measured without it.
         """
         super().showEvent(event)
-        if not getattr(self, "_shown_once", False):
-            self._shown_once = True
-            self._settle_minimum()
+        self._settle_minimum()
 
     def closeEvent(self, event) -> None:
         """Close = hide to tray (the server keeps running). Quit lives in the

@@ -37,9 +37,19 @@ it re-measures from the computed floor, declares the result, and grows the
 window without ever shrinking below the size the owner gave it (a maximized
 window is left alone). `_content_signature()` is what decides WHEN — the six
 strings/visibilities that can change length — so the 1 s refresh tick does not
-re-lay-out the window every second. `showEvent()` settles once more the first
-time the window is realized: a widget measured while hidden can under-report by
-whole rows (43 px of update button, here).
+re-lay-out the window every second. `showEvent()` settles again on every show:
+a widget measured while hidden can under-report by whole rows (43 px of update
+button, here).
+
+**The tray is part of that** — closing this app hides it, it does not close it,
+so an update offer can arrive while nobody is looking. Two rules keep that from
+undoing the fix: `_resettle` does nothing while the window is hidden (Qt gives
+no real metrics there, and the smaller floor it would produce is exactly the
+bug), and the signature asks `isHidden()` rather than `isVisible()` — a child
+of a hidden window is not visible either, so a visibility-based signature would
+"change" the moment the owner closes to the tray and trigger that bad
+measurement. `showEvent` is what settles whatever arrived while the window was
+away.
 
 ## Connections
 
