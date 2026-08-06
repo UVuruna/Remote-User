@@ -11,8 +11,11 @@ The report that opened this session was itself the evidence: the first
 paragraph of his message is a sentence he dictated for ANOTHER project, and it
 arrived here.
 
-NOT DONE / BLOCKED: **none of what he asked**. One thing is stated, not
-hidden: I could not name the specific program that stole his focus tonight,
+NOT DONE / BLOCKED: **nothing is left undone — every task he gave is finished
+and shipped**. (Say this the right way round: an earlier version of this line
+read "none of what he asked", which in Serbian reads as "I did nothing you
+asked" — the exact opposite. A status line that can be read as its own
+opposite is a broken status line.) One thing is stated, not hidden: I could not name the specific program that stole his focus tonight,
 because nothing in the app was watching. From this version the server log
 names it (exe + title) every time it tries — and it no longer succeeds inside
 a layout.
