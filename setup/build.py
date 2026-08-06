@@ -217,6 +217,16 @@ def input_gate() -> None:
     # cannot see it happen: the stream still shows the PC.
     step("0e/6  FOCUS GATE — typed input lands where he is looking (tests/test_focus_guard.py)")
     run([sys.executable, str(PROJECT_DIR / "tests" / "test_focus_guard.py")])
+    # And the phone's whole LAYOUT protocol (owner report 2026-08-06: "layout,
+    # kreiraj iz liste, ništa se ne dešava"). One shadowed name in
+    # layout_list — `mon_rect = mon_rect(stream)` — raised UnboundLocalError
+    # before a single byte was sent, so the loading cube spun forever. Four
+    # guards and four gates were green over it, because NO TEST WALKED THE
+    # PATH. Every layout message the phone can send is driven through the real
+    # dispatcher here, and a handler that raises or answers nothing fails the
+    # build.
+    step("0f/6  LAYOUT GATE — every layout message answers the phone (tests/test_layout_protocol.py)")
+    run([sys.executable, str(PROJECT_DIR / "tests" / "test_layout_protocol.py")])
 
 
 def generate_icons() -> None:

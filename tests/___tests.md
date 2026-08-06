@@ -196,6 +196,30 @@ through the real `web._receive_input` dispatcher.
 Run: `.venv\Scripts\python tests/test_focus_guard.py` — also a fail-closed
 step in `build.py` (0e/6).
 
+### `test_layout_protocol.py` — Layout Gate
+Proves that EVERY layout message the phone can send answers it. Born from the
+2026-08-06 live failure — *"layout, kreiraj iz liste, ništa se ne dešava"*: the
+loading cube spun and no list ever came, because one line in
+`layout_api.layout_list` read `mon_rect = mon_rect(stream)`. That name is the
+module's own function, so the assignment made it a LOCAL for the whole function
+and the call on the right-hand side raised `UnboundLocalError` before anything
+was sent. The owner's server log carried the traceback three times; the build
+carried nothing, because **no test walked this path** — four guards, an input
+gate, a presence gate, a notify gate and a focus gate, and the phone's entire
+layout protocol had none.
+
+Five checks driving the REAL `web._receive_input` dispatcher over the REAL
+`layout_api` and `LayoutRegistry`, with only Windows faked (user32, the window
+list, UIA, the process table): create from a LIST (windows plus the tabs of
+tab-capable apps), create by TAPPING a window, create → focus → desktop,
+rename / app-sets / aspect / remove each answering with a fresh `layout_state`,
+and a 2×1 grid built from the list. A handler that raises, or that answers the
+phone with nothing, fails here. Self-tested by replanting the defect: the
+first check reports the exact `UnboundLocalError` and fails.
+
+Run: `.venv\Scripts\python tests/test_layout_protocol.py` — also a
+fail-closed step in `build.py` (0f/6).
+
 ### Guard tests (THE LAWS — rules/CODE.md → Enforcement, rules/DOCS.md → Enforcement)
 Five standard-named guard tests, a fast runner, and a small shared helper —
 four installed 2026-08-01 alongside the MD-First 2.0 docs migration, the fifth

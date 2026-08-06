@@ -1,0 +1,270 @@
+"""Layout gate: EVERY layout message the phone can send must answer it.
+
+Regression proof for the 2026-08-06 live failure — "layout, kreiraj iz liste,
+ništa se ne dešava": the loading cube spun and no list ever came. The cause was
+one line in `layout_api.layout_list`:
+
+    mon_rect = mon_rect(stream)
+
+`mon_rect` is this module's own function, so assigning to that name made it a
+LOCAL for the whole function and the call on the right-hand side raised
+UnboundLocalError before anything was sent. The socket died, the phone
+reconnected, and the owner saw a spinner forever. His server log carried the
+traceback three times; nothing in the build did, because NO TEST WALKED THIS
+PATH. Four guard tests, an input gate, a presence gate, a notify gate and a
+focus gate, and the phone's whole layout protocol had none — that is the real
+finding, and this file is it.
+
+Every message is driven through the REAL `web._receive_input` dispatcher and
+the REAL `layout_api` + `LayoutRegistry`; only Windows itself is faked (user32,
+the window list, UIA, the process table). A handler that raises, or that
+answers the phone with nothing, fails here.
+
+Run:  .venv\\Scripts\\python tests/test_layout_protocol.py
+"""
+
+import asyncio
+import json
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "server"))
+
+import agents  # noqa: E402
+import layout_api  # noqa: E402
+import uia  # noqa: E402
+import web  # noqa: E402
+import window_manager  # noqa: E402
+
+WIN_A, WIN_B = 0x10, 0x20
+MON = (0, 0, 3840, 2160)
+
+
+class FakeWs:
+    def __init__(self, messages):
+        self._messages = list(messages)
+        self.sent: list = []
+
+    async def receive_text(self) -> str:
+        if not self._messages:
+            raise web.WebSocketDisconnect(1000)
+        return json.dumps(self._messages.pop(0))
+
+    async def send_text(self, text: str) -> None:
+        self.sent.append(json.loads(text))
+
+    async def close(self, code: int = 1000) -> None:
+        pass
+
+
+class FakeStream:
+    mode = "h264"
+    width, height, monitor_index = 3840, 2160, 0
+
+
+class FakeWin32:
+    """Only what the layout path asks of user32/dwmapi."""
+
+    def __init__(self, alive):
+        self.alive = set(alive)
+
+    def IsWindow(self, hwnd):             # noqa: N802
+        return 1 if hwnd in self.alive else 0
+
+    def IsWindowVisible(self, hwnd):      # noqa: N802
+        return 1 if hwnd in self.alive else 0
+
+    def GetForegroundWindow(self):        # noqa: N802
+        return WIN_A
+
+    def __getattr__(self, name):
+        return lambda *a, **k: 0
+
+
+def fake_windows():
+    """Two open windows, one of them tab-capable."""
+    return [
+        {"hwnd": WIN_A, "title": "Remote User - Visual Studio Code",
+         "process": "code.exe", "icon": None},
+        {"hwnd": WIN_B, "title": "Downloads", "process": "explorer.exe",
+         "icon": None},
+    ]
+
+
+def install_fakes() -> None:
+    fake = FakeWin32([WIN_A, WIN_B])
+    window_manager.user32 = fake
+    window_manager.dwmapi = fake
+    window_manager._topmost.clear()
+    window_manager._ledger_save = lambda: None
+    window_manager.is_alive = lambda hwnd: True
+    window_manager.list_windows = lambda exclude=None: [
+        w for w in fake_windows() if not exclude or w["hwnd"] not in exclude]
+    window_manager.window_at = lambda rect, x, y: dict(fake_windows()[0])
+    window_manager.place_window = lambda hwnd, rect: True
+    window_manager.raise_window = lambda hwnd, topmost=True: None
+    window_manager.drop_topmost = lambda hwnd: True
+    window_manager.freeze_transitions = lambda hwnd, disabled=True: None
+    window_manager.wait_minimized = lambda hwnds, timeout_s=0: None
+    window_manager._frame_rect = lambda hwnd: (0, 0, 1000, 1000)
+    window_manager._title = lambda hwnd: "Remote User - Visual Studio Code"
+    window_manager._process_name = lambda hwnd: "code.exe"
+    window_manager._process_path = lambda hwnd: "C:/code.exe"
+    window_manager.icon_data_uri = lambda path: None
+    layout_api.rect_for_size = lambda w, h, i: MON
+    uia.has_tabs = lambda process: process == "code.exe"
+    uia.list_tabs = lambda rect, hwnd: [{"name": "prompt.txt", "x": 0.1, "y": 0.02}]
+    uia.tab_at = lambda rect, x, y: None
+    agents.agents_for = lambda title: []
+
+
+def fresh_conn() -> dict:
+    return {"ratio": 9 / 16, "active": None, "region": None, "quality": None,
+            "seen": 0.0, "away": None, "left": False,
+            "pin": None, "pin_stale": True}
+
+
+def drive(messages, conn=None, layouts=None):
+    """Run the messages through the real dispatcher; return (ws, conn, layouts).
+    An exception inside a handler is NOT swallowed — that is the point."""
+    conn = conn if conn is not None else fresh_conn()
+    layouts = layouts if layouts is not None else window_manager.LayoutRegistry()
+    ws = FakeWs(messages)
+
+    async def run():
+        try:
+            await web._receive_input(ws, injector=None, stream=FakeStream(),
+                                     token="t", layouts=layouts, conn=conn)
+        except web.WebSocketDisconnect:
+            pass
+
+    asyncio.run(run())
+    return ws, conn, layouts
+
+
+def sent_of(ws, kind):
+    return [m for m in ws.sent if m.get("type") == kind]
+
+
+# ═══════════════════ the failure that got here ═══════════════════
+def check_create_from_a_list_answers() -> bool:
+    """THE bug: `layout_list` raised UnboundLocalError, so the phone's cube
+    spun forever. The list must come back, with the windows AND the tabs of
+    the tab-capable ones."""
+    install_fakes()
+    ws, _, _ = drive([{"type": "layout_list"}])
+    offers = sent_of(ws, "layout_offer")
+    if len(offers) != 1:
+        return False
+    entries = offers[0]["entries"]
+    kinds = [e["kind"] for e in entries]
+    return ("window" in kinds and "tab" in kinds and len(entries) == 3
+            and offers[0]["grids"])
+
+
+def check_tap_a_window_answers() -> bool:
+    """The other creation source — one armed tap."""
+    install_fakes()
+    ws, _, _ = drive([{"type": "layout_pick", "x": 0.5, "y": 0.5}])
+    offers = sent_of(ws, "layout_offer")
+    return len(offers) == 1 and offers[0]["target"]["hwnd"] == WIN_A
+
+
+# ═══════════════════ and the whole protocol behind it ═══════════════════
+def check_create_focus_and_desktop() -> bool:
+    """Create → the layout is focused and framed; Desktop → back out."""
+    install_fakes()
+    conn, layouts = fresh_conn(), window_manager.LayoutRegistry()
+    ws, conn, layouts = drive([
+        {"type": "layout_create", "mode": "solo", "orient": "portrait",
+         "slots": [{"hwnd": WIN_A, "tab": None, "x": 0.5, "y": 0.5}],
+         "name": "Work", "app_sets": ["claude"]},
+    ], conn, layouts)
+    states = sent_of(ws, "layout_state")
+    if not states or len(layouts.layouts) != 1:
+        return False
+    if states[-1]["active"] != 0 or conn["active"] != 0:
+        return False
+    if layouts.layouts[0].name != "Work" or layouts.layouts[0].app_sets != ["claude"]:
+        return False
+    ws, conn, layouts = drive([{"type": "layout_focus", "index": -1}], conn, layouts)
+    states = sent_of(ws, "layout_state")
+    return bool(states) and states[-1]["active"] is None and conn["active"] is None
+
+
+def check_rename_apps_aspect_remove_all_answer() -> bool:
+    """Every later message about an existing layout answers with the state —
+    a silent handler is how the phone ends up showing a stale list."""
+    install_fakes()
+    conn, layouts = fresh_conn(), window_manager.LayoutRegistry()
+    ws, conn, layouts = drive([
+        {"type": "layout_create", "mode": "solo", "orient": "portrait",
+         "slots": [{"hwnd": WIN_A, "tab": None, "x": 0.5, "y": 0.5}]},
+    ], conn, layouts)
+    for msg, check in (
+        ({"type": "layout_rename", "index": 0, "name": "Reading"},
+         lambda: layouts.layouts[0].name == "Reading"),
+        ({"type": "layout_apps", "index": 0, "sets": ["vscode"]},
+         lambda: layouts.layouts[0].app_sets == ["vscode"]),
+        ({"type": "layout_aspect", "index": 0, "w": 4, "h": 3, "pos": 250},
+         lambda: layouts.layouts[0].ratio == (4, 3)),
+    ):
+        ws, conn, layouts = drive([msg], conn, layouts)
+        if not sent_of(ws, "layout_state") or not check():
+            return False
+    ws, conn, layouts = drive([{"type": "layout_remove", "index": 0}], conn, layouts)
+    return bool(sent_of(ws, "layout_state")) and not layouts.layouts
+
+
+def check_a_grid_from_the_list_answers() -> bool:
+    """Two slots, the source the owner actually used when it broke."""
+    install_fakes()
+    ws, conn, layouts = drive([
+        {"type": "layout_list"},
+        {"type": "layout_create", "mode": "grid", "grid": "2x1",
+         "orient": "wide",
+         "slots": [{"hwnd": WIN_A, "tab": None, "x": 0.25, "y": 0.5},
+                   {"hwnd": WIN_B, "tab": None, "x": 0.75, "y": 0.5}]},
+    ])
+    progress = sent_of(ws, "layout_progress")
+    return (len(sent_of(ws, "layout_offer")) == 1 and len(progress) == 2
+            and len(layouts.layouts) == 1
+            and layouts.layouts[0].members == [WIN_A, WIN_B])
+
+
+CHECKS = [
+    ("create from a LIST answers the phone", check_create_from_a_list_answers),
+    ("create by TAPPING a window answers the phone", check_tap_a_window_answers),
+    ("create → focus → desktop", check_create_focus_and_desktop),
+    ("rename / app sets / aspect / remove all answer",
+     check_rename_apps_aspect_remove_all_answer),
+    ("a 2x1 grid built from the list", check_a_grid_from_the_list_answers),
+]
+
+
+def main() -> int:
+    print("=== LAYOUT GATE ===")
+    failed = 0
+    for name, fn in CHECKS:
+        try:
+            ok = fn()
+        except Exception as e:  # a crashing handler is a failing check
+            ok = False
+            print(f"  ERROR {name}: {e!r}")
+        print(f"  {'PASS' if ok else 'FAIL'}  {name}")
+        failed += 0 if ok else 1
+    print()
+    if failed:
+        print(f"LAYOUT GATE FAILED — {failed} check(s).")
+        return 1
+    print("LAYOUT GATE PASSED — every layout message answers the phone.")
+    return 0
+
+
+def test_layout_protocol():
+    """pytest entry."""
+    assert main() == 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
