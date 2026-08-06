@@ -173,6 +173,14 @@ class Settings:
     # Kept where the owner can reopen it; regenerated on every server start.
     qr_image_path: Path = (USER_DIR if FROZEN else PROJECT_ROOT) / "PAIRING_QR.png"
 
+    # Desktop window — closing it hides to the tray, and the toast that SAYS
+    # so is one-time guidance, not a status report (owner 2026-08-06: "stalno
+    # dobijamo ovo obaveštenje, konstantno se otvara i zatvara"). An in-memory
+    # flag only lasted one run, so every start/stop of the day produced it
+    # again; the marker file is what makes "once" mean once. Deleting it shows
+    # the notice again, which is the only reason to touch it.
+    tray_notice_path: Path = USER_DIR / "tray_notice.seen"
+
     # Logging
     log_dir: Path = USER_DIR if FROZEN else PROJECT_ROOT / "logs"
     log_file: str = "server.log"

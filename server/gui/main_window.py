@@ -727,10 +727,29 @@ class MainWindow(QMainWindow):
         tray menu."""
         event.ignore()
         self.hide()
-        if not self._tray_notice_shown:
-            self._tray_notice_shown = True
-            self.tray.showMessage(
-                "Remote User is still running",
-                "The server keeps working in the tray. Right-click the icon to quit.",
-                QSystemTrayIcon.MessageIcon.Information, 3000,
-            )
+        if self._tray_notice_shown or self._tray_notice_seen():
+            return
+        self._tray_notice_shown = True
+        self._mark_tray_notice_seen()
+        self.tray.showMessage(
+            "Remote User is still running",
+            "The server keeps working in the tray. Right-click the icon to quit.",
+            QSystemTrayIcon.MessageIcon.Information, 3000,
+        )
+
+    # -- the one-time tray notice (owner 2026-08-06) -------------------------
+    # "Closing hides me, I keep running" is something a user needs told ONCE.
+    # The flag used to live only in this object, so it reset with every start
+    # — and a day of starting and stopping the app turned one-time guidance
+    # into a toast that "constantly opens and closes". A marker file next to
+    # the rest of the user data is what makes once mean once.
+    def _tray_notice_seen(self) -> bool:
+        return SETTINGS.tray_notice_path.exists()
+
+    def _mark_tray_notice_seen(self) -> None:
+        try:
+            path = SETTINGS.tray_notice_path
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("shown", encoding="utf-8")
+        except OSError as e:  # a notice we cannot remember is not a failure
+            logger.warning("Could not record the tray notice: %s", e)
