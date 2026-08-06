@@ -685,3 +685,31 @@ NOWHERE in the repo — no exit path drops the topmost band.
       (payload gate, INPUT/PRESENCE/NOTIFY gates, smoke test, signed exe and
       installer, VERIFY FileVersion 0.0.088) and GIT RELEASE published:
       https://github.com/UVuruna/Remote-User/releases/tag/v0.0.088
+
+Round 12 (owner's voice message of 2026-08-06 evening — the URGENT one; the
+first paragraph of his message is the evidence itself: a sentence dictated for
+another project that landed in THIS session):
+- [x] 61. FOCUS NEVER LEAVES THE BOX HE IS DICTATING INTO — server/focus_guard.py.
+      Root cause: SendInput has no target — every dictated character went to
+      whatever window Windows called the foreground at that instant, so anything
+      that took focus mid-sentence took the sentence. Half of it was OURS and is
+      in his log (excursions 18:38:56, 18:41:50): a picker closes the socket, the
+      page re-focuses the layout, and focus() raised members in LIST order, so the
+      keyboard went to the last window of the grid. Fix: the target is decided
+      before every typing message (layout = fence, desktop = pin, GW_OWNER dialog
+      = the target, thief NAMED in the log), Layout.last_member rides last, and —
+      after his second, shouted message — the layout is DEFENDED every 0.25 s by
+      focus_guard.watch, because the recognizer delivers a whole utterance only at
+      the END of a round. Phone half: VoiceInput keeps a rescue copy of what it
+      heard, so a round that dies types it instead of deleting it. Evidence:
+      tests/test_focus_guard.py 15/15 (incl. the whole path through the real
+      dispatcher), fail-closed as step 0e of build.py. Commits 0.0.280, 0.0.283.
+- [x] 63. The tray toast — the "already told" flag lived only in the window
+      object, so every start of the app produced it again and a day of starting
+      and stopping turned one-time guidance into a toast constantly opening and
+      closing. Now a marker file (SETTINGS.tray_notice_path) makes once mean once;
+      the footer says the same sentence permanently anyway. Commit 0.0.281.
+- [x] 62. Round close — APK 0.0.089 (Kotlin changed) + full desktop build (payload
+      gate, INPUT/PRESENCE/NOTIFY/FOCUS gates, smoke test, signed exe + installer,
+      VERIFY FileVersion 0.0.089) and GIT RELEASE published:
+      https://github.com/UVuruna/Remote-User/releases/tag/v0.0.089

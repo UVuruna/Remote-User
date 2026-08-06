@@ -1,3 +1,75 @@
+SESSION: b8d8ce25-5cc2-4f32-9fc5-60a910985a1f
+RELEASE: https://github.com/UVuruna/Remote-User/releases/tag/v0.0.089
+
+# Final Report — round 12 (2026-08-06): the dictation that went somewhere else
+
+The report that opened this session was itself the evidence: the first
+paragraph of his message is a sentence he dictated for ANOTHER project, and it
+arrived here.
+
+NOT DONE / BLOCKED: **none of what he asked**. One thing is stated, not
+hidden: I could not name the specific program that stole his focus tonight,
+because nothing in the app was watching. From this version the server log
+names it (exe + title) every time it tries — and it no longer succeeds inside
+a layout.
+
+## Root cause, in one line
+`SendInput` has no target. Every dictated character went to whatever window
+Windows called the FOREGROUND at that instant, so anything on the PC that took
+focus mid-sentence took the rest of the sentence with it — silently, with no
+error, while the stream still showed the PC.
+
+Half of it was OURS, and his own server log dates it: a picker or permission
+dialog closes the socket (excursions at 18:38:56 and 18:41:50), the page
+re-focuses the layout on the new connection, and `focus()` raised members in
+LIST order — so the keyboard went to whichever window sat last in the grid,
+which for him is the other agent's session.
+
+## Per task
+
+- [x] 61. Focus never leaves the box he is dictating into — DONE.
+  `server/focus_guard.py`: the target is decided BEFORE every message that
+  types. In a layout the fence is the layout (a foreign foreground is refused
+  and focus handed back to the member he was typing in); at the desktop the
+  target is the window the typing burst started in, re-armed only by what he
+  does on purpose; a dialog of the target counts as the target (GW_OWNER
+  chain, never process identity — every VSCode window shares one process and
+  one of them is the thief); the thief is NAMED in the log.
+  After his second message, shouted: the layout is **defended**, not merely
+  checked — `focus_guard.watch` polls every 0.25 s, because the recognizer
+  delivers a whole utterance only at the END of a round, so a guard that waits
+  for a keystroke arrives after the damage. It sleeps while the phone is away.
+  `Layout.last_member` fixes the other half: the keyboard member is raised
+  LAST on every re-focus.
+  Phone half: `VoiceInput` keeps a rescue copy of what it has already heard
+  (`EXTRA_PARTIAL_RESULTS`), so a round that dies — the `ERROR_CLIENT` lines
+  that fill his log — types those words instead of deleting them; `deliver()`
+  is the only exit, so nothing is typed twice.
+  Evidence: `tests/test_focus_guard.py` 15/15, including the whole path
+  through the real `web._receive_input` dispatcher, fail-closed as step 0e of
+  `build.py`. Commits 0.0.280, 0.0.283.
+
+- [x] 63. The tray toast that constantly opened and closed — DONE. The "already
+  told" flag lived only in the window object, so every start of the app
+  produced it again. A marker file (`SETTINGS.tray_notice_path`) makes once
+  mean once. Noted for him: his screenshot showed the sender as **Python**, so
+  that one came from a dev instance, not the installed app. Commit 0.0.281.
+
+- [x] 62. Round close — DONE. APK 0.0.089 (Kotlin changed) + full desktop
+  build and GIT RELEASE v0.0.089.
+
+## Gates on the released tree
+
+guards 4/4 · INPUT GATE · PRESENCE GATE · NOTIFY GATE 15/15 · **FOCUS GATE
+15/15 (new, step 0e)** · Qt layout audit 5/5 · phone layout audit · client
+load test · PyInstaller smoke test · payload gate · signed exe + installer ·
+VERIFY FileVersion 0.0.089.
+
+## What he should watch for
+If anything still pulls focus while he dictates, the server log now says who:
+`Focus left the layout the phone is showing — <exe> "<title>" (0x…)`. That
+line is the next fix's starting point, and it did not exist before tonight.
+
 SESSION: 0eb7cbe2-d779-4c9d-9ec7-0a3d35d0897a
 RELEASE: https://github.com/UVuruna/Remote-User/releases/tag/v0.0.088
 
