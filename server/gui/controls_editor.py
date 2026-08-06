@@ -58,6 +58,17 @@ from gui.controls_widgets import (
 
 logger = logging.getLogger(__name__)
 
+# The set list's three sections, in the order they are shown (owner
+# 2026-08-06: "hoću da srodne celine budu odvojene linijom"). One flat list of
+# twelve names said nothing about WHEN a set appears — and that is the only
+# thing that separates them. The names match the vocabulary of CLAUDE.md and
+# ACTIONS.md ("app-aware sets"), so the editor and the docs speak one language.
+SECTIONS = (
+    ("categories", "Standard"),    # always available in the wheel
+    ("app_sets", "App-aware"),     # appear only while a matching layout is focused
+    ("custom_sets", "Custom"),     # made here by the owner
+)
+
 WHEEL_MAX = 8  # sets in the phone's wheel at once; Mouse/Input/Settings are
                # `required` (never hidden), everything else toggles
                # (owner 2026-08-05)
@@ -230,7 +241,7 @@ class ControlsEditor(QDialog):
         left = QVBoxLayout()
         left.addWidget(QLabel("Sets"))
         self.set_list = QListWidget()
-        self.set_list.currentRowChanged.connect(self._select)
+        self.set_list.currentRowChanged.connect(self._row_selected)
         left.addWidget(self.set_list, 1)
         row = QHBoxLayout()
         add = QPushButton("New set")
@@ -289,18 +300,31 @@ class ControlsEditor(QDialog):
         dbox.addWidget(self.detail)
         right.addWidget(self.detail_group)
 
-        arr = QGroupBox("Arrangement (the shipped order is the default)")
-        arow = QHBoxLayout(arr)
+        # The caption says only what the box IS (owner 2026-08-06): every
+        # position is spelled out in the rows below it, so repeating
+        # "top · left · right · bottom" in the titles was the same text twice.
+        arr = QGroupBox("Arrangement")
+        acol = QVBoxLayout(arr)
+        arow = QHBoxLayout()
         # The slot ladder differs per orientation: landscape is a cross with
         # real directions, portrait is a plain column — 1st…4th from the top
         # (owner 2026-08-05: "left/right/bottom" said nothing about a column).
-        self.order_land = OrderList("Landscape — top · left · right · bottom", LAND_SLOTS)
-        self.order_port = OrderList("Portrait — top → bottom", PORT_SLOTS)
+        # The names are the owner's own (2026-08-06): D-pad is what the cross
+        # is called everywhere else in this project, Stack is the column.
+        self.order_land = OrderList("D-pad (landscape)", LAND_SLOTS)
+        self.order_port = OrderList("Stack (portrait)", PORT_SLOTS)
         arow.addWidget(self.order_land, 1)
         arow.addWidget(self.order_port, 1)
-        reset = QPushButton("Reset arrangement")
+        acol.addLayout(arow)
+        # A lone button belongs UNDER the two lists, not beside them (owner
+        # 2026-08-06): sitting in the third column it charged the whole box its
+        # own width, and the two lists — the content — paid for it.
+        reset_row = QHBoxLayout()
+        reset_row.addStretch()
+        reset = QPushButton("Default")
         reset.clicked.connect(self._reset_arrangement)
-        arow.addWidget(reset, 0, Qt.AlignmentFlag.AlignBottom)
+        reset_row.addWidget(reset)
+        acol.addLayout(reset_row)
         right.addWidget(arr)
 
         actions = QHBoxLayout()
@@ -357,8 +381,10 @@ class ControlsEditor(QDialog):
         longest entry, plus the detail form (caption + the longest command
         name / chord / "Built-in: …" entry + the Record button). Height = six
         pool rows, the detail form's four rows, the arrangement's caption plus
-        four slots, and the fixed furniture (headers, group titles, buttons) —
-        the smallest window in which a shipped set still reads whole.
+        four slots plus its two button rows (the move pair and the Default
+        button, which moved UNDER the lists on 2026-08-06), and the fixed
+        furniture (headers, group titles, buttons) — the smallest window in
+        which a shipped set still reads whole.
         """
         metrics = QFontMetrics(self.font())
 
@@ -388,7 +414,8 @@ class ControlsEditor(QDialog):
         rows = metrics.height() + 12
         height = (rows * 6                    # six pool rows, no scrollbar
                   + rows * 4                  # the detail form's four rows
-                  + rows * 5                  # arrangement: caption + 4 slots
+                  + rows * 7                  # arrangement: caption + 4 slots
+                                              # + the ↑↓ row + the Default row
                   + rows * 4                  # header, group titles, actions
                   + 190)                      # group frames, margins, buttons
         return QSize(width, height)
@@ -400,7 +427,7 @@ class ControlsEditor(QDialog):
         the shipped categories, the owner's custom sets, and the app-aware
         sets (editable for the first time, owner 2026-08-05)."""
         out: list[tuple[str, int, dict]] = []
-        for key in ("categories", "custom_sets", "app_sets"):
+        for key, _ in SECTIONS:
             for i, s in enumerate(self.data.get(key) or []):
                 out.append((key, i, s))
         return out
@@ -423,21 +450,73 @@ class ControlsEditor(QDialog):
 
     # -- UI logic ------------------------------------------------------------
 
+    def _set_suffix(self, kind: str, s: dict) -> str:
+        """What a row adds after the set's name. The section heading already
+        says WHAT the set is, so only the app sets still owe an explanation —
+        and there the interesting part is not the process (two sets share
+        `code`) but the CONDITION: which window brings this set out."""
+        if kind != "app_sets":
+            return ""
+        title = s.get("title")
+        if title:
+            names = title if isinstance(title, list) else [title]
+            return f"   ({s.get('process', '?')} · “{names[0]}”)"
+        return f"   ({s.get('process', '?')})"
+
+    def _header_item(self, text: str) -> QListWidgetItem:
+        """A section heading: readable, and NOT a set — Qt must never let the
+        selection land on it, or `_select` would be handed a row that has no
+        entry behind it."""
+        item = QListWidgetItem(text)
+        item.setFlags(Qt.ItemFlag.NoItemFlags)
+        font = item.font()
+        font.setBold(True)
+        item.setFont(font)
+        return item
+
     def _reload_list(self, select: int = 0) -> None:
+        """Rebuilds the left list as three separated sections.
+
+        `select` is an index into `_entries()` — NOT a list row, because the
+        headings occupy rows of their own. `self._rows` is the bridge: row →
+        entry index, or None for a heading/hint row.
+        """
         self.set_list.blockSignals(True)
         self.set_list.clear()
-        for kind, _, s in self._entries():
-            suffix = {"categories": "   (built-in)", "custom_sets": "",
-                      "app_sets": f"   (app · {s.get('process', '?')})"}[kind]
-            item = QListWidgetItem(f"{s.get('name', '?')}{suffix}")
-            body = self.icons.get(s.get("icon", ""))
-            if body:
-                item.setIcon(icon_for(body))
-            self.set_list.addItem(item)
+        self._rows: list[int | None] = []
+        entry = 0
+        for key, heading in SECTIONS:
+            self.set_list.addItem(self._header_item(heading))
+            self._rows.append(None)
+            sets = self.data.get(key) or []
+            for s in sets:
+                item = QListWidgetItem(f"{s.get('name', '?')}{self._set_suffix(key, s)}")
+                body = self.icons.get(s.get("icon", ""))
+                if body:
+                    item.setIcon(icon_for(body))
+                self.set_list.addItem(item)
+                self._rows.append(entry)
+                entry += 1
+            if not sets:
+                # An empty section still has to say what it is FOR — a blank
+                # gap under "Custom" reads as a bug, not as an invitation.
+                hint = self._header_item("      (none yet — “New set”)")
+                hint.setFont(self.set_list.font())
+                self.set_list.addItem(hint)
+                self._rows.append(None)
         self.set_list.blockSignals(False)
         self.set_list.setIconSize(QSize(22, 22))
         self._fit_set_list()
-        self.set_list.setCurrentRow(min(select, self.set_list.count() - 1))
+        self.set_list.setCurrentRow(self._row_of(select))
+
+    def _row_of(self, entry: int) -> int:
+        """Entry index → list row (the first real row when it is out of range,
+        so a deletion can never leave the list on a heading)."""
+        rows = getattr(self, "_rows", [])
+        if entry in rows:
+            return rows.index(entry)
+        real = [r for r, e in enumerate(rows) if e is not None]
+        return real[0] if real else -1
 
     def _fit_set_list(self) -> None:
         """Ladder step 1: the list column is not stretched, so it must ASK for
@@ -446,9 +525,16 @@ class ControlsEditor(QDialog):
         self.set_list.setMinimumWidth(
             self.set_list.sizeHintForColumn(0) + 2 * self.set_list.frameWidth() + 12)
 
-    def _select(self, index: int) -> None:
+    def _row_selected(self, row: int) -> None:
+        """The list's own signal speaks in ROWS; everything else in this
+        dialog speaks in ENTRY indices (the headings sit between them). This
+        is the one place that translates — a heading row selects nothing."""
+        rows = getattr(self, "_rows", [])
+        self._select(rows[row] if 0 <= row < len(rows) else None)
+
+    def _select(self, index: int | None) -> None:
         self._store_current()
-        self._current = index if index >= 0 else None
+        self._current = index if index is not None and index >= 0 else None
         entry = self._current_entry()
         if entry is None:
             return
@@ -599,8 +685,9 @@ class ControlsEditor(QDialog):
             "buttons": [],
         })
         self._current = None  # the list is about to be rebuilt
-        self._reload_list(len(self.data.get("categories") or [])
-                          + len(self.data["custom_sets"]) - 1)
+        # The entry index of the set just appended — Custom is the LAST
+        # section, so it is simply the end of the flat entry list.
+        self._reload_list(len(self._entries()) - 1)
 
     def _delete_set(self) -> None:
         entry = self._current_entry()

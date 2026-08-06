@@ -43,6 +43,7 @@ Every entry obeys it, and a new one must too:
 | Windows | `grid` `desktop` `switchwin` `tasks` `maxwin` `minwin` `snapl` `snapr` `run` `x` `newwin` |
 | Apps | `sidebar` `palette` `terminal` `preview` `gotofile` `comment` `newtab` `closetab` `address` `reopen` `reload` `newdir` `folderup` `copypath` `details` |
 | Claude | `claude` `usage` `model` `thinking` `cmode` `compact` `newchat` `rewind` |
+| App faces | `vscode` `chrome` `explorer` |
 | System / panels | `settings` `monitor` `monitor2` `gauge` `globe` `target` `list` `aspect` `move` |
 
 ## Connections
@@ -61,3 +62,8 @@ Every entry obeys it, and a new one must too:
   device's font coverage.
 - **A missing name is not an error**: `svg()` returns an empty `<svg>`, and a
   button with no usable icon falls back to a text face (`.ctl.text`).
+- **An app-aware set wears its own app's face** (owner 2026-08-06): VSCode,
+  Chrome and Explorer all shared the generic `newwin` window, so the wheel
+  and the desktop set list said "some app set" instead of naming the app.
+  Drawn in the same stroke language as everything else — recognisable at
+  24 px, never a bitmap logo. `claude` (the asterisk) was already there.

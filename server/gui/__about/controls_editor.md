@@ -27,15 +27,42 @@ files. What it does:
   version's pool refresh, matched BY COMMAND ID.
 - Chooses which sets the phone's wheel shows by default (Mouse/Input/Settings
   are `required` and locked ON; every other shipped or custom set toggles,
-  `WHEEL_MAX` = 8 total; app sets never charge the count — they ride with a
-  focused layout).
+  `WHEEL_MAX` = 8 total; app sets DO charge the count on the phone since
+  2026-08-06 — see [Controls](../../../client/__about/controls.md)).
 - Rearranges the four ACTIVE buttons per orientation (`order_land` — landscape
   cross, `order_port` — portrait column) with a reset to the shipped default.
   The slot ladder is fixed and belongs to the POSITION — `Top · Left · Right ·
   Bottom` in landscape, `1ˢᵗ … 4ᵗʰ` in portrait (owner 2026-08-05); only the
   commands travel through it. The widgets themselves live in
   [Controls Widgets](controls_widgets.md) (THE STRUCTURE LAW split of the
-  same day).
+  same day). The box is captioned **Arrangement** and its two lists are
+  **D-pad (landscape)** and **Stack (portrait)** (owner's own names,
+  2026-08-06) — repeating `top · left · right · bottom` in the title said the
+  same thing the rows below already spell out. The single **Default** button
+  sits in its own row UNDER the lists: beside them it charged the whole box
+  its width, and the content paid.
+
+## The set list — three sections (owner 2026-08-06)
+
+One flat list of twelve names said nothing about WHEN a set appears, which is
+the only thing that separates them. `SECTIONS` is the display order and the
+headings: **Standard** (always in the wheel) → **App-aware** (only while a
+matching layout is focused) → **Custom** (made here). The names match the
+vocabulary of CLAUDE.md and ACTIONS.md, so the editor and the docs speak one
+language, and an empty section still says what it is for instead of showing a
+blank gap.
+
+Headings are rows with `NoItemFlags` — Qt may never let the selection land on
+one. `self._rows` is the bridge that makes that safe: row → entry index, or
+`None` for a heading/hint. The list's `currentRowChanged` goes to
+`_row_selected`, the ONLY place that translates rows into entry indices;
+everything else in the dialog (`_current`, `_reload_list(select=…)`,
+`_select`) speaks entries. Mixing the two is what would put one set's data on
+another set's screen.
+
+An app-set row's suffix names the CONDITION, not the process: two sets share
+`code`, so `Claude   (code · “claude code”)` is the useful line and
+`VSCode   (code)` is the unconditional one.
 
 App-aware sets (`app_sets`, VSCode/Chrome/Explorer) appear in the editor for
 the first time — their pools are where the owner's per-app reserves live.
@@ -54,8 +81,10 @@ svi imaju ikonu?"): a built-in action's name and icon live in the client's
 widest real entry (`sizeHintForColumn`) + the detail form (caption + the
 longest command name / chord / "Built-in: …" entry + the Record button);
 height = six pool rows + the detail form's four rows + the arrangement's
-caption and four slots + the fixed furniture. With the shipped actions.json
-that is **1311 × 665** (dev machine, theme font 13 px, 2026-08-05); it moves
+caption, four slots and its two button rows (the ↑↓ pair and the Default
+button, which moved under the lists on 2026-08-06) + the fixed furniture.
+With the shipped actions.json
+that is **1363 × 715** (dev machine, theme font 13 px, 2026-08-06); it moves
 with the content, which is the point. `ChordRecorder` measures its own two
 lines: **406 × 58**.
 

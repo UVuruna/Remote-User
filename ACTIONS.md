@@ -33,16 +33,19 @@ The two D-pad groups on the tablet are defined entirely by [actions.json](action
 - **Custom sets** are created in the desktop app (**Controls…** button; end
   users never hand-edit files), stored under `"custom_sets"` — same shape as
   a category plus `"enabled"`.
-- The **app set** rides along while a matching layout is focused, and does
-  not charge against the picker's count.
+- The **app sets** ride along while a matching layout is focused — and they
+  DO charge against the count (owner 2026-08-06): what they hold is the
+  largest group that can appear together, so VSCode + Claude reserve two
+  slots and leave six for the rest. See App-aware sets below.
 - Hard cap **8** in the wheel: over the cap, non-required sets are bumped
   from the END (they return when the app set goes away).
 
 Any set (shipped or custom) may carry `"order_land"` / `"order_port"` — the
 button arrangement per orientation (indices into the ACTIVE four; landscape
 slots are top·left·right·bottom, portrait is the column top→bottom). The
-shipped order is the default; the desktop editor's "Reset arrangement"
-restores it.
+shipped order is the default; the desktop editor's **Default** button
+restores it. That editor calls the two lists **D-pad (landscape)** and
+**Stack (portrait)** (owner's names, 2026-08-06).
 
 ## Pools and reserves (owner 2026-08-05)
 
@@ -139,7 +142,7 @@ manage names/icons/shortcuts per zone).
     {
       "process": "code",
       "name": "VSCode",
-      "icon": "newwin",
+      "icon": "vscode",
       "buttons": [ { "label": "Sidebar", "chord": "ctrl+b" } ]
     }
   ]
@@ -148,9 +151,9 @@ manage names/icons/shortcuts per zone).
 
 - **left / right** — index of the category each group shows on connect.
 - **name** — the category label (centre button + wheel).
-- **icon** — any name from the client's icon set, which lives in one place: [client/icons.js](client/icons.js) (97 of them since the owner's 2026-08-05 round — every pool command now has one). The desktop **Controls…** editor reads that same file, so its icon combo always offers exactly what the phone can draw. Families and house style: [client/__about/icons.md](client/__about/icons.md).
+- **icon** — any name from the client's icon set, which lives in one place: [client/icons.js](client/icons.js) (100 of them: the owner's 2026-08-05 round of 97, plus `vscode` / `chrome` / `explorer` on 2026-08-06, so an app-aware set wears its own app's face instead of a generic window). The desktop **Controls…** editor reads that same file, so its icon combo always offers exactly what the phone can draw. Families and house style: [client/__about/icons.md](client/__about/icons.md).
 - **buttons** — the set's POOL (see Pools above); the four on the D-pad are placed in order **up · left · right · down**.
-- **title** *(app sets only, owner 2026-08-05)* — an extra match against the layout window's OWN title, so a set can single out an app that shares another's process: `Claude` is `{"process": "code", "title": "claude"}` and rides beside `VSCode`, which matches the process alone. The title is the window's, never the layout's (owner-chosen) name, so renaming a layout never changes which set appears.
+- **title** *(app sets only, owner 2026-08-05)* — an extra match against the layout window's OWN title, so a set can single out an app that shares another's process: `Claude` is `{"process": "code", "title": ["claude code", "claude"]}` and rides beside `VSCode`, which matches the process alone. The title is the window's, never the layout's (owner-chosen) name, so renaming a layout never changes which set appears. A **list** names several spellings of the same thing. The match is a **whole word**, and a title that looks like a FILE never matches at all (owner 2026-08-06): the Claude set belongs to the Claude conversation, not to an open `CLAUDE.md`, a transcript, or any other document that happens to carry the word.
 
 ## App-aware sets (`app_sets`)
 
@@ -168,12 +171,30 @@ app sets are editable in the desktop Controls editor like any other set.
 **Two sets may match the same window** (owner 2026-08-05). Claude Code runs
 INSIDE VSCode — same process, `Code.exe` — so `Claude` adds a `"title"` match
 on top of the process and both sets ride together while that layout is
-focused: six of your own sets plus these two still fit the wheel's cap of 8.
+focused — this is the ONE case where two app sets are on the wheel at once,
+and both are wanted: Claude's commands are there while the editor's own
+shortcuts stay reachable.
 The title is read when the layout is CREATED (it is the window's own title,
 not the layout's name), which is also why nothing switches by itself later —
 the same rule the app sets have followed since 2026-08-04. Each app set is
 ticked separately in the phone's **Settings → Sets**, so hiding Claude while
 keeping VSCode is one tap.
+
+**And an app set costs a wheel slot** (owner 2026-08-06). They used to be
+free, which let the Sets picker promise eight while the wheel silently
+dropped two. What is charged is not "how many are ticked" but the largest
+group that can appear TOGETHER — grouped by `process`, because Chrome,
+Explorer and VSCode can never be on screen at the same moment. So:
+
+| Ticked app sets | Slots held | Left for everything else |
+|---|---|---|
+| Chrome + Explorer + VSCode | 1 | 7 |
+| VSCode + Claude | 2 | **6** |
+| none (or the master switch off) | 0 | 8 |
+
+The picker states it — `N of 8 used — M held for app shortcuts` — and refuses
+the tick that would overflow instead of letting the wheel drop a set you
+already chose.
 
 ## Button kinds
 
