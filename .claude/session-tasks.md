@@ -45,7 +45,7 @@ checkbox form per the new Final Report gate):
 - [x] check ALL groups after the Win-in-Mouse corruption (slika 3)
 - [x] root rule with teeth: a delivering session ends with the per-task final report (machine-wide)
 
-WAITING_ON_OWNER: no
+WAITING_ON_OWNER: yes
 
 ROUND 4 IMPLEMENTED (owner approved "moze sve i bipovi kao checkbox"):
 (a) shipped-pools merge now ALSO runs once at server start
@@ -122,6 +122,22 @@ work resumes. Enforced machine-wide by rules/hooks/session_tasks_guard.py.
       an engine/model gap, a wrong language pin, or a recognizer error code
       each lead somewhere different, and guessing between them is exactly
       what the first two rounds proved wasteful.
+      STATE AFTER ROUND 10 (2026-08-06): this is the ONLY open task, and
+      nothing on this PC can close it. The owner's own round-3 report says
+      RECOGNITION WORKS (Serbian Latin chosen, the text lands), and the
+      five follow-ups he raised (a–e) all shipped in v0.0.078: the
+      shipped-pools merge at server start, LOCK stopping every listening
+      round, the mute-beeps checkbox default ON, More languages…, and the
+      pulse animation dropped. What is missing is a CONFIRMATION only his
+      device can give — three checks, on v0.0.085 or any build since
+      0.0.078: (1) locking the phone mid-dictation silences everything at
+      once, (2) no listening beeps between rounds, (3) Settings shows
+      Language, not Anywhere, WITHOUT opening the desktop Controls editor.
+      If all three hold the task is FIXED = VERIFIED and closes; if any
+      fails, that failure is the next round's evidence and the server log
+      around it (client_log lines) says which of the three causes it is.
+      Not checked, because a task is checked only on evidence — and the
+      evidence is on his phone, not here.
 - [x] 2. Layout resize panel: center Move handle (✥) — drag repositions the
       shrunken region along the free axis; applied on Apply; double-tap
       re-centers. DONE 0.0.169: layout_aspect {pos} + Layout.pos/_fit_rect
