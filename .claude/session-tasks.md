@@ -34,6 +34,17 @@ The two corruption bugs he shouted about (VSCode gone, Win in Mouse) were
 diagnosed here and fixed by the parallel session in 0.0.210 — both are in this
 release, and the guard proves them.
 
+Round-9 task list (owner's prompt.txt of 2026-08-06 + his mid-turn message,
+checkbox form per the new Final Report gate):
+- [x] find why VSCode vanished when Claude arrived, and bring it back
+- [x] Claude set only on the Claude conversation tab, never on a document
+- [x] both app sets ticked = 6 free wheel slots, not 7 (app sets charge the cap)
+- [x] set list split into sections: standard / app-aware / custom
+- [x] real icons for VSCode, Chrome, Explorer instead of the generic window
+- [x] Arrangement: short title, D-pad + Stack names, Default button below the lists
+- [x] check ALL groups after the Win-in-Mouse corruption (slika 3)
+- [x] root rule with teeth: a delivering session ends with the per-task final report (machine-wide)
+
 WAITING_ON_OWNER: yes
 
 ROUND 4 IMPLEMENTED (owner approved "moze sve i bipovi kao checkbox"):
@@ -447,11 +458,18 @@ NOWHERE in the repo — no exit path drops the topmost band.
       may carry `options`; the phone shows them centred and one tap sends the
       finished `/effort xhigh` + Enter. Generic, not a Claude special case.
       Evidence: 2 new checks in the NOTIFY GATE + a layout-audit case.
-- [ ] 38. Sets picker grouping + group NAMES (his item 2) — the parallel
-      session is inside `openSetsPanel`/`appSetRow` right now; names proposed
-      in chat, implementation left to them to avoid two agents in one function.
+- [x] 38. Sets picker grouping + group NAMES (his item 2) — DONE 0.0.214
+      (the session the owner's slika 1 actually shows is the DESKTOP editor
+      list): three sections Standard / App-aware / Custom with heading rows,
+      row↔entry map so a heading can never be selected, real vscode/chrome/
+      explorer icons; the phone's picker keeps its own named app-group heading
+      and now counts app sets against the cap (0.0.213). Evidence: offscreen
+      smoke rows map [None,0..8,None,9..12,None,None]; guards + layout audits
+      green; shipped in v0.0.082.
 - [x] 39. Arrangement section (his item 3) — already done by the parallel
       session (title shortened, "D-pad (landscape)" / "Stack (portrait)",
       Default button moved below). Not duplicated.
-- [ ] 40. Round close — build + GIT RELEASE once the parallel session's round
-      is finished (owner: "ne moras release dok ne zavrsi taj drugi agent").
+- [x] 40. Round close — DONE: full desktop build (INPUT/PRESENCE/NOTIFY
+      gates green, signed exe + installer, APK bundled) and GIT RELEASE
+      v0.0.082 published:
+      https://github.com/UVuruna/Remote-User/releases/tag/v0.0.082
