@@ -64,6 +64,28 @@ nothing — owner 2026-08-06: a heading over an apologetic "(none yet)" line is
 a placeholder, not information. The **New set** button is the invitation; the
 section is born with its first set.
 
+## The tick — which sets are actually on the wheel (owner 2026-08-06)
+
+The list named twelve sets and said nothing about which of them the phone
+shows. The state existed only in one checkbox on the other side of the dialog,
+so reading it meant clicking every set in turn — and the owner had asked for
+the mark once already, in the round before. Each set row now carries its own
+answer at the right edge: `CHECK_ROLE` holds it, `SectionDelegate._paint_tick`
+draws it in the accent, and `MARK` reserves the column so a long set name can
+never be painted underneath it (THE SPACE & LEGIBILITY LAW — the width the
+list asks for grows with it). The mark is DRAWN, three points and a round pen,
+never a font glyph: this project has already paid for a glyph that came out a
+blunt cross on the owner's own device.
+
+What the tick claims is exactly `_rides()`: **Standard** and **Custom** sets
+show it when they are `required` (Mouse/Input/Settings, never hideable) or
+`enabled`; **App-aware** sets never wear one, because they do not ride on their
+own — they come and go with the focused layout, by the owner's ticks *there*.
+The list's caption says it once ("Sets — ticked = on the phone's wheel"), and
+`_mark_current()` keeps the row and the form's checkbox saying the same thing
+the instant either changes (the form writes into `self.data` only on the way
+out, so the row cannot be re-read from there).
+
 Headings are rows with `NoItemFlags` — Qt may never let the selection land on
 one. `self._rows` is the bridge that makes that safe: row → entry index, or
 `None` for a heading. The list's `currentRowChanged` goes to

@@ -42,8 +42,8 @@ import logging
 import re
 from pathlib import Path
 
-from PySide6.QtCore import QSize, Qt
-from PySide6.QtGui import QColor, QFontMetrics, QPen
+from PySide6.QtCore import QPointF, QSize, Qt
+from PySide6.QtGui import QColor, QFontMetrics, QPainter, QPen, QPolygonF
 from PySide6.QtWidgets import (
     QCheckBox, QComboBox, QDialog, QGridLayout, QGroupBox, QHBoxLayout, QLabel,
     QLineEdit, QListWidget, QListWidgetItem, QMessageBox, QPushButton,
@@ -55,6 +55,7 @@ from gui.controls_widgets import (
     DPAD_SLOTS, LAND_SLOTS, PORT_SLOTS, CommandDetail, CommandTable, OrderList,
     button_id, icon_for,
 )
+from gui.theme import TOKENS
 
 logger = logging.getLogger(__name__)
 
@@ -76,20 +77,31 @@ SECTIONS = (
 HIDE_WHEN_EMPTY = {"custom_sets"}
 
 HEADER_ROLE = Qt.ItemDataRole.UserRole + 1  # marks a section-heading row
+CHECK_ROLE = Qt.ItemDataRole.UserRole + 2   # True = this set rides in the wheel
 
 
 class SectionDelegate(QStyledItemDelegate):
-    """Paints the set list's section headings.
+    """Paints the set list's section headings — and each set's own TICK.
 
     A heading is not a small bold set name — it is a TITLE: centered, a size
     larger than the rows it governs, and separated from the section above by a
     real horizontal LINE (owner 2026-08-06). Qt's own item painting gives none
     of that, so both the metrics (`sizeHint`) and the rule (`paint`) live here
     rather than in per-item font fiddling that only made the text bold.
+
+    The tick answers the question the list could not (owner 2026-08-06,
+    shouted — it had been asked for once already and not delivered): WHICH of
+    these twelve sets are actually on the phone's wheel? The state was
+    readable only by clicking every set in turn and watching one checkbox on
+    the other side of the dialog. Now the list says it, at a glance, in the
+    accent — and it is DRAWN, not a font glyph (this project has already paid
+    for a glyph that came out a blunt cross on the owner's device).
     """
 
     GAP = 16   # breathing room above a heading, where the rule is drawn
     TOP = 6    # …and above the very first one, which has nothing to divide
+    MARK = 22  # the tick's own column on the right — reserved, never shared,
+               # so a long set name can never be drawn underneath it
 
     def initStyleOption(self, option, index) -> None:
         super().initStyleOption(option, index)
@@ -106,11 +118,17 @@ class SectionDelegate(QStyledItemDelegate):
         size = super().sizeHint(option, index)
         if index.data(HEADER_ROLE):
             size.setHeight(size.height() + (self.GAP if index.row() else self.TOP))
+        else:
+            size.setWidth(size.width() + self.MARK)
         return size
 
     def paint(self, painter, option, index) -> None:
         super().paint(painter, option, index)
-        if not index.data(HEADER_ROLE) or not index.row():
+        if not index.data(HEADER_ROLE):
+            if index.data(CHECK_ROLE):
+                self._paint_tick(painter, option.rect)
+            return
+        if not index.row():
             return  # the first heading divides nothing — no rule above it
         painter.save()
         # Derived from the TEXT colour, not `palette.mid()`: on the dark theme
@@ -121,6 +139,24 @@ class SectionDelegate(QStyledItemDelegate):
         painter.setPen(QPen(rule))
         y = option.rect.top() + self.GAP // 2
         painter.drawLine(option.rect.left() + 6, y, option.rect.right() - 6, y)
+        painter.restore()
+
+    def _paint_tick(self, painter, rect) -> None:
+        """The check itself: three points, the accent, round ends — the same
+        mark the checkboxes wear (assets/check.svg), drawn here because an
+        item view has no widget to style."""
+        painter.save()
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        pen = QPen(QColor(TOKENS["accent"]))
+        pen.setWidthF(2.0)
+        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+        pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+        painter.setPen(pen)
+        left = rect.right() - self.MARK + 5
+        mid = rect.center().y() + 1
+        painter.drawPolyline(QPolygonF([QPointF(left, mid),
+                                        QPointF(left + 3.5, mid + 3.5),
+                                        QPointF(left + 10.0, mid - 4.0)]))
         painter.restore()
 
 WHEEL_MAX = 8  # sets in the phone's wheel at once; Mouse/Input/Settings are
@@ -293,7 +329,9 @@ class ControlsEditor(QDialog):
 
         # left: the set list
         left = QVBoxLayout()
-        left.addWidget(QLabel("Sets"))
+        # The caption is where the tick is explained ONCE — a mark nobody can
+        # name is decoration, and the list has no other room to say it.
+        left.addWidget(QLabel("Sets — ticked = on the phone's wheel"))
         self.set_list = QListWidget()
         self._section_delegate = SectionDelegate(self.set_list)
         self.set_list.setItemDelegate(self._section_delegate)
@@ -324,6 +362,7 @@ class ControlsEditor(QDialog):
         form.setColumnStretch(3, 0)
         self.enabled_check = QCheckBox(
             f"Shown in the wheel by default (the wheel holds up to {WHEEL_MAX} sets)")
+        self.enabled_check.toggled.connect(self._mark_current)
         form.addWidget(self.enabled_check, 1, 1, 1, 3)
         right.addLayout(form)
 
@@ -519,6 +558,26 @@ class ControlsEditor(QDialog):
             return f"   ({s.get('process', '?')} · “{names[0]}”)"
         return f"   ({s.get('process', '?')})"
 
+    def _rides(self, kind: str, s: dict) -> bool:
+        """Does this set ride in the phone's wheel? — the one thing the tick
+        claims. An app set never does on its own (it comes and goes with the
+        focused layout, by the owner's ticks THERE), so it wears no tick;
+        Mouse/Input/Settings always do and cannot be turned off."""
+        if kind == "app_sets":
+            return False
+        return bool(s.get("required") or s.get("enabled", True))
+
+    def _mark_current(self, on: bool) -> None:
+        """Keeps the list's tick and the form's checkbox saying the same thing
+        the instant one of them changes — the form writes into `self.data`
+        only on the way out, so the row cannot be re-read from there."""
+        item = self.set_list.currentItem()
+        entry = self._current_entry()
+        if item is None or entry is None or entry[0] == "app_sets":
+            return
+        item.setData(CHECK_ROLE, bool(on))
+        self.set_list.viewport().update()
+
     def _header_item(self, text: str) -> QListWidgetItem:
         """A section heading: a title, and NOT a set — Qt must never let the
         selection land on it, or `_select` would be handed a row that has no
@@ -551,6 +610,7 @@ class ControlsEditor(QDialog):
                 body = self.icons.get(s.get("icon", ""))
                 if body:
                     item.setIcon(icon_for(body))
+                item.setData(CHECK_ROLE, self._rides(key, s))
                 self.set_list.addItem(item)
                 self._rows.append(entry)
                 entry += 1
