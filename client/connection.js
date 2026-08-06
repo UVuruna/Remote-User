@@ -84,6 +84,15 @@ function connect() {
         customSets = msg.custom_sets || [];
         groups.left = Math.min(msg.left ?? 0, categories.length - 1);
         groups.right = Math.min(msg.right ?? 0, categories.length - 1);
+        // The cap of 8 is a LAW over the STORED state too (owner 2026-08-06):
+        // prefs saved before app sets started charging, and desktop defaults
+        // that never asked, both used to sail past a check that only ran on a
+        // tap — nine ticked, eight shown. Normalize here, where the sets are
+        // finally known, and SAY what had to give way.
+        const dropped = enforceWheelCap();
+        if (dropped.length) {
+          showToast(`The wheel holds ${WHEEL_MAX} sets — switched off ${dropped.join(", ")}`);
+        }
         refreshCategories();
       } else if (msg.type === "toast") {
         showToast(msg.text);
