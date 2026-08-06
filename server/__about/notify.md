@@ -90,3 +90,13 @@ Two things the packaged app must handle and a dev checkout need not:
   so a real `python` is looked up on PATH. A PC with none is TOLD so, plainly,
   in the caption under the switch. A switch that silently fails to arm is the
   same failure this whole task exists to end.
+
+**And the script has to BE in the bundle** (owner screenshot 2026-08-06):
+v0.0.085 shipped without it — `setup/agent_hook.py` was never in PyInstaller's
+`--add-data` — so the installed app could not turn the switch on at all and
+answered with `[Errno 2] No such file or directory: …\_internal\setup\
+agent_hook.py`. Fixed at all three layers, because each failed on its own:
+the file is bundled ([Build](../../setup/__about/build.md)), the build's
+**payload gate** refuses to package without it, and `_hook_module()` no longer
+hands a raw path to a user — a missing script is the APP being broken, so the
+sentence says that, and the log keeps the path.
