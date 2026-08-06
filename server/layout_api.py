@@ -148,10 +148,15 @@ async def layout_create(ws, layouts, stream, conn: dict, msg: dict) -> None:
     # window title stays the default the panel prefilled it with.
     typed = str(msg.get("name", "")).strip()[:80]
     name = typed or name
+    # The app-aware sets the owner ticked for THIS layout (owner 2026-08-06).
+    # A missing key means an older client that cannot tick — None keeps the
+    # automatic process match for it; an empty list is a real "none here".
+    picked = msg.get("app_sets")
+    app_sets = list(picked) if isinstance(picked, list) else None
     created = await asyncio.to_thread(
         layouts.create, target, str(msg.get("mode", "solo")),
         msg.get("grid"), [h for h, _ in resolved[1:]],
-        orient, conn["ratio"], mon_rect(stream), name)
+        orient, conn["ratio"], mon_rect(stream), name, app_sets)
     if created is None:
         await toast(ws, "That window is gone — layout not created")
     else:

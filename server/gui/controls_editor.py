@@ -809,18 +809,32 @@ class ControlsEditor(QDialog):
                 self, "Empty sets",
                 "These sets have no finished buttons yet and will show empty "
                 "on the phone:\n  " + ", ".join(incomplete))
-        # App sets never charge the wheel count — they appear only while a
-        # matching layout is focused (owner 2026-08-05).
+        # App sets DO charge the wheel count (owner 2026-08-06, reversing the
+        # 2026-08-05 line that used to stand here). Saying they were free is
+        # the desktop half of what he found on his phone: NINE sets ticked by
+        # default under a cap of eight. The charge is the largest group that
+        # can appear TOGETHER — grouped by process, because Chrome, Explorer
+        # and VSCode can never match at once while VSCode and Claude always
+        # do. Same rule, same arithmetic as sets.js on the phone.
+        per_process: dict[str, int] = {}
+        for kind, _, s in self._entries():
+            if kind == "app_sets":
+                key = str(s.get("process", "")).lower()
+                per_process[key] = per_process.get(key, 0) + 1
+        reserve = max(per_process.values(), default=0)
         shown = [s for kind, _, s in self._entries()
                  if kind != "app_sets" and (s.get("required") or s.get("enabled", True))]
-        if len(shown) > WHEEL_MAX:
-            extras = [s for s in shown if not s.get("required")][WHEEL_MAX - len(shown):]
+        if len(shown) + reserve > WHEEL_MAX:
+            room = WHEEL_MAX - reserve
+            extras = [s for s in shown if not s.get("required")][room - len(shown):]
             for s in extras:
                 s["enabled"] = False
             QMessageBox.information(
                 self, "Wheel limit",
-                f"The wheel holds up to {WHEEL_MAX} sets — the last "
-                f"{len(extras)} were left OFF by default (the phone's Sets "
-                "picker can swap them in).")
+                f"The wheel holds up to {WHEEL_MAX} sets, and {reserve} of "
+                f"them are held for app shortcuts that can appear together "
+                f"(VSCode and Claude share a window). That leaves {room} — "
+                f"the last {len(extras)} were left OFF by default (the "
+                "phone's Sets picker can swap them in).")
         self._write()
         self.accept()
