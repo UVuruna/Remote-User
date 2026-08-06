@@ -9,6 +9,14 @@ color or radius.
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import QGraphicsDropShadowEffect, QWidget
 
+from config import BUNDLE_DIR, FROZEN, PROJECT_ROOT
+
+# ═══════════════════════════ ASSET PATHS ═══════════════════════════
+# QSS reaches assets by PATH, so it needs the one the app is actually running
+# from. Forward slashes and quotes: the installed path holds spaces
+# ("C:/Program Files/Remote User/…") and a bare url() would break on them.
+ASSET_URL = ((BUNDLE_DIR if FROZEN else PROJECT_ROOT) / "assets").as_posix()
+
 # ═══════════════════════════ DESIGN TOKENS ═══════════════════════════
 TOKENS = {
     # Surfaces (elevation steps lighter, never flat gray)
@@ -126,6 +134,29 @@ QComboBox QAbstractItemView {{
     outline: none;
 }}
 
+/* Checkboxes. Unstyled, a QCheckBox took the QWidget rule above and carried
+   the WINDOW's background into the card it sits in — a darker block around
+   the label, plus Windows' own gray tick box (owner screenshot 2026-08-06).
+   The label is transparent, and the box is the same control surface as a
+   combo, filled with the one accent when it is on. */
+QCheckBox {{ background: transparent; spacing: 9px; }}
+QCheckBox:disabled {{ color: {text2}; }}
+QCheckBox::indicator {{
+    width: 16px;
+    height: 16px;
+    border: 1px solid {border};
+    border-radius: 5px;
+    background: {surface2};
+}}
+QCheckBox::indicator:hover {{ border-color: {accent}; }}
+QCheckBox::indicator:checked {{
+    background: {accent};
+    border: 1px solid {accent};
+    image: url("{assets}/check.svg");
+}}
+QCheckBox::indicator:disabled {{ background: {surface1}; border-color: {border}; }}
+QCheckBox::indicator:checked:disabled {{ background: {accentDim}; }}
+
 QMenu {{
     background: {surface1};
     border: 1px solid {border};
@@ -141,7 +172,7 @@ QToolTip {{
     border: 1px solid {border};
     padding: 4px 8px;
 }}
-""".format(font=FONT_STACK, **TOKENS)
+""".format(font=FONT_STACK, assets=ASSET_URL, **TOKENS)
 
 
 # ═══════════════════════════ HELPERS ═══════════════════════════

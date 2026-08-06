@@ -1,0 +1,11 @@
+<!-- The tick inside a CHECKED checkbox (gui/theme.py QSS).
+
+     Dark ink on the accent-filled box, the same pairing as the primary
+     button — one accent family, one ink. Drawn, never a font glyph: a glyph
+     depends on whatever face the machine has, and this project has already
+     paid for that once (the ✥ that came out a blunt cross on the phone). -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16">
+  <path d="M3.5 8.5 L6.6 11.6 L12.5 4.9"
+        fill="none" stroke="#06212E" stroke-width="2.2"
+        stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
