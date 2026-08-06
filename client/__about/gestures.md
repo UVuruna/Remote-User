@@ -76,14 +76,40 @@ Pinching out PAST the fitted view no longer dead-ends: the finger position is
 mapped to steps (`FONT_ZOOM_STEP` = 1.2× pinch per step, `FONT_ZOOM_MAX` cap)
 and each step below the floor sends `chord ctrl+minus` — the layout window's
 own content shrinks, so an article wider than the region becomes fully
-visible. Pinching back in first undoes the applied steps with `ctrl+plus`
-(the `=`/`+` key) BEFORE any visual zoom resumes, so the sequence is always
-content-back-to-100% → then visual zoom, exactly mirroring the way out.
-Steps already applied are tracked per layout in `fontZoomByLayout`
+visible. Pinching back in undoes the applied steps with `ctrl+plus` (the
+`=`/`+` key). Steps already applied are tracked per layout in `fontZoomByLayout`
 ([State](state.md); indices shift on `layout_remove`). The effect is whatever
 the focused app does with Ctrl+-/= — browsers and editors scale, Explorer
 cycles its view modes, image viewers may ignore it (owner accepted). The
 desktop pinch path is untouched (`viewLocked()` gates the whole branch).
+
+### One pinch, one side (owner 2026-08-06)
+
+The fitted view with the content at 100% is a **wall**, not a point on one
+continuous scale — a single pinch may only travel on the side it started on:
+
+```
+                     WALL
+   font staircase      ║      visual zoom
+  <-----------------   ║   ----------------->
+  text 40% ... 100%    ║   1x ........... MAX
+```
+
+- started zoomed in (`view.scale` > fitted) → `side = "zoom"`: closing the
+  fingers stops at the fitted view, the content is never touched;
+- started with the content shrunk (`fontZoomSteps() > 0`) → `side = "font"`:
+  the view stays at the fitted framing and spreading walks the content back up
+  to exactly 100%, then stops;
+- started ON the wall → `side = null` until the fingers travel
+  `PINCH_SIDE_DEADZONE` (0.25 steps) in one direction: spread commits to
+  `"zoom"`, close commits to `"font"`. Nothing moves inside the deadzone, so
+  jitter cannot pick the mode.
+
+The side is decided once, in `beginPinch()`, and holds for the whole gesture —
+crossing therefore costs a finger lift. Rationale: with the two modes joined
+into one slide, the state the owner wants most often — content at exactly
+100% — was nearly impossible to land on, since the same finger motion sailed
+straight through it.
 
 ## Input switchers auto-OFF (owner 2026-08-04)
 The primary `pointerdown` on the canvas calls `inputOff()` — tapping the
