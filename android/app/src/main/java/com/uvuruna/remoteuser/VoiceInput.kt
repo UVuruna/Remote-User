@@ -58,6 +58,24 @@ class VoiceInput(private val activity: Activity, private val js: (String) -> Uni
      *  deleted. Cleared by a final result, which always wins over it. */
     private var partial = ""
 
+    /** The last text this utterance actually SENT to the PC, and the reason
+     *  it exists (owner 2026-08-07 — his own message to us arrived shredded,
+     *  one sentence repeated about forty times, each copy one word longer):
+     *
+     *      "Da li · Da li · Da li pravimo · Da li pravimo ·
+     *       Da li pravimo klaude · Da li pravimo klaude vs · …"
+     *
+     *  His server log dates it to the second — 11:30:05 → 11:30:12, forty
+     *  lines of `Voice error 5 (online)`, ERROR_CLIENT. The page restarts a
+     *  dead round every 250 ms, `onError` delivered the rescue copy EVERY
+     *  time, and Google's partials are CUMULATIVE, so each restart re-typed
+     *  the whole sentence so far. The rescue copy was built to make sure
+     *  nothing spoken is lost; without this field it made sure everything
+     *  spoken is typed over and over. A rescue may only ever add what has not
+     *  been said yet. Cleared when an utterance genuinely ends (a final
+     *  result) or when the mic goes off. */
+    private var lastOut = ""
+
     /** True while the beep-carrying streams are muted for a listening
      *  session (owner round 4: the round beeps irritate — mutable via the
      *  card's checkbox, default muted). */
@@ -200,6 +218,8 @@ class VoiceInput(private val activity: Activity, private val js: (String) -> Uni
     fun onBackground() {
         background = true
         recognizer?.cancel()
+        partial = ""
+        lastOut = ""
         unmuteBeeps()
     }
 
@@ -226,6 +246,15 @@ class VoiceInput(private val activity: Activity, private val js: (String) -> Uni
             rec.setRecognitionListener(listener)
             recognizer = rec
         }
+        // The previous session is STOPPED before a new one starts (owner
+        // 2026-08-07). Without this, `startListening` on a recognizer that is
+        // still running is refused with ERROR_CLIENT, the page restarts 250 ms
+        // later, and it is refused again — his log holds forty of those in
+        // seven seconds, each one typing the still-live old session's growing
+        // partial into his PC. Cancelling first is what makes the restart a
+        // restart instead of a collision.
+        r.cancel()
+        partial = ""
         r.startListening(
             Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                 putExtra(
@@ -248,6 +277,8 @@ class VoiceInput(private val activity: Activity, private val js: (String) -> Uni
 
     fun cancel() {
         recognizer?.cancel()
+        partial = ""
+        lastOut = ""   // the mic went off: whatever comes next is a new sentence
         unmuteBeeps()
     }
 
@@ -367,14 +398,34 @@ class VoiceInput(private val activity: Activity, private val js: (String) -> Uni
 
     /** Type what this round produced. The final result wins; if there is none,
      *  the kept partial is used, because losing what he already said is the
-     *  one outcome this whole subsystem may not have. Either way the rescue
-     *  copy is dropped afterwards, so nothing is ever typed twice. */
+     *  one outcome this whole subsystem may not have.
+     *
+     *  A RESCUE COPY MAY ONLY ADD (owner 2026-08-07 — see `lastOut` for the
+     *  message of his this shredded). The recognizer's partials are
+     *  cumulative, so a rescue is always the whole sentence so far, and a
+     *  round that dies four times a second used to type that whole sentence
+     *  four times a second. So a rescue is trimmed against what this
+     *  utterance has already sent, and if it adds nothing it sends nothing.
+     *  A FINAL result is not trimmed — it is the engine's own last word, it
+     *  ends the utterance, and it is allowed to correct what the partials
+     *  guessed. */
     private fun deliver(text: String?) {
-        val out = if (!text.isNullOrBlank()) text else partial
+        val isFinal = !text.isNullOrBlank()
+        var out = if (isFinal) text!! else partial
         partial = ""
-        if (out.isNotBlank()) {
-            js("window.__voiceResult && __voiceResult(${JSONObject.quote(out)})")
+        if (out.isBlank()) return
+        if (isFinal) {
+            lastOut = ""            // the utterance is over; the next one is new
+        } else {
+            if (lastOut.isNotEmpty() && out.startsWith(lastOut)) {
+                out = out.substring(lastOut.length).trimStart()
+            } else if (lastOut.isNotEmpty() && lastOut.startsWith(out)) {
+                return              // nothing new was heard — say nothing
+            }
+            if (out.isBlank()) return
+            lastOut = if (lastOut.isEmpty()) out else "$lastOut $out"
         }
+        js("window.__voiceResult && __voiceResult(${JSONObject.quote(out)})")
     }
 
     private val listener = object : RecognitionListener {
