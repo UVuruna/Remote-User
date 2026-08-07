@@ -322,6 +322,31 @@ def main() -> int:
                   return m.width >= 40 && m.left >= c.left && m.right <= c.right &&
                          m.top >= c.top && m.bottom <= c.bottom;
                 }""")
+            # A SECOND TOUCH IS NOT A DOUBLE TAP (owner 2026-08-07: he shrank
+            # a layout, pulled the Move handle down, "ali on je i dalje na
+            # sredini"). The handle treated ANY contact within 350 ms of the
+            # previous one as the double-tap that re-centres — including the
+            # press that begins a drag right after a first touch. That press
+            # then returned without capturing the pointer, so the drag was
+            # dead AND the region had just been put back in the middle: his
+            # exact words. A double tap is two SHORT taps; this drives the
+            # real handlers and asserts the region actually moved.
+            results[f"a press after a tap is not a re-centre @ {label}"] = page.evaluate(
+                """() => {
+                  const h = document.querySelector('.asp-move');
+                  const r = document.querySelector('.asp-screen').getBoundingClientRect();
+                  const put = (t) => h.dispatchEvent(new PointerEvent(t, {
+                    pointerId: 7, bubbles: true, cancelable: true,
+                    clientX: r.left + r.width / 2, clientY: r.top + r.height / 2 }));
+                  // A synthetic pointer id owns no real capture — stubbing
+                  // keeps the DOM from throwing; nothing below depends on it.
+                  h.setPointerCapture = () => {};
+                  h.hasPointerCapture = () => false;
+                  aspecting.pos = 0.9; updateAspectPreview();
+                  put('pointerdown'); put('pointerup');   // one tap
+                  put('pointerdown');                     // …then a real press
+                  return aspecting.pos === 0.9;
+                }""")
             page.evaluate("closeLayoutPanel()")
             results[f"no page errors @ {label}"] = not errors
             ctx.close()

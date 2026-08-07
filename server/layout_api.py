@@ -67,7 +67,8 @@ async def layout_pick(ws, layouts, stream, msg: dict) -> None:
     if uia.has_tabs(target["process"]):
         tab = await asyncio.to_thread(uia.tab_at, mon_rect(stream), x, y)
     if isinstance(target, dict):
-        target["agents"] = agents.agents_for(target.get("title", ""))
+        live = await asyncio.to_thread(agents.live_agents)
+        target["agents"] = agents.agents_for(target.get("title", ""), live)
     await ws.send_text(json.dumps({
         "type": "layout_offer",
         "target": target,
@@ -93,14 +94,20 @@ async def layout_list(ws, layouts, stream) -> None:
     rect = mon_rect(stream)
     used = await asyncio.to_thread(layouts.member_hwnds)
     windows = await asyncio.to_thread(window_manager.list_windows, used)
+    # ONE snapshot for the whole list, taken off the event loop (owner
+    # 2026-08-07). It used to be asked per entry, bare, from this coroutine:
+    # a 1.85 s PowerShell probe every time the 2 s cache lapsed between two
+    # windows, each one freezing the stream and the heartbeats along with the
+    # list. See agents.agents_for.
+    live = await asyncio.to_thread(agents.live_agents)
     entries = []
     for w in windows:
-        # `agents` is what makes the creation panel pre-tick Claude without a
-        # single tap (owner 2026-08-06): the PC reads its own process table,
-        # the phone cannot.
+        # `agents` is what puts the Claude wheel on a Claude window with no
+        # tap from anyone (owner 2026-08-06): the PC reads its own process
+        # table, the phone cannot.
         entries.append({"kind": "window", "hwnd": w["hwnd"], "title": w["title"],
                         "process": w["process"], "icon": w["icon"],
-                        "agents": agents.agents_for(w["title"])})
+                        "agents": agents.agents_for(w["title"], live)})
         if not uia.has_tabs(w["process"]):
             continue  # its TabItems are internal sections, not real tabs
         for tab in await asyncio.to_thread(uia.list_tabs, rect, w["hwnd"]):
@@ -109,7 +116,7 @@ async def layout_list(ws, layouts, stream) -> None:
                             "x": tab["x"], "y": tab["y"],
                             "title": tab["name"],
                             "process": w["process"], "icon": w["icon"],
-                            "agents": agents.agents_for(w["title"])})
+                            "agents": agents.agents_for(w["title"], live)})
     await ws.send_text(json.dumps({
         "type": "layout_offer",
         "target": None,
@@ -163,15 +170,15 @@ async def layout_create(ws, layouts, stream, conn: dict, msg: dict) -> None:
     # window title stays the default the panel prefilled it with.
     typed = str(msg.get("name", "")).strip()[:80]
     name = typed or name
-    # The app-aware sets the owner ticked for THIS layout (owner 2026-08-06).
-    # A missing key means an older client that cannot tick — None keeps the
-    # automatic process match for it; an empty list is a real "none here".
-    picked = msg.get("app_sets")
-    app_sets = list(picked) if isinstance(picked, list) else None
+    # `app_sets` used to arrive here — the owner's ticks. It is ignored now
+    # (owner 2026-08-07): the PC recognises what runs in a window, and a copy
+    # of that answer frozen at creation time is what kept his Claude layout on
+    # the VS Code wheel. An old client may still send the key; it changes
+    # nothing.
     created = await asyncio.to_thread(
         layouts.create, target, str(msg.get("mode", "solo")),
         msg.get("grid"), [h for h, _ in resolved[1:]],
-        orient, conn["ratio"], mon_rect(stream), name, app_sets)
+        orient, conn["ratio"], mon_rect(stream), name)
     if created is None:
         await toast(ws, "That window is gone — layout not created")
     else:

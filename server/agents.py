@@ -206,16 +206,27 @@ def title_folder(title: str) -> str:
     return match.group(1).strip().lower() if match else ""
 
 
-def agents_for(title: str) -> list[str]:
+def agents_for(title: str, live: dict[str, set[str]] | None = None) -> list[str]:
     """Which agents are live in the project this window title names.
 
     Deliberately title-driven rather than hwnd-driven: see the module
     docstring — every VS Code window shares one process, so the handle cannot
     single out an extension host, while the title carries the folder that a
     live session can be matched against.
+
+    `live` is a SNAPSHOT from `live_agents()`. Pass one whenever you are about
+    to ask this for more than one window: without it every call may reach the
+    1.85 s PowerShell probe (measured on the owner's PC, 2026-08-07) the
+    moment the two-second cache lapses between two entries — and the callers
+    that ask it in a loop are async handlers, so that time is the whole event
+    loop stopped: no stream, no heartbeats, nothing. Taking the snapshot once,
+    in a thread, is the difference between a list that arrives and a phone
+    that looks frozen (owner: "treba mu jako dugo da učita").
     """
     folder = title_folder(title)
     if not folder:
         return []
-    return sorted(agent for agent, folders in live_agents().items()
+    if live is None:
+        live = live_agents()
+    return sorted(agent for agent, folders in live.items()
                   if folder in folders)

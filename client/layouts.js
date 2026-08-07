@@ -390,31 +390,9 @@ function openRenamePanel(index) {
   const field = nameField(lay.name || "");
   card.append(h, sub, field);
 
-  // The same app-shortcut ticks the creation panel offers, changeable for
-  // good (owner 2026-08-06). They live here rather than as a third button in
-  // every list row — the row already carries rename and ratio, and a fourth
-  // control is what THE SPACE & LEGIBILITY LAW keeps catching.
-  const picked = Array.isArray(lay.app_sets)
-    ? lay.app_sets.slice()
-    : appSets.filter((s) => appSetMatches(s, lay)).map((s) => s.name);
-  if (appSets.length) {
-    const appLbl = document.createElement("p");
-    appLbl.className = "lay-sub";
-    appLbl.textContent = "App shortcuts on the wheel for this layout:";
-    const appRow = document.createElement("div");
-    appRow.className = "lay-row";
-    const draw = () => {
-      appRow.innerHTML = "";
-      appSets.forEach((s) => appRow.appendChild(
-        layChip(s.name, picked.includes(s.name), () => {
-          const i = picked.indexOf(s.name);
-          if (i >= 0) picked.splice(i, 1); else picked.push(s.name);
-          draw();
-        })));
-    };
-    draw();
-    card.append(appLbl, appRow);
-  }
+  // The app-shortcut ticks used to live here too. They are GONE (owner
+  // 2026-08-07): the PC recognises what is running in a window by itself, so
+  // this panel does one thing again — the name.
 
   const actions = document.createElement("div");
   actions.className = "lay-actions";
@@ -422,7 +400,6 @@ function openRenamePanel(index) {
   actions.appendChild(layChip("Save", true, () => {
     const name = field.value.trim();
     if (name && name !== lay.name) send({ type: "layout_rename", index, name });
-    if (appSets.length) send({ type: "layout_apps", index, sets: picked });
     closeLayoutPanel();
   }));
   card.appendChild(actions);
@@ -658,7 +635,24 @@ function dragAspect(screenBox) {
 // The Move handle's own drag (owner 2026-08-05): slides the region along the
 // free axis; a double-tap re-centers. stopPropagation keeps the screen box's
 // resize drag out of the gesture.
-let moveTapAt = 0;
+//
+// A DOUBLE TAP IS TWO TAPS, NOT TWO TOUCHES (owner 2026-08-07: "smanjio sam
+// dimenzije layout-a i pokušao da ga privučem dole ali on je i dalje na
+// sredini"). The re-centre used to fire from `pointerdown` on any contact
+// within 350 ms of the previous one — so the very common tap-then-drag was
+// read as a double tap: it put the region back in the MIDDLE and returned
+// without capturing the pointer, killing the drag that was just starting.
+// Both halves of his sentence, from one line. A tap is now only a tap once it
+// has ENDED, quickly and without travel, and a press is always a press.
+// -Infinity, never 0: `0` is a real `performance.now()` reading — it means
+// "a tap at page load" — so every tap in the page's first 350 ms counted as
+// the SECOND tap of a double tap and re-centred the region. The audit caught
+// this in landscape, where the panel opens sooner after load than the 350 ms
+// window (portrait was past it at 623 ms and passed, which is exactly how a
+// timing bug survives a green suite).
+let moveTapAt = -Infinity;
+const MOVE_TAP_MS = 350;   // two taps closer than this = re-centre
+const MOVE_TAP_SLOP = 12;  // px: past this the contact was a drag, not a tap
 function dragMove(handle, screenBox) {
   const apply = (e) => {
     const a = aspecting;
@@ -672,25 +666,45 @@ function dragMove(handle, screenBox) {
     a.pos = Math.min(1, Math.max(0, (finger - regionPx / 2) / freePx));
     updateAspectPreview();
   };
+  let downAt = 0;
+  let downX = 0;
+  let downY = 0;
   handle.addEventListener("pointerdown", (e) => {
     e.preventDefault();
     e.stopPropagation();
-    const now = performance.now();
-    if (now - moveTapAt < 350) {
-      // Double-tap = back to the middle (owner 2026-08-05).
-      moveTapAt = 0;
-      if (aspecting) {
-        aspecting.pos = 0.5;
-        updateAspectPreview();
-      }
-      return;
-    }
-    moveTapAt = now;
+    // Every press captures and may drag. Nothing is decided here — deciding
+    // at DOWN is what made a press into a re-centre.
+    downAt = performance.now();
+    downX = e.clientX;
+    downY = e.clientY;
     handle.setPointerCapture(e.pointerId);
   });
   handle.addEventListener("pointermove", (e) => {
     if (handle.hasPointerCapture(e.pointerId)) apply(e);
   });
+  const ended = (e) => {
+    const now = performance.now();
+    const moved = Math.hypot(e.clientX - downX, e.clientY - downY);
+    // Only a contact that STAYED PUT and ended quickly was a tap; a drag
+    // ends the gesture and arms nothing.
+    if (moved > MOVE_TAP_SLOP || now - downAt > MOVE_TAP_MS) {
+      moveTapAt = 0;
+      return;
+    }
+    if (now - moveTapAt < MOVE_TAP_MS) {
+      moveTapAt = 0;
+      if (aspecting) {
+        aspecting.pos = 0.5;   // double tap = back to the middle (owner 2026-08-05)
+        updateAspectPreview();
+      }
+      return;
+    }
+    moveTapAt = now;
+  };
+  handle.addEventListener("pointerup", ended);
+  // A tap Android steals at a screen edge never reaches `pointerup` — the
+  // same rule the control buttons live by (CLAUDE.md constraint 9).
+  handle.addEventListener("pointercancel", ended);
 }
 
 // In the APK, layout focus locks the phone's rotation to the layout's chosen
@@ -738,7 +752,6 @@ function newCreation(source) {
     entries: null,          // list source: [{kind, hwnd, title, process, icon, tab?, x?, y?}]
     slots: [],              // chosen cells, in order — slot 1 names the layout
     name: null,             // owner-typed name; null = follow slot 1's title
-    apps: null,             // app sets ticked for it; null = follow the process
     mode: "solo",
     grid: null,
     orient: window.innerHeight >= window.innerWidth ? "portrait" : "wide",
@@ -929,28 +942,12 @@ function renderCreationPanel() {
     card.appendChild(row);
   }
 
-  // WHICH app shortcuts this layout carries (owner 2026-08-06). This exists
-  // because no string on the PC can identify Claude Code: it names its VSCode
-  // tab after the conversation ("Ispravka UI dizajna meni…"), wears the same
-  // UIA class as a file tab, and hides its content from accessibility — so
-  // the automatic title test could never fire, and the owner marks it here
-  // instead. Pre-ticked from the process match, which is right for Chrome,
-  // Explorer and plain VSCode and only ever needs a correction for Claude.
-  if (appSets.length) {
-    const appLbl = document.createElement("p");
-    appLbl.className = "lay-sub";
-    appLbl.textContent = "App shortcuts on the wheel for this layout:";
-    const appRow = document.createElement("div");
-    appRow.className = "lay-row";
-    if (c.apps === null) c.apps = autoAppSets(c.slots);
-    appSets.forEach((s) => appRow.appendChild(
-      layChip(s.name, c.apps.includes(s.name), () => {
-        const i = c.apps.indexOf(s.name);
-        if (i >= 0) c.apps.splice(i, 1); else c.apps.push(s.name);
-        renderCreationPanel();
-      })));
-    card.append(appLbl, appRow);
-  }
+  // "Which app shortcuts does this layout carry" was a QUESTION here until
+  // 2026-08-07, with a row of ticks under it. The owner's answer, twice:
+  // "nema potrebe da se vidi ... jer naš program to prepoznaje". He is right,
+  // and the PC had been able to answer it since 0.0.266 — `agents` in every
+  // state frame. Making the layout carry a written-once copy of that answer
+  // is what froze his Claude layout on VS Code. Nothing is asked now.
 
   const orientRow = document.createElement("div");
   orientRow.className = "lay-row";
@@ -974,9 +971,6 @@ function renderCreationPanel() {
       type: "layout_create",
       slots: c.slots.map((s) => ({ hwnd: s.hwnd, tab: s.tab, x: s.x, y: s.y })),
       name: (c.name || "").trim(), // "" = keep the window/tab title
-      // An empty list is a real answer ("no app shortcuts here") — the server
-      // only falls back to the process guess when the key is missing entirely.
-      app_sets: c.apps || autoAppSets(c.slots),
       mode: c.mode,
       grid: c.grid,
       orient: c.orient,
