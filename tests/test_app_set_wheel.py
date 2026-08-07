@@ -176,39 +176,53 @@ def test_the_reserve_is_the_largest_group_that_can_appear_at_once():
         "the master switch off means app sets charge nothing")
 
 
-# -- C. the owner's own tick beats every guess ------------------------------
+# -- C. the PC's answer decides, and no stored tick may outrank it ----------
 
-def test_the_layouts_own_ticks_win_over_the_title_guess():
-    """The reason the Claude set never appeared for the owner (2026-08-06):
-    Claude Code names its VSCode tab after the CONVERSATION. The probe of his
-    own PC found the extracted window titled
+def test_detection_decides_and_a_stored_tick_list_can_never_win():
+    """THIS TEST USED TO PIN THE BUG (owner 2026-08-07, and it is the clearest
+    example in the repo of how a green guard shipped a broken app).
+
+    Its previous name was "the layout's own ticks win over the title guess",
+    and it asserted exactly the line that kept the owner's Claude wheel dead:
+    a layout carrying `app_sets` was answered from that list ALONE. Written
+    from the same belief as the code, it could never have gone red. The belief
+    was already obsolete when it was written — `agents` detection had shipped
+    in the same round.
+
+    His real window, probed on his own PC:
 
         'Ispravka UI dizajna meni… - Remote User - Visual Studio Code [Administrator]'
         TAB 'Ispravka UI dizajna meni…, Window 2: Editor Group 1'
 
-    with the same UIA class as `prompt.txt` beside it, an empty AutomationId,
-    and no occurrence of "claude" anywhere in its tree. No string test can
-    ever find that, so the layout now carries the owner's own ticks and they
-    answer alone — the title guess is only for layouts made before this."""
+    No string in it says "claude", the tab wears the same UIA class as
+    `prompt.txt` beside it, AutomationId is empty. The title can never answer
+    this. The PROCESS TABLE can, and does: `agents: ["claude"]` on the layout.
+    So that is what must decide — every frame, freshly, with no stored copy of
+    an older answer anywhere in the path."""
     sets = shipped_app_sets()
     body = """
 const real = { process: "code.exe", title: "Ispravka UI dizajna meni…" };
 console.log(JSON.stringify({
-  guessed: appSets.filter((s) => appSetMatches(s, real)).map((s) => s.name),
-  ticked: appSets.filter((s) => appSetMatches(s,
-      { ...real, app_sets: ["VSCode", "Claude"] })).map((s) => s.name),
-  none: appSets.filter((s) => appSetMatches(s,
-      { ...real, app_sets: [] })).map((s) => s.name),
+  detected: appSets.filter((s) => appSetMatches(s,
+      { ...real, agents: ["claude"] })).map((s) => s.name),
+  plain: appSets.filter((s) => appSetMatches(s, { ...real, agents: [] }))
+      .map((s) => s.name),
+  stale: appSets.filter((s) => appSetMatches(s,
+      { ...real, agents: ["claude"], app_sets: ["VSCode"] })).map((s) => s.name),
 }));
 """
     got = run_js(body, sets, {"apps": True, "appState": {}, "state": {}})
-    assert got["guessed"] == ["VSCode"], (
-        "the owner's REAL Claude title carries no keyword — the guess can only "
-        f"ever find VSCode, which is why the tick exists: {got['guessed']}")
-    assert got["ticked"] == ["VSCode", "Claude"], (
-        f"the owner ticked both — both must ride: {got['ticked']}")
-    assert got["none"] == [], (
-        f"an empty list is a real answer, not a fall-through: {got['none']}")
+    assert got["detected"] == ["VSCode", "Claude"], (
+        "the PC says a Claude session is live in this window's project — both "
+        f"sets must ride, with nobody ticking anything: {got['detected']}")
+    assert got["plain"] == ["VSCode"], (
+        "no live claude.exe in that project means plain VSCode — the wheel "
+        f"must not carry Claude's slash commands into an editor: {got['plain']}")
+    assert got["stale"] == ["VSCode", "Claude"], (
+        "A LAYOUT MAY NOT CARRY AN ANSWER. This is the owner's bug of "
+        "2026-08-07: a list written once at creation outranked a live "
+        "detection that was saying 'claude' on every state frame, and his "
+        f"wheel offered VS Code alone forever: {got['stale']}")
 
 
 # -- D. the cap of 8 is a LAW over the STORED state too ---------------------
@@ -325,8 +339,8 @@ def test_the_window_title_names_the_project():
 TESTS = [
     ("only the Claude conversation wears the Claude set",
      test_only_the_claude_conversation_matches_the_claude_set),
-    ("the layout's own ticks win over the title guess",
-     test_the_layouts_own_ticks_win_over_the_title_guess),
+    ("detection decides — a stored tick list can never win",
+     test_detection_decides_and_a_stored_tick_list_can_never_win),
     ("the shipped defaults cannot tick more than the cap",
      test_the_shipped_defaults_cannot_tick_more_than_the_cap),
     ("a stored state over the cap is brought back to it",

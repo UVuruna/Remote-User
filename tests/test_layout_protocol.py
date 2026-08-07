@@ -115,7 +115,11 @@ def install_fakes() -> None:
     uia.has_tabs = lambda process: process == "code.exe"
     uia.list_tabs = lambda rect, hwnd: [{"name": "prompt.txt", "x": 0.1, "y": 0.02}]
     uia.tab_at = lambda rect, x, y: None
-    agents.agents_for = lambda title: []
+    # The snapshot argument is the fix of 2026-08-07: the real function is a
+    # 1.85 s PowerShell probe, and the handlers used to reach it once per
+    # entry, bare, on the event loop. `live` is what they pass now.
+    agents.agents_for = lambda title, live=None: ["claude"] if "Remote User" in title else []
+    agents.live_agents = lambda: {"claude": {"remote user"}}
 
 
 def fresh_conn() -> dict:
@@ -162,6 +166,31 @@ def check_create_from_a_list_answers() -> bool:
             and offers[0]["grids"])
 
 
+def check_the_list_probes_the_process_table_once() -> bool:
+    """The list may cost ONE process-table probe, never one per entry (owner
+    2026-08-07: "treba mu jako dugo da učita").
+
+    `agents.live_agents()` is a PowerShell subprocess — 1.85 s measured on the
+    owner's own PC. `layout_list` used to call `agents_for()` bare, once per
+    window and once per tab, from the coroutine itself: every lapse of the two
+    second cache bought another 1.85 s with the WHOLE event loop stopped — no
+    stream, no heartbeats, no answer — while a slow `uia.list_tabs` between
+    two windows guaranteed the lapse. One snapshot, taken in a thread, is the
+    fix; this counts it."""
+    install_fakes()
+    calls = []
+    agents.live_agents = lambda: (calls.append(1), {"claude": {"remote user"}})[1]
+    agents.agents_for = lambda title, live=None: (
+        [] if live is None else ["claude"] if "Remote User" in title else [])
+    ws, _, _ = drive([{"type": "layout_list"}])
+    entries = sent_of(ws, "layout_offer")[0]["entries"]
+    if len(calls) != 1:
+        return False
+    # …and every entry still carries a real answer, so "once" did not become
+    # "not at all".
+    return any(e["agents"] == ["claude"] for e in entries)
+
+
 def check_tap_a_window_answers() -> bool:
     """The other creation source — one armed tap."""
     install_fakes()
@@ -178,6 +207,9 @@ def check_create_focus_and_desktop() -> bool:
     ws, conn, layouts = drive([
         {"type": "layout_create", "mode": "solo", "orient": "portrait",
          "slots": [{"hwnd": WIN_A, "tab": None, "x": 0.5, "y": 0.5}],
+         # `app_sets` is what an OLD client still sends (the ticks, removed
+         # 2026-08-07). It must be accepted and ignored — a phone that has not
+         # reloaded the page may not break creation.
          "name": "Work", "app_sets": ["claude"]},
     ], conn, layouts)
     states = sent_of(ws, "layout_state")
@@ -185,8 +217,10 @@ def check_create_focus_and_desktop() -> bool:
         return False
     if states[-1]["active"] != 0 or conn["active"] != 0:
         return False
-    if layouts.layouts[0].name != "Work" or layouts.layouts[0].app_sets != ["claude"]:
+    if layouts.layouts[0].name != "Work":
         return False
+    if "app_sets" in states[-1]["layouts"][0]:
+        return False  # nothing may carry a frozen copy of the app-set answer
     ws, conn, layouts = drive([{"type": "layout_focus", "index": -1}], conn, layouts)
     states = sent_of(ws, "layout_state")
     return bool(states) and states[-1]["active"] is None and conn["active"] is None
@@ -204,10 +238,9 @@ def check_rename_apps_aspect_remove_all_answer() -> bool:
     for msg, check in (
         ({"type": "layout_rename", "index": 0, "name": "Reading"},
          lambda: layouts.layouts[0].name == "Reading"),
-        ({"type": "layout_apps", "index": 0, "sets": ["vscode"]},
-         lambda: layouts.layouts[0].app_sets == ["vscode"]),
         ({"type": "layout_aspect", "index": 0, "w": 4, "h": 3, "pos": 250},
-         lambda: layouts.layouts[0].ratio == (4, 3)),
+         lambda: layouts.layouts[0].ratio == (4, 3)
+         and abs(layouts.layouts[0].pos - 0.25) < 1e-6),
     ):
         ws, conn, layouts = drive([msg], conn, layouts)
         if not sent_of(ws, "layout_state") or not check():
@@ -234,9 +267,11 @@ def check_a_grid_from_the_list_answers() -> bool:
 
 CHECKS = [
     ("create from a LIST answers the phone", check_create_from_a_list_answers),
+    ("the list probes the process table ONCE, not per entry",
+     check_the_list_probes_the_process_table_once),
     ("create by TAPPING a window answers the phone", check_tap_a_window_answers),
     ("create → focus → desktop", check_create_focus_and_desktop),
-    ("rename / app sets / aspect / remove all answer",
+    ("rename / aspect / remove all answer",
      check_rename_apps_aspect_remove_all_answer),
     ("a 2x1 grid built from the list", check_a_grid_from_the_list_answers),
 ]

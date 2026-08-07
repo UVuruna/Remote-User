@@ -74,18 +74,24 @@ function titleMatches(want, title) {
   return words.some((w) => w && new RegExp(`(^|[^a-z0-9])${w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}([^a-z0-9]|$)`).test(t));
 }
 
-// Does this app set belong to this layout? The owner's own tick wins over
-// every guess (owner 2026-08-06): `lay.app_sets` is the list he ticked when
-// he made the layout, and a layout that HAS the list is answered from it
-// alone. The probe that forced this is in window_manager.Layout — Claude Code
-// names its VSCode tab after the CONVERSATION ("Ispravka UI dizajna meni…"),
-// carries the same UIA class as a file tab and exposes nothing else, so no
-// string test can ever find it. Only layouts made before this version (list
-// = null) still fall through to the process/title guess below.
+// Does this app set belong to this layout? THE PC ANSWERS, NOBODY TICKS
+// (owner 2026-08-06, repeated 2026-08-07 after finding the ticks still there:
+// "nema potrebe da se vidi da li pravimo Claude/VSCode/Chrome/Explorer prozor
+// jer naš program to prepoznaje").
+//
+// This function carried a tick list until 2026-08-07 and it is worth saying
+// exactly what that cost, because the detection it disabled had ALREADY been
+// built. The line was:
+//
+//     if (Array.isArray(lay.app_sets)) return lay.app_sets.includes(s.name);
+//
+// — a layout that carried the list was answered from it ALONE. The list was
+// written once, at creation, out of whatever the PC happened to see in that
+// second; a single miss then outlived every later truth. So the owner sat in
+// a live Claude conversation, `agents` said "claude" on every state frame,
+// and the wheel offered him VS Code and nothing else — forever, for that
+// layout. Detection is not a default here. It is the answer.
 function appSetMatches(s, lay) {
-  // The owner's own ticks still win, wherever he made them — detection is the
-  // default, never a cage.
-  if (Array.isArray(lay.app_sets)) return lay.app_sets.includes(s.name);
   const proc = String(lay.process || "").toLowerCase();
   if (!proc.includes(String(s.process || "").toLowerCase())) return false;
   // An AGENT set asks the PC, not the window text (owner 2026-08-06, after
@@ -106,25 +112,6 @@ function appSetMatches(s, lay) {
   // shortcuts stay reachable while Claude's commands are there).
   if (!s.title) return true;
   return titleMatches(s.title, lay.title);
-}
-
-// Which app sets a new layout starts out carrying. Two fixes on 2026-08-06:
-// EVERY slot is considered, not just the first (a 2x2 with Chrome in cell two
-// never pre-ticked Chrome — the owner's "we went backwards" was wrong about
-// VSCode, which was always pre-ticked, and right that something was missing),
-// and an AGENT set is included when the server says that agent is live in the
-// window's project, so Claude needs no tap either.
-function autoAppSets(slots) {
-  const procs = slots.map((s) => String(s.process || "").toLowerCase());
-  const agents = slots.flatMap((s) => (Array.isArray(s.agents) ? s.agents : []));
-  return appSets
-    .filter((s) => {
-      const proc = String(s.process || "").toLowerCase();
-      if (!procs.some((p) => p.includes(proc))) return false;
-      if (s.agent) return agents.includes(s.agent);
-      return !s.title;
-    })
-    .map((s) => s.name);
 }
 
 function visibleAppSets() {
