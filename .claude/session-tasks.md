@@ -163,11 +163,16 @@ dropped for them):
       is exactly what he is now answering: he wants it. Needs his choice
       between a foreground service and FCM push — presented in this round's
       report, nothing built.
-- [ ] 81. DRAG A LAYOUT ROW (new feature, needs his answers first) — long
-      press a row in the layout list, drag it up/down, and dropping it ON
-      another row makes a GRID of the two, "like holding a file in Explorer
-      and dragging it into a folder". He explicitly said to ASK rather than
-      invent — questions go to him before any code.
+- [~] 81. DRAG A LAYOUT ROW — BUILT and shipped v0.0.092, to his four answers
+      and his drawing (UV/grid_variations.png). Hold a row, drop ON another =
+      a grid of the two and the dragged layout disappears; drop BETWEEN rows =
+      reorder. A full four greys out while the drag is in flight. 1+1 and 1+3
+      ask nothing; 1+2 becomes a three and he picks one of the four
+      arrangements. New: server/grids.py + client/grids.js (the catalogue,
+      every shape a DRAWING), layout_grid / layout_merge / layout_reorder,
+      the shape in the layout's settings panel, and "wide" renamed to
+      "landscape" everywhere. Gate: the audit proves every shape tiles its
+      region exactly — no gap, no overlap, no sliver.
 
 
 ISPORUKA (round 6): kod = the TOPMOST leak killed at its two proven roots
