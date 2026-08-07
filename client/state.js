@@ -129,11 +129,13 @@ window.addEventListener("error", (e) => setStatus("disconnected", `Page error: $
 window.addEventListener("unhandledrejection", (e) =>
   setStatus("disconnected", `Page error: ${e.reason}`));
 
-// The canvas keeps its FULL height when the soft keyboard opens and is simply
-// shifted up by `kbShift` CSS px (owner 2026-08-03 — the picture must never be
-// squeezed; the bottom stays visible above the keyboard and the top runs off
-// screen). Touch coordinates are reported against the visible viewport, so the
-// same shift is added back here to land in canvas space.
+// The canvas keeps its FULL height when the soft keyboard opens (owner
+// 2026-08-03 — the picture must never be SQUEEZED, and that half still
+// holds). It is no longer LIFTED: the owner withdrew that on 2026-08-07
+// because a keyboard-sized lift carried the very line he was typing off the
+// top of the screen. The keyboard covers what it covers; nothing moves. So
+// `kbShift` is 0 and stays 0 — kept as the one place a future lift would go,
+// and as the one place every gesture already passes through.
 let kbShift = 0;
 
 function toCanvasPx(e) {

@@ -162,12 +162,19 @@ function updateViewport() {
   const kb = vv ? Math.max(0, window.innerHeight - vv.height - vv.offsetTop) : 0;
   if (Math.abs(w - fullView.w) > 1) fullView = { w, h: visibleH }; // rotation
   else fullView.h = Math.max(fullView.h, visibleH);
-  // What the canvas keeps (full height) vs what is actually visible: the
-  // difference is how far the canvas is lifted so its BOTTOM edge — the row
-  // the user is typing into — sits right above the keyboard.
+  // THE KEYBOARD COVERS, IT NEVER MOVES ANYTHING (owner decree 2026-08-07,
+  // withdrawing his own 2026-08-03 request after living with it). The canvas
+  // used to be LIFTED by the keyboard's height so its bottom edge sat just
+  // above the keys. It reads well on paper and is wrong in the hand: the row
+  // he is typing into is almost never at the very bottom of the PC screen, so
+  // lifting the picture by a whole keyboard drove the text he was watching
+  // off the top — "izbaci tekst koji se kuca ... iz vidokruga". A keyboard
+  // that simply covers the lower part of the picture leaves everything else
+  // exactly where his eyes left it, and he can pan if he needs what is under
+  // it. `kbShift` stays 0, so `toCanvasPx` is a straight mapping again.
   const h = fullView.h;
-  kbShift = Math.max(0, h - visibleH);
-  canvas.style.transform = kbShift ? `translateY(${-kbShift}px)` : "";
+  kbShift = 0;
+  canvas.style.transform = "";
   // NOTE: do NOT blur the keyboard field on a keyboard-height drop. Switching
   // to the IME's voice/mic input transiently shrinks the keyboard, and a blur
   // there tore down the field mid-dictation (had to re-tap Keys to get back —
