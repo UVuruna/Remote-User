@@ -45,7 +45,7 @@
 #layout-bar .lay-arrow svg {
   width: 32px;
   height: 32px;
-  filter: drop-shadow(0 1px 3px rgb(0 0 0 / 0.85));
+  filter: drop-shadow(0 1px 3px var(--lbl-shadow));
 }
 /* The frame is the rectangle: name + ✕ together, and it takes whatever width
    the arrows leave — never more. */
@@ -58,7 +58,7 @@
   padding: 6px 8px 6px 12px;
   border: 1px solid var(--border);
   border-radius: 14px;
-  background: rgb(15 23 42 / 0.85);
+  background: var(--bar);
 }
 /* Tapping the name opens the full layout list. */
 #layout-bar #lay-pick {
@@ -86,14 +86,17 @@
   align-self: stretch;
   padding: 0 6px;
   color: var(--text-secondary);
-  font: 700 15px/1 system-ui, sans-serif;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
+#layout-bar #lay-close svg { width: 15px; height: 15px; }
 
 #layout-panel {
   position: fixed;
   inset: 0;
   z-index: 45;
-  background: rgb(15 23 42 / 0.72);
+  background: var(--scrim);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -105,13 +108,13 @@
   width: min(420px, 100%);
   max-height: 92vh;
   overflow-y: auto;
-  background: #1E293B;
+  background: var(--card);
   border: 1px solid var(--border);
   border-radius: 18px;
   padding: 22px 20px;
   color: var(--text-primary);
   font: 400 14px/1.45 system-ui, sans-serif;
-  box-shadow: 0 12px 40px rgb(0 0 0 / 0.45);
+  box-shadow: 0 12px 40px var(--card-shadow);
 }
 .lay-card h2 { font-size: 19px; margin-bottom: 2px; }
 .lay-sub { color: var(--text-secondary); font-size: 13px; margin-bottom: 10px; }
@@ -126,7 +129,7 @@
   padding: 9px 15px;
   border-radius: var(--radius-pill);
   border: 1px solid var(--border);
-  background: rgb(51 65 85 / 0.6);
+  background: var(--chip);
   color: var(--text-primary);
   font: 600 13px system-ui, sans-serif;
 }
@@ -181,7 +184,7 @@
   padding: 12px 14px;
   border-radius: 12px;
   border: 1px solid var(--border);
-  background: rgb(51 65 85 / 0.5);
+  background: var(--chip-2);
   color: var(--text-primary);
   font: 600 14px system-ui, sans-serif;
   text-align: left;
@@ -213,7 +216,7 @@
   padding: 0 12px;
   border-radius: 12px;
   border: 1px solid var(--border);
-  background: rgb(51 65 85 / 0.5);
+  background: var(--chip-2);
   color: var(--text-secondary);
   font: 600 12px system-ui, sans-serif;
 }
@@ -230,7 +233,7 @@
   padding: 11px 13px;
   border-radius: 12px;
   border: 1px solid var(--border);
-  background: rgb(51 65 85 / 0.6);
+  background: var(--chip);
   color: var(--text-primary);
   font: 600 15px system-ui, sans-serif;
 }
@@ -252,7 +255,7 @@
   padding: 9px 10px;
   border-radius: 10px;
   border: 1px solid var(--border);
-  background: rgb(51 65 85 / 0.6);
+  background: var(--chip);
   color: var(--text-primary);
   font: 700 15px system-ui, sans-serif;
   text-align: center;
@@ -283,7 +286,7 @@
   transform: translate(-50%, -50%);
   border: 2px solid var(--accent);
   border-radius: 4px;
-  background: rgb(56 189 248 / 0.12);
+  background: var(--accent-wash);
 }
 .asp-h {
   position: absolute;
@@ -309,7 +312,7 @@
   height: 44px;
   border-radius: 50%;
   background: var(--accent);
-  color: #0F172A;
+  color: var(--on-accent);
   /* A drawn four-way arrow (ICONS.move), not a font glyph — see controls.js */
   display: flex;
   align-items: center;
@@ -337,7 +340,7 @@
   position: fixed;
   inset: 0;
   z-index: 48;
-  background: #0F172A;
+  background: var(--opaque);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -380,7 +383,7 @@
 .cube-face {
   position: absolute;
   inset: 0;
-  border: 2px solid rgb(15 23 42 / 0.55);
+  border: 2px solid var(--scrim-soft);
   border-radius: 10px;
   opacity: 0.96;
 }
@@ -410,3 +413,17 @@
 /* A grid choice is a DRAWING of the grid (his sheet), not its name. */
 .lay-chip.lay-grid { padding: 8px 10px; }
 .lay-grid-ico { width: 30px; height: 30px; display: block; }
+/* A drawing with a tiny caption under it (owner round 2, 2026-08-07 — the
+   creation panel's count row and the orientation row): the picture stays the
+   thing that is tapped and lit, the caption only echoes it. */
+.lay-chip.lay-shape {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.lay-chip.lay-shape span {
+  font: 600 11px system-ui, sans-serif;
+  color: var(--text-secondary);
+}
+.lay-chip.lay-shape.sel span { color: var(--accent); }

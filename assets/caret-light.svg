@@ -1,0 +1,9 @@
+<!-- The combo box's caret, LIGHT palette (gui/theme.py QSS, token `caretAsset`).
+
+     Same drawing as caret.svg, this palette's `text2` ink (#545A6B). See that
+     file for why the caret is an asset at all and why there are two of them. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="12" height="12">
+  <polyline points="5 9 12 16 19 9"
+            fill="none" stroke="#545A6B" stroke-width="2.4"
+            stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

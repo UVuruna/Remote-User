@@ -100,3 +100,20 @@ style.css
                                   here with the rest (noted for accuracy, not
                                   changed — see the folder's Design Decisions)
 ```
+
+## Build round R3 (2026-08-07) — themes
+
+```
+theme.css   :root                      every colour, dark by default
+            body[data-theme="light"]   surfaces invert, accent deepens,
+                                       ink shadows flip black -> white
+            body[data-theme="colored"] dark surfaces + per-set --set-color
+            body[data-fill="full"]     --glass-fill/--chip -> --fill-solid
+      |
+      v  (loaded first)
+style.css   :root   --kb --vtop --topbar --corner --radius-pill --space-*
+            ...every rule below reads a colour token and names none.
+      |
+      v
+layouts.css ...the same, for the layout feature's own surfaces.
+```

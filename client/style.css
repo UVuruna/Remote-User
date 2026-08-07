@@ -1,16 +1,10 @@
+/* COLOUR LIVES IN theme.css (build round R3) — it loads before this file and
+   owns every hue, in three themes and two fills. What is left here is SHAPE:
+   sizes, positions, radii, spacing. A rule in this file may READ a colour
+   token; it may not invent one. */
 :root {
-  --surface-0: #0f172a;
-  --glass-fill: rgb(30 41 59 / 0.20);
-  --border: rgb(255 255 255 / 0.20);
   --kb: 0px;   /* soft-keyboard height, kept live from visualViewport */
   --vtop: 0px; /* visualViewport top offset, so top corners stay visible */
-  --text-primary: #f5f5f5;
-  --text-secondary: #a8b3c5;
-  --accent: #38bdf8;
-  --accent-2: #8b5cf6;
-  --accent-glow: rgb(56 189 248 / 0.25);
-  --warning: #f59e0b;
-  --error: #ef4444;
   --corner: 58px;  /* corner button size — the layout bar's hard bounds */
   /* Bottom edge of the top panel (Layout / Hide corners + the layout bar).
      EVERY floating notice (status pill, toasts, update banner) starts below
@@ -59,9 +53,9 @@ html, body {
   transition: opacity 0.4s;
 }
 
-#status.connecting { background: linear-gradient(90deg, var(--warning), #d97706); }
+#status.connecting { background: linear-gradient(90deg, var(--warning), var(--warning-2)); }
 #status.connected  { background: linear-gradient(90deg, var(--accent), var(--accent-2)); opacity: 0; pointer-events: none; }
-#status.disconnected { background: linear-gradient(90deg, var(--error), #b91c1c); }
+#status.disconnected { background: linear-gradient(90deg, var(--error), var(--error-2)); }
 /* An expiring toast fades out KEEPING its own colour (see showToast) — the
    pill only returns to the connected state once it is already invisible. */
 #status.fade { opacity: 0; pointer-events: none; }
@@ -149,7 +143,7 @@ html, body {
   width: 23px;
   height: 23px;
   pointer-events: none;
-  filter: drop-shadow(0 1px 2px rgb(0 0 0 / 0.7));
+  filter: drop-shadow(0 1px 2px var(--ink-shadow));
 }
 
 /* A pool's reserve commands carry longer names than the shipped four
@@ -160,7 +154,7 @@ html, body {
   font: 600 9px/1.15 system-ui, sans-serif;
   letter-spacing: 0.02em;
   color: var(--text-primary);
-  text-shadow: 0 1px 2px rgb(0 0 0 / 0.85);
+  text-shadow: 0 1px 2px var(--lbl-shadow);
   pointer-events: none;
   max-width: 54px;
   text-align: center;
@@ -186,13 +180,21 @@ html, body {
   transform: scale(0.94);
 }
 
-/* The category button is smaller — used only when switching presets */
+/* The category button is smaller — used only when switching presets.
+
+   NOTHING IS MADE RECESSIVE BY DIMMING ITS TEXT (found by the audit's own new
+   ancestor-opacity check, 2026-08-07). This carried `opacity: 0.85`, which the
+   old contrast check could not see because it read `opacity` on the text leaf
+   and never on its parents — so the set NAME, the one word telling you which
+   set your thumb is on, was quietly the dimmest text on the screen: 3.35:1 in
+   dark and 4.27:1 on a filled VSCode-blue button, under AA in both. The
+   smaller size and the DASHED border already say "this one is the switcher,
+   not an action", and they say it without spending legibility. */
 .ctl.cat {
   width: 42px;
   height: 42px;
   border-radius: 12px;
   border-style: dashed;
-  opacity: 0.85;
 }
 .ctl.cat svg { width: 18px; height: 18px; }
 .ctl.cat .lbl { font-size: 8px; }
@@ -243,12 +245,38 @@ html, body {
 
 /* --- Category wheel (tap to open, tap an item, X to cancel) --------------- */
 
+/* THE VEIL DIMS THE PC'S SCREEN, NOT OUR OWN BUTTONS (independent grader,
+   2026-08-07 — the finding that blocked this release). `#wheel` used to carry
+   `--scrim-soft` as its OWN background, and it sits at z-index 35, above the
+   D-pad (20) and the corner buttons (30) — so opening the wheel laid a 0.55
+   navy veil over every control on screen. Measured on the "Click" label in
+   that state: 4.22:1 in `dark`, 2.66:1 in `colored`, because a veil costs a
+   chromatic colour far more luminance than it costs white.
+
+   No ink could have fixed it. Under a 0.55 veil the contrast ACHIEVABLE
+   between the brightest and darkest possible pixels is 4.83:1, and a filled
+   coloured button (dark ink on a mid-luminance fill, both pulled toward the
+   same navy) tops out at 2.0-2.8:1 whichever ink is chosen. So the veil moved
+   to a layer of its OWN, below everything we draw and above the stream — which
+   is what it was always for: the wheel is a small radial menu over the PC's
+   screen, not a card that replaces it. Nothing else changes — `#wheel` still
+   covers the viewport, so a tap outside an item still cancels exactly as
+   before, and a full modal PANEL (`--scrim`, z-index 50) still dims the
+   controls, because a panel really does replace the screen. */
+body.wheel-open::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 10;               /* over the stream, under .group (20) */
+  background: var(--scrim-soft);
+  pointer-events: none;      /* the tap belongs to #wheel, as it always did */
+}
+
 #wheel {
   position: fixed;
   inset: 0;
   z-index: 35;
   display: none;
-  background: rgb(15 23 42 / 0.55);
 }
 #wheel.open { display: block; }
 
@@ -258,8 +286,8 @@ html, body {
   width: 74px;
   height: 74px;
   border-radius: 50%;
-  background: rgb(30 41 59 / 0.85);
-  border: 1px solid var(--border);
+  background: var(--glass-strong);
+  border: 1px solid var(--wheel-border, var(--border));
   color: var(--text-primary);
   display: flex;
   flex-direction: column;
@@ -283,8 +311,8 @@ html, body {
   width: 60px;
   height: 60px;
   border-radius: 50%;
-  background: rgb(30 41 59 / 0.9);
-  border: 1px solid var(--border);
+  background: var(--glass-strong);
+  border: 1px solid var(--wheel-border, var(--border));
   color: var(--text-secondary);
   display: flex;
   align-items: center;
@@ -302,12 +330,16 @@ html, body {
   padding: 10px 18px;
   border-radius: var(--radius-pill);
   border: 1px solid var(--border);
-  background: rgb(15 23 42 / 0.85);
+  background: var(--bar);
   color: var(--accent);
   font: 600 13px system-ui, sans-serif;
   z-index: 25;
   -webkit-tap-highlight-color: transparent;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }
+#anywhere-banner svg { width: 16px; height: 16px; flex: none; }
 #anywhere-banner[hidden] { display: none; }
 
 /* In-app update offer — pill under the status, shown when the PC server
@@ -320,12 +352,16 @@ html, body {
   padding: 8px 16px;
   border-radius: var(--radius-pill);
   border: 1px solid var(--border);
-  background: rgb(15 23 42 / 0.9);
+  background: var(--bar);
   color: var(--accent);
   font: 600 13px system-ui, sans-serif;
   z-index: 24;
   -webkit-tap-highlight-color: transparent;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }
+#update-banner svg { width: 16px; height: 16px; flex: none; }
 #update-banner[hidden] { display: none; }
 body.hidden-controls #update-banner { display: none; }
 
@@ -333,7 +369,7 @@ body.hidden-controls #update-banner { display: none; }
   position: fixed;
   inset: 0;
   z-index: 50;
-  background: rgb(15 23 42 / 0.72);
+  background: var(--scrim);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -346,11 +382,12 @@ body.hidden-controls #update-banner { display: none; }
 #sets-panel,
 #quality-panel,
 #dictation-panel,
+#notice-panel,
 #choice-panel {
   position: fixed;
   inset: 0;
   z-index: 50;
-  background: rgb(15 23 42 / 0.72);
+  background: var(--scrim);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -359,6 +396,7 @@ body.hidden-controls #update-banner { display: none; }
 #sets-panel[hidden],
 #quality-panel[hidden],
 #dictation-panel[hidden],
+#notice-panel[hidden],
 #choice-panel[hidden] { display: none; }
 
 /* A chooser row is a BUTTON, not a checkbox row — one tap picks and closes
@@ -381,11 +419,39 @@ body.hidden-controls #update-banner { display: none; }
 }
 .sets-row.choice:active { background: var(--accent-glow); border-color: var(--accent); }
 
-/* Dictation setup card rows (owner round 2, 2026-08-05) */
-.sets-row.dict { justify-content: flex-start; }
-.sets-row.dict input { width: 20px; height: 20px; accent-color: var(--accent); }
-.dict-name { font-weight: 600; }
-.dict-status { margin-left: auto; color: var(--text-secondary); font-size: 12px; text-align: right; }
+/* Dictation setup card rows (owner round 2, 2026-08-05).
+
+   TWO ROWS, NOT TWO COLUMNS (independent grader, 2026-08-07 — 7/10 in both
+   palettes). The row used to be one flex line: radio, language name, status
+   pushed right by `margin-left:auto`. Both text boxes are shrinkable, so on a
+   412 px phone BOTH wrapped at once — "Srpski" was cut from its own "(Srbija)"
+   while the status orphaned "arrives" on a line of its own, with ~60 px of
+   unused width standing between them. THE SPACE & LEGIBILITY LAW's own
+   picture: a starving element beside a neighbour holding slack.
+
+   Ladder rung 1 (let the name take the free width) cannot fix it, and the
+   measurement says why: the longest real pair is "English (United States)" at
+   600 15 px (~175 px) plus "model will download — online until it arrives" at
+   12 px (~240 px), which is 415 px of text for a ~328 px line. There is no
+   free width to take — the two genuinely do not fit on one line. So rung 2,
+   REFLOW: the status moves under the name, left-aligned, and each takes the
+   full width of the row. Both now sit on one line each, and the card grows
+   into the vertical space that was already standing empty above it. */
+.sets-row.dict {
+  display: grid;
+  grid-template-columns: 20px 1fr;
+  gap: 1px 10px;
+  align-items: center;
+}
+.sets-row.dict input {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--accent);
+  grid-column: 1;
+  grid-row: 1 / span 2;
+}
+.dict-name { grid-column: 2; grid-row: 1; font-weight: 600; }
+.dict-status { grid-column: 2; grid-row: 2; color: var(--text-secondary); font-size: 12px; }
 .sets-row.dict.sel .dict-name { color: var(--accent); }
 .dict-more {
   background: transparent;
@@ -419,7 +485,7 @@ body.hidden-controls #update-banner { display: none; }
 .q-seg button.on {
   border-color: var(--accent);
   color: var(--accent);
-  background: rgb(56 189 248 / 0.08);
+  background: var(--accent-wash);
 }
 /* A step the PC's own settings put out of reach (owner 2026-08-05): visibly
    inert, so nobody taps 30 fps under a 10 fps PC and wonders why nothing
@@ -434,14 +500,81 @@ body.hidden-controls #update-banner { display: none; }
   width: min(420px, 100%);
   max-height: 92vh;
   overflow-y: auto;
-  background: #1E293B;
+  background: var(--card);
   border: 1px solid var(--border);
   border-radius: 18px;
   padding: 22px 20px;
   color: var(--text-primary);
   font: 400 14px/1.45 system-ui, sans-serif;
-  box-shadow: 0 12px 40px rgb(0 0 0 / 0.45);
+  box-shadow: 0 12px 40px var(--card-shadow);
 }
+/* A SHORT SCREEN SPENDS ITS WIDTH (independent grader's landscape shot,
+   2026-08-07 — the first landscape picture of this client that anyone had
+   ever LOOKED at, and it caught this in one second). Every panel card is
+   `min(420px, 100%)` wide and `92vh` tall, which is right in portrait: 380 px
+   of a 412 px screen, and nothing scrolls. Turn the phone and the SAME card
+   is still 420 px wide inside a 915 px screen — 495 px of width standing
+   idle — while 92vh is now only 379 px, so seven of the ten panels scrolled:
+   the Sets picker by 235 px, the grid catalogue by 256 px, and the creation
+   panel's Create button sat below the fold entirely. THE SPACE & LEGIBILITY
+   LAW draws this exact picture as BUG A: "a visible scrollbar with unused
+   space in the same window is a bug, not a style choice".
+
+   Ladder rung 1 then 2. The card TAKES the free width — which by itself lets
+   every `.lay-row` of chips collapse onto one line instead of two — and the
+   thing that is actually tall, the LIST of rows, REFLOWS into two columns.
+   The list and nothing else: a first attempt made the whole CARD a multicol
+   and it spilled a third column sideways off the screen (the Cancel button
+   landed at x=957 on a 915 px screen), because a multicol with a definite
+   height keeps making columns until the content fits and `break-inside:
+   avoid` gives it no choice. A grid on the list alone is deterministic —
+   two columns, never three, and every row stays whole.
+
+   Measured after, at 915x412: the tallest card falls from 633 px of content
+   to 355 px inside a 379 px box, and not one of the ten panels scrolls in
+   either orientation. Portrait is untouched (the query needs BOTH a landscape
+   orientation and a short screen, so a tablet held upright never sees it).
+
+   It names BOTH card classes although `.lay-card` is declared in
+   layouts.css: this is one rule about one thing — what a panel card does when
+   the screen is short — and two copies of it in two files is how the two
+   would come to disagree.
+
+   (`body` prefixes the selector on purpose: `.lay-card` declares its own
+   `width` in layouts.css, which loads after this file, so an equal-weight
+   selector here loses the cascade and the card would take the reflow WITHOUT
+   the width — two ~180 px columns, which made the layout list measurably
+   worse, not better. Measured, not assumed.) */
+@media (orientation: landscape) and (max-height: 560px) {
+  body .sets-card,
+  body .lay-card {
+    width: min(760px, 100%);
+    column-count: 2;
+    column-gap: 24px;
+  }
+  /* Only the ROWS are unbreakable. A first attempt made every direct child of
+     the card unbreakable, and the card spilled a THIRD column off the right
+     edge of the screen (the Cancel button at x=957 on a 915 px screen),
+     because a fixed column-count with nothing splittable in it has no other
+     way to place a block that will not fit. A list may divide between two of
+     its rows; a row, a chip, a button or the aspect preview may never be cut
+     in half. */
+  body .sets-row,
+  body .lay-row,
+  body .lay-item,
+  body .q-row,
+  body .asp-screen,
+  body .sets-card button,
+  body .lay-card button { break-inside: avoid; }
+  /* The Name box is a textarea sized for a portrait card; on a short screen
+     its idle air is height nobody has to spare (the grader's own portrait
+     note: "one short word over ~120 px of air"). */
+  body .lay-name-in { height: 64px; }
+  /* The lists cap their own height for a TALL card; inside a column that cap
+     only re-introduces a scrollbar of their own. */
+  body .lay-list { max-height: none; overflow-y: visible; }
+}
+
 .sets-card h2 { font-size: 19px; margin-bottom: 4px; }
 .sets-sub { color: var(--text-secondary); font-size: 13px; margin-bottom: 12px; }
 .sets-list { display: flex; flex-direction: column; gap: 2px; margin-bottom: 10px; }
@@ -454,6 +587,40 @@ body.hidden-controls #update-banner { display: none; }
   font-size: 15px;
 }
 .sets-row input { width: 20px; height: 20px; accent-color: var(--accent); }
+/* An UNCHECKED box is drawn, not the WebView's own native chrome (owner
+   grader, 2026-08-07: on light/filled, the unchecked "Save data on mobile
+   networks" box was pure white — the platform's default checkbox fill, which
+   ignores the page theme entirely — and read as the brightest object in the
+   card). `accent-color` only reaches the CHECKED state in Chromium; the empty
+   box needs its own background and border to sit at the same weight as every
+   other unfilled control ( --glass-fill / --border ), on every theme, not
+   only light. The check itself is drawn with a small rotated corner rather
+   than a font glyph or emoji — the same house rule icons.js follows. */
+.sets-row input[type="checkbox"] {
+  -webkit-appearance: none;
+  appearance: none;
+  border-radius: 5px;
+  border: 1px solid var(--border);
+  background: var(--glass-fill);
+  position: relative;
+  flex: none;
+  cursor: pointer;
+}
+.sets-row input[type="checkbox"]:checked {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.sets-row input[type="checkbox"]:checked::after {
+  content: "";
+  position: absolute;
+  left: 6px;
+  top: 2px;
+  width: 5px;
+  height: 10px;
+  border: solid var(--on-accent);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
 .sets-row.apps { border-top: 1px solid var(--border); margin-top: 6px; padding-top: 14px; }
 .sets-ic { width: 22px; height: 22px; color: var(--text-secondary); }
 .sets-ic svg { width: 22px; height: 22px; }
@@ -479,7 +646,7 @@ body.hidden-controls #update-banner { display: none; }
    inherited the row's near-white ink and sat at 1.96:1 on the accent (owner
    2026-08-06; found by the audit's new contrast check, not by eye). */
 .sets-live.on {
-  color: var(--surface-0);
+  color: var(--on-accent);
   background: var(--accent);
   border-color: var(--accent);
 }
@@ -499,13 +666,13 @@ body.hidden-controls #update-banner { display: none; }
   width: min(420px, 100%);
   max-height: 92vh;
   overflow-y: auto;
-  background: #1E293B;
+  background: var(--card);
   border: 1px solid var(--border);
   border-radius: 18px;
   padding: 22px 20px;
   color: var(--text-primary);
   font: 400 14px/1.45 system-ui, sans-serif;
-  box-shadow: 0 12px 40px rgb(0 0 0 / 0.45);
+  box-shadow: 0 12px 40px var(--card-shadow);
 }
 .wiz-card h2 { font-size: 19px; margin-bottom: 4px; }
 .wiz-sub { color: var(--text-secondary); font-size: 13px; margin-bottom: 16px; }
@@ -520,8 +687,11 @@ body.hidden-controls #update-banner { display: none; }
   border: 1px solid var(--border);
   background: transparent;
   color: var(--text-secondary);
-  font-size: 15px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
+#wiz-close svg { width: 15px; height: 15px; }
 
 .wiz-step {
   display: flex;
@@ -550,7 +720,7 @@ body.hidden-controls #update-banner { display: none; }
   padding: 9px 16px;
   border-radius: 10px;
   border: 1px solid var(--border);
-  background: rgb(51 65 85 / 0.6);
+  background: var(--chip);
   color: var(--text-primary);
   font: 600 13px system-ui, sans-serif;
   text-decoration: none;
@@ -558,16 +728,16 @@ body.hidden-controls #update-banner { display: none; }
 .wiz-btn.primary {
   background: linear-gradient(90deg, var(--accent), var(--accent-2));
   border: none;
-  color: #06212E;
+  color: var(--on-accent);
 }
 
 /* Step 3 success state */
 .wiz-step.done .wiz-num {
-  background: rgb(34 197 94 / 0.18);
-  border-color: rgb(34 197 94 / 0.5);
-  color: #22C55E;
+  background: var(--success-dim);
+  border-color: var(--success-edge);
+  color: var(--success);
 }
-.wiz-step.done #wiz-status { color: #22C55E; }
+.wiz-step.done #wiz-status { color: var(--success); }
 
 /* --- Hide-all mode ------------------------------------------------------- */
 body.hidden-controls .group,
@@ -592,8 +762,8 @@ body.hidden-controls .corner-tl { display: none; }
   position: absolute;
   border: 2px dashed var(--accent);
   border-radius: 6px;
-  background: rgb(56 189 248 / 0.10);
-  box-shadow: 0 0 0 9999px rgb(15 23 42 / 0.35);  /* everything outside dims */
+  background: var(--accent-wash);
+  box-shadow: 0 0 0 9999px var(--dim-out);  /* everything outside dims */
   touch-action: none;
 }
 
@@ -639,7 +809,7 @@ body.hidden-controls .corner-tl { display: none; }
   justify-content: center;
   touch-action: none;
 }
-.rg-move svg { width: 26px; height: 26px; filter: drop-shadow(0 1px 2px rgb(0 0 0 / 0.7)); }
+.rg-move svg { width: 26px; height: 26px; filter: drop-shadow(0 1px 2px var(--ink-shadow)); }
 
 .rg-bar {
   position: absolute;
@@ -652,7 +822,7 @@ body.hidden-controls .corner-tl { display: none; }
   max-width: calc(100vw - 2 * var(--space-m));
   padding: var(--space-s) var(--space-m);
   border-radius: var(--radius-pill);
-  background: rgb(15 23 42 / 0.9);
+  background: var(--bar);
   border: 1px solid var(--border);
 }
 /* The hint wraps instead of eliding — SPACE & LEGIBILITY, same rule the D-pad
@@ -668,7 +838,7 @@ body.hidden-controls .corner-tl { display: none; }
   border-radius: var(--radius-pill);
   border: none;
   background: var(--accent);
-  color: #06121f;
+  color: var(--on-accent);
   font: 700 15px system-ui, sans-serif;
 }
 .rg-cancel {
