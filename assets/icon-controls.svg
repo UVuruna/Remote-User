@@ -1,0 +1,19 @@
+<!-- Controls — sliders. The button that opens the Controls editor
+     (gui/main_window.py, tinted by gui/theme.py's icon()).
+
+     Stroke-based on a 24x24 grid, 2px stroke, single colour via
+     `currentColor` — the theme substitutes it, so the same file serves a
+     light theme too. DRAWN, never a font glyph: a glyph depends on whatever
+     face the machine has, and this project has already paid for that once
+     (the ✥ that came out a blunt cross on the owner's phone). -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="48" height="48">
+  <g fill="none" stroke="currentColor" stroke-width="2"
+     stroke-linecap="round" stroke-linejoin="round">
+    <line x1="3.5" y1="7" x2="20.5" y2="7"/>
+    <line x1="3.5" y1="12" x2="20.5" y2="12"/>
+    <line x1="3.5" y1="17" x2="20.5" y2="17"/>
+    <circle cx="9" cy="7" r="2.4" fill="currentColor" stroke="none"/>
+    <circle cx="16" cy="12" r="2.4" fill="currentColor" stroke="none"/>
+    <circle cx="7" cy="17" r="2.4" fill="currentColor" stroke="none"/>
+  </g>
+</svg>

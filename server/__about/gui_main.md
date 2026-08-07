@@ -33,3 +33,11 @@ repaired at the next start, for the paths that run no code at all — Task
 Manager, the installer's `taskkill`, a power cut. See
 [Window Manager](window_manager.md) — the topmost ledger. `release_windows()`
 is idempotent, so all three firing is the design, not a bug.
+
+Windows' FOREGROUND LOCK (round R2) rides the same two in-process nets —
+`foreground_lock.release` is connected to `aboutToQuit` and registered with
+`atexit` SEPARATELY from `release_windows`, because that one also runs on
+every server stop (Apply & restart) and the lock belongs to the process, not
+to a server run. Its third net is the same on-disk ledger idea, and it has a
+fourth the topmost band does not: the value never reaches the registry, so a
+reboot already restores it. See [Foreground Lock](foreground_lock.md).

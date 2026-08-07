@@ -67,9 +67,18 @@ def main() -> None:
     #     Manager, the installer's taskkill, a power cut) are repaired by the
     #     next start (ServerController.__init__ -> repair_stranded).
     # release_windows() is idempotent, so running all three is the design.
+    #
+    # Windows' FOREGROUND LOCK (round R2) rides the same three nets and has a
+    # fourth of its own: the raised value never reaches the registry, so a
+    # reboot already restores it. Released separately from release_windows()
+    # because that one also runs on every server stop, and this lock belongs
+    # to the process, not to a server run.
     import atexit
+    import foreground_lock
     app.aboutToQuit.connect(controller.release_windows)
+    app.aboutToQuit.connect(foreground_lock.release)
     atexit.register(controller.release_windows)
+    atexit.register(foreground_lock.release)
 
     controller.start()
     sys.exit(app.exec())

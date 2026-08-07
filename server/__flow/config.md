@@ -73,3 +73,24 @@ Pseudocode:
         IF any key not in USER_ADJUSTABLE → raise ValueError
         merge changes over the existing settings.json, write it
         apply(**changes)           # running SETTINGS updates immediately
+
+## Build round R3 (2026-08-07) — themes
+
+```
+Settings (dataclass)
+   `- Appearance          ui_theme      "dark"          <- this PC
+                          phone_theme   "dark"          <- the phone
+                          phone_fill    "transparent"   <- the phone
+
+SET_COLORS  (its own banner section — 13 shipped sets, one colour each)
+
+ui_config()  ->  {"theme": phone_theme,
+                  "fill":  phone_fill,
+                  "colors": dict(SET_COLORS)}
+                        |
+                        v
+              web._send_config()  ->  `config` frame, key "ui"
+                        |
+                        v
+              client/theme.js applyUi()  ->  <body data-theme=.. data-fill=..>
+```
