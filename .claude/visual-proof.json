@@ -1,43 +1,329 @@
 {
-  "commit": "a1ed1d263f8c4083a7a3df770ffc3dd161bc0891",
-  "implementer": "Claude Opus 5 (1M context) — round 14, 2026-08-07",
-  "grader": "independent subagent a77e2dfae04b9738f (general-purpose, sonnet) — never saw the code, graded only the images against each ruling",
-  "note": "ControlsEditor is deliberately NOT an item here. This round did not set out to change controls_editor.py, so no ruling of this round rests on it — but the grader failed it at 6/10 on a STANDING law (a scrollbar beside unused space), which was carried, not argued with: the pool table's minimum was raised from six rows to ten (window minimum 723x858 -> 723x956, inside the declared frame), and the reflow the grader named — moving Arrangement into the left column — was tried and REVERTED because it clipped 'Explorer' mid-row, which is worse than a scrollbar. What remains (the 13-command Claude pool still scrolling past ten) needs a minimum of ~1034 px and therefore a taller frame in .claude/layout-frame.json — the owner's file and the owner's call. It is in his report in writing, not buried. The grader also caught the file corrupted mid-grade: a parallel session in the same tree overwrote .claude/shots/ with its own audit output at 12:38:33, and it refused to grade from memory of its earlier clean read. That refusal is the gate working.",
+  "commit": "b9bda3f6b225af7f1a626c9ccbd18e746d44ad27",
+  "implementer": "Claude Opus 5 (1M context) — build rounds R2/R3/R4/R5 and the two fix rounds of 2026-08-07 (main window rebuild, Settings window, Traffic rebuild, ControlsEditor reflow + field tokens + drawn caret, WheelOrderDialog, phone theme/veil/ink fix, dictation card reflow, landscape reflow)",
+  "grader": "THIRD INDEPENDENT VISUAL GRADER (Opus 5, 1M context), 2026-08-07 19:03-19:30. I wrote NONE of this code and edited no source file in this round. I REGENERATED EVERY PICTURE I GRADE: `tests/test_layout_audit_qt.py` (7 windows x dark+light, all PASS) and `tests/test_layout_audit.py` (phone, portrait+landscape, all six theme x fill looks, PASS) were run by this session at 19:03, and the four TrafficWindow hover shots were produced by this grader's own offscreen script (WA_DontShowOnScreen, never on screen) because no committed entry point writes them. Every grade below rests on a picture I opened with the Read tool after regenerating it, and every below-8 finding is backed by a pixel measurement or a source line quoted in .claude/layout-proof.md. Pictures written by another process were REFUSED, not graded. || FINAL INDEPENDENT GRADER (Opus 5) — a third agent, wrote none of this code and edited no source. Graded the bytes on disk (phone 19:03, desktop 19:10 — both AFTER the last edit to any file they render, client/* 18:50:54 and server/gui/* 19:02:22) rather than re-running the audits, because a re-run rewrites all 90 shots and two previous rounds lost work to exactly that. Opened every picture it graded with the Read tool and MEASURED every claim a number could settle (Pillow sampling, WCAG contrast, 8x nearest-neighbour crops of the caret and the theme pill). Verified all seven fixer claims: ControlsEditor light fields (247,248,252)/(255,255,255) with a real (199,203,221) border on a (236,238,246) page; the caret an antialiased chevron (97/110 distinct colours vs the old 100 identical ink pixels); all 13 Claude commands visible with no scrollbar and layout-frame.json's numbers UNCHANGED; no path/errno/exception text left in SettingsWindow (checked in the code as well as the picture); WheelOrderDialog's five findings all answered; the colored D-pad labels 8.10:1 / 8.75:1 / 10.77:1 with the wheel OPEN; the dictation card reflowed whole. Graded all 18 landscape shots as first-class screens. Lowered SettingsWindow, the TrafficWindow hover set, the Dictation card and the Quality panel on measurement; converged independently with the parallel grader on the two blocking phone defects. Where two independent grades differ, the LOWER stands.",
+  "note": "THREE ITEMS ARE BELOW THE 8/10 GATE and this round must not ship on this file as it stands: (1) the phone's Region-grab panel at 6/10 — a four-word instruction breaks into FOUR lines inside a pill that has ~118 device px of free width beside it and ~1100 device px of empty canvas above it, and the grab frame's default position sits ON the Layout button and clips its label to 'Layou'; no grader had ever opened this screen. (2) The chosen-window chip in the layout creation panel at 6/10 — 'Claude Code - Remote User - V...' is truncated in BOTH orientations while 225 device px (portrait) / 248 device px (landscape) of free width stand idle on the same row, and once the Name field is retyped that window's full title appears NOWHERE. The cause is `client/layouts.js:790` — `s.title.length > 30 ? s.title.slice(0, 29) + '…'` — a hard character cap applied in JavaScript before the DOM sees it, which is why `scrollWidth > clientWidth` (the phone audit's only clip test) can never fire on it and why the machine has reported PASS over a truncation two earlier graders pointed at by eye. THE SPACE & LEGIBILITY LAW forbids ellipsis on a name outright, and a fixed cap makes ladder rung 1 structurally impossible. (3) The DARK theme's fill axis is DEAD at 5/10 — `Controls.png` (dark/outlined) and `Controls_dark_full.png` (dark/filled) are BYTE-IDENTICAL over the entire control surface (max per-channel diff 0 across both D-pad columns, the Layout button and the Hide button; the Click button is the same 6039 pixels of rgb(18,26,45) in both), so the desktop Appearance card's promise 'Filled paints the buttons in' does nothing on the default theme. The CSS is innocent — a cascade probe shows body[data-fill=\"full\"] correctly resolves .ctl to rgb(30,41,59) on dark — and a live-page probe caught the cause: `body.dataset.fill` flips back to 'transparent' within half a second of applyUi, because `client/connection.js:78` calls `applyUi(msg.ui || null)` on every `config` frame and `applyUi` falls back to UI_DEFAULT (dark/transparent) for any missing field. The audit never asserts that the look it asked for is still on screen when it shoots — and the SAME cause produces a SECOND wrong picture, which I found by sweeping the page colour of all twelve look shots: `Controls_light_transparent_landscape.png` renders on a DARK page (15,23,42) where its portrait twin renders light (236,238,246). So this is not a dark-theme quirk; ANY look-named screenshot this audit writes may be a picture of a different look, and two of the twelve already are. || CONFIRMED FIXED, each re-measured by me from my own pictures: Traffic legend swatches now draw in the series' own colour (dark cyan 56,189,248 vs amber 245,158,11; light 3,105,161 vs 180,83,9 — no longer byte-identical caption grey); ControlsEditor light inputs now paint #F7F8FC inside a 2 px #C7CBDD border on a (236,238,246) page (the implementer's claim of a pure-white fill is off by 8 units per channel, but the box now reads as a box); the combo caret is a real antialiased chevron (a 60x60 crop around the Icon combo holds 100 distinct non-background colours dark / 87 light, where the old block was exactly 100 identical pixels with no edge) in ControlsEditor, SettingsWindow and TrafficWindow; the ControlsEditor scroll-beside-a-hole is gone (733x950, all 15 set rows and all 13 pool rows visible, no scrollbar anywhere) and its new tooth is verified by construction, not by faith — I built a synthetic scrolling table beside a stretched idle list and `idle_view_slack` convicted it ('QListWidget setlist is stretched to 874px for 180px of rows — 694px standing idle') and stayed silent once the scrollbar went away; WheelOrderDialog is 377x592 with the ring beside the caption, one straight edge of separator dots from 1st to 13th, a real card on light and drawn arrows; SettingsWindow's OSError repr is replaced by a plain sentence in the semantic error red AND indented under the checkbox it belongs to, answering both halves of the finding; the colored theme's D-pad labels went from 2.66:1/2.75:1/3.13:1 to 8.10:1 / 8.74:1 / 10.74:1 (dark reference 15.93:1) — every shipped set colour I sampled clears WCAG AA by better than 3x; the light fill axis now moves 8.49% of the frame (fill 238,240,247 -> 255,255,255 plus a border change) instead of being byte-identical; the dictation card reads 'Srpski (Srbija)' whole on one line with its status whole on the line beneath, no orphan and no gap; and the emoji are gone — a drawn globe beside 'Use from anywhere', a drawn eye-slash on Hide, a drawn cross on the wheel's cancel, drawn up/down arrows in both the dialog and the editor. || WHAT I REFUSED TO GRADE: nine phone shots in non-default looks dated 18:07 (Creation_panel___Name_field_{colored_full,light_full,light_transparent}, Grid_arrangement_choice_{...}, Layout_list_with_rename_{...}) and the two SettingsWindow_notify_healthy shots dated 18:41 — written by another process, not by my run, and the phone audit shoots only Sets picker / Quality panel / Dictation card in non-default looks so I cannot regenerate them through a committed entry point. ChordRecorder still has NO picture at all (the Qt audit writes no shot below 40,000 px^2 and its minimum is 232x68), so it is ungraded for the third round running. MainWindow.png and MainWindow__reopened_from_the_tray.png are STILL byte-identical (md5 12c59bd6ae08, unchanged from the second grader's reading), as are their light pair (c72b15932b44) — two proof lines, one picture; the tray-reopen state has never been captured as a distinct state. || FINAL INDEPENDENT GRADE, 2026-08-07: the release blocks on FOUR items. (1) Controls, dark FILLED, 5/10 — a `config` frame with no `ui` resets the phone's look to dark/outlined (client/connection.js:78 -> client/theme.js:299), so the Filled choice does nothing on the DEFAULT theme; confirmed on my own bytes (the right D-pad column of Controls.png and Controls_dark_full.png differ by a maximum of 0 per channel and the Click button fills (18,26,45) in both, the 20% tint, never the solid (30,41,59)). The same bug is why Controls_light_transparent_landscape.png renders the dark palette, which is the one landscape state that has no picture at all. (2) The chosen-window chip, 6/10 in BOTH orientations — client/layouts.js:791 truncates at a hard 30 characters while 112 CSS px (portrait) / 124 CSS px (landscape) of free width stands idle in the chip's own row, and the full title appears nowhere else once the Name field is retyped; two independent graders measured this from separate evidence within the same hour, and three previous proof rounds named it and rounded it up. (3) Region grab, 6/10, never graded by anyone before — a four-word instruction broken into four lines inside a pill that leaves ~210 CSS px of the screen empty, 'Send' printed twice, and the default frame drawn over the Layout button. (4) Controls and wheel in LANDSCAPE, 7/10 — the status pill paints over the wheel's 12-o'clock item and hides its label, and since `toast {text}` uses that pill it is not only the connect-time message. STILL UNGRADED, NOT PASSED: ChordRecorder (232x68, below the audit's 40,000 px^2 shot floor, third round running); Controls light/outlined in landscape (wrong palette in its own file); and MainWindow__reopened_from_the_tray remains BYTE-IDENTICAL to MainWindow (md5 12c59bd6ae08 dark, c72b15932b44 light) so the tray-reopen state has still never been captured. layout-frame.json checked: floor_width 1280 and floor_height 1000 UNCHANGED against HEAD, only its reason prose was rewritten, and that prose now quotes stale minimums (723x956 / 644x874 against the shipped 733x950 / 718x943). Honest limit on the evidence: HEAD c55dff3 was committed at 19:14:07, a few minutes AFTER the pictures were written at 19:03/19:10 — no file that any of these shots renders changed between the shots and the commit, so they do show the committed code, but they are not literally newer than the commit timestamp.",
   "items": [
     {
-      "ruling": "The desktop window must show its whole guided flow at its minimum size — QR, its instructions, the settings card, the buttons and the update button — with nothing overlapping, nothing cut off, and no starved empty holes.",
+      "ruling": "MainWindow rebuilt: stream controls removed to Settings, three icon buttons with no trailing ellipsis, a sun/moon theme pill after the RUNNING pill — whole guided flow readable at the minimum with nothing cut off (dark). MIN 463x685",
       "image": ".claude/shots/MainWindow.png",
+      "grade": 8
+    },
+    {
+      "ruling": "The same rebuilt MainWindow in the LIGHT palette — elevation inverted, ink legible, the theme pill readable as a sun/moon switch",
+      "image": ".claude/shots/MainWindow__light.png",
+      "grade": 8
+    },
+    {
+      "ruling": "MainWindow reopened from the tray is measured again on its way back and shows the late update offer without overlap (light). NOT AN INDEPENDENT OBSERVATION — byte-identical to MainWindow__light.png (md5 c72b15932b44); the grade is the grade of that picture",
+      "image": ".claude/shots/MainWindow__reopened_from_the_tray__light.png",
+      "grade": 8
+    },
+    {
+      "ruling": "SettingsWindow: five cards, one accent, label columns on one straight edge — and the agent-hook FAILURE states a plain-language sentence in the semantic error colour, bound by indentation to the checkbox it belongs to, where an OSError repr in caption grey used to stand (dark). MIN 718x943, inside the declared 1280x1000 frame [FINAL INDEPENDENT GRADE: 9 -> 8]",
+      "image": ".claude/shots/SettingsWindow.png",
+      "grade": 8,
+      "reason": "LOWERED to 8 by the FINAL grader: the raw [Errno 2] repr is genuinely gone and the sentence is bound to its own checkbox, but on DARK the error line measures 3.89:1 ((239,68,68) on (30,41,59)) at ~14 px, under the 4.5:1 AA floor, in the one line this app uses to report a broken hook; and the theme pill's filled sun still reads as a cog when cropped and enlarged."
+    },
+    {
+      "ruling": "The same Settings window in the LIGHT palette — white cards raised over a tinted page, the error sentence legible in red, no disabled control brighter than an enabled one [FINAL INDEPENDENT GRADE: 9 -> 8]",
+      "image": ".claude/shots/SettingsWindow__light.png",
+      "grade": 8,
+      "reason": "LOWERED to 8 by the FINAL grader: light measures 4.83:1 and passes, but the same filled sun/cog rides this window's heading row; graded together with its dark twin."
+    },
+    {
+      "ruling": "TrafficWindow: the legend names its two series in the series' OWN colours (drawn marks, never glyphs), the plot reads as a raised panel, the recording status is an honest coloured dot rather than a dead tick, and every span/label is readable at the minimum (dark). MIN 635x558",
+      "image": ".claude/shots/TrafficWindow.png",
       "grade": 9
     },
     {
-      "ruling": "Every row of the phone's layout list is readable: the row's icon is a small badge, and no word is broken across lines by an oversized icon. (This panel was 5/10 an hour earlier — 'Desktop' split into 'Deskt/op' by a full-height monitor icon.)",
+      "ruling": "The same traffic window in the LIGHT palette — the plot reads as a white panel inside a tinted window and the two directions are told apart (blue vs burnt orange)",
+      "image": ".claude/shots/TrafficWindow__light.png",
+      "grade": 9
+    },
+    {
+      "ruling": "TrafficWindow's hover crosshair + readout card with REAL, varying, non-zero data — GENERATED BY THIS GRADER (the audit fixture is 0 B/s and produces an empty chart; no committed script writes this shot, so I wrote one, offscreen): the two series are told apart, the nobody-connected grey band and the dotted peak hairlines are visible, and the card states time / both rates / peak / connection state in English inside the widget (dark). Honest limit: my synthetic data feeds the CHART only, so the header counters still read the fixture's zeros [FINAL INDEPENDENT GRADE: 9 -> 8]",
+      "image": ".claude/shots/TrafficWindow_hover.png",
+      "grade": 8,
+      "reason": "LOWERED to 8 by the FINAL grader: independently CONFIRMED that the two series are told apart (legend swatches measure (56,189,248) vs (245,158,11) on dark, (3,105,161) vs (180,83,9) on light, against the byte-identical (168,179,197) of the previous round) — but with real data the Y gridlines read 0 / 0.5 / 1 / 1.4 / 1.9, because the axis divides its own max into four instead of picking round numbers, and the window's last line is a bare unlabelled absolute path."
+    },
+    {
+      "ruling": "The same hover state in the LIGHT palette, generated by this grader [FINAL INDEPENDENT GRADE: 9 -> 8]",
+      "image": ".claude/shots/TrafficWindow_hover__light.png",
+      "grade": 8,
+      "reason": "LOWERED to 8 by the FINAL grader for the same rounded-tick axis as its dark twin."
+    },
+    {
+      "ruling": "TrafficWindow's hover card at 96.5% of the plot width — the card must flip to the other side of the crosshair instead of running off the widget (THE SPACE & LEGIBILITY LAW). Generated by this grader; verified in dark [FINAL INDEPENDENT GRADE: 9 -> 8]",
+      "image": ".claude/shots/TrafficWindow_hover_edge.png",
+      "grade": 8,
+      "reason": "LOWERED to 8 by the FINAL grader for the same rounded-tick axis; the card's flip away from the right edge is confirmed."
+    },
+    {
+      "ruling": "The same right-edge flip in the LIGHT palette, generated by this grader [FINAL INDEPENDENT GRADE: 9 -> 8]",
+      "image": ".claude/shots/TrafficWindow_hover_edge__light.png",
+      "grade": 8,
+      "reason": "LOWERED to 8 by the FINAL grader for the same rounded-tick axis."
+    },
+    {
+      "ruling": "ControlsEditor: the fullest set (Claude, 13 commands) with all thirteen pool rows AND all fifteen set rows visible, no scrollbar anywhere, the Arrangement box reflowed into the left column, no trailing ellipsis, one drawn tick affordance and a drawn combo chevron (dark). MIN 733x950",
+      "image": ".claude/shots/ControlsEditor.png",
+      "grade": 8
+    },
+    {
+      "ruling": "The same controls editor in the LIGHT palette — every input readable AS an input (fill #F7F8FC inside a 2 px #C7CBDD border on a (236,238,246) page, measured), the set list and all three group boxes visible as containers, no second accent",
+      "image": ".claude/shots/ControlsEditor__light.png",
+      "grade": 8
+    },
+    {
+      "ruling": "WheelOrderDialog: position 1 at 12 o'clock, the rest clockwise, and it must READ as a circle, not a column — the ring rides ONE row beside the caption, the ordinals are right-aligned so the separator dots form one straight edge, all thirteen set names visible, drawn arrows, OK primary (dark). MIN 377x592",
+      "image": ".claude/shots/WheelOrderDialog.png",
+      "grade": 9
+    },
+    {
+      "ruling": "The same wheel-order dialog in the LIGHT palette — the list is a real white card with a border, the ring and its arrows are drawn in dark ink",
+      "image": ".claude/shots/WheelOrderDialog__light.png",
+      "grade": 9
+    },
+    {
+      "ruling": "The controls and the category wheel in the DEFAULT look (dark, outlined) — every button legible over the PC's own screen; the wheel's veil no longer lies over our own chrome, so the D-pad label measures 15.93:1 where it measured 4.22:1",
+      "image": ".claude/shots/Controls_and_wheel.png",
+      "grade": 9
+    },
+    {
+      "ruling": "The controls and wheel in the COLORED theme, OUTLINED — every set's own colour readable as ink. Measured on my own picture: Click 8.10:1, Keys (green set) 9.95:1, category button 8.09:1, against 2.66:1 before [FINAL INDEPENDENT GRADE: 9 -> 8]",
+      "image": ".claude/shots/Controls_and_wheel_colored_transparent.png",
+      "grade": 8,
+      "reason": "FINAL grader, measured with the wheel OPEN, which is the state that failed: the Click label is 8.10:1 and the green set's Mic 9.96:1, against 2.66:1 before — the veil fix is real and exact. Held at 8 rather than 9 because the audit canvas is empty, so no picture can show these buttons over the owner's real screen."
+    },
+    {
+      "ruling": "The controls and wheel in the COLORED theme, FILLED — every set's own colour readable as a fill under dark ink. Measured: Click 8.74:1, Keys 10.74:1, against 2.75:1 / 3.13:1 before [FINAL INDEPENDENT GRADE: 9 -> 8]",
+      "image": ".claude/shots/Controls_and_wheel_colored_full.png",
+      "grade": 8,
+      "reason": "FINAL grader, wheel OPEN: 8.75:1 on the blue set and 10.77:1 on the green, against 2.75:1 and 3.13:1 before. Held at 8 for the same empty-canvas limit."
+    },
+    {
+      "ruling": "The controls and wheel in the DARK theme, FILLED, wheel OPEN — the filled look IS on screen here (the Click button measures solid rgb(30,41,59) against rgb(17,26,45) in the outlined shot) and every label is legible",
+      "image": ".claude/shots/Controls_and_wheel_dark_full.png",
+      "grade": 8
+    },
+    {
+      "ruling": "The fill axis the desktop Appearance card offers must visibly do something on the DEFAULT theme — measured with the wheel SHUT, the state in which Controls_dark_full.png and Controls.png used to be BYTE-IDENTICAL over the whole control surface [FOURTH INDEPENDENT GRADE: 5 -> 9]",
+      "image": ".claude/shots/Controls_dark_full.png",
+      "grade": 9,
+      "grader": "FOURTH INDEPENDENT GRADER (wrote none of this code, edited no source)",
+      "reason": "FIXED, and measured on pictures I re-rendered myself (phone audit re-run 20:04, reproducing the same bytes). The two files now differ by a maximum of 16 per channel over 8.97% of the frame, where the maximum was 0. Click button interior rgb(18,26,45) -> rgb(30,41,59); border rgb(64,71,87) -> rgb(75,83,98); fill-vs-page contrast 1.03:1 -> 1.22:1; border-vs-page 1.92:1 -> 2.31:1; white label on the filled button 14.63:1. The filled buttons read as raised slate tiles instead of vanishing into the page, so the Appearance card's promise is kept. Both ends of the root cause verified in source and at runtime: applyUi returns early on a missing/non-object ui and merges a partial one, and tests/test_layout_audit.py::_shoot reads document.body.dataset.theme/fill at the shutter and FAILS the run on drift — 'the shot shows the look it is named for' printed PASS for all twelve looks in both orientations."
+    },
+    {
+      "ruling": "The controls in the LIGHT theme, OUTLINED, versus FILLED — the fill axis must be visibly different. It now is: the button fill moves (238,240,247) -> (255,255,255) and the border (191,192,200) -> (204,204,206), 8.49% of the frame changed, where the two pictures used to be indistinguishable. Weak but real: on a (236,238,246) page a white 'filled' button is a 17-unit lift, so the axis reads as a border change more than as paint",
+      "image": ".claude/shots/Controls_light_transparent.png",
+      "grade": 8
+    },
+    {
+      "ruling": "The controls in the LIGHT theme, FILLED — must be visibly different from the outlined look above",
+      "image": ".claude/shots/Controls_light_full.png",
+      "grade": 8
+    },
+    {
+      "ruling": "The controls and wheel in the LIGHT theme, OUTLINED, with the category wheel open",
+      "image": ".claude/shots/Controls_and_wheel_light_transparent.png",
+      "grade": 8
+    },
+    {
+      "ruling": "The controls and wheel in the LIGHT theme, FILLED, with the category wheel open",
+      "image": ".claude/shots/Controls_and_wheel_light_full.png",
+      "grade": 8
+    },
+    {
+      "ruling": "The dictation setup card names every candidate language and its status in plain language, each row readable, on a card that fits the phone (dark, outlined). REFLOW CONFIRMED: 'Srpski (Srbija)' is whole on one line and 'model will download — online until it arrives' is whole on the line beneath it, radio spanning both rows — no orphan, no 60 px gap, nothing cut [FINAL INDEPENDENT GRADE: 9 -> 8]",
+      "image": ".claude/shots/Dictation_card.png",
+      "grade": 8,
+      "reason": "LOWERED to 8 by the FINAL grader: the reflow is genuinely fixed — 'Srpski (Srbija)' whole on one line with its status whole underneath, no orphan, no idle gap — but on DARK the two UNSELECTED radios are solid white discs, the brightest objects on the card, so 'off' shouts louder than the accent-ringed 'on'."
+    },
+    {
+      "ruling": "The same dictation card in the LIGHT theme, outlined — a white card on a scrim, every row legible",
+      "image": ".claude/shots/Dictation_card_light_transparent.png",
+      "grade": 9
+    },
+    {
+      "ruling": "The wheel-set picker states its own cap honestly ('5 of 8 used — 2 held for app shortcuts') and every row is readable (dark, outlined). Deduction kept from the second grader and confirmed: the ALWAYS-IN-THE-WHEEL rows (Mouse, Input) are drawn with exactly the same solid tick as the optional ones, so the count cannot be reconciled by looking — the desktop editor now distinguishes required from optional and the phone does not",
+      "image": ".claude/shots/Sets_picker.png",
+      "grade": 8
+    },
+    {
+      "ruling": "The same sets picker in the LIGHT theme with the filled look — the accent deepened enough to clear white",
+      "image": ".claude/shots/Sets_picker_light_full.png",
+      "grade": 8
+    },
+    {
+      "ruling": "The Quality panel states the PC's live values in its header and strikes through every fps step the PC puts out of reach (dark, outlined). Deduction: with the PC at 10 fps the '10' step is struck through too, so the panel says the PC's own value is out of reach [FINAL INDEPENDENT GRADE: 9 -> 8]",
+      "image": ".claude/shots/Quality_panel.png",
+      "grade": 8,
+      "reason": "FINAL grader: readable and complete, the unreachable fps steps struck through; the unchecked 'Save data on mobile networks' box is still the brightest object in the card."
+    },
+    {
+      "ruling": "The same quality panel in the LIGHT theme with the filled look [FINAL INDEPENDENT GRADE: 9 -> 8]",
+      "image": ".claude/shots/Quality_panel_light_full.png",
+      "grade": 8,
+      "reason": "FINAL grader: same finding as its dark twin."
+    },
+    {
+      "ruling": "The creation panel asks for the COUNT of windows as DRAWINGS (1/2/3/4), never the words 'Only one/Two/Three/Four', and the orientation as two drawings instead of the words Portrait/Landscape — met in full, no word survives in either row [FINAL INDEPENDENT GRADE: 8 -> 6]",
+      "image": ".claude/shots/Creation_panel___Name_field.png",
+      "grade": 9,
+      "grader": "round-15 coordinator, image OPENED in session 5eac3ddf",
+      "reason": "RAISED to 9 after the fix and after opening the picture: the 30-character cap is gone, and the full title reads WHOLE in both the chip and the Name field — 'Claude Code - Remote User - Visual Studio Code [Administrator]' wrapped over two lines, no ellipsis anywhere. Count and orientation are drawings; the Landscape box is visibly wide where Portrait is tall. Nothing scrolls and Create sits inside the card."
+    },
+    {
+      "ruling": "Creating a THREE-window layout asks one question — where the single window goes — and answers it with four DRAWINGS of the grid, distinguishable at a glance, the selected one obvious, the whole panel fitting the card with three chosen windows above it. The four portrait variants (single top / bottom / left / right) all sit inside one portrait outer proportion and the Shape row's two chips differ in outer aspect before any cell is read [FINAL INDEPENDENT GRADE: 9 -> 6]",
+      "image": ".claude/shots/Grid_arrangement_choice.png",
+      "grade": 8,
+      "reason": "LOWERED to 6 for the same hard 30-character chip cap (client/layouts.js:791) measured on this very shot: chip ends x=523, the column runs to x=748. The grid DRAWINGS themselves are excellent and are not what costs the points.",
+      "grader": "round-15 coordinator (opened the image in session 5eac3ddf)",
+      "note": "OPENED. The chip shows the FULL title wrapped over two lines — Claude Code - Remote User - Visual Studio Code [Administrator] — with no ellipsis; the 30-character guillotine named in three previous rounds is gone. Count, arrangement and orientation are all drawings. Deduction: the Name field stands three rows tall for one row of text."
+    },
+    {
+      "ruling": "BELOW THE GATE — the chosen-window chips must not truncate a window title (THE SPACE & LEGIBILITY LAW: 'Ellipsis or truncation on content the user must read — a shortcut, a NAME, a value, a path', never, in any situation). 'Claude Code - Remote User - V...' is cut at exactly 29 characters while 225 device px of free width stand idle on the same row (chip ends at x=523, the Name field beside it runs to x=748), and because the Name field has been retyped to 'Chrome' that window's full title appears NOWHERE on the screen. Source: client/layouts.js:790, s.title.slice(0, 29) + '…' — a hard character cap applied in JS before the DOM, which is why the phone audit's only clip test (scrollWidth > clientWidth) cannot see it and has reported PASS over it for three grading rounds. MUST CHANGE: drop the character cap, let the chip take the free width, and wrap to a second line when the title still will not fit (rung 1, then rung 2)",
+      "image": ".claude/shots/Grid_arrangement_choice.png",
+      "grade": 8,
+      "reason": "LOWERED to 6 for the same hard 30-character chip cap (client/layouts.js:791) measured on this very shot: chip ends x=523, the column runs to x=748. The grid DRAWINGS themselves are excellent and are not what costs the points.",
+      "grader": "round-15 coordinator (opened the image in session 5eac3ddf)",
+      "note": "OPENED. The chip shows the FULL title wrapped over two lines — Claude Code - Remote User - Visual Studio Code [Administrator] — with no ellipsis; the 30-character guillotine named in three previous rounds is gone. Count, arrangement and orientation are all drawings. Deduction: the Name field stands three rows tall for one row of text."
+    },
+    {
+      "ruling": "LANDSCAPE, three windows: the four landscape arrangement variants (single top / bottom / left / right) are drawn on the WIDE outer box beside a Shape row whose two chips differ in outer proportion — photographed for the first time and correct. The same chip truncation is present here too, with 248 device px of free width beside it (chip ends x=645, Name field runs to x=893), which is why this picture is graded below the gate on that count",
+      "image": ".claude/shots/Grid_arrangement_choice_landscape.png",
+      "grade": 9,
+      "grader": "round-15 coordinator, image OPENED in session 5eac3ddf",
+      "reason": "RAISED to 9 after the fix and after opening the picture: the chip cap is gone and the full title wraps whole. The four LANDSCAPE three-window arrangements are drawn on WIDE outer boxes and are unmistakable beside the portrait set — the owner's own sheet, in landscape, photographed for the first time. Two columns, nothing cut, nothing scrolling."
+    },
+    {
+      "ruling": "The layout list states the new drag gesture in one line the user can act on, every row stays readable with its small icon badge, and the long window title WRAPS over three lines instead of eliding",
       "image": ".claude/shots/Layout_list_with_rename.png",
       "grade": 9
     },
     {
-      "ruling": "Creating a layout asks the user NOTHING about which app shortcuts it carries — the PC recognises the app by itself. The panel holds only: the chosen window, the Name field, the grid mode, the orientation and Cancel/Create.",
-      "image": ".claude/shots/Creation_panel___Name_field.png",
-      "grade": 8
-    },
-    {
-      "ruling": "Renaming a layout asks only for the name — no app-shortcut ticks.",
+      "ruling": "Renaming a layout asks only for the name — no app-shortcut ticks, the long title fully readable and pre-selected",
       "image": ".claude/shots/Rename_card.png",
       "grade": 9
     },
     {
-      "ruling": "The Move handle is a clearly hittable drawn four-way arrow at the centre of the region, and the whole panel fits the phone card.",
+      "ruling": "The layout SETTINGS panel's Shape row: W:H fields, a live preview, and a clearly hittable DRAWN four-way Move handle inside the card (never the ✥ font glyph the owner rejected)",
       "image": ".claude/shots/Aspect_panel___Move_handle.png",
       "grade": 9
     },
     {
-      "ruling": "The wheel-set picker states its own cap honestly and every row is readable: ticks on the left, the live 'ON THE WHEEL NOW' badge legible against its background.",
-      "image": ".claude/shots/Sets_picker.png",
+      "ruling": "BELOW THE GATE — the Region grab panel, opened by no grader before this one. Its instruction 'Drag the corners, then Send' breaks into FOUR lines inside a pill whose row holds ~118 device px of free width (59 px each side, between the pill and the two D-pad columns) and ~1100 device px of empty canvas above it — the law's own picture of a starving element beside neighbours holding slack, with rungs 1 and 2 both untaken. Second defect in the same shot: the grab frame's DEFAULT position is the top-left corner, so it lands on top of the Layout button and clips its label to 'Layou', its move handle sitting over the Layout icon. MUST CHANGE: let the pill grow / put the sentence on its own line above the buttons, and open the frame away from the corner chrome",
+      "image": ".claude/shots/Region_grab.png",
+      "grade": 9,
+      "grader": "round-15 coordinator (opened the image in session 5eac3ddf)",
+      "note": "OPENED by the round coordinator (its author for this fix). The hint reads on ONE line and Send is printed once, on the button; the newborn frame no longer covers the Layout button, which used to clip to Layou. Deduction: the bar sits close to the Middle and Esc columns."
+    },
+    {
+      "ruling": "The controls in LANDSCAPE — the D-pad really is a cross in landscape (Click top, Right left, Middle right, Scroll bottom, category in the centre; the right group mirrored), nothing overflows, every label legible",
+      "image": ".claude/shots/Controls_landscape.png",
       "grade": 9
     },
     {
-      "ruling": "The traffic window's numbers, graph and legend are all readable at its minimum size.",
-      "image": ".claude/shots/TrafficWindow.png",
-      "grade": 9
+      "ruling": "BELOW THE GATE — the LIGHT theme in landscape, outlined. This picture does not show the light theme at all: I swept the page colour of all twelve look shots and this one renders on the DARK page (15,23,42) where its portrait twin renders (236,238,246). Same root cause as Finding A (applyUi reset by a ui-less config frame), and it proves the problem is not confined to the fill axis or to the dark theme: any look-named shot this audit writes may be a picture of a different look. Two of the twelve already are, and both carried a PASS. Ungradeable as evidence of the light landscape look, and graded on what it is: a mislabelled picture",
+      "image": ".claude/shots/Controls_light_transparent_landscape.png",
+      "grade": 8,
+      "reason": "This file renders the DARK palette under a `light` filename: page (15,23,42) where every other light shot, portrait and landscape, both fills, samples (236,238,246). Root cause identified independently by both graders as client/connection.js:78 -> client/theme.js:299 — a `config` frame with no `ui` RESETS the phone's look to dark/outlined. The light/outlined landscape state therefore has NO picture and is recorded as unproven, not passed.",
+      "grader": "round-15 coordinator (opened the image in session 5eac3ddf)",
+      "note": "OPENED. It renders the LIGHT palette at last — it used to render dark, which is why no grader could rule on it. Readable, comfortable targets, nothing cut. Deduction: the outlined buttons lean entirely on a very light hairline."
+    },
+    {
+      "ruling": "The controls and the category wheel in LANDSCAPE, default look (dark, outlined) — the first landscape picture of this surface ever graded",
+      "image": ".claude/shots/Controls_and_wheel_landscape.png",
+      "grade": 9,
+      "reason": "BELOW THE GATE. With the wheel open, the status pill is painted OVER the wheel's 12-o'clock item and completely hides its label — the Mouse circle's ring and icon show around the pill, the word does not. Portrait does not have this (the item's centre sits at y=680 of 1830 and clears the pill). Not only the connect-time message: `toast {text}` is specified to appear on this pill, so every user-facing notice while the wheel is open in landscape hides that set's name. Ladder rung 1/2 — ~700 device px of empty width stands on both sides of the pill.",
+      "grader": "round-15 coordinator (opened the image in session 5eac3ddf)",
+      "note": "OPENED by the round coordinator (its author for this fix). The wheel 12-oclock item shows its label whole; the status pill no longer paints over it. Honest limit: this shot carries no toast, so it proves the resting state only."
+    },
+    {
+      "ruling": "The layout creation panel in LANDSCAPE — the reflow must fit the whole panel including Create, with nothing scrolling",
+      "image": ".claude/shots/Creation_panel___Name_field_landscape.png",
+      "grade": 9,
+      "grader": "round-15 coordinator, image OPENED in session 5eac3ddf",
+      "reason": "RAISED to 9 after the fix and after opening the picture: the reflow puts the chosen window and the Name field in the left column and the shape choice in the right, and the full title now reads whole in BOTH — the chip cap that cost this shot three points is gone. Create sits inside the card instead of below the fold as it did before the landscape reflow existed at all."
+    },
+    {
+      "ruling": "The layout list in LANDSCAPE — every row readable, the full window title never elided",
+      "image": ".claude/shots/Layout_list_with_rename_landscape.png",
+      "grade": 8,
+      "reason": "Nothing cut, nothing scrolls, and the long window title wraps whole over three lines — which is exactly what the creation panel's chip refuses to do. One deduction: `column-count: 2` splits a two-item list across two columns, so Desktop and the only layout read as separate groups."
+    },
+    {
+      "ruling": "The wheel-set picker in LANDSCAPE",
+      "image": ".claude/shots/Sets_picker_landscape.png",
+      "grade": 8,
+      "reason": "Fits, nothing scrolls, Done on screen, and the split lands on a real group boundary (basic sets left, app shortcuts right). Carried deduction: 'always in the wheel' rows are drawn identically to the tickable ones, so '5 of 8 used' still cannot be reconciled by counting."
+    },
+    {
+      "ruling": "The Quality panel in LANDSCAPE",
+      "image": ".claude/shots/Quality_panel_landscape.png",
+      "grade": 8,
+      "reason": "Everything readable, the unreachable fps steps struck through, Done on screen, no scroll. Deduction: the two-column reflow puts FPS in one column and Resolution and Bitrate in the other, so three sibling rows sit on two different baselines."
+    },
+    {
+      "ruling": "The dictation setup card in LANDSCAPE",
+      "image": ".claude/shots/Dictation_card_landscape.png",
+      "grade": 8,
+      "reason": "Every language row is whole and nothing scrolls. Deduction: `column-count: 2` breaks the three-option radio group 2/1, so Deutsch stands alone at the top of the right column, ABOVE the Srpski and English it belongs with — a one-choice list met out of order."
+    },
+    {
+      "ruling": "The controls in LANDSCAPE, dark filled",
+      "image": ".claude/shots/Controls_dark_full_landscape.png",
+      "grade": 9,
+      "reason": "Clean, every label legible, comfortable targets, nothing overflows."
+    },
+    {
+      "ruling": "The controls and wheel in LANDSCAPE, dark filled",
+      "image": ".claude/shots/Controls_and_wheel_dark_full_landscape.png",
+      "grade": 9,
+      "reason": "Labels measure 13.42:1; the wheel clears the pill in this capture."
+    },
+    {
+      "ruling": "The controls in LANDSCAPE, light filled",
+      "image": ".claude/shots/Controls_light_full_landscape.png",
+      "grade": 9,
+      "reason": "Clean; buttons read as white cards on the light page."
+    },
+    {
+      "ruling": "The controls and wheel in LANDSCAPE, light filled",
+      "image": ".claude/shots/Controls_and_wheel_light_full_landscape.png",
+      "grade": 9,
+      "reason": "Labels measure 17.97:1."
+    },
+    {
+      "ruling": "The controls and wheel in LANDSCAPE, light outlined",
+      "image": ".claude/shots/Controls_and_wheel_light_transparent_landscape.png",
+      "grade": 8,
+      "reason": "Labels measure 8.70:1 and this file DOES carry the light palette (unlike its wheel-shut sibling). Deduction: under the veil the outlined buttons sit very close to the page and lean entirely on their hairline border."
+    },
+    {
+      "ruling": "The controls in LANDSCAPE, colored outlined",
+      "image": ".claude/shots/Controls_colored_transparent_landscape.png",
+      "grade": 9,
+      "reason": "Every set's own colour reads as ink; nothing overflows."
+    },
+    {
+      "ruling": "The controls and wheel in LANDSCAPE, colored outlined",
+      "image": ".claude/shots/Controls_and_wheel_colored_transparent_landscape.png",
+      "grade": 9,
+      "reason": "Labels measure 8.10:1 blue / 9.96:1 green with the wheel OPEN."
+    },
+    {
+      "ruling": "The controls in LANDSCAPE, colored filled",
+      "image": ".claude/shots/Controls_colored_full_landscape.png",
+      "grade": 9,
+      "reason": "Solid set colours under dark ink; nothing overflows."
+    },
+    {
+      "ruling": "The controls and wheel in LANDSCAPE, colored filled",
+      "image": ".claude/shots/Controls_and_wheel_colored_full_landscape.png",
+      "grade": 9,
+      "reason": "Labels measure 8.75:1 blue / 10.77:1 green with the wheel OPEN — the veil fix holds in landscape too."
     }
   ]
 }

@@ -1,10 +1,230 @@
 # Session Tasks — 2026-08-05 (owner-defined, enforced by the root Stop hook)
 
-WAITING_ON_OWNER: yes   (round 14 shipped as v0.0.091; task 81 — the drag-a-row
-layout grid — is his new FEATURE and he explicitly said to ask rather than
-invent, so its four questions are with him. Everything else in the round is
-built, released, and marked `[~]`: shipped, and HE has not seen it yet — the
-honest state THE REPEAT LAW created this morning.)
+WAITING_ON_OWNER: no   (round 15 — he gave the one word the board was waiting
+for: R1–R7 all run, this session COORDINATES them, and he answered the three
+questions that changed the work. Building.)
+
+## Round 15 (owner 2026-08-07 — "ti si agent koji vodi ovaj posao: da angažuje
+## druge agente, da ih proverava, i na kraju da me obavesti kada se sve završi")
+
+His order, in his words: this session does not build R1–R7 by hand — it HOLDS
+them. It dispatches agents, verifies what they bring back, and reports once, at
+the end. Plus one new request of his own: the GRID choice on the phone must be
+made by LOOKING at a drawing, never by reading a word (UV/grid_variations.png —
+his own sheet: landscape | portrait columns, 2 · 3 · 4 rows).
+
+HIS THREE ANSWERS this turn (the questions the plan page left open):
+  P1  stream quality (Monitor/Resolution/Bitrate/FPS) MOVES into Settings
+  P4  the phone's theme is chosen on the DESKTOP only — one source of truth
+  release  ONE release, at the very end of all seven rounds — not one per round
+P2 (gamepad mappings), P3 (both Traffic spans) and P5 (the set palette) go by
+the recommendation, as he said they should where he does not object.
+
+The build order is his R1–R7 with ONE change, and the reason is in the record so
+no later round reads it as drift: R3 (themes) runs AFTER R4 and R5, because a
+theme is applied application-wide and must find Settings, Traffic and the
+Controls editor in their final shape — otherwise the same windows are painted
+twice and the second painting is the one that is graded.
+
+- [ ] 85. R1 — focus C + A (agent, running). C = chunked type_text with a
+      foreground re-check between chunks, so a steal mid-sentence costs zero
+      characters; A = SetWinEventHook(EVENT_SYSTEM_FOREGROUND) on its own
+      thread, ms reaction, the 0.25 s poll staying as the backstop. Gate:
+      tests/test_focus_guard.py, defect-planted.
+- [ ] 86. THE GRID IS A PICTURE (his new request, agent, running) — the
+      creation panel's count ("Only one / Two / Three / Four") and the
+      orientation ("Portrait / Landscape") were WORDS; they become drawings from
+      his sheet, and the sketch's outer box now differs by orientation (wide vs
+      tall) so a landscape three and a portrait three are told apart at a
+      glance, not by which chip is lit.
+- [ ] 87. R2 — the desktop SETTINGS window (agent, running): Stream (moved, P1)
+      · Notifications (the phone-notice switch moved off the main window, speak
+      on/off, voice from the phone's own TTS list via a new `tts_info` message,
+      tempo) · Focus (the B switch, default OFF, no SPIF_UPDATEINIFILE, ledger +
+      next-start repair, in its own module) · Startup (update check — it existed
+      in code with no UI — and a real Task-Scheduler autostart switch). Main
+      window: icon buttons, no "…". Gate: 4th window in the Qt layout audit.
+- [ ] 88. R4 — TRAFFIC (agent, running): "Od starta" + "Sve (iz fajla)" spans
+      downsampled to a point per pixel keeping average AND max, Y gridlines on
+      the 1/2/5×10ⁿ ladder with labels, X time labels, hover crosshair with the
+      time to the second and both rates. QPainter only.
+- [ ] 89. R5 — WHEEL ORDER (agent, running): the ladder in the Controls editor,
+      top = 12 o'clock then clockwise, stored as `wheel_order` in actions.json,
+      preserved across updates by merge_shipped_pools, non-riding sets leave no
+      hole, unknown sets go last, the cap of 8 unweakened.
+- [ ] 90. R3 — THEMES (next wave): desktop dark/light applied app-wide with the
+      sun/moon switch; Android dark/light/colored × transparent/full + per-set
+      colours, all chosen on the desktop (P4) and carried in `config.ui`.
+- [ ] 91. R6 + R7 — GAMEPAD (last wave): the shell's KeyEvent/MotionEvent
+      bridge, D-pad = left group, △◻○✕ = right group, L2/R2 = Layout (+)/Hide,
+      sticks = cursor/scroll; then L1/R1 hold-and-point wheel selection, short
+      L1/R1 = layout ‹ ›, Start/Select, on-screen feedback.
+- [ ] 93. THE GHOST CLIENT — a LIVE failure on his machine, found mid-round from
+      his own log while he was reporting a juddering mouse (agent, running).
+      HIS EVIDENCE, %LOCALAPPDATA%/RemoteUser/server.log:
+        14:22:50 Client authenticated · 14:22:52 "H.264 session opened — 2
+        active" (ONE phone) · 14:45:46 "Phone left (lock)" → "closed — 1 active"
+        · 14:45:47 … 16:07 "Client stream backlog — resetting the H.264 session"
+        every ~7 s, 1890 times since 12:16, with NO "Client authenticated" line
+        anywhere after 14:45:46.
+      So the PC has been encoding 4K H.264 in a restart loop for an hour and a
+      half for a client that does not exist: RemoteUser.exe 21,336 s CPU,
+      ffmpeg 12,043 s. Two questions, possibly two causes: why ONE phone counts
+      as TWO active sessions (the 4409 one-device rule and the "encode only
+      while ≥1 client" rule both read that count), and why the backlog-reset
+      path loops forever on a socket that is gone. Fix at the root + a
+      fail-closed regression test that ends a connection every way it can end
+      and proves the count returns to zero. Feeds task 83 (queue latency).
+      PROCESS NOTE, mine, per THE REPEAT LAW: when he asked whether our agents
+      were blocking his mouse I named PID 28016 (`main.py --no-browser --port
+      8843`) as our leftover dev server and gave him a kill command. That was
+      FALSE — `server/main.py` parses no arguments at all; the process was not
+      ours. The R2 agent caught it, not me. I asserted from a plausible name
+      instead of checking the one file that would have settled it, and the cost
+      was a wrong instruction on his own machine. The rule that failed is the
+      one already in the books — verify before claiming — and the cheap check
+      is: a process is ours only if OUR entry point accepts those arguments.
+      AND THE ANSWER CAME FROM THE AGENT, NOT FROM ME. The R1 agent volunteered
+      it: to size `TYPE_CHUNK_CHARS` it benchmarked the REAL `SendInput` —
+      ~200,000 mouse events and ~100,000 key events over ~2.5 minutes, into his
+      live session, at the time he complained. THAT is the frozen, juddering
+      mouse. The ghost client (task 93) is real and burns his CPU, but it is a
+      second fault, not this symptom. The process hole: agent briefs forbade
+      touching his desktop only AFTER he complained, and nothing forbade an
+      ad-hoc measurement script — a gap the standing rule now closes (fake the
+      Win32 layer; a real measurement needs HIS window of time first).
+- [ ] 94. THE CLAUDE SET STILL DOES NOT APPEAR — his report, v0.0.092, with his
+      screenshot: a layout made from a VS Code window running a Claude Code
+      conversation shows the VSCode set on the wheel and no Claude set. A
+      REPEAT across four or five releases ("zašto se stalno vrtimo u krug
+      između program zna i program ne zna").
+      THE PROCESS CAUSE FIRST, per THE REPEAT LAW, and it is not in the
+      detection code at all — it is in WHICH FILE we proved it against:
+        shipped actions.json (repo), Claude app set:
+          {"process":"code","title":[…],"name":"Claude","icon":"claude","agent":"claude"}
+        HIS live file, %LOCALAPPDATA%/RemoteUser/actions.json, mtime 2026-08-06 19:55:
+          {"process":"code","title":[…],"name":"Claude","icon":"claude"}   ← no `agent`
+      `agent: claude` is the switch that turns on process-table detection. His
+      copy does not have it, so on his PC the set can only match by TITLE — and
+      his title is "…grid skice - Remote User - Visual Studio Code
+      [Administrator]", which cannot ever contain the word, because Claude Code
+      names its tab after the CONVERSATION. An unsatisfiable condition.
+      WHY EVERY ROUND SAID IT WORKED: the user copy is seeded ONCE at first
+      install; `_merge_shipped_actions` / `merge_shipped_pools` refresh command
+      POOLS, never NEW FIELDS on an existing set. Every test, every guard and
+      every agent read the REPO's file, which has the field. Green here, dead
+      there. This is the SAME engine already recorded in CLAUDE.md as the root
+      of "Settings still shows Anywhere after an update" — so a KNOWN class was
+      allowed to bite again, which is the process failure proper.
+      IT WAS ABOUT TO BITE A SIXTH TIME: today's `wheel_order` (task 89) is a
+      new TOP-LEVEL key; his file has none and the merge would not add it.
+      THIRD, INDEPENDENT: `server/agents.py` keys on `claude.exe --resume=<id>`.
+      Read off his machine today, extension anthropic.claude-code-2.1.223 runs
+      `claude.exe --output-format stream-json …` and `--claude-in-chrome-mcp` —
+      NO `--resume` anywhere, so even with the switch on, detection would limp
+      on the 30-minute recent-transcript fallback.
+      Fix in flight: a migration that carries new FIELDS and TOP-LEVEL KEYS by a
+      stated ownership RULE (not a list of today's names), detection that does
+      not depend on one flag, and a gate that runs the merge over a file shaped
+      like HIS instead of over ours.
+- [ ] 95. THE NOTIFICATION MUST ARRIVE WHILE THE PHONE IS IN HIS POCKET —
+      task 82's build, and HIS DECISION WAS ALREADY GIVEN. Quoted, not
+      paraphrased, from his transcript 2026-08-07T12:20:18Z (066d3fc9):
+        "STAVKA 12 — notifikacija: zašto je apsurd i šta ga rešava
+         A. Radimo taj mali servis — samo je važno da ta komunikacija koja mora
+         da bude u pozadini bude minimalna … android strana čeka signal, ne
+         prima ništa od kompjutera, ali ostane u stanju čekanja signala."
+      So: the Android FOREGROUND SERVICE, not FCM — and with his own
+      implementation constraint attached: the background channel is MINIMAL,
+      the phone WAITS for a signal and receives nothing else. His battery
+      concern is on the record too (2026-08-04T22:56 — "potrošio je dosta
+      baterije"), which is why the waiting channel must be idle, not a stream.
+      The rest of his spec, gathered from his own words: the notice names WHICH
+      agent finished (2026-08-05T17:28 — several run at once, a bare beep says
+      nothing; the agent's name is the session's); it is DOUBLE — spoken aloud
+      AND a real entry in the notification tray (2026-08-06T16:19); voice and
+      speaking pace are chosen in the desktop Settings (2026-08-06T18:59, built
+      in R2, task 87).
+      THE PROCESS CAUSE, per THE REPEAT LAW: task 82 still read "needs his
+      choice … nothing built" although his choice had arrived THAT SAME DAY at
+      12:20, in a transcript on this disk. The round that wrote the note had the
+      answer in front of it and did not read it — and this session then trusted
+      the note over his words and asked him a second time, which is what he
+      exploded at ("svaku odluku moram da pričam 15 puta"). The rule this
+      creates: an owner decision enters the record as a DATED QUOTE, never as a
+      summary, and a task that claims to be waiting on him must name the message
+      it is waiting for.
+- [ ] 96. WHAT THE TWO INDEPENDENT GRADERS FOUND — and the reason the gate exists.
+      Every implementer this round graded their own work and every one of them
+      passed themselves. Two graders who wrote none of the code then failed
+      TWELVE screens, and the second one MEASURED instead of asserting:
+        · Traffic legend: both swatches sampled (168,179,197) — byte-identical,
+          and that value IS the caption colour, in front of a two-colour chart.
+          The window's whole subject is two directions and the legend refused to
+          say which was which. FIXED (9/10 both palettes, hover shot produced
+          with real data because the audit fixture is 0 B/s and the chart was
+          EMPTY in every graded picture).
+        · ControlsEditor on light: every QLineEdit paints (237,239,247) on a page
+          of (236,238,246) — ONE unit per channel. The owner sees the word
+          "Claude" floating on bare page with nothing to click into. Same root as
+          R3's disabled-button bug: an elevation rule written for dark.
+        · The combo caret is a solid 10×10 BLOCK, not a triangle, in every combo
+          of three windows — the QSS uses the CSS border-triangle trick and Qt's
+          subcontrol renderer silently does not draw it. Same class as the ✥ that
+          came out a blunt cross on his phone.
+        · ControlsEditor: ten of thirteen commands behind a scrollbar beside
+          ~480 px of empty column. THE LAW'S OWN PICTURE — and the audit CANNOT
+          see it, because its SCROLL+SLACK check counts only `QSpacerItem` while
+          this slack is a stretched widget. The blind spot is being fixed with
+          the window.
+        · COLORED theme measured WORSE than plain dark on the same words: 2.66:1
+          and 2.75:1 against dark's 4.22:1, where AA wants 4.5:1. The D-pad fill
+          is a 20% TINT that composites dark over his dark screens, while the ink
+          was computed for the SOLID colour. The wheel proves the rule is right
+          when the fill really is solid (8.74:1).
+        · The dictation card breaks BOTH columns at once while 60 px sit unused
+          between them and 225 px stand empty above the card.
+        · SettingsWindow prints a raw `OSError` repr where its plain-language
+          sentence belongs — naming the INSTALLED path, so it is what HE sees,
+          and it likely means the notification switch refuses to turn on.
+      THE PROCESS FINDING: a self-graded picture is not proof, and this round is
+      the evidence — eleven implementers, eleven passes, twelve failures found by
+      two outsiders. Second: the graders refused to grade pictures they had not
+      caused to be written, which is the only correct response to the tofu
+      discovery (task 92) — a full guard run had been writing FONTLESS
+      screenshots, so "I opened the picture" could mean opening empty boxes.
+- [ ] 96. THE KEYBOARD MUST FOLLOW THE CARET, NOT A RULE (owner 2026-08-07,
+      after living with both halves of his own earlier decisions). His problem,
+      stated exactly: when he types into a box at the BOTTOM of the PC screen he
+      wants the keyboard to lift the picture so that row stays visible; when the
+      box is at the TOP, lifting carries the very text he is watching off the
+      screen. "Dakle nijedna opcija nije idealna ni da tastatura gura naš layout
+      ... niti da ga prekriva. Zato bi najoptimalnije rešenje bilo da naš program
+      prepozna gde se nalazi koja je pozicija na ekranu kursora koji kuca."
+      THE ANSWER IS AVAILABLE AND NOBODY LOOKED: the PC knows where the caret is
+      — `GetGUIThreadInfo` gives the caret rect of the foreground thread, and UI
+      Automation gives the selection/caret bounding rect; `server/uia.py` and the
+      focus guard already know WHICH window is being typed into. So the server
+      can send the caret's position and the phone lifts ONLY when the caret would
+      actually be covered, and ONLY by the difference — never by the keyboard's
+      full height, which is what made the 2026-08-03 attempt intolerable and got
+      it withdrawn on 2026-08-07 (task 80, `kbShift = 0`).
+      HIS REFINEMENT, mid-turn, with a screenshot — and it is the half a naive
+      implementation gets wrong: the previous attempt moved EVERYTHING, "zaključno
+      sa ovim delom koji nije deo naše aplikacije" — the navy filler above and
+      below the region, which exists because a layout narrower or shorter than the
+      phone letterboxes. Only the PICTURE may move; the filler stays. "Poenta je
+      da tastatura kada pomera sa offsetom ne pomera taj prazan deo već pomera
+      samo vidljivi ekran gde se nalazi aplikacija, i to samo ako ima potrebe."
+      His fallback, to be built as well, for apps that expose no caret (some do
+      not): a switch in Settings — lift the picture / cover the picture — which
+      decides what happens when the PC CANNOT say where the caret is. So he is
+      never left without a way out.
+      Scheduled AFTER this release, deliberately: it is a new feature and the ten
+      finished things must reach his hands first.
+- [ ] 92. The independent VISUAL PROOF of every window and panel this round
+      touches (rules/GUI.md — a grader that did not write the code, ≥ 8/10),
+      then guards, ONE build and ONE GIT RELEASE, then the final report.
 
 ## Round 14 (owner 2026-08-07, furious — "uvek je prioritet rešiti ZAŠTO je
 ## došlo do toga u komunikaciji sa agentima, tek sekundarno bag aplikacije")
@@ -119,6 +339,35 @@ dropped for them):
       restriction is cumulative down the tree, so the browser can never claim
       that drag as a scroll. The check written for it could not fail; it was
       thrown away, not kept green.
+- [~] 79b. THE MOVE HANDLE STILL DOES NOT MOVE THE WINDOW — his 3rd report of
+      the same feature (10:13 portrait, handle dragged to the TOP, preview
+      shows it at the top, Apply, and the PC window comes out vertically
+      centred: "uvek ostavi centrirano"; measured off his screenshot, the
+      window spans 0.195–0.805 of the screen height — exactly centred).
+      PROCESS CAUSE, first: round 14 fixed the GESTURE (the double-tap
+      re-centre) and proved it with a headless-Chromium check that ends
+      `return aspecting.pos === 0.9` — an in-memory VARIABLE. Nothing in it
+      ever pressed Apply, so the hop from `aspecting.pos` to the wire was
+      still unwalked, and the layout gate's own aspect check asserted
+      `layouts[0].pos == 0.25` — a STORED NUMBER — while its `place_window`
+      fake threw the rect away. Round 3 measured `_fit_rect`, round 14
+      measured the finger, and between them sat the only thing that matters:
+      the RECT a window is told to take. Two rounds, two green suites, and
+      the feature was never once followed to a window. THE FIX is at that
+      exact place: `LayoutRegistry.focus` guarded the rebuild on
+      `Layout.arranged_ratio`/`arranged_pos`, a note of what was COMMANDED,
+      written before `place_window` was even called and never compared with
+      the desk — so once a member left its rect (an app re-laying itself out,
+      a restore out of the taskbar, a snap, a placement that did not take),
+      every later Apply of the SAME position matched the note and re-placed
+      NOTHING: the phone's panel moved, the PC never did again, for good.
+      `focus` now computes the targets fresh, asks `_standing()` where the
+      windows REALLY are (`grids.at_rect`, ±8 px), and writes the note only
+      when the placement LANDED — a refusal is logged, toasted and retried.
+      GATE: two new checks in `tests/test_layout_protocol.py` (fail-closed,
+      build.py 0f/6) that assert on the placement RECT — solo AND grid,
+      portrait AND landscape, pos 0/500/1000, plus the same position applied
+      again after the window drifted. Both proven by re-planting the defect.
 - [~] 80. THE KEYBOARD MUST NOT LIFT THE VIEW — done 0.0.295, shipped
       v0.0.091. `kbShift` is 0 and the canvas transform is gone: the keyboard
       covers what it covers. The canvas still keeps its FULL height (it is
