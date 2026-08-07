@@ -22,7 +22,8 @@ button, **the stolen-tap rescue** (Android ends edge-zone touches with
 `pointercancel` — a no-travel cancel must still fire or buttons die
 on-device, the 2026-07-26 live failure) and its inverse (**a system swipe
 crossing a button — real travel, then cancel — must NOT fire**), edge
-reachability with the cursor-offset margin, keyboard capture (typed
+reachability with no reserved margin (the pointer sits exactly under the
+finger — the offset system is gone), keyboard capture (typed
 text + the Shift+Enter new-row rule), **the /ping contract** — the
 endpoint must answer EXACTLY 204: the Android shell's reachability probe
 counts only 204 as "the PC answered", because captive portals on foreign

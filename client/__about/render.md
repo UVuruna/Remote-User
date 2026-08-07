@@ -15,8 +15,6 @@ MediaSource Extensions (MSE). Second of the six client scripts to load (after
 ### Uses
 - [State](state.md) — `canvas`, `ctx`, `monitor`, `baseRect`, `view`,
   `baseBitmap`/`detailBitmap`/`detailRegion`, `streamMode`, `cursorPos`
-- [Input Geometry](input-geometry.md) — `offsetDistancePx()` used by
-  `computeBaseRect()` to size the edge margin
 
 ### Used by
 - [Controls](controls.md) implicitly (nothing calls into render.js directly
@@ -31,9 +29,9 @@ MediaSource Extensions (MSE). Second of the six client scripts to load (after
 
 ## Key Functions
 
-- `computeBaseRect()` — fits the monitor image into the canvas minus an
-  edge margin (sized by the cursor offset, see [Input Geometry (flow)](../__flow/input-geometry.md))
-  so the pointer can reach every PC-screen corner.
+- `computeBaseRect()` — aspect-fits the monitor image into the FULL canvas,
+  centered, no reserved margin (owner 2026-08-02 — the pointer sits under the
+  finger, so the image touches all four screen edges).
 - `drawnRect()` — `baseRect` transformed by the current pan/zoom `view`.
 - `clampView()` — keeps pan/zoom within bounds; snaps back to identity at
   scale ≤ 1.
@@ -76,12 +74,11 @@ itself is
 untouched: full-frame H.264 stays cheap (ROADMAP measurement), and the JPEG
 path narrows through the existing `viewport` region mechanism.
 
-## Offset system removed (owner 2026-08-02)
-The cursor-offset system (handedness diagonal, finger calibration, reserved
-edge margins) is GONE — the pointer sits exactly under the finger, the image
-aspect-fits the FULL canvas, and a focused layout touches all four screen
-edges. Any offset/margin description in this doc's diagrams predating
-2026-08-02 is historical.
+## The cursor-offset system is gone (owner 2026-08-02, remnants finished 2026-08-07)
+The pointer sits exactly under the finger, the image aspect-fits the FULL
+canvas, and a focused layout touches all four screen edges — no handedness
+diagonal, no finger calibration, no reserved edge margin. Removed for good on
+2026-08-07, along with `config.hand` and the `calibrate` action.
 
 ## The locked region is CLIPPED (owner 2026-08-03)
 Since a layout can carry its own aspect ratio ([Layouts](layouts.md)), its

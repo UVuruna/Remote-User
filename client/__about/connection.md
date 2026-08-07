@@ -34,7 +34,7 @@ every other script must already be loaded by this point (and is, since
   still-closing socket's late callbacks never touch a newer connection's
   state.
 - `onmessage` (text) — dispatches by `type`:
-  - `config` — full view reset: monitor size, `hand`, stream mode/codec,
+  - `config` — full view reset: monitor size, stream mode/codec,
     `tailscale_url` (fed to the Android bridge), `app_version` (drives the
     update banner); re-inits or tears down MSE; sent after auth and after
     every stream restart.

@@ -41,9 +41,8 @@ from gui.theme import TOKENS, color as token_color
 
 logger = logging.getLogger(__name__)
 
-# Built-in actions a custom button may trigger (mirrors client BUILTINS —
-# calibrate is retired and left out on purpose). Used as the fallback when
-# client/controls.js cannot be parsed.
+# Built-in actions a custom button may trigger (mirrors client BUILTINS).
+# Used as the fallback when client/controls.js cannot be parsed.
 BUILTIN_ACTIONS = [
     "click", "right", "middle", "x1", "x2", "scroll", "drag", "keyboard",
     "enter", "esc", "newrow", "mic", "gallery", "camera", "files", "pcshot",

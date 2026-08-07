@@ -52,8 +52,6 @@ USER_ADJUSTABLE = {
     # nowhere else (owner answer P4: one source of truth, no menu on the
     # phone) and carried to it in every `config` frame.
     "ui_theme", "phone_theme", "phone_fill",
-    # "hand" retired 2026-08-02 (the cursor-offset system is gone); an old
-    # settings.json carrying it is simply ignored on load.
 }
 
 
@@ -140,9 +138,6 @@ class Settings:
     inject_verify_min_jump: int = 24
     inject_verify_tolerance: int = 16
     inject_verify_streak: int = 3
-    # LEGACY (2026-08-02): the cursor-offset system is gone — still sent in
-    # `config` for protocol stability, ignored by the client, no GUI control.
-    hand: str = "right"
 
     # Layouts — the always-on-top ledger (owner decree 2026-08-05). Layout
     # members are forced above every other window while the phone shows them,
@@ -264,6 +259,25 @@ class Settings:
     # return None and hides the in-window Update button entirely.
     update_repo: str = "UVuruna/Remote-User"
     update_check: bool = True
+
+    # THE HANDOVER (owner report 2026-08-07). Installing an update KILLED the
+    # very session he was installing from: *"čim uđem u instalaciju on će meni
+    # ugasiti Remote User i više neću moći da komandujem odavde."* So the
+    # update is now unattended end to end — see server/update_handover.py — and
+    # these are the three files it leaves behind on purpose. All three live in
+    # USER_DIR, never in the install folder: the installer REPLACES the install
+    # folder, and a handover cannot keep its own instructions somewhere the
+    # thing it is driving is about to overwrite.
+    update_record_path: Path = USER_DIR / "update.json"
+    update_script_path: Path = USER_DIR / "update_handover.cmd"
+    update_log_path: Path = USER_DIR / "update.log"
+    # How long the handover waits for the old app to exit, and for the new one
+    # to appear. The exit budget covers a server thread joining (10 s) plus
+    # Qt's teardown; the start-up budget covers a cold PyInstaller onedir launch
+    # of a PySide6 app from files written seconds ago (an antivirus first-touch
+    # scan is what makes this number generous rather than tight).
+    update_wait_exit_s: int = 30
+    update_wait_up_s: int = 40
 
     # Appearance (build round R3, owner-approved 2026-08-07). Three settings,
     # two surfaces, ONE place to change them — the desktop Settings window's

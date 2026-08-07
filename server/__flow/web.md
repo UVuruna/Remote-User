@@ -131,7 +131,7 @@ Pseudocode:
 
 ```
 _send_config(ws, stream, token, codec)
-   payload = { type, monitor_width, monitor_height, stream, hand,
+   payload = { type, monitor_width, monitor_height, stream,
                tailscale_url, app_version, apk_version,
                base: _stream_base(stream),
                ui:   ui_config() }        <- R3: {theme, fill, colors}

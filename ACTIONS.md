@@ -311,7 +311,6 @@ A button is one of:
   - `quality` — open the stream-quality panel (fps / resolution / bitrate + auto-save on mobile data — owner 2026-08-05, replacing the old cycle). Shipped in **Settings**.
   - `dictation` — open the dictation-language card (choose the language you speak; model download guided). Shipped in **Settings** (owner 2026-08-05).
   - `anywhere` — open the "use from anywhere" wizard (Tailscale setup). NOT in the defaults since 2026-08-05 (the first-contact banner still guides new phones); stays in the pool for custom sets.
-  - `calibrate` — retired (the pointer sits exactly under the finger since 2026-08-02).
 - **Chord** — `{ "label": "Copy", "chord": "ctrl+c" }` — fires a key combination (see below). An optional `"icon"` from the list above gives it an icon face.
 - **Special key** — `{ "label": "Esc", "key": "escape" }` — a single structural key; `"icon"` works here too.
 - **Typed text** — `{ "label": "Usage", "text": "/usage", "enter": true }` (owner 2026-08-05) — the PC pastes the text into whatever box has focus and presses Enter. Built for the **Claude** set, whose commands are not shortcuts at all but slash commands written into the app's own prompt. The paste goes through the clipboard (one atomic insert; a character-by-character type races the autocomplete menu that re-filters on every keystroke). `"enter": false` leaves the line standing — that is the `Menu` button, which types `/` and lets you pick from the list with the cursor.

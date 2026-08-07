@@ -624,7 +624,6 @@ async def _send_config(ws: WebSocket, stream, token: str, codec: str | None = No
         "monitor_width": stream.width,
         "monitor_height": stream.height,
         "stream": stream.mode,
-        "hand": SETTINGS.hand,
         "tailscale_url": f"http://{ts_ip}:{SETTINGS.port}/?token={token}" if ts_ip else None,
         # The phone's update source is THIS PC, never the internet. The
         # banner compares against apk_version — the version of the APK this

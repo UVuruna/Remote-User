@@ -14,8 +14,8 @@ flowchart TB
     KEEP --> COUNT{pointers.size >= 2?}
     COUNT -- yes --> PINCH[beginPinch — every mode, layout focus included]
     COUNT -- no --> MODE{touchMode?}
-    MODE -- drag --> DRAGSTART[pointer_down at offset position]
-    MODE -- move --> MOVESTART[sendCursor at offset position]
+    MODE -- drag --> DRAGSTART[pointer_down at toRemoteClamped position]
+    MODE -- move --> MOVESTART[sendCursor at toRemoteClamped position]
     MODE -- scroll --> SCROLLSTART[track velocity baseline]
     MODE -- pan --> PANSTART[track local pan origin]
 
@@ -37,12 +37,12 @@ Pseudocode:
 
     ON pointerdown:
         IF isPrimary → wipe pointers/pinch/primary (ghost-pointer self-heal)
-        register this pointer; sampleFinger(e)
+        register this pointer
         IF 2+ pointers down → beginPinch(); RETURN
-        primary = { id, type: touchMode, offset: isTouch }
+        primary = { id, type: touchMode }
         SWITCH touchMode:
-            drag   → primary.pos = offset-mapped point; send pointer_down
-            move   → sendCursor(offset-mapped point)
+            drag   → primary.pos = toRemoteClamped(point); send pointer_down
+            move   → sendCursor(toRemoteClamped(point))
             scroll → prime velocity tracking at this point
             (pan handled entirely in pointermove via startX/startY)
 
@@ -50,7 +50,7 @@ Pseudocode:
         IF pinch active AND 2+ pointers → rescale/translate view; RETURN
         IF not the primary pointer → RETURN
         SWITCH primary.type:
-            drag/move → sendCursor(offset-mapped point)
+            drag/move → sendCursor(toRemoteClamped(point))
             scroll    → accumulate delta-Y into tick counter; send scroll ticks
             pan       → translate view by finger delta; clampView; redraw
 
@@ -61,9 +61,8 @@ Pseudocode:
             IF type == scroll → startScrollInertia(lastVelocity)
             primary = null
 
-## Offset system removed (owner 2026-08-02)
-The cursor-offset system (handedness diagonal, finger calibration, reserved
-edge margins) is GONE — the pointer sits exactly under the finger, the image
-aspect-fits the FULL canvas, and a focused layout touches all four screen
-edges. Any offset/margin description in this doc's diagrams predating
-2026-08-02 is historical.
+## The cursor-offset system is gone (owner 2026-08-02, remnants finished 2026-08-07)
+The pointer sits exactly under the finger, the image aspect-fits the FULL
+canvas, and a focused layout touches all four screen edges — no handedness
+diagonal, no finger calibration, no reserved edge margin. Removed for good on
+2026-08-07, along with `config.hand` and the `calibrate` action.

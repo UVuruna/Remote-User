@@ -103,7 +103,6 @@ const BUILTINS = {
   // captured and PASTED like every other Attach source — Snipping Tool's
   // rectangle, from the phone.
   region:   { label: "Region", icon: "region",   kind: "region" },
-  calibrate:{ label: "Calibrate", icon: "target", kind: "calibrate" },
   anywhere: { label: "Anywhere", icon: "globe",  kind: "anywhere" },
   // Dictation setup (owner round 2, 2026-08-05): replaces Anywhere in the
   // default Settings set (the anywhere ACTION stays in this pool — future
@@ -701,11 +700,6 @@ function makeActionButton(btn, pos) {
         markExcursion();
         filePick.click();
       });
-    } else if (b.kind === "calibrate") {
-      // The offset/calibration system is gone (owner 2026-08-02 — the pointer
-      // sits under the finger). The action stays registered so an owner
-      // actions.json that still lists it renders a harmless button.
-      keepFocus(el, () => showToast("Not needed anymore — the pointer is right under your finger"));
     } else if (b.kind === "anywhere") {
       keepFocus(el, openWizard); // the banner shows only once — this is the permanent way in
     } else if (b.kind === "quality") {

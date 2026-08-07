@@ -25,11 +25,9 @@ for the split's general load-order reasoning.
 ## Connections
 
 ### Uses
-- [State](state.md) — `send`, tunables, `hand`
+- [State](state.md) — `send`, tunables
 - [Render](render.md) — `redraw()`, `computeBaseRect()`, `clampView()`
-  (calibration/mode changes re-trigger a draw)
-- [Input Geometry](input-geometry.md) — `startCalibration()` (the
-  `calibrate` built-in)
+  (mode changes re-trigger a draw)
 
 ### Used by
 - [Connection](connection.md) — the `actions` message handler calls
@@ -56,7 +54,7 @@ for the split's general load-order reasoning.
   `send` of shift+enter so a line break never interrupts dictation),
   `pick` (gallery/camera/files),
   `shot` (the viewed region), `region` (the free frame — see [Region](region.md)),
-  `send`, `upload`, `calibrate`, `anywhere`, `quality`, `dictation`, `sets`.
+  `send`, `upload`, `anywhere`, `quality`, `dictation`, `sets`.
   A button may override a built-in's NAME (`btn.label || b.label`, owner
   2026-08-05): the side buttons carry whatever the user's mouse driver put on
   them, so the face must be allowed to say "Back". Only the name — the

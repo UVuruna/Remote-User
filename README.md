@@ -161,7 +161,7 @@ The CLI prints the pairing URL and a QR (console + image viewer). Dev note: H.26
     📄 install.html    ← install funnel — what every browser gets instead
     📄 state.js        ← client script 1/6 — tunables + shared state
     📄 render.js       ← client script 2/6 — canvas drawing, H.264/JPEG decode
-    📄 input-geometry.js ← client script 3/6 — coordinate mapping, cursor calibration
+    📄 input-geometry.js ← client script 3/6 — coordinate mapping, scroll inertia
     📄 controls.js     ← client script 4/6 — keyboard, wizard, D-pad, wheel, toast
     📄 gestures.js     ← client script 5/6 — pointer-event dispatch, pinch zoom
     📄 connection.js   ← client script 6/6 — WebSocket lifecycle, protocol handlers
