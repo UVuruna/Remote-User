@@ -58,7 +58,7 @@ The grader's finding, verbatim in substance: under "Tell my phone when an agent 
 
 `tests/test_layout_audit_qt.py`'s `make_settings_window()` fixture used to poke `window.notify_caption.setText(NOTIFY_WORST)` directly, bypassing all of the above — the audit's own "fullest state" screenshot was never proof of the fix. It now calls `window._set_caption(window.notify_caption, NOTIFY_WORST, error=True)`, the exact method the real toggle handler uses, so the standing screenshot IS the evidence.
 
-## Build round R3 (2026-08-07) — themes
+## Build round R3 (2026-08-07) — themes; CORRECTED to three axes (2026-08-08)
 
 ### APPEARANCE — the card the R2 seam was left for
 
@@ -67,24 +67,33 @@ whole look of the product, both halves:
 
 - **This PC** — the sun/moon pill ([Switch](switch.md)), riding the section
   heading's own row rather than taking a row of its own.
-- **The phone** — two combos on ONE row: theme (Dark / Light / Colored dark /
-  Colored light) and button fill (Outlined / Filled). Chosen here and only
-  here: the owner's answer to this round's P4 was one source of truth and no
-  menu on the phone, so the page applies `config.ui` and asks the device
-  nothing.
+- **The phone** — THREE combos on ONE row (owner correction 2026-08-08):
+  theme (Dark / Light), whether the controls are Coloured or Plain, and their
+  fill (Outlined / Filled). Chosen here and only here: the owner's answer to
+  this round's P4 was one source of truth and no menu on the phone, so the
+  page applies `config.ui` and asks the device nothing.
 
-  **FOUR themes, not three** (owner colour correction 2026-08-07). The
-  coloured look is one idea over two pages, and the two pages want opposite
-  palettes — dark shades that carry a button on a dark page, strong inks that
-  carry a letter on a light one (`config.SET_COLORS_DARK` /
-  `SET_COLORS_LIGHT`). Adding a value costs him one more line in a dropdown
-  and takes nothing away; folding colour into the plain Light theme instead
-  would have deleted the monochrome light look he already has.
+  **THREE COMBOS, NOT TWO** (owner correction 2026-08-08, replacing the
+  2026-08-07 shape that folded colour into a fourth `phone_theme` value:
+  `"colored"` / `"colored-light"`). His own words: *"teme postoje samo dve,
+  svetla i tamna … a ove komande … on može da bude obojen, neobojen, i može
+  da bude transparentan ili pun."* A coloured look still picks its palette by
+  the THEME combo alone (`config.SET_COLORS_DARK` / `SET_COLORS_LIGHT`) —
+  dark shades that carry a button on a dark page, strong inks that carry a
+  letter on a light one — but which table it wears is no longer spelled with
+  a fourth theme name; `PHONE_COLORED` is its own dropdown, independent of
+  both `PHONE_THEMES` and `PHONE_FILLS`.
 
-Both phone combos save immediately (`save_user_settings`), like every card in
-this window except STREAM. The caption says the honest thing — the phone reads
-the change on its NEXT connection, which in practice means locking and
-unlocking it, because `ui` rides the `config` frame.
+All three phone combos save immediately (`save_user_settings`), like every
+card in this window except STREAM. The caption says the honest thing — the
+phone reads the change on its NEXT connection, which in practice means
+locking and unlocking it, because `ui` rides the `config` frame.
+
+**A pre-2026-08-08 `settings.json` is TRANSLATED, never reset** — see
+[Config](../../__about/config.md) → `_migrate_legacy_ui`. This window always
+reads `SETTINGS.phone_theme` / `SETTINGS.phone_colored` / `SETTINGS.phone_fill`
+AFTER `load_user_settings()` has already run the migration, so the three
+combos never have to know the old shape existed.
 
 ### The reflow the fifth card paid for
 

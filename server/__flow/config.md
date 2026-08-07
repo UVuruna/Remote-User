@@ -76,27 +76,46 @@ Pseudocode:
         merge changes over the existing settings.json, write it
         apply(**changes)           # running SETTINGS updates immediately
 
-## Build round R3 (2026-08-07) — themes
+## Build round R3 (2026-08-07) — themes; CORRECTED to three axes (2026-08-08)
 
 ```
 Settings (dataclass)
-   `- Appearance          ui_theme      "dark"          <- this PC
-                          phone_theme   "dark"          <- the phone
-                          phone_fill    "transparent"   <- the phone
+   `- Appearance          ui_theme       "dark"          <- this PC
+                          phone_theme    "dark"          <- the phone PAGE
+                          phone_colored  False           <- the CONTROLS
+                          phone_fill     "transparent"   <- the CONTROLS
 
 SET_COLORS_DARK   (own banner section — 13 shipped sets, dark shades)
 SET_COLORS_LIGHT  (the same 13, as strong inks for a light page)
 
-set_colors(theme)  ->  phone_theme == "colored-light" ? LIGHT : DARK
+set_colors(theme)  ->  phone_theme == "light" ? LIGHT : DARK   (never gated
+                        on phone_colored — resolved regardless, cheap either
+                        way, and it keeps this function answering ONE
+                        question)
                         |
-ui_config()  ->  {"theme": phone_theme,
-                  "fill":  phone_fill,
-                  "colors": set_colors()}      <- already resolved: ONE flat
-                                                  map on the wire, always
+ui_config()  ->  {"theme":   phone_theme,
+                  "colored": phone_colored,
+                  "fill":    phone_fill,
+                  "colors":  set_colors()}     <- already resolved: ONE flat
+                                                   map on the wire, always
                         |
                         v
               web._send_config()  ->  `config` frame, key "ui"
                         |
                         v
-              client/theme.js applyUi()  ->  <body data-theme=.. data-fill=..>
+     client/theme.js mergedUi() -> legacyTheme() translates a stray old-shape
+                        |          `theme:"colored"/"colored-light"` FIRST
+                        v          (server not yet rebuilt, or this device's
+              applyUi()             OWN stale cache) into {theme, colored}
+                        |
+                        v
+   <body data-theme=.. data-colored=.. data-fill=..>
+
+BACKWARD COMPATIBILITY — settings.json written before 2026-08-08:
+  _migrate_legacy_ui({"phone_theme": "colored-light", "phone_fill": "full"})
+    -> {"phone_theme": "light", "phone_colored": True, "phone_fill": "full"}
+  Runs on every load_user_settings() AND on save_user_settings()'s own
+  re-read of the current file, so the file on disk self-heals on the very
+  next save — the owner's saved choice is TRANSLATED, never reset to a
+  default he never asked for.
 ```

@@ -1,24 +1,34 @@
-// How the phone LOOKS — theme, fill, and the colour each set wears.
-// Build round R3 (owner-approved 2026-08-07). Loads after controls.js (it
-// uses `prefGet`/`prefSet`) and before panels.js/layouts.js. The colours
-// themselves live in client/theme.css; this file only decides WHICH of them
-// are in force and hands each set its own. See client/__about/theme.md.
+// How the phone LOOKS — theme, whether the controls are coloured, fill, and
+// the colour each set wears.
+// Build round R3 (owner-approved 2026-08-07), CORRECTED to three independent
+// axes 2026-08-08. Loads after controls.js (it uses `prefGet`/`prefSet`) and
+// before panels.js/layouts.js. The colours themselves live in
+// client/theme.css; this file only decides WHICH of them are in force and
+// hands each set its own. See client/__about/theme.md.
 //
-// THE DESKTOP DECIDES, THE PHONE OBEYS (owner answer P4 to this round's open
-// questions). Every `config` frame carries `ui = {theme, fill, colors}` and
-// that is the only input: no menu on the phone, no auto-detection, and the
-// device's own dark/light preference is deliberately ignored. One source of
-// truth means the owner never has to wonder which of two places is winning.
+// THE DESKTOP DECIDES, THE PHONE OBEYS (owner answer P4). Every `config`
+// frame carries `ui = {theme, colored, fill, colors}` and that is the only
+// input: no menu on the phone, no auto-detection, and the device's own
+// dark/light preference is deliberately ignored. One source of truth means
+// the owner never has to wonder which of two places is winning.
 //
-// `colors` is ONE flat map, already chosen for the theme it arrives with. The
-// coloured look has two surfaces since the owner's correction of 2026-08-07
-// (`colored` = dark page, `colored-light` = light page) and they wear
-// DIFFERENT palettes — dark shades that carry a button, versus vivid inks
-// that carry a letter — but the choosing happens once, on the desktop
-// (server/config.py → `set_colors`). This file never holds a table.
+// THREE AXES, NOT A FOURTH THEME NAME (owner correction 2026-08-08). His own
+// words: "teme postoje samo dve, svetla i tamna … a ove komande … on može da
+// bude obojen, neobojen, i može da bude transparentan ili pun." The
+// 2026-08-07 shape folded colour into `theme` ("colored" / "colored-light"),
+// which produced the same eight looks by accident but claimed the page has
+// four themes when only the CONTROLS (the D-pad groups and the radial wheel)
+// carry the extra switch. `theme` is now `"dark"` / `"light"` only; `colored`
+// is its own boolean, independent of both.
+//
+// `colors` is ONE flat map, already chosen for the THEME axis alone (dark
+// shades on a dark page, vivid inks on a light one — server/config.py →
+// `set_colors`), and it rides on every `config` frame whether or not
+// `colored` is on; the palette is resolved once, on the desktop, and this
+// file never holds a table.
 //
 // The choice is CACHED per device so the page does not paint the previous
-// theme for the third of a second it takes the socket to open and the server
+// look for the third of a second it takes the socket to open and the server
 // to answer — a flash the owner would see on every single connect.
 "use strict";
 
@@ -26,8 +36,32 @@ const UI_PREF = "uiLook";
 // The SEED, not a fallback. It is what a device that has never been told
 // anything wears, and nothing else: `applyUi` merges onto the look in force
 // and never onto this (see its own comment — a `config` with no `ui` used to
-// reset the owner's choice to these two values).
-const UI_DEFAULT = { theme: "dark", fill: "transparent", colors: {} };
+// reset the owner's choice to these values).
+const UI_DEFAULT = { theme: "dark", colored: false, fill: "transparent", colors: {} };
+
+// BACKWARD COMPATIBILITY (owner correction 2026-08-08). Two things can still
+// hand this file the OLD four-value `theme` ("colored" / "colored-light"):
+// an older server not yet rebuilt, and THIS DEVICE'S OWN cache
+// (`prefGet(UI_PREF)`) written by an older page before this build ever
+// ran — the cache is read at load, before any socket exists, so it is a path
+// a server-side translation alone can never reach (see server/config.py →
+// `_migrate_legacy_ui` for that half). Translated once, at the single point
+// every incoming `ui` object passes through (`mergedUi`), so the owner's
+// SAVED CHOICE never silently becomes something else: "colored-light" meant
+// light-page-with-colour, and that is exactly {theme:"light",colored:true}
+// spelled with two fields instead of one — not a value to fall back away
+// from.
+function legacyTheme(next) {
+  if (!next || typeof next !== "object") return next;
+  const LEGACY = { colored: { theme: "dark", colored: true },
+                   "colored-light": { theme: "light", colored: true } };
+  const hit = LEGACY[next.theme];
+  if (!hit) return next;
+  const rest = { ...next };
+  delete rest.theme;
+  return { ...rest, theme: hit.theme,
+           colored: next.colored !== undefined ? next.colored : hit.colored };
+}
 
 // Ink on a coloured button. Computed, never tabled (rules/CODE.md — Compute,
 // Don't Generate): the owner may retune the palette on the desktop whenever he
@@ -360,11 +394,11 @@ function paintSet(el, name, surfaceVar) {
   if (glow) el.style.setProperty("--set-glow", glow);
 }
 
-// Put the choice on <body>; every rule in theme.css hangs off these two.
+// Put the choice on <body>; every rule in theme.css hangs off these three.
 function writeLook() {
   document.body.dataset.theme =
-    ["dark", "light", "colored", "colored-light"].includes(ui.theme)
-      ? ui.theme : "dark";
+    ["dark", "light"].includes(ui.theme) ? ui.theme : "dark";
+  document.body.dataset.colored = ui.colored ? "true" : "false";
   document.body.dataset.fill = ui.fill === "full" ? "full" : "transparent";
   // The canvas is painted by JS, not by CSS, so it cannot inherit a variable
   // — it is TOLD the page colour once per look change (client/render.js).
@@ -375,9 +409,20 @@ function writeLook() {
 
 // One look laid over another, field by field. The base is what is in force —
 // never a constant — so an axis nobody mentioned keeps the value it has.
-function mergedUi(base, next) {
+// `next` is translated through `legacyTheme` FIRST — the one point every
+// incoming `ui` object passes through, server frame or device cache alike.
+//
+// `colored` needs an explicit-undefined check, not `||`: it is a boolean, and
+// `false || base.colored` would silently discard a real "turn colour off"
+// instruction the moment the owner actually chose it — the same class of bug
+// `theme`/`fill` cannot have, because an empty string is never a value either
+// side sends.
+function mergedUi(base, rawNext) {
+  const next = legacyTheme(rawNext);
   return {
     theme: (next && next.theme) || base.theme,
+    colored: next && typeof next.colored === "boolean"
+      ? next.colored : (base.colored || false),
     fill: (next && next.fill) || base.fill,
     colors: (next && next.colors) || base.colors || {},
   };

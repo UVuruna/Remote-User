@@ -82,17 +82,17 @@ longer here would offer the owner voices he cannot hear. The CHOICE is
 persisted, as a plain name — a device that no longer has it falls back to its
 own default rather than speaking in whichever voice now sits at that index.
 
-## Build round R3 (2026-08-07) — themes
+## Build round R3 (2026-08-07) — themes; CORRECTED to three axes (2026-08-08)
 
 ```
 _build_cards(root)
-   |- APPEARANCE          +-------------------------------------------+
-   |                      | APPEARANCE            This PC   [ (  * ) ]|
-   |                      | The phone   [Dark  v] [Outlined v]        |
-   |                        Dark | Light | Colored dark | Colored light
-   |                      | Colored gives every set its own colour -  |
-   |                      | dark shades on a dark page, strong ones.. |
-   |                      +-------------------------------------------+
+   |- APPEARANCE          +----------------------------------------------+
+   |                      | APPEARANCE               This PC   [ (  * ) ]|
+   |                      | The phone   [Dark v] [Coloured v] [Outlined v]
+   |                        Dark | Light   Coloured | Plain   Outlined|Filled
+   |                      | Dark or Light picks the whole page. Coloured  |
+   |                      | gives every set its own colour on top of it..|
+   |                      +----------------------------------------------+
    |- STREAM              (unchanged — the only card with an Apply)
    |- NOTIFICATIONS       (unchanged)
    `- QHBoxLayout         +------------------+ +----------------------+
@@ -104,11 +104,30 @@ _build_cards(root)
                                the declared 1000 px height floor
 ```
 
-Minimum, measured in both palettes:
+**THREE combos, not two** (owner correction 2026-08-08 — "teme postoje samo
+dve, svetla i tamna … a ove komande … on može da bude obojen, neobojen, i
+može da bude transparentan ili pun"). The 2026-08-07 shape's `PHONE_THEMES`
+carried a fourth value ("Colored dark" / "Colored light") that folded the
+colour axis into the theme name; it is back to two entries and `PHONE_COLORED`
+(Coloured / Plain) is its own new dropdown, saved to `SETTINGS.phone_colored`.
+`_computed_minimum`'s `phone_row` widens accordingly (three combo widths + two
+inter-combo gaps instead of one), and `_save_phone_colored()` joins
+`_save_phone_theme()` / `_save_phone_fill()` as the third immediate-save
+handler.
+
+Minimum, measured in both palettes (native Qt platform, `WA_DontShowOnScreen`
+— see `tests/test_layout_audit_qt.py`'s own comment on why `offscreen` alone
+gives font-substitute numbers no real session ever sees):
 
 ```
             width           height
 before R3   614             890     (four cards, one column)
 + card      614            1048     <- past the declared 1000 floor
 + reflow    718             921     <- FOCUS | STARTUP on one row
++ trio      718             ~873    <- the third combo widens phone_row
+                                        (642 px), still well under the
+                                        1244 px `paired_row` that actually
+                                        binds this window's width; only the
+                                        height moved, from the longer
+                                        APPEARANCE_TEXT caption
 ```

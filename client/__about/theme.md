@@ -3,17 +3,18 @@
 One feature, two files, one doc (the same arrangement `layouts.css` and
 `layouts.js` already use):
 
-- **`client/theme.css`** — every colour the client uses, in four themes and
-  two fills. Nothing in it positions anything.
+- **`client/theme.css`** — every colour the client uses, across two themes,
+  the coloured-controls switch, and two fills. Nothing in it positions
+  anything.
 - **`client/theme.js`** — which of those are in force right now, and the
   colour each SET wears.
 
 Built in **build round R3** (owner-approved 2026-08-07), answering the round's
 open question **P4** with "the phone's theme is chosen ON THE DESKTOP ONLY"
-and **P5** with "adopt the proposed set-colour palette and tune later".
+and **P5** with "adopt the proposed set-colour palette and tune later". THE
+AXES WERE CORRECTED on **2026-08-08** — see below.
 
-**He tuned it the next day, and the tuning changed the shape of the feature**
-(owner, 2026-08-07):
+**He tuned the palette the next day** (owner, 2026-08-07):
 
 > "one boje koje si osmislio — kada je DARK tema treba da budu jako tamne
 > nijanse, dakle mali lightness/brightness; a ovaj mod LIGHT treba da ima jako
@@ -23,55 +24,92 @@ and **P5** with "adopt the proposed set-colour palette and tune later".
 Two sentences, two pages, and they cannot both be true of one table of
 colours: on a dark page the colour is the BODY of the button and the white
 label does the reading, so it must be dark; on a light page the colour is the
-INK, so it must be strong. So the coloured look gained a second surface
-(`colored-light`) and a second palette, and the lift that makes a colour
-readable stopped bleeding it white. See [The set colours](#the-set-colours).
+INK, so it must be strong. So the coloured look kept two palettes, one per
+theme, and the lift that makes a colour readable stopped bleeding it white.
+See [The set colours](#the-set-colours).
+
+**Then he corrected the SHAPE itself, a day later** (owner, 2026-08-08):
+
+> "što se tiče teme — teme postoje samo dve, svetla i tamna, i to je onaj
+> switcher sunce mesec. zatim dalje pričam samo za ove komande sa kojim
+> komuniciramo sa aplikacijom i za onaj kružni meni koji biramo — on može da
+> bude obojen, neobojen, i može da bude transparentan ili pun. dakle to je
+> ukupno osam kombinacija za ove dugmiće: tamna tema, svetla tema, puno,
+> prazno, obojeno, neobojeno."
+
+The 2026-08-07 shape had folded the colour question into a FOURTH theme
+value (`colored` = dark page + colour, `colored-light` = light page +
+colour). It rendered the same eight looks by accident, but it said the page
+has four themes when the owner's own model is two themes plus two switches
+that belong to the CONTROLS — the D-pad groups and the radial wheel — not the
+page. `data-colored` is now its own axis, independent of `data-theme` and
+`data-fill` alike.
 
 ## The one rule everything else follows
 
 **The desktop decides; the phone obeys.** The look arrives in every `config`
-frame as `ui = {theme, fill, colors}` and that is the only input. There is no
-theme menu on the phone, nothing is auto-detected, and the device's own
-dark/light preference is deliberately ignored — one source of truth means the
-owner never has to work out which of two places is winning. It is set in the
-desktop **Settings → APPEARANCE** card (`server/gui/settings_window.py`) and
-built by `config.ui_config()`.
+frame as `ui = {theme, colored, fill, colors}` and that is the only input.
+There is no theme menu on the phone, nothing is auto-detected, and the
+device's own dark/light preference is deliberately ignored — one source of
+truth means the owner never has to work out which of two places is winning.
+It is set in the desktop **Settings → APPEARANCE** card
+(`server/gui/settings_window.py`) and built by `config.ui_config()`.
 
-## The two axes
+## The three axes
 
 | Attribute on `<body>` | Values | What it decides |
 |---|---|---|
-| `data-theme` | `dark` · `light` · `colored` · `colored-light` | surfaces, ink, shadows |
+| `data-theme` | `dark` · `light` | surfaces, ink, shadows — the sun/moon switcher |
+| `data-colored` | `true` · `false` | do the D-pad groups + radial wheel wear each set's own colour |
 | `data-fill` | `transparent` · `full` | outlined buttons, or filled ones |
 
-They are independent, so there are **eight** real renderings of every surface
+They are independent, so there are **eight** real renderings of every control
 — and the audit measures all eight (below).
 
-- **dark** — today's look, unchanged. It is the `:root` block, and the other
-  three are overrides of it.
+- **dark** — today's look, unchanged. It is the `:root` block, and `light` is
+  an override of it.
 - **light** — elevation INVERTS (DESIGN.md): the raised card is the whitest
   thing and the page sits a step below it. The accent is deepened to `#0369a1`
   because the dark theme's `#38bdf8` sits at 2.2:1 on white. The icon and
   label shadows flip from black to white — the controls float over the PC's
   own screen, which can be any colour, so dark ink over a dark window needs a
   light halo or it vanishes.
-- **colored** — the DARK surfaces, with every set wearing its own colour.
-- **colored-light** — the LIGHT surfaces, same idea. It shares every surface
-  token with `light` (a light page is a light page whether or not the buttons
+- **colored (`data-colored="true"`)** — every set wearing its own colour, on
+  top of WHICHEVER theme is in force. It shares every surface token with the
+  page's own theme (a light page is a light page whether or not the buttons
   are coloured; duplicating twenty tokens would be two files to retune the day
-  the page grey changes) and differs only in that the per-set rules apply and
-  a different palette arrives.
+  the page grey changes) and adds nothing but the per-set rules at the bottom
+  of theme.css. The palette a coloured look wears is picked by `data-theme`
+  ALONE (dark shades on `dark`, strong inks on `light` — see below), never by
+  a fourth theme name.
 
-The two coloured themes are ONE selector in the stylesheet —
-`body[data-theme^="colored"]` — because every value those rules use is
-computed by `theme.js` against the surface actually in force. Nothing about
-the light page needs a rule of its own, and a duplicated block per surface
-would be the first thing to fall out of step.
+`body[data-colored="true"]` is ONE selector for both surfaces, because every
+value its rules use is computed by `theme.js` against the surface actually in
+force. Nothing about the light page needs a rule of its own, and a duplicated
+block per theme would be the first thing to fall out of step.
 
 `full` is carried by ONE token. `--glass-fill` (and its three relatives) is
 what every button, chip and wheel item already paints itself with, so
 `body[data-fill="full"]` re-points those four at `--fill-solid` and no rule
 anywhere else needs to know which fill is active.
+
+## Backward compatibility (owner correction 2026-08-08)
+
+Two places can still hand this file the OLD four-value `theme`
+(`"colored"` / `"colored-light"`), and both are translated, never reset,
+because the owner's SAVED CHOICE must not silently become something else:
+
+- **A server not yet rebuilt.** `client/theme.js` → `legacyTheme()` runs
+  inside `mergedUi()` — the one point every incoming `ui` object passes
+  through — and turns `theme: "colored"` into `{theme: "dark", colored:
+  true}`, `"colored-light"` into `{theme: "light", colored: true}`.
+- **This device's OWN cache** (`prefGet("uiLook")`), written by an older page
+  before this build ever ran. `restoreUi()` reads it at load, before any
+  socket exists, so a server-side translation alone could never reach it —
+  it goes through the SAME `mergedUi()` / `legacyTheme()` path.
+
+The server side of the same fix is `config._migrate_legacy_ui()` — see
+[config.md](../../server/__about/config.md).
 
 **The light theme's own transparent values were too close to opaque to prove
 that** (independent grader, 2026-08-07 — graded 7/10: `Controls_light_transparent`
@@ -196,8 +234,8 @@ used to be the raw hex at 0.30 alpha, which was fine while the palette was
 bright and became no signal at all the moment it went dark — a `#1C3878` navy
 halo on a `#0f172a` page. It is now derived from `--set-line`, which is by
 construction far from its surface (lighter on a dark page, darker on a light
-one), so "switched on" stays visible in both coloured themes without a token
-per theme.
+one), so "switched on" stays visible whichever theme is in force, without a
+token per theme.
 
 `paintSet(el, name, surfaceVar)` writes `--set-color`, `--set-fill`,
 `--set-ink`, `--set-line` and `--set-glow` onto the element that OWNS a set —
@@ -207,14 +245,15 @@ names the token the caller's OWN buttons are painted with (`--glass-fill` for
 a D-pad button, `--glass-strong` for a wheel item — really different
 surfaces, 0.20 vs 0.85 of the same navy, and therefore different lifts); the
 caller states it because it is the only one that knows. The properties are
-written in every theme and READ only in the two coloured ones: a rule that has to un-set
-itself when the theme changes is a rule that will one day be left behind.
+written in every look and READ only when `data-colored="true"`: a rule that
+has to un-set itself when the axis changes is a rule that will one day be
+left behind.
 
 ## The ink is COMPUTED, never tabled
 
 `inkOn(surface)` returns `#0b1220` or `#ffffff`, whichever actually has the
 better contrast on that exact surface — black and white cross over at a
-relative luminance of about **0.179**. That is what keeps the coloured themes
+relative luminance of about **0.179**. That is what keeps a coloured look
 readable without anyone tuning anything: the owner may retune the palette on
 the desktop whenever he likes — he did, one day after adopting the first one,
 and not one ink rule had to change — and a hand-written ink per colour would

@@ -26,27 +26,38 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "server"))
 
 SIZES = [("portrait 412x915", 412, 915), ("landscape 915x412", 915, 412)]
 
-# EVERY LOOK THE PRODUCT SHIPS (build round R3, 2026-08-07; the fourth theme
-# added the same day by the owner's colour correction). The desktop chooses one
-# of FOUR themes and one of two fills, so there are eight real renderings of
+# EVERY LOOK THE PRODUCT SHIPS — THREE INDEPENDENT AXES (build round R3,
+# 2026-08-07; CORRECTED 2026-08-08 to match the owner's own model: "teme
+# postoje samo dve, svetla i tamna … a ove komande … on može da bude obojen,
+# neobojen, i može da bude transparentan ili pun"). theme (dark/light) x
+# colored (True/False) x fill (transparent/full) = eight real renderings of
 # every panel — and the CONTRAST check below is the only thing standing
-# between a coloured theme and a set whose own name is unreadable on its own
-# colour. A theme audited in one combination is not audited.
+# between a coloured look and a set whose own name is unreadable on its own
+# colour. A look audited in one combination is not audited.
 #
-# `colored-light` is not a variation of `colored` for this file's purposes: it
-# is a DIFFERENT page under a DIFFERENT palette (server/config.py ships two),
-# and the whole reason the sweep exists is that a colour which reads on one
-# surface can be invisible on the other.
+# `colored` is not a fourth THEME (the 2026-08-07 model this replaces): it is
+# its own axis, orthogonal to `theme`. A coloured look on `light` is a
+# DIFFERENT page under a DIFFERENT palette from a coloured look on `dark`
+# (server/config.py ships two tables, chosen by `theme` alone), and the whole
+# reason the sweep exists is that a colour which reads on one surface can be
+# invisible on the other — restructuring the axes changes NOTHING about that
+# fact, only how it is spelled.
 #
 # The full panel sweep runs in every combination at PORTRAIT (where the cards
 # are narrowest and a row starves first); landscape keeps the default look,
 # because what landscape tests is GEOMETRY and geometry does not change with
 # a colour. Both sizes get the contrast check in every combination.
-LOOKS = [("dark", "transparent"), ("dark", "full"),
-         ("light", "transparent"), ("light", "full"),
-         ("colored", "transparent"), ("colored", "full"),
-         ("colored-light", "transparent"), ("colored-light", "full")]
+#
+# Each entry is (theme, colored, fill).
+LOOKS = [("dark", False, "transparent"), ("dark", False, "full"),
+         ("dark", True, "transparent"), ("dark", True, "full"),
+         ("light", False, "transparent"), ("light", False, "full"),
+         ("light", True, "transparent"), ("light", True, "full")]
 DEFAULT_LOOK = LOOKS[0]
+
+
+def _look_word(colored: bool) -> str:
+    return "colored" if colored else "plain"
 
 # The panels SHOT in a non-default look. Shooting all eleven in all eight
 # would be eighty-eight pictures nobody will open, and a picture nobody opened is not
@@ -114,16 +125,27 @@ def _shot_name(name: str) -> str:
     return "".join(c if c.isalnum() else "_" for c in name).strip("_") + ".png"
 
 
-def _shot_label(name: str, look, portrait: bool = True) -> str:
+def _shot_label(name: str, look, portrait: bool = True, always: bool = False) -> str:
     """A panel's name, plus the look it was shot in and the orientation — but
-    ONLY when either is not the default, so every shot the existing proof lines
-    already point at keeps its filename.
+    ONLY when either is not the default (or `always` says otherwise — the
+    eight axis-named "Controls and wheel" pictures the owner grades by hand
+    want every combination spelled out, default included), so every OTHER
+    shot the existing proof lines already point at keeps its filename.
 
     LANDSCAPE IS NOT A DEFAULT (independent grader, 2026-08-07): every phone
     screenshot on disk was 824x1830 portrait, so nothing about the other
-    orientation had ever been LOOKED at, only measured. The app runs in both."""
-    if look != DEFAULT_LOOK:
-        name = f"{name} {look[0]} {look[1]}"
+    orientation had ever been LOOKED at, only measured. The app runs in both.
+
+    THREE AXES SPELLED WITH TWO SPACES BETWEEN THEM (owner correction
+    2026-08-08): a panel name may itself contain spaces ("Controls and
+    wheel"), and `_shot_name` below turns every non-alnum run into
+    underscores one-for-one — so a double space between the panel name and
+    the axes, and between each axis, is what turns into the double
+    underscores the owner asked filenames to carry
+    ("Controls_and_wheel__dark__colored__full.png")."""
+    theme, colored, fill = look
+    if always or look != DEFAULT_LOOK:
+        name = f"{name}  {theme}  {_look_word(colored)}  {fill}"
     return name if portrait else f"{name} landscape"
 
 
@@ -366,7 +388,7 @@ window.__sweepSetColours = (names) => {
 """
 
 
-def _apply_look(page, theme, fill):
+def _apply_look(page, theme, colored, fill):
     """Put the page into one of the eight looks the desktop can choose.
 
     Through `applyUi`, the app's OWN entry point — the same function the
@@ -375,25 +397,27 @@ def _apply_look(page, theme, fill):
 
     AND THROUGH THE DESKTOP, which is the only place a look is really chosen
     (client/__about/theme.md). This audit runs the real server in THIS process,
-    so `config.apply` moves the same `SETTINGS.phone_theme` / `phone_fill` the
-    Appearance card writes, and every `config` frame the server sends from now
-    on carries the look this sweep asked for. Without it the audit was fighting
-    its own server: the page's readiness gate (`#group-left button`) goes green
-    about 1.4 s before the socket's first `config` lands, so the first look
-    applied inside that window was silently dragged back to the shipped default
-    — one wrong picture per browser context, which is exactly the two of twelve
-    a third independent grader found by sampling page colours (2026-08-07).
-    In-memory only; `save_user_settings` is the only writer of the owner's file
-    and is never called here.
+    so `config.apply` moves the same `SETTINGS.phone_theme` / `phone_colored` /
+    `phone_fill` the Appearance card writes, and every `config` frame the
+    server sends from now on carries the look this sweep asked for. Without it
+    the audit was fighting its own server: the page's readiness gate
+    (`#group-left button`) goes green about 1.4 s before the socket's first
+    `config` lands, so the first look applied inside that window was silently
+    dragged back to the shipped default — one wrong picture per browser
+    context, which is exactly the two of twelve a third independent grader
+    found by sampling page colours (2026-08-07). In-memory only;
+    `save_user_settings` is the only writer of the owner's file and is never
+    called here.
 
     AND THE PALETTE COMES WITH IT. The colours are no longer a parameter this
-    file carries around: since the coloured look gained a second surface, WHICH
-    of the two shipped tables a theme wears is a decision, and it belongs to
-    the one place that makes it for the real phone — `config.ui_config()`. An
-    audit that chose the palette itself could paint the light page with the
-    dark table and report a green sweep of colours no phone will ever show."""
+    file carries around: WHICH of the two shipped tables a THEME wears
+    (independent of whether `colored` is even on) is a decision, and it
+    belongs to the one place that makes it for the real phone —
+    `config.ui_config()`. An audit that chose the palette itself could paint
+    the light page with the dark table and report a green sweep of colours no
+    phone will ever show."""
     import config as server_config
-    server_config.apply(phone_theme=theme, phone_fill=fill)
+    server_config.apply(phone_theme=theme, phone_colored=colored, phone_fill=fill)
     ui = server_config.ui_config()
     page.evaluate("(ui) => applyUi(ui)", ui)
     return ui
@@ -416,14 +440,20 @@ def _shoot(page, label, look, results):
     It FAILS the audit rather than warning, because a warning on a picture is
     worth nothing: the picture is the deliverable, and a mislabelled one costs a
     whole grading round. The shot is still written — the grader has to be able
-    to SEE what was measured — but the run goes red and names both looks."""
+    to SEE what was measured — but the run goes red and names both looks.
+
+    ALL THREE AXES, since the 2026-08-08 correction — a drifted `data-colored`
+    is exactly as wrong a picture as a drifted `data-theme` or `data-fill`."""
+    theme, colored, fill = look
     got = page.evaluate(
-        "() => [document.body.dataset.theme, document.body.dataset.fill]")
-    ok = (got[0], got[1]) == (look[0], look[1])
+        "() => [document.body.dataset.theme, document.body.dataset.colored,"
+        " document.body.dataset.fill]")
+    ok = (got[0], got[1] == "true", got[2]) == (theme, colored, fill)
     results[f"the shot shows the look it is named for: {label}"] = ok
     if not ok:
-        print(f"  DETAIL look drift @ {label}: asked for {look[0]}/{look[1]}, "
-              f"the page was showing {got[0]}/{got[1]} at the shutter")
+        print(f"  DETAIL look drift @ {label}: asked for "
+              f"{theme}/{_look_word(colored)}/{fill}, the page was showing "
+              f"{got[0]}/{_look_word(got[1] == 'true')}/{got[2]} at the shutter")
     SHOT_DIR.mkdir(parents=True, exist_ok=True)
     page.screenshot(path=str(SHOT_DIR / _shot_name(label)))
 
@@ -629,7 +659,7 @@ def main() -> int:
     # `_apply_look` — a theme picks its own palette there — but the names are
     # the same thirteen in both, and they are what the sweep iterates.
     from config import set_colors
-    SET_NAMES = list(set_colors("colored"))
+    SET_NAMES = list(set_colors("dark"))
 
     threading.Thread(target=gate.run_server, daemon=True).start()
     gate.server_ready.wait(15)
@@ -693,18 +723,23 @@ def main() -> int:
             portrait = label.startswith("portrait")
 
             for look in LOOKS:
-                theme, fill = look
-                look_name = f"{theme}/{fill}"
-                _apply_look(page, theme, fill)
+                theme, colored, fill = look
+                look_name = f"{theme}/{_look_word(colored)}/{fill}"
+                _apply_look(page, theme, colored, fill)
 
-                # The D-pad and the wheel FIRST — they are the surfaces the
-                # `colored` theme actually paints, and no panel check has ever
+                # The D-pad and the wheel FIRST — they are the surfaces a
+                # `colored` look actually paints, and no panel check has ever
                 # looked at them. Both sizes, every look.
                 bad = _check_controls(page)
                 results[f"controls contrast @ {label} @ {look_name}"] = not bad
                 if bad:
                     print(f"  DETAIL controls @ {label} @ {look_name}: {bad}")
-                _shoot(page, _shot_label("Controls and wheel", look, portrait),
+                # ALWAYS axis-named (owner request 2026-08-08): eight pictures
+                # of the controls + open wheel, one per combination, graded by
+                # the owner himself — unlike every other shot in this sweep,
+                # even the DEFAULT look gets its axes spelled out in the name.
+                _shoot(page, _shot_label("Controls and wheel", look, portrait,
+                                        always=True),
                        look, results)
                 page.evaluate("closeWheel()")
                 # …and the working screen WITHOUT the wheel. Both orientations,

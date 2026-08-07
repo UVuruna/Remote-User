@@ -27,18 +27,25 @@ Five cards, in the order the owner reads them:
                    Task Scheduler task rather than a preference of its own.
 
 APPEARANCE arrived in round R3 (owner-approved 2026-08-07) exactly where R2
-left the seam for it — first in `_build_cards`, nothing else moved. It holds
-the whole look of the product, both halves of it:
+left the seam for it — first in `_build_cards`, nothing else moved. Its PHONE
+half was CORRECTED to three independent axes 2026-08-08 (owner: "teme
+postoje samo dve, svetla i tamna … a ove komande … on može da bude obojen,
+neobojen, i može da bude transparentan ili pun") — the card holds the whole
+look of the product, both halves of it:
 
   - **This PC** — the sun/moon pill, the same widget the main window's top bar
     carries. Neither switch owns the setting; both call `switch.choose_theme`.
-  - **The phone** — theme (dark / light / colored dark / colored light) and
-    button fill (outlined / filled), chosen HERE and only here. The two
-    coloured entries are the same look on two pages, and each carries its own
-    palette (config.SET_COLORS_DARK / SET_COLORS_LIGHT — owner correction
-    2026-08-07). The owner's answer to this round's
-    P4 was one source of truth and no menu on the phone, so the page never
-    asks the device anything: it applies what `config.ui` tells it.
+  - **The phone** — THREE combos, not two: theme (dark / light), whether the
+    D-pad + wheel are coloured (coloured / plain) and their fill (outlined /
+    filled), chosen HERE and only here. A coloured look picks its palette by
+    the THEME combo alone (config.SET_COLORS_DARK / SET_COLORS_LIGHT — owner
+    correction 2026-08-07), never by a fourth theme name — the 2026-08-07
+    shape folded colour into `phone_theme` itself ("colored" / "colored-light")
+    and produced the same eight looks by accident, but said the page has four
+    themes when the owner's own model is two themes plus two switches that
+    belong to the CONTROLS. The owner's answer to this round's P4 was one
+    source of truth and no menu on the phone, so the page never asks the
+    device anything: it applies what `config.ui` tells it.
 
 Everything except the STREAM card takes effect the moment it is switched;
 that is the rule the notify switch already set on the main window, and a
@@ -80,21 +87,23 @@ FPS_CHOICES = [("10 fps — light", 10), ("30 fps", 30), ("60 fps", 60)]
 SPEECH_RATES = [("0.8× — slower", 0.8), ("1× — normal", 1.0),
                 ("1.25× — faster", 1.25), ("1.5× — fastest", 1.5)]
 
-# The phone's look (round R3). SHORT labels on purpose: a combo is sized by
-# its longest entry, and one explanatory entry would set the width of the
-# whole window (the lesson the Voice row already taught this file on
-# 2026-08-05). What the choices MEAN belongs in the caption, which wraps.
+# The phone's look (round R3, corrected to three axes 2026-08-08). SHORT
+# labels on purpose: a combo is sized by its longest entry, and one
+# explanatory entry would set the width of the whole window (the lesson the
+# Voice row already taught this file on 2026-08-05). What the choices MEAN
+# belongs in the caption, which wraps.
 #
-# FOUR, NOT THREE, since the owner's colour correction of 2026-08-07: the
-# coloured look is one idea over two pages, and the two pages want opposite
-# palettes ("kada je DARK tema treba da budu jako tamne nijanse … a ovaj mod
-# LIGHT treba da ima … u boji, dakle ona klasična jaka"). Adding a value costs
-# him one more line in a dropdown and takes nothing away — folding colour into
-# the plain Light theme instead would have deleted the monochrome light look
-# he already has.
-PHONE_THEMES = [("Dark", "dark"), ("Light", "light"),
-                ("Colored dark", "colored"),
-                ("Colored light", "colored-light")]
+# THREE COMBOS, NOT TWO (owner correction 2026-08-08, replacing the
+# 2026-08-07 shape that folded colour into a fourth `phone_theme` value:
+# "colored" / "colored-light"). His own model has exactly two themes and two
+# SEPARATE switches that belong to the controls, not the page: "teme postoje
+# samo dve, svetla i tamna … a ove komande … on može da bude obojen,
+# neobojen, i može da bude transparentan ili pun." PHONE_THEMES therefore
+# drops back to two entries — the palette a coloured look wears is picked by
+# THIS combo alone (config.SET_COLORS_DARK / SET_COLORS_LIGHT), never by a
+# separate coloured theme name — and PHONE_COLORED is new.
+PHONE_THEMES = [("Dark", "dark"), ("Light", "light")]
+PHONE_COLORED = [("Coloured", True), ("Plain", False)]
 PHONE_FILLS = [("Outlined", "transparent"), ("Filled", "full")]
 
 # Every labelled row in the window, in one place — the label column is sized
@@ -126,9 +135,11 @@ CAPTION_MAX_INNER = 620
 CAPTION_INDENT_LEFT = 25
 
 APPEARANCE_TEXT = (
-    "Colored gives every set its own colour — dark shades on a dark page, "
-    "strong ones on a light page; Filled paints the buttons in. "
-    "The phone has no theme menu — it reads this on its next connection.")
+    "Dark or Light picks the whole page. Coloured gives every set its own "
+    "colour on top of it — dark shades on a dark page, strong ones on a "
+    "light page; Filled paints the buttons in, Outlined leaves them "
+    "see-through. The phone has no menu of its own — it reads this on its "
+    "next connection.")
 
 STREAM_TEXT = ("These are the PC's own limits. The phone's quality panel may "
                "go below them, never above.")
@@ -307,8 +318,10 @@ class SettingsWindow(QDialog):
         head.addWidget(self.theme_switch)
         box.addLayout(head)
 
-        # …and the phone's two choices share ONE row for the same reason.
-        # They are two words each; giving each of them a labelled row of its
+        # …and the phone's three choices share ONE row for the same reason
+        # (three combos since the owner's 2026-08-08 correction split what
+        # used to be a single four-value theme combo into theme + coloured).
+        # Each is one or two words; giving any of them a labelled row of its
         # own would have bought nothing but height.
         form = self._form()
         self.phone_theme_combo = QComboBox()
@@ -318,6 +331,13 @@ class SettingsWindow(QDialog):
         self.phone_theme_combo.setCurrentIndex(index if index >= 0 else 0)
         self.phone_theme_combo.currentIndexChanged.connect(self._save_phone_theme)
 
+        self.phone_colored_combo = QComboBox()
+        for label, value in PHONE_COLORED:
+            self.phone_colored_combo.addItem(label, value)
+        index = self.phone_colored_combo.findData(SETTINGS.phone_colored)
+        self.phone_colored_combo.setCurrentIndex(index if index >= 0 else 0)
+        self.phone_colored_combo.currentIndexChanged.connect(self._save_phone_colored)
+
         self.phone_fill_combo = QComboBox()
         for label, value in PHONE_FILLS:
             self.phone_fill_combo.addItem(label, value)
@@ -325,19 +345,23 @@ class SettingsWindow(QDialog):
         self.phone_fill_combo.setCurrentIndex(index if index >= 0 else 0)
         self.phone_fill_combo.currentIndexChanged.connect(self._save_phone_fill)
 
-        pair = QWidget()
-        pair_row = QHBoxLayout(pair)
-        pair_row.setContentsMargins(0, 0, 0, 0)
-        pair_row.setSpacing(8)
-        pair_row.addWidget(self.phone_theme_combo, 1)
-        pair_row.addWidget(self.phone_fill_combo, 1)
-        self._row(form, "The phone", pair)
+        trio = QWidget()
+        trio_row = QHBoxLayout(trio)
+        trio_row.setContentsMargins(0, 0, 0, 0)
+        trio_row.setSpacing(8)
+        trio_row.addWidget(self.phone_theme_combo, 1)
+        trio_row.addWidget(self.phone_colored_combo, 1)
+        trio_row.addWidget(self.phone_fill_combo, 1)
+        self._row(form, "The phone", trio)
         box.addLayout(form)
         self._caption(box, APPEARANCE_TEXT)
         return frame
 
     def _save_phone_theme(self) -> None:
         save_user_settings({"phone_theme": str(self.phone_theme_combo.currentData())})
+
+    def _save_phone_colored(self) -> None:
+        save_user_settings({"phone_colored": bool(self.phone_colored_combo.currentData())})
 
     def _save_phone_fill(self) -> None:
         save_user_settings({"phone_fill": str(self.phone_fill_combo.currentData())})
@@ -708,7 +732,7 @@ class SettingsWindow(QDialog):
         label_col = widest(FORM_LABELS) + 16
         combo_col = widest(
             [label for label, _ in RESOLUTIONS + BITRATES + FPS_CHOICES
-             + SPEECH_RATES + PHONE_THEMES + PHONE_FILLS]
+             + SPEECH_RATES + PHONE_THEMES + PHONE_COLORED + PHONE_FILLS]
             + [f"Monitor {self.monitor_combo.count()}", DEFAULT_VOICE_LABEL]
             + [self.voice_combo.itemText(i) for i in range(self.voice_combo.count())]
         ) + 56
@@ -724,12 +748,15 @@ class SettingsWindow(QDialog):
                                   "Check for new versions when the app starts",
                                   "Start with Windows")) + 34 + 36) + 12
 
-        # The phone's row holds TWO combos side by side, so it can be wider
-        # than the widest single one — and a heading row that also carries
-        # the theme pill has its own floor. Both measured, neither guessed.
+        # The phone's row holds THREE combos side by side (owner correction
+        # 2026-08-08 split one theme combo into theme + coloured), so it can
+        # be wider than the widest single one — and a heading row that also
+        # carries the theme pill has its own floor. Both measured, neither
+        # guessed. +8 per gap between combos (trio_row's own spacing), twice.
         phone_row = (label_col
                      + widest([label for label, _ in PHONE_THEMES]) + 56
-                     + widest([label for label, _ in PHONE_FILLS]) + 56 + 8)
+                     + widest([label for label, _ in PHONE_COLORED]) + 56
+                     + widest([label for label, _ in PHONE_FILLS]) + 56 + 16)
         head_row = (metrics.horizontalAdvance("APPEARANCE")
                     + metrics.horizontalAdvance("This PC")
                     + THEME_SWITCH_W + 32)
@@ -762,7 +789,7 @@ class SettingsWindow(QDialog):
                        + max(tallest(half, FOCUS_TEXT) + rows,      # + 1 tick
                              tallest(half, STARTUP_TEXT) + rows * 2))
             return (rows * 5      # the five section headings (one row shared)
-                    + rows * 7    # seven form rows (the phone's pair + four
+                    + rows * 7    # seven form rows (the phone's trio + four
                                   #                  stream + voice + pace)
                     + rows * 2    # the two checkboxes above the paired row
                     + rows * 1    # the Apply row

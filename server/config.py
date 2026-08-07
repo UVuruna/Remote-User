@@ -47,11 +47,12 @@ USER_ADJUSTABLE = {
     # to survive a restart; the three notify keys ride in every notify frame.
     "notify_speak", "notify_voice", "notify_rate",
     "foreground_lock", "update_check",
-    # Appearance (build round R3, 2026-08-07). `ui_theme` is the DESKTOP's
-    # palette; `phone_theme`/`phone_fill` are the PHONE's, chosen here and
-    # nowhere else (owner answer P4: one source of truth, no menu on the
-    # phone) and carried to it in every `config` frame.
-    "ui_theme", "phone_theme", "phone_fill",
+    # Appearance (build round R3, 2026-08-07; corrected to three independent
+    # axes 2026-08-08). `ui_theme` is the DESKTOP's palette; `phone_theme` /
+    # `phone_colored` / `phone_fill` are the PHONE's, chosen here and nowhere
+    # else (owner answer P4: one source of truth, no menu on the phone) and
+    # carried to it in every `config` frame.
+    "ui_theme", "phone_theme", "phone_colored", "phone_fill",
 }
 
 
@@ -279,22 +280,36 @@ class Settings:
     update_wait_exit_s: int = 30
     update_wait_up_s: int = 40
 
-    # Appearance (build round R3, owner-approved 2026-08-07). Three settings,
-    # two surfaces, ONE place to change them — the desktop Settings window's
-    # APPEARANCE card.
-    #   ui_theme    — this PC's palette: "dark" or "light" (gui/theme.py).
-    #   phone_theme — the phone's: "dark", "light", "colored" (every set in
-    #                 its own colour on a DARK page) or "colored-light" (the
-    #                 same idea on a LIGHT one). The two coloured values are
-    #                 one look over two surfaces, and they do NOT share a
-    #                 palette — see SET_COLORS_DARK / SET_COLORS_LIGHT below.
-    #   phone_fill  — "transparent" (today's outlined buttons) or "full"
-    #                 (filled ones).
-    # The phone gets these in `config.ui` and applies them; it has no menu of
-    # its own (owner answer P4). An unknown value is treated as the default by
-    # the surface that reads it, never as a reason to fail.
+    # Appearance (build round R3, owner-approved 2026-08-07; CORRECTED to
+    # three INDEPENDENT axes 2026-08-08 — his words: "teme postoje samo dve,
+    # svetla i tamna … zatim dalje pričam samo za ove komande … on može da
+    # bude obojen, neobojen, i može da bude transparentan ili pun. dakle to
+    # je ukupno osam kombinacija". The 2026-08-07 shape folded colour into a
+    # FOURTH theme name ("colored" / "colored-light"), which produced the
+    # same eight looks by accident but said the page has four themes when the
+    # owner's own model is two themes plus two switches that belong to the
+    # CONTROLS (the D-pad groups and the radial wheel), not to the page. The
+    # desktop Settings card is what he actually operates, so it must match
+    # his model exactly, not an equivalent one.
+    #   ui_theme      — this PC's palette: "dark" or "light" (gui/theme.py).
+    #                   Untouched by this correction — always was two values.
+    #   phone_theme   — the phone PAGE: "dark" or "light". Same two values as
+    #                   ui_theme now that colour is its own axis.
+    #   phone_colored — whether the D-pad groups and the radial wheel wear
+    #                   each set's own colour. True picks a palette by
+    #                   `phone_theme` (SET_COLORS_DARK / SET_COLORS_LIGHT,
+    #                   below) — dark shades on a dark page, strong inks on a
+    #                   light one, per his own words. False leaves them the
+    #                   theme's plain foreground colour ("samo belo" on dark).
+    #   phone_fill    — "transparent" (outlined) or "full" (filled) — the
+    #                   SAME two controls, independent of theme AND colour.
+    # 2 x 2 x 2 = 8 combinations, all real. The phone gets these in `config.ui`
+    # and applies them; it has no menu of its own (owner answer P4). An
+    # unknown value is treated as the default by the surface that reads it,
+    # never as a reason to fail.
     ui_theme: str = "dark"
     phone_theme: str = "dark"
+    phone_colored: bool = False
     phone_fill: str = "transparent"
 
 
@@ -381,28 +396,36 @@ SET_COLORS_LIGHT = {
 
 
 def set_colors(theme: str | None = None) -> dict:
-    """The palette a given phone theme wears — the SURFACE decides, nothing
-    else. Anything that is not the light-page coloured theme gets the dark
-    table, which is also the honest answer for the two monochrome themes: they
-    read no set colour at all, so the value only has to be a valid palette.
-    """
+    """The palette a given PHONE THEME wears — the SURFACE decides, nothing
+    else (owner correction 2026-08-08: chosen by `theme` alone, never by a
+    fourth theme name that used to fold the colour axis in). A monochrome
+    look never reads this map at all (client/theme.css only wires the
+    `--set-*` tokens under `data-colored="true"`), so resolving it here
+    regardless of `phone_colored` costs nothing and keeps this function
+    answering exactly one question."""
     name = SETTINGS.phone_theme if theme is None else theme
-    return dict(SET_COLORS_LIGHT if name == "colored-light" else SET_COLORS_DARK)
+    return dict(SET_COLORS_LIGHT if name == "light" else SET_COLORS_DARK)
 
 
 def ui_config() -> dict:
     """The APPEARANCE half of every `config` frame (`web._send_config`).
 
-    Deliberately a function here rather than three lines built in web.py:
-    the desktop owns this decision, config.py owns the desktop's settings,
-    and web.py's job is only to put it on the wire.
+    Deliberately a function here rather than lines built in web.py: the
+    desktop owns this decision, config.py owns the desktop's settings, and
+    web.py's job is only to put it on the wire.
 
-    The PALETTE IS RESOLVED HERE, so the wire shape never changed: the phone
-    still receives one flat `{set: hex}` map and has no idea two tables exist.
-    Sending both and letting the page choose would have put the same decision
-    in two places, and the page's copy would be the one that drifts.
+    THREE INDEPENDENT AXES (owner correction 2026-08-08), not a shape derived
+    from one. `theme`/`colored`/`fill` are three flat fields the phone applies
+    without ever knowing colour used to be folded into the theme name.
+
+    The PALETTE IS RESOLVED HERE, so the wire shape never changed on that
+    front either: the phone still receives one flat `{set: hex}` map and has
+    no idea two tables exist. Sending both and letting the page choose would
+    have put the same decision in two places, and the page's copy would be
+    the one that drifts.
     """
     return {"theme": SETTINGS.phone_theme,
+            "colored": SETTINGS.phone_colored,
             "fill": SETTINGS.phone_fill,
             "colors": set_colors()}
 
@@ -472,6 +495,52 @@ def apply(**changes) -> None:
 
 
 # ═══════════════════════════ USER SETTINGS I/O ═══════════════════════════
+# BACKWARD COMPATIBILITY (owner correction 2026-08-08, THE THREE-AXIS THEME
+# MODEL). Before this build `phone_theme` carried four values, and "colored"
+# / "colored-light" WERE the colour axis — a phone whose owner had picked one
+# of them has that exact choice sitting in his settings.json right now. The
+# decision here is to TRANSLATE, never to reset: his SAVED CHOICE must not
+# silently become something else the first time a build that no longer
+# understands the old spelling reads his file. "colored-light" meant
+# dark-page-with-colour respelled as light-page-with-colour is exactly
+# {"phone_theme": "light", "phone_colored": True} — no information is lost,
+# only the shape changes from one field to two.
+#
+# This also covers the SAME situation arriving from a different direction: a
+# phone's own local cache (`prefGet("uiLook")` in client/theme.js) can hold a
+# `ui` object saved by an OLDER page, independent of what this server now
+# sends — see client/theme.js's own `legacyTheme()` for that half of the same
+# fix. Two call sites, one idea: an old four-value shape is DATA to translate,
+# not an error to reject.
+_LEGACY_PHONE_THEME = {
+    "colored": {"phone_theme": "dark", "phone_colored": True},
+    "colored-light": {"phone_theme": "light", "phone_colored": True},
+}
+
+
+def _migrate_legacy_ui(raw: dict) -> dict:
+    """Translates a pre-2026-08-08 `phone_theme` value into the current
+    three-axis shape, in place of the dict it is handed (a copy — callers must
+    not have their own `raw`/`current` mutated from under them). Runs BEFORE
+    the `USER_ADJUSTABLE` / type checks below: the legacy value is a
+    recognisable, valid shape from an earlier version, not a bad one, and
+    letting it fall into `_coerced` would have looked identical to a corrupt
+    field and been silently dropped — which is exactly the reset this
+    function exists to avoid.
+
+    `setdefault` on `phone_colored`: if the file SOMEHOW already carries both
+    the legacy theme name and an explicit `phone_colored` (hand-edited, or a
+    future migration run twice), the explicit value wins — this function only
+    fills in what the old shape did not have a field for."""
+    hit = _LEGACY_PHONE_THEME.get(raw.get("phone_theme"))
+    if not hit:
+        return raw
+    migrated = dict(raw)
+    migrated["phone_theme"] = hit["phone_theme"]
+    migrated.setdefault("phone_colored", hit["phone_colored"])
+    return migrated
+
+
 def _coerced(key: str, value):
     """Validates a user-file override against the dataclass field type.
     Returns the coerced value, or None when the value is unusable.
@@ -507,6 +576,7 @@ def load_user_settings() -> None:
     except (json.JSONDecodeError, OSError) as e:
         logger.error("settings.json unreadable (%s) — using defaults", e)
         return
+    raw = _migrate_legacy_ui(raw)
     accepted = {}
     for key, value in raw.items():
         if key not in USER_ADJUSTABLE:
@@ -528,6 +598,12 @@ def save_user_settings(changes: dict) -> None:
         current = json.loads(SETTINGS_PATH.read_text(encoding="utf-8-sig"))
     except (FileNotFoundError, json.JSONDecodeError, OSError):
         pass
+    # The file SELF-HEALS on the very next save after an upgrade: without
+    # this, a legacy "colored"/"colored-light" left over from before would
+    # sit next to a freshly-written `phone_colored`, and the stale
+    # `phone_theme` value would be an unrecognised string the next load has
+    # to migrate all over again — harmless, but worth not repeating forever.
+    current = _migrate_legacy_ui(current)
     unknown = set(changes) - USER_ADJUSTABLE
     if unknown:
         raise ValueError(f"Not user-adjustable: {sorted(unknown)}")
