@@ -132,10 +132,17 @@ be staged into the top-left corner, which proved nothing about the bottom-centre
 bar it claimed to test and handed every grader a picture of a state the product
 never opens in.
 
-**SIX LOOKS, not one** (build round R3, 2026-08-07). The desktop now chooses
-one of three phone themes (dark / light / colored) and one of two fills
-(outlined / filled), so there are six real renderings of every surface and a
-theme audited in one combination is not audited. The full panel sweep runs in
+**EIGHT LOOKS, not one** (build round R3, 2026-08-07). The desktop now
+chooses one of four phone themes (dark / light / colored / colored-light —
+the fourth arrived the same day with the owner's colour correction) and one of
+two fills (outlined / filled), so there are eight real renderings of every
+surface and a theme audited in one combination is not audited. The two
+coloured themes are not variations of each other for this file's purposes:
+they are different pages under DIFFERENT palettes (`server/config.py` ships
+two), which is the whole reason the colour sweep exists — a colour that reads
+on one surface can be invisible on the other. `_apply_look` therefore fetches
+the palette through `config.ui_config()` instead of carrying a table of its
+own, so the audit can never measure the light page with the dark colours. The full panel sweep runs in
 every combination at PORTRAIT (narrowest cards, where a row starves first);
 landscape keeps the default look, because what landscape tests is GEOMETRY and
 geometry does not change with a colour. Three things changed with it:
@@ -146,8 +153,9 @@ geometry does not change with a colour. Three things changed with it:
 - the check moved into one installed `window.__contrast(root)` so the panels,
   the D-pad and the wheel are judged by the same function, not three copies;
 - **the D-pad groups and the category wheel are measured too.** That is where
-  a set's colour actually lands in `colored`, and no panel check had ever
-  looked at them. Self-tested by forcing `theme.js`'s `INK_CROSSOVER` high so
+  a set's colour actually lands in the coloured themes, and no panel check had ever
+  looked at them. Self-tested by forcing `theme.js`'s `inkOn()` to return white
+  whatever the surface, so
   every ink comes out white: thirteen labels go red at 1.74–2.72:1 in
   `colored/full`, in both orientations, and green again when it is put back.
 
@@ -341,6 +349,51 @@ here: there is no Android runtime on the build machine. What this gate pins is
 the PC's half of the contract and the exact bytes the shell must read.
 
 Run: `.venv\Scripts\python tests/test_notice_channel.py`
+
+### `test_link_recovery.py` — Link Recovery Gate
+Proves that a phone which loses its **route** comes back by itself. His report
+on 2026-08-07: *"kada nismo na wi-fi mreži … dešava nam se prekid veze, i ovo
+'Try again' dugme retko kad pomogne, već moramo više puta, nekad čak i da
+zatvorimo celu aplikaciju."*
+
+A REPEAT. Three mechanisms were already written as the answer to this exact
+complaint — two stored addresses probed at start, a self-re-probing error card,
+a `/ping` contract only an exact 204 satisfies — and all three hold. All three
+only run in states he is not in. The state he **is** in is a page that loaded
+perfectly and is now retrying an address that no longer reaches the PC, and
+there: the shell re-probed only behind its error card, the page cannot move
+itself (its socket goes to `location.host` and nowhere else), a socket stuck
+CONNECTING or opened onto silence is skipped by `ensureConnected` so the page
+retries nothing at all, and on the PC a socket the watchdog had already
+declared dead still held the one-device slot — so the returning phone arrived
+as a *second device against its own corpse* and its first act was
+`await prev.close(4409)` on a socket with nowhere to send.
+
+Eleven checks in three parts. **The PC** (fakes, no Windows): a watchdogged
+session vacating the one-device slot; `presence.hand_over` bounded against a
+socket whose `close()` never returns; and the real `ws_endpoint` still
+delivering `actions`, `layout_state` and `config` to a new client while a
+corpse sits in the slot. **The page** — the REAL `client/state.js` +
+`client/connection.js` run in node inside a sandbox with a virtual clock, a
+scripted WebSocket and a fake `window.Android` (no browser, no server, no
+waiting): a socket that never opens abandoned and retried, a socket that opens
+and is never served abandoned and retried, a run of unserved connections
+(silent **or** flapping) asking the shell exactly once, a served connection
+never asking, and 4401/4409 never being read as a lost route. **The shell**
+(source contract — no Android runtime here): the network-change re-probe not
+gated on the error card, `Android.linkLost()` existing and reaching the
+resolver, and session health judged by ADDRESS rather than by a whole URL
+string (with the callback now firing on a live page, a string mismatch would
+reload a working session on every blip).
+
+Every check was shown red on a planted defect before being trusted — ten
+plants, ten reds, tree restored green.
+
+Needs `node` on PATH for the page half; a missing node fails the gate rather
+than skipping it.
+
+Run: `.venv\Scripts\python tests/test_link_recovery.py` — also a fail-closed
+step in `build.py` (0j/6).
 
 ### `test_focus_guard.py` — Focus Gate
 Proves that what the phone types lands where the owner is LOOKING. `SendInput`
@@ -555,6 +608,55 @@ failure this gate exists to end.
 
 Run: `.venv\Scripts\python tests/test_actions_migration.py` — also in
 `run_guards.py` and a fail-closed step in `build.py` (0h/6).
+
+### `test_update_handover.py` — Update Handover Gate
+Proves that an update never costs him the session he is installing FROM. His
+report on 2026-08-07: *"dešava se da ja ne mogu da instaliram novu verziju ako
+nisam kući, zato što čim uđem u instalaciju on će meni ugasiti Remote User i
+više neću moći da komandujem odavde."* Every fix this project ships reaches him
+only through an install, so an install that kills the remote session is a bug
+that eats the project.
+
+Nine checks against `server/update_handover.py` and, for six of them, the
+SHIPPED handover script itself — written out of `update_handover.SCRIPT` and
+really executed, so the batch this project ships is the batch this gate proves:
+nothing unverified is ever run (truncated / too small / not-a-program /
+missing) · a damaged download stops EVERYTHING before anything irreversible
+(no notice, no record, no script, no spawn) · the phone is told BEFORE the app
+can exit · the script waits for the old app's own pid to be gone before the
+installer starts (proven by the fake installer looking that pid up and writing
+down what it found) · **THE ROLLBACK** — a non-zero installer exit still starts
+an app again from the same path · it proves the app came back, and tries once
+more when it did not · "nothing to run" is SAID, never shrugged off · and the
+next start tells him how it went, good or bad.
+
+**Nothing real is touched.** The installer and the app are fakes; the pid it
+waits on and the image name it probes are the gate's own (`RU_GATE_FAKE_APP.exe`),
+and `refuse_to_touch_the_real_app()` asserts that before every run — a gate that
+could take his live session down while proving his live session is safe would be
+its own worst bug. It kills what it starts and prints a check proving nothing of
+its own is left running.
+
+It earned its keep on the first run: the `DETACHED_PROCESS` spawn flag left the
+script with no console at all, where `tasklist` silently returns nothing — so
+"is the old app gone?" answered yes instantly and wrongly. And a bare `find`
+in the script resolves to **GNU find** on any PC with Git for Windows, which
+reads its argument as a file name and fails the same way. Both are real
+shipping defects that no amount of reading would have found; every system tool
+is called by full path now.
+
+Self-tested by planting three defects: making the restart conditional on the
+installer's exit code turns the rollback check red; moving `tell_phone` after
+the spawn turns the ordering check red; disabling the declared-size comparison
+turns the verify check red. Each returns exit 1 and is green again on revert.
+
+The NSIS half — `/S`, the silent-mode section choices — is compile-verified
+only (`makensis` against a throwaway payload). Running a real silent install on
+the dev machine would taskkill the owner's live app, rewrite his autostart task
+and his firewall rule; that half is proven on his PC or not at all.
+
+Run: `.venv\Scripts\python tests/test_update_handover.py` — also a fail-closed
+step in `build.py` (0i/6).
 
 ### Guard tests (THE LAWS — rules/CODE.md → Enforcement, rules/DOCS.md → Enforcement)
 Five standard-named guard tests, a fast runner, and a small shared helper —

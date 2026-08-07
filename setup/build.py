@@ -268,6 +268,30 @@ def input_gate() -> None:
     step("0h/6  ACTIONS MIGRATION GATE — a new version's fields reach HIS file "
          "(tests/test_actions_migration.py)")
     run([sys.executable, str(PROJECT_DIR / "tests" / "test_actions_migration.py")])
+    # And that taking THIS build does not cost him the session he takes it
+    # from (owner report 2026-08-07). Everything above only matters if the
+    # release can be installed at all, and until now it could not be — not
+    # from away: entering the install killed the remote session that was
+    # driving it, so an owner on the road sat on an old build watching fixed
+    # bugs. This gate runs the SHIPPED handover script against a fake
+    # installer and a fake app, and the check that must never go red is the
+    # rollback: a failed install still has to give him his PC back.
+    step("0i/6  UPDATE HANDOVER GATE — installing does not cost him the "
+         "session (tests/test_update_handover.py)")
+    run([sys.executable, str(PROJECT_DIR / "tests" / "test_update_handover.py")])
+    # And that a phone which loses its ROUTE comes back without being killed
+    # (owner report 2026-08-07: "'Try again' retko kad pomogne ... nekad čak i
+    # da zatvorimo celu aplikaciju"). A REPEAT — three mechanisms were already
+    # written as the answer to this complaint and all three only run in states
+    # he is not in. The one he IS in is a page that loaded fine and is now
+    # retrying an address that no longer reaches the PC: the shell re-probed
+    # only behind its error card, the page can only ever reach the address the
+    # document came from, and on this side a socket the watchdog had declared
+    # dead still held the one-device slot. Needs node (it runs the REAL
+    # client/connection.js on a virtual clock) — never skip it silently.
+    step("0j/6  LINK RECOVERY GATE — a lost route recovers without killing "
+         "the app (tests/test_link_recovery.py)")
+    run([sys.executable, str(PROJECT_DIR / "tests" / "test_link_recovery.py")])
 
 
 def generate_icons() -> None:

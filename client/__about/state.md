@@ -30,6 +30,13 @@ Loads FIRST of the six client scripts (see [Client (folder)](../___client.md))
 
 - **Tunables** — `ZOOM_MAX`, scroll fling constants, `VIEWPORT_MARGIN`,
   `RECONNECT_MS`, MSE live-edge constants (`LIVE_MAX_BEHIND_S` etc.).
+- **Losing the route** (owner 2026-08-07) — `CONNECT_TIMEOUT_MS` = 6 s (a
+  socket still CONNECTING has no route), `SERVED_TIMEOUT_MS` = 8 s (OPEN but
+  never sent a `config` is a server we cannot hear), `LINK_LOST_TRIES` = 3
+  (connections in a row that were never served, after which the shell is
+  asked to re-probe both addresses). A WebSocket only ever reports that it
+  CLOSED — these three are how the page tells a dead route from a quiet PC.
+  The mechanism itself lives in [Connection](connection.md).
 - **DOM/connection refs** — `canvas`, `ctx`, `statusEl`, `token` (from the URL
   query string, delivered by the QR/pairing link).
 - **View/stream state** — `monitor`, `baseRect`, `view` (pan/zoom transform),

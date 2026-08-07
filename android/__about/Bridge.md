@@ -47,11 +47,31 @@ because Activity Result launchers are the Activity's own —
 
 | Subject | Methods |
 |---------|---------|
-| Pairing / addresses | `rescan`, `setTailscaleUrl`, `appVersion`, `update` |
+| Pairing / addresses | `rescan`, `setTailscaleUrl`, `linkLost`, `appVersion`, `update` |
 | Per-device storage | `prefGet`, `prefSet` — origin-independent, because the shell alternates between the LAN and Tailscale addresses and `localStorage` is keyed by ORIGIN (the "sets picker rotates" bug, 2026-08-05) |
 | Network / presence | `transport`, `netStats`, `hideReason`, `keepAwake`, `lockOrientation` |
 | Dictation | `startVoice`, `stopVoice`, `voiceLangs`, `voiceChosen`, `voiceSetLang`, `voiceState`, `voiceMuteBeeps`, `voiceSetMuteBeeps` |
 | Notices | `notify`, `speak`, `speakAs`, `ttsVoices`, `noticeState`, `noticeSetup` |
+
+## `linkLost` — the one thing the page cannot do for itself (owner 2026-08-07)
+
+The page's WebSocket can only ever go to `location.host` — the address the
+**document** was loaded from. When the phone changes network the document is
+still perfectly alive on an address that no longer reaches the PC, and nothing
+in the page can move it: it retries the dead host forever, which is the owner's
+report of *"prekid veze"* and of having to close the whole app.
+
+The two stored addresses live in the shell, so the shell is the only component
+that can answer. `linkLost()` is the page saying *I have lost the PC* — sent
+after `LINK_LOST_TRIES` connections in a row that were never served (see
+`client/__about/connection.md`) — and it hands straight to
+`MainActivity.pageLostTheServer()`.
+
+What happens next is the resolver's decision, not the page's: the current
+address still answering leaves the document exactly where it is
+(`sessionHealthy`), the other one answering moves us there, neither answering
+brings up the error card with its own 4-second self-healing. So asking costs
+nothing when the address was fine.
 
 ## `hideReason` did not change, and that matters
 

@@ -46,6 +46,31 @@ class Bridge(private val host: MainActivity) {
         Prefs.setTsUrl(host, url.ifBlank { null })
     }
 
+    /** The page has lost the PC and cannot get it back by itself (owner
+     *  report 2026-08-07: *"dešava nam se prekid veze, i ovo 'Try again'
+     *  dugme retko kad pomogne ... nekad čak i da zatvorimo celu
+     *  aplikaciju"*).
+     *
+     *  The page's WebSocket can only ever go to the address the DOCUMENT was
+     *  loaded from — `location.host`. When the phone changes network the
+     *  document is still perfectly alive on an address that no longer reaches
+     *  the PC, and nothing in the page can move it: it retries the dead host
+     *  forever. The two stored addresses live HERE, so this is the only
+     *  component that can answer, and until now it only ever answered at
+     *  start, at onResume, or while the native error card was on screen —
+     *  none of which is the state he is in. Restarting the app was therefore
+     *  the only cure, because a restart is the one thing that re-probes.
+     *
+     *  The resolver decides what happens: the current address still answering
+     *  leaves this document exactly where it is (`sessionHealthy` — the page's
+     *  own JS reconnects in milliseconds and a reload would cost the session),
+     *  the other one answering moves us there, neither answering brings up the
+     *  error card with its own 4-second self-healing. */
+    @JavascriptInterface
+    fun linkLost() {
+        host.runOnUiThread { host.pageLostTheServer() }
+    }
+
     /** This shell's version — the page compares it with the server's
      *  `config.app_version` and offers the in-app update banner. */
     @JavascriptInterface

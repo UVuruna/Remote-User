@@ -119,10 +119,27 @@ class MainActivity : AppCompatActivity() {
      *  and a VPN network (Tailscale) lists its underlying transports in its
      *  capabilities. */
     private val netCallback = object : ConnectivityManager.NetworkCallback() {
+        /** A NEW default network. This is the moment the loaded address may
+         *  have stopped being the right one — home Wi-Fi to mobile data, a
+         *  tunnel coming up, a foreign AP re-granting connectivity.
+         *
+         *  It used to re-resolve only `if (errorView.visibility == VISIBLE)`,
+         *  and THAT is the owner's 2026-08-07 report. The error card is a
+         *  cold-start state: it means no address answered before a page ever
+         *  loaded. The state he is actually in is the opposite one — a page
+         *  that loaded perfectly on the home Wi-Fi and is now retrying a
+         *  192.168 host from a mobile network. In that state nothing here ran,
+         *  nothing in the page could move it (its socket can only reach
+         *  `location.host`), and the only code path that re-probes both
+         *  addresses was a fresh process. So he killed the app, and it worked,
+         *  every time — which is what made "Try again" look broken.
+         *
+         *  Resolving with a live page is safe by construction: `sessionHealthy`
+         *  keeps a document whose own address still answers. */
         override fun onAvailable(network: Network) {
             runOnUiThread {
                 if (isFinishing || isDestroyed) return@runOnUiThread
-                if (errorView.visibility == View.VISIBLE) resolveAndLoad(silent = true)
+                resolveAndLoad(silent = true)
             }
         }
 
@@ -136,6 +153,24 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
+    }
+
+    /** The page says it has lost the PC (Bridge.linkLost). Re-probe both
+     *  addresses and move the document only if the other one is the live one.
+     *
+     *  Throttled, because the page asks after a RUN of failed connections and
+     *  those runs can repeat while a network settles — and every resolve costs
+     *  up to one ping timeout on each address. The throttle is deliberately
+     *  shorter than the page's own escalation, so a real network change is
+     *  never the one that gets swallowed. */
+    private var lastPageAsk = 0L
+
+    internal fun pageLostTheServer() {
+        if (isFinishing || isDestroyed) return
+        val now = android.os.SystemClock.elapsedRealtime()
+        if (now - lastPageAsk < LINK_LOST_THROTTLE_MS) return
+        lastPageAsk = now
+        resolveAndLoad(silent = true)
     }
 
     private val filePicker =
@@ -396,8 +431,19 @@ class MainActivity : AppCompatActivity() {
                     // some network other than home — say so once per stay.
                     if (chosen == ts && chosen != lan) warnIfForeignWifi()
                     val current = web.url
-                    val sessionHealthy = silent && pageAlive && current != null &&
-                        results.any { it.first == current && it.second }
+                    // Compared by ORIGIN, never by the whole string. `web.url`
+                    // is what the DOCUMENT reports — the server's own path, a
+                    // fragment the page added, a token re-issued since pairing
+                    // — while the candidates are the addresses as PAIRING
+                    // stored them. Matching those two texts character for
+                    // character answered "is this the address that just
+                    // answered?" with a no far too often, and every no is a
+                    // reload of a session that was working. Which address we
+                    // are on is the host and the port; the rest is the page's
+                    // business.
+                    val here = origin(current)
+                    val sessionHealthy = silent && pageAlive && here != null &&
+                        results.any { origin(it.first) == here && it.second }
                     if (sessionHealthy) {
                         // The document is live and ITS address answers — the
                         // page's own JS reconnects the WebSocket; a loadUrl
@@ -567,6 +613,16 @@ class MainActivity : AppCompatActivity() {
         if (!onWifi || warnedForeignWifi) return
         warnedForeignWifi = true
         Toast.makeText(this, R.string.foreign_wifi_warning, Toast.LENGTH_LONG).show()
+    }
+
+    /** Which ADDRESS a page URL is — scheme, host and port, nothing else.
+     *  Null for anything unparseable (about:blank, a data: URL), which can
+     *  never be "the address that answered". */
+    private fun origin(url: String?): String? {
+        if (url.isNullOrBlank()) return null
+        val u = Uri.parse(url)
+        val host = u.host ?: return null
+        return "${u.scheme}://$host:${u.port}"
     }
 
     /** True when the server answers the auth-free reachability probe.
@@ -854,6 +910,8 @@ class MainActivity : AppCompatActivity() {
     private companion object {
         const val PING_TIMEOUT_MS = 3000
         const val RETRY_INTERVAL_MS = 4000L
+        // Floor between two page-driven re-probes (see pageLostTheServer).
+        const val LINK_LOST_THROTTLE_MS = 5000L
         // Must match the manifest's <queries> entry and the page's Play Store
         // link (client/index.html) — one package name, three places.
         const val TAILSCALE_PKG = "com.tailscale.ipn"

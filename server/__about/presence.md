@@ -64,6 +64,44 @@ Exactly 300 s — the old `EXCURSION_MAX_S`. The log shows the same gap twice
 | `excursion_backstop(layouts, active_client)` | the hold, ended early by the phone returning or by the owner's own keyboard |
 | `watchdog(ws, layouts, conn, active_client)` | the per-connection poller; only ever ends the session it belongs to |
 | `is_excursion(msg)` | the `away` vocabulary, with the legacy flag honoured |
+| `HANDOVER_TIMEOUT_S` = 1 | how long a NEW device waits for the previous one's 4409 |
+| `hand_over(prev)` | close the previous device — bounded, never inline-blocking |
+
+## Handing the session over (owner report 2026-08-07)
+
+*"dešava nam se prekid veze, i ovo 'Try again' dugme retko kad pomogne, već
+moramo više puta, nekad čak i da zatvorimo celu aplikaciju."*
+
+One device at a time (owner 2026-08-02) means every new connection first evicts
+the old one. That was a plain `await prev.close(4409)` in `web.ws_endpoint`,
+sitting ahead of everything the new client is sent — `actions`, the held
+notices, `layout_state`, the resumed layout, `config`, the stream, and every
+per-connection task **including this module's watchdog**.
+
+That order is safe only while "the previous device" means *another* device. In
+practice it is nearly always the SAME PHONE on a route that has just died: home
+Wi-Fi dropped, a mobile-data handover, a Tailscale relay changing. Its socket is
+then a black hole — no RST, no FIN, an OS send buffer with a paused H.264 stream
+in it — and a close on such a socket does not fail, it **waits**. The phone has
+already reconnected on its new route: the page's `onopen` fired, its pill says
+"Connected", and `ensureConnected` will not retry a socket that is OPEN. So a
+perfectly healthy page sits in front of a server that has sent it nothing, for
+as long as the corpse takes to answer. Killing the app was the only move,
+because killing the app is what finally made the old socket fail.
+
+`hand_over` bounds the wait and lets the close run on in the background
+(`asyncio.shield`, with the task held in `_handovers` so the event loop is not
+its only reference). Two rules, both proven in `tests/test_link_recovery.py`:
+
+1. the close is still **attempted** — a device that really is there gets its
+   4409 and stops reconnecting, exactly as before;
+2. nothing the dead device does can cost the live one its session.
+
+The other half is in `watchdog`: a session it has declared dead **vacates the
+one-device slot** before closing. Otherwise the slot points at that socket until
+the receive loop unblocks — which, on a link that simply went silent, waits out
+the OS TCP timeout, minutes away. Until then the phone coming back is not a
+reconnect at all: it is a second device arriving against its own corpse.
 
 `leave_session` calls `clear_topmost()` **after** the minimize, and that is not
 redundant: it walks the ledger, so a window that fell out of its layout
