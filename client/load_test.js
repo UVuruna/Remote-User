@@ -49,7 +49,10 @@ global.document = {
   createElement: () => stubElement(),
   querySelectorAll: () => [],
   documentElement: { style: { setProperty() {} } },
-  body: { classList: { toggle: () => false } },
+  // `dataset`: theme.js writes data-theme / data-fill onto <body> at load
+  // (build round R3) — the cached look, applied before the socket says
+  // anything, which is the whole point of caching it.
+  body: { classList: { toggle: () => false }, dataset: {} },
   addEventListener() {},
   hidden: false,
   activeElement: null,
@@ -78,11 +81,13 @@ const FILES = [
   "icons.js",
   "sets.js",
   "controls.js",
+  "theme.js",
   "panels.js",
   "quality.js",
   "region.js",
   "notify.js",
   "layouts.js",
+  "gamepad.js",
   "gestures.js",
   "connection.js",
 ];

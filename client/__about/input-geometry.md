@@ -29,8 +29,13 @@ gesture ends. Third of the six client scripts to load (after
 
 ## Key Functions
 
-- `toRemoteClamped(px, py)` — canvas-px point → PC-normalized point, clamped
-  to `[0, 1]`, through `drawnRect()`.
+- `clampRemote(x, y)` — the one fence around a PC coordinate: `[0, 1]`, and
+  inside a focused layout that layout's own region. Split out of
+  `toRemoteClamped` on 2026-08-07 (build round G1) so the gamepad's left stick,
+  which arrives already normalized, is fenced by the SAME rule as a finger
+  rather than by a second copy of it — see [Gamepad](gamepad.md).
+- `toRemoteClamped(px, py)` — canvas-px point → PC-normalized point, through
+  `drawnRect()` and then `clampRemote`.
 - `sampleFinger(e)` — feeds one touch sample into calibration; locks
   `fingerRadiusPx` at the MAX contact radius seen over
   `CURSOR_CALIB_SAMPLES` samples (max, not median — a light press

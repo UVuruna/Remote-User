@@ -5,6 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <meta name="mobile-web-app-capable" content="yes">
   <title>Remote User</title>
+  <!-- theme.css FIRST: it owns every colour token, in three themes and two
+       fills (build round R3). style.css and layouts.css read those tokens
+       and own shape and position only. -->
+  <link rel="stylesheet" href="/static/theme.css">
   <link rel="stylesheet" href="/static/style.css">
   <link rel="stylesheet" href="/static/layouts.css">
 </head>
@@ -45,7 +49,11 @@
         <img id="lay-icon" alt="" hidden>
         <span id="lay-name">Desktop</span>
       </button>
-      <button id="lay-close" type="button" aria-label="Remove this layout" hidden>✕</button>
+      <button id="lay-close" type="button" aria-label="Remove this layout" hidden>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/>
+        </svg>
+      </button>
     </div>
     <button id="lay-next" class="lay-arrow" type="button" aria-label="Next layout">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
@@ -87,12 +95,26 @@
   <input id="pick-files" type="file" multiple hidden>
 
   <!-- "Access from anywhere" — offered when the PC has Tailscale and this
-       page is on the home address; opens the guided one-time wizard -->
-  <button id="anywhere-banner" type="button" hidden>🌍 Use from anywhere — set up</button>
+       page is on the home address; opens the guided one-time wizard.
+       DRAWN icon (icons.js "globe"), not the 🌍 emoji it used to carry
+       (owner grader, 2026-08-07 — an icon is drawn, never a font glyph;
+       this is the same rule that keeps `move` off the "✥" character). -->
+  <button id="anywhere-banner" type="button" hidden>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+    </svg>
+    Use from anywhere — set up
+  </button>
 
   <!-- Shown inside the app when the PC carries a newer app version — one tap
-       downloads /app.apk from this same PC (the phone never checks the web) -->
-  <button id="update-banner" type="button" hidden>⬆️ Update the app — new version is ready</button>
+       downloads /app.apk from this same PC (the phone never checks the web).
+       Drawn icon (icons.js "reload"), not the ⬆️ emoji it used to carry. -->
+  <button id="update-banner" type="button" hidden>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M20.5 12a8.5 8.5 0 1 1-2.6-6.1"/><polyline points="20.5 4.2 20.5 9.4 15.3 9.4"/>
+    </svg>
+    Update the app — new version is ready
+  </button>
 
   <!-- Layout creation offer (filled by controls.js from `layout_offer`) -->
   <div id="layout-panel" hidden></div>
@@ -102,6 +124,9 @@
   <div id="sets-panel" hidden></div>
   <div id="quality-panel" hidden></div>
   <div id="dictation-panel" hidden></div>
+  <!-- "Notices while the app is closed" — the one step Android will not let
+       the app take for itself (owner decree 2026-08-07); filled by notify.js -->
+  <div id="notice-panel" hidden></div>
   <div id="region-panel" hidden></div>
   <div id="choice-panel" hidden></div>
 
@@ -128,7 +153,11 @@
 
   <div id="wizard" hidden>
     <div class="wiz-card">
-      <button id="wiz-close" type="button" aria-label="Close">✕</button>
+      <button id="wiz-close" type="button" aria-label="Close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/>
+        </svg>
+      </button>
       <h2>Use this from anywhere</h2>
       <p class="wiz-sub">One-time setup, about a minute. Each step waits for you — just come back to this page.</p>
 
@@ -170,6 +199,9 @@
   <script src="/static/icons.js"></script>
   <script src="/static/sets.js"></script>
   <script src="/static/controls.js"></script>
+  <!-- Right after controls.js: it uses prefGet/prefSet and IN_APP from there,
+       and it must run before anything paints a control. -->
+  <script src="/static/theme.js"></script>
   <script src="/static/panels.js"></script>
   <script src="/static/quality.js"></script>
   <script src="/static/region.js"></script>
@@ -178,6 +210,8 @@
   <script src="/static/loading.js"></script>
   <script src="/static/grids.js"></script>
   <script src="/static/layouts.js"></script>
+  <!-- The pad maps onto everything above it (groups, wheel, layout bar). -->
+  <script src="/static/gamepad.js"></script>
   <script src="/static/gestures.js"></script>
   <script src="/static/connection.js"></script>
 </body>

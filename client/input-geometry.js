@@ -5,17 +5,25 @@
 
 // --- Coordinate mapping ---------------------------------------------------
 
-function toRemoteClamped(px, py) {
-  const D = drawnRect();
-  let x = Math.min(Math.max((px - D.x) / D.w, 0), 1);
-  let y = Math.min(Math.max((py - D.y) / D.h, 0), 1);
+// The one fence around a PC coordinate: the monitor, and inside a focused
+// layout that layout's own region — the phone sees ONLY that window, so the
+// cursor may never leave it however the coordinate was produced. A finger
+// arrives here through toRemoteClamped (canvas pixels); the gamepad's left
+// stick arrives here already normalized (client/gamepad.js), and both must be
+// fenced by the same rule.
+function clampRemote(x, y) {
+  x = Math.min(Math.max(x, 0), 1);
+  y = Math.min(Math.max(y, 0), 1);
   if (viewLocked()) {
-    // Layout focus: the finger may travel past the framed window's edge but
-    // the PC cursor must never leave it — the phone sees ONLY this region.
     x = Math.min(Math.max(x, layoutRegion.x), layoutRegion.x + layoutRegion.w);
     y = Math.min(Math.max(y, layoutRegion.y), layoutRegion.y + layoutRegion.h);
   }
   return { x, y };
+}
+
+function toRemoteClamped(px, py) {
+  const D = drawnRect();
+  return clampRemote((px - D.x) / D.w, (py - D.y) / D.h);
 }
 
 // Send a cursor move and draw the arrow optimistically; the server `cursor`

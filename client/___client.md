@@ -8,9 +8,10 @@ The phone side of Remote User — a plain web page served by the PC server, load
 |------|------|----------|
 | `index.html` | Standard | page shell — canvas, corner buttons, D-pad groups, wheel, keyboard capture — [about](__about/index.md) |
 | `install.html` | Standard | install funnel (Open the app → Install) — the only page ANY browser ever sees — [about](__about/install.md) |
-| `style.css` | Algorithmic | design tokens + every component's visual rules — [about](__about/style.md) · [flow](__flow/style.md) |
+| `theme.css` | Algorithmic | EVERY colour, in three themes (dark / light / colored) and two fills (outlined / filled) — loaded FIRST, documented with `theme.js` in [about](__about/theme.md) · [flow](__flow/theme.md) |
+| `style.css` | Algorithmic | every component's visual rules — shape and position only; it reads theme.css's tokens and names no colour of its own — [about](__about/style.md) · [flow](__flow/style.md) |
 | `layouts.css` | Algorithmic | the layout feature's own styling (bar, list, aspect panel, creation, loading cube), split off style.css 2026-08-05 — documented with `layouts.js` in [about](__about/layouts.md) · [flow](__flow/layouts.md) |
-| `load_test.js` | Standard | dev harness — concatenates and executes the 12 client scripts below, in load order, against a stubbed DOM to catch load-time errors — [about](__about/load_test.md) |
+| `load_test.js` | Standard | dev harness — concatenates and executes the 15 client scripts below, in load order, against a stubbed DOM to catch load-time errors — [about](__about/load_test.md) |
 | `state.js` | Standard | tunables + shared state + `setStatus`/`toCanvasPx`/`send` — loads 1st — [about](__about/state.md) |
 | `render.js` | Algorithmic | canvas drawing, view transform, dual-mode (H.264 MSE / JPEG) frame decode — loads 2nd — [about](__about/render.md) · [flow](__flow/render.md) |
 | `input-geometry.js` | Algorithmic | finger→PC coordinate mapping (pointer under the finger since 2026-08-02), scroll inertia — loads 3rd — [about](__about/input-geometry.md) · [flow](__flow/input-geometry.md) |
@@ -19,13 +20,15 @@ The phone side of Remote User — a plain web page served by the PC server, load
 | `loading.js` | Algorithmic | the loading cube and the SETTLE watcher — the animation lasts as long as the WORK does, never until the server merely answers (split from layouts.js 2026-08-07) — [about](__about/loading.md) · [flow](__flow/loading.md) |
 | `sets.js` | Algorithmic | which sets ride the wheel: per-device prefs, app-aware matching by the owner's per-layout ticks, THE CAP OF 8 (split from controls.js 2026-08-06) — loads 5th — [about](__about/sets.md) · [flow](__flow/sets.md) |
 | `controls.js` | Algorithmic | on-screen chrome: keyboard capture, anywhere wizard, update banner, upload, D-pad groups, wheel, corner buttons, toast — loads 6th — [about](__about/controls.md) · [flow](__flow/controls.md) |
-| `panels.js` | Standard | Settings overlays: Sets picker + dictation setup card (split from controls.js 2026-08-05) — loads 7th — [about](__about/panels.md) |
-| `quality.js` | Standard | stream quality: this device's overrides of the PC's settings — prefs + panel, hierarchy-aware (split 2026-08-05) — loads 8th — [about](__about/quality.md) |
-| `region.js` | Standard | the Region grab: a free frame the finger sizes, captured and pasted on the PC — loads 9th — [about](__about/region.md) |
-| `notify.js` | Standard | the PC's notices: Android notification + speech + toast, named per agent — loads 10th — [about](__about/notify.md) |
-| `layouts.js` | Algorithmic | layout bar, layout list, aspect-ratio panel (+ Move handle), creation flow, loading cube — loads 11th — [about](__about/layouts.md) · [flow](__flow/layouts.md) |
-| `gestures.js` | Algorithmic | canvas pointer-event dispatch: pinch-zoom + font-zoom staircase + the single-finger touchMode gestures — loads 12th — [about](__about/gestures.md) · [flow](__flow/gestures.md) |
-| `connection.js` | Algorithmic | WebSocket lifecycle, protocol message handlers, visibility-gated session — loads 13th (starts the page) — [about](__about/connection.md) · [flow](__flow/connection.md) |
+| `theme.js` | Algorithmic | which theme/fill are in force (the DESKTOP decides — no menu on the phone), the colour each set wears, and the ink COMPUTED from that colour's luminance — loads 7th — [about](__about/theme.md) · [flow](__flow/theme.md) |
+| `panels.js` | Standard | Settings overlays: Sets picker + dictation setup card (split from controls.js 2026-08-05) — loads 8th — [about](__about/panels.md) |
+| `quality.js` | Standard | stream quality: this device's overrides of the PC's settings — prefs + panel, hierarchy-aware (split 2026-08-05) — loads 9th — [about](__about/quality.md) |
+| `region.js` | Standard | the Region grab: a free frame the finger sizes, captured and pasted on the PC — loads 10th — [about](__about/region.md) |
+| `notify.js` | Standard | the PC's notices: Android notification + speech + toast, named per agent — loads 11th — [about](__about/notify.md) |
+| `layouts.js` | Algorithmic | layout bar, layout list, aspect-ratio panel (+ Move handle), creation flow, loading cube — loads 12th — [about](__about/layouts.md) · [flow](__flow/layouts.md) |
+| `gamepad.js` | Algorithmic | the Bluetooth game controller mapped onto the controls that already exist — every pad press goes through the FINGER's activator (`buttonPress`), plus the stick curve and the held-and-pointed wheel — loads 13th — [about](__about/gamepad.md) · [flow](__flow/gamepad.md) |
+| `gestures.js` | Algorithmic | canvas pointer-event dispatch: pinch-zoom + font-zoom staircase + the single-finger touchMode gestures — loads 14th — [about](__about/gestures.md) · [flow](__flow/gestures.md) |
+| `connection.js` | Algorithmic | WebSocket lifecycle, protocol message handlers, visibility-gated session — loads 15th (starts the page) — [about](__about/connection.md) · [flow](__flow/connection.md) |
 
 ## Connections
 

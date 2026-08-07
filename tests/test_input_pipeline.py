@@ -30,11 +30,31 @@ Scenarios (all must pass, any failure exits 1 — build.py runs this fail-closed
      shell counts only 204 as "the PC answered" (captive portals on foreign
      Wi-Fi answer any request with a 2xx/redirect login page — live failure
      2026-07-27); a drift to 200 here would strand every phone
+  10. gamepad     — synthetic pad events driven through the page's REAL
+     mapping (build rounds G1/G2, owner spec 2026-08-07): a D-pad arrow presses
+     the LEFT group's button in that direction and HOLDS the PC button while
+     it is held; a face button presses the RIGHT group's, on release; L2/R2 are
+     Layout (+) / Hide; the left stick steers on the tuned curve at three
+     deflections (deadzone included); the right stick scrolls; L1 held + stick
+     + release picks a wheel category and fires NO button; a short shoulder tap
+     steps the layout bar instead. The pad is only ever allowed in through
+     `buttonPress()` — the same activator a finger's pointerup runs — so this
+     block also pins that there is no second button path to drift (constraint 9)
   9. injection tripwire — InjectionMonitor alarms on exactly the configured
      streak of eaten big moves, ignores small ones, re-arms after a success
      (UIPI live failure 2026-07-29: Windows silently discarded every injected
      event while an elevated window had focus — SendInput "succeeded", the
      phone showed a healthy session with a dead mouse)
+  11. horizontal scroll (owner spec — "scroll vertikalni i horizontalni"):
+     InputInjector.wheel's new `hticks` is optional at the Win32 mapping
+     itself — an OLD-STYLE call with no `hticks` argument at all (every
+     caller before this round) still scrolls vertically only, with NOTHING
+     horizontal ever sent; the right stick's other axis drives it at the same
+     tuned rate, positive = tilted right (Windows documents MOUSEEVENTF_HWHEEL's
+     positive value as "the wheel was tilted to the right" — the SAME sense as
+     the stick's own un-inverted +x, so unlike the vertical mapping no
+     negation belongs here); and the finger's Scroll mode is proven
+     byte-for-byte unchanged — it never sends an `hticks` field at all
 
 The control layout comes from tests/fixtures/actions.json — pinned, so the
 owner's hand-edited repo actions.json can never break the build.
@@ -44,6 +64,7 @@ Requires: pip install playwright && playwright install chromium
 """
 
 import asyncio
+import math
 import socket
 import sys
 import threading
@@ -100,10 +121,13 @@ class FakeInjector:
     def press(self, button, down):
         self._rec("press", button, down)
 
-    def wheel(self, x, y, ticks):
-        self._rec("wheel", round(x, 4), round(y, 4), ticks)
+    def wheel(self, x, y, ticks, hticks=0.0):
+        self._rec("wheel", round(x, 4), round(y, 4), ticks, hticks)
 
-    def type_text(self, text):
+    def type_text(self, text, guard=None):
+        # `guard` is the mid-sentence focus checkpoint (focus_guard.typist) —
+        # the real injector re-checks the foreground between chunks; nothing
+        # here to fence, so it is only accepted.
         self._rec("type_text", text)
 
     def press_key(self, key):
@@ -294,7 +318,7 @@ def main():
     typed = InputInjector((0, 0, 1920, 1080))
     typed.press_chord = lambda c: steps.append(("chord", c))
     typed.press_key = lambda k: steps.append(("key", k))
-    typed.type_text = lambda t: steps.append(("typed", t))
+    typed.type_text = lambda t, guard=None: steps.append(("typed", t))
     web_mod._paste_text(typed, "/usage", True)
     web_mod._paste_text(typed, "/", False)          # the Menu button: no Enter
     clip.copy_text = lambda t: False                # clipboard held by another app
@@ -305,6 +329,29 @@ def main():
         ("clipboard", "/"), ("chord", "ctrl+v"),
         ("typed", "/model"), ("key", "enter"),      # fallback still delivers
     ]
+
+    # 9e. HORIZONTAL wheel (closing the gamepad round's reported gap: the
+    # protocol carried one `ticks` and the injector knew only
+    # `MOUSEEVENTF_WHEEL`). Pins the Win32 mapping the way 9c pins the side
+    # buttons: MOUSEEVENTF_HWHEEL (0x1000), mouseData = hticks * WHEEL_DELTA,
+    # positive = right — and, in the SAME assertion, that the legacy call
+    # shape (no `hticks` argument at all — every caller before this round)
+    # still injects EXACTLY one WHEEL event and nothing else.
+    sent_wheel: list[tuple[int, int]] = []
+    wh = InputInjector((0, 0, 1920, 1080))
+    wh._send = lambda flags, ax=0, ay=0, mouse_data=0: sent_wheel.append((flags, mouse_data))
+    wh._cursor_px = lambda: (10, 10)
+    wh.wheel(0.5, 0.5, 3)          # legacy call — positional, no hticks at all
+    wh.wheel(0.5, 0.5, -2, 1)      # vertical + rightward horizontal together
+    wh.wheel(0.5, 0.5, 0, -1)      # horizontal-only, leftward
+    # wheel() also calls move() first (the gesture point) — MOVE events use a
+    # different flag, so filtering to the two wheel flags isolates the part
+    # this case is about.
+    wheel_only = [(f, d) for f, d in sent_wheel if f in (0x0800, 0x1000)]
+    results["wheel: legacy call (no hticks) injects only WHEEL, unchanged"] = \
+        wheel_only[:1] == [(0x0800, 360)]
+    results["wheel: HWHEEL fires with the right flag and signed mouseData"] = \
+        wheel_only[1:] == [(0x0800, -240), (0x1000, 120), (0x0800, 0), (0x1000, -120)]
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
@@ -445,6 +492,277 @@ def main():
         page.keyboard.press("Enter")
         results["keyboard: Enter -> chord(shift+enter)"] = \
             wait_for(lambda c: ("press_chord", "shift+enter") in c)
+
+        # 10. GAMEPAD (build rounds G1/G2, owner spec 2026-08-07). The pad
+        # pairs with the PHONE, so the Android shell captures its keys and
+        # sticks and calls the page's `__padButton` / `__padAxis` — where the
+        # WHOLE mapping lives. Everything below drives those two entry points
+        # exactly as the shell does: synthetic pad events through the real
+        # mapping, asserting the exact protocol that must come out of it.
+        #
+        # The pinned fixture layout is what makes the expectations readable:
+        #   left group  = Mouse (up Click · left Right · right Middle · down Scroll)
+        #   right group = Input (up Keys  · left Enter · right Esc  · down Mic)
+        def pad(js):
+            page.evaluate(f"() => {{ {js} }}")
+
+        # 10a. A D-pad arrow presses the LEFT group's button in that direction,
+        # and HOLDING it holds the PC button down — the same CLICK/HOLD the
+        # finger gets, because it is literally the same activator.
+        clear_calls()
+        pad("__padButton('d_up', true)")
+        pad_down = wait_for(lambda c: ("press", "left", True) in c)
+        time.sleep(0.25)
+        pad_still_held = ("press", "left", False) not in snapshot()
+        pad("__padButton('d_up', false)")
+        results["pad: D-pad -> left group's button, held while the key is held"] = (
+            pad_down and pad_still_held and wait_for(lambda c: press_pair(c, "left")))
+
+        # 10b. A face button presses the RIGHT group's — and on the RELEASE,
+        # exactly where a finger's pointerup acts.
+        clear_calls()
+        pad("__padButton('f_right', true)")
+        time.sleep(0.25)
+        fired_early = ("press_key", "escape") in snapshot()
+        pad("__padButton('f_right', false)")
+        results["pad: face button -> right group's command, on release"] = (
+            not fired_early and wait_for(lambda c: ("press_key", "escape") in c))
+
+        # 10c. The triggers are the two corner buttons.
+        results["pad: L2 -> Layout (+)"] = page.evaluate("""() => {
+            closeLayoutPanel();
+            __padButton('l2', true);
+            __padButton('l2', false);
+            const open = !document.getElementById('layout-panel').hidden;
+            closeLayoutPanel();
+            return open;
+        }""")
+        results["pad: R2 -> Hide"] = page.evaluate("""() => {
+            const hidden = () => document.body.classList.contains('hidden-controls');
+            const before = hidden();
+            __padButton('r2', true);
+            __padButton('r2', false);
+            const during = hidden();
+            __padButton('r2', true);
+            __padButton('r2', false);   // put the controls back
+            return before === false && during === true && hidden() === false;
+        }""")
+
+        # 10d. The left stick STEERS, on the curve the owner will tune. The
+        # gate pins the SHAPE (deadzone, then a power curve, then speed × time),
+        # never the numbers — it reads the page's own constants and recomputes
+        # the expected coordinate independently, so retuning the feel on the
+        # real controller can never turn a build red, while changing the
+        # FORMULA must.
+        pad_cfg = page.evaluate(
+            "() => ({dz: PAD_DEADZONE, cv: PAD_CURVE, sp: PAD_CURSOR_SPEED,"
+            "        tk: PAD_SCROLL_TICKS})")
+
+        def pad_expected_x(deflection, dt_ms):
+            magnitude = abs(deflection)
+            if magnitude <= pad_cfg["dz"]:
+                return None  # inside the deadzone: nothing may move at all
+            unit = (magnitude - pad_cfg["dz"]) / (1 - pad_cfg["dz"])
+            travel = math.copysign(unit ** pad_cfg["cv"], deflection)
+            return 0.5 + travel * pad_cfg["sp"] * dt_ms / 1000
+
+        for deflection in (0.10, 0.55, 1.0):
+            clear_calls()
+            # padCursorStep() is the very function the rAF loop calls — driving
+            # it with an exact dt is what makes a frame-clock race untestable
+            # into an exact assertion. Zeroing the axes afterwards stops the
+            # loop before it can fire a frame of its own.
+            page.evaluate(f"""() => {{
+                __padAxis(0, 0, 0, 0);
+                cursorPos = {{x: 0.5, y: 0.5}};
+                __padAxis({deflection}, 0, 0, 0);
+                padCursorStep(100);
+                __padAxis(0, 0, 0, 0);
+            }}""")
+            want = pad_expected_x(deflection, 100)
+            if want is None:
+                time.sleep(0.3)
+                ok = not any(x[0] == "move" for x in snapshot())
+                label = f"pad: left stick at {deflection:.2f} is inside the deadzone"
+            else:
+                ok = wait_for(lambda c, w=want: any(
+                    x[0] == "move" and abs(x[1] - w) < 0.002 and abs(x[2] - 0.5) < 0.002
+                    for x in c))
+                label = f"pad: left stick at {deflection:.2f} -> pointer_move on the curve"
+            results[label] = ok
+
+        # 10e. The right stick SCROLLS, and pushing it up scrolls up. Also
+        # pins that a pure-vertical push leaves the NEW horizontal field at
+        # zero (x[4] — FakeInjector.wheel records (x, y, ticks, hticks)) —
+        # the "vertical is unchanged" half of closing the gamepad round's gap.
+        clear_calls()
+        page.evaluate("""() => {
+            __padAxis(0, 0, 0, 0);
+            cursorPos = {x: 0.4, y: 0.6};
+            __padAxis(0, 0, 0, -1);   // pushed fully UP
+            padScrollStep(1000);       // one second at full tilt
+            __padAxis(0, 0, 0, 0);
+        }""")
+        results["pad: right stick -> scroll (up is up, at the tuned rate)"] = wait_for(
+            lambda c: any(x[0] == "wheel" and x[3] == pad_cfg["tk"] and x[4] == 0.0
+                          for x in c))
+
+        # 10e2. The right stick's HORIZONTAL axis (`rx`) scrolls sideways —
+        # the gap this round closes: `rx` used to be spent only on pointing
+        # the category wheel while a shoulder was held (10f below); with no
+        # wheel open it now drives `hticks` on the same curve as `ry`.
+        # Pushing RIGHT must scroll right (positive hticks, matching
+        # InputInjector.wheel's contract pinned in 9e), and the vertical
+        # field must stay untouched by a horizontal-only push.
+        clear_calls()
+        page.evaluate("""() => {
+            __padAxis(0, 0, 0, 0);
+            cursorPos = {x: 0.4, y: 0.6};
+            __padAxis(0, 0, 1, 0);   // pushed fully RIGHT
+            padScrollStep(1000);      // one second at full tilt
+            __padAxis(0, 0, 0, 0);
+        }""")
+        results["pad: right stick horizontal -> scroll right (positive hticks)"] = wait_for(
+            lambda c: any(x[0] == "wheel" and x[3] == 0.0 and x[4] == pad_cfg["tk"]
+                          for x in c))
+        clear_calls()
+        page.evaluate("""() => {
+            __padAxis(0, 0, 0, 0);
+            cursorPos = {x: 0.4, y: 0.6};
+            __padAxis(0, 0, -1, 0);  // pushed fully LEFT
+            padScrollStep(1000);
+            __padAxis(0, 0, 0, 0);
+        }""")
+        results["pad: right stick horizontal -> scroll left (negative hticks)"] = wait_for(
+            lambda c: any(x[0] == "wheel" and x[4] == -pad_cfg["tk"] for x in c))
+
+        # 10e3. Backward compatibility: a `scroll` message with NO `hticks`
+        # field at all — every client before this round, and still what an
+        # unmodified page sends off-canvas — must reach the injector exactly
+        # as it always did: `hticks` defaults to 0.0, nothing about the
+        # vertical path changes. Bypasses the pad entirely (raw `send()`, the
+        # same call gestures.js has always made) to pin the PROTOCOL contract
+        # rather than the pad's own mapping.
+        clear_calls()
+        page.evaluate("""() => {
+            send({ type: "scroll", x: 0.4, y: 0.6, ticks: 3 });
+        }""")
+        results["scroll backward-compat: message without hticks injects unchanged"] = \
+            wait_for(lambda c: ("wheel", 0.4, 0.6, 3.0, 0.0) in c)
+
+        # 10e4. The FINGER'S own Scroll mode must be byte-for-byte unchanged
+        # by this round — not just the protocol contract 10e3 pins, but the
+        # actual gestures.js code path: the Scroll mode button (Mouse set's
+        # "down" slot, data-action="scroll") plus a real one-finger drag on
+        # the canvas. That code never learned about `hticks` (untouched this
+        # round), so the message it sends carries no such key at all, and it
+        # must still land at the injector with `hticks` defaulted to 0.0.
+        clear_calls()
+        tap_button(page, '#group-left [data-action="scroll"]')
+        page.evaluate("""() => {
+            // A raw dispatchEvent-built PointerEvent is untrusted — real
+            // Chromium refuses setPointerCapture() for a pointerId that never
+            // came from an actual touch, throwing out of gestures.js's own
+            // pointerdown handler mid-gesture (killing the rest of the drag,
+            // and the socket with it). client/load_test.js hits the exact
+            // same wall for its synthetic load-test pointers and stubs the
+            // same way — this is that established pattern, test-only, and
+            // restored right after so no later test's real touchscreen.tap()
+            // is affected.
+            canvas.__realCapture = canvas.setPointerCapture;
+            canvas.setPointerCapture = () => {};
+            const r = canvas.getBoundingClientRect();
+            const cx = r.x + r.width / 2, cy = r.y + r.height / 2;
+            const opts = (y) => ({bubbles: true, cancelable: true, isPrimary: true,
+                                  pointerId: 66, pointerType: 'touch',
+                                  clientX: cx, clientY: y});
+            canvas.dispatchEvent(new PointerEvent('pointerdown', opts(cy)));
+            canvas.dispatchEvent(new PointerEvent('pointermove', opts(cy + 200)));
+            canvas.dispatchEvent(new PointerEvent('pointerup', opts(cy + 200)));
+            canvas.setPointerCapture = canvas.__realCapture;
+            // The synthetic down->move->up above lands in one JS turn (0ms
+            // elapsed), so gestures.js computes an enormous fling velocity
+            // and arms scroll INERTIA on pointerup — left alone it keeps
+            // sending `scroll` messages on its own rAF loop long after this
+            // block returns, polluting every later test's clear_calls()
+            // window (confirmed: it broke 10f's "fires no button" assertion
+            // downstream before this line was added). Cancel it before the
+            // browser gets a chance to run that first frame.
+            cancelScrollInertia();
+        }""")
+        finger_scrolled = wait_for(lambda c: any(x[0] == "wheel" for x in c))
+        results["finger scroll (real drag): unchanged — hticks still defaults to 0.0"] = (
+            finger_scrolled and all(x[4] == 0.0 for x in snapshot() if x[0] == "wheel"))
+        tap_button(page, '#group-left [data-action="scroll"]')  # restore Move mode
+
+        # 10f. A HELD shoulder opens that side's wheel, the stick POINTS (the
+        # ring's own frame follows it) and the release confirms — while not a
+        # single button may fire on the way.
+        clear_calls()
+        wheel_state = page.evaluate("""() => {
+            groups.left = 0;
+            renderGroup('left');
+            __padButton('l1', true);
+            const open = document.getElementById('wheel').classList.contains('open');
+            const items = () => [...document.querySelectorAll('#wheel .wheel-item')];
+            const n = items().length;
+            // Item 1 sits a third of the way clockwise from 12 o'clock, i.e.
+            // 30 degrees from the +x axis: (cos 30, sin 30).
+            __padAxis(0.866, 0.5, 0, 0);
+            const framed = items().findIndex((el) => el.classList.contains('current'));
+            __padButton('l1', false);   // released while still pointing — that IS the pick
+            __padAxis(0, 0, 0, 0);      // ...and only then does the thumb come back
+            return {open, n, framed, picked: groups.left,
+                    closed: !document.getElementById('wheel').classList.contains('open'),
+                    shown: document.querySelector('#group-left .ctl.cat .lbl').textContent};
+        }""")
+        time.sleep(0.3)
+        results["pad: L1 held + stick + release picks a set, and fires no button"] = (
+            wheel_state["open"] and wheel_state["n"] == 3 and
+            wheel_state["framed"] == 1 and wheel_state["picked"] == 1 and
+            wheel_state["shown"] == "Input" and wheel_state["closed"] and
+            not snapshot())
+        page.evaluate("() => { groups.left = 0; renderGroup('left'); }")
+
+        # 10g. ...and the SAME shoulder, merely tapped, is the layout bar's
+        # ‹ › step. `send` is captured here rather than followed to the server:
+        # what this pins is that a short press produces the layout message and
+        # NOT a category change (the server side of layout_focus is
+        # tests/test_layout_protocol.py's job).
+        stepped = page.evaluate("""() => {
+            const real = window.send;
+            const sent = [];
+            window.send = (m) => sent.push(m);
+            layouts = [{name: 'A'}, {name: 'B'}];
+            layoutActive = null;
+            const before = groups.right;
+            __padButton('r1', true);
+            __padButton('r1', false);   // a tap: no stick, no waiting
+            window.send = real;
+            layouts = [];
+            layoutActive = null;
+            hideLayLoading();
+            return {sent, before, after: groups.right};
+        }""")
+        results["pad: a short shoulder tap steps the layout bar"] = (
+            len(stepped["sent"]) == 1 and
+            stepped["sent"][0]["type"] == "layout_focus" and
+            stepped["sent"][0]["index"] == 0 and
+            stepped["before"] == stepped["after"])
+
+        # 10h. A pad press holds the SCREEN awake. It is neither a touch nor a
+        # keydown — the shell claims it at dispatchKeyEvent and hands it to the
+        # page through evaluateJavascript — so the two listeners in
+        # connection.js never hear it, and a session driven entirely from the
+        # controller would go dark after KEEP_AWAKE_MS, hide the page, and have
+        # the PC correctly pack the layout away mid-work.
+        results["pad: activity holds the screen awake"] = page.evaluate("""() => {
+            awakeUntil = 0;
+            padAwakeAt = -Infinity;     // open the throttle, whatever it just did
+            __padButton('l1', true);    // no layouts exist: this only opens the wheel
+            __padButton('l1', false);
+            return awakeUntil > 0;
+        }""")
 
         browser.close()
 

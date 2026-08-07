@@ -49,3 +49,18 @@ toggles, keyboard, wizard, update banner, upload, D-pad actions, wheel items,
 corner buttons) is wired through — see
 [tests/test_input_pipeline.py](../../tests/___tests.md) for the end-to-end
 gate that locks both the stolen-tap and system-swipe cases in.
+
+## Build round R3 (2026-08-07) — themes
+
+```
+refreshCategories()
+   resetSetColors()                  <- R3: a new custom set may need a colour
+   for side in (left, right):
+       renderGroup(side)
+          cat = allCats()[groups[side]]
+          paintSet(host, cat.name)   <- --set-color/--set-ink/--set-glow
+          ...buttons appended; they INHERIT the three properties
+
+openWheel(side)
+   for each cat: paintSet(item, cat.name)   <- the ring says what the colours are
+```

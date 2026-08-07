@@ -65,3 +65,15 @@ The top-left corner button is now **Layout (+)** (the Move/pan button is gone
 — owner 2026-08-02); `#layout-bar` sits top-center (hidden until a layout
 exists; big SVG arrows outside a framed name button that opens the layout list, + ✕); `#layout-panel` is the empty container controls.js
 fills with the creation card.
+
+## Build round R3 (2026-08-07) — themes
+
+Two tags, in the two places order matters (build round R3):
+
+- `theme.css` is linked FIRST, before `style.css` and `layouts.css` — it owns
+  every colour token those two read.
+- `theme.js` loads right after `controls.js`: it uses that file's
+  `prefGet`/`prefSet` and `IN_APP`, and it must run before anything paints a
+  control, because it applies the cached look at load time.
+
+See [theme.css + theme.js](theme.md).
