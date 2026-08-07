@@ -42,6 +42,13 @@ so layouts made by an older version keep their shape.
   is the one a merge keeps as the layout's own window.
 - `_fit_rect(box, aspect, pos)` — the largest rect of an aspect inside a box,
   placed at `pos` of the slack. Everything above is built from it.
+- `at_rect(rect, target)` — is a window's visible frame ON the rect it was
+  commanded to take? Top-left within `PLACE_TOLERANCE_PX` (8, DWM frame
+  rounding), size at least the cell (a bigger minimum size is owner-accepted —
+  the phone letterboxes). Moved here from `window_manager` on 2026-08-07: it
+  is pure arithmetic, and it is now asked twice — once by `wait_landed` while
+  placing, and once by `_standing` before a focus decides whether the
+  arrangement it REMEMBERS is the arrangement the desk actually holds.
 - `_normalize(rect, mon_rect)` — a rect as monitor-normalized 0–1, which is
   the only coordinate space the phone is ever told about.
 
