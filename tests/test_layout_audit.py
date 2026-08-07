@@ -295,6 +295,23 @@ def main() -> int:
                  "closeLayoutPanel()", "#layout-panel .lay-card"),
                 # Creation panel: the Name field is prefilled with the chosen
                 # window's (long) title and must fit the card.
+                # The grid catalogue he drew (owner 2026-08-07) — the THREE
+                # state, where four arrangement SKETCHES sit under the count
+                # chips. Its own case because it is the tallest the creation
+                # panel ever gets, and because a drawing nobody looked at is
+                # not a proof.
+                ("Grid arrangement choice",
+                 "creating = newCreation('list');"
+                 "creating.slots = [{hwnd:1, title:'Chrome', process:'chrome.exe',"
+                 " icon:null, tab:null, x:0.5, y:0.5},"
+                 " {hwnd:2, title:'Explorer', process:'explorer.exe',"
+                 " icon:null, tab:null, x:0.5, y:0.5},"
+                 " {hwnd:3, title:'Claude Code - Remote User - Visual Studio"
+                 " Code [Administrator]', process:'code.exe', icon:null,"
+                 " tab:null, x:0.5, y:0.5}];"
+                 "creating.mode = 'grid'; creating.grid = '3-left';"
+                 "renderCreationPanel()",
+                 "cancelCreation(true)", "#layout-panel .lay-card"),
                 ("Creation panel + Name field",
                  "appSets = APP_SETS;"
                  "creating = newCreation('tap');"
