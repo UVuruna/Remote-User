@@ -71,8 +71,9 @@ Both are hidden by Hide-all.
 
 ## Build round R3 (2026-08-07) — themes
 
-**Every colour left this file.** `theme.css` owns them now — three themes
-(dark / light / colored) times two fills (outlined / filled) — and it is
+**Every colour left this file.** `theme.css` owns them now — four themes
+(dark / light / colored / colored-light) times two fills (outlined / filled) —
+and it is
 loaded BEFORE this one so its `:root` tokens are already resolved. What stayed
 in `:root` here is shape and geometry only: `--kb`, `--vtop`, `--topbar`,
 `--corner`, `--radius-pill`, `--space-s`, `--space-m`.

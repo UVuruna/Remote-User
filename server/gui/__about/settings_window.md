@@ -67,10 +67,19 @@ whole look of the product, both halves:
 
 - **This PC** — the sun/moon pill ([Switch](switch.md)), riding the section
   heading's own row rather than taking a row of its own.
-- **The phone** — two combos on ONE row: theme (Dark / Light / Colored) and
-  button fill (Outlined / Filled). Chosen here and only here: the owner's
-  answer to this round's P4 was one source of truth and no menu on the phone,
-  so the page applies `config.ui` and asks the device nothing.
+- **The phone** — two combos on ONE row: theme (Dark / Light / Colored dark /
+  Colored light) and button fill (Outlined / Filled). Chosen here and only
+  here: the owner's answer to this round's P4 was one source of truth and no
+  menu on the phone, so the page applies `config.ui` and asks the device
+  nothing.
+
+  **FOUR themes, not three** (owner colour correction 2026-08-07). The
+  coloured look is one idea over two pages, and the two pages want opposite
+  palettes — dark shades that carry a button on a dark page, strong inks that
+  carry a letter on a light one (`config.SET_COLORS_DARK` /
+  `SET_COLORS_LIGHT`). Adding a value costs him one more line in a dropdown
+  and takes nothing away; folding colour into the plain Light theme instead
+  would have deleted the monochrome light look he already has.
 
 Both phone combos save immediately (`save_user_settings`), like every card in
 this window except STREAM. The caption says the honest thing — the phone reads

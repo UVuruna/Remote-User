@@ -283,8 +283,11 @@ class Settings:
     # two surfaces, ONE place to change them — the desktop Settings window's
     # APPEARANCE card.
     #   ui_theme    — this PC's palette: "dark" or "light" (gui/theme.py).
-    #   phone_theme — the phone's: "dark", "light" or "colored" (every set in
-    #                 its own colour, SET_COLORS below).
+    #   phone_theme — the phone's: "dark", "light", "colored" (every set in
+    #                 its own colour on a DARK page) or "colored-light" (the
+    #                 same idea on a LIGHT one). The two coloured values are
+    #                 one look over two surfaces, and they do NOT share a
+    #                 palette — see SET_COLORS_DARK / SET_COLORS_LIGHT below.
     #   phone_fill  — "transparent" (today's outlined buttons) or "full"
     #                 (filled ones).
     # The phone gets these in `config.ui` and applies them; it has no menu of
@@ -296,32 +299,95 @@ class Settings:
 
 
 # ═══════════════════════════ APPEARANCE — THE PHONE'S SET COLOURS ═══════════════════════════
-# One colour per shipped set (owner adopted this palette 2026-08-07, answer
-# P5: "adopt the proposed set-colour palette and tune later"), used only when
-# `phone_theme` is "colored" — as the button OUTLINE in the transparent fill
-# and as the button FILL in the full one. The phone computes the ink from each
-# colour's luminance, so a set's text and icon can never land unreadable on
-# its own colour whatever is tuned here later.
+# One colour per shipped set — as the button OUTLINE in the transparent fill
+# and as the button FILL in the full one. The phone computes every INK from
+# the surface the text really lands on (client/theme.js), so a set's label can
+# never land unreadable on its own colour whatever is tuned here later.
+#
+# TWO TABLES, ONE PER SURFACE (owner correction 2026-08-07, replacing the
+# single table he adopted the same day with "tune later"). His words:
+#
+#   "kada je DARK tema treba da budu jako tamne nijanse, dakle mali
+#    lightness/brightness; a ovaj mod LIGHT treba da ima jako svetla slova,
+#    velikim, u boji, dakle ona klasična jaka. Sto saturacija ne treba ni u
+#    jednom modu."
+#
+# One table cannot answer both halves of that, because the colour does a
+# DIFFERENT JOB on each page. On a dark page the colour is the BODY of the
+# button and the white label carries the reading — so the colour must be dark,
+# or the button glows (the first palette's #38BDF8 filled a 58 px button with
+# near-neon cyan on a near-black page). On a light page the colour is the INK
+# — strong, vivid, classic — on a calm surface it must stay legible against.
+# A dark navy that reads beautifully as a fill is invisible as ink on white,
+# and a vivid ink is a searchlight as a fill; the same hex cannot be both.
+#
+# THE RULE BOTH TABLES OBEY, and the reason each hex is the one it is:
+#   * HSL saturation is CAPPED — 66% on dark, 72% on light. "Sto saturacija ne
+#     treba ni u jednom modu": nothing here is a pure hue. The two ceilings
+#     differ because the jobs differ — 72% is what the classic strong inks
+#     (a #B92 red, a #204DB6 blue) actually measure, and on dark a shade that
+#     saturated turns muddy as it darkens.
+#   * DARK: lightness 22–40%. The floor is not taste — a fill darker than that
+#     stops reading as a button against the #0f172a page; the ceiling is where
+#     white label text stops clearing AA on it. Both are measured, not guessed.
+#   * LIGHT: lightness 26–54%, the band where a colour is vivid enough to be
+#     "ona klasična jaka" and still dark enough to be read on #eceef6.
+#   * HUE **and** LIGHTNESS separate the sets that share the wheel — the one
+#     property of the first palette worth keeping. The four blues (Mouse 196,
+#     Settings 215, VSCode 222, Windows 232) and the four warms (Claude 13,
+#     Explorer 24, Attach 36, Chrome 50) are pulled apart in lightness as well
+#     as hue, so a colour-blind eye still has a second signal.
+#
+# Every combination is swept by tests/test_layout_audit.py — all 13 colours,
+# both surfaces, both fills, D-pad and wheel — and no entry here needs the
+# client's own fill correction (`fillOn`): what the desktop shows is what the
+# phone paints.
 #
 # CUSTOM sets are not listed and never will be: the owner names them himself
-# in the Controls editor, so the phone hands each one the next colour of this
-# same palette that no shipped set already holds (client/theme.js →
-# `colorFor`). One table, one place to tune, no second list to keep in step.
-SET_COLORS = {
-    "Mouse": "#38BDF8",
-    "Input": "#4ADE80",
-    "Settings": "#94A3B8",
-    "Edit": "#A78BFA",
-    "Attach": "#F59E0B",
-    "Navigate": "#2DD4BF",
-    "Media": "#F87171",
-    "Windows": "#818CF8",
-    "VSCode": "#3B82F6",
-    "Chrome": "#FACC15",
-    "Explorer": "#FB923C",
-    "Claude": "#D97757",
-    "Cursor": "#F472B6",
+# in the Controls editor, so the phone hands each one the next colour of the
+# palette in force that no shipped set already holds (client/theme.js →
+# `setColors`). One table per surface, no third list to keep in step.
+SET_COLORS_DARK = {
+    "Mouse": "#1D6A86",
+    "Input": "#1C693C",
+    "Settings": "#4B5B71",
+    "Edit": "#572B82",
+    "Attach": "#7D561C",
+    "Navigate": "#175E57",
+    "Media": "#86282E",
+    "Windows": "#354297",
+    "VSCode": "#1C3878",
+    "Chrome": "#5D5113",
+    "Explorer": "#944D1E",
+    "Claude": "#8D4834",
+    "Cursor": "#7E2A57",
 }
+
+SET_COLORS_LIGHT = {
+    "Mouse": "#186B89",
+    "Input": "#14713B",
+    "Settings": "#476185",
+    "Edit": "#702BB6",
+    "Attach": "#C38322",
+    "Navigate": "#146F65",
+    "Media": "#BA2630",
+    "Windows": "#4356D0",
+    "VSCode": "#204DB6",
+    "Chrome": "#A58E1D",
+    "Explorer": "#DC7028",
+    "Claude": "#A3472E",
+    "Cursor": "#B02971",
+}
+
+
+def set_colors(theme: str | None = None) -> dict:
+    """The palette a given phone theme wears — the SURFACE decides, nothing
+    else. Anything that is not the light-page coloured theme gets the dark
+    table, which is also the honest answer for the two monochrome themes: they
+    read no set colour at all, so the value only has to be a valid palette.
+    """
+    name = SETTINGS.phone_theme if theme is None else theme
+    return dict(SET_COLORS_LIGHT if name == "colored-light" else SET_COLORS_DARK)
 
 
 def ui_config() -> dict:
@@ -330,10 +396,15 @@ def ui_config() -> dict:
     Deliberately a function here rather than three lines built in web.py:
     the desktop owns this decision, config.py owns the desktop's settings,
     and web.py's job is only to put it on the wire.
+
+    The PALETTE IS RESOLVED HERE, so the wire shape never changed: the phone
+    still receives one flat `{set: hex}` map and has no idea two tables exist.
+    Sending both and letting the page choose would have put the same decision
+    in two places, and the page's copy would be the one that drifts.
     """
     return {"theme": SETTINGS.phone_theme,
             "fill": SETTINGS.phone_fill,
-            "colors": dict(SET_COLORS)}
+            "colors": set_colors()}
 
 
 # ═══════════════════════════ VERSION ═══════════════════════════

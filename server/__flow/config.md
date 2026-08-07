@@ -30,6 +30,8 @@
     actions_path
   📁 Updates
     update_repo, update_check
+    update_record_path, update_script_path, update_log_path
+    update_wait_exit_s, update_wait_up_s
 ```
 
 ★ = in `USER_ADJUSTABLE` — the desktop GUI's Settings card may override these at
@@ -82,11 +84,15 @@ Settings (dataclass)
                           phone_theme   "dark"          <- the phone
                           phone_fill    "transparent"   <- the phone
 
-SET_COLORS  (its own banner section — 13 shipped sets, one colour each)
+SET_COLORS_DARK   (own banner section — 13 shipped sets, dark shades)
+SET_COLORS_LIGHT  (the same 13, as strong inks for a light page)
 
+set_colors(theme)  ->  phone_theme == "colored-light" ? LIGHT : DARK
+                        |
 ui_config()  ->  {"theme": phone_theme,
                   "fill":  phone_fill,
-                  "colors": dict(SET_COLORS)}
+                  "colors": set_colors()}      <- already resolved: ONE flat
+                                                  map on the wire, always
                         |
                         v
               web._send_config()  ->  `config` frame, key "ui"

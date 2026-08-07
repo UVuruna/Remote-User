@@ -14,6 +14,8 @@ Single source of truth for every tunable value in the server (root Rule #4 — n
 
 **Round R2 (owner 2026-08-07) added five user-adjustable keys**, all of them owned by the new [Settings window](../gui/__about/settings_window.md): `notify_speak` / `notify_voice` / `notify_rate` (how the phone SAYS a notice — they ride in every `notify` frame), `foreground_lock` (Windows' own foreground rule, re-applied at every start), and `update_check`, which had lived here as a default with no UI at all. Two non-adjustable companions came with them: `foreground_lock_timeout_ms` + `foreground_lock_ledger_path` (see [Foreground Lock](foreground_lock.md)) and `autostart_task`, the Task Scheduler task name shared with the installer (see [Autostart](autostart.md)).
 
+**The Updates section gained five non-adjustable keys the same day** (owner report 2026-08-07 — installing an update killed the session he was installing FROM): `update_record_path`, `update_script_path`, `update_log_path`, `update_wait_exit_s`, `update_wait_up_s`. All three paths sit in `USER_DIR` and never in the install folder, for one reason worth stating here — the installer REPLACES the install folder, so a handover cannot keep its own instructions inside the thing it is driving. See [Update Handover](update_handover.md).
+
 See the [flow doc](../__flow/config.md) for the full section/key tree.
 
 ## Connections
@@ -22,7 +24,7 @@ See the [flow doc](../__flow/config.md) for the full section/key tree.
 - Nothing (leaf module)
 
 ### Used by
-- Every other file in this folder — [Bootstrap](bootstrap.md), [Server Core](server_core.md), [Screen Capture](capture.md), [H.264 Streamer](h264_streamer.md), [Encoders](encoders.md), [Input Injector](input_injector.md), [Web Layer](web.md), [Pairing](pairing.md), [Updates](updates.md), [Autostart](autostart.md), [Foreground Lock](foreground_lock.md) — plus `gui/main_window.py` and `gui/settings_window.py` (see [GUI (subfolder)](../gui/___gui.md))
+- Every other file in this folder — [Bootstrap](bootstrap.md), [Server Core](server_core.md), [Screen Capture](capture.md), [H.264 Streamer](h264_streamer.md), [Encoders](encoders.md), [Input Injector](input_injector.md), [Web Layer](web.md), [Pairing](pairing.md), [Updates](updates.md), [Update Handover](update_handover.md), [Autostart](autostart.md), [Foreground Lock](foreground_lock.md) — plus `gui/main_window.py` and `gui/settings_window.py` (see [GUI (subfolder)](../gui/___gui.md))
 
 ## Classes
 
@@ -60,24 +62,56 @@ old comparison offered a phantom update forever.
 
 ### APPEARANCE (build round R3, owner-approved 2026-08-07)
 
-Three settings and one table, all in `USER_ADJUSTABLE` or their own section:
+Three settings and two tables, all in `USER_ADJUSTABLE` or their own section:
 
 | Key | Values | What it is |
 |---|---|---|
 | `ui_theme` | `dark` / `light` | THIS PC's palette (`server/gui/theme.py`) |
-| `phone_theme` | `dark` / `light` / `colored` | the PHONE's |
+| `phone_theme` | `dark` / `light` / `colored` / `colored-light` | the PHONE's |
 | `phone_fill` | `transparent` / `full` | outlined buttons, or filled |
 
-`SET_COLORS` is the per-set colour palette the owner adopted (this round's
-answer P5): Mouse `#38BDF8`, Input `#4ADE80`, Settings `#94A3B8`, Edit
-`#A78BFA`, Attach `#F59E0B`, Navigate `#2DD4BF`, Media `#F87171`, Windows
-`#818CF8`, VSCode `#3B82F6`, Chrome `#FACC15`, Explorer `#FB923C`, Claude
-`#D97757`, Cursor `#F472B6`. Custom sets are deliberately NOT listed — the
-owner names his own sets, so the phone hands each unnamed one the next colour
-of this same palette that nothing already wears (`client/theme.js`). One table
-to tune, no second list to keep in step.
+### The two set palettes (owner correction 2026-08-07)
 
-`ui_config()` is the whole APPEARANCE half of a `config` frame,
-`{theme, fill, colors}`. It lives here rather than in `web.py` on purpose: the
+He adopted the first palette with "tune later" and tuned it the next day:
+
+> "kada je DARK tema treba da budu jako tamne nijanse, dakle mali
+> lightness/brightness; a ovaj mod LIGHT treba da ima jako svetla slova,
+> velikim, u boji, dakle ona klasična jaka. Sto saturacija ne treba ni u
+> jednom modu."
+
+One table cannot answer both halves, because the colour does a different job
+on each page: on a dark page it is the BODY of the button and the white label
+does the reading; on a light page it is the INK. A navy that is an excellent
+fill is invisible as ink on white, and a vivid ink is a searchlight as a fill.
+So there are two, and the coloured theme gained a second surface to wear the
+second one:
+
+| Table | Used by | Lightness | Saturation ceiling |
+|---|---|---|---|
+| `SET_COLORS_DARK` | `colored` (dark page) | 22–40% | 66% |
+| `SET_COLORS_LIGHT` | `colored-light` (light page) | 26–54% | 72% |
+
+Neither reaches full saturation, in either mode — the third of his three
+sentences. The lightness bands are measured, not taste: below the dark floor a
+fill stops reading as a button against `#0f172a`, above its ceiling a white
+label stops clearing AA on it; the light band is where a colour is vivid
+enough to be "ona klasična jaka" and still dark enough to be read on
+`#eceef6`. Hue AND lightness separate the sets that share the wheel — the four
+blues and the four warms are pulled apart on both axes, so an eye that cannot
+tell two hues apart still has a second signal. The exact thirteen hexes of
+each table are listed in [theme.md](../../client/__about/theme.md).
+
+Custom sets are deliberately NOT listed — the owner names his own sets, so the
+phone hands each unnamed one the next colour of the palette IN FORCE that
+nothing already wears (`client/theme.js`). One table per surface, no third
+list to keep in step.
+
+`set_colors(theme=None)` answers "which palette does this theme wear", and it
+is the ONLY place that decides. `ui_config()` is the whole APPEARANCE half of
+a `config` frame, `{theme, fill, colors}`, with the palette already resolved —
+so the wire shape never changed and the phone still receives one flat
+`{set: hex}` map. Both live here rather than in `web.py` on purpose: the
 desktop owns this decision, this file owns the desktop's settings, and the web
-layer's job is only to put it on the wire.
+layer's job is only to put it on the wire. Sending both tables and letting the
+page choose would have put one decision in two places, and the page's copy is
+the one that drifts.

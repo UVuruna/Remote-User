@@ -8,7 +8,7 @@ The phone side of Remote User — a plain web page served by the PC server, load
 |------|------|----------|
 | `index.html` | Standard | page shell — canvas, corner buttons, D-pad groups, wheel, keyboard capture — [about](__about/index.md) |
 | `install.html` | Standard | install funnel (Open the app → Install) — the only page ANY browser ever sees — [about](__about/install.md) |
-| `theme.css` | Algorithmic | EVERY colour, in three themes (dark / light / colored) and two fills (outlined / filled) — loaded FIRST, documented with `theme.js` in [about](__about/theme.md) · [flow](__flow/theme.md) |
+| `theme.css` | Algorithmic | EVERY colour, in four themes (dark / light / colored / colored-light) and two fills (outlined / filled) — loaded FIRST, documented with `theme.js` in [about](__about/theme.md) · [flow](__flow/theme.md) |
 | `style.css` | Algorithmic | every component's visual rules — shape and position only; it reads theme.css's tokens and names no colour of its own — [about](__about/style.md) · [flow](__flow/style.md) |
 | `layouts.css` | Algorithmic | the layout feature's own styling (bar, list, aspect panel, creation, loading cube), split off style.css 2026-08-05 — documented with `layouts.js` in [about](__about/layouts.md) · [flow](__flow/layouts.md) |
 | `load_test.js` | Standard | dev harness — concatenates and executes the 15 client scripts below, in load order, against a stubbed DOM to catch load-time errors — [about](__about/load_test.md) |

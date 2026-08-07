@@ -89,7 +89,9 @@ _build_cards(root)
    |- APPEARANCE          +-------------------------------------------+
    |                      | APPEARANCE            This PC   [ (  * ) ]|
    |                      | The phone   [Dark  v] [Outlined v]        |
-   |                      | Colored gives every set its own colour;.. |
+   |                        Dark | Light | Colored dark | Colored light
+   |                      | Colored gives every set its own colour -  |
+   |                      | dark shades on a dark page, strong ones.. |
    |                      +-------------------------------------------+
    |- STREAM              (unchanged — the only card with an Apply)
    |- NOTIFICATIONS       (unchanged)

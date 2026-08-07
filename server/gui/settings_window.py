@@ -32,8 +32,11 @@ the whole look of the product, both halves of it:
 
   - **This PC** — the sun/moon pill, the same widget the main window's top bar
     carries. Neither switch owns the setting; both call `switch.choose_theme`.
-  - **The phone** — theme (dark / light / colored) and button fill (outlined /
-    filled), chosen HERE and only here. The owner's answer to this round's
+  - **The phone** — theme (dark / light / colored dark / colored light) and
+    button fill (outlined / filled), chosen HERE and only here. The two
+    coloured entries are the same look on two pages, and each carries its own
+    palette (config.SET_COLORS_DARK / SET_COLORS_LIGHT — owner correction
+    2026-08-07). The owner's answer to this round's
     P4 was one source of truth and no menu on the phone, so the page never
     asks the device anything: it applies what `config.ui` tells it.
 
@@ -81,7 +84,17 @@ SPEECH_RATES = [("0.8× — slower", 0.8), ("1× — normal", 1.0),
 # its longest entry, and one explanatory entry would set the width of the
 # whole window (the lesson the Voice row already taught this file on
 # 2026-08-05). What the choices MEAN belongs in the caption, which wraps.
-PHONE_THEMES = [("Dark", "dark"), ("Light", "light"), ("Colored", "colored")]
+#
+# FOUR, NOT THREE, since the owner's colour correction of 2026-08-07: the
+# coloured look is one idea over two pages, and the two pages want opposite
+# palettes ("kada je DARK tema treba da budu jako tamne nijanse … a ovaj mod
+# LIGHT treba da ima … u boji, dakle ona klasična jaka"). Adding a value costs
+# him one more line in a dropdown and takes nothing away — folding colour into
+# the plain Light theme instead would have deleted the monochrome light look
+# he already has.
+PHONE_THEMES = [("Dark", "dark"), ("Light", "light"),
+                ("Colored dark", "colored"),
+                ("Colored light", "colored-light")]
 PHONE_FILLS = [("Outlined", "transparent"), ("Filled", "full")]
 
 # Every labelled row in the window, in one place — the label column is sized
@@ -113,7 +126,8 @@ CAPTION_MAX_INNER = 620
 CAPTION_INDENT_LEFT = 25
 
 APPEARANCE_TEXT = (
-    "Colored gives every set its own colour; Filled paints the buttons in. "
+    "Colored gives every set its own colour — dark shades on a dark page, "
+    "strong ones on a light page; Filled paints the buttons in. "
     "The phone has no theme menu — it reads this on its next connection.")
 
 STREAM_TEXT = ("These are the PC's own limits. The phone's quality panel may "

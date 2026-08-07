@@ -10,6 +10,13 @@
 // device's own dark/light preference is deliberately ignored. One source of
 // truth means the owner never has to wonder which of two places is winning.
 //
+// `colors` is ONE flat map, already chosen for the theme it arrives with. The
+// coloured look has two surfaces since the owner's correction of 2026-08-07
+// (`colored` = dark page, `colored-light` = light page) and they wear
+// DIFFERENT palettes — dark shades that carry a button, versus vivid inks
+// that carry a letter — but the choosing happens once, on the desktop
+// (server/config.py → `set_colors`). This file never holds a table.
+//
 // The choice is CACHED per device so the page does not paint the previous
 // theme for the third of a second it takes the socket to open and the server
 // to answer — a flash the owner would see on every single connect.
@@ -23,9 +30,11 @@ const UI_PREF = "uiLook";
 const UI_DEFAULT = { theme: "dark", fill: "transparent", colors: {} };
 
 // Ink on a coloured button. Computed, never tabled (rules/CODE.md — Compute,
-// Don't Generate): the owner may retune SET_COLORS on the desktop whenever he
-// likes, and a hand-written ink per colour would be wrong the first time he
-// does.
+// Don't Generate): the owner may retune the palette on the desktop whenever he
+// likes — he did, one day after adopting the first one — and a hand-written
+// ink per colour would be wrong the first time he does. It is also what let
+// this round replace thirteen bright hexes with thirteen dark ones and change
+// no ink rule at all.
 //
 // AND IT IS COMPUTED AGAINST THE SURFACE THE TEXT ACTUALLY SITS ON (independent
 // grader, 2026-08-07 — the finding that blocked the release). The first version
@@ -34,9 +43,10 @@ const UI_DEFAULT = { theme: "dark", fill: "transparent", colors: {} };
 // with the set colour, so black-or-white against that hex is right. In the
 // OUTLINED fill nothing is painted with it at all — the colour is the ink, and
 // what it lands on is `--glass-fill` composited over the page. A colour that is
-// perfectly readable AS a fill (Claude's #D97757 carries black at 5.9:1) can be
-// a poor INK on a dark page (5.5:1 for a 9 px label), and nothing in the old
-// rule could tell those two questions apart.
+// perfectly readable AS a fill can be a poor INK on the same page, and nothing
+// in the old rule could tell those two questions apart. The current palettes
+// make the point at its sharpest: a #1C3878 navy is an excellent FILL under a
+// white label and completely illegible as ink on a near-black page.
 //
 // So both inks are derived from the LIVE tokens, every time the look changes:
 //   --set-ink   ink ON the set colour   (the `full` fill)
@@ -52,8 +62,8 @@ const UI_DEFAULT = { theme: "dark", fill: "transparent", colors: {} };
 // the luminance range as the colour allows. A 9 px semibold label is not
 // "large text" by any reading of WCAG, so 4.5:1 is its FLOOR, not its target;
 // AAA (7:1) is what a label with an unknown backdrop deserves and it is what
-// the palette can pay: the largest lift the shipped thirteen need is VSCode's
-// #3B82F6, and even that stays unmistakably blue.
+// the palettes can pay — the target survived the whole palette being darkened,
+// because a lift that keeps hue and saturation can pay it without going grey.
 //
 // (The other half of the grader's finding was not an ink problem at all and is
 // not fixed here: the numbers it measured — 2.66:1 — were read through the
@@ -74,7 +84,11 @@ const FILL_INK_TARGET = 4.5;
 // is the binding constraint: a plain `.ctl` has no opacity at all, so
 // whatever clears AA after this dilution clears it before too.
 const CAT_OPACITY = 0.85;
-const LIFT_STEPS = 20;
+// Steps the lift walks. 40 rather than 20 (owner correction 2026-08-07): the
+// walk now moves LIGHTNESS, and a coarse step there is a visible jump in how
+// pale the ink comes out — the finer sweep returns the SMALLEST lift that
+// clears, which is the whole point of returning the first step that does.
+const LIFT_STEPS = 40;
 
 let ui = { ...UI_DEFAULT };
 let setColorCache = null;
@@ -114,8 +128,66 @@ function contrast(a, b) {
   return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
 }
 
+// A straight line between two colours. Used ONLY to simulate a real
+// compositing step (the category button's 0.85 opacity over its own fill) —
+// never to make a colour readable. See `lift` for why.
 function mix(rgb, toward, t) {
   return [0, 1, 2].map((i) => rgb[i] + (toward[i] - rgb[i]) * t);
+}
+
+// --- HSL, because LIGHTNESS is the axis a lift is allowed to move ----------
+// The owner's correction of 2026-08-07 is a statement about lightness and
+// saturation ("jako tamne nijanse, dakle mali lightness/brightness … sto
+// saturacija ne treba ni u jednom modu"), so the code that adjusts a colour
+// has to speak the same language he does. Straight RGB cannot: mixing toward
+// white raises lightness AND drains saturation, which is why the previous
+// version's comment claiming "hue and saturation ride along" was simply
+// false — a dark navy lifted toward white came out grey-blue, and a palette
+// of dark shades would have arrived on the phone as a row of pastels.
+function toHsl(rgb) {
+  const [r, g, b] = rgb.map((v) => v / 255);
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  const d = max - min;
+  if (!d) return [0, 0, l];
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  let h;
+  if (max === r) h = ((g - b) / d + (g < b ? 6 : 0)) / 6;
+  else if (max === g) h = ((b - r) / d + 2) / 6;
+  else h = ((r - g) / d + 4) / 6;
+  return [h, s, l];
+}
+
+function fromHsl(h, s, l) {
+  if (!s) return [l * 255, l * 255, l * 255];
+  const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+  const p = 2 * l - q;
+  const at = (t) => {
+    t = (t + 1) % 1;
+    if (t < 1 / 6) return p + (q - p) * 6 * t;
+    if (t < 1 / 2) return q;
+    if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+    return p;
+  };
+  return [at(h + 1 / 3), at(h), at(h - 1 / 3)].map((v) => v * 255);
+}
+
+// Walk this colour's LIGHTNESS toward one end — white when `up`, black when
+// not — and return the first step that satisfies `ok`, together with how far
+// it had to go. Hue and saturation are untouched, so a lifted teal is still
+// unmistakably the teal set: it is the same colour at the lightness the
+// surface demands. The far end is white (or black), which clears any target
+// there is, so the walk always terminates with an answer.
+function lift(rgb, up, ok) {
+  const [h, s, l0] = toHsl(rgb);
+  const end = up ? 1 : 0;
+  let cand = rgb;
+  for (let i = 0; i <= LIFT_STEPS; i++) {
+    cand = fromHsl(h, s, l0 + (end - l0) * (i / LIFT_STEPS));
+    if (ok(cand)) return { rgb: cand, steps: i };
+  }
+  return { rgb: cand, steps: LIFT_STEPS };
 }
 
 function css(rgb) {
@@ -152,61 +224,64 @@ function inkOn(surface) {
 // A hue sitting near the black/white crossover (luminance ~0.179) fails BOTH
 // inks almost equally — no ink choice can save it, because black and white
 // are already the two most extreme options (independent grader, 2026-08-07:
-// VSCode's #3B82F6 filled measured 4.27:1 with the BETTER of the two, just
-// under AA). The only remaining lever is the fill's own luminance, nudged the
-// SHORTEST distance — toward black or toward white, whichever gets there in
-// fewer steps — so the set is still unmistakably its own hue and only the
-// colours that actually need it move at all (today just VSCode in the
-// shipped thirteen).
+// the first palette's VSCode #3B82F6 filled measured 4.27:1 with the BETTER
+// of the two, just under AA). The only remaining lever is the fill's own
+// LIGHTNESS, walked the shorter way — darker or lighter — so the set is still
+// unmistakably its own hue at its own saturation.
+//
+// A CORRECTION, NOT A DESIGN. Neither shipped palette needs it (server/
+// config.py picks lightnesses that clear AA on their own, so what the desktop
+// shows is what the phone paints); this is the net under a colour the owner
+// retunes tomorrow, and it stays because the day he does is the day nobody is
+// measuring.
 function fillOn(rgb) {
-  const tryToward = (toward) => {
-    for (let i = 0; i <= LIFT_STEPS; i++) {
-      const cand = mix(rgb, toward, i / LIFT_STEPS);
-      const ink = parseHex(inkOn(cand));
-      // The category button's own dilution, simulated up front rather than
-      // discovered by the audit: ink blended 85:15 toward the fill it sits
-      // on is what a photograph of THAT button actually shows.
-      const diluted = mix(ink, cand, 1 - CAT_OPACITY);
-      if (contrast(diluted, cand) >= FILL_INK_TARGET) return { rgb: cand, steps: i };
-    }
-    return null;
+  // The category button's own dilution, simulated up front rather than
+  // discovered by the audit: ink blended 85:15 toward the fill it sits on is
+  // what a photograph of THAT button actually shows.
+  const ok = (cand) => {
+    const ink = parseHex(inkOn(cand));
+    return contrast(mix(ink, cand, 1 - CAT_OPACITY), cand) >= FILL_INK_TARGET;
   };
-  const toDark = tryToward([0, 0, 0]);
-  const toLight = tryToward([255, 255, 255]);
-  const pick = !toDark ? toLight : !toLight ? toDark :
-    (toDark.steps <= toLight.steps ? toDark : toLight);
-  return pick ? pick.rgb : rgb;   // nothing clears it — leave the hue alone
+  if (ok(rgb)) return rgb;
+  const down = lift(rgb, false, ok);
+  const up = lift(rgb, true, ok);
+  const downOk = ok(down.rgb);
+  const upOk = ok(up.rgb);
+  if (downOk && (!upOk || down.steps <= up.steps)) return down.rgb;
+  if (upOk) return up.rgb;
+  return rgb;   // nothing clears it — leave the colour alone
 }
 
-// The set colour, lifted along the straight line toward whichever of black or
-// white the surface is FURTHEST from, until it clears the target. Hue and
-// saturation ride along, so a lifted cyan is still unmistakably the cyan set —
-// it is the same colour with the luminance the surface demands. Returns the
-// FIRST step that clears, so a colour that already reads is returned untouched
-// (today Mouse, Input, Attach, Navigate, Chrome and Explorer are, and the
-// heaviest lift in the shipped thirteen is VSCode's #3B82F6 -> #76A8F9).
+// The set colour with its LIGHTNESS walked away from the surface — up on a
+// dark page, down on a light one — until it clears the target. Hue and
+// saturation genuinely ride along now (see `lift`), so a lifted teal is a
+// lighter teal and not a grey with a memory of teal, and that is what lets
+// the dark page's palette be as dark as the owner asked: the fill wears the
+// shade he chose, and the OUTLINED look wears the same shade at the lightness
+// a near-black page demands. Returns the FIRST step that clears, so a colour
+// that already reads on its surface is returned untouched.
 function lineOn(rgb, surface) {
   const dark = parseHex(INK_DARK);
   const light = parseHex(INK_LIGHT);
-  const toward = contrast(light, surface) >= contrast(dark, surface) ? light : dark;
-  let best = rgb;
-  for (let i = 0; i <= LIFT_STEPS; i++) {
-    const cand = mix(rgb, toward, i / LIFT_STEPS);
-    best = cand;
-    if (contrast(cand, surface) >= INK_TARGET) return css(cand);
-  }
-  return css(best);   // nothing clears it — the most readable end of the line
+  const up = contrast(light, surface) >= contrast(dark, surface);
+  return lift(rgb, up, (c) => contrast(c, surface) >= INK_TARGET).rgb;
 }
 
-function glowFor(hex) {
-  const rgb = parseHex(hex);
+// The halo an ACTIVE toggle wears (Keys on, Scroll on). It is fed the LIFTED
+// colour, not the raw one (owner correction 2026-08-07): "switched on" is a
+// signal, and a signal drawn in a #1C3878 navy on a #0f172a page is no signal
+// at all. The lifted colour is by construction far from its surface — lighter
+// on a dark page, darker on a light one — so the same rule keeps the halo
+// visible on both without a token per theme.
+function glowFor(rgb) {
   if (!rgb) return null;
-  return `rgb(${rgb[0]} ${rgb[1]} ${rgb[2]} / 0.30)`;
+  return `rgb(${rgb.map((v) => Math.round(v)).join(" ")} / 0.30)`;
 }
 
 // The full name → colour map, shipped colours first and the owner's own sets
-// filled in from the SAME palette (the desktop's SET_COLORS values are the
-// pool — one table to tune, no second list to keep in step). A custom set
+// filled in from the SAME palette (the values of whichever table the desktop
+// sent for the theme in force are the pool — one table to tune per surface, no
+// third list to keep in step). A custom set
 // takes the next colour nothing already wears; if he ever makes more sets
 // than there are colours the pool simply cycles, which is a repeat, not a
 // crash. Deterministic: the order is the order the sets arrive in, so a set's
@@ -252,9 +327,9 @@ function resetSetColors() {
 // really do want different lifts. The caller states it because the caller is
 // the only one that knows; nothing here guesses from the DOM.
 //
-// The properties are set in EVERY theme and read only in `colored`
-// (client/theme.css): a rule that has to un-set itself when the theme changes
-// is a rule that will one day be left behind.
+// The properties are set in EVERY theme and read only in the two coloured
+// ones (client/theme.css): a rule that has to un-set itself when the theme
+// changes is a rule that will one day be left behind.
 function paintSet(el, name, surfaceVar) {
   const color = setColors()[name];
   const rgb = parseHex(color);
@@ -269,24 +344,27 @@ function paintSet(el, name, surfaceVar) {
   const page = pageSurface();
   el.style.setProperty("--set-color", color);
   // FILLED: the button IS this colour, composited over the page in case the
-  // fill token ever carries an alpha of its own — nudged the shortest
-  // distance toward black or white ONLY when black-or-white ink cannot
-  // otherwise clear AA on it (fillOn; today only VSCode moves at all), THEN
-  // given its ink against that same nudged surface, never the raw hue.
+  // fill token ever carries an alpha of its own — its lightness nudged the
+  // shorter way ONLY when black-or-white ink cannot otherwise clear AA on it
+  // (fillOn; neither shipped palette moves at all today), THEN given its ink
+  // against that same surface, never the raw hue.
   const fillRgb = fillOn(over([...rgb, 1], page));
   el.style.setProperty("--set-fill", css(fillRgb));
   el.style.setProperty("--set-ink", inkOn(fillRgb));
   // OUTLINED: the colour is the ink, and it lands on the button's own tint.
-  el.style.setProperty(
-    "--set-line", lineOn(rgb, tokenSurface(surfaceVar || "--glass-fill")));
-  const glow = glowFor(color);
+  const lineRgb = lineOn(rgb, tokenSurface(surfaceVar || "--glass-fill"));
+  el.style.setProperty("--set-line", css(lineRgb));
+  // …and the ACTIVE halo rides the same lifted colour, for the same reason:
+  // it has to be seen against the surface, not against nothing.
+  const glow = glowFor(lineRgb);
   if (glow) el.style.setProperty("--set-glow", glow);
 }
 
 // Put the choice on <body>; every rule in theme.css hangs off these two.
 function writeLook() {
   document.body.dataset.theme =
-    ["dark", "light", "colored"].includes(ui.theme) ? ui.theme : "dark";
+    ["dark", "light", "colored", "colored-light"].includes(ui.theme)
+      ? ui.theme : "dark";
   document.body.dataset.fill = ui.fill === "full" ? "full" : "transparent";
   // The canvas is painted by JS, not by CSS, so it cannot inherit a variable
   // — it is TOLD the page colour once per look change (client/render.js).

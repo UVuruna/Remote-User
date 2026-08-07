@@ -26,11 +26,17 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "server"))
 
 SIZES = [("portrait 412x915", 412, 915), ("landscape 915x412", 915, 412)]
 
-# EVERY LOOK THE PRODUCT SHIPS (build round R3, 2026-08-07). The desktop
-# chooses one of three themes and one of two fills, so there are six real
-# renderings of every panel — and the CONTRAST check below is the only thing
-# standing between `colored` and a set whose own name is unreadable on its own
+# EVERY LOOK THE PRODUCT SHIPS (build round R3, 2026-08-07; the fourth theme
+# added the same day by the owner's colour correction). The desktop chooses one
+# of FOUR themes and one of two fills, so there are eight real renderings of
+# every panel — and the CONTRAST check below is the only thing standing
+# between a coloured theme and a set whose own name is unreadable on its own
 # colour. A theme audited in one combination is not audited.
+#
+# `colored-light` is not a variation of `colored` for this file's purposes: it
+# is a DIFFERENT page under a DIFFERENT palette (server/config.py ships two),
+# and the whole reason the sweep exists is that a colour which reads on one
+# surface can be invisible on the other.
 #
 # The full panel sweep runs in every combination at PORTRAIT (where the cards
 # are narrowest and a row starves first); landscape keeps the default look,
@@ -38,11 +44,12 @@ SIZES = [("portrait 412x915", 412, 915), ("landscape 915x412", 915, 412)]
 # a colour. Both sizes get the contrast check in every combination.
 LOOKS = [("dark", "transparent"), ("dark", "full"),
          ("light", "transparent"), ("light", "full"),
-         ("colored", "transparent"), ("colored", "full")]
+         ("colored", "transparent"), ("colored", "full"),
+         ("colored-light", "transparent"), ("colored-light", "full")]
 DEFAULT_LOOK = LOOKS[0]
 
-# The panels SHOT in a non-default look. Shooting all eleven in all six would
-# be sixty-six pictures nobody will open, and a picture nobody opened is not
+# The panels SHOT in a non-default look. Shooting all eleven in all eight
+# would be eighty-eight pictures nobody will open, and a picture nobody opened is not
 # proof (rules/GUI.md). These three are the ones that carry colour: the sets
 # list with its live badge, the quality panel's segmented rows, and the
 # dictation card's status column.
@@ -137,7 +144,7 @@ def _shot_label(name: str, look, portrait: bool = True) -> str:
 # [15, 23, 42] - the dark theme's --surface-0 - which would have quietly
 # scored every LIGHT-theme panel against a dark page that is not there, and
 # passed unreadable combinations. It now comes from the live variable, so the
-# same check is honest in all six looks.
+# same check is honest in all eight looks.
 #
 # Installed ONCE per page as `window.__contrast(root)` so the panels, the
 # D-pad and the wheel are all judged by the same function instead of by three
@@ -332,7 +339,7 @@ window.__truncated = (root) => {
 // EVERY COLOUR IN THE TABLE, not merely the three the fixture happens to show
 // (independent grader, 2026-08-07: "that tooth is the only safety net for
 // `colored` when the owner retunes his palette"). tests/fixtures/actions.json
-// ships Mouse / Input / Edit, so ten of the desktop's thirteen SET_COLORS had
+// ships Mouse / Input / Edit, so ten of the desktop's thirteen set colours had
 // never been measured on any surface at all — a set whose colour the owner
 // darkens tomorrow would reach his phone unreadable with every check green.
 // `paintSet` is the product's own entry point and takes a NAME, so the real
@@ -359,8 +366,8 @@ window.__sweepSetColours = (names) => {
 """
 
 
-def _apply_look(page, theme, fill, colors):
-    """Put the page into one of the six looks the desktop can choose.
+def _apply_look(page, theme, fill):
+    """Put the page into one of the eight looks the desktop can choose.
 
     Through `applyUi`, the app's OWN entry point — the same function the
     `config` frame calls — so the audit can never be measuring a state the
@@ -377,11 +384,19 @@ def _apply_look(page, theme, fill, colors):
     — one wrong picture per browser context, which is exactly the two of twelve
     a third independent grader found by sampling page colours (2026-08-07).
     In-memory only; `save_user_settings` is the only writer of the owner's file
-    and is never called here."""
+    and is never called here.
+
+    AND THE PALETTE COMES WITH IT. The colours are no longer a parameter this
+    file carries around: since the coloured look gained a second surface, WHICH
+    of the two shipped tables a theme wears is a decision, and it belongs to
+    the one place that makes it for the real phone — `config.ui_config()`. An
+    audit that chose the palette itself could paint the light page with the
+    dark table and report a green sweep of colours no phone will ever show."""
     import config as server_config
     server_config.apply(phone_theme=theme, phone_fill=fill)
-    page.evaluate("([t, f, c]) => applyUi({ theme: t, fill: f, colors: c })",
-                  [theme, fill, colors])
+    ui = server_config.ui_config()
+    page.evaluate("(ui) => applyUi(ui)", ui)
+    return ui
 
 
 def _shoot(page, label, look, results):
@@ -609,10 +624,12 @@ PANELS = (
 
 def main() -> int:
     import test_input_pipeline as gate
-    # The shipped set colours, from the ONE table that defines them
-    # (server/config.py) — the audit must colour the page exactly as the
-    # server would, never with a copy that can drift.
-    from config import SET_COLORS
+    # The shipped set NAMES, from the tables that define them
+    # (server/config.py). The colours themselves are fetched per look inside
+    # `_apply_look` — a theme picks its own palette there — but the names are
+    # the same thirteen in both, and they are what the sweep iterates.
+    from config import set_colors
+    SET_NAMES = list(set_colors("colored"))
 
     threading.Thread(target=gate.run_server, daemon=True).start()
     gate.server_ready.wait(15)
@@ -678,7 +695,7 @@ def main() -> int:
             for look in LOOKS:
                 theme, fill = look
                 look_name = f"{theme}/{fill}"
-                _apply_look(page, theme, fill, SET_COLORS)
+                _apply_look(page, theme, fill)
 
                 # The D-pad and the wheel FIRST — they are the surfaces the
                 # `colored` theme actually paints, and no panel check has ever
@@ -699,7 +716,7 @@ def main() -> int:
                 # EVERY colour of the desktop's table, on both surfaces — not
                 # only the three the pinned fixture puts on screen.
                 bad = page.evaluate("(names) => __sweepSetColours(names)",
-                                    list(SET_COLORS))
+                                    SET_NAMES)
                 results[f"every set colour @ {label} @ {look_name}"] = not bad
                 if bad:
                     print(f"  DETAIL set colours @ {label} @ {look_name}: {bad}")
@@ -724,7 +741,7 @@ def main() -> int:
 
             # Everything below is geometry, and it is measured in the look the
             # product ships by default.
-            _apply_look(page, *DEFAULT_LOOK, SET_COLORS)
+            _apply_look(page, *DEFAULT_LOOK)
 
             # D-pad labels: a set's POOL may hold reserve commands with longer
             # names than the shipped four ("Copy path", "Go to file"), and the
