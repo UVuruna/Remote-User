@@ -39,6 +39,11 @@ ASSET_DIR = (BUNDLE_DIR if FROZEN else PROJECT_ROOT) / "assets"
 QR_SIZE = 216
 REFRESH_MS = 1000
 PAIRING_RECHECK_TICKS = 5  # re-check addresses/Tailscale every N refresh ticks
+# How often a RUNNING app asks GitHub again (owner 2026-08-07). Fifteen
+# minutes: a release he is waiting for reaches him inside one coffee, and 96
+# unauthenticated calls a day sit far under any rate limit. See
+# `_check_updates` for the day this number was worth.
+UPDATE_CHECK_MS = 15 * 60 * 1000
 
 RESOLUTIONS = [("Native (up to 4K)", 3840), ("2560 — QHD", 2560),
                ("1920 — Full HD", 1920), ("1600 — light", 1600)]
@@ -118,6 +123,12 @@ class MainWindow(QMainWindow):
         self._settle_minimum(keep=QSize(0, 0))
 
         threading.Thread(target=self._check_updates, daemon=True).start()
+        # …and again while the app RUNS (owner 2026-08-07, and this is the
+        # single most expensive defect this project has had). See
+        # `_check_updates` for what one-check-per-start actually cost him.
+        self._update_timer = QTimer(self)
+        self._update_timer.timeout.connect(self._recheck_updates)
+        self._update_timer.start(UPDATE_CHECK_MS)
 
     # -- the law's computed minimum ----------------------------------------
 
@@ -544,11 +555,35 @@ class MainWindow(QMainWindow):
     # -- updates -----------------------------------------------------------
 
     def _check_updates(self) -> None:
-        """Worker: one GitHub check per start. Only sets the attribute — the
-        refresh timer shows the button on the UI thread."""
+        """Worker: ask GitHub whether a newer release exists. Only sets the
+        attribute — the refresh timer shows the button on the UI thread.
+
+        THIS RAN ONCE PER START UNTIL 2026-08-07, and that one word cost the
+        owner more than any bug in this repo. Proven from his own machine the
+        morning he lost his temper:
+
+            installed exe 0.0.089, running since 2026-08-06 19:49:58
+            v0.0.090 published                   2026-08-06 20:06
+
+        He had been testing — and reporting as broken — a build published
+        BEFORE the fix he was testing for, for a full day, because the app he
+        leaves running for days had asked GitHub exactly once, seventeen
+        minutes too early. Every round after that re-diagnosed a bug that was
+        already fixed and released. A desktop app that only looks for its own
+        update at startup is, for this owner, an app that never updates.
+        """
         self._update = updates.check()
         if self._update:
             self._update_state = "found"
+
+    def _recheck_updates(self) -> None:
+        """The periodic re-check. Never disturbs an update already in flight
+        (found / downloading / ready / launched) — only a state of None can
+        still learn something new, and re-arming a button he is mid-way
+        through installing would be its own bug."""
+        if self._update_state is not None:
+            return
+        threading.Thread(target=self._check_updates, daemon=True).start()
 
     def _install_update(self) -> None:
         upd = self._update
