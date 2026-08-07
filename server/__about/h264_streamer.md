@@ -28,13 +28,43 @@ One client's encoder: frames from a personal `FrameSink` → ffmpeg stdin (rawvi
 - `stop()`: idempotent, callable from any thread — detaches the sink, closes stdin, terminates ffmpeg; the daemon threads unwind on their own
 - fMP4 flags: `frag_keyframe+empty_moov+default_base_moof`, `-frag_duration` below one frame interval, `-flush_packets 1` — one promptly-flushed fragment per encoded frame
 
+### SessionOwner — the claim (live failure 2026-08-07)
+One consumer's claim on one session, and the reason "nothing runs while nobody is watching" is now enforceable.
+
+`await asyncio.to_thread(manager.open_session, …)` **cannot be cancelled.** Cancelling the awaiting task raises `CancelledError` at the `await` immediately, but the worker thread runs on: ffmpeg spawns, `open_session` returns, the session registers — and the coroutine that would have closed it never bound the name, so nothing anywhere could reach it again. The owner's server log dated it to the millisecond:
+
+```
+12:05:11,822  Client authenticated: port=56482
+12:05:12,730  dxcam: Frame buffer build(start): 3840x2160    <- open_session, in the thread
+12:05:12,732  Client disconnected: port=56482                <- the task is cancelled here
+12:05:12,951  H.264 session opened - 1 active                <- 219 ms too late; the orphan
+12:05:21,218  WARNING Client stream backlog - resetting ...  <- and every ~7 s after
+```
+
+That orphan held `_sessions` non-empty for four hours (so capture could never stop), reached 12,924 s of ffmpeg CPU at native 4K with no phone connected, and wrote 1,890 backlog warnings — while the owner's mouse juddered at his own desk.
+
+So the claim is created on the CALLER's thread, before the encoder exists, and a mutex settles the race both ways round:
+
+| Order | What happens |
+|-------|--------------|
+| `take()` then `release()` | the session registers normally; `release()` is what closes it |
+| `release()` then `take()` | `take()` refuses; the manager `_abandon`s the session it just built — terminated, never registered, and SAID so in the log |
+
+- `alive`: false once the consumer is gone. The [Web Layer](web.md)'s queue closure reads it, so a session nobody can hear is never "reset" on a dead client's behalf — the **second, independent** defence (either one alone stops the endless reset loop; both are needed, because only the claim stops the session leaking).
+- `release()` is idempotent, callable from any thread, and fast enough to run inside a `finally` mid-cancellation. It calls `close_session` OUTSIDE its own lock: the encoder thread holds the manager's lock while calling `take()`, and taking both in the other order here is the one deadlock this design could have.
+
 ### H264Manager
 What the [Web Layer](web.md) talks to (duck interface shared with `JpegStreamer`; `mode = "h264"`):
 
-- `open_session(on_data, on_end)` / `close_session(session)`: session registry; capture starts with the first client and stops with the last — nothing runs while nobody is watching
+- `new_owner()`: a fresh `SessionOwner` for the caller to hand to `open_session`. Must be created on the caller's own thread — that timing IS the defence
+- `open_session(on_data, on_end, quality, owner)` / `close_session(session)`: session registry; capture starts with the first client and stops with the last — nothing runs while nobody is watching. A session whose claim is already released, or one that finished starting after `shutdown()`, is closed and never registered
 - `switch_to(index)`: ends every session (owners reopen automatically and resend `config`) and swaps the capture monitor
 - `take_screenshot()`, `width` / `height` / `monitor_index`, `output_count()`: delegated to the source
-- `shutdown()`: server teardown — ends every session and stops capture
+- `shutdown()`: server teardown — ends every session, stops capture, and stays ended (`_shut_down`), because a session already inside `session.start()` on its own thread finishes AFTER `shutdown()` returns
+
+Gate: [`tests/test_stream_lifecycle.py`](../../tests/___tests.md), fail-closed in `build.py` (0g/6).
+
+> **Note on lock scope:** `open_session` holds `_lock` across the blocking ffmpeg spawn, so `shutdown()` from another thread cannot interleave with it — the post-start `_shut_down` check is defence in depth for a future in which that scope narrows, not a path reachable today.
 
 ## Module functions
 - `_moov_end(buf)`: byte length of the complete init segment (through `moov`) if fully buffered, else 0 — walks top-level MP4 boxes; raises on a malformed box

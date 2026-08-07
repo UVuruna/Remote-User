@@ -79,19 +79,53 @@ Pseudocode:
 
 ```mermaid
 flowchart LR
-    A["open_session(on_data, on_end)"] --> B{source already running?}
+    A["open_session(on_data, on_end, quality, owner)"] --> A2{shut down?}
+    A2 -- yes --> A3["raise RuntimeError"]
+    A2 -- no --> B{source already running?}
     B -- no --> C["source.start()"]
     B -- yes --> D
     C --> D["new H264Session; session.start()"]
-    D -- raises --> E{any sessions left?}
-    E -- no --> F["source.stop()"]
-    E -- yes --> G[re-raise]
-    F --> G
-    D -- ok --> H["add to _sessions"]
+    D -- raises --> E["_stop_source_if_idle(); re-raise"]
+    D -- ok --> O{"owner.take(self, session)"}
+    O -- refused: the consumer is gone --> P["_abandon: session.stop(),
+    NOT registered, logged"]
+    O -- accepted --> H["add to _sessions"]
 
     I["close_session(session)"] --> J["session.stop()"]
     J --> K["remove from _sessions"]
-    K --> L{_sessions empty?}
-    L -- yes --> M["source.stop()"]
-    L -- no --> N[capture keeps running for the others]
+    K --> L["_stop_source_if_idle()"]
 ```
+
+## Algorithm — the claim (SessionOwner), the 2026-08-07 fix
+
+`asyncio.to_thread` cannot cancel the thread it started, so the consumer's
+claim — not the returned reference — is what owns the session's life.
+
+```mermaid
+sequenceDiagram
+    participant W as _stream_h264 (event loop)
+    participant O as SessionOwner
+    participant T as encoder thread
+    W->>O: new_owner() — BEFORE the thread exists
+    W->>T: to_thread(open_session, …, owner)
+    Note over W: socket dies / 4409 / server stop
+    W->>O: release()  (except BaseException / finally)
+    T->>O: take(manager, session)
+    O-->>T: False — the consumer is gone
+    T->>T: _abandon: terminate ffmpeg, do not register
+```
+
+Pseudocode:
+
+    SessionOwner.take(manager, session):      # encoder thread
+        WITH lock:
+            IF NOT alive -> RETURN False      # do not register it
+            remember manager+session; RETURN True
+
+    SessionOwner.release():                   # consumer, any thread
+        WITH lock:
+            alive = False
+            grab remembered manager+session, forget them
+        IF a session was remembered -> manager.close_session(it)
+        # deliberately OUTSIDE the lock: close_session takes the manager's
+        # lock, which the encoder thread holds while calling take()

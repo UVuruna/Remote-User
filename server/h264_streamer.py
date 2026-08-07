@@ -14,6 +14,10 @@ parsed (never guessed) and sent to the client in `config` — then one
 `H264Manager` is what the web layer talks to: it tracks sessions, starts
 capture when the first client arrives and stops it when the last one leaves
 (nothing runs while nobody is watching), and orchestrates monitor switching.
+
+`SessionOwner` is the rule that "nothing runs while nobody is watching" is
+allowed to depend on — see its docstring for the live failure that proved a
+plain `open_session()/close_session()` pair cannot carry it.
 """
 
 import logging
@@ -204,6 +208,74 @@ class H264Session:
             self._on_end()
 
 
+class SessionOwner:
+    """One consumer's CLAIM on one session — the thing that survives an
+    `asyncio.to_thread` cancellation.
+
+    Cancelling `await asyncio.to_thread(manager.open_session, …)` does not stop
+    the worker thread it started. ffmpeg still spawns, `open_session` still
+    returns, the session still registers — and the coroutine that would have
+    closed it never learned its name, because the `await` raised instead of
+    assigning. That is the live failure of 2026-08-07: the phone's socket died
+    18 ms after auth, 205 ms before its own encoder finished starting, and the
+    orphan then ran for FOUR HOURS at native 4K with nobody on the other end,
+    holding capture alive (`_sessions` was never empty again), burning 12,000
+    seconds of CPU and writing 1,890 "stream backlog" warnings into the owner's
+    log while his mouse juddered.
+
+    So the claim is made BEFORE the thread starts and released by the
+    consumer's own teardown — every way a connection can end: a clean close, a
+    4409 takeover, network death with no close frame, an exception in the send
+    path, server stop. The mutex settles the race in both directions:
+
+    - `take()` first   → the session registers normally, and the later
+      `release()` is what closes it;
+    - `release()` first → `take()` refuses, and the manager closes the session
+      it has just built instead of registering it.
+
+    Either way, no session outlives its consumer, and `alive` is the flag the
+    web layer's queue closure reads so a session nobody can hear is never
+    "reset" on a dead client's behalf.
+    """
+
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._alive = True
+        self._manager: "H264Manager | None" = None
+        self._session: H264Session | None = None
+
+    @property
+    def alive(self) -> bool:
+        """False once the consumer is gone. Nothing may be queued for it and
+        nothing may be reset on its behalf after that."""
+        return self._alive
+
+    def take(self, manager: "H264Manager", session: H264Session) -> bool:
+        """Manager side, on the encoder thread: hand the finished session to
+        its claim. False means the consumer already left — do NOT register it."""
+        with self._lock:
+            if not self._alive:
+                return False
+            self._manager, self._session = manager, session
+            return True
+
+    def release(self) -> None:
+        """Consumer side: I am gone. Closes the session if one was registered
+        and refuses every later `take()`. Idempotent, callable from any thread,
+        and fast enough to run inside a `finally` mid-cancellation.
+
+        `close_session` is deliberately called OUTSIDE this lock: it takes the
+        manager's lock, and the encoder thread holds the manager's lock while
+        calling `take()` — holding both here in the other order would be the
+        one deadlock this design can have."""
+        with self._lock:
+            self._alive = False
+            manager, session = self._manager, self._session
+            self._manager = self._session = None
+        if session is not None:
+            manager.close_session(session)
+
+
 class H264Manager:
     """The web layer's H.264 backend: session registry + capture lifecycle +
     monitor switching. All blocking methods are called via asyncio.to_thread."""
@@ -215,6 +287,7 @@ class H264Manager:
         self._source = RawFrameSource()
         self._sessions: set[H264Session] = set()
         self._source_running = False
+        self._shut_down = False
         self._lock = threading.Lock()
 
     @property
@@ -243,10 +316,28 @@ class H264Manager:
         connected (capture idles otherwise and the request times out)."""
         return self._source.take_screenshot()
 
-    def open_session(self, on_data, on_end, quality: dict | None = None) -> H264Session:
+    @staticmethod
+    def new_owner() -> SessionOwner:
+        """A fresh claim for the caller to hand to `open_session`. Made on the
+        caller's OWN thread, before the blocking open starts — that timing is
+        the whole defence, so this must never be created inside the thread."""
+        return SessionOwner()
+
+    def open_session(self, on_data, on_end, quality: dict | None = None,
+                     owner: SessionOwner | None = None) -> H264Session:
         """Starts capture with the first client. Blocking (ffmpeg spawn + init
-        segment wait). Raises RuntimeError when the encoder fails to start."""
+        segment wait). Raises RuntimeError when the encoder fails to start, or
+        when the manager is already shut down.
+
+        `owner` is the caller's claim (`new_owner()`). A session whose claim is
+        already released — or one that finished starting after the server began
+        shutting down — is CLOSED here and never registered: it has no consumer
+        and nothing else would ever be able to name it (see `SessionOwner`).
+        The returned object is then a dead session, which is exactly what the
+        cancelled caller does with its unread result."""
         with self._lock:
+            if self._shut_down:
+                raise RuntimeError("the H.264 manager is shut down")
             if not self._source_running:
                 self._source.start()
                 self._source_running = True
@@ -255,10 +346,12 @@ class H264Manager:
             try:
                 session.start()
             except Exception:  # RuntimeError (no head) or OSError (Popen) — same cleanup
-                if not self._sessions:
-                    self._source.stop()
-                    self._source_running = False
+                self._stop_source_if_idle()
                 raise
+            if self._shut_down:
+                return self._abandon(session, "the server is shutting down")
+            if owner is not None and not owner.take(self, session):
+                return self._abandon(session, "its client was already gone")
             self._sessions.add(session)
             logger.info("H.264 session opened — %d active, codec %s, %dx%d",
                         len(self._sessions), session.codec, session.width, session.height)
@@ -270,10 +363,25 @@ class H264Manager:
         session.stop()
         with self._lock:
             self._sessions.discard(session)
-            if not self._sessions and self._source_running:
-                self._source.stop()
-                self._source_running = False
+            self._stop_source_if_idle()
             logger.info("H.264 session closed — %d active", len(self._sessions))
+
+    def _abandon(self, session: H264Session, why: str) -> H264Session:
+        """Caller holds `_lock`. A session that finished starting with nobody
+        left to read it: terminate ffmpeg, leave the registry untouched, and
+        SAY so — an abandoned session used to be indistinguishable from a
+        working one in the log, for four hours (2026-08-07)."""
+        session.stop()
+        self._stop_source_if_idle()
+        logger.warning("H.264 session abandoned during startup (%s) — closed, "
+                       "not registered; %d active", why, len(self._sessions))
+        return session
+
+    def _stop_source_if_idle(self) -> None:
+        """Caller holds `_lock`. Capture runs only while a session needs it."""
+        if not self._sessions and self._source_running:
+            self._source.stop()
+            self._source_running = False
 
     def switch_to(self, index: int) -> bool:
         """Ends every session (their owners reopen automatically and resend
@@ -287,8 +395,12 @@ class H264Manager:
             return self._source.switch_monitor(index)
 
     def shutdown(self) -> None:
-        """Server teardown: end everything."""
+        """Server teardown: end everything — and stay ended. The flag is not
+        cosmetic: a session already inside `session.start()` on its own thread
+        finishes AFTER this returns, and without the flag it would register
+        itself into a manager the process has finished with."""
         with self._lock:
+            self._shut_down = True
             for session in list(self._sessions):
                 session.stop()
             self._sessions.clear()
