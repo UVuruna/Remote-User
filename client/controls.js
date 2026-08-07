@@ -21,6 +21,44 @@ function svg(name) {
   return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICONS[name] || ""}</svg>`;
 }
 
+// --- One activation per button (build round G1, 2026-08-07) ----------------
+// A gamepad press must BE a button press, not a second implementation of one.
+// CLAUDE.md constraint 9 exists because a parallel path is exactly what died
+// on the real device: an up-only handler that drifted from Android's stolen
+// touches killed every control at once. So every control button registers
+// exactly ONE activator here — the same function object its own pointer
+// handlers call — and `buttonPress()` is the single door the pad
+// ([Gamepad](gamepad.js)) comes in by. Nothing is copied: a CLICK/HOLD
+// button's `hold` IS what pointerdown/pointerup run, and a tap button's `tap`
+// IS what pointerup and the pointercancel rescue run.
+//
+// It lives HERE, at the top, for the same hoisting reason the file header
+// gives: `keepFocus` is called at the top level by the wizard section further
+// down, before its own definition, so the WeakMap it writes into must already
+// be initialized by then (a `const` further down is in its temporal dead zone
+// at that moment — caught by client/load_test.js the first time).
+const ACTIVATORS = new WeakMap(); // button element -> {tap} | {hold}
+
+// `down` follows the physical press. A CLICK/HOLD mouse button holds the PC
+// button down BETWEEN the two calls (owner 2026-08-04 — a held pad arrow is a
+// held finger); every other button acts on the RELEASE, which is exactly where
+// a finger's pointerup acts. Returns false for an element carrying no action —
+// a D-pad slot the current set left empty.
+function buttonPress(el, down) {
+  const a = el && ACTIVATORS.get(el);
+  if (!a) return false;
+  if (a.hold) {
+    a.hold(down);   // hold buttons light themselves — the PC button IS down
+    return true;
+  }
+  // The screen always SHOWS what the pad did (build round G2): `.held` is the
+  // pressed-in glow a finger already earns on a CLICK/HOLD button, borrowed
+  // for the moment a pad key is down on a tap button.
+  el.classList.toggle("held", down);
+  if (!down) a.tap();
+  return true;
+}
+
 // --- Built-in group actions -----------------------------------------------
 
 const BUILTINS = {
@@ -502,10 +540,23 @@ const POSITIONS = ["up", "left", "right", "down"];
 // before this file (THE STRUCTURE LAW, 2026-08-06).
 const groups = { left: 0, right: 0 };  // which category each D-pad group shows
 
+// The button sitting in one D-pad slot ("up"/"left"/"right"/"down"), or null
+// when the current set has nothing there. The slot IS the grid area
+// `makeActionButton` stamps on it, so this stays true whatever `order_land` /
+// `order_port` did to the arrangement — which is the point: the pad's arrows
+// press what the owner SEES in that direction, not a fixed index into the set.
+function groupButton(side, pos) {
+  return [...groupEls[side].children].find((el) => el.style.gridArea === pos) || null;
+}
+
 
 // Re-render after anything that changes the category list (actions arrived,
 // layout focus changed) — a group left pointing past the end falls back to 0.
 function refreshCategories() {
+  // A fresh set list may hold a custom set that has never been given a
+  // colour — the map is rebuilt here, once, rather than per button
+  // (client/theme.js).
+  resetSetColors();
   const n = allCats().length;
   for (const side of ["left", "right"]) {
     if (groups[side] >= n) groups[side] = 0;
@@ -525,6 +576,9 @@ function refreshCategories() {
 // field stays open). Proven by the cancel cases in tests/test_input_pipeline.py.
 const CANCEL_TAP_SLOP = 18; // CSS px of travel that still counts as a stolen tap
 function keepFocus(el, onTap) {
+  // ONE activator per button — see the top of this file. `onTap` is stored,
+  // never re-implemented: the pad calls this very function object.
+  ACTIVATORS.set(el, { tap: onTap });
   let press = null; // {id, x, y, moved} — implicit touch capture routes the events here
   el.addEventListener("pointerdown", (e) => {
     e.preventDefault();
@@ -564,17 +618,21 @@ function makeButton(cls, iconName, label) {
 // wait to see how the touch ends).
 function holdButton(el, button) {
   let pid = null;
+  // The one body both the finger and the pad run (see buttonPress above).
+  const hold = (down) => {
+    el.classList.toggle("held", down);
+    send({ type: "press", button, down });
+  };
+  ACTIVATORS.set(el, { hold });
   el.addEventListener("pointerdown", (e) => {
     e.preventDefault();
     pid = e.pointerId;
-    el.classList.add("held");
-    send({ type: "press", button, down: true });
+    hold(true);
   });
   const release = (e) => {
     if (pid === null || e.pointerId !== pid) return;
     pid = null;
-    el.classList.remove("held");
-    send({ type: "press", button, down: false });
+    hold(false);
   };
   el.addEventListener("pointerup", (e) => { e.preventDefault(); release(e); });
   el.addEventListener("pointercancel", release);
@@ -722,6 +780,13 @@ function renderGroup(side) {
   host.innerHTML = "";
   const cat = allCats()[groups[side]];
   if (!cat) return;
+  // The GROUP wears the set's colour, so its four buttons and its category
+  // button inherit it — one write instead of five, and the `colored` theme
+  // needs nothing else (client/theme.css). A no-op in every other theme.
+  // `--glass-fill` is what a D-pad button is painted with, and the readable
+  // ink is derived from that surface, so the surface is NAMED rather than
+  // guessed (client/theme.js → paintSet).
+  paintSet(host, cat.name, "--glass-fill");
 
   const center = makeButton("ctl cat", cat.icon, cat.name);
   center.style.gridArea = "center";
@@ -761,6 +826,10 @@ function openWheel(side) {
     const item = document.createElement("div");
     item.className = "wheel-item" + (i === groups[side] ? " current" : "");
     item.innerHTML = svg(cat.icon) + `<span>${cat.name}</span>`;
+    // The wheel is where the colours SAY what they are — and a wheel item is
+    // painted with `--glass-strong` (0.85), a different surface from a D-pad
+    // button's 0.20 tint, so it gets its own ink.
+    paintSet(item, cat.name, "--glass-strong");
     item.style.left = `${cx + WHEEL_RADIUS * Math.cos(angle)}px`;
     item.style.top = `${cy + WHEEL_RADIUS * Math.sin(angle)}px`;
     keepFocus(item, () => {
@@ -779,6 +848,9 @@ function openWheel(side) {
 
   wheelEl.addEventListener("pointerdown", backdropCancel);
   wheelEl.classList.add("open");
+  // The dimming veil is a layer of its own, under our chrome and over the
+  // stream (client/style.css → body.wheel-open::before) — see the note there.
+  document.body.classList.add("wheel-open");
 }
 
 function backdropCancel(e) {
@@ -790,6 +862,7 @@ function backdropCancel(e) {
 
 function closeWheel() {
   wheelEl.classList.remove("open");
+  document.body.classList.remove("wheel-open");
   wheelEl.removeEventListener("pointerdown", backdropCancel);
   wheelEl.innerHTML = "";
 }

@@ -61,3 +61,11 @@ fails.
   cross-file forward reference that is safe in the real page (function
   hoisting across `<script>` tags in one document) would falsely fail if each
   file ran in isolation.
+
+## Build round R3 (2026-08-07) — themes
+
+`theme.js` joined `FILES` in build round R3, in the position `index.html`
+loads it (7th, right after `controls.js`). The `<body>` stub gained a
+`dataset` object with it — `theme.js` writes `data-theme` / `data-fill` onto
+the body at load, which is exactly the kind of load-time error this harness
+exists to catch, and it caught it.

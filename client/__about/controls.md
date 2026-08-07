@@ -36,6 +36,8 @@ for the split's general load-order reasoning.
   `renderGroup("left"/"right")`; the `config` handler calls
   `updateAnywhereBanner()`/`refreshUpdateBanner()`
 - [Gestures](gestures.md) — reads `keyboardOpen()`
+- [Gamepad](gamepad.md) — every pad button acts through `buttonPress`, and the
+  D-pad/face arrows find their targets through `groupButton`
 - [Layouts](layouts.md) — every layout button is wired through `keepFocus`,
   and it uses `svg`, `showToast` and `IN_APP` from here
 
@@ -144,6 +146,24 @@ for the split's general load-order reasoning.
   the file picker/IME) plus a `pointercancel` rescue when travel stayed under
   `CANCEL_TAP_SLOP` (Android steals edge-zone touches and ends them with a
   cancel — an up-only handler silently never fires there).
+- `ACTIVATORS` / `buttonPress(el, down)` — **one activation per button**
+  (build round G1, 2026-08-07). `keepFocus` and `holdButton` each register
+  exactly ONE activator per element, and `buttonPress` is the single door a
+  GAMEPAD press comes in by ([Gamepad](gamepad.md)) — a hold button's `hold`
+  IS what its pointerdown/pointerup run, a tap button's `tap` IS what its
+  pointerup and pointercancel rescue run. Nothing is duplicated, which is the
+  point: constraint 9 is in CLAUDE.md because a second, parallel button path
+  is precisely what killed every control on the real device once already.
+  `down` follows the physical press, so a held pad arrow holds the PC button
+  exactly like a finger; every other button acts on the RELEASE. It also
+  paints `.held` while a pad key is down, so the screen always shows what the
+  pad did (build round G2) — the same glow a finger earns on a hold button, no
+  new styling.
+- `groupButton(side, pos)` — the button sitting in one D-pad slot
+  (`"up"`/`"left"`/`"right"`/`"down"`), found by the grid area
+  `makeActionButton` stamps on it. The pad's arrows therefore press what the
+  owner SEES in that direction even when a set carries its own `order_land` /
+  `order_port` arrangement.
 - `makeButton`/`makeActionButton`/`renderGroup` — builds a D-pad group's
   buttons from the current `actions.json` category.
 - `openWheel`/`backdropCancel`/`closeWheel` — the tap-based category picker
@@ -205,3 +225,16 @@ on this phone right now, and may they all fit"* — the per-device prefs, the
 app-aware matching, the cap of 8 — moved to **[sets.js](sets.md)**, loaded
 before this file. What stays here is the wheel, the D-pad groups and what a
 button DOES. `groups` (which category each side shows) stayed with them.
+
+## Build round R3 (2026-08-07) — themes
+
+Two calls into [theme.js](theme.md), and nothing else changed here:
+
+- `refreshCategories()` starts with `resetSetColors()` — a fresh set list may
+  hold a custom set that has never been given a colour, and the map is rebuilt
+  once rather than per button.
+- `renderGroup(side)` and `openWheel(side)` call `paintSet(el, cat.name)`. The
+  element painted is the one that OWNS the set — the D-pad GROUP, or a wheel
+  item — so its four buttons, its category button and all their labels inherit
+  `--set-color` / `--set-ink` / `--set-glow` in one write instead of five. A
+  no-op in every theme but `colored`.
