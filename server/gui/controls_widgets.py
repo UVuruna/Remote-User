@@ -528,6 +528,14 @@ class CommandTable(QTableWidget):
             elif btn.get("key"):
                 name, icon_name = btn.get("label", ""), btn.get("icon", "")
                 does, shortcut = "key", btn.get("key", "")
+            elif btn.get("text") is not None:
+                # A TYPED command (the Claude set's slash commands): the server
+                # puts the text in the clipboard and pastes it. Calling that a
+                # "chord" and showing an empty shortcut told the owner ten rows
+                # of a lie about his own buttons (independent grader,
+                # 2026-08-07) — a row must say what the button really does.
+                name, icon_name = btn.get("label", ""), btn.get("icon", "")
+                does, shortcut = "types", btn.get("text", "")
             else:
                 name, icon_name = btn.get("label", ""), btn.get("icon", "")
                 does, shortcut = "chord", btn.get("chord", "")

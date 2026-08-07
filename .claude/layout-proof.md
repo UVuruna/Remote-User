@@ -2034,3 +2034,359 @@ line in the next round's task list:
   `SettingsWindow_notify_healthy` shots dated 18:41 were written by another
   process and no committed entry point regenerates them. They are not in
   `visual-proof.json` and I did not grade them.
+
+## Addendum — HEAD moved under me, so I re-shot everything again
+
+Written after the grade above, so the record is exact rather than tidy. While I
+was writing my verdict the round's coordinator committed twice more (b9bda3f,
+then 9ae2d55 at 20:12:08, which swept in this very file and my toast shot).
+That left every picture in `.claude/visual-proof.json` OLDER than the commit it
+claims to prove — a thing THE VISUAL PROOF refuses outright, and rightly: a
+picture taken before the commit is not evidence of the commit.
+
+So I re-rendered all of it a second time, after 20:12:08 and with no source
+changed in between: `tests/test_layout_audit.py` (exit 0),
+`tests/test_layout_audit_qt.py` (exit 0), the hover script, and my own toast
+shot. Then I set `commit` to `9ae2d55`. Every measurement in the block above
+was re-taken on those final bytes and every one of them reproduced exactly —
+the dark fill axis still 16 / 8.97 %, the light landscape page still
+rgb(236,238,246), the chips still x74->749 and x198->891, the Region frame
+still x134->689 / y198->1135, the Settings error line still rgb(239,68,68) on
+rgb(30,41,59). Determinism, checked three times rather than assumed once.
+
+I then ran the gate's own validator against the file
+(`rules/hooks/visual_proof_guard.py::validate_proof`): **0 problems** —
+`commit` matches HEAD, `grader` differs from `implementer`, every image exists,
+is a real screenshot, is newer than the commit, and no grade is below 8.
+
+The standing trap, stated so the next round does not fall into it: committing
+the proof file moves HEAD past the shots, so the pictures must be re-rendered
+AFTER the commit that carries them, or the guard blocks on its own bookkeeping.
+
+One entry was REMOVED rather than graded: `MainWindow reopened from the tray
+(light)`. Commit b9bda3f deliberately stopped photographing that case
+(`NO_SHOT` in `tests/test_layout_audit_qt.py`) after measuring both factories
+byte-identical, so no run regenerates the picture and the entry would have
+blocked the gate on an image the project decided not to take. Its own ruling
+already read "NOT AN INDEPENDENT OBSERVATION". The case is still AUDITED —
+both palettes PASS — and `MainWindow__light.png` carries the pixels. What it
+proves is a number, and the audit is where a number belongs.
+
+---
+
+SESSION: 5eac3ddf-7019-4f1c-914a-95246d063c38
+ROUND: FOURTH INDEPENDENT VISUAL GRADE (2026-08-07, 19:58-20:20) — the round
+       sent to check the last two fixes, and the one that found what the
+       previous four rounds were not looking at
+
+I wrote none of this code and edited no source file. I did not grade a single
+picture another process wrote: I ran `tests/test_layout_audit_qt.py` (7 windows
+x dark+light, all PASS) and `tests/test_layout_audit.py` (phone, portrait +
+landscape, all six looks, PASS) myself at 19:58, and then **ran both again at
+20:13** after HEAD moved under me (`b9bda3f` -> `9ae2d55`, a `.claude`-only
+commit that swept the shots and the proofs into git) — because a picture older
+than the commit it claims to prove is not evidence, whatever else is true about
+it. Every measurement below was reproduced on BOTH runs, byte for byte.
+
+## The table — my own numbers, from my own pictures
+
+| Screen | g1 | g2 | g3 | me (4) |
+|---|---|---|---|---|
+| **Controls, dark: fill axis (wheel shut)** | — | — | **5** | **9 — FIXED** |
+| **Controls, light outlined, LANDSCAPE** | — | — | **5 (wrong palette)** | **8 — FIXED** |
+| **The chosen-window chip** (4 shots) | 8/9 | 8 | **6** | **9 — FIXED** |
+| **Region grab** (portrait) | never opened | never opened | **6** | **9 — FIXED** |
+| Region grab, LANDSCAPE (new picture) | — | — | — | **8** |
+| Controls + wheel, LANDSCAPE (pill/label) | — | — | **7** | **8 — met, evidence hand-made** |
+| Controls, light fill axis | 7 | — | 8 | **8 / 8** |
+| Controls, colored filled | 9 | 7 | 9 | **9** |
+| Controls + wheel, dark outlined / filled | 9 | 9 | 9 / 8 | **9 / 9** |
+| Controls, LANDSCAPE | ungraded | ungraded | 9 | **9** |
+| MainWindow, dark / light | 8 / 8 | 9 / 8 | 8 / 8 | **8 / 8** |
+| SettingsWindow, dark / light | 8 / 8 | 7 / 7 | 9 / 8 | **8 / 8** |
+| TrafficWindow, dark / light | 6 / 6 | 7 / 7 | 9 / 9 | **8 / 8** |
+| **ControlsEditor, dark / light** | 6 / 5 | 7 / 5 | 8 / 8 | **7 / 7 — NEW** |
+| WheelOrderDialog, dark / light | 7 / 6 | 8 / 8 | 9 / 9 | **9 / 9** |
+| Sets picker / Quality panel / Dictation card | 8 / 8 / — | 9 / — / 7 | 8 / 8 / 8 | **8 / 8 / 8** |
+| Quality / Dictation, LANDSCAPE | — | — | 8 / 8 | **8 / 8** |
+| Layout list / Rename card / Aspect panel | 9 / 9 / 9 | — | 9 / 9 / 9 | **9 / 9 / 8** |
+| Command chooser | never opened | never opened | never opened | **9** |
+| **The status pill / every `toast`** | — | — | — | **5 — NEW, computed** |
+| ChordRecorder | no picture | no picture | no picture | **no picture — 4th round** |
+
+Proof lines:
+
+- MainWindow (server/gui/main_window.py) - MIN 463x685 - SHOT .claude/shots/MainWindow.png - GRADE 8/10 - audit: PASS
+- MainWindow light (server/gui/theme.py) - MIN 463x685 - SHOT .claude/shots/MainWindow__light.png - GRADE 8/10 - audit: PASS
+- SettingsWindow (server/gui/settings_window.py) - MIN 718x943 - SHOT .claude/shots/SettingsWindow.png - GRADE 8/10 - audit: PASS
+- SettingsWindow light (server/gui/settings_window.py) - MIN 718x943 - SHOT .claude/shots/SettingsWindow__light.png - GRADE 8/10 - audit: PASS
+- TrafficWindow (server/gui/traffic_window.py) - MIN 635x558 - SHOT .claude/shots/TrafficWindow.png - GRADE 8/10 - audit: PASS
+- TrafficWindow light (server/gui/traffic_window.py) - MIN 635x558 - SHOT .claude/shots/TrafficWindow__light.png - GRADE 8/10 - audit: PASS
+- ControlsEditor (server/gui/controls_widgets.py) - MIN 733x950 - SHOT .claude/shots/ControlsEditor.png - GRADE 7/10 - audit: PASS (and that is the problem — see finding 1)
+- ControlsEditor light (server/gui/controls_widgets.py) - MIN 733x950 - SHOT .claude/shots/ControlsEditor__light.png - GRADE 7/10 - audit: PASS
+- WheelOrderDialog (server/gui/controls_order.py) - MIN 377x592 - SHOT .claude/shots/WheelOrderDialog.png - GRADE 9/10 - audit: PASS
+- WheelOrderDialog light (server/gui/controls_order.py) - MIN 377x592 - SHOT .claude/shots/WheelOrderDialog__light.png - GRADE 9/10 - audit: PASS
+- ChordRecorder - MIN 232x68 - SHOT none (below the Qt audit's 40,000 px^2 shot floor) - GRADE ungraded, NOT passed - audit: PASS
+- Controls, dark FILLED, wheel shut (client/theme.js, client/connection.js) - MIN 412x915 - SHOT .claude/shots/Controls_dark_full.png - GRADE 9/10 - audit: PASS
+- Controls, dark outlined (client/style.css) - MIN 412x915 - SHOT .claude/shots/Controls.png - GRADE 9/10 - audit: PASS
+- Controls, light outlined / filled (client/theme.css) - MIN 412x915 - SHOT .claude/shots/Controls_light_transparent.png, Controls_light_full.png - GRADE 8/10 - audit: PASS
+- Controls, colored filled (client/theme.js) - MIN 412x915 - SHOT .claude/shots/Controls_colored_full.png - GRADE 9/10 - audit: PASS
+- Controls, light outlined, LANDSCAPE (client/theme.js) - MIN 915x412 - SHOT .claude/shots/Controls_light_transparent_landscape.png - GRADE 8/10 - audit: PASS
+- Grid arrangement choice (client/layouts.js, client/layouts.css) - MIN 412x915 - SHOT .claude/shots/Grid_arrangement_choice.png - GRADE 9/10 - audit: PASS
+- Grid arrangement choice, LANDSCAPE - MIN 915x412 - SHOT .claude/shots/Grid_arrangement_choice_landscape.png - GRADE 9/10 - audit: PASS
+- Creation panel + Name field (client/layouts.js) - MIN 412x915 - SHOT .claude/shots/Creation_panel___Name_field.png - GRADE 9/10 - audit: PASS
+- Creation panel + Name field, LANDSCAPE - MIN 915x412 - SHOT .claude/shots/Creation_panel___Name_field_landscape.png - GRADE 9/10 - audit: PASS
+- Region grab (client/region.js, client/style.css) - MIN 412x915 - SHOT .claude/shots/Region_grab.png - GRADE 9/10 - audit: PASS
+- Region grab, LANDSCAPE (client/region.js) - MIN 915x412 - SHOT .claude/shots/Region_grab_landscape.png - GRADE 8/10 - audit: PASS
+- Controls and wheel, dark outlined / filled - MIN 412x915 - SHOT .claude/shots/Controls_and_wheel.png, Controls_and_wheel_dark_full.png - GRADE 9/10 - audit: PASS
+- Controls and wheel, LANDSCAPE (client/style.css:568) - MIN 915x412 - SHOT .claude/shots/Controls_and_wheel_landscape.png - GRADE 8/10 - audit: PASS
+- Controls, LANDSCAPE - MIN 915x412 - SHOT .claude/shots/Controls_landscape.png - GRADE 9/10 - audit: PASS
+- Sets picker (client/sets.js) - MIN 412x915 - SHOT .claude/shots/Sets_picker.png - GRADE 8/10 - audit: PASS
+- Sets picker, colored filled - MIN 412x915 - SHOT .claude/shots/Sets_picker_colored_full.png - GRADE 8/10 - audit: PASS
+- Quality panel (client/quality.js) - MIN 412x915 - SHOT .claude/shots/Quality_panel.png - GRADE 8/10 - audit: PASS
+- Quality panel, LANDSCAPE - MIN 915x412 - SHOT .claude/shots/Quality_panel_landscape.png - GRADE 8/10 - audit: PASS
+- Dictation card (client/panels.js) - MIN 412x915 - SHOT .claude/shots/Dictation_card.png - GRADE 8/10 - audit: PASS
+- Dictation card, LANDSCAPE - MIN 915x412 - SHOT .claude/shots/Dictation_card_landscape.png - GRADE 8/10 - audit: PASS
+- Command chooser (client/panels.js) - MIN 412x915 - SHOT .claude/shots/Command_chooser.png - GRADE 9/10 - audit: PASS
+- Layout list (client/layouts.js) - MIN 412x915 - SHOT .claude/shots/Layout_list_with_rename.png - GRADE 9/10 - audit: PASS
+- Rename card (client/layouts.js) - MIN 412x915 - SHOT .claude/shots/Rename_card.png - GRADE 9/10 - audit: PASS
+- Aspect panel + Move handle (client/layouts.js) - MIN 412x915 - SHOT .claude/shots/Aspect_panel___Move_handle.png - GRADE 8/10 - audit: PASS
+- The status pill / every `toast` (client/style.css:42-58, client/theme.css:49-62,104-117) - GRADE 5/10 - audit: PASS (the contrast tooth is never run over `#status`)
+
+## The two fixes I was sent to check — measured, both real
+
+**1. The look reset.** `Controls.png` and `Controls_dark_full.png` were
+byte-identical over the whole control surface last round (max per-channel
+difference **0**). On my own bytes they now differ on **8.98 %** of the frame,
+and the Click button is the decisive patch:
+
+| look | Click button body | page |
+|---|---|---|
+| dark outlined | rgb(18, 26, 45) | (15, 23, 42) |
+| dark **filled** | **rgb(30, 41, 59)** | (15, 23, 42) |
+| light outlined / filled | (238,240,247) -> **(255,255,255)** | (236,238,246) |
+| colored outlined / filled | (18,26,45) -> **(56,189,248)** | (15, 23, 42) |
+
+rgb(30,41,59) is exactly `#1e293b` — the solid the filled look promises, where
+the outlined look composites the same hex at 0.20. The axis is alive on all
+three themes. `applyUi` now returns early on an absent `ui` and merges a partial
+one (client/theme.js:336), which is the product half; the audit's half is the
+new assertion, and it printed **14 `the shot shows the look it is named for`
+PASS lines** in my run.
+
+I then swept the page colour of every look-named `Controls*` shot — all
+twenty-six of them, portrait and landscape:
+
+    light (portrait + landscape, both fills)   (236, 238, 246)   correct
+    dark and colored (both fills)              ( 15,  23,  42)   correct
+    light under the wheel's veil               (167, 168, 177)   correct
+
+`Controls_light_transparent_landscape.png`, which rendered the DARK palette
+under a `light` filename last round, is now genuinely light — and it is the
+only picture of that state, so a state that had NO evidence now has some.
+
+**2a. The chip.** "Claude Code - Remote User - Visual Studio Code
+[Administrator]" reads **whole**, wrapped over two lines, in all four shots
+(creation panel and grid arrangement, portrait and landscape). The 30-character
+guillotine is gone from `client/layouts.js`, and the new `__truncated` tooth
+looks for the tell a JS cut leaves behind — an ellipsis IN the text — which is
+the one thing `scrollWidth > clientWidth` can never see. That is the right
+tooth for the right hole.
+
+**2b. The Region grab.** Hint on ONE line ("Drag the corners to frame it"),
+"Send" printed once, and the frame born clear of our chrome: the Layout button
+reads "Layout" whole in portrait and in landscape.
+
+## Who was right about the Region default frame: the FIXER, and I can show it
+
+The old audit staged the frame itself:
+
+    ("Region grab",
+     "openRegionPanel();"
+     "rgBox.x = 4; rgBox.y = 4; rgBox.w = 60; rgBox.h = 60; rgApply()",   <- removed in c6b338f
+     ...)
+
+A 60x60 box at (4, 4) is the top-left corner by construction — that is what
+every grader was handed, and it is not a state the product opens in. The
+product's old default was `x = 18 %`, `y = 22 %` of the screen, which in
+PORTRAIT puts the frame's top at **y = 201 CSS px**, far below a Layout button
+that ends at ~75. **The previous grader's finding that the default frame lands
+on the Layout button was FALSE**, and it was false because the fixture lied to
+them — the same class of failure as a screenshot named for a look it does not
+show. The fixer's further claim that the old percentages DID collide in
+LANDSCAPE is arithmetically sound (0.22 x 412 = 90.6, minus the 22 px handle
+overhang = 68.6, against corner buttons running to ~75), but I could not run the
+old code, so I record it as their claim and not my measurement.
+
+The new birthplace is measured from the real elements (`rgFreeBand`), and it
+costs one thing, which I grade rather than hide: in landscape the band between
+the corner buttons and the D-pad rows is thin, so the newborn frame is a
+**915 x 66 CSS letterbox**. It overlaps nothing; it is simply a sliver the user
+must open out.
+
+## Finding 1 — BELOW THE GATE: the ControlsEditor calls a typed command a chord
+
+Ten of the thirteen commands in the Claude set are TYPED text in the shipped
+`actions.json` — the `paste_text` mechanism the owner asked for on 2026-08-05,
+because a slash command must be one atomic insert and not a race with the
+autocomplete menu:
+
+    {"label": "Usage", "icon": "usage", "text": "/usage", "enter": true}
+
+The editor prints every one of them as **`chord`** with an **empty Shortcut
+cell**, and its detail form shows **"Shortcut (chord)"** over a blank field with
+a Record button beside it. The cause is one missing branch, in two places:
+
+    server/gui/controls_widgets.py:530  (CommandTable.fill)
+        if action:      does = "built-in"
+        elif key:       does = "key"
+        else:           does, shortcut = "chord", btn.get("chord", "")   <- a `text` command lands here
+    server/gui/controls_widgets.py:412  (CommandDetail.show_button)      <- and here
+
+Nothing is lost — `dump()` returns `dict(self._btn)` for a non-editable set, so
+a Save does not rewrite the typed commands — but the window is telling the owner
+something false about ten of the thirteen rows of its fullest set, and there is
+no way to CREATE a typed command in a custom set at all, because the kind combo
+offers only "Shortcut (chord)", "Special key" and the built-ins.
+
+The app contradicts itself in writing, in the same round, in two pictures I
+opened one after the other: the phone's command chooser
+(`.claude/shots/Command_chooser.png`) says *"Pick one — the PC types it and runs
+it"* about the very command the desktop calls a chord.
+
+**MUST CHANGE:** a third branch — `does = "types"`, and the text itself in the
+Shortcut column (`/usage`) — plus the kind in the combo so the pool can grow a
+typed command. It is a display fix, not an architecture change.
+
+## Finding 2 — BELOW THE GATE: every `toast` the app shows fails WCAG AA
+
+`#status` is the pill that carries **every** user-facing notice — `toast {text}`
+is specified to use it. It pins `color: var(--text-primary)` while its
+background is a saturated semantic gradient, and `--text-primary` inverts with
+the theme while the gradient does not:
+
+| theme | state | ink on the gradient | contrast |
+|---|---|---|---|
+| dark | connecting (warning) | #f5f5f5 on #f59e0b -> #d97706 | **1.97 -> 2.92** |
+| dark | disconnected (error) | #f5f5f5 on #ef4444 -> #b91c1c | **3.45** -> 5.93 |
+| light | connecting (warning) | #16161f on #b45309 -> #92400e | **3.58 -> 2.53** |
+| light | disconnected (error) | #16161f on #b91c1c -> #7f1d1d | **2.78 -> 1.79** |
+
+Six of eight are under the 4.5:1 floor DESIGN.md itself sets for semantic
+colour. I also measured it on a real rendering of the amber pill —
+**2.68:1** — but that picture is one I refused (below), so the finding stands
+on the shipped tokens, which need no photograph.
+
+**Why four rounds of teeth missed it:** `window.__contrast` is real, careful and
+now even composites overlays — and it is run over exactly four roots,
+`#group-left`, `#group-right`, `#wheel` and each panel card. `#status` is passed
+to none of them. The one element whose entire purpose is to be read at a glance
+is outside the reach of the contrast tooth, and the Qt audit has no contrast
+check at all.
+
+**MUST CHANGE:** give the pill its own ink per state instead of the theme's body
+ink — dark ink on the warning fill (#16161f on #f59e0b = **8.37:1**, on #d97706
+= **5.64:1**), white on the light theme's deep amber (**5.02 / 7.09**), white on
+error in both themes with the dark theme's first stop moved to #dc2626
+(**4.83:1**). And pass `#status` to `__contrast`.
+
+## What else I found that four rounds had not
+
+- **The light theme pill's "sun" is a COG.** Enlarged 6x: a filled blue disc
+  with a white hole and eight white slots cut through its ring, two rows above
+  a real gear on the Settings button. On dark, where the same icon is unfilled,
+  it reads as a sun immediately — so the cause is that the fill swallows the ray
+  roots. Third round named, still unfixed. Draw the rays outside the disc, or
+  grow the hole.
+- **The dictation card's radios are inverted, measured.** The two UNSELECTED
+  radios are a solid disc of pure **(255,255,255)** on a (30,41,59) card —
+  **18.4:1**, the brightest object on the card — while the SELECTED radio is a
+  (56,189,248) ring at 8.6:1. "Off" shouts twice as loud as "on".
+- **The Quality panel's sentence is wrong by one word.** It says greyed-out
+  steps are "already **above** what it allows", while `client/quality.js:40` is
+  deliberately `fps >= base.fps` ("a step at or above the PC's own rate is
+  identical to Max"). With the PC at 10 fps the picture shows the "10" step
+  struck through under a sentence that says it should not be. Fix the sentence.
+- **The SettingsWindow error line still measures 3.89:1 on dark** ((239,68,68)
+  on (30,41,59)) — DESIGN.md ships `#EF4444` as Error and asks for 4.5:1 on the
+  surface, and this surface is a card, not the page. `#F87171` measures 5.29:1
+  there. Named twice before; the reason it survives is that
+  `tests/test_layout_audit_qt.py` runs **no contrast check whatsoever**.
+- **The wheel has never been photographed with more than THREE items.** Every
+  wheel picture in this file — four rounds, six looks, both orientations —
+  shows three, because `tests/fixtures/actions.json` defines exactly three
+  categories, while the wheel's own cap is EIGHT and the picker in the very same
+  screenshot says "up to 8 in total". I computed the missing state rather than
+  leave it hanging: `WHEEL_RADIUS = 118`, item diameter 74, so at n = 8 adjacent
+  centres are 2 x 118 x sin(22.5 deg) = **90.3 CSS px** apart — a 16 px gap, no
+  collision — and the 6 o'clock item's bottom edge lands at **612.5 CSS px**,
+  clear of the anywhere banner at 855. The geometry holds. The picture still
+  does not exist, and a fixture with three categories cannot prove an
+  eight-category rule.
+
+## What I refused to grade — do not read these as passes
+
+1. **`Controls_and_wheel_landscape_toast.png` (20:05:28)** — the only picture
+   anywhere of the status pill beside an OPEN wheel, which is precisely the
+   state the previous round failed at 7/10. **No committed entry point writes
+   it**: `grep -ri toast tests/*.py` finds nothing in either audit. It was made
+   by hand by another process while I graded, so I refuse it as proof exactly as
+   the three graders before me refused pictures they did not produce — and I
+   settle the ruling by construction instead: `body.wheel-open #status`
+   (client/style.css:568) takes `left: var(--space-m)` and
+   `max-width: calc(50% - 185px)` = 272.5 CSS px, while the wheel's 12 o'clock
+   item spans 420.5..494.5 CSS px — **132 px of clearance** — and my own
+   `Controls_and_wheel_landscape.png` shows the "Mouse" label whole at 7.08:1.
+   The fix is real; its evidence is hand-made, which is the pattern THE VISUAL
+   PROOF exists to stop. **The audit should stage a toast.**
+2. **Every `TrafficWindow_*hover*` file** (19:22 and earlier) — older than the
+   commit, and no committed entry point writes them. The hover card, the
+   crosshair, the grey band and the right-edge flip are therefore **unproven
+   this round**, not passed.
+3. **The nine 18:07 phone shots in non-default looks** and the two 18:41
+   `SettingsWindow_notify_healthy` shots — same reason, third round running.
+4. **ChordRecorder — no picture at all**, fourth round. 232x68 is below the Qt
+   audit's 40,000 px^2 shot floor. Ungraded, not passed.
+
+## The tray subtraction: I agree, and I checked it rather than took it
+
+`MainWindow (reopened from the tray)` is now audited WITHOUT a screenshot. That
+is right. My freshly written `MainWindow.png` hashes to **md5 12c59bd6ae08** —
+the identical hash the tray shot carried in the two previous rounds — and the
+light pair to **c72b15932b44**. Two factories, one set of pixels; what the case
+proves is a number (a window measured on its way back from the tray does not
+report a smaller minimum), and a number is not a photograph. One housekeeping
+item: the stale `MainWindow__reopened_from_the_tray(.__light).png` files are
+still on disk and older than the commit — delete them, so no future round
+mistakes them for evidence.
+
+## `.claude/layout-frame.json`, checked
+
+`floor_width` 1280 and `floor_height` 1000 UNCHANGED against HEAD. Every window
+above is inside it. The `reason` prose still quotes ControlsEditor at 723x956
+and Settings at 644x874 while the shipped windows measure **733x950** and
+**718x943** — the same inaccuracy the previous grader handed back, still
+uncorrected.
+
+## The deductions behind the 8s, stated rather than rounded away
+
+- **MainWindow 8.** "Stop server" alone in a row with ~670 device px of empty
+  width to its right; the three-step pairing list CENTRE-aligned, so its
+  "1." "2." "3." do not form a column; the cog-sun on light.
+- **TrafficWindow 8 / 8.** The window's last line is a bare unlabelled absolute
+  path hard against the bottom edge, and at the fixture's zeros the window draws
+  a full 0-1.5 kB/s axis over an empty frame instead of saying there is nothing
+  yet.
+- **Aspect panel 8.** The preview draws four identical round handles on all four
+  edges while the card's own caption says "portrait: full width, free height" —
+  two of the four cannot move anything and are drawn exactly like the two that
+  can.
+- **Sets picker 8.** The always-in-the-wheel rows still carry the same solid
+  tick as the optional ones — while the DESKTOP editor now draws them lighter,
+  so the two ends of the same feature disagree.
+- **The landscape panels 8.** `column-count: 2` still splits groups that should
+  stay whole: Deutsch alone at the top of the right column ABOVE the Srpski and
+  English it belongs with; FPS in one column with Resolution and Bitrate in the
+  other. Nothing is cut and nothing scrolls — this is composition, not the law.
+- **Region grab landscape 8.** The 915x66 CSS letterbox the free band leaves.
+- **Controls and wheel landscape 8.** Met, but its only photograph is hand-made.
