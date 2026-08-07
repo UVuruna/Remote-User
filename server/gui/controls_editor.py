@@ -17,6 +17,11 @@ it can do:
 - rearrange the four active buttons per orientation — landscape (top·left·
   right·bottom cross) and portrait (top→bottom column) — with a one-click
   reset to the shipped default order.
+- choose the ORDER the sets ride the phone's category wheel in — a separate
+  small dialog (`gui.controls_order.WheelOrderDialog`, build round R5,
+  2026-08-07), opened from the "Wheel order…" button: position 1 sits at
+  12 o'clock, the rest follow clockwise, stored as `wheel_order` (a list of
+  set names) in actions.json.
 
 The phone picks every change up on its next connection (actions.json is
 re-read per connect); the phone's own Settings → Sets picker can further
@@ -32,18 +37,21 @@ the window's free height, every editor field owns a full-width row, and the
 window's minimum size is COMPUTED from the longest real string this dialog
 can show (see `_computed_minimum`), never guessed.
 
-The widgets this dialog is assembled from (the chord recorder, the pool
-table, the command form, the arrangement lists) live in
-[controls_widgets.py](controls_widgets.py) — THE STRUCTURE LAW.
+This module owns only the WINDOW — load/assemble/save actions.json. The data
+plumbing (paths, client-table parsing, the shipped-pool merge) lives in
+[controls_data.py](controls_data.py); the command-editing widgets (chord
+recorder, pool table, command form) live in
+[controls_widgets.py](controls_widgets.py); the arrangement/order-editing
+widgets (the per-set ladder, the new wheel-order ring) live in
+[controls_order.py](controls_order.py) — THE STRUCTURE LAW, split again in
+build round R5 (2026-08-07) along the same lines the 2026-08-05 split drew.
 """
 
 import json
 import logging
-import re
-from pathlib import Path
 
-from PySide6.QtCore import QPointF, QSize, Qt
-from PySide6.QtGui import QColor, QFontMetrics, QPainter, QPen, QPolygonF
+from PySide6.QtCore import QRect, QSize, Qt
+from PySide6.QtGui import QColor, QFontMetrics, QPen
 from PySide6.QtWidgets import (
     QCheckBox, QComboBox, QDialog, QGridLayout, QGroupBox, QHBoxLayout, QLabel,
     QLineEdit, QListWidget, QListWidgetItem, QMessageBox, QPushButton,
@@ -51,12 +59,15 @@ from PySide6.QtWidgets import (
     QTableWidgetItem, QVBoxLayout, QWidget,
 )
 
-from config import BUNDLE_DIR, FROZEN, PROJECT_ROOT, SETTINGS, USER_DIR, apply as apply_settings
-from gui.controls_widgets import (
-    DPAD_SLOTS, LAND_SLOTS, PORT_SLOTS, CommandDetail, CommandTable, OrderList,
-    button_id, icon_for,
+from gui.controls_data import (
+    DPAD_SLOTS, WHEEL_MAX, active_buttons, button_id, effective_wheel_order,
+    load_client_builtins, load_client_icons, merge_shipped_pools, natural_order,
+    shipped_actions_path, user_actions_path,
 )
-from gui.theme import TOKENS
+from gui.controls_order import LAND_SLOTS, PORT_SLOTS, OrderList, WheelOrderDialog
+from gui.controls_widgets import (
+    CommandDetail, CommandTable, RowDelegate, icon_for, paint_check,
+)
 from gui.sizing import settle_minimum
 
 logger = logging.getLogger(__name__)
@@ -84,7 +95,7 @@ LOCKED = "locked"   # on the wheel and NOT the owner's to switch (`required`)
 ON = "on"           # on the wheel by his choice, and switchable
 
 
-class SectionDelegate(QStyledItemDelegate):
+class SectionDelegate(RowDelegate):
     """Paints the set list's section headings — and each set's own TICK.
 
     A heading is not a small bold set name — it is a TITLE: centered, a size
@@ -98,9 +109,16 @@ class SectionDelegate(QStyledItemDelegate):
     these twelve sets are actually on the phone's wheel? The state was
     readable only by clicking every set in turn and watching one checkbox on
     the other side of the dialog. Now the list says it at a glance, in a strip
-    of its own on the LEFT — grey where he cannot switch the set, white where
-    he can — and it is DRAWN, not a font glyph (this project has already paid
-    for a glyph that came out a blunt cross on the owner's device).
+    of its own on the LEFT — and it is DRAWN, not a font glyph (this project
+    has already paid for a glyph that came out a blunt cross on the owner's
+    device).
+
+    The MARK ITSELF is `controls_widgets.paint_check`, shared with the
+    commands table (2026-08-07). It used to be a bare checkmark with nothing
+    at all drawn for a set that is switched OFF — so "off" and "not
+    switchable" looked identical, and a screen with three different tick
+    affordances on it had no way to say which of them was a control. One box,
+    three states, everywhere: see that function.
     """
 
     GAP = 16   # breathing room above a heading, where the rule is drawn
@@ -138,9 +156,12 @@ class SectionDelegate(QStyledItemDelegate):
             # what is left.
             opt = QStyleOptionViewItem(option)
             self.initStyleOption(opt, index)
-            style = opt.widget.style() if opt.widget else QApplication.style()
-            style.drawPrimitive(QStyle.PrimitiveElement.PE_PanelItemViewItem,
-                                opt, painter, opt.widget)
+            # The row's fill is drawn across the FULL width first, so the tick
+            # strip is part of the selected row rather than a gap beside it —
+            # and it is drawn by `RowDelegate.take_selection`, in this app's
+            # accent, because the native panel paints the WINDOWS one (gold on
+            # the owner's PC, see that method).
+            self.take_selection(painter, opt)
             opt.rect = option.rect.adjusted(self.MARK, 0, 0, 0)
             super().paint(painter, opt, index)
             self._paint_tick(painter, option.rect, index.data(CHECK_ROLE))
@@ -160,167 +181,17 @@ class SectionDelegate(QStyledItemDelegate):
         painter.restore()
 
     def _paint_tick(self, painter, rect, state) -> None:
-        """The check itself: three points, round ends — drawn, never a font
-        glyph, because an item view has no widget for QSS to style.
+        """The box, in its own MARK-wide strip on the left.
 
-        Two colours, and the difference is the owner's own rule (2026-08-06):
-        GREY where the set is `required` and he could not turn it off if he
-        wanted to (Mouse, Input, Settings), WHITE where it is on and his to
-        switch. A tick that looks the same in both cases would promise him a
-        choice he does not have.
+        The drawing is `paint_check` — the one tick this dialog owns. The
+        owner's 2026-08-06 rule survives it, now carried by the FILL rather
+        than by the ink: a `required` set shows the accent WASH (riding, and
+        not his to switch), a set he switched on shows the solid accent, and a
+        set he switched off shows the empty box that used to be nothing at
+        all.
         """
-        if not state:
-            return
-        painter.save()
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-        pen = QPen(QColor(TOKENS["text2"] if state == LOCKED else TOKENS["text"]))
-        pen.setWidthF(2.0)
-        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
-        pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
-        painter.setPen(pen)
-        left = rect.left() + 7
-        mid = rect.center().y() + 1
-        painter.drawPolyline(QPolygonF([QPointF(left, mid),
-                                        QPointF(left + 3.5, mid + 3.5),
-                                        QPointF(left + 10.0, mid - 4.0)]))
-        painter.restore()
-
-WHEEL_MAX = 8  # sets in the phone's wheel at once; Mouse/Input/Settings are
-               # `required` (never hidden), everything else toggles
-               # (owner 2026-08-05)
-
-
-def user_actions_path() -> Path:
-    """The writable actions.json. In the installed app the bundled default is
-    read-only (Program Files), so the first use seeds the %LOCALAPPDATA% copy
-    and repoints the RUNNING server at it (edits reach the phone on its next
-    connection, no restart)."""
-    path = Path(SETTINGS.actions_path)
-    if not FROZEN:
-        return path
-    user_copy = USER_DIR / "actions.json"
-    if not user_copy.exists():
-        user_copy.parent.mkdir(parents=True, exist_ok=True)
-        user_copy.write_bytes(path.read_bytes())
-    apply_settings(actions_path=user_copy)
-    return user_copy
-
-
-def shipped_actions_path() -> Path:
-    """The actions.json we SHIP — the source of every built-in set's command
-    pool. It stays reachable after `user_actions_path()` repoints SETTINGS,
-    which is what lets a new version's reserve commands reach an owner who
-    already has his own copy."""
-    return (BUNDLE_DIR if FROZEN else PROJECT_ROOT) / "actions.json"
-
-
-def load_client_table(name: str, line_re: str,
-                      source: str = "controls.js") -> dict[str, tuple[str, ...]]:
-    """Parses a `const <name> = {...}` table out of a client script — one
-    entry per line. Returns {} on any surprise (the editor then falls back to
-    plain names — never a crash)."""
-    try:
-        text = (SETTINGS.client_dir / source).read_text(encoding="utf-8")
-        block = re.search(r"const " + name + r" = \{(.*?)\n\};", text, re.S)
-        if not block:
-            return {}
-        out: dict[str, tuple[str, ...]] = {}
-        for line in block.group(1).splitlines():
-            m = re.match(line_re, line)
-            if m:
-                out[m.group(1)] = tuple(m.groups()[1:])
-        return out
-    except OSError as e:
-        logger.warning("Client table %s unavailable for the editor: %s", name, e)
-        return {}
-
-
-def load_client_icons() -> dict[str, str]:
-    """{icon name: svg fragment} — the phone's own icon set. It lives in
-    client/icons.js since the 2026-08-05 icon round (before that, in
-    controls.js beside the actions)."""
-    table = load_client_table("ICONS", r"\s*([A-Za-z0-9_]+):\s*'(.*)',?\s*$",
-                              source="icons.js")
-    return {name: body[0] for name, body in table.items()}
-
-
-def load_client_builtins() -> dict[str, tuple[str, str]]:
-    """{action: (label, icon)} — what the PHONE draws for a built-in action.
-    The editor shows these instead of an empty field, so a built-in row tells
-    the truth about the button it configures."""
-    return load_client_table(
-        "BUILTINS",
-        r'\s*([A-Za-z0-9_]+):\s*\{[^}]*label:\s*"([^"]*)"[^}]*icon:\s*"([^"]*)"')
-
-
-def active_buttons(s: dict) -> list[dict]:
-    """The ≤4 commands of `s` that sit on the D-pad — mirrors the client's
-    activeButtons(): `active` by ID, or the first four (pre-pool behaviour)."""
-    pool = s.get("buttons") or []
-    ids = s.get("active")
-    if not isinstance(ids, list):
-        return pool[:DPAD_SLOTS]
-    picked: list[dict] = []
-    by_id = {button_id(b): b for b in pool}
-    for i in ids:
-        b = by_id.get(i)
-        if b is not None and b not in picked:
-            picked.append(b)
-        if len(picked) == DPAD_SLOTS:
-            break
-    return picked or pool[:DPAD_SLOTS]
-
-
-def merge_shipped_pools(data: dict, shipped: dict) -> None:
-    """Refreshes every built-in set's POOL from the shipped file while keeping
-    the owner's choices (`active`, `order_*`, `enabled`) — and his RENAMES.
-
-    Without this, an owner who already has a %LOCALAPPDATA% copy would never
-    see the reserve commands a new version adds — his copy is seeded once and
-    then never touched by an update.
-
-    The renames are the second half of that promise (owner 2026-08-05): he may
-    rename any button of a built-in set — Btn 4 / Btn 5 carry whatever his
-    mouse driver puts on them — and a pool refresh that overwrote those names
-    would quietly undo the only thing he is allowed to change here. Names are
-    carried over BY COMMAND ID, so a reordered or extended pool keeps them
-    pointing at the right button.
-    """
-    # Both lists are keyed by NAME. App sets used to be keyed by `process`,
-    # and that was the 2026-08-05 bug the owner hit within the hour: Claude
-    # runs inside VSCode, so BOTH shipped sets carry process "code", the map
-    # held one entry for that key, and merging Claude on top of it renamed his
-    # VSCode set out of existence ("zašto je nestao VSCode kad si ubacio
-    # Claude"). A name is what tells two sets of one process apart — it is
-    # also what the phone's picker and the wheel show.
-    for key in ("categories", "app_sets"):
-        mine = data.get(key) or []
-        by_ident = {s.get("name"): s for s in mine}
-        for ship in shipped.get(key) or []:
-            s = by_ident.get(ship.get("name"))
-            if s is None:
-                mine.append(json.loads(json.dumps(ship)))  # a set we newly ship
-                continue
-            renamed = {button_id(b): b["label"] for b in (s.get("buttons") or [])
-                       if b.get("action") and b.get("label")}
-            fresh = json.loads(json.dumps(ship.get("buttons") or []))
-            for b in fresh:
-                name = renamed.get(button_id(b))
-                if name:
-                    b["label"] = name
-            s["buttons"] = fresh
-            for field in ("name", "icon", "required", "process", "title"):
-                if field in ship:
-                    s[field] = ship[field]
-            # A pool refresh can leave `active` pointing at a command that is
-            # no longer in it — from a version that dropped one, or from a
-            # file this editor corrupted before the write-guard below existed.
-            # A choice that cannot be honoured is not a choice: fall back to
-            # the shipped four rather than to a two-button D-pad.
-            ids = {button_id(b) for b in fresh}
-            if not set(s.get("active") or []) <= ids:
-                s.pop("active", None)
-        data[key] = mine
+        strip = QRect(rect.left(), rect.top(), self.MARK, rect.height())
+        paint_check(painter, strip, on=bool(state), locked=state == LOCKED)
 
 
 class ControlsEditor(QDialog):
@@ -344,9 +215,10 @@ class ControlsEditor(QDialog):
             self.data = {"categories": [], "custom_sets": [], "app_sets": []}
         for key in ("categories", "custom_sets", "app_sets"):
             self.data.setdefault(key, [])
+        self._shipped: dict = {}  # the Wheel order dialog's "Default" reset
         try:
-            shipped = json.loads(shipped_actions_path().read_text(encoding="utf-8"))
-            merge_shipped_pools(self.data, shipped)
+            self._shipped = json.loads(shipped_actions_path().read_text(encoding="utf-8"))
+            merge_shipped_pools(self.data, self._shipped)
         except (OSError, json.JSONDecodeError) as e:
             logger.warning("Shipped actions.json unavailable (%s) — pools as saved", e)
         self._current: int | None = None  # index into _entries()
@@ -370,8 +242,16 @@ class ControlsEditor(QDialog):
         self.del_btn.clicked.connect(self._delete_set)
         row.addWidget(add)
         row.addWidget(self.del_btn)
+        # Global, not per-set (build round R5, 2026-08-07: "the owner chooses
+        # the ORDER of the sets around the phone's category wheel") — a
+        # SEPARATE dialog, not a fourth box in the right column. It rides the
+        # same row as New set / Delete (2026-08-07): a full-width button of
+        # its own cost the left column 44 px of HEIGHT, and height is the axis
+        # this window is short of — width it has to spare.
+        wheel_btn = QPushButton("Wheel order")
+        wheel_btn.clicked.connect(self._open_wheel_order)
+        row.addWidget(wheel_btn)
         left.addLayout(row)
-        root.addLayout(left, 0)
 
         # right: the selected set
         right = QVBoxLayout()
@@ -446,22 +326,30 @@ class ControlsEditor(QDialog):
         reset.clicked.connect(self._reset_arrangement)
         reset_row.addWidget(reset)
         acol.addLayout(reset_row)
-        # ARRANGEMENT STAYS IN THE RIGHT COLUMN, and the attempt to move it is
-        # worth recording (2026-08-07). An independent grader failed this
-        # window under THE SPACE & LEGIBILITY LAW — the pool table scrolled
-        # while the set list beside it held an idle block — and named the
-        # ladder's REFLOW step: move this self-contained box into that space.
-        # It was tried. All thirteen commands became visible and the declared
-        # minimum FELL from 956 to 799 — and the set list itself then scrolled
-        # AND clipped "Explorer" mid-row. That is a strictly worse violation:
-        # a scrollbar hides nothing, clipped text does. The two columns have
-        # different natural heights, so height moved between them is height
-        # taken from one of them. What stands instead is the raised minimum
-        # (CommandTable.ROWS_SHOWN), and what remains — the largest pool still
-        # scrolling past ten of thirteen — is on the owner's desk as a
-        # proposal, because the only fix left raises the 1280x1000 frame in
-        # .claude/layout-frame.json, and that file is his to change.
-        right.addWidget(arr)
+        # THE REFLOW, done properly this time (2026-08-07, second independent
+        # grader). Arrangement is a LEFT-column box: everything on the left
+        # answers "which set, and how does it ride" (pick it, make it, order
+        # the wheel, arrange its four buttons) and everything on the right
+        # answers "which commands" (the pool, the selected one).
+        #
+        # The first attempt at this move failed and the failure is worth
+        # keeping: the box went left, all thirteen commands became visible and
+        # the minimum FELL to 799 — and the set list then SCROLLED AND CLIPPED
+        # "Explorer" mid-row, because nothing in this window ever declared how
+        # tall the set list needs to be. Qt quotes a QListWidget's
+        # `minimumSizeHint` at a couple of rows whatever it holds, so the
+        # settle loop never grew the window for it and the reflow simply moved
+        # the starvation from one column to the other.
+        #
+        # `_fit_set_list` now declares the list's real content height (capped,
+        # exactly like `CommandTable.ROWS_SHOWN`), so the window's minimum is
+        # the honest max of the two columns and BOTH fit: fifteen list rows on
+        # the left, all thirteen pool rows on the right, nothing scrolling,
+        # no hole. The 253 px of idle set-list space the grader measured is
+        # what pays for the three pool rows that used to hide behind a
+        # scrollbar — which is what ladder step 2 means.
+        left.addWidget(arr)
+        root.addLayout(left, 0)
 
         actions = QHBoxLayout()
         open_json = QPushButton("Open the file")
@@ -506,14 +394,19 @@ class ControlsEditor(QDialog):
     def _computed_minimum(self) -> QSize:
         """MEASURED, never guessed (THE SPACE & LEGIBILITY LAW).
 
+        A FLOOR, not the answer: `settle_minimum` grows it until every real
+        widget fits, and since 2026-08-07 both columns actually state their
+        need (`_fit_set_list` for the list, `CommandTable._fit_rows` for the
+        pool), so the settle has the truth to work from. What this estimate
+        still owes is the WIDTH, which no widget declares by itself.
+
         Width = the widest real row this dialog can show: the set list's
         longest entry, plus the detail form (caption + the longest command
-        name / chord / "Built-in: …" entry + the Record button). Height = six
-        pool rows, the detail form's four rows, the arrangement's caption plus
-        four slots plus its two button rows (the move pair and the Default
-        button, which moved UNDER the lists on 2026-08-06), and the fixed
-        furniture (headers, group titles, buttons) — the smallest window in
-        which a shipped set still reads whole.
+        name / chord / "Built-in: …" entry + the Record button). Height = the
+        taller column: LEFT is the set list's rows plus its button row and the
+        arrangement box (caption + four slots + the ↑↓ row + the Default row);
+        RIGHT is the pool rows, the detail form's four rows and the actions
+        row. Both carry the fixed furniture — headers, group titles, margins.
         """
         metrics = QFontMetrics(self.font())
 
@@ -536,18 +429,21 @@ class ControlsEditor(QDialog):
         side = self.set_list.minimumWidth() or (widest(names) + 90)
         field = max(widest(shortcuts), widest(names), widest(kinds)) + 60
         caption = widest(("Shortcut", "Name", "Icon", "Does")) + 16
-        record = metrics.horizontalAdvance("Record…") + 44
+        record = metrics.horizontalAdvance("Record") + 44
         checkbox = metrics.horizontalAdvance(self.enabled_check.text()) + 60
         width = max(side + caption + field + record, side + checkbox) + 72
 
         rows = metrics.height() + 12
-        height = (rows * 6                    # six pool rows, no scrollbar
-                  + rows * 4                  # the detail form's four rows
-                  + rows * 7                  # arrangement: caption + 4 slots
+        left = (rows * 8                      # eight set rows before the
+                                              # settle takes over from
+                                              # _fit_set_list's real count
+                + rows * 7                    # arrangement: caption + 4 slots
                                               # + the ↑↓ row + the Default row
-                  + rows * 4                  # header, group titles, actions
-                  + 190)                      # group frames, margins, buttons
-        return QSize(width, height)
+                + rows * 2)                   # the caption and the button row
+        right = (rows * 6                     # six pool rows before the settle
+                 + rows * 4                   # the detail form's four rows
+                 + rows * 4)                  # header, group titles, actions
+        return QSize(width, max(left, right) + 190)  # frames, margins, buttons
 
     # -- data helpers --------------------------------------------------------
 
@@ -671,12 +567,38 @@ class ControlsEditor(QDialog):
         real = [r for r, e in enumerate(rows) if e is not None]
         return real[0] if real else -1
 
+    # How many set rows the window's minimum makes room for. The cap plays
+    # exactly the part `CommandTable.ROWS_SHOWN` plays for the pool: the ladder
+    # says RAISE THE MINIMUM before you scroll, and it also says the minimum
+    # must fit the declared 1280x1000 frame — so the raise has to stop
+    # somewhere. Fifteen is the shipped file's own fullest list (thirteen sets
+    # plus two section headings); an owner with a dozen custom sets scrolls,
+    # which is the ladder's legitimate last step rather than a shortcut past
+    # its first.
+    ROWS_SHOWN = 15
+
     def _fit_set_list(self) -> None:
-        """Ladder step 1: the list column is not stretched, so it must ASK for
-        the width its longest real entry needs ("Explorer   (app · explorer)")
-        — otherwise Qt hands it a default and the names are cut."""
-        self.set_list.setMinimumWidth(
-            self.set_list.sizeHintForColumn(0) + 2 * self.set_list.frameWidth() + 12)
+        """Ladder step 1, BOTH axes.
+
+        Width: the column is not stretched, so it must ASK for the width its
+        longest real entry needs ("Explorer   (app · explorer)") — otherwise Qt
+        hands it a default and the names are cut.
+
+        Height: and it must ask for that too, which is the half that was
+        missing until 2026-08-07. Qt answers `minimumSizeHint` for a
+        QListWidget with a couple of rows however many it holds, so the settle
+        loop had nothing to grow the window for; the list simply took whatever
+        the OTHER column's height left over. That is why it held 253 px of idle
+        space while the pool table scrolled — and why the first attempt to
+        reflow the Arrangement box in here made the list scroll instead. A
+        column that does not state its need cannot be given its share.
+        """
+        rows = min(self.set_list.count(), self.ROWS_SHOWN)
+        frame = 2 * self.set_list.frameWidth()
+        self.set_list.setMinimumWidth(self.set_list.sizeHintForColumn(0) + frame + 12)
+        if rows:
+            self.set_list.setMinimumHeight(
+                sum(self.set_list.sizeHintForRow(i) for i in range(rows)) + frame + 2)
 
     def _row_selected(self, row: int) -> None:
         """The list's own signal speaks in ROWS; everything else in this
@@ -889,6 +811,23 @@ class ControlsEditor(QDialog):
         labels = self._button_labels(entry[2])
         self.order_land.set_order(labels, list(range(len(labels))))
         self.order_port.set_order(labels, list(range(len(labels))))
+
+    def _open_wheel_order(self) -> None:
+        """Opens the wheel-order ring (build round R5, 2026-08-07). A
+        SEPARATE dialog on purpose — see the module docstring and `arr`'s
+        comment below for why the right column takes no more boxes.
+
+        `effective_wheel_order` already extends a saved order with any set it
+        does not mention (a future version's addition), so the dialog always
+        lists every set the file has, riding or not — a set not currently on
+        the wheel is simply skipped by the CLIENT at render time, never left
+        out of this list (the owner arranges the whole roster once)."""
+        self._store_current()
+        current = effective_wheel_order(self.data)
+        default = natural_order(self._shipped) or current
+        dlg = WheelOrderDialog(current, default, self)
+        if dlg.exec():
+            self.data["wheel_order"] = dlg.order_names()
 
     def _open_json(self) -> None:
         import os

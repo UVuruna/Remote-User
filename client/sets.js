@@ -12,6 +12,11 @@
 let categories = [];
 let appSets = [];    // app-aware sets from actions.json (owner 2026-08-04)
 let customSets = []; // owner-made sets from the desktop editor (owner 2026-08-05)
+// The desktop Controls editor's "Wheel order…" list (build round R5,
+// 2026-08-07, owner: "he chooses the ORDER of the sets around the phone's
+// category wheel") — a list of set NAMES, top = 12 o'clock, the rest
+// clockwise. Missing/empty = today's rendering order, unchanged.
+let wheelOrder = [];
 // Phone-side wheel preferences (the Settings → Sets picker): which custom
 // sets this DEVICE hides, and whether app-aware sets appear. Per-phone on
 // purpose — the desktop editor sets the defaults, the phone overrides them.
@@ -208,10 +213,37 @@ function enforceWheelCap() {
   return dropped;
 }
 
+// The owner's WHEEL ORDER (build round R5, 2026-08-07): `wheelOrder` names
+// sets by ID (their `name`), top of the desktop list = 12 o'clock on the
+// phone, the rest clockwise — `openWheel()` already places item i at angle
+// `-PI/2 + i * 2*PI/n`, i.e. i=0 is straight up and increasing i sweeps
+// CLOCKWISE on screen, so sorting THIS array is the whole feature; nothing
+// about the drawing changes.
+//
+// Only sets that are actually going to RIDE are sorted — the caller passes
+// the already-filtered list, so a set mentioned in `wheelOrder` but not
+// currently on (unticked, or an app set whose layout is not focused) was
+// never in `list` to begin with: the ring closes up around whichever subset
+// rides, with no gap left where the missing one would have sat.
+//
+// A set the owner's order does not mention (a future version's addition, or
+// simply never reordered) sorts to the END, keeping its ORIGINAL relative
+// order among the other unmentioned sets (stable sort) — never inserted
+// arbitrarily in the middle of the sets he did arrange.
+function sortByWheelOrder(list) {
+  if (!Array.isArray(wheelOrder) || !wheelOrder.length) return list;
+  const rank = new Map(wheelOrder.map((name, i) => [name, i]));
+  return list
+    .map((s, i) => ({ s, i, r: rank.has(s.name) ? rank.get(s.name) : Infinity }))
+    .sort((a, b) => (a.r - b.r) || (a.i - b.i))
+    .map((x) => x.s);
+}
+
 function allCats() {
-  const list = categories.filter((c) => c.required || setOn(c))
+  let list = categories.filter((c) => c.required || setOn(c))
     .concat(visibleAppSets())
     .concat(customSets.filter(setOn));
+  list = sortByWheelOrder(list);
   for (let i = list.length - 1; list.length > WHEEL_MAX && i >= 0; i--) {
     if (!list[i].required) list.splice(i, 1);
   }

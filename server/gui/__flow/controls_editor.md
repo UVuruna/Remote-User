@@ -22,35 +22,41 @@ LEGIBILITY violations the owner photographed.
 │ │  VSCode (code)   │ │ │ [ ]│ Back         │ chord    │ alt+left     │  │
 │ │  Claude (code·…) │ │ │ [ ]│ Find next    │ chord    │ f3      ↕    │  │
 │ │ CUSTOM           │ │ │ [Add command][Remove]      4 of 4 on D-pad  │  │
-│ │  My set        ✓ │ │ └────────────────────────────────────────────┘  │
-│ └──────────────────┘ │                                                 │
-│ [New set] [Delete]   │                                                 │
-│                      │ ┌ The selected command ──────────────────────┐   │
-│                      │ │ Does     [Shortcut (chord) ▾]              │   │
-│                      │ │ Shortcut [shift+tab.............][Record…] │   │
-│                      │ │ Name     [Prev..........................]  │   │
-│                      │ │ Icon     [▾ tabback]                       │   │
-│                      │ └────────────────────────────────────────────┘   │
-│                      │ ┌ Arrangement ───────────────────────────────┐   │
-│                      │ │ D-pad (landscape) │ Stack (portrait)       │   │
-│                      │ │ [list + ↑ ↓]      │ [list + ↑ ↓]           │   │
-│                      │ │                                  [Default] │   │
-│                      │ └────────────────────────────────────────────┘   │
-│ [Open the file]                                    [Save] [Cancel]      │
+│ │  My set        ✓ │ │ │ [ ]│ Focus        │ chord    │ ctrl+esc     │  │
+│ └──────────────────┘ │ │ [Add command][Remove]      4 of 4 on D-pad  │  │
+│ [New set][Delete]    │ └────────────────────────────────────────────┘  │
+│ [Wheel order]        │ ┌ The selected command ──────────────────────┐   │
+│ ┌ Arrangement ─────┐ │ │ Does     [Shortcut (chord) ˅]              │   │
+│ │ D-pad  │ Stack   │ │ │ Shortcut [shift+tab.............][Record]  │   │
+│ │ [list] │ [list]  │ │ │ Name     [Prev..........................]  │   │
+│ │ [↑][↓] │ [↑][↓]  │ │ │ Icon     [˅ tabback]                       │   │
+│ │            [Def] │ │ └────────────────────────────────────────────┘   │
+│ └──────────────────┘ │            [Open the file]     [Save] [Cancel]   │
 └─────────────────────────────────────────────────────────────────────────┘
-   ▲ list asks for its widest entry   ▲ the table takes ALL the free height
+   ▲ LEFT = which set, and how it rides     ▲ RIGHT = which commands
+     (list states its own rows AND width)     (the table takes the free height)
 ```
 
 ## Where the space goes (SPACE & LEGIBILITY LAW)
 
+The Arrangement box moved into the LEFT column on 2026-08-07 — ladder step 2,
+after two independent graders measured the same hole: three of thirteen pool
+rows behind a scrollbar with ~253 px of idle set list beside them. Both
+columns now STATE what they need, which is what makes the minimum honest.
+
 ```
-free height ──▶ the command table            (the only stretched widget)
-set list    ──▶ sizeHintForColumn(0)         "Explorer   (app · explorer)" + MARK
-                                             (the tick's reserved column, 22 px —
-                                              a name is never drawn under it)
-order lists ──▶ exactly their 4 rows         SlotList.sizeHint = rows + frame
-detail form ──▶ one field per row, column 1 stretched, Record fixed
-window min  ──▶ _computed_minimum()          measured strings, never a round number
+left column  ──▶ caption + set list + [New set][Delete][Wheel order] + Arrangement
+right column ──▶ Name/Icon form + the pool table + the selected command + actions
+window min   ──▶ max(left, right)            _computed_minimum() is only the FLOOR;
+                                             settle_minimum grows it to the truth
+set list     ──▶ _fit_set_list()             its widest entry + MARK (the tick's
+                                             reserved 22 px column) AND its real
+                                             row height, capped at ROWS_SHOWN = 15
+pool table   ──▶ _fit_rows()                 all 13 rows of the largest shipped pool
+free height  ──▶ the pool table              the right column is the shorter one,
+                                             so its stretch lands here
+order lists  ──▶ exactly their 4 rows        SlotList.sizeHint = rows + frame
+detail form  ──▶ one field per row, column 1 stretched, Record fixed
 ```
 
 ## Data flow
@@ -83,6 +89,15 @@ select a row (currentCellChanged)
 Record… ──▶ ChordRecorder.keyPressEvent
              modifiers (ctrl/win/alt/shift) + main key → "ctrl+shift+p"
              Esc alone = cancel; unknown keys keep listening
+
+Wheel order… ──▶ _open_wheel_order (build round R5, 2026-08-07)
+ ├─ effective_wheel_order(self.data)   saved order + unmentioned sets, appended at the end
+ ├─ natural_order(self._shipped)       the dialog's own Default target
+ └─ WheelOrderDialog(current, default, self).exec()
+       accepted → self.data["wheel_order"] = dlg.order_names()   (RAM only —
+                                              Save below writes it to disk)
+       cancelled → self.data untouched
+    See [Controls Order — Flow](controls_order.md) for the dialog's own diagram.
 
 Save
  ├─ _store_current()

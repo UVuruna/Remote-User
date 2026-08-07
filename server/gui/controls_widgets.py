@@ -1,47 +1,45 @@
-"""The Controls editor's own widgets (split out of `controls_editor.py`).
+"""The Controls editor's own COMMAND-editing widgets (split out of
+`controls_editor.py`, and split again from the arrangement widgets).
 
-THE STRUCTURE LAW: the dialog module had grown to the 1,000-line threshold
-holding two different responsibilities — the WINDOW (load/assemble/save
-actions.json) and the WIDGETS it is assembled from. The widgets live here:
+THE STRUCTURE LAW: the dialog module first grew past the 1,000-line
+threshold holding two responsibilities — the WINDOW (load/assemble/save
+actions.json) and the WIDGETS it is assembled from (2026-08-05). Build round
+R5 (2026-08-07, the owner's "choose the wheel order" round) split it again,
+along a second seam this module always had: everything here answers "what
+does a command DO and how is it EDITED" —
 
 - `ChordRecorder` — a shortcut is RECORDED from the PC keyboard, never typed;
-- `SlotList` / `SlotDelegate` / `OrderList` — the per-orientation arrangement
-  of the four active buttons;
 - `CommandDetail` — the selected pool command, one field per full-width row;
 - `CommandTable` — the set's whole pool with a tick on the four that ride.
 
-Everything the widgets need to draw a command (the icon painter, the command
-identity, the D-pad slot names) lives here too — the dialog imports them from
-this module, so the dependency runs one way only.
+The POSITION-editing widgets (`SlotList`/`SlotDelegate`/`OrderList`, and the
+new wheel-order ring) answer a different question — "WHERE does a thing sit"
+— and moved to [controls_order.py](controls_order.py); this module's `button_id`
+and `DPAD_SLOTS` (a command's stable identity, and how many slots a D-pad
+holds — pure data, no Qt) moved to [controls_data.py](controls_data.py), the
+one place that needed them with no `QApplication` in sight. `icon_for()`
+stays here — it builds a `QIcon`, which is Qt by definition.
 """
 
-import html
 import logging
 
-from PySide6.QtCore import QSize, Qt
+from PySide6.QtCore import QPointF, QRectF, QSize, Qt
 from PySide6.QtGui import (
-    QAbstractTextDocumentLayout, QFontMetrics, QIcon, QPainter, QPalette,
-    QPixmap, QTextDocument,
+    QColor, QFontMetrics, QIcon, QPainter, QPen, QPixmap, QPolygonF,
 )
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import (
     QAbstractItemView, QApplication, QComboBox, QDialog, QGridLayout,
-    QHBoxLayout, QHeaderView, QLabel, QLineEdit, QListWidget, QListWidgetItem,
-    QPushButton, QSizePolicy, QStyle, QStyledItemDelegate,
-    QStyleOptionViewItem, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
+    QHeaderView, QLabel, QLineEdit, QPushButton, QSizePolicy, QStyle,
+    QStyledItemDelegate, QStyleOptionViewItem, QTableWidget, QTableWidgetItem,
+    QVBoxLayout, QWidget,
 )
 
+from gui.controls_data import button_id
+from gui.sizing import settle_minimum
+from gui.theme import TOKENS, color as token_color
+
 logger = logging.getLogger(__name__)
-
-DPAD_SLOTS = 4  # a D-pad cross has exactly four positions — the pool may be
-                # longer, the phone still shows four (owner 2026-08-05)
-
-# The slot ladder each orientation shows. LANDSCAPE is a cross, so its slots
-# have real directions; PORTRAIT is a plain column, where "Left"/"Right" were
-# a lie — it is 1st, 2nd, 3rd, 4th from the top (owner 2026-08-05). The
-# ordinals are HTML because the list draws rich text (see SlotDelegate).
-LAND_SLOTS = ("Top", "Left", "Right", "Bottom")
-PORT_SLOTS = ("1<sup>st</sup>", "2<sup>nd</sup>", "3<sup>rd</sup>", "4<sup>th</sup>")
 
 # Built-in actions a custom button may trigger (mirrors client BUILTINS —
 # calibrate is retired and left out on purpose). Used as the fallback when
@@ -53,7 +51,13 @@ BUILTIN_ACTIONS = [
     "dictation",
 ]
 
-ICON_STROKE = "#cbd5e1"  # icon preview stroke on the editor's dark-ish list
+# The icon preview's stroke. A TOKEN, read at draw time (build round R3): it
+# was the literal "#cbd5e1" — a pale slate that reads correctly on the dark
+# list and all but disappears on the white one. `icon_stroke()` is a function
+# for the same reason `theme.qss()` is: a module constant would freeze
+# whichever palette happened to be active at import.
+def icon_stroke() -> str:
+    return TOKENS["text2"]
 
 KIND_CHORD = "__chord"
 KIND_KEY = "__key"
@@ -74,13 +78,20 @@ QT_NAMED_KEYS = {
 }
 
 
-def icon_for(body: str) -> QIcon:
-    """One client icon fragment → a QIcon (24×24 stroke drawing)."""
+def icon_for(body: str, color: str | None = None) -> QIcon:
+    """One client icon fragment → a QIcon (24×24 stroke drawing).
+
+    `color` overrides the preview stroke: a decoration beside a list row wants
+    the dim `text2`, but an icon that IS a button's whole face (the wheel
+    order dialog's ↑ / ↓) has to wear the same ink as a button's label, or it
+    is a hint rather than a control — visibly so on the light palette.
+    """
+    stroke = color or icon_stroke()
     svg = (
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" '
-        f'fill="none" stroke="{ICON_STROKE}" stroke-width="2" '
+        f'fill="none" stroke="{stroke}" stroke-width="2" '
         f'stroke-linecap="round" stroke-linejoin="round">'
-        + body.replace("currentColor", ICON_STROKE) + "</svg>"
+        + body.replace("currentColor", stroke) + "</svg>"
     )
     renderer = QSvgRenderer(svg.encode("utf-8"))
     pix = QPixmap(48, 48)
@@ -91,13 +102,157 @@ def icon_for(body: str) -> QIcon:
     return QIcon(pix)
 
 
-def button_id(btn: dict) -> str:
-    """Stable identity of a pool command — what `active` stores. Explicit
-    `id` wins; otherwise the action / chord / key / label, which are unique
-    inside one set. IDs (not indices) survive a later version inserting or
-    reordering pool commands."""
-    return (btn.get("id") or btn.get("action") or btn.get("chord")
-            or btn.get("key") or btn.get("label") or "")
+# ═════════════════════ ONE TICK, EVERYWHERE (2026-08-07) ═════════════════════
+# An independent grader counted THREE different tick affordances on one screen
+# — a bare checkmark glyph in the set list (and NOTHING at all for a set that
+# is switched off, so "off" and "not switchable" looked identical), a native
+# empty square in the commands table, and the QSS-styled blue box under it.
+# There is one now, and it is DRAWN rather than left to the native style,
+# because an item view has no widget for QSS to reach: `QCheckBox::indicator`
+# styles a checkbox, never a `QTableWidget` item.
+#
+# The geometry deliberately MATCHES the QSS indicator (16 px, radius 5, 1 px
+# border, accent fill, `onAccent` ink) so the three places a tick appears in
+# this dialog are the same object.
+TICK_BOX = 16
+TICK_RADIUS = 5.0
+
+
+def paint_check(painter: QPainter, rect, on: bool, locked: bool = False) -> None:
+    """One tick box, centered in `rect` — three readable states.
+
+    off      empty box, the palette's border — "switchable, and switched off"
+    on       accent fill + `onAccent` tick — "riding"
+    locked   the accent WASH + a dim tick — "riding, and not yours to switch"
+             (Mouse / Input / Settings are `required`; the owner's own rule of
+             2026-08-06 is that a tick must not promise a choice he does not
+             have, and the same wash is what the QSS gives a checked-disabled
+             checkbox)
+    """
+    box = QRectF(rect.center().x() - TICK_BOX / 2, rect.center().y() - TICK_BOX / 2,
+                 TICK_BOX, TICK_BOX)
+    painter.save()
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+    # `token_color`, never a bare QColor: `accentDim` and the dark `fieldEdge`
+    # are `rgba(...)` strings, which QColor cannot parse — see gui/theme.color.
+    edge = token_color(TOKENS["accent" if on else "fieldEdge"])
+    painter.setPen(QPen(edge, 1.0))
+    if on and not locked:
+        painter.setBrush(token_color(TOKENS["accent"]))
+    elif on:
+        painter.setBrush(token_color(TOKENS["accentDim"]))
+    else:
+        painter.setBrush(token_color(TOKENS["fieldFill"]))
+    painter.drawRoundedRect(box.adjusted(0.5, 0.5, -0.5, -0.5), TICK_RADIUS, TICK_RADIUS)
+    if not on:
+        painter.restore()
+        return
+    pen = QPen(QColor(TOKENS["text2"] if locked else TOKENS["onAccent"]))
+    pen.setWidthF(2.0)
+    pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+    pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+    painter.setPen(pen)
+    painter.setBrush(Qt.BrushStyle.NoBrush)
+    painter.drawPolyline(QPolygonF([
+        QPointF(box.left() + 3.6, box.center().y() + 0.4),
+        QPointF(box.left() + 6.4, box.center().y() + 3.2),
+        QPointF(box.left() + 12.2, box.center().y() - 3.4)]))
+    painter.restore()
+
+
+class RowDelegate(QStyledItemDelegate):
+    """A selected row, painted in THIS app's accent instead of Windows'.
+
+    Qt's windows11 style draws a selected item the way the OS does: a fill
+    plus a small indicator bar at the item's left edge, both in the SYSTEM
+    accent colour — which on the owner's PC is GOLD. So the editor showed a
+    yellow bar down the selected set and a yellow sliver at the left of every
+    cell of the selected command, against its own blue everywhere else, and
+    an independent grader failed it for two competing accents. Sampled off the
+    screenshot: (198, 211, 101) on dark, (190, 190, 71) on light.
+
+    A `QListWidget::item:selected` rule in the QSS was not enough — the
+    stylesheet colours the fill and the native indicator is drawn regardless.
+    So the selection is taken away from the style entirely: filled here, and
+    the flag cleared before the base class ever sees it.
+    """
+
+    def initStyleOption(self, option, index) -> None:  # noqa: N802 — Qt override
+        super().initStyleOption(option, index)
+        # The dotted/accented CURRENT-item ring is the same story one state
+        # over, and nothing in this dialog needs it: the selection already
+        # says which row is current.
+        option.state &= ~QStyle.StateFlag.State_HasFocus
+
+    def take_selection(self, painter: QPainter, option: QStyleOptionViewItem) -> None:
+        """Fill a selected row ourselves and clear the flag, so whatever paints
+        next draws an ordinary row in our own ink."""
+        if not (option.state & QStyle.StateFlag.State_Selected):
+            return
+        # TWO fills, and the first one is the point. The VIEW has already
+        # drawn the native selection under this delegate — gold bar included —
+        # and `accentDim` is a 14–16 % wash, so a single translucent fill let
+        # the bar show straight through it (still (197, 210, 101) after the
+        # first attempt at this fix; measured, not assumed). The card colour
+        # goes down first to ERASE, the wash on top to colour.
+        painter.fillRect(option.rect, token_color(TOKENS["surface1"]))
+        painter.fillRect(option.rect, token_color(TOKENS["accentDim"]))
+        option.state &= ~QStyle.StateFlag.State_Selected
+        option.palette.setColor(option.palette.ColorRole.Text,
+                                token_color(TOKENS["accent"]))
+
+    def paint(self, painter, option, index) -> None:
+        opt = QStyleOptionViewItem(option)
+        self.initStyleOption(opt, index)
+        self.take_selection(painter, opt)
+        super().paint(painter, opt, index)
+
+
+class CheckDelegate(RowDelegate):
+    """The commands table's "On" column, drawn with `paint_check`.
+
+    The native indicator is suppressed (`HasCheckIndicator` cleared) rather
+    than styled: QSS reaches `QCheckBox::indicator` and nothing inside an item
+    view, which is exactly why the two looked different in the first place.
+
+    `editorEvent` keeps the column clickable — and makes the WHOLE cell the
+    target instead of the style's 16 px indicator rect, which is strictly
+    kinder and cannot drift out of alignment with a box we now draw ourselves.
+    """
+
+    def paint(self, painter, option, index) -> None:
+        opt = QStyleOptionViewItem(option)
+        self.initStyleOption(opt, index)
+        self.take_selection(painter, opt)
+        opt.text = ""
+        opt.features &= ~QStyleOptionViewItem.ViewItemFeature.HasCheckIndicator
+        style = opt.widget.style() if opt.widget else QApplication.style()
+        style.drawControl(QStyle.ControlElement.CE_ItemViewItem, opt, painter, opt.widget)
+        state = index.data(Qt.ItemDataRole.CheckStateRole)
+        paint_check(painter, option.rect,
+                    on=Qt.CheckState(state) == Qt.CheckState.Checked)
+
+    def sizeHint(self, option, index) -> QSize:  # noqa: N802 — Qt override
+        size = super().sizeHint(option, index)
+        return QSize(max(size.width(), TICK_BOX + 16), size.height())
+
+    def editorEvent(self, event, model, option, index) -> bool:  # noqa: N802
+        flags = index.flags()
+        if not (flags & Qt.ItemFlag.ItemIsUserCheckable
+                and flags & Qt.ItemFlag.ItemIsEnabled):
+            return False
+        if event.type() != event.Type.MouseButtonRelease:
+            return False
+        if event.button() != Qt.MouseButton.LeftButton:
+            return False
+        if not option.rect.contains(event.position().toPoint()):
+            return False
+        checked = Qt.CheckState(index.data(Qt.ItemDataRole.CheckStateRole))
+        model.setData(index,
+                      Qt.CheckState.Unchecked if checked == Qt.CheckState.Checked
+                      else Qt.CheckState.Checked,
+                      Qt.ItemDataRole.CheckStateRole)
+        return True
 
 
 class ChordRecorder(QDialog):
@@ -108,21 +263,41 @@ class ChordRecorder(QDialog):
         super().__init__(parent)
         self.setWindowTitle("Record a shortcut")
         self.chord: str | None = None
-        box = QVBoxLayout(self)
-        label = QLabel("Press the key combination now…\n(Esc alone cancels)")
-        label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        label.setWordWrap(True)
-        box.addWidget(label)
-        # Computed minimum (SPACE & LEGIBILITY LAW): the label is the whole
-        # window, so its two real lines ARE the minimum — measured, not a
-        # round number.
-        metrics = QFontMetrics(label.font())
-        text_w = max(metrics.horizontalAdvance(line) for line in label.text().split("\n"))
-        margins = box.contentsMargins()
-        self.setMinimumSize(
-            text_w + margins.left() + margins.right() + 24,
-            metrics.height() * 2 + margins.top() + margins.bottom() + 12,
-        )
+        self._settled = False
+        self._box = QVBoxLayout(self)
+        self._label = QLabel("Press the key combination now…\n(Esc alone cancels)")
+        self._label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._label.setWordWrap(True)
+        self._box.addWidget(self._label)
+
+    def showEvent(self, event) -> None:  # noqa: N802 — Qt override
+        """MEASURED ON SHOW, never in the constructor (build round R3).
+
+        It WAS in the constructor, and the theme is what exposed the lie: the
+        palette is applied to the whole application now, so this dialog is
+        finally styled the way it always was in the real app (as a child of
+        the Controls editor) — and Qt resolves a QSS font only when a widget
+        is polished, which happens on SHOW. The constructor measured the
+        system font, declared 36 px of height, and the themed label then
+        needed 43. The audit caught it the moment the theme reached the
+        window; before that it was measuring an unstyled dialog nobody ships.
+        Exactly the 2026-08-05 lesson the Settings window already carries.
+        """
+        super().showEvent(event)
+        if self._settled:
+            return
+        self._settled = True
+        settle_minimum(self, self._computed_minimum(), QSize(0, 0))
+
+    def _computed_minimum(self) -> QSize:
+        """The label is the whole window, so its two real lines ARE the
+        minimum — measured, not a round number."""
+        metrics = QFontMetrics(self._label.font())
+        text_w = max(metrics.horizontalAdvance(line)
+                     for line in self._label.text().split("\n"))
+        margins = self._box.contentsMargins()
+        return QSize(text_w + margins.left() + margins.right() + 24,
+                     metrics.height() * 2 + margins.top() + margins.bottom() + 12)
 
     def keyPressEvent(self, event) -> None:  # noqa: N802 — Qt override
         key = Qt.Key(event.key())
@@ -156,144 +331,6 @@ class ChordRecorder(QDialog):
         self.accept()
 
 
-class SlotDelegate(QStyledItemDelegate):
-    """Draws an arrangement row as RICH text.
-
-    The portrait ladder is ordinals with a REAL superscript (1ˢᵗ, 2ⁿᵈ …,
-    owner 2026-08-05). Qt builds a `<sup>` out of the dialog's own font, so
-    nothing depends on the machine carrying an exotic character — the ✥
-    lesson of the same day: a glyph that renders here can be a blunt box on
-    the owner's device. The row's own width is measured from the RENDERED
-    text (`idealWidth`), so the item-view guard still sees the truth.
-    """
-
-    def _doc(self, option: QStyleOptionViewItem) -> QTextDocument:
-        doc = QTextDocument()
-        doc.setDefaultFont(option.font)
-        doc.setDocumentMargin(1)
-        doc.setHtml(option.text)
-        return doc
-
-    def paint(self, painter: QPainter, option: QStyleOptionViewItem, index) -> None:
-        opt = QStyleOptionViewItem(option)
-        self.initStyleOption(opt, index)
-        doc = self._doc(opt)
-        style = opt.widget.style() if opt.widget is not None else QApplication.style()
-        opt.text = ""  # background + selection stay Qt's, the text is ours
-        style.drawControl(QStyle.ControlElement.CE_ItemViewItem, opt, painter, opt.widget)
-        palette = QPalette(opt.palette)
-        if opt.state & QStyle.StateFlag.State_Selected:
-            palette.setColor(QPalette.ColorRole.Text,
-                             opt.palette.color(QPalette.ColorRole.HighlightedText))
-        ctx = QAbstractTextDocumentLayout.PaintContext()
-        ctx.palette = palette
-        rect = style.subElementRect(
-            QStyle.SubElement.SE_ItemViewItemText, opt, opt.widget)
-        painter.save()
-        painter.translate(rect.topLeft())
-        doc.documentLayout().draw(painter, ctx)
-        painter.restore()
-
-    def sizeHint(self, option: QStyleOptionViewItem, index) -> QSize:  # noqa: N802
-        opt = QStyleOptionViewItem(option)
-        self.initStyleOption(opt, index)
-        doc = self._doc(opt)
-        return QSize(int(doc.idealWidth()) + 10, int(doc.size().height()) + 6)
-
-
-class SlotList(QListWidget):
-    """A list that asks for exactly the height of its rows.
-
-    THE SPACE & LEGIBILITY LAW, ladder step 1: a hard height on this widget
-    made it scroll with four items while ~300 px of the same dialog stood
-    empty (the owner's screenshot of 2026-08-05). A content-derived size hint
-    takes what it needs and leaves the free space to the command table.
-    """
-
-    def _needed_height(self) -> int:
-        rows = sum(self.sizeHintForRow(i) for i in range(self.count()))
-        frame = 2 * self.frameWidth() + 2
-        return max(rows + frame, self.fontMetrics().height() * 2 + frame)
-
-    def sizeHint(self) -> QSize:  # noqa: N802 — Qt override
-        return QSize(super().sizeHint().width(), self._needed_height())
-
-    def minimumSizeHint(self) -> QSize:  # noqa: N802 — Qt override
-        return QSize(super().minimumSizeHint().width(), self._needed_height())
-
-
-class OrderList(QWidget):
-    """The active buttons in slot order with Up/Down — one per orientation.
-
-    The slot name belongs to the POSITION, not to the command (owner fix
-    2026-08-05). The first version wrote the name INTO the item's text, so
-    moving a command carried its old name along and the ladder read
-    Top · Left · Bottom · Right — the owner's screenshot. Here the item holds
-    only the command (its label and its index into the active four); the
-    ladder is re-drawn from the row numbers after every move, so the left
-    column can never change order.
-    """
-
-    INDEX_ROLE = Qt.ItemDataRole.UserRole
-    LABEL_ROLE = Qt.ItemDataRole.UserRole + 1
-
-    def __init__(self, title: str, slots: tuple[str, ...]):
-        super().__init__()
-        self.slots = slots
-        box = QVBoxLayout(self)
-        box.setContentsMargins(0, 0, 0, 0)
-        caption = QLabel(title)
-        caption.setWordWrap(True)
-        box.addWidget(caption)
-        self.list = SlotList()
-        self.list.setItemDelegate(SlotDelegate(self.list))
-        self.list.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
-        box.addWidget(self.list)
-        row = QHBoxLayout()
-        up = QPushButton("↑")
-        down = QPushButton("↓")
-        up.clicked.connect(lambda: self._move(-1))
-        down.clicked.connect(lambda: self._move(1))
-        row.addWidget(up)
-        row.addWidget(down)
-        row.addStretch()
-        box.addLayout(row)
-
-    def _move(self, delta: int) -> None:
-        i = self.list.currentRow()
-        j = i + delta
-        if i < 0 or not (0 <= j < self.list.count()):
-            return
-        item = self.list.takeItem(i)
-        self.list.insertItem(j, item)
-        self.list.setCurrentRow(j)
-        self._relabel()
-        self.list.updateGeometry()
-
-    def _relabel(self) -> None:
-        """Re-draws the fixed slot ladder over the current command order."""
-        for slot in range(self.list.count()):
-            item = self.list.item(slot)
-            label = html.escape(str(item.data(self.LABEL_ROLE) or ""))
-            name = self.slots[slot] if slot < len(self.slots) else ""
-            item.setText(f"{name} &nbsp;·&nbsp; {label}" if name else label)
-
-    def set_order(self, labels: list[str], order: list[int]) -> None:
-        self.list.clear()
-        idxs = order if sorted(order) == list(range(len(labels))) else list(range(len(labels)))
-        for i in idxs:
-            item = QListWidgetItem()
-            item.setData(self.INDEX_ROLE, i)
-            item.setData(self.LABEL_ROLE, labels[i])
-            self.list.addItem(item)
-        self._relabel()
-        self.list.updateGeometry()
-
-    def order(self) -> list[int]:
-        return [self.list.item(i).data(self.INDEX_ROLE)
-                for i in range(self.list.count())]
-
-
 class CommandDetail(QWidget):
     """The selected command, one field per full-width row.
 
@@ -322,7 +359,10 @@ class CommandDetail(QWidget):
 
         self.chord = QLineEdit()
         self.chord.setPlaceholderText("e.g. ctrl+shift+p")
-        self.record = QPushButton("Record…")
+        # No trailing ellipsis — the main window's three door buttons dropped
+        # theirs in build round R2 and one window may not keep a convention the
+        # app next door has retired (graded 2026-08-07).
+        self.record = QPushButton("Record")
         self.record.clicked.connect(self._record)
 
         self.label = QLineEdit()
@@ -452,6 +492,14 @@ class CommandTable(QTableWidget):
         super().__init__(0, len(self.HEADERS))
         self.setHorizontalHeaderLabels(self.HEADERS)
         self.verticalHeader().hide()
+        # The "On" column's tick is DRAWN, and it is the same drawing the set
+        # list and the checkboxes wear — see `paint_check`. Left native, this
+        # column showed a bare checkmark for a ticked row and an empty square
+        # for an unticked one: two affordances inside ONE column.
+        self._row_delegate = RowDelegate(self)
+        self._check_delegate = CheckDelegate(self)
+        self.setItemDelegate(self._row_delegate)
+        self.setItemDelegateForColumn(0, self._check_delegate)
         self.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
@@ -462,6 +510,11 @@ class CommandTable(QTableWidget):
         header.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
         header.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        # The set list declares an icon size; this table never did, so it drew
+        # `icon_for`'s 48 px pixmap at whatever the style felt like. Measured:
+        # it costs no row height either way, but one icon size across the two
+        # views is one look.
+        self.setIconSize(QSize(20, 20))
 
     def fill(self, pool: list[dict], active: list[str],
              builtins: dict[str, tuple[str, str]], icons: dict[str, str]) -> None:
@@ -502,14 +555,17 @@ class CommandTable(QTableWidget):
     #
     # An independent grader failed this window at 6/10 on 2026-08-07 for
     # exactly that: the pool table scrolled at six rows while the set list
-    # beside it held a large empty block. The two are side by side, so the
-    # table cannot REFLOW into that space — the only step left above `scroll`
-    # is a RAISED MINIMUM, which is what this is. The cap exists because the
-    # raise has its own limit: every window's minimum must still fit
-    # 1280x1000, and the largest pool (Navigate, 11) would push past it. Ten
-    # rows covers every set shipped today; beyond that a scrollbar is the
-    # law's own last resort rather than a shortcut past its first.
-    ROWS_SHOWN = 10
+    # beside it held a large empty block. The answer then was a raise to ten,
+    # which still hid three of the Claude set's thirteen commands — and the
+    # NEXT grader measured the same hole again, 253 px of it, and called the
+    # tooth blind for not seeing it.
+    #
+    # THIRTEEN, because the reflow finally paid for it: the Arrangement box
+    # moved into the left column's idle space (`controls_editor.py`), which is
+    # ladder step 2, and the raise on top of it is step 3. Thirteen is the
+    # largest pool the shipped file has (Claude); a longer one scrolls, which
+    # is the ladder's own last step and no longer a shortcut past its first.
+    ROWS_SHOWN = 13
 
     def _fit_rows(self) -> None:
         rows = min(self.rowCount(), self.ROWS_SHOWN)

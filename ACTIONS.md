@@ -39,6 +39,23 @@ The two D-pad groups on the tablet are defined entirely by [actions.json](action
   slots and leave six for the rest. See App-aware sets below.
 - Hard cap **8** in the wheel: over the cap, non-required sets are bumped
   from the END (they return when the app set goes away).
+- **The ORDER the sets ride in is the owner's choice** (build round R5,
+  2026-08-07 — "he chooses the ORDER of the sets around the phone's category
+  wheel"): a top-level `"wheel_order"` array in this file, a list of set
+  NAMES. Position 1 (the top of the desktop list) sits at **12 o'clock** on
+  the phone's wheel, and the rest follow **CLOCKWISE** — set in the desktop
+  Controls editor's **Wheel order…** dialog (a small separate window: a
+  drawn ring legend beside a numbered ladder with ↑/↓, and a **Default**
+  button back to today's order), never hand-typed. A set named in
+  `wheel_order` but not currently riding (unticked, or an app set whose
+  layout is not focused) is simply skipped — the ring closes up with no
+  gap. A set the order does not mention (a version that adds one later)
+  rides at the END, after everything the owner did arrange. The default
+  ships as TODAY's order (categories, then app sets, in this file's own
+  listed order), so an owner who never opens the new dialog sees no change,
+  and `merge_shipped_pools` never touches this field — a hand-edited order
+  survives a shipped-pool update exactly as saved, the same guarantee
+  `active`/`order_*`/`enabled`/renames already had.
 
 Any set (shipped or custom) may carry `"order_land"` / `"order_port"` — the
 button arrangement per orientation (indices into the ACTIVE four; landscape
@@ -119,6 +136,7 @@ manage names/icons/shortcuts per zone).
 {
   "left": 0,
   "right": 1,
+  "wheel_order": ["Mouse", "Edit", "VSCode"],
   "categories": [
     {
       "name": "Mouse",
@@ -150,6 +168,10 @@ manage names/icons/shortcuts per zone).
 ```
 
 - **left / right** — index of the category each group shows on connect.
+- **wheel_order** *(build round R5, 2026-08-07)* — a list of set NAMES,
+  top-level, deciding the order sets ride the phone's wheel: position 1 =
+  12 o'clock, the rest clockwise. Written by the desktop Controls editor's
+  **Wheel order…** dialog; see "The wheel" above.
 - **name** — the category label (centre button + wheel).
 - **icon** — any name from the client's icon set, which lives in one place: [client/icons.js](client/icons.js) (100 of them: the owner's 2026-08-05 round of 97, plus `vscode` / `chrome` / `explorer` on 2026-08-06, so an app-aware set wears its own app's face instead of a generic window). The desktop **Controls…** editor reads that same file, so its icon combo always offers exactly what the phone can draw. Families and house style: [client/__about/icons.md](client/__about/icons.md).
 - **buttons** — the set's POOL (see Pools above); the four on the D-pad are placed in order **up · left · right · down**.

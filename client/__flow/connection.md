@@ -53,3 +53,16 @@ Pseudocode:
 
     setInterval(ensureConnected, RECONNECT_MS)   # safety net
     connect()                                     # initial call — page starts here
+
+## Build round R3 (2026-08-07) — themes
+
+```
+msg.type === "config"
+   |- monitor / streamMode / codec / tailscale_url / app_version
+   |- setStreamBase(msg.base)
+   |- applyUi(msg.ui)          <- R3: {theme, fill, colors}
+   |     |- prefSet("uiLook")      the head start for the next page load
+   |     |- <body data-theme/data-fill>
+   |     `- refreshCategories()    the controls are already on screen
+   `- ...view reset, MSE init, redraw
+```

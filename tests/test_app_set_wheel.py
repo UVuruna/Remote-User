@@ -57,14 +57,15 @@ ACTIONS = PROJECT / "actions.json"
 
 
 def run_js(body: str, app_sets: list, prefs: dict,
-           categories: list | None = None, custom: list | None = None) -> object:
+           categories: list | None = None, custom: list | None = None,
+           wheel_order: list | None = None) -> object:
     """Runs client/sets.js in node behind the four things it borrows from its
     neighbours — the prefs bridge (state.js) and the focused layout
     (layouts.js) — and returns the JSON the body prints."""
     module = SETS.read_text(encoding="utf-8")
     for needed in ("function titleMatches", "function appSetMatches",
                    "function appSetReserve", "function enforceWheelCap",
-                   "function capVictim"):
+                   "function capVictim", "function sortByWheelOrder"):
         assert needed in module, f"{needed} left client/sets.js"
     script = f"""
 let STORE = {json.dumps({"setsPrefs": json.dumps(prefs)})};
@@ -76,6 +77,7 @@ let layouts = [];
 categories = {json.dumps(categories if categories is not None else [])};
 appSets = {json.dumps(app_sets)};
 customSets = {json.dumps(custom if custom is not None else [])};
+wheelOrder = {json.dumps(wheel_order if wheel_order is not None else [])};
 {body}
 """
     with tempfile.TemporaryDirectory() as tmp:
@@ -336,6 +338,90 @@ def test_the_window_title_names_the_project():
         assert got == want, f"{title!r} -> {got!r}, expected {want!r}"
 
 
+# -- E. the owner's WHEEL ORDER (build round R5, 2026-08-07) ----------------
+# "on choose redosled setova po ringu na telefonu" — a new list in the desktop
+# Controls editor, the SAME ladder widget already used for button arrangement,
+# stored as `wheel_order` (a list of set NAMES) in actions.json. Position 1 =
+# 12 o'clock, the rest clockwise — which `openWheel()` already draws correctly
+# for ANY array order (i=0 is straight up, increasing i sweeps clockwise), so
+# the whole feature IS `sortByWheelOrder()` ordering the array `allCats()`
+# hands it. These four cases would all fail without that function.
+
+def test_wheel_order_is_honoured():
+    cats = [{"name": "Mouse", "required": True}, {"name": "Input", "required": True},
+            {"name": "Settings", "required": True}, {"name": "Attach"},
+            {"name": "Edit"}, {"name": "Navigate"}]
+    body = "console.log(JSON.stringify(allCats().map((c) => c.name)));"
+    order = ["Navigate", "Attach", "Mouse", "Input", "Settings", "Edit"]
+    got = run_js(body, [], {"apps": True, "appState": {}, "state": {}},
+                categories=cats, wheel_order=order)
+    assert got == order, f"the wheel must ride in the OWNER's own order: {got}"
+
+
+def test_a_non_riding_set_leaves_no_hole():
+    """A set named in `wheel_order` but not currently ON (unticked) is simply
+    absent from what rides — the ring closes up around it, never a gap."""
+    cats = [{"name": "Mouse", "required": True}, {"name": "Input", "required": True},
+            {"name": "Settings", "required": True},
+            {"name": "Attach", "enabled": False},  # off — not riding right now
+            {"name": "Edit"}, {"name": "Navigate"}]
+    body = "console.log(JSON.stringify(allCats().map((c) => c.name)));"
+    order = ["Navigate", "Attach", "Mouse", "Edit", "Input", "Settings"]
+    got = run_js(body, [], {"apps": True, "appState": {}, "state": {}},
+                categories=cats, wheel_order=order)
+    assert got == ["Navigate", "Mouse", "Edit", "Input", "Settings"], (
+        f"Attach is OFF — the ring must close up around it, not leave a hole "
+        f"(no null/undefined entry, no gap in position): {got}")
+
+
+def test_an_unknown_set_lands_at_the_end():
+    """A set the owner's order does not mention (a future version's addition,
+    or one he simply never dragged) goes to the END — after everything he DID
+    arrange, never spliced into the middle of his own order."""
+    cats = [{"name": "Mouse", "required": True}, {"name": "Input", "required": True},
+            {"name": "Settings", "required": True},
+            {"name": "Attach"}, {"name": "Edit"}, {"name": "Navigate"}]
+    body = "console.log(JSON.stringify(allCats().map((c) => c.name)));"
+    # His order never heard of "Edit" or "Navigate".
+    order = ["Settings", "Mouse", "Input", "Attach"]
+    got = run_js(body, [], {"apps": True, "appState": {}, "state": {}},
+                categories=cats, wheel_order=order)
+    assert got[:4] == order, f"the arranged sets must ride first, in his order: {got}"
+    assert got[4:] == ["Edit", "Navigate"], (
+        f"unmentioned sets land at the end, in their ORIGINAL relative order "
+        f"(stable sort — never shuffled among themselves): {got}")
+
+
+def test_cap_still_holds_with_a_wheel_order_and_app_sets_charging_it():
+    """The cap of 8 (rule D/B above) must survive a custom order untouched —
+    an app set still charges exactly what it always charged, a required set
+    is never the one bumped, and the trim still comes from the arrangement's
+    OWN end (build round R5 must not weaken the existing cap logic)."""
+    sets = shipped_app_sets()  # VSCode + Claude share one process — 2 slots
+    cats = [{"name": "Mouse", "required": True}, {"name": "Input", "required": True},
+            {"name": "Settings", "required": True}, {"name": "Attach"},
+            {"name": "Edit"}, {"name": "Navigate"}, {"name": "Cursor"}]
+    # The app sets sit FIRST in the owner's order on purpose — the cap must
+    # trim from the END OF THE SORTED RING, not silently favour app sets.
+    order = ["Claude", "VSCode", "Cursor", "Navigate", "Edit", "Attach",
+             "Mouse", "Input", "Settings"]
+    body = """
+layoutActive = 0;
+layouts = [{ process: "code.exe", title: "Claude Code", agents: ["claude"] }];
+console.log(JSON.stringify(allCats().map((c) => c.name)));
+"""
+    got = run_js(body, sets, {"apps": True, "appState": {}, "state": {}},
+                categories=cats, wheel_order=order)
+    assert len(got) == 8, f"the cap of 8 must still hold: {got}"
+    assert {"Mouse", "Input", "Settings"} <= set(got), (
+        f"a required set must never be the one bumped: {got}")
+    assert got == ["Claude", "VSCode", "Cursor", "Navigate", "Edit",
+                   "Mouse", "Input", "Settings"], (
+        f"Attach (the last non-required set in HIS order) gives way, in his "
+        f"own arrangement's own end, exactly as the untouched trim rule "
+        f"always worked: {got}")
+
+
 TESTS = [
     ("only the Claude conversation wears the Claude set",
      test_only_the_claude_conversation_matches_the_claude_set),
@@ -353,6 +439,11 @@ TESTS = [
      test_the_pc_decides_whether_claude_is_live),
     ("a VS Code title names its project folder",
      test_the_window_title_names_the_project),
+    ("the wheel order is honoured", test_wheel_order_is_honoured),
+    ("a non-riding set leaves no hole", test_a_non_riding_set_leaves_no_hole),
+    ("an unknown set lands at the end", test_an_unknown_set_lands_at_the_end),
+    ("the cap of 8 still holds with a wheel order and app sets charging it",
+     test_cap_still_holds_with_a_wheel_order_and_app_sets_charging_it),
 ]
 
 

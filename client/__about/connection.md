@@ -42,7 +42,10 @@ every other script must already be loaded by this point (and is, since
     client's optimistic draw).
   - `actions` — replaces `categories`/`appSets`/`groups` and re-renders both
     D-pad groups via `refreshCategories()`; `layout_state` calls it too —
-    app-aware sets appear/vanish with layout focus (owner 2026-08-04).
+    app-aware sets appear/vanish with layout focus (owner 2026-08-04). Also
+    sets `wheelOrder` from `msg.wheel_order` (build round R5, 2026-08-07 —
+    the desktop Controls editor's "Wheel order…" list; `sets.js`'s
+    `allCats()` sorts by it — see [sets](sets.md)).
   - `toast` — shows a status-pill notice.
 - `onmessage` (binary) — H.264: pushed into `mseQueue` + `pumpMse()`; JPEG:
   handed to `onFrame()`.
@@ -65,6 +68,11 @@ every other script must already be loaded by this point (and is, since
 - **4401 is terminal, not retried** — hammering the server with the same
   rejected token helps nobody; the phone needs a fresh QR/pairing link.
 ## Layouts (Phase F+ step 1)
+On open, right after `auth`, `sendTtsInfo()` reports this phone's own
+text-to-speech voices (round R2 — see [Notify (client)](notify.md)); the PC
+cannot enumerate them and the desktop Settings window's Voice dropdown has
+no other source.
+
 `auth` now carries `screen {w, h}` — the device's aspect drives layout window
 sizing on the server (tablet vs phone). New handlers: `layout_state` (mirror
 the list, update the bar, lock/unlock rotation, apply or reset the locked
@@ -122,3 +130,12 @@ slot — same creation session); `layout_state` ARMS the loading overlay's settl
 - **The screen is held awake only while the owner is working** — every
   pointer/key event re-arms `KEEP_AWAKE_MS`, and the idle sweep calls
   `Android.keepAwake(false)` so the phone's own timeout takes over.
+
+## Build round R3 (2026-08-07) — themes
+
+The `config` handler gained one line: `applyUi(msg.ui || null)` — how this
+phone should LOOK, decided on the desktop (build round R3, owner answer P4).
+It sits with `setStreamBase`, beside the other "what the PC is set to" fields,
+and a frame WITHOUT `ui` puts the phone back to the shipped default rather
+than leaving it wearing a theme nobody chose. See
+[theme.css + theme.js](theme.md).

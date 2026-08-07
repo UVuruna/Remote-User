@@ -34,13 +34,21 @@ files. What it does:
   The slot ladder is fixed and belongs to the POSITION — `Top · Left · Right ·
   Bottom` in landscape, `1ˢᵗ … 4ᵗʰ` in portrait (owner 2026-08-05); only the
   commands travel through it. The widgets themselves live in
-  [Controls Widgets](controls_widgets.md) (THE STRUCTURE LAW split of the
-  same day). The box is captioned **Arrangement** and its two lists are
-  **D-pad (landscape)** and **Stack (portrait)** (owner's own names,
-  2026-08-06) — repeating `top · left · right · bottom` in the title said the
-  same thing the rows below already spell out. The single **Default** button
-  sits in its own row UNDER the lists: beside them it charged the whole box
-  its width, and the content paid.
+  [Controls Order](controls_order.md) (THE STRUCTURE LAW, moved there in
+  build round R5, 2026-08-07 — first split out to
+  [Controls Widgets](controls_widgets.md) on 2026-08-05). The box is
+  captioned **Arrangement** and its two lists are **D-pad (landscape)** and
+  **Stack (portrait)** (owner's own names, 2026-08-06) — repeating
+  `top · left · right · bottom` in the title said the same thing the rows
+  below already spell out. The single **Default** button sits in its own row
+  UNDER the lists: beside them it charged the whole box its width, and the
+  content paid.
+- **Chooses the ORDER the sets ride the phone's wheel in** (owner build
+  round R5, 2026-08-07: "he chooses the ORDER of the sets around the phone's
+  category wheel") — a separate small dialog, the "Wheel order…" button
+  under the set list. Position 1 sits at 12 o'clock, the rest follow
+  clockwise; stored as `wheel_order` (a list of set names) in actions.json.
+  Full spec: [Controls Order](controls_order.md).
 
 ## The set list — three sections (owner 2026-08-06)
 
@@ -72,17 +80,24 @@ so reading it meant clicking every set in turn — and the owner had asked for
 the mark once already, in the round before. Each set row now carries its own
 answer: `CHECK_ROLE` holds it, `SectionDelegate._paint_tick` draws it, and
 `MARK` reserves its column so a set name can never be painted underneath it (THE SPACE & LEGIBILITY LAW — the width the
-list asks for grows with it). The mark is DRAWN, three points and a round pen,
-never a font glyph: this project has already paid for a glyph that came out a
-blunt cross on the owner's own device.
+list asks for grows with it). The mark is DRAWN, never a font glyph: this
+project has already paid for a glyph that came out a blunt cross on the
+owner's own device.
 
 The tick sits in its own strip on the **left**, with the icon and name
-indented past it, and it has two colours — the owner's own rule (2026-08-06):
-**grey** where the set is `required` and he could not turn it off if he wanted
-to (Mouse, Input, Settings), **white** where it is on and his to switch. A tick
-that looked the same in both cases would promise him a choice he does not have.
-The row's background is painted across the full width first, so the strip
-belongs to the selected row instead of leaving a gap beside it.
+indented past it, and the row's background is painted across the full width
+first, so the strip belongs to the selected row instead of leaving a gap
+beside it.
+
+**The mark itself is `controls_widgets.paint_check`** (2026-08-07), the one
+box this app draws — shared with the pool table and matched to the QSS
+checkbox. It used to be a bare checkmark with **nothing at all** drawn for a
+set that is switched OFF, so "off" and "not switchable" looked identical, and
+a screen carrying three different tick affordances had no way to say which of
+them was a control. The owner's own rule of 2026-08-06 survives the change,
+carried by the FILL instead of by the ink: a `required` set shows the accent
+WASH (riding, and not his to switch), a set he switched on shows the solid
+accent, a set he switched off shows the empty box.
 
 **App-aware sets are ticked too**, and their checkbox is live. They were left
 blank on the reasoning that they ride only in layout focus — but the phone
@@ -122,13 +137,48 @@ svi imaju ikonu?"): a built-in action's name and icon live in the client's
 `_computed_minimum()` measures, it never guesses: width = the set list's
 widest real entry (`sizeHintForColumn`) + the detail form (caption + the
 longest command name / chord / "Built-in: …" entry + the Record button);
-height = six pool rows + the detail form's four rows + the arrangement's
-caption, four slots and its two button rows (the ↑↓ pair and the Default
-button, which moved under the lists on 2026-08-06) + the fixed furniture.
-With the shipped actions.json
-that is **1363 × 715** (dev machine, theme font 13 px, 2026-08-06); it moves
-with the content, which is the point. `ChordRecorder` measures its own two
-lines: **406 × 58**.
+height = the TALLER COLUMN — left is the set list's rows plus its button row
+plus the arrangement box, right is the pool rows plus the detail form plus the
+actions row — with the fixed furniture on top. It is a FLOOR: since 2026-08-07
+both columns state their own need (`_fit_set_list`, `CommandTable._fit_rows`),
+so `settle_minimum` has the truth to grow from. `ChordRecorder` measures its
+own two lines.
+
+### THE REFLOW — what two independent graders bought (2026-08-07)
+
+The first grader failed this window because the pool table scrolled while the
+set list beside it held a large idle block. The answer then was a raised
+minimum (ten rows) — and the second grader measured the SAME hole again: **3
+of 13 commands behind a scrollbar, ~253 px of idle set list, ~90 px more in
+the Arrangement box.** The ladder says reflow (step 2) BEFORE raise (step 3),
+and the reflow had been tried once and reverted, so it went back in properly:
+
+- **The Arrangement box is a LEFT-column box now.** Everything on the left
+  answers "which set, and how does it ride" — pick it, make it, order the
+  wheel, arrange its four buttons; everything on the right answers "which
+  commands". The "Wheel order" button rides the New set / Delete row rather
+  than a full-width row of its own, because height is the axis this window is
+  short of and width it has to spare.
+- **`_fit_set_list` declares the list's HEIGHT**, not only its width. That is
+  why the first attempt failed: Qt quotes a `QListWidget`'s
+  `minimumSizeHint` at a couple of rows however many it holds, so the settle
+  loop had nothing to grow the window for and the reflow simply moved the
+  starvation from one column to the other (the list scrolled and clipped
+  "Explorer" mid-row). A column that does not state its need cannot be given
+  its share. `ROWS_SHOWN = 15` caps the declaration exactly as
+  `CommandTable.ROWS_SHOWN` caps the pool's — the raise must still fit the
+  declared 1280×1000 frame.
+- **Result, measured:** 723×956 → **733×950**, with all fifteen list rows AND
+  all thirteen pool rows visible, no scrollbar anywhere, in both palettes.
+  What remains is ~124 px of empty grid under the pool's last row — the right
+  column is now the SHORTER one, and its stretch lands in the table, directly
+  above its own "Add command" button. Nothing is hidden by it.
+- **And the tooth was fixed with the window** — `tests/test_layout_audit_qt.py`
+  could not see this failure at all: its SCROLL+SLACK check counted only
+  `QSpacerItem`s on the path up to the window, and this slack was a stretched
+  SIBLING. `idle_view_slack` now measures every item view's viewport against
+  its own rows. Self-tested by rebuilding the pre-round layout, which the
+  audit now fails, naming the idle list and its 356 px.
 
 The measurement happens in `showEvent`, not in `__init__`: the theme reaches
 this dialog through its parent's stylesheet and Qt resolves the QSS font and
@@ -138,24 +188,27 @@ and the wheel checkbox and the set list were cut at the resulting minimum.
 The audit caught exactly that, once its factory started applying the theme
 the way the app does.
 
-The command table takes the window's free height (no widget carries a hard
-size), and every editor field owns a full-width row — the two failures the law
-names (a list scrolling beside empty space, a shortcut rendered "ift+tab")
+The command table takes the right column's free height (no widget carries a
+hard size), and every editor field owns a full-width row — the two failures the
+law names (a list scrolling beside empty space, a shortcut rendered "ift+tab")
 cannot recur here. Proof: [tests/test_layout_audit_qt.py](../../../tests/___tests.md).
 
 ## Connections
 
 ### Uses
-- [Config](../../__about/config.md) — `SETTINGS.actions_path`/`client_dir`,
-  `USER_DIR`, `BUNDLE_DIR`, `PROJECT_ROOT`, `FROZEN`, `apply()` (repointing the
-  running server at the user copy the first time it is seeded)
-- client/icons.js — `load_client_icons()` parses `const ICONS` out of it
-  ([Icons](../../../client/__about/icons.md)); client/controls.js —
-  `load_client_builtins()` parses `const BUILTINS`
-  ([Controls](../../../client/__about/controls.md)). Icons AND built-in labels
-  therefore have exactly one source of truth, the phone's own
-- the SHIPPED actions.json — `merge_shipped_pools()` refreshes every built-in
-  pool from it on open ([Actions](../../../ACTIONS.md))
+- [Controls Data](controls_data.md) — every actions.json path/parse/merge
+  function, plus `natural_order`/`effective_wheel_order` (build round R5).
+  This module owns NONE of that plumbing itself since 2026-08-07 — it calls
+  in, it does not implement
+- [Controls Widgets](controls_widgets.md) — `CommandDetail`, `CommandTable`,
+  `icon_for`
+- [Controls Order](controls_order.md) — `OrderList` (per-set arrangement) and
+  `WheelOrderDialog` (the new global wheel order)
+- [Config](../../__about/config.md) — indirectly, through Controls Data
+- client/icons.js / client/controls.js — indirectly, through
+  `load_client_icons`/`load_client_builtins`
+  ([Icons](../../../client/__about/icons.md),
+  [Controls](../../../client/__about/controls.md))
 
 ### Used by
 - `gui/main_window.py` (see [GUI (subfolder)](../___gui.md)) — the
@@ -163,54 +216,24 @@ cannot recur here. Proof: [tests/test_layout_audit_qt.py](../../../tests/___test
 
 ## Classes
 
-- **`ChordRecorder`** — a tiny modal that captures ONE key combination from
-  the PC keyboard (`keyPressEvent`: modifiers + a key the injector knows —
-  letters/digits, F-keys, `QT_NAMED_KEYS`) and returns it as a chord string
-  (`ctrl+shift+p`). Chords are recorded, never typed (owner spec). Esc alone
-  cancels.
-- **`SlotList`** — a `QListWidget` whose size hint is exactly the height of
-  its rows. This is what replaced the hard height that made the arrangement
-  lists scroll while the dialog stood empty (ladder step 1).
-- **`OrderList`** — the four ACTIVE buttons in slot order with ↑/↓, one per
-  orientation; identity order is returned but written as "no entry" (the
-  shipped default needs no JSON).
-- **`CommandDetail`** — the selected command, ONE field per full-width row
-  (Does / Shortcut + Record / Name / Icon). On a built-in or app-set row every
-  field is read-only EXCEPT the Name, which anyone may override (owner
-  2026-08-05); the fields always show the real inherited values.
-- **`CommandTable`** — the set's whole pool: tick, name (+ icon), does
-  (built-in / chord / key), shortcut. Item truncation is turned OFF (the law),
-  columns size to content except the name column, which stretches.
+- **`SectionDelegate`** — paints the set list's three section headings and
+  each set's own wheel tick (stays in THIS module — it is the set list's own
+  presentation, not a reusable widget the way the command/order widgets are).
 - **`ControlsEditor`** — the dialog: set list (built-ins and app sets
   flagged), `_store_current` writes screen → RAM on every selection change,
   `_tick_changed` keeps the D-pad at four and says so on screen when a fifth
-  is tried, `_save` validates (empty sets warned, shown-by-default clamped to
+  is tried, `_open_wheel_order` opens `WheelOrderDialog` (build round R5,
+  2026-08-07) and writes its result into `self.data["wheel_order"]` on OK,
+  `_save` validates (empty sets warned, shown-by-default clamped to
   `WHEEL_MAX`) and writes the file.
 
-## Functions
-
-- `user_actions_path()`: the writable actions.json — dev: the repo file;
-  installed: seeds the %LOCALAPPDATA% copy from the bundled default on first
-  use and repoints the running server via `config.apply`
-- `shipped_actions_path()`: the actions.json we SHIP, still reachable after
-  the repoint — the source every built-in pool is refreshed from
-- `merge_shipped_pools(data, shipped)`: built-in and app sets take their
-  `buttons` from the shipped file while the owner's `active` / `order_*` /
-  `enabled` survive. Without it an owner who already has a user copy would
-  never receive the reserve commands a new version adds (the 2026-08-05 root
-  cause of "Settings still shows Anywhere")
-- `button_id(btn)`: the stable identity `active` stores — explicit `id`, else
-  action / chord / key / label. IDs, not indices, so inserting a pool command
-  in a later version cannot silently re-point the owner's choice
-- `active_buttons(s)`: the ≤4 commands on the D-pad — mirrors the client's
-  `activeButtons()`; no `active` = the first four (pre-pool behaviour)
-- `load_client_table(name, line_re, source)`: one `const NAME = {...}` table
-  out of a client script (`controls.js` by default, `icons.js` for the icon
-  set); `{}` on any surprise (never a crash)
-- `load_client_icons()` / `load_client_builtins()`: `{name: svg fragment}` and
-  `{action: (label, icon)}` built on top of it
-- `icon_for(body)`: one fragment → `QIcon` via `QSvgRenderer` (48 px, stroke
-  `ICON_STROKE`)
+The command-editing widgets (`ChordRecorder`, `CommandDetail`,
+`CommandTable`) live in [Controls Widgets](controls_widgets.md); the
+arrangement/order widgets (`SlotList`, `OrderList`, `WheelRing`,
+`WheelOrderDialog`) live in [Controls Order](controls_order.md); every
+actions.json path/parse/merge FUNCTION lives in
+[Controls Data](controls_data.md) — this module (since build round R5,
+2026-08-07) owns only the WINDOW that assembles them.
 
 ## App sets charge the wheel here too (owner 2026-08-06)
 

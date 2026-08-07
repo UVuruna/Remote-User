@@ -1,70 +1,26 @@
-# Controls Editor — Widgets — Flow
+# Controls Editor — Command Widgets — Flow
 
 **About:** [description](../__about/controls_widgets.md)
 
-## Who owns what after the split (THE STRUCTURE LAW, 2026-08-05)
+## Who owns what after the round R5 split (2026-08-07)
 
 ```
-controls_editor.py  (dialog)          controls_widgets.py  (pieces)
-├─ user/shipped actions.json paths    ├─ icon_for()      svg fragment → QIcon
-├─ load_client_icons/builtins()       ├─ button_id()     command identity
-├─ active_buttons()                   ├─ DPAD_SLOTS / LAND_SLOTS / PORT_SLOTS
-├─ merge_shipped_pools()              ├─ ChordRecorder   records a chord
-└─ ControlsEditor                     ├─ SlotDelegate    rich-text rows
-     assembles ▼                      ├─ SlotList        height = its rows
-                                      ├─ OrderList       slot ladder + Up/Down
-                                      ├─ CommandDetail   one field per row
+controls_editor.py  (dialog)          controls_widgets.py  (COMMAND widgets)
+├─ (imports from the other three)     ├─ icon_for()      svg fragment → QIcon
+└─ ControlsEditor                     ├─ ChordRecorder   records a chord
+     assembles ▼                      ├─ CommandDetail   one field per row
                                       └─ CommandTable    the pool + ticks
-        imports ───────────────────────────▶ (one direction only)
+
+controls_data.py    (data)            controls_order.py    (ORDER widgets)
+├─ button_id()     command identity   ├─ SlotDelegate/SlotList/OrderList
+├─ DPAD_SLOTS / WHEEL_MAX              ├─ WheelRing / WheelOrderDialog
+└─ merge_shipped_pools() etc.          (see [Controls Order — Flow](controls_order.md)
+        ▲ imported by all three ◀──────────────── for the OrderList diagram)
 ```
 
-## OrderList — a move changes the COMMAND order, never the ladder
-
-```
-item i    data(INDEX_ROLE) = index into the ACTIVE four   (what order() returns)
-          data(LABEL_ROLE) = the name the phone prints    (never re-read from text)
-
-set_order(labels, order)
- ├─ order valid (a permutation) ? use it : identity
- ├─ one item per slot, both roles set
- └─ _relabel()
-
-↑ / ↓  _move(±1)
- ├─ takeItem(i) → insertItem(j)        the COMMAND travels
- ├─ setCurrentRow(j)                   selection follows the command
- └─ _relabel()                         ◀── the fix: the ladder is redrawn
-                                            from the row numbers, so
-                                            Top·Left·Right·Bottom (landscape)
-                                            and 1ˢᵗ…4ᵗʰ (portrait) stand still
-
-_relabel()
- for slot in rows:  text = SLOTS[slot] + " · " + escape(label)
-                            ▲ position          ▲ HTML-escaped: labels come
-                              (may hold <sup>)    from the owner's actions.json
-```
-
-Before the fix (owner screenshot 2026-08-05): the slot name was baked into
-the item's text, so raising `Bottom · Next tab` produced
-
-```
-Top     · Sidebar          Top     · Sidebar
-Left    · Terminal    →    Left    · Terminal
-Right   · Preview          Bottom  · Next tab   ◀ the NAME came along
-Bottom  · Next tab         Right   · Preview
-```
-
-## SlotDelegate — one row, drawn twice
-
-```
-sizeHint(option, index)                 paint(painter, option, index)
- ├─ initStyleOption → opt.text = HTML    ├─ doc = HTML in the row's font
- ├─ doc.idealWidth() + 10                ├─ opt.text = ""  ← Qt draws the
- └─ doc.size().height() + 6              │   background/selection only
-        ▲                                ├─ palette.Text = HighlightedText
-        └─ the item-view guard reads      │   while the row is selected
-           THIS, so a rich-text row is    └─ doc.documentLayout().draw()
-           measured by what is drawn          at SE_ItemViewItemText
-```
+`SlotList`/`SlotDelegate`/`OrderList` and their flow diagram moved to
+[Controls Order — Flow](controls_order.md) in build round R5 (2026-08-07);
+`button_id()` moved to [Controls Data](controls_data.md) the same round.
 
 ## CommandDetail — what is editable, and what is only shown
 
@@ -79,4 +35,13 @@ show_button(btn, editable)
 
 dump()  → {"action": …} | {"label": …, "chord"|"key": …, "icon"?: …} | None
           (None = an unusable row — an empty shortcut is never written)
+```
+
+## Build round R3 (2026-08-07) — themes
+
+```
+icon_for(body)
+   stroke = icon_stroke()          <- TOKENS["text2"], read NOW (was "#cbd5e1")
+   <svg stroke="{stroke}"> + body.replace("currentColor", stroke) </svg>
+   -> QSvgRenderer -> 48x48 QPixmap -> QIcon
 ```

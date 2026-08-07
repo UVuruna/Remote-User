@@ -42,7 +42,7 @@ def copy(data: dict) -> dict:
 
 def test_two_sets_of_one_process_both_survive_a_merge():
     """A. Claude and VSCode share `Code.exe` — merging must keep both."""
-    from gui.controls_editor import merge_shipped_pools
+    from gui.controls_data import merge_shipped_pools
     shipped = shipped_actions()
     names = [s["name"] for s in shipped["app_sets"]]
     assert names.count("VSCode") == 1 and "Claude" in names, (
@@ -60,7 +60,7 @@ def test_two_sets_of_one_process_both_survive_a_merge():
 
 def test_a_merge_keeps_renames_but_drops_impossible_choices():
     """The owner may rename any button; a stale `active` must not survive."""
-    from gui.controls_editor import active_buttons, merge_shipped_pools
+    from gui.controls_data import active_buttons, merge_shipped_pools
     shipped = shipped_actions()
     user = copy(shipped)
     mouse = next(s for s in user["categories"] if s["name"] == "Mouse")
@@ -78,7 +78,7 @@ def test_a_merge_keeps_renames_but_drops_impossible_choices():
 
 def test_a_corrupted_pool_repairs_itself():
     """B's aftermath: a user copy that already has Win sitting in Mouse."""
-    from gui.controls_editor import merge_shipped_pools
+    from gui.controls_data import merge_shipped_pools
     shipped = shipped_actions()
     broken = copy(shipped)
     mouse = next(s for s in broken["categories"] if s["name"] == "Mouse")
@@ -89,6 +89,25 @@ def test_a_corrupted_pool_repairs_itself():
     actions = [b.get("action") for b in mouse["buttons"]]
     assert actions[:4] == ["click", "right", "middle", "scroll"], actions
     assert "active" not in mouse
+
+
+def test_merge_preserves_the_owners_wheel_order():
+    """E. Build round R5 (2026-08-07, owner: "he chooses the ORDER of the
+    sets around the phone's category wheel"). `merge_shipped_pools` must
+    PRESERVE `wheel_order` across a shipped-pool merge — the whole point of
+    that function is that a new version's defaults reach the user WITHOUT
+    discarding his own choices, exactly like `active`/`order_*`/`enabled`
+    already do. Proven here even though the shipped file's OWN default order
+    differs from the owner's — the merge must not fall back to it."""
+    from gui.controls_data import merge_shipped_pools
+    shipped = shipped_actions()
+    shipped["wheel_order"] = ["Settings", "Input", "Mouse"]  # a future default
+    user = copy(shipped)
+    user["wheel_order"] = ["Navigate", "Attach", "Mouse"]  # the owner's own pick
+    merge_shipped_pools(user, shipped)
+    assert user["wheel_order"] == ["Navigate", "Attach", "Mouse"], (
+        "the owner's wheel order must survive a shipped-pool merge exactly "
+        f"as he left it: {user['wheel_order']}")
 
 
 def test_switching_sets_never_writes_into_the_other_pool():
@@ -136,6 +155,8 @@ CHECKS = [
     ("a merge keeps renames, drops impossible choices",
      test_a_merge_keeps_renames_but_drops_impossible_choices),
     ("a corrupted pool repairs itself", test_a_corrupted_pool_repairs_itself),
+    ("merge preserves the owner's wheel order",
+     test_merge_preserves_the_owners_wheel_order),
     ("switching sets never writes into another pool",
      test_switching_sets_never_writes_into_the_other_pool),
 ]
