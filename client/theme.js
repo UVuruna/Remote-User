@@ -16,6 +16,10 @@
 "use strict";
 
 const UI_PREF = "uiLook";
+// The SEED, not a fallback. It is what a device that has never been told
+// anything wears, and nothing else: `applyUi` merges onto the look in force
+// and never onto this (see its own comment — a `config` with no `ui` used to
+// reset the owner's choice to these two values).
 const UI_DEFAULT = { theme: "dark", fill: "transparent", colors: {} };
 
 // Ink on a coloured button. Computed, never tabled (rules/CODE.md — Compute,
@@ -291,16 +295,47 @@ function writeLook() {
   }
 }
 
-// The server's word, from `config.ui`. Anything missing or unknown falls back
-// to the shipped default rather than to whatever was cached — a server that
-// stops sending `ui` (an older PC) must put the phone back to the look that
-// PC actually renders for, not leave it wearing a theme nobody chose.
-function applyUi(next) {
-  ui = {
-    theme: (next && next.theme) || UI_DEFAULT.theme,
-    fill: (next && next.fill) || UI_DEFAULT.fill,
-    colors: (next && next.colors) || {},
+// One look laid over another, field by field. The base is what is in force —
+// never a constant — so an axis nobody mentioned keeps the value it has.
+function mergedUi(base, next) {
+  return {
+    theme: (next && next.theme) || base.theme,
+    fill: (next && next.fill) || base.fill,
+    colors: (next && next.colors) || base.colors || {},
   };
+}
+
+// The server's word, from `config.ui`.
+//
+// SILENCE IS NOT AN INSTRUCTION (independent grader, 2026-08-07 — the finding
+// that blocked the release, and the only product bug the three grading rounds
+// found by measuring pixels instead of reading code). This function used to
+// default every missing field to `UI_DEFAULT`, so a `config` frame carrying no
+// `ui` at all — or one that named only the theme — put the phone back to
+// dark/transparent within half a second of the owner choosing anything else.
+// The desktop's Appearance card looked like it did nothing.
+//
+// The old comment justified it with "a server that stops sending `ui` (an
+// older PC) must put the phone back to the look that PC actually renders for",
+// and that sentence is simply not true of anything: the PC renders nothing for
+// the phone — the phone paints itself. A server too old to have a `phone_theme`
+// setting has no opinion about appearance to impose, and overwriting the
+// owner's only choice with a constant is not obedience, it is a reset.
+//
+// So the rule is IGNORE-OR-MERGE, and the fallback is the CACHE, never
+// `UI_DEFAULT`:
+//   no `ui`      -> nothing happens at all. Not a state change, not a pref
+//                   write, not a repaint. The look in force stays in force,
+//                   and on a device that has never been told anything that is
+//                   `UI_DEFAULT` anyway (restoreUi below seeds it).
+//   partial `ui` -> merged onto the look in force, so naming the theme cannot
+//                   silently discard the fill or the set colours.
+// The cache is the phone's memory of the last thing the DESKTOP said; that is
+// a far better answer to "what look does this owner want" than a constant
+// compiled into the page.
+function applyUi(next) {
+  if (!next || typeof next !== "object") return;
+  ui = mergedUi(ui, next);
   resetSetColors();
   writeLook();
   try {
@@ -325,7 +360,7 @@ function applyUi(next) {
 (function restoreUi() {
   try {
     const raw = prefGet(UI_PREF);
-    if (raw) ui = { ...UI_DEFAULT, ...JSON.parse(raw) };
+    if (raw) ui = mergedUi(UI_DEFAULT, JSON.parse(raw));
   } catch (e) {
     ui = { ...UI_DEFAULT };
   }

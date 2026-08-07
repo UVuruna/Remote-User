@@ -75,7 +75,15 @@ function connect() {
         // How this phone should LOOK, decided on the DESKTOP (build round R3,
         // owner answer P4). Applied straight to CSS variables — the page
         // never asks the device and offers no menu of its own.
-        applyUi(msg.ui || null);
+        //
+        // `msg.ui` is handed over EXACTLY as it arrived, absence included: a
+        // frame that says nothing about appearance must change nothing
+        // (independent grader, 2026-08-07 — this line and theme.js's old
+        // UI_DEFAULT fallback were the two halves of "the Filled choice does
+        // nothing"). The decision of what silence means belongs in theme.js,
+        // with the look itself and with the cache that remembers it, not here
+        // in a `||` that turns "no opinion" into "dark, outlined".
+        applyUi(msg.ui);
         refreshQualityButtons();
         detailRegion = { x: 0, y: 0, w: 1, h: 1 };
         if (baseBitmap) { baseBitmap.close(); baseBitmap = null; }

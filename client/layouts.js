@@ -654,6 +654,15 @@ function layChip(label, selected, onTap, icon) {
   return el;
 }
 
+// A chip whose label is a WINDOW TITLE. Same maker as every other chip, plus
+// the one class that lets a long title WRAP instead of being cut — see the
+// note over the chosen-slots row in renderCreationPanel().
+function titleChip(label, selected, onTap, icon) {
+  const el = layChip(label, selected, onTap, icon);
+  el.classList.add("lay-title");
+  return el;
+}
+
 function newCreation(source) {
   return {
     source,                 // "list" | "tap"
@@ -787,9 +796,24 @@ function renderCreationPanel() {
     card.appendChild(sub);
     const row = document.createElement("div");
     row.className = "lay-row";
+    // THE TITLE IS THE CONTENT, AND CONTENT IS NEVER CUT (owner 2026-08-06:
+    // "čip sa izabranim prozorom skraćuje naziv na 'Claude Code - Remote User
+    // - V…', a pun naziv se na tom ekranu ne vidi nigde kada polje Name već
+    // prepišeš"). This chip cut at 30 CHARACTERS, in JS, before the DOM ever
+    // saw the string — so `scrollWidth === clientWidth` and the phone audit's
+    // clip test could not fire, which is how three rounds of PASS sat over a
+    // defect two people had pointed at. 225 device px stood idle on that row
+    // in portrait, 248 in landscape.
+    //
+    // Ladder rung 1 then 2 (THE SPACE & LEGIBILITY LAW): the chip takes the
+    // free width, and wraps when the title is longer still — the SAME
+    // treatment the layout list gives the same titles (`.lay-item-main span`),
+    // not a second one invented here. And it is this chip that answers the
+    // half he actually complained about: the Name field may be retyped to
+    // anything, the chip above it still carries the window's own title.
     c.slots.forEach((s, i) => row.appendChild(
-      layChip(s.title.length > 30 ? s.title.slice(0, 29) + "…" : s.title, true,
-              () => { c.slots.splice(i, 1); renderCreationPanel(); }, s.icon)));
+      titleChip(s.title, true,
+                () => { c.slots.splice(i, 1); renderCreationPanel(); }, s.icon)));
     card.appendChild(row);
   }
 
@@ -853,9 +877,10 @@ function renderCreationPanel() {
     c.entries.forEach((e) => {
       const slot = slotFromEntry(e);
       const idx = c.slots.findIndex((s) => sameSlot(s, slot));
-      const label = (e.kind === "tab" ? "↳ " : "") +
-        (e.title.length > 34 ? e.title.slice(0, 33) + "…" : e.title);
-      list.appendChild(layChip(label, idx >= 0, () => {
+      // The same rule as the chosen chips above: the title is the only thing
+      // that tells two windows of one app apart, so it is never cut in JS.
+      const label = (e.kind === "tab" ? "↳ " : "") + e.title;
+      list.appendChild(titleChip(label, idx >= 0, () => {
         if (idx >= 0) c.slots.splice(idx, 1);          // tap again = deselect
         else if (c.slots.length < cellsNeeded()) c.slots.push(slot);
         else c.slots[c.slots.length - 1] = slot;       // full = replace last

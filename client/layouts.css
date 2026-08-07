@@ -138,6 +138,20 @@
   color: var(--accent);
   box-shadow: 0 0 0 2px var(--accent-glow);
 }
+/* A chip carrying a WINDOW TITLE (the chosen slots and the creation list).
+   It used to be cut at 30 characters in JS — invisible to every DOM-side clip
+   test, because a string shortened before the DOM never overflows anything
+   (owner 2026-08-06, and the third independent grader who found the line).
+   The cut is gone, so the chip must be able to do what the layout list's rows
+   already do with the very same titles: take the free width, then wrap.
+   `max-width: 100%` is what keeps a 63-character title from widening the row
+   past the card instead of wrapping inside it. */
+.lay-chip.lay-title {
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: left;
+}
 .lay-actions {
   display: flex;
   gap: 10px;

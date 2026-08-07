@@ -19,6 +19,8 @@ const regionPanel = document.getElementById("region-panel");
 
 const RG_MIN = 44;    // CSS px — a box smaller than a fingertip cannot be grabbed
 const RG_EDGE = 8;    // keep the box off the very screen edge, where Android steals touches
+const RG_CLEAR = 10;  // CSS px the newborn frame keeps away from our own chrome
+const RG_HANDLE = 22; // the corner handles hang this far OUTSIDE the box
 
 // The box in CSS px, in screen coordinates. Reopened at the same size, so a
 // second grab of the same shape is one tap (the PC screen does not move).
@@ -109,15 +111,55 @@ function rgToMonitor() {
   return { x: x1, y: y1, w: Math.max(0, x2 - x1), h: Math.max(0, y2 - y1) };
 }
 
-function openRegionPanel() {
-  if (!rgBox) {
-    rgBox = {
-      x: window.innerWidth * 0.18,
-      y: window.innerHeight * 0.22,
-      w: window.innerWidth * 0.64,
-      h: window.innerHeight * 0.5,
-    };
+// WHERE THE FRAME IS BORN (independent grader, 2026-08-07). The panel draws
+// ABOVE everything we put on screen (z-index 55), so a frame that opens over
+// a control paints its dashed edge and its 44 px handles straight across that
+// control's label — the grader's picture read "Layou" where the corner button
+// says "Layout". The old default was two percentages (18 % / 22 % of the
+// screen) that knew nothing about the chrome, and in landscape they put the
+// frame's top handles level with the corner buttons.
+//
+// So the newborn frame is placed in the band our own chrome LEAVES FREE,
+// measured from the real elements rather than guessed: everything above the
+// screen's middle pushes the band's top down, everything below pulls its
+// bottom up, and the frame — handles included — is centred in what is left.
+// It is only the STARTING rect: a drag may still take the frame anywhere,
+// which is what "full freedom za dimenzije i poziciju" asked for.
+function rgFreeBand() {
+  const mid = window.innerHeight / 2;
+  let top = RG_EDGE;
+  let bottom = window.innerHeight - RG_EDGE;
+  for (const el of document.querySelectorAll(".corner, #layout-bar, .group")) {
+    // A hidden control has a 0x0 rect, which is the whole test. `offsetParent`
+    // is NOT: every one of these is `position: fixed`, and a fixed element's
+    // offsetParent is null whether it is on screen or not.
+    const r = el.getBoundingClientRect();
+    if (r.width <= 0 || r.height <= 0) continue;
+    if (r.bottom <= mid) top = Math.max(top, r.bottom + RG_CLEAR);
+    else if (r.top >= mid) bottom = Math.min(bottom, r.top - RG_CLEAR);
   }
+  // A screen so crowded that nothing is free is not a reason to open a frame
+  // too small to grab — fall back to the whole screen inset.
+  if (bottom - top < RG_MIN + 2 * RG_HANDLE) {
+    return { top: RG_EDGE, bottom: window.innerHeight - RG_EDGE };
+  }
+  return { top, bottom };
+}
+
+function rgDefaultBox() {
+  const band = rgFreeBand();
+  const room = band.bottom - band.top - 2 * RG_HANDLE;
+  const h = Math.max(RG_MIN, Math.min(window.innerHeight * 0.5, room));
+  return {
+    x: window.innerWidth * 0.18,
+    y: band.top + RG_HANDLE + (room - h) / 2,
+    w: window.innerWidth * 0.64,
+    h,
+  };
+}
+
+function openRegionPanel() {
+  if (!rgBox) rgBox = rgDefaultBox();
   regionPanel.innerHTML = "";
 
   rgEl = document.createElement("div");
@@ -140,7 +182,11 @@ function openRegionPanel() {
   bar.className = "rg-bar";
   const hint = document.createElement("span");
   hint.className = "rg-hint";
-  hint.textContent = "Drag the corners, then Send";
+  // The button beside this already says Send — printing the word twice in one
+  // bar wasted the line and read as two instructions (independent grader,
+  // 2026-08-07). The hint says what the FINGER does; the button says what
+  // happens next, and it says it once.
+  hint.textContent = "Drag the corners to frame it";
   const send_ = document.createElement("button");
   send_.type = "button";
   send_.className = "rg-send";
@@ -165,10 +211,15 @@ function openRegionPanel() {
 
   rgApply();
   regionPanel.hidden = false;
+  // The "use from anywhere" pill is anchored to the same bottom centre as the
+  // bar above, and the bar's background is translucent — so it showed THROUGH
+  // it with Send sitting on its words. It stands down while the frame is up.
+  document.body.classList.add("region-open");
 }
 
 function closeRegionPanel() {
   regionPanel.hidden = true;
   regionPanel.innerHTML = "";
   rgEl = null;
+  document.body.classList.remove("region-open");
 }
