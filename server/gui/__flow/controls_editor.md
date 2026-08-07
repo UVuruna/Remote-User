@@ -37,6 +37,17 @@ LEGIBILITY violations the owner photographed.
      (list states its own rows AND width)     (the table takes the free height)
 ```
 
+Selecting a TYPED command (Does = "Types (paste text)", e.g. the Claude set's
+Usage) swaps the Shortcut row for the Text row — never both at once (build
+round R6, 2026-08-07 — see [Controls Widgets](controls_widgets.md)):
+
+```
+│ Does     [Types (paste text) ˅]                                        │
+│ Text     [/usage.................................][x] Press Enter     │
+│ Name     [Usage...........................................]           │
+│ Icon     [˅ usage]                                                     │
+```
+
 ## Where the space goes (SPACE & LEGIBILITY LAW)
 
 The Arrangement box moved into the LEFT column on 2026-08-07 — ladder step 2,
