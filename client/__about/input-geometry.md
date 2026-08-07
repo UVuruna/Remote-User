@@ -6,26 +6,21 @@
 ## Purpose
 
 Maps a finger's canvas-pixel position to the PC's normalized (0–1) monitor
-coordinates, calibrates the fixed cursor-offset distance from the finger's
-measured touch contact size, and drives scroll-wheel momentum after a scroll
-gesture ends. Third of the six client scripts to load (after
-[Render](render.md), before [Controls](controls.md)).
+coordinates, and drives scroll-wheel momentum after a scroll gesture ends.
+Third of the six client scripts to load (after [Render](render.md), before
+[Controls](controls.md)).
 
 ## Connections
 
 ### Uses
-- [State](state.md) — `hand`, cursor-offset tunables (`CURSOR_OFFSET_*`,
-  `CURSOR_CALIB_SAMPLES`), scroll tunables, `send`
-- [Render](render.md) — `drawnRect()` (coordinate mapping basis),
-  `computeBaseRect()`/`clampView()`/`redraw()` (re-run after calibration
-  changes the offset distance)
+- [State](state.md) — scroll tunables, `send`
+- [Render](render.md) — `drawnRect()` (coordinate mapping basis)
 
 ### Used by
-- [Gestures](gestures.md) — every pointer handler calls
-  `toRemoteMaybeOffset`/`offsetRemote`/`toRemoteClamped`, `sampleFinger`,
+- [Gestures](gestures.md) — every pointer handler calls `toRemoteClamped`,
   `sendCursor`, `startScrollInertia`/`cancelScrollInertia`
-- [Controls](controls.md) — the `calibrate` built-in action calls
-  `startCalibration()`
+- [Gamepad](gamepad.md) — the left stick's already-normalized point goes
+  through `clampRemote`, the same fence a finger uses
 
 ## Key Functions
 
@@ -36,19 +31,6 @@ gesture ends. Third of the six client scripts to load (after
   rather than by a second copy of it — see [Gamepad](gamepad.md).
 - `toRemoteClamped(px, py)` — canvas-px point → PC-normalized point, through
   `drawnRect()` and then `clampRemote`.
-- `sampleFinger(e)` — feeds one touch sample into calibration; locks
-  `fingerRadiusPx` at the MAX contact radius seen over
-  `CURSOR_CALIB_SAMPLES` samples (max, not median — a light press
-  under-reports contact size).
-- `startCalibration()` — re-arms calibration (Settings → Calibrate),
-  resetting to the fallback offset until re-measured.
-- `offsetDistancePx()` — the constant per-session offset distance:
-  `fingerRadiusPx + CURSOR_OFFSET_MARGIN`, clamped to `[MIN, MAX]`, or the
-  fallback until calibrated.
-- `offsetRemote(p)` — finger point → PC point placed one offset away, in the
-  fixed handedness diagonal (315° right-handed / 45° left-handed).
-- `toRemoteMaybeOffset(p, offset)` — dispatches to `offsetRemote` (touch) or
-  `toRemoteClamped` (mouse/pen — no offset).
 - `sendCursor(remote)` — sets `cursorPos` optimistically, sends
   `pointer_move`, redraws immediately (zero round-trip lag; the server's
   `cursor` echo corrects it later).
@@ -57,20 +39,22 @@ gesture ends. Third of the six client scripts to load (after
 
 ## Design Decisions
 
-- **The pointer never sits on the finger.** A fixed diagonal offset (not a
-  radial angle — that was the pre-2026-07-26 design) keeps the PC cursor
-  visible and the aiming direction constant, building muscle memory.
-- **Calibration takes the MAX, not the median or first sample** — a light
-  first touch under-reports contact radius and would place the pointer too
-  close, partly hidden by the finger.
+- **The pointer sits exactly under the finger** (owner decision 2026-08-02) —
+  no diagonal offset, no calibration, no reserved edge margin. `toRemoteClamped`
+  is a straight mapping; see below.
 ## Layouts (Phase F+ step 1)
 `toRemoteClamped` additionally clamps into `layoutRegion` while a layout is
 focused — the finger may travel past the framed window's edge, the PC cursor
 never does (the phone sees ONLY that region).
 
-## Offset system removed (owner 2026-08-02)
-The cursor-offset system (handedness diagonal, finger calibration, reserved
-edge margins) is GONE — the pointer sits exactly under the finger, the image
-aspect-fits the FULL canvas, and a focused layout touches all four screen
-edges. Any offset/margin description in this doc's diagrams predating
-2026-08-02 is historical.
+## The cursor-offset system is gone (owner 2026-08-02, remnants finished 2026-08-07)
+This file used to calibrate a fixed diagonal offset from the finger's measured
+contact size (`sampleFinger`, `startCalibration`, `offsetDistancePx`,
+`offsetRemote`, `toRemoteMaybeOffset`) and steer the PC cursor away from the
+touch point along a handedness diagonal (`hand`: `"left"`/`"right"`). The
+owner reversed that design on 2026-08-02 — the pointer sits exactly under the
+finger — and on 2026-08-07 ordered every remaining trace removed as dead
+weight, not kept as a compatibility shim: the `calibrate` built-in action, the
+server's `config.hand` field, and the docs describing the old algorithm as if
+it still ran. None of it exists anymore. The focus going forward is a
+gamepad-first app, not finger handedness.

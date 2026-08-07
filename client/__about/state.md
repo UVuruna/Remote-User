@@ -4,10 +4,10 @@
 
 ## Purpose
 
-Tunables (zoom limits, scroll fling constants, cursor-offset bounds, timing
-constants), the shared mutable state every other client script reads and
-writes (canvas/context refs, connection/view/gesture state, calibration
-state), and the three primitives everything else is built on: `setStatus`
+Tunables (zoom limits, scroll fling constants, timing constants), the shared
+mutable state every other client script reads and writes (canvas/context
+refs, connection/view/gesture state), and the three primitives everything
+else is built on: `setStatus`
 (status pill), `toCanvasPx` (pointer event → canvas-px point) and `send`
 (JSON WebSocket send with the "dead socket → visible reconnect" fallback).
 
@@ -29,21 +29,16 @@ Loads FIRST of the six client scripts (see [Client (folder)](../___client.md))
 ## Key State & Functions
 
 - **Tunables** — `ZOOM_MAX`, scroll fling constants, `VIEWPORT_MARGIN`,
-  `RECONNECT_MS`, MSE live-edge constants (`LIVE_MAX_BEHIND_S` etc.), and the
-  cursor-offset bounds (`CURSOR_OFFSET_MARGIN/MIN/MAX/FALLBACK`,
-  `CURSOR_CALIB_SAMPLES`) — see [Input Geometry (flow)](../__flow/input-geometry.md)
-  for how the offset bounds are used.
+  `RECONNECT_MS`, MSE live-edge constants (`LIVE_MAX_BEHIND_S` etc.).
 - **DOM/connection refs** — `canvas`, `ctx`, `statusEl`, `token` (from the URL
   query string, delivered by the QR/pairing link).
 - **View/stream state** — `monitor`, `baseRect`, `view` (pan/zoom transform),
   `baseBitmap`/`detailBitmap`/`detailRegion` (JPEG mode), `ws`, `streamMode`
   (`"h264"` default-overridden-to `"jpeg"` at declaration, actually set from
-  the server's `config` message), `cursorPos`, `hand`.
+  the server's `config` message), `cursorPos`.
 - **Gesture state** — `touchMode` (single active mode: move/drag/scroll/pan),
   `pointers` (Map of active PointerEvents), `pinch`, `primary` (the steering
   finger).
-- **Calibration state** — `fingerRadiusPx`, `fingerMaxPx`,
-  `fingerSampleCount`, `calibrating`.
 - **Region-streaming state** — `lastSentViewport`, `viewportTimer`.
 - `setStatus(cls, text)` — sets the status pill's class + text.
 - Global `error`/`unhandledrejection` listeners route uncaught page errors

@@ -44,7 +44,7 @@ Every entry obeys it, and a new one must too:
 | Apps | `sidebar` `palette` `terminal` `preview` `gotofile` `comment` `newtab` `closetab` `address` `reopen` `reload` `newdir` `folderup` `copypath` `details` |
 | Claude | `claude` `usage` `model` `thinking` `cmode` `compact` `newchat` `rewind` |
 | App faces | `vscode` `chrome` `explorer` |
-| System / panels | `settings` `monitor` `monitor2` `gauge` `globe` `target` `list` `aspect` `move` |
+| System / panels | `settings` `monitor` `monitor2` `gauge` `globe` `list` `aspect` `move` |
 
 ## Connections
 

@@ -38,12 +38,16 @@ Frozen dataclass — the module-level `SETTINGS` instance is the only one. See t
 - `bitrate_bps(text)`: `"12M"` / `"1200k"` / `"900000"` → bits per second; unparsable text logs and falls back to 12 Mbps rather than killing a stream
 - `bitrate_for_level(level)`: the phone's bitrate step resolved against the DESKTOP choice — `"high"` is `h264_bitrate` itself, `"mid"`/`"low"` are `h264_bitrate_mid_pct` / `_low_pct` percent of it. Percentages replaced the absolute `"5M"`/`"1200k"` on 2026-08-05: fixed numbers meant the desktop Bitrate combo applied only while the phone sat on "High", so the PC's choice was silently discarded the moment the phone picked Mid
 
-## Settings trim (owner 2026-08-02)
-"Phone hand" is gone from the Settings form (the cursor-offset system it fed
-was removed — the pointer sits under the finger); `config.hand` stays a
-legacy field the server still sends and nobody reads. Frame rate gained a
-"10 fps — light" choice. An old settings.json carrying "hand" is ignored on
-load with a warning (documented non-fatal path).
+## Settings trim (owner 2026-08-02); `hand` removed for good (owner 2026-08-07)
+"Phone hand" left the Settings form on 2026-08-02 (the cursor-offset system it
+fed was removed — the pointer sits under the finger). The `hand` field itself
+is now GONE too: the owner ordered every remaining offset-era remnant
+deleted, not kept as a compatibility shim ("sve ono što smo računali offset —
+uopšte, to se neće koristiti više"), so `Settings.hand` no longer exists and
+`config` no longer sends it. Frame rate gained a "10 fps — light" choice. An
+old settings.json that still carries `"hand"` is unaffected — it was never in
+`USER_ADJUSTABLE`, so `load_user_settings()` logs a warning and skips the
+key, exactly like any other unrecognized key.
 
 ## apk_version (owner bug 2026-08-02)
 `apk_version()` reads the `RemoteUser.apk.version` sidecar (written by

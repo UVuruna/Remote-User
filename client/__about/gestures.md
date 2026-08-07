@@ -18,8 +18,8 @@ everything defined in the first four files).
   `cursorPos`, `send`
 - [Render](render.md) — `drawnRect()`, `redraw()`, `video`/`streamMode`
   (autoplay unlock on first touch)
-- [Input Geometry](input-geometry.md) — `toRemoteMaybeOffset`, `sendCursor`,
-  `sampleFinger`, `startScrollInertia`/`cancelScrollInertia`
+- [Input Geometry](input-geometry.md) — `toRemoteClamped`, `sendCursor`,
+  `startScrollInertia`/`cancelScrollInertia`
 - [Controls](controls.md) — `inputOff()` (a primary tap on the stream
   switches keyboard AND mic OFF by itself — owner 2026-08-04, reversing the
   old keep-focus rule), `scheduleViewport()`
@@ -117,9 +117,10 @@ stream is the natural "done typing/dictating", so the keyboard and mic
 switchers turn OFF without a manual toggle. (The old rule was the opposite —
 `preventDefault` to keep the field focused; the owner reversed it.)
 
-## Offset system removed (owner 2026-08-02)
-The cursor-offset system (handedness diagonal, finger calibration, reserved
-edge margins) is GONE — the pointer sits exactly under the finger, the image
-aspect-fits the FULL canvas, and a focused layout touches all four screen
-edges. Any offset/margin description in this doc's diagrams predating
-2026-08-02 is historical.
+## The cursor-offset system is gone (owner 2026-08-02, remnants finished 2026-08-07)
+The pointer sits exactly under the finger, the image aspect-fits the FULL
+canvas, and a focused layout touches all four screen edges — no handedness
+diagonal, no finger calibration, no reserved edge margin. The owner ordered
+every remaining trace (the `calibrate` action, `config.hand`, and stale docs
+describing the old algorithm) removed on 2026-08-07 as dead weight, not kept
+as legacy.

@@ -16,7 +16,7 @@
   📁 Virtual cursor
     cursor_hz
   📁 Injection self-check
-    inject_verify_min_jump, inject_verify_tolerance, inject_verify_streak, hand ★
+    inject_verify_min_jump, inject_verify_tolerance, inject_verify_streak
   📁 Pairing
     token_bytes, persist_token, token_path
   📁 Remote access
