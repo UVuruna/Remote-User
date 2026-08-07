@@ -37,6 +37,38 @@ Fixed (`.lay-item-main img, .lay-item-main svg`), re-shot, re-graded 9/10, and
 given a tooth: the audit now measures the row's badge and fails over 40 px.
 Self-tested by unsizing the svg again — both orientations go red.
 
+## ControlsEditor is 7/10 and it is NOT my number — it is the grader's
+
+An independent grader (it never saw the code) failed this window twice and was
+right both times. Its words: the commands table scrolls while the set list
+beside it holds a large idle block, and rules/GUI.md names that pattern itself
+— "a visible scrollbar with unused space in the same window is a bug, not a
+style choice". It also refused, mid-grade, to grade a file at all: a parallel
+session in this same tree overwrote `.claude/shots/` with its own audit output
+while it was reading, and it would not grade from memory of its earlier clean
+read. That refusal is the gate doing precisely what it exists for.
+
+What its verdict bought, in the ladder's order:
+- **raised minimum (kept)** — the pool table now declares room for ten rows
+  instead of six; the window's minimum went 723x858 -> 723x956, still inside
+  the declared 1280x1000 frame. Every set's four ACTIVE commands plus six
+  reserves are visible without scrolling.
+- **reflow (tried, reverted, recorded in the code)** — the grader named moving
+  the self-contained Arrangement box into the left column's idle space. It was
+  done. All thirteen commands became visible and the minimum FELL to 799 — and
+  the set list then scrolled AND clipped "Explorer" mid-row. A scrollbar hides
+  nothing; clipped text does. The columns have different natural heights, so
+  height moved between them is height taken from one of them.
+- **what is left is the owner's** — the largest pool (Claude, 13) still scrolls
+  past ten. Showing all thirteen needs ~1034 px of minimum, which breaks the
+  frame declared in `.claude/layout-frame.json`. That file exists exactly for a
+  project that genuinely needs a taller floor, and changing it is his decision,
+  not something to slip in under a round about a microphone.
+
+7/10 therefore stands in this file, unrounded, over a window that ships —
+because the alternative was to write 9 under a picture the grader had already
+failed twice.
+
 ## The two 8/10s, stated rather than rounded up
 
 - **TrafficWindow 8/10** — correct and readable, but the "Record to file"

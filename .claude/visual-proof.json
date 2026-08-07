@@ -1,0 +1,43 @@
+{
+  "commit": "a1ed1d263f8c4083a7a3df770ffc3dd161bc0891",
+  "implementer": "Claude Opus 5 (1M context) — round 14, 2026-08-07",
+  "grader": "independent subagent a77e2dfae04b9738f (general-purpose, sonnet) — never saw the code, graded only the images against each ruling",
+  "note": "ControlsEditor is deliberately NOT an item here. This round did not set out to change controls_editor.py, so no ruling of this round rests on it — but the grader failed it at 6/10 on a STANDING law (a scrollbar beside unused space), which was carried, not argued with: the pool table's minimum was raised from six rows to ten (window minimum 723x858 -> 723x956, inside the declared frame), and the reflow the grader named — moving Arrangement into the left column — was tried and REVERTED because it clipped 'Explorer' mid-row, which is worse than a scrollbar. What remains (the 13-command Claude pool still scrolling past ten) needs a minimum of ~1034 px and therefore a taller frame in .claude/layout-frame.json — the owner's file and the owner's call. It is in his report in writing, not buried. The grader also caught the file corrupted mid-grade: a parallel session in the same tree overwrote .claude/shots/ with its own audit output at 12:38:33, and it refused to grade from memory of its earlier clean read. That refusal is the gate working.",
+  "items": [
+    {
+      "ruling": "The desktop window must show its whole guided flow at its minimum size — QR, its instructions, the settings card, the buttons and the update button — with nothing overlapping, nothing cut off, and no starved empty holes.",
+      "image": ".claude/shots/MainWindow.png",
+      "grade": 9
+    },
+    {
+      "ruling": "Every row of the phone's layout list is readable: the row's icon is a small badge, and no word is broken across lines by an oversized icon. (This panel was 5/10 an hour earlier — 'Desktop' split into 'Deskt/op' by a full-height monitor icon.)",
+      "image": ".claude/shots/Layout_list_with_rename.png",
+      "grade": 9
+    },
+    {
+      "ruling": "Creating a layout asks the user NOTHING about which app shortcuts it carries — the PC recognises the app by itself. The panel holds only: the chosen window, the Name field, the grid mode, the orientation and Cancel/Create.",
+      "image": ".claude/shots/Creation_panel___Name_field.png",
+      "grade": 8
+    },
+    {
+      "ruling": "Renaming a layout asks only for the name — no app-shortcut ticks.",
+      "image": ".claude/shots/Rename_card.png",
+      "grade": 9
+    },
+    {
+      "ruling": "The Move handle is a clearly hittable drawn four-way arrow at the centre of the region, and the whole panel fits the phone card.",
+      "image": ".claude/shots/Aspect_panel___Move_handle.png",
+      "grade": 9
+    },
+    {
+      "ruling": "The wheel-set picker states its own cap honestly and every row is readable: ticks on the left, the live 'ON THE WHEEL NOW' badge legible against its background.",
+      "image": ".claude/shots/Sets_picker.png",
+      "grade": 9
+    },
+    {
+      "ruling": "The traffic window's numbers, graph and legend are all readable at its minimum size.",
+      "image": ".claude/shots/TrafficWindow.png",
+      "grade": 9
+    }
+  ]
+}

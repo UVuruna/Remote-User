@@ -123,6 +123,23 @@ dropped for them):
       v0.0.091. `kbShift` is 0 and the canvas transform is gone: the keyboard
       covers what it covers. The canvas still keeps its FULL height (it is
       never SQUEEZED — that half of his 2026-08-03 request stands).
+- [ ] 82. THE NOTIFICATION ONLY ARRIVES WHEN HE UNLOCKS THE PHONE — his words,
+      and he is right that it is an absurdity: "notifikaciji posao je da
+      obavesti korisnika kada NE radi to na telefonu, a mi čekamo da korisnik
+      otvori aplikaciju i onda mu kao kažemo". DIAGNOSIS (read, not guessed):
+      the whole notify path rides the WEBSOCKET — server/notify.py sends the
+      `notify` frame to a connected client, and Notifier.kt raises the Android
+      notification from inside the page's own process. But the session is
+      designed to END when the phone locks (CLAUDE.md constraint 8 — the
+      socket closes so nothing hovers over his desk). So at the exact moment a
+      notification matters, there is no socket, and the notice is QUEUED (30
+      min / 20 deep, task 59) until he opens the app himself. The queue was
+      built for "he was away"; it is not a delivery mechanism. This was named
+      as an open limitation in round 11c ("with the app fully closed nothing
+      arrives AT THAT MOMENT — unless he wants a foreground service"), which
+      is exactly what he is now answering: he wants it. Needs his choice
+      between a foreground service and FCM push — presented in this round's
+      report, nothing built.
 - [ ] 81. DRAG A LAYOUT ROW (new feature, needs his answers first) — long
       press a row in the layout list, drag it up/down, and dropping it ON
       another row makes a GRID of the two, "like holding a file in Explorer
