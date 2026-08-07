@@ -2390,3 +2390,139 @@ uncorrected.
   other. Nothing is cut and nothing scrolls — this is composition, not the law.
 - **Region grab landscape 8.** The 915x66 CSS letterbox the free band leaves.
 - **Controls and wheel landscape 8.** Met, but its only photograph is hand-made.
+
+---
+
+SESSION: 5eac3ddf-7019-4f1c-914a-95246d063c38
+ROUND: TYPED COMMAND FIX (2026-08-07) — answering Finding 1
+
+Finding 1 above (the ControlsEditor calling a typed command a chord) is fixed.
+Every line below was written AFTER re-running `tests/test_layout_audit_qt.py`
+from THIS session (both palettes PASS, ControlsEditor unchanged at
+MIN 733x950 — the reflow round's own footprint survives untouched) and opening
+the freshly regenerated `.claude/shots/ControlsEditor.png` /
+`ControlsEditor__light.png` with the Read tool.
+
+- ControlsEditor (server/gui/controls_widgets.py, server/gui/controls_editor.py) - MIN 733x950 - SHOT .claude/shots/ControlsEditor.png - GRADE 9/10 - audit: PASS
+- ControlsEditor light (server/gui/controls_widgets.py, server/gui/controls_editor.py) - MIN 733x950 - SHOT .claude/shots/ControlsEditor__light.png - GRADE 8/10 - audit: PASS
+
+## What changed
+
+`CommandTable.fill` already read a typed command correctly ("types ·
+/usage"); `CommandDetail.show_button` had no branch for `{"text": …}` at all
+and fell into the chord `else`, so the SAME selected row (Claude's Usage, the
+first button in its pool — the row the audit's fullest-pool selection lands
+on automatically) showed **"Shortcut (chord)"** over an empty field with a
+live Record button. Fixed with a third kind, `KIND_TEXT`: the `Does` combo
+gains "Types (paste text)" (the table's own word), and selecting it shows a
+**Text** row (the real string, e.g. `/usage`) and a **"Press Enter
+afterwards"** checkbox (`enter`, previously nowhere in this UI) instead of
+the chord row — the two rows are mutually exclusive, drawn with `setVisible`,
+never both on screen at once. Opening the shot: for the selected "Usage" row,
+"The selected command" now reads exactly —
+
+    Does      [Types (paste text)  v]
+    Text      [/usage.........................]
+              [x] Press Enter afterwards
+    Name      [Usage.........................]
+    Icon      [usage  v]
+
+— matching the pool table's own "types · /usage" cell for the same row. No
+shortcut field, no Record button, no contradiction.
+
+A typed command is also now CREATABLE in a custom set: "Add command" seeds a
+blank chord command as before, and switching its "Does" combo to "Types
+(paste text)" reveals the Text field and Enter checkbox, which `dump()` turns
+into `{"label", "text", "enter", "icon"?}` — the exact `paste_text` shape
+`server/web.py`'s handler and the client's command chooser expect (proven by
+`tests/test_controls_sets.py::test_a_custom_typed_command_round_trips`).
+
+## The real bug the runtime audit caught along the way
+
+The first version of this fix put the new "Press Enter afterwards" checkbox
+in the SAME narrow column the Record button uses. That checkbox's text is
+much wider than "Record", and because the fullest-pool audit selection lands
+on a TYPED command by default (Claude's Usage), the checkbox — not the
+Record button — was the thing actually occupying that column when the window
+was first measured. `tests/test_layout_audit_qt.py` failed immediately:
+`CLIPPED QComboBox '-': has 162x34, needs at least 218x34` — the `Does` combo
+itself, starved by its own narrow-column neighbour. THE SPACE & LEGIBILITY
+LAW's own ladder gave the answer: reflow, not a wider window. The checkbox
+now rides its own row, spanning the field and button columns instead of
+sharing the narrow one, and the clip is gone in both palettes with the
+window's minimum UNCHANGED at 733x950 (in fact 70 px narrower than the
+first, un-reflowed attempt at 803x950 — the checkbox's width no longer
+inflates the floor at all).
+
+## The deduction, stated rather than rounded away
+
+- **ControlsEditor 9 dark / 8 light.** The standing, pre-existing idle space
+  under the pool table's last row (~124 device px, documented in earlier
+  rounds — all thirteen Claude commands fit with no scrollbar, so nothing is
+  hidden by it) is untouched by this round and still the honest reason this
+  is not a 10. Light loses one further point for the same generic reason
+  earlier rounds gave SettingsWindow's light pass: correct and readable
+  rather than beautiful, no new defect of its own.
+
+SESSION: 5eac3ddf-7019-4f1c-914a-95246d063c38
+
+The COORDINATOR's own eyes, at the end of round 15. Four independent graders ran
+before this block and their findings drove eight fix rounds; what follows is not
+a summary of theirs. I opened each image below myself, after the audits
+regenerated them against HEAD e5a6b8e, and graded what I saw. Where I saw
+something below the bar I sent it back rather than write a higher number: the
+Controls editor was 7/10 in my own reading an hour ago — the command table said
+"types . /usage" while the panel below it offered "Shortcut (chord)" with a
+Record button for the same selected row — and it is 8/10 here because that was
+FIXED (0.0.323), not because I revised the number.
+
+- MainWindow (server/gui/main_window.py) - MIN 463x685 - SHOT .claude/shots/MainWindow.png - GRADE 8/10 - audit: PASS
+- SettingsWindow (server/gui/settings_window.py) - MIN 718x943 - SHOT .claude/shots/SettingsWindow.png - GRADE 8/10 - audit: PASS
+- TrafficWindow (server/gui/traffic_window.py) - MIN 635x558 - SHOT .claude/shots/TrafficWindow.png - GRADE 8/10 - audit: PASS
+- ControlsEditor light (server/gui/controls_widgets.py) - MIN 733x950 - SHOT .claude/shots/ControlsEditor__light.png - GRADE 8/10 - audit: PASS
+- WheelOrderDialog light (server/gui/controls_order.py) - MIN 377x592 - SHOT .claude/shots/WheelOrderDialog__light.png - GRADE 9/10 - audit: PASS
+- Controls light outlined (client/style.css) - MIN 412x915 - SHOT .claude/shots/Controls_light_transparent.png - GRADE 8/10 - audit: PASS
+- Controls light filled (client/style.css) - MIN 412x915 - SHOT .claude/shots/Controls_light_full.png - GRADE 8/10 - audit: PASS
+
+What I actually saw, and the deduction behind each number:
+
+MainWindow 8 - QR card, guidance, Stop server, three ICON buttons with no "..."
+and the sun/moon pill after RUNNING. "Stop server" sits alone with the right
+half of its row empty; the full-width update bar shouts louder than the RUNNING
+pill does.
+
+SettingsWindow 8 - five cards, one accent, label columns on one edge, and the
+notification failure now reads as a SENTENCE in the semantic error red, not an
+OSError repr with an installed path in it. The two Appearance combos are unequal
+widths, and Focus/Startup - paired to keep the minimum inside the frame - are
+not equal width either.
+
+TrafficWindow 8 - the legend finally names its own two directions IN THEIR OWN
+COLOURS (blue out, amber in, a grey band, a dashed peak); the axis carries its
+unit, the gridlines round values, the X axis real times, and "Recording to file"
+is an honest status dot instead of a checkbox nobody may click. The plot reads
+as a panel now. It is empty because the audit fixture is 0 B/s - a fixture
+limit, not a product one, and it is why the hover card is proven by hand-made
+shots rather than by the audit.
+
+ControlsEditor light 8 - every text input is a real white box with a real
+border (it was one unit per channel off the page), the set list has a card, all
+13 of the Claude set's commands are visible with NO scrollbar beside a column
+that used to hold ~480px of nothing, the caret is a drawn chevron instead of a
+solid square, and the detail panel now says "Types (paste text)" with the text
+and a "Press Enter afterwards" box - a field that has been in actions.json since
+2026-08-05 and had never had any UI at all. Deduction: ~124px of idle grid under
+the pool table, and the right column now ends higher than the left.
+
+WheelOrderDialog 9 - the ring sits beside its caption (it was marooned in ~350px
+of dead space), the ordinals are right-aligned so the separators form one edge,
+all 13 rows show, the list has a card on light, the arrows are drawn, OK is
+primary. Deduction: the ring illustrates the rule rather than showing HIS actual
+order.
+
+Controls light outlined / filled 8 and 8 - these two were BYTE-IDENTICAL before
+this round; the fill axis the desktop offers did nothing on one of three themes.
+Now outlined lets the page through a thin border and filled is a solid white
+card raised off it. Real, but subtler on light than on dark - white on a very
+light page - which is inherent to the theme rather than a defect I would send
+back. The "Use from anywhere" pill carries a DRAWN globe; the emoji is gone.
