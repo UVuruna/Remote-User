@@ -20,6 +20,35 @@
   🧊 #lay-loading    — opaque full-screen cube overlay (class `open`)
 ```
 
+## Where a window's FULL title is readable
+
+Three places show one, and each one shows it WHOLE — no character caps, no
+ellipsis. A title is the only thing that tells two windows of one app apart.
+
+```
+creation panel                     layout list                  layout bar
+┌───────────────────────────────┐  ┌───────────────────────┐   ┌──────────┐
+│ Chosen (1/1) — tap to remove: │  │ 🗔 Claude Code -      │   │ 🗔 Claude│
+│ ╭───────────────────────────╮ │  │    Remote User -      │   │ Code -   │
+│ │ Claude Code - Remote User │ │  │    Visual Studio Code │   │ Remote…  │
+│ │ - Visual Studio Code      │ │  │    [Administrator]    │   └──────────┘
+│ │   [Administrator]         │ │  └───────────────────────┘   2 rows, then
+│ ╰───────────────────────────╯ │  .lay-item-main span         clamped — the
+│ Name:  ┌────────────────────┐ │  wraps, row grows            list is one
+│        │ my own name here   │ │                              tap away
+│        └────────────────────┘ │
+└───────────────────────────────┘
+  ▲ the chip is the DURABLE copy: the Name field may be retyped to
+    anything, the chip above it still carries the window's own title
+    (owner 2026-08-06 — "a pun naziv se na tom ekranu ne vidi nigde
+    kada polje Name već prepišeš")
+```
+
+The chip and the list rows share ONE treatment (`.lay-title` /
+`.lay-item-main span`: take the free width, then wrap). The top bar is the
+single exemption in the project, written into `layouts.css` beside the rule:
+it owns one row of the phone screen, and one tap opens the list.
+
 ## Algorithm — how long the loading animation lasts
 
 ```mermaid

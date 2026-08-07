@@ -151,15 +151,51 @@ and `fillOn()` (above) are the same idea applied to the two surfaces that
 actually exist — a translucent tint, and a fill that may need its own small
 nudge — rather than one function pretending both are the same question.
 
-## The cache
+## The cache — and why silence is not an instruction
 
 The choice is stored per device (`prefGet`/`prefSet` → the shell's
 SharedPreferences, localStorage in a dev browser) and re-applied at load,
 before the socket has said anything. Without it the page would paint the
 previous theme for the third of a second it takes to connect — a flash on
-every single connect. The cache is a HEAD START, never an authority: a
-`config` without `ui` puts the phone back to the shipped default rather than
-leaving it wearing a theme nobody chose.
+every single connect.
+
+The cache is a HEAD START, not an authority — but it IS the fallback, and
+that distinction is the product bug a third independent grader found by
+measuring pixels (2026-08-07). `applyUi` used to default every missing field
+to `UI_DEFAULT`, so:
+
+| what the server said | what the phone used to do | what it does now |
+|---|---|---|
+| `ui = {theme, fill, colors}` | obey | obey — unchanged |
+| **no `ui` at all** | **reset to dark/outlined** | **nothing at all** |
+| **`ui = {theme}` only** | **reset the fill and the colours** | **merge; only the theme moves** |
+
+The owner would choose Filled in the desktop's Appearance card, see the phone
+change, and see it change back within half a second. The old code justified
+itself with "a server that stops sending `ui` (an older PC) must put the phone
+back to the look that PC actually renders for", and that sentence is not true
+of anything: the PC renders nothing for the phone — the phone paints itself. A
+server too old to have a `phone_theme` setting has no opinion about appearance
+to impose, and replacing the owner's only choice with a compiled-in constant is
+not obedience, it is a reset.
+
+So the rule is **ignore-or-merge**, and `UI_DEFAULT` is the SEED a device that
+has never been told anything is born with (`restoreUi`), never a fallback:
+
+- **no `ui`** → `applyUi` returns immediately. No state change, no pref write,
+  no repaint. The look in force stays in force.
+- **partial `ui`** → `mergedUi(ui, next)` lays it over the look in force, field
+  by field, so naming the theme cannot silently discard the fill or the set
+  colours.
+
+`client/connection.js` passes `msg.ui` across EXACTLY as it arrived, absence
+included (it used to write `msg.ui || null`) — deciding what silence means
+belongs here, beside the look and the cache that remembers it.
+
+**The desktop still wins whenever it speaks.** A reconnect carrying a full
+`ui` overrides whatever the phone was wearing, which is the whole "the desktop
+decides" rule; what changed is only that saying nothing is no longer a way of
+saying "dark, outlined".
 
 ## What proves it
 
@@ -180,6 +216,19 @@ large.
 **every** colour in the desktop's `SET_COLORS` table, not only the two or
 three a fixture happens to show — a set the owner darkens tomorrow is
 measured today, on both surfaces, in every look.
+
+**And every look-named screenshot now has to BE that look** (`_shoot`, same
+round). Twelve `Controls*` pictures carried a theme and a fill in their
+filenames and nothing had ever compared those two words against
+`body.dataset.theme` / `body.dataset.fill` at the moment the shutter fired —
+so two of the twelve showed a different look while every check printed PASS,
+and three rounds of graders were handed them. `_shoot` asserts first and FAILS
+the audit (not warns) when the page has drifted, naming both looks; the picture
+is still written, because a grader has to be able to see what was measured.
+`_apply_look` also moves the DESKTOP's own `phone_theme`/`phone_fill` — the
+audit runs the real server in-process, so the look it asks for is the look
+every later `config` frame carries, instead of the audit fighting its own
+server.
 
 ## Related
 

@@ -133,9 +133,19 @@ slot — same creation session); `layout_state` ARMS the loading overlay's settl
 
 ## Build round R3 (2026-08-07) — themes
 
-The `config` handler gained one line: `applyUi(msg.ui || null)` — how this
-phone should LOOK, decided on the desktop (build round R3, owner answer P4).
-It sits with `setStreamBase`, beside the other "what the PC is set to" fields,
-and a frame WITHOUT `ui` puts the phone back to the shipped default rather
-than leaving it wearing a theme nobody chose. See
-[theme.css + theme.js](theme.md).
+The `config` handler gained one line: `applyUi(msg.ui)` — how this phone
+should LOOK, decided on the desktop (build round R3, owner answer P4). It sits
+with `setStreamBase`, beside the other "what the PC is set to" fields.
+
+**`msg.ui` is handed over exactly as it arrived, absence included.** The line
+was written `applyUi(msg.ui || null)` and `applyUi` then defaulted every
+missing field to `UI_DEFAULT`, so a `config` frame that said nothing about
+appearance — or named only the theme — put the owner's chosen look back to
+dark/outlined within half a second of him choosing it, on every connect and
+every stream restart. An independent grader found it by measuring pixels
+(2026-08-07): the dark theme's whole fill axis was dead on disk.
+
+The `||` is gone. What silence MEANS is decided in `theme.js`, beside the look
+and the per-device cache that remembers it — no `ui` changes nothing at all, a
+partial `ui` merges onto the look in force. This file's job is only to deliver
+the server's word, not to invent one. See [theme.css + theme.js](theme.md).

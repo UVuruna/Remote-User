@@ -39,7 +39,20 @@ Settings → APPEARANCE
                               │
                               │  web._send_config()  →  `config` frame
                               ▼
-                        connection.js: applyUi(msg.ui)
+                        connection.js: applyUi(msg.ui)   ← as it arrived,
+                              │                             absence included
+                              ▼
+                    ┌─────────────────────────────────────────┐
+                    │  no `ui` at all?  → return. nothing      │
+                    │  happens: no state, no pref, no repaint  │
+                    │                                          │
+                    │  otherwise: ui = mergedUi(ui, next)      │
+                    │    theme  = next.theme  ?? ui.theme      │
+                    │    fill   = next.fill   ?? ui.fill       │
+                    │    colors = next.colors ?? ui.colors     │
+                    │  (the base is THE LOOK IN FORCE — the    │
+                    │   cache — never UI_DEFAULT)              │
+                    └─────────────────────────────────────────┘
                               │
                   ┌───────────┴────────────┐
                   ▼                        ▼
@@ -65,8 +78,40 @@ theme.js loads (after controls.js — it uses prefGet/IN_APP)
   │     └─ writeLook()  <body> gets its two attributes NOW
   │
   └─ …the page paints in the right look, once.
-        A `config` arriving later either confirms it (no visible change)
-        or corrects it (one repaint, on a page nobody is mid-gesture on).
+        A `config` arriving later either confirms it (no visible change),
+        corrects it (one repaint, on a page nobody is mid-gesture on),
+        or says nothing about the look — in which case nothing moves.
+```
+
+## The reset that used to happen half a second after every connect
+
+The bug a third independent grader measured on 2026-08-07, and what replaced
+it:
+
+```
+BEFORE                                    AFTER
+ t=0    owner picks Filled on the PC       t=0    owner picks Filled on the PC
+        <body data-fill="full">                   <body data-fill="full">
+ t+0.4  a `config` frame lands             t+0.4  a `config` frame lands
+        ui absent / partial                       ui absent  → applyUi returns
+        applyUi → UI_DEFAULT                      ui partial → merged onto the
+        <body data-fill="transparent">                        look in force
+        ▲                                         <body data-fill="full">
+        └─ the Appearance card "does nothing"
+```
+
+Two things it cost, both measured, not argued:
+
+```
+Controls.png  vs  Controls_dark_full.png   (dark outlined vs dark filled)
+   with the reset : max per-channel diff 0, 0 of 1,507,920 pixels differ
+                    both are 87,024 px of the 20% tint rgb(18,26,45)
+   without it     : max per-channel diff R13 G16 B15, 134,804 px differ (8.94%)
+                    filled = 87,023 px of the solid rgb(30,41,59)
+
+Controls_light_transparent_landscape.png   (a file named "light")
+   with the reset : page colour (15, 23, 42)   ← the DARK theme
+   without it     : page colour (236,238,246)  ← light, like its portrait twin
 ```
 
 ## `paintSet` — one write per set, not one per button, THREE surfaces not one
@@ -158,13 +203,31 @@ project's labels qualify.
 
 ```
 for size in (portrait 412x915, landscape 915x412):
+    open the page, wait for #group-left button
+      …AND for monitor.w > 0                 ← the socket's FIRST `config`.
+                                                The D-pad renders from the
+                                                page's own defaults ~1.4 s
+                                                earlier, and everything done
+                                                in that window used to be
+                                                overwritten when the frame
+                                                finally landed
     install window.__contrast(root)          ← reads --surface-0 LIVE,
                                                 composites every veil ABOVE
                                                 the element too, and floors
                                                 each leaf at 3:1 or 4.5:1
                                                 by its own font-size/weight
     for look in the six (theme × fill):
-        applyUi({theme, fill, colors})       ← the app's own entry point
+        _apply_look(theme, fill, colors)
+          ├─ config.apply(phone_theme, phone_fill)   ← the DESKTOP's own
+          │                                            setting, in-process,
+          │                                            so every later
+          │                                            `config` frame agrees
+          └─ applyUi({theme, fill, colors})          ← the app's own entry point
+
+        every look-named screenshot goes through _shoot():
+            body.dataset.theme / .fill == the look asked for?
+              no  → the audit FAILS, naming both looks
+              yes → page.screenshot(...)
         ├─ __contrast(#wheel) + (#group-left) + (#group-right)
         │     the surfaces `colored` actually paints, wheel OPEN and SHUT
         ├─ __sweepSetColours(all 13 SET_COLORS)
