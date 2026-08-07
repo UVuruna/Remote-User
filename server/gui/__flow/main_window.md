@@ -57,7 +57,7 @@ flowchart TB
         UPDATE["update_btn — hidden until a newer\nGitHub release is found"]
         FOOTER["footer — 'vX.Y.Z · closing hides to tray…'"]
 
-        HEADER --> QRCARD --> SETCARD --> BOTTOM --> UPDATE --> FOOTER
+        HEADER --> QRCARD --> POWERROW --> WINDOWROW --> UPDATE --> FOOTER
     end
 
     subgraph TRAY["System tray icon"]
@@ -83,17 +83,35 @@ Widget inventory per zone (nested-list form, for a quick text scan):
   - `self.url_label` (selectable text)
   - `self.copy_btn`, `self.browser_btn`
   - `self.reach_label` (word-wrapped hint)
-- Settings card (`QFrame#card`)
-  - `QFormLayout`: `self.monitor_combo`, `self.resolution_combo`,
-    `self.bitrate_combo`, `self.fps_combo`
-  - `self.apply_btn`
-  - `self.notify_check` + `self.notify_caption` (the agent-hook switch; takes
-    effect at once, which is why it sits BELOW the Apply row)
-- Bottom row
+- Power row
   - `self.power_btn` (`#primary`/`#danger`)
-  - `self.controls_btn`, `self.traffic_btn`
-  - `self.tailscale_btn`
+  - `self.tailscale_btn` (hidden once Tailscale is connected)
+- Window row (round R2) — three buttons of equal stretch, each an SVG icon
+  from `theme.icon()` plus a bare name: Controls, Traffic, Settings. The
+  stream form and the agent-hook switch that used to sit above this row now
+  live in the [Settings window](../__about/settings_window.md).
 - `self.update_btn` (`#primary`, hidden by default)
 - Footer `QLabel#caption`
 - Tray (`QSystemTrayIcon` + `QMenu`)
   - open action, `self.tray_toggle`, separator, quit action
+
+## Build round R3 (2026-08-07) — themes
+
+```
+MainWindow.__init__
+   |- theme.apply_theme(SETTINGS.ui_theme)      <- the APPLICATION, not this window
+   |- _build_header()
+   |     logo . titles . -stretch- . pill . ThemeSwitch
+   |                                        picked --> switch.choose_theme
+   |- _build_qr_card() ... _build_window_row()
+   |     each door button: setProperty("iconName", name)
+   |        `- so apply_theme can rebuild it in the new ink
+   `- _settle_minimum()
+         inner = max(QR_SIZE,
+                     power_row  - card_pad,
+                     window_row - card_pad,
+                     update_row - card_pad,
+                     header_row - card_pad)   <- NEW in R3
+         header_row = 34 + 10 + widest(title, subtitle)
+                      + widest(PILL_TEXT) + 28 + 10 + THEME_SWITCH_W
+```

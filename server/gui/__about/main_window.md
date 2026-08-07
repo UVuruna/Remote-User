@@ -6,19 +6,35 @@
 ## Purpose
 
 The one desktop window plus the system tray icon: status, in-window pairing
-QR, stream settings, Start/Stop, Tailscale helper, and the self-update button.
-A single column of soft-shadowed cards (DESIGN.md bento style). The window
-never blocks — server start/stop/restart run on worker threads, and a 1 s
-`QTimer` pulls state from the `ServerController` and repaints. Closing the
-window hides it to the tray; the server keeps running until Quit.
+QR, Start/Stop, Tailscale helper, the three doors (Controls, Traffic,
+Settings) and the self-update button. A single column of soft-shadowed cards
+(DESIGN.md bento style). The window never blocks — server start/stop/restart
+run on worker threads, and a 1 s `QTimer` pulls state from the
+`ServerController` and repaints. Closing the window hides it to the tray; the
+server keeps running until Quit.
+
+**What this window is NOT, since round R2** (owner 2026-08-07). It had become
+two things at once: the thing you open to PAIR a phone, and the thing you open
+to CONFIGURE a PC — so the settings form sat under the QR forever and every
+new switch made the pairing window taller. The stream form and the notify
+switch moved to the [Settings window](settings_window.md); what is left is one
+job, plus one row of doors to the three windows that do the rest. The measured
+minimum fell from **503 × 937** to **404 × 703**.
+
+Those three doors are **icon buttons** now, on a row of their own, sharing it
+equally, without the trailing "…" (a dialog is what a button does, not
+something its label has to apologise for). Five heterogeneous buttons in one
+line was what made the old row — and therefore the whole window — wide. The
+icons are drawn SVG assets tinted by `theme.icon()`, **never a font glyph**:
+see [GUI (subfolder)](../___gui.md) → Design Decisions for why that rule holds
+on the desktop too.
 
 **Sizing** (THE SPACE & LEGIBILITY LAW, 2026-08-05): the window is resizable
 with a COMPUTED minimum — `_computed_minimum()` measures the widest real row
-(the three bottom buttons at their longest captions, the update button's full
-sentence, the widest settings row, the QR) and the height its longest guidance
+(the two button rows at their longest captions, the update button's full
+sentence, the QR) and the height its longest guidance
 text needs wrapped at that width, then a settle loop takes the larger of that
-and Qt's own layout minimum. With the shipped strings: **676 × 787** (dev
-machine, Segoe UI 13 px). The old hard `setFixedWidth(400)` is gone — it was
+and Qt's own layout minimum. The old hard `setFixedWidth(400)` is gone — it was
 exactly the "element can no longer take the free space" the law forbids. The
 QR label keeps its fixed 216 px square (an image at scan size, exempted on the
 line with its reason). The three guided reachability texts live in one place,
@@ -42,10 +58,9 @@ speaks instead of two.
 
 **The minimum is re-declared whenever the content changes** (owner screenshots
 2026-08-06 — the QR's link drawn over the QR, and the guidance text over the
-settings card below it). Measuring once, at construction, was the bug: two
-things arrive later — the update button (hidden until the GitHub check answers)
-and the notify switch's caption (three lines when it reports a failure instead
-of one) — and an explicit `setMinimumSize()` makes Qt stop enforcing its
+settings card below it). Measuring once, at construction, was the bug: things
+arrive later — above all the update button, hidden until the GitHub check
+answers — and an explicit `setMinimumSize()` makes Qt stop enforcing its
 layout's own minimum, so the extra rows had nowhere to go and were painted on
 top of what was already there. `_settle_minimum()` is now callable at any time:
 it re-measures from the computed floor, declares the result, and grows the
@@ -71,16 +86,18 @@ away.
 ### Uses
 - [Server Core](../../__about/server_core.md) — `ServerController`: the `start` /
   `stop` / `state` / `info` / `error` surface this window drives and polls
-- [Theme](theme.md) — `QSS` (window stylesheet), `card_shadow()`,
-  `repolish()`
+- [Theme](theme.md) — `QSS` (window stylesheet), `card()` (the shared card
+  factory), `icon()` (the SVG assets on the three door buttons), `repolish()`
 - [Pairing](../../__about/pairing.md) — `tailscale_exe()`, `pairing_urls()`,
   `qr_png()` for the in-window QR
 - [Config](../../__about/config.md) — `BUNDLE_DIR`, `FROZEN`, `PROJECT_ROOT`,
-  `SETTINGS`, `app_version()`, `save_user_settings()`
+  `SETTINGS`, `app_version()`
+- [Settings Window](settings_window.md) — built on first open and handed
+  `restart_server`, so a stream Apply restarts the server on THIS window's
+  worker thread
 - [Updates](../../__about/updates.md) — `check()`, the startup GitHub-release lookup
   behind the Update button
-- [Screen Capture](../../__about/capture.md) — `BaseCapture.output_count()`, imported
-  locally inside `_populate_monitors()` to size the monitor combo
+- [Traffic Window](traffic_window.md) — built on first open, modeless
 
 ### Used by
 - `gui_main.py` (documented under [Server (folder)](../../___server.md) —
@@ -105,10 +122,17 @@ away.
   code that touches Qt with them
 
 #### Key methods
-- `_build_header/_build_qr_card/_build_settings_card/_build_bottom_row/
+- `_build_header/_build_qr_card/_build_power_row/_build_window_row/
   _build_update_button/_build_footer/_build_tray` — one builder per zone,
   called once from `__init__` in layout order (see
   [flow](../__flow/main_window.md))
+- `restart_server()` — the Settings window's Apply & restart, run the way
+  every other server action here runs (worker thread, buttons gated). A no-op
+  while a worker is in flight or while the server is stopped: the new values
+  are read by the next start
+- `_show_settings()` / `_show_traffic()` / `_show_child()` — the modeless
+  children, built once and never destroyed on close (they hold live state: a
+  chart's history, the phone's reported voices)
 - `_toggle_server()` / `_run_worker()` / `_guarded()` — start/stop dispatch
   onto a daemon thread; `_busy` is cleared in a `finally` so a crashing worker
   can never wedge the buttons permanently
@@ -131,11 +155,11 @@ away.
   closing; shows a one-time tray balloon explaining the app is still running
 
 ## Settings trim (owner 2026-08-02)
-"Phone hand" is gone from the Settings form (the cursor-offset system it fed
-was removed — the pointer sits under the finger); `config.hand` stays a
-legacy field the server still sends and nobody reads. Frame rate gained a
-"10 fps — light" choice. An old settings.json carrying "hand" is ignored on
-load with a warning (documented non-fatal path).
+"Phone hand" is gone (the cursor-offset system it fed was removed — the
+pointer sits under the finger); `config.hand` stays a legacy field the server
+still sends and nobody reads, and it has no UI anywhere. An old settings.json
+carrying "hand" is ignored on load with a warning (documented non-fatal path).
+The stream form itself now lives in the [Settings window](settings_window.md).
 
 ## Round 6 (owner 2026-08-05)
 
@@ -155,9 +179,11 @@ load with a warning (documented non-fatal path).
 
 ## "Tell my phone when an agent finishes" (ROADMAP H2, owner 2026-08-06)
 
-A checkbox in the Settings card, below Apply. It installs or removes the Claude
-Code `Stop` hook, and it takes effect **at once** — nothing restarts, which is
-why it sits below the Apply row rather than in the form above it.
+It lived here until round R2 and now lives in the
+[Settings window](settings_window.md)'s NOTIFICATIONS card. The history below
+is kept because it is the reason the switch exists at all. It installs or
+removes the Claude Code `Stop` hook, and it takes effect **at once** —
+nothing restarts.
 
 It reads the real hook state on every open (`agent_hook_installed()`), so it
 can never claim an installation that is not there. When the switch cannot be
@@ -167,8 +193,8 @@ because the feature shipped working in v0.0.081 and stayed silent for a day
 on the owner's own PC: nobody had run the install command, and an end user
 must never type one.
 
-The logic lives in [notify](../../__about/notify.md); this window owns the
-checkbox and its caption.
+The logic lives in [notify](../../__about/notify.md); the
+[Settings window](settings_window.md) owns the checkbox and its caption.
 
 **Why it could not be switched on in v0.0.085** (owner screenshot 2026-08-06):
 `setup/agent_hook.py` was never added to the PyInstaller bundle, so the
@@ -177,3 +203,29 @@ directory: …\_internal\setup\agent_hook.py` and sprang back. Three fixes, one
 per layer: the file is bundled (`setup/build.py`), the build now REFUSES to
 package without it (the payload gate), and the message the user can see is
 plain language about the app, not a path (`notify._hook_module`).
+
+## Build round R3 (2026-08-07) — themes
+
+Two changes, both small on the surface and both load-bearing:
+
+- **The theme is applied to the APPLICATION here.** `__init__` no longer calls
+  `self.setStyleSheet(QSS)` — it calls `theme.apply_theme(SETTINGS.ui_theme)`.
+  A per-widget stylesheet wins over its parent's, so the old call would have
+  stranded Controls, Traffic, Settings and the wheel-order dialog in whatever
+  palette they were born with.
+- **The top bar carries the sun/moon pill**, after the RUNNING pill
+  ([Switch](switch.md)). It owns no state: it is told the current theme and
+  its `picked` signal goes straight to `switch.choose_theme`, which persists
+  the choice, flips under the cover transition, and moves the twin pill in
+  Settings.
+
+The three door buttons now carry a dynamic property `iconName`. That is what
+lets `theme.apply_theme` rebuild their icons on a flip: Qt's SVG renderer does
+not resolve `currentColor`, so `theme.icon()` bakes the ink into the source
+and an icon built once is a picture in the OLD ink afterwards.
+
+`_computed_minimum` grew a `header_row` term for the same reason every other
+row is measured: the header sits OUTSIDE the card, so it competes with the
+card's width, and the pill added roughly 64 px to the widest state (logo +
+subtitle + "STARTING..." + switch). `THEME_SWITCH_W` is imported from the
+widget that DRAWS the pill so the measurement can never drift from the row.

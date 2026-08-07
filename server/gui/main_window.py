@@ -1,9 +1,19 @@
-"""The desktop window: status, pairing QR, settings, start/stop, tray.
+"""The desktop window: status, pairing QR, start/stop, tray.
 
 One column of soft-shadowed cards (DESIGN.md bento style, single column at
 this size). The window never blocks: server start/stop/restart run on worker
 threads and a 1 s timer pulls state from the ServerController. Closing the
 window hides to the tray — the server keeps running until Quit.
+
+WHAT THIS WINDOW IS *NOT*, since round R2 (owner 2026-08-07). It had become
+two things at once: the thing you open to PAIR a phone, and the thing you open
+to CONFIGURE a PC. The stream form and the notify switch moved out to
+[gui/settings_window.py]; what is left is one job — get a phone connected to
+this PC and say whether it worked — plus one row of doors to the three windows
+that do the rest (Controls, Traffic, Settings). Those three are ICON buttons
+with real SVG icons and no trailing "…": drawn assets, never a font glyph, for
+the same reason the phone's Move handle is drawn (owner 2026-08-05 — a glyph
+came out a blunt cross on his device).
 """
 
 import logging
@@ -18,18 +28,19 @@ from pathlib import Path
 from PySide6.QtCore import QSize, Qt, QTimer
 from PySide6.QtGui import QAction, QFontMetrics, QGuiApplication, QIcon, QPixmap
 from PySide6.QtWidgets import (
-    QCheckBox, QComboBox, QFormLayout, QFrame, QHBoxLayout, QLabel, QMainWindow,
-    QMenu, QPushButton, QSystemTrayIcon, QVBoxLayout, QWidget,
+    QFrame, QHBoxLayout, QLabel, QMainWindow, QMenu, QPushButton,
+    QSystemTrayIcon, QVBoxLayout, QWidget,
 )
 
 import pairing
 import updates
-from config import BUNDLE_DIR, FROZEN, PROJECT_ROOT, SETTINGS, app_version, save_user_settings
+from config import BUNDLE_DIR, FROZEN, PROJECT_ROOT, SETTINGS, app_version
 from gui.controls_editor import ControlsEditor
+from gui.settings_window import SettingsWindow
 from gui.sizing import settle_minimum
-from gui.theme import QSS, card_shadow, repolish
+from gui.switch import TRACK_W as THEME_SWITCH_W, ThemeSwitch, choose_theme
+from gui.theme import apply_theme, card, icon as themed_icon, repolish
 from gui.traffic_window import TrafficWindow
-from notify import agent_hook_installed, set_agent_hook
 from server_core import ServerController
 
 logger = logging.getLogger(__name__)
@@ -45,13 +56,12 @@ PAIRING_RECHECK_TICKS = 5  # re-check addresses/Tailscale every N refresh ticks
 # `_check_updates` for the day this number was worth.
 UPDATE_CHECK_MS = 15 * 60 * 1000
 
-RESOLUTIONS = [("Native (up to 4K)", 3840), ("2560 — QHD", 2560),
-               ("1920 — Full HD", 1920), ("1600 — light", 1600)]
-BITRATES = [("6 Mbps — slow links", "6M"), ("12 Mbps — default", "12M"),
-            ("20 Mbps — max quality", "20M")]
-FPS_CHOICES = [("10 fps — light", 10), ("30 fps", 30), ("60 fps", 60)]
-# "Phone hand" is GONE (owner 2026-08-02): the cursor-offset system it fed
-# was removed — the pointer sits exactly under the finger.
+# The stream choices moved to gui/settings_window.py with the combos they
+# fill (round R2). "Phone hand" is GONE (owner 2026-08-02): the cursor-offset
+# system it fed was removed — the pointer sits exactly under the finger.
+ICON_PX = 17   # icon height on the three window buttons, next to 13px text
+# THEME_SWITCH_W is imported from the widget that DRAWS the pill, so the
+# measured minimum below can never drift from what is actually on the row.
 
 PILL_TEXT = {"running": "RUNNING", "starting": "STARTING…",
              "stopped": "STOPPED", "failed": "FAILED"}
@@ -93,10 +103,17 @@ class MainWindow(QMainWindow):
         self._update_state = None
         self._update_path = None
         self._traffic = None         # the Traffic window, built on first open
+        self._settings = None        # the Settings window, built on first open
         self._settled_for = None     # content the declared minimum was measured against
 
         self.setWindowTitle("Remote User")
-        self.setStyleSheet(QSS)
+        # ON THE APPLICATION, not on this window (build round R3): a
+        # per-widget stylesheet WINS over its parent's, so styling this window
+        # alone would have left Controls, Traffic, Settings and the
+        # wheel-order dialog in whichever palette they were born with. One
+        # call themes every window the app has and every window it opens
+        # later (gui/theme.py → apply_theme).
+        apply_theme(SETTINGS.ui_theme)
         icon = QIcon(str(ASSET_DIR / "logo.svg"))
         self.setWindowIcon(icon)
 
@@ -108,8 +125,8 @@ class MainWindow(QMainWindow):
 
         root.addLayout(self._build_header())
         root.addWidget(self._build_qr_card())
-        root.addWidget(self._build_settings_card())
-        root.addLayout(self._build_bottom_row())
+        root.addLayout(self._build_power_row())
+        root.addLayout(self._build_window_row())
         root.addWidget(self._build_update_button())
         root.addWidget(self._build_footer())
 
@@ -168,8 +185,7 @@ class MainWindow(QMainWindow):
         question this window actually decides: was the button shown or not.
         """
         return (self.update_btn.isHidden(), self.update_btn.text(),
-                self.notify_caption.text(), self.reach_label.text(),
-                self.qr_label.text())
+                self.reach_label.text(), self.qr_label.text())
 
     def _resettle(self) -> None:
         if self._settled_for is None:
@@ -186,12 +202,17 @@ class MainWindow(QMainWindow):
 
         The window used to be pinned at a hard 400 px, which is exactly the
         "element can no longer take the free space" the law forbids. The floor
-        below is the widest real row it can show — the three bottom buttons at
-        their longest captions, the update button's full sentence, the widest
-        settings row, and the QR — plus the height its longest guidance text
-        needs once wrapped at that width. The caller takes the LARGER of this
-        and Qt's own layout minimum, so neither measurement can undercut the
-        other.
+        below is the widest real row it can show — the two button rows at
+        their longest captions, the update button's full sentence, and the QR
+        — plus the height its longest guidance text needs once wrapped at that
+        width. The caller takes the LARGER of this and Qt's own layout
+        minimum, so neither measurement can undercut the other.
+
+        The settings form left this window in round R2, and with it the row
+        that used to drive the width. Two shorter rows replaced one long one
+        on purpose: five heterogeneous buttons side by side is what made the
+        old row wide, and a wide window spends its extra pixels on empty space
+        beside a fixed-size QR.
         """
         metrics = QFontMetrics(self.font())
 
@@ -199,19 +220,29 @@ class MainWindow(QMainWindow):
             return max(metrics.horizontalAdvance(s) for s in strings)
 
         button_pad, spacing = 40, 8   # QSS padding 8/16 + border, layout spacing
-        bottom_row = (widest(("Start server", "Stop server"))
-                      + widest(("Controls…",))
-                      + widest(("Traffic…",))
-                      + widest(("Set up Tailscale", "Sign in to Tailscale",
-                                "Install Tailscale"))
-                      + 4 * button_pad + 3 * spacing)
+        power_row = (widest(("Start server", "Stop server"))
+                     + widest(("Set up Tailscale", "Sign in to Tailscale",
+                               "Install Tailscale"))
+                     + 2 * button_pad + spacing)
+        window_row = (widest(("Controls",)) + widest(("Traffic",))
+                      + widest(("Settings",))
+                      + 3 * (button_pad + ICON_PX + 6)   # icon + its 6px gap
+                      + 2 * spacing)
         update_row = widest((f"Update to v{app_version()} — download && install",)) + button_pad
-        settings_row = (widest(("Frame rate", "Resolution", "Monitor", "Bitrate")) + 16
-                        + widest([label for label, _ in RESOLUTIONS + BITRATES + FPS_CHOICES]
-                                 + ["Monitor 1"]) + 56)
+        # The header row grew a theme pill in round R3, and it sits OUTSIDE
+        # the card — so it competes with the card's own width and has to be
+        # measured, or the widest state (logo + subtitle + STARTING… pill +
+        # switch) would simply overlap. Logo 34 + its 10 gap, the longest of
+        # the two title lines, the longest pill with its QSS padding, the
+        # switch and its gap.
+        header_row = (34 + 10 + widest(("Remote User",
+                                        "Control this PC from your phone"))
+                      + widest(tuple(PILL_TEXT.values())) + 28
+                      + 10 + THEME_SWITCH_W)
 
         card_pad, root_pad = 36, 48   # card contents margins, window margins
-        inner = max(QR_SIZE, settings_row, bottom_row - card_pad, update_row - card_pad)
+        inner = max(QR_SIZE, power_row - card_pad, window_row - card_pad,
+                    update_row - card_pad, header_row - card_pad)
         width = inner + card_pad + root_pad
 
         guidance = max(
@@ -221,8 +252,7 @@ class MainWindow(QMainWindow):
         rows = metrics.height() + 20
         height = (QR_SIZE + guidance          # the QR card's two tall parts
                   + rows * 2                  # url label (wraps) + its buttons
-                  + rows * 5                  # four settings rows + Apply
-                  + rows * 4                  # header, bottom row, update, footer
+                  + rows * 5                  # header, 2 button rows, update, footer
                   + 120)                      # card frames, spacings, margins
         return QSize(width, height)
 
@@ -248,24 +278,25 @@ class MainWindow(QMainWindow):
         self.pill.setObjectName("pill")
         self.pill.setProperty("state", "stopped")
 
+        # The theme pill, top-right AFTER the RUNNING pill (owner's placement,
+        # build round R3). The same switch also sits in Settings → Appearance;
+        # neither remembers a state of its own — both are told the current
+        # theme, so clicking one moves the other.
+        self.theme_switch = ThemeSwitch()
+        self.theme_switch.set_theme_name(SETTINGS.ui_theme)
+        self.theme_switch.picked.connect(choose_theme)
+
         row.addWidget(logo)
         row.addSpacing(10)
         row.addLayout(titles)
         row.addStretch()
         row.addWidget(self.pill)
+        row.addSpacing(10)
+        row.addWidget(self.theme_switch)
         return row
 
-    def _card(self) -> tuple[QFrame, QVBoxLayout]:
-        card = QFrame()
-        card.setObjectName("card")
-        card_shadow(card)
-        box = QVBoxLayout(card)
-        box.setContentsMargins(18, 16, 18, 16)
-        box.setSpacing(10)
-        return card, box
-
     def _build_qr_card(self) -> QFrame:
-        card, box = self._card()
+        frame, box = card()   # the shared card factory — gui/theme.py
 
         self.qr_label = QLabel("Server stopped")
         self.qr_label.setObjectName("qr")
@@ -293,99 +324,46 @@ class MainWindow(QMainWindow):
         self.reach_label.setAlignment(Qt.AlignmentFlag.AlignHCenter)
         self.reach_label.setWordWrap(True)
         box.addWidget(self.reach_label)
-        return card
+        return frame
 
-    def _build_settings_card(self) -> QFrame:
-        card, box = self._card()
-        form = QFormLayout()
-        form.setHorizontalSpacing(16)
-        form.setVerticalSpacing(10)
-
-        self.monitor_combo = QComboBox()
-        self._populate_monitors()
-        self.resolution_combo = QComboBox()
-        for label, value in RESOLUTIONS:
-            self.resolution_combo.addItem(label, value)
-        self.bitrate_combo = QComboBox()
-        for label, value in BITRATES:
-            self.bitrate_combo.addItem(label, value)
-        self.fps_combo = QComboBox()
-        for label, value in FPS_CHOICES:
-            self.fps_combo.addItem(label, value)
-        self._select_current_settings()
-
-        form.addRow("Monitor", self.monitor_combo)
-        form.addRow("Resolution", self.resolution_combo)
-        form.addRow("Bitrate", self.bitrate_combo)
-        form.addRow("Frame rate", self.fps_combo)
-        box.addLayout(form)
-
-        apply_row = QHBoxLayout()
-        apply_row.addStretch()
-        self.apply_btn = QPushButton("Apply && restart")
-        self.apply_btn.clicked.connect(self._apply_settings)
-        apply_row.addWidget(self.apply_btn)
-        box.addLayout(apply_row)
-
-        # ROADMAP H2 — the switch that installs the agent hook (owner
-        # 2026-08-06). The feature shipped in v0.0.081 and then sat silent on
-        # his own PC for a day because nobody had run `agent_hook.py
-        # --install`: an end user must never type a command, so the app does
-        # it. Takes effect at once — no Apply, nothing restarts.
-        self.notify_check = QCheckBox("Tell my phone when an agent finishes")
-        self.notify_check.setChecked(agent_hook_installed())
-        self.notify_check.toggled.connect(self._toggle_agent_hook)
-        box.addWidget(self.notify_check)
-        self.notify_caption = QLabel("")
-        self.notify_caption.setObjectName("caption")
-        self.notify_caption.setWordWrap(True)
-        box.addWidget(self.notify_caption)
-        self._show_notify_state()
-        return card
-
-    def _show_notify_state(self) -> None:
-        self.notify_caption.setText(
-            "Claude Code will call this PC when a turn ends, and the PC passes "
-            "it to your phone by name."
-            if self.notify_check.isChecked() else
-            "Off — the phone stays quiet when a job on this PC finishes.")
-        self._resettle()  # a longer caption gets its room NOW, not in a second
-
-    def _toggle_agent_hook(self, on: bool) -> None:
-        """Install or remove the Claude Code Stop hook. The packaged EXE has no
-        interpreter inside it, so the script is copied somewhere permanent
-        (it must outlive an app update) and a real python is named — and when
-        this PC has none, the switch SAYS so instead of failing quietly."""
-        try:
-            ok, detail = set_agent_hook(on)
-        except OSError as e:  # noqa: BLE001 — a switch may never crash the app
-            ok, detail = False, str(e)
-            logger.error("agent hook switch failed: %s", e)
-        if not ok:
-            self.notify_check.blockSignals(True)
-            self.notify_check.setChecked(agent_hook_installed())
-            self.notify_check.blockSignals(False)
-            self.notify_caption.setText(detail)
-            self._resettle()  # a reported failure is the caption's longest state
-            return
-        self._show_notify_state()
-
-    def _build_bottom_row(self) -> QHBoxLayout:
+    def _build_power_row(self) -> QHBoxLayout:
+        """What this window is FOR: run the server, and reach the phone from
+        anywhere. Nothing else lives on this row."""
         row = QHBoxLayout()
         self.power_btn = QPushButton("Start server")
         self.power_btn.setObjectName("primary")
         self.power_btn.clicked.connect(self._toggle_server)
         row.addWidget(self.power_btn)
         row.addStretch()
-        self.controls_btn = QPushButton("Controls…")
-        self.controls_btn.clicked.connect(self._edit_controls)
-        row.addWidget(self.controls_btn)
-        self.traffic_btn = QPushButton("Traffic…")
-        self.traffic_btn.clicked.connect(self._show_traffic)
-        row.addWidget(self.traffic_btn)
         self.tailscale_btn = QPushButton("Set up Tailscale")
         self.tailscale_btn.clicked.connect(self._setup_tailscale)
         row.addWidget(self.tailscale_btn)
+        return row
+
+    def _build_window_row(self) -> QHBoxLayout:
+        """The three doors, as one row of equals (round R2).
+
+        They used to sit between the power button and the Tailscale button,
+        which put five unrelated buttons in one line and made that line the
+        thing that decided how wide this window has to be. Given a row of
+        their own they share it equally, they carry their SVG icon, and they
+        lost the trailing "…" — a dialog is what a button does, not something
+        its label has to apologise for.
+        """
+        row = QHBoxLayout()
+        for label, name, handler in (
+                ("Controls", "icon-controls", self._edit_controls),
+                ("Traffic", "icon-traffic", self._show_traffic),
+                ("Settings", "icon-settings", self._show_settings)):
+            button = QPushButton(themed_icon(name), f"  {label}")
+            # The palette is BAKED into the SVG source (Qt's renderer ignores
+            # `currentColor`), so an icon built once is a picture in the old
+            # ink after a theme flip. Naming the asset on the widget is what
+            # lets `theme.apply_theme` rebuild it — round R3.
+            button.setProperty("iconName", name)
+            button.setIconSize(QSize(ICON_PX, ICON_PX))
+            button.clicked.connect(handler)
+            row.addWidget(button, 1)
         return row
 
     def _edit_controls(self) -> None:
@@ -406,10 +384,27 @@ class MainWindow(QMainWindow):
         he watches this window WHILE he locks the phone in his other hand."""
         if self._traffic is None:
             self._traffic = TrafficWindow(self)
-            self._traffic.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, False)
-        self._traffic.show()
-        self._traffic.raise_()
-        self._traffic.activateWindow()
+        self._show_child(self._traffic)
+
+    def _show_settings(self) -> None:
+        """Everything about this PC that is not "get a phone connected"
+        (round R2): the stream form that used to sit under the QR, the notify
+        switch that used to sit under that, and the three switches that had no
+        UI at all — focus, update check, start with Windows. Modeless like
+        Traffic: an Apply restarts the server, and the owner watches the main
+        window's status pill do it."""
+        if self._settings is None:
+            self._settings = SettingsWindow(self.controller, self.restart_server, self)
+        self._show_child(self._settings)
+
+    def _show_child(self, window) -> None:
+        """Show a modeless child window without letting it be destroyed on
+        close — these windows keep live state (a chart's history, a phone's
+        reported voices) and are built once."""
+        window.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, False)
+        window.show()
+        window.raise_()
+        window.activateWindow()
 
     def _build_update_button(self) -> QPushButton:
         """Hidden until the startup check finds a newer release; one click
@@ -448,40 +443,19 @@ class MainWindow(QMainWindow):
         )
         self.tray.show()
 
-    # -- settings ----------------------------------------------------------
-
-    def _populate_monitors(self) -> None:
-        from capture import BaseCapture
-        try:
-            count = BaseCapture.output_count()
-        except Exception as e:  # enumeration is cosmetic — never kill the window
-            logger.error("Monitor enumeration failed: %s", e)
-            count = 1
-        self.monitor_combo.clear()
-        for i in range(max(1, count)):
-            self.monitor_combo.addItem(f"Monitor {i + 1}", i)
-
-    def _select_current_settings(self) -> None:
-        def select(combo: QComboBox, value) -> None:
-            index = combo.findData(value)
-            combo.setCurrentIndex(index if index >= 0 else 0)
-        select(self.monitor_combo, SETTINGS.monitor_index)
-        select(self.resolution_combo, SETTINGS.h264_max_width)
-        select(self.bitrate_combo, SETTINGS.h264_bitrate)
-        select(self.fps_combo, SETTINGS.target_fps)
-
-    def _apply_settings(self) -> None:
-        changes = {
-            "monitor_index": self.monitor_combo.currentData(),
-            "h264_max_width": self.resolution_combo.currentData(),
-            "h264_bitrate": self.bitrate_combo.currentData(),
-            "target_fps": self.fps_combo.currentData(),
-        }
-        save_user_settings(changes)
-        if self.controller.state in ("running", "starting"):
-            self._run_worker(self._restart_worker)
-
     # -- server control ----------------------------------------------------
+
+    def restart_server(self) -> None:
+        """The Settings window's "Apply & restart", run the way every other
+        server action in this app runs: on a worker thread, with this window's
+        buttons gated until it finishes. The Settings window saved the values;
+        picking them up is a restart, and a restart belongs to whoever owns
+        the controller — this window. A no-op while a worker is already in
+        flight, and while the server is stopped there is nothing to restart:
+        the new values are read by the next start."""
+        if self._busy or self.controller.state not in ("running", "starting"):
+            return
+        self._run_worker(self._restart_worker)
 
     def _run_worker(self, target) -> None:
         """Start/stop must never block the UI thread; _busy gates the buttons
@@ -733,7 +707,6 @@ class MainWindow(QMainWindow):
         self.power_btn.setObjectName("danger" if running else "primary")
         repolish(self.power_btn)
         self.power_btn.setEnabled(not self._busy)
-        self.apply_btn.setEnabled(not self._busy)
         self.copy_btn.setEnabled(state == "running")
         self.browser_btn.setEnabled(state == "running")
         self.tray_toggle.setText("Stop server" if running else "Start server")

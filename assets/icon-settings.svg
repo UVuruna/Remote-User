@@ -1,0 +1,24 @@
+<!-- Settings — a gear. The button that opens the Settings window
+     (gui/main_window.py, tinted by gui/theme.py's icon()).
+
+     Eight teeth COMPUTED, not hand-drawn: each tooth is the same rounded
+     spoke turned 45° further (root "compute, don't generate"). Stroke-based
+     on a 24x24 grid, 2px stroke, single colour via `currentColor` so the
+     theme can re-tint it; drawn, never a font glyph (see icon-controls.svg). -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="48" height="48">
+  <g fill="none" stroke="currentColor" stroke-width="2"
+     stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="3.1"/>
+    <g stroke-width="2.8">
+      <line x1="12" y1="3.3" x2="12" y2="6.4"/>
+      <line x1="12" y1="3.3" x2="12" y2="6.4" transform="rotate(45 12 12)"/>
+      <line x1="12" y1="3.3" x2="12" y2="6.4" transform="rotate(90 12 12)"/>
+      <line x1="12" y1="3.3" x2="12" y2="6.4" transform="rotate(135 12 12)"/>
+      <line x1="12" y1="3.3" x2="12" y2="6.4" transform="rotate(180 12 12)"/>
+      <line x1="12" y1="3.3" x2="12" y2="6.4" transform="rotate(225 12 12)"/>
+      <line x1="12" y1="3.3" x2="12" y2="6.4" transform="rotate(270 12 12)"/>
+      <line x1="12" y1="3.3" x2="12" y2="6.4" transform="rotate(315 12 12)"/>
+    </g>
+    <circle cx="12" cy="12" r="6.4"/>
+  </g>
+</svg>

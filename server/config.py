@@ -41,6 +41,17 @@ SETTINGS_PATH = USER_DIR / "settings.json"
 USER_ADJUSTABLE = {
     "port", "monitor_index", "target_fps", "use_h264",
     "h264_max_width", "h264_bitrate", "jpeg_quality", "open_qr_image",
+    # The desktop Settings window (round R2, owner 2026-08-07) — everything
+    # that window can change, and nothing else. `foreground_lock` and
+    # `update_check` are read at START as well as on the toggle, so they have
+    # to survive a restart; the three notify keys ride in every notify frame.
+    "notify_speak", "notify_voice", "notify_rate",
+    "foreground_lock", "update_check",
+    # Appearance (build round R3, 2026-08-07). `ui_theme` is the DESKTOP's
+    # palette; `phone_theme`/`phone_fill` are the PHONE's, chosen here and
+    # nowhere else (owner answer P4: one source of truth, no menu on the
+    # phone) and carried to it in every `config` frame.
+    "ui_theme", "phone_theme", "phone_fill",
     # "hand" retired 2026-08-02 (the cursor-offset system is gone); an old
     # settings.json carrying it is simply ignored on load.
 }
@@ -151,6 +162,17 @@ class Settings:
     traffic_csv_path: Path = USER_DIR / "traffic.csv"
     traffic_csv_max_bytes: int = 20_000_000  # ~4 months of idle sampling
     traffic_csv_backups: int = 1
+    # BUILD ROUND R4 (owner-approved 2026-08-07): the "Od starta" / "Sve (iz
+    # fajla)" spans read the CSV off the UI thread (traffic_history.py) and
+    # fold it into at most this many points — a ceiling on the DISK read
+    # only, comfortably above any real window width, so the chart's own
+    # paint-time coalesce (never more than one point per pixel) is what
+    # actually limits what gets drawn; this just bounds the read's time/memory.
+    traffic_history_max_buckets: int = 2000
+    # How often a long span re-reads the file while it stays selected — a
+    # live watch should see new samples appear, but a 20+ MB file is not
+    # worth re-scanning on every 1 s GUI tick.
+    traffic_history_refresh_s: float = 30.0
 
     # Pairing
     token_bytes: int = 16           # entropy of the pairing token
@@ -180,6 +202,38 @@ class Settings:
     # again; the marker file is what makes "once" mean once. Deleting it shows
     # the notice again, which is the only reason to touch it.
     tray_notice_path: Path = USER_DIR / "tray_notice.seen"
+    # "Start with Windows" (Settings window, round R2). The thing that really
+    # starts the app at logon is a Task Scheduler task the installer creates
+    # (setup/installer.nsi -> SecAutostart, /RL HIGHEST because HKCU Run
+    # silently refuses elevated apps). The switch READS and WRITES that task,
+    # never a preference of its own — a switch that only remembers an
+    # intention is exactly the kind of lie this project keeps paying for.
+    autostart_task: str = "RemoteUser"
+
+    # Notifications to the phone (ROADMAP Phase H; the desktop Settings window
+    # owns all three since round R2). `notify_speak` off still raises the
+    # Android banner — the server simply sends speak:false, so nothing is
+    # SAID; the notice is never lost. `notify_voice` is a TTS voice NAME
+    # exactly as the phone reported it in `tts_info`, and a device that does
+    # not have it falls back to its own default, so swapping phones can never
+    # silence the feature. `notify_rate` is TextToSpeech's speech rate
+    # (1.0 = the engine's normal pace); the window offers 0.8 / 1 / 1.25 / 1.5.
+    notify_speak: bool = True
+    notify_voice: str = ""
+    notify_rate: float = 1.0
+
+    # "Don't let applications steal focus" (Settings window, round R2 —
+    # the desktop half of the focus work; the phone's half is focus_guard).
+    # Windows' own foreground lock: for `foreground_lock_timeout_ms` after the
+    # user's last input, no process may push itself to the front. Raised with
+    # NO SPIF_UPDATEINIFILE on purpose — the value must never reach the
+    # registry, where it would outlive this app and quietly change a PC we no
+    # longer run on. It therefore dies with the process (and with a Windows
+    # restart), and the ledger below is what repairs a run we were KILLED in,
+    # exactly as topmost_ledger_path does for the always-on-top band.
+    foreground_lock: bool = False
+    foreground_lock_timeout_ms: int = 200_000
+    foreground_lock_ledger_path: Path = USER_DIR / "foreground_lock.json"
 
     # Logging
     log_dir: Path = USER_DIR if FROZEN else PROJECT_ROOT / "logs"
@@ -204,8 +258,68 @@ class Settings:
     # desktop GUI checks it once per start and offers the update in-window;
     # the phone never checks the internet (its update comes from the PC:
     # `config` carries the server version, /app.apk carries the matching APK).
+    # `update_check` had no UI until round R2 — it existed only as a default
+    # nobody could reach. The Settings window's "Check for new versions when
+    # the app starts" is that switch; turning it off makes updates.check()
+    # return None and hides the in-window Update button entirely.
     update_repo: str = "UVuruna/Remote-User"
     update_check: bool = True
+
+    # Appearance (build round R3, owner-approved 2026-08-07). Three settings,
+    # two surfaces, ONE place to change them — the desktop Settings window's
+    # APPEARANCE card.
+    #   ui_theme    — this PC's palette: "dark" or "light" (gui/theme.py).
+    #   phone_theme — the phone's: "dark", "light" or "colored" (every set in
+    #                 its own colour, SET_COLORS below).
+    #   phone_fill  — "transparent" (today's outlined buttons) or "full"
+    #                 (filled ones).
+    # The phone gets these in `config.ui` and applies them; it has no menu of
+    # its own (owner answer P4). An unknown value is treated as the default by
+    # the surface that reads it, never as a reason to fail.
+    ui_theme: str = "dark"
+    phone_theme: str = "dark"
+    phone_fill: str = "transparent"
+
+
+# ═══════════════════════════ APPEARANCE — THE PHONE'S SET COLOURS ═══════════════════════════
+# One colour per shipped set (owner adopted this palette 2026-08-07, answer
+# P5: "adopt the proposed set-colour palette and tune later"), used only when
+# `phone_theme` is "colored" — as the button OUTLINE in the transparent fill
+# and as the button FILL in the full one. The phone computes the ink from each
+# colour's luminance, so a set's text and icon can never land unreadable on
+# its own colour whatever is tuned here later.
+#
+# CUSTOM sets are not listed and never will be: the owner names them himself
+# in the Controls editor, so the phone hands each one the next colour of this
+# same palette that no shipped set already holds (client/theme.js →
+# `colorFor`). One table, one place to tune, no second list to keep in step.
+SET_COLORS = {
+    "Mouse": "#38BDF8",
+    "Input": "#4ADE80",
+    "Settings": "#94A3B8",
+    "Edit": "#A78BFA",
+    "Attach": "#F59E0B",
+    "Navigate": "#2DD4BF",
+    "Media": "#F87171",
+    "Windows": "#818CF8",
+    "VSCode": "#3B82F6",
+    "Chrome": "#FACC15",
+    "Explorer": "#FB923C",
+    "Claude": "#D97757",
+    "Cursor": "#F472B6",
+}
+
+
+def ui_config() -> dict:
+    """The APPEARANCE half of every `config` frame (`web._send_config`).
+
+    Deliberately a function here rather than three lines built in web.py:
+    the desktop owns this decision, config.py owns the desktop's settings,
+    and web.py's job is only to put it on the wire.
+    """
+    return {"theme": SETTINGS.phone_theme,
+            "fill": SETTINGS.phone_fill,
+            "colors": dict(SET_COLORS)}
 
 
 # ═══════════════════════════ VERSION ═══════════════════════════

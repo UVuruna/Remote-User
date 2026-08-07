@@ -12,6 +12,8 @@ Single source of truth for every tunable value in the server (root Rule #4 — n
 
 `app_version()` reads the running version from the bundled `setup/app_info.json` — `"dev"` in an unversioned checkout. It is the single source the GUI footer, the update check, and the `config` WebSocket message all read from.
 
+**Round R2 (owner 2026-08-07) added five user-adjustable keys**, all of them owned by the new [Settings window](../gui/__about/settings_window.md): `notify_speak` / `notify_voice` / `notify_rate` (how the phone SAYS a notice — they ride in every `notify` frame), `foreground_lock` (Windows' own foreground rule, re-applied at every start), and `update_check`, which had lived here as a default with no UI at all. Two non-adjustable companions came with them: `foreground_lock_timeout_ms` + `foreground_lock_ledger_path` (see [Foreground Lock](foreground_lock.md)) and `autostart_task`, the Task Scheduler task name shared with the installer (see [Autostart](autostart.md)).
+
 See the [flow doc](../__flow/config.md) for the full section/key tree.
 
 ## Connections
@@ -20,7 +22,7 @@ See the [flow doc](../__flow/config.md) for the full section/key tree.
 - Nothing (leaf module)
 
 ### Used by
-- Every other file in this folder — [Bootstrap](bootstrap.md), [Server Core](server_core.md), [Screen Capture](capture.md), [H.264 Streamer](h264_streamer.md), [Encoders](encoders.md), [Input Injector](input_injector.md), [Web Layer](web.md), [Pairing](pairing.md), [Updates](updates.md) — plus `gui/main_window.py` (see [GUI (subfolder)](../gui/___gui.md))
+- Every other file in this folder — [Bootstrap](bootstrap.md), [Server Core](server_core.md), [Screen Capture](capture.md), [H.264 Streamer](h264_streamer.md), [Encoders](encoders.md), [Input Injector](input_injector.md), [Web Layer](web.md), [Pairing](pairing.md), [Updates](updates.md), [Autostart](autostart.md), [Foreground Lock](foreground_lock.md) — plus `gui/main_window.py` and `gui/settings_window.py` (see [GUI (subfolder)](../gui/___gui.md))
 
 ## Classes
 
@@ -49,3 +51,29 @@ load with a warning (documented non-fatal path).
 serves at /app.apk. The phone's update banner compares against THIS, not
 `app_version()`: the APK does not change with desktop-only releases, and the
 old comparison offered a phantom update forever.
+
+## Build round R3 (2026-08-07) — themes
+
+### APPEARANCE (build round R3, owner-approved 2026-08-07)
+
+Three settings and one table, all in `USER_ADJUSTABLE` or their own section:
+
+| Key | Values | What it is |
+|---|---|---|
+| `ui_theme` | `dark` / `light` | THIS PC's palette (`server/gui/theme.py`) |
+| `phone_theme` | `dark` / `light` / `colored` | the PHONE's |
+| `phone_fill` | `transparent` / `full` | outlined buttons, or filled |
+
+`SET_COLORS` is the per-set colour palette the owner adopted (this round's
+answer P5): Mouse `#38BDF8`, Input `#4ADE80`, Settings `#94A3B8`, Edit
+`#A78BFA`, Attach `#F59E0B`, Navigate `#2DD4BF`, Media `#F87171`, Windows
+`#818CF8`, VSCode `#3B82F6`, Chrome `#FACC15`, Explorer `#FB923C`, Claude
+`#D97757`, Cursor `#F472B6`. Custom sets are deliberately NOT listed — the
+owner names his own sets, so the phone hands each unnamed one the next colour
+of this same palette that nothing already wears (`client/theme.js`). One table
+to tune, no second list to keep in step.
+
+`ui_config()` is the whole APPEARANCE half of a `config` frame,
+`{theme, fill, colors}`. It lives here rather than in `web.py` on purpose: the
+desktop owns this decision, this file owns the desktop's settings, and the web
+layer's job is only to put it on the wire.

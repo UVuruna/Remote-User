@@ -1,0 +1,13 @@
+<!-- Traffic — a chart. The button that opens the Traffic window
+     (gui/main_window.py, tinted by gui/theme.py's icon()).
+
+     Two axes and the rising line the window itself draws. Stroke-based on a
+     24x24 grid, 2px stroke, single colour via `currentColor` so the theme can
+     re-tint it; drawn, never a font glyph (see icon-controls.svg). -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="48" height="48">
+  <g fill="none" stroke="currentColor" stroke-width="2"
+     stroke-linecap="round" stroke-linejoin="round">
+    <polyline points="4,3.5 4,20 20.5,20"/>
+    <polyline points="7.5,15.5 11,10.5 14.5,13.5 19,6.5"/>
+  </g>
+</svg>
