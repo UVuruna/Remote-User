@@ -23,11 +23,15 @@ def main() -> None:
     # the handler stays tiny because Windows gives it only seconds.
     import atexit
     import ctypes
+
+    import foreground_lock
     atexit.register(controller.release_windows)
+    atexit.register(foreground_lock.release)   # round R2 — same discipline
     handler_type = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_uint)
 
     def _console_event(_event: int) -> bool:
         controller.release_windows()
+        foreground_lock.release()
         return False  # let the default handler end the process
 
     _keep_alive = handler_type(_console_event)   # must outlive the call

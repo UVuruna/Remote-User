@@ -2,6 +2,35 @@
 
 **About:** [description](../__about/input_injector.md)
 
+## Algorithm — wheel() (vertical + horizontal, owner spec 2026-08-07)
+
+```mermaid
+flowchart TB
+    A["wheel(x_norm, y_norm, ticks, hticks=0.0)"] --> B["move(x_norm, y_norm) — the wheel targets the window under the cursor"]
+    B --> C["SendInput MOUSEEVENTF_WHEEL, mouseData = ticks * WHEEL_DELTA"]
+    C --> D{hticks nonzero?}
+    D -- no --> E["done — byte-for-byte the pre-round call"]
+    D -- yes --> F["SendInput MOUSEEVENTF_HWHEEL, mouseData = hticks * WHEEL_DELTA"]
+```
+
+Pseudocode:
+
+    wheel(x_norm, y_norm, ticks, hticks = 0.0):
+        move(x_norm, y_norm)                              # cursor first — the wheel targets what's under it
+        SendInput(MOUSEEVENTF_WHEEL, mouseData = round(ticks * WHEEL_DELTA))
+        IF hticks:
+            SendInput(MOUSEEVENTF_HWHEEL, mouseData = round(hticks * WHEEL_DELTA))
+
+`hticks` defaults to 0.0 and is skipped entirely when falsy — an old call
+(every caller before this round) or a `scroll` message with no `hticks` field
+therefore injects EXACTLY the one WHEEL event it always did, with no HWHEEL at
+all. Sign: positive `hticks` sends `MOUSEEVENTF_HWHEEL` a positive mouseData,
+which Windows documents as "the wheel was tilted to the right" — the caller
+(the gamepad's right stick, `client/gamepad.js`) carries its own `rx` straight
+through unflipped, because Android's `AXIS_Z`/`AXIS_RX` already agrees with
+that sense (unlike the Y axes, which Android reports inverted and the vertical
+tick negates before it ever reaches this module).
+
 ## Algorithm — InjectionMonitor (pure decision logic)
 
 ```mermaid
@@ -50,6 +79,56 @@ Pseudocode:
         ELSE → miss streak += 1
                IF streak reached AND not already alarmed → alarm once, return True
                ELSE → return False
+
+## Algorithm — type_text: the text is cut, and the target re-checked between cuts
+
+```mermaid
+flowchart TB
+    A["type_text(text, guard)"] --> A1["_typeable(text): unpaired surrogates dropped ONCE<br/>— never mid-sentence, never half a character"]
+    A1 --> B{"guard given?"}
+    B -- no --> C["_type_chunk(whole text) — the old single burst"]
+    B -- yes --> D["next TYPE_CHUNK_CHARS (1) character"]
+    D --> E{"first character?"}
+    E -- yes --> H["_type_chunk: one down+up per UTF-16 unit"]
+    E -- no --> F["guard() — bare GetForegroundWindow,<br/>escalating to focus_guard.checkpoint"]
+    F -- "returns an hwnd" --> H
+    F -- "returns 0" --> G["log ERROR: how much was typed,<br/>what is NOT being sent — then STOP"]
+    G --> K["RETURN the remainder → the phone is toasted"]
+    H --> I{"more text left?"}
+    I -- yes --> D
+    I -- no --> J["return what was dropped, if anything"]
+```
+
+Pseudocode:
+
+    type_text(text, guard = None) -> what never reached the PC:
+        text, dropped = _typeable(text)      # unpaired surrogates, once, up front
+        IF guard is None → inject the whole text, exactly as before
+        FOR start IN 0, 1, 2, ...:
+            IF start > 0 AND guard() == 0:
+                log ERROR "ABORTED after {start} of {len} characters — NOT sent: …"
+                RETURN text[start:] + dropped     # a thief is never fed
+            inject text[start]               # one down+up per UTF-16 code unit
+        RETURN dropped
+
+Why a check per character: `SendInput` has no target, and typing was MEASURED
+on the owner's PC at 921 µs per keyboard event — ~1.84 ms per character, so a
+600-character dictated sentence is ~1.1 s of injection during which a window
+that steals focus receives the rest, silently, with nothing to replay it (owner
+report 2026-08-06; the fix is build round R1). Against that, one
+`GetForegroundWindow` costs 194 ns — 0.01% — so there is no reason to let a
+thief have even one character. Why by CHARACTER and not by code unit: a
+boundary inside a surrogate pair would cut an emoji in half.
+
+Why the surrogate check happens once, up front: doing it per chunk raised
+`UnicodeEncodeError` out of the middle of a sentence — part typed, the rest
+gone, and the exception escaping into the WebSocket dispatcher, which catches
+only `WebSocketDisconnect`. The socket died mid-dictation.
+
+Why the guard is an ARGUMENT and not an import: the focus fence knows about
+layouts and connections, which live a layer above this module. Importing upward
+to reach it would invert the layering; a callable passed in costs nothing and
+keeps this module knowing only how to press keys.
 
 Why verify the PREVIOUS move instead of the current one: checking immediately would
 race Windows' own cursor-update latency (a real move has not "landed" yet the instant

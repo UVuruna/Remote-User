@@ -18,6 +18,7 @@ import ctypes
 import ctypes.wintypes as wintypes
 import logging
 import math
+from collections.abc import Callable
 
 from config import SETTINGS
 
@@ -38,6 +39,7 @@ MOUSEEVENTF_MIDDLEUP = 0x0040
 MOUSEEVENTF_XDOWN = 0x0080
 MOUSEEVENTF_XUP = 0x0100
 MOUSEEVENTF_WHEEL = 0x0800
+MOUSEEVENTF_HWHEEL = 0x1000
 MOUSEEVENTF_ABSOLUTE = 0x8000
 MOUSEEVENTF_VIRTUALDESK = 0x4000
 WHEEL_DELTA = 120
@@ -65,6 +67,27 @@ BUTTON_FLAGS = {
 
 KEYEVENTF_KEYUP = 0x0002
 KEYEVENTF_UNICODE = 0x0004
+
+# ═══════════════════════════ TYPING ═══════════════════════════
+# How many characters go out between two foreground checks (owner-approved
+# build round R1, 2026-08-07 — option C). ONE, because the machine was asked
+# instead of guessed. Measured on the owner's PC:
+#
+#   SendInput, one keyboard event .... 921 000 ns   -> a character = ~1.84 ms
+#   GetForegroundWindow ..............     194 ns
+#   one more turn of this loop .......     333 ns
+#
+# So a check before EVERY character costs 0.01% of the typing it protects
+# (a 600-character sentence: ~1.1 s of injection, +0.3 ms of checks), and the
+# characters a focus thief can still catch drop from "up to CHUNK-1" to ZERO.
+# The first version chose 40 from an assumed 0.03-0.1 ms per character; the
+# real figure is ~20x worse, which also means the window a thief had was never
+# 20-60 ms but closer to a full second. Nothing here may be re-tuned by
+# reasoning — re-measure.
+#
+# The check the caller passes is bare on the happy path (focus_guard.typist:
+# one GetForegroundWindow against the armed target, no lock).
+TYPE_CHUNK_CHARS = 1
 
 # Structural keys the client may send as `key_special` or inside a chord.
 VK_CODES = {
@@ -236,6 +259,31 @@ class InjectionMonitor:
         return False
 
 
+def _typeable(text: str) -> tuple[str, str]:
+    """(what SendInput can carry, what had to be dropped).
+
+    A lone surrogate cannot be encoded to UTF-16 at all, and finding that out
+    per chunk meant a `UnicodeEncodeError` thrown out of the middle of a
+    sentence — part typed, the rest gone, and the exception escaping into the
+    WebSocket dispatcher, which catches only `WebSocketDisconnect`. The socket
+    died mid-dictation. It is reachable in the real product: the client reads
+    printable characters by diffing JavaScript UTF-16 strings and can hand us
+    half an emoji.
+
+    So the whole text is checked ONCE, before a single key goes out."""
+    try:
+        text.encode("utf-16-le")
+        return text, ""
+    except UnicodeEncodeError:
+        clean = "".join(ch for ch in text if not 0xD800 <= ord(ch) <= 0xDFFF)
+        dropped = "".join(ch for ch in text if 0xD800 <= ord(ch) <= 0xDFFF)
+        logger.error(
+            "%d unpaired surrogate(s) in what the phone sent — half a "
+            "character cannot be typed, so they were dropped and the other "
+            "%d character(s) are being sent", len(dropped), len(clean))
+        return clean, dropped
+
+
 class InputInjector:
     """Maps monitor-normalized coordinates to virtual-desktop absolutes and injects."""
 
@@ -362,11 +410,19 @@ class InputInjector:
         down_flag, up_flag, data = BUTTON_FLAGS[button]
         self._send(down_flag if down else up_flag, mouse_data=data)
 
-    def wheel(self, x_norm: float, y_norm: float, ticks: float) -> None:
+    def wheel(self, x_norm: float, y_norm: float, ticks: float, hticks: float = 0.0) -> None:
         """Moves the cursor to the gesture point (the wheel targets the window
-        under the cursor), then scrolls by the given number of wheel ticks."""
+        under the cursor), then scrolls by the given number of wheel ticks —
+        vertical (`MOUSEEVENTF_WHEEL`) and, when the client sent one,
+        horizontal (`MOUSEEVENTF_HWHEEL`; positive `hticks` = right, matching
+        Windows' own sign for the horizontal wheel). Two separate injected
+        events, same shape as the two flag pairs above them: one call can only
+        carry one wheel's mouseData, and a tilt gesture legitimately wants
+        both at once (a diagonal flick on the right stick)."""
         self.move(x_norm, y_norm)
         self._send(MOUSEEVENTF_WHEEL, mouse_data=round(ticks * WHEEL_DELTA))
+        if hticks:
+            self._send(MOUSEEVENTF_HWHEEL, mouse_data=round(hticks * WHEEL_DELTA))
 
     def _send_key(self, vk: int, scan: int, flags: int) -> None:
         inp = INPUT(type=INPUT_KEYBOARD)
@@ -375,14 +431,58 @@ class InputInjector:
         if sent != 1:
             logger.error("SendInput (key) failed: %s", ctypes.get_last_error())
 
-    def type_text(self, text: str) -> None:
-        """Injects arbitrary Unicode text via VK_PACKET. Surrogate pairs work —
-        each UTF-16 code unit is sent as its own down+up event."""
+    def _type_chunk(self, text: str) -> None:
         data = text.encode("utf-16-le")
         for i in range(0, len(data), 2):
             unit = int.from_bytes(data[i:i + 2], "little")
             self._send_key(0, unit, KEYEVENTF_UNICODE)
             self._send_key(0, unit, KEYEVENTF_UNICODE | KEYEVENTF_KEYUP)
+
+    def type_text(self, text: str, guard: Callable[[], int] | None = None) -> str:
+        """Injects arbitrary Unicode text via VK_PACKET. Surrogate pairs work —
+        each UTF-16 code unit is sent as its own down+up event, and the text is
+        cut into chunks by CHARACTER, so a pair is never split across one.
+
+        `guard` is the focus checkpoint (`focus_guard.typist`), called BETWEEN
+        chunks of `TYPE_CHUNK_CHARS`: it returns the hwnd typing may continue
+        into, or 0 when focus was stolen and could not be brought back. It is
+        passed IN rather than imported — this module knows nothing about
+        layouts or connections, and must not learn.
+
+        Without a guard the whole text goes out in one burst: exactly the old
+        behaviour, which is what every caller with no connection to fence
+        wants. WHY the guard exists at all: `SendInput` has no target, so a
+        window that takes focus mid-sentence receives the remainder — the
+        2026-08-06 report, whose last hole was that the fence stood only
+        BETWEEN messages (owner-approved round R1).
+
+        **Returns what did NOT reach the PC** ("" when everything landed), so
+        the caller can TELL the phone. Destroying the rest of a sentence and
+        saying so only in the server log would be the very failure this module
+        exists to end: the app being the last to know.
+
+        Never raises. Unpaired surrogates (the client captures printable
+        characters by diffing UTF-16 strings and can slice an emoji in half)
+        are dropped BEFORE anything is injected, not discovered mid-way —
+        half a character must never be typed, and an exception escaping here
+        reaches the message dispatcher and kills the socket mid-dictation."""
+        text, lost = _typeable(text)
+        if guard is None:
+            self._type_chunk(text)
+            return lost
+        for start in range(0, len(text), TYPE_CHUNK_CHARS):
+            if start and not guard():
+                # The thief is named by the guard itself, one line above this
+                # one. What THIS line adds is the damage: how much arrived and
+                # what never will — text dropped in silence is how the whole
+                # failure went unnoticed for three reports.
+                logger.error(
+                    "Typing ABORTED after %d of %d characters — focus could "
+                    "not be returned to the owner's window; NOT sent: %r",
+                    start, len(text), text[start:start + 60])
+                return text[start:] + lost
+            self._type_chunk(text[start:start + TYPE_CHUNK_CHARS])
+        return lost
 
     def press_key(self, name: str) -> None:
         """Presses a structural key (Enter, Backspace, arrows…) by VK code."""

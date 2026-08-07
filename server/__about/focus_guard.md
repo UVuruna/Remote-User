@@ -50,6 +50,61 @@ aiming at, and the phone had no way to be told.
    the last to find out is what made this bug cost three reports; a restored
    keystroke that logged nothing would only hide the next cause.
 
+## Inside one sentence (build round R1, owner-approved 2026-08-07)
+The fence above stands between MESSAGES. The hole that left: `SendInput`
+injects one UTF-16 code unit at a time, and that is far slower than anyone
+assumed. **Measured on the owner's PC** (`SendInput` with one keyboard event:
+921 µs; `GetForegroundWindow`: 194 ns), so:
+
+| | |
+|---|---|
+| one typed character (down + up) | ~1.84 ms |
+| a 600-character dictated sentence | **~1.1 s** of injection |
+| the foreground check that protects it | 194 ns — **0.01%** of one character |
+
+A whole second in which a window that took focus received the remainder, with
+nothing to replay it and no error from Windows.
+
+So the check runs **before every character** (`TYPE_CHUNK_CHARS = 1`, and that
+number is measured, never reasoned — re-measure before changing it). The first
+attempt used 40 characters from an assumed 0.03–0.1 ms per character; that was
+~20× optimistic, and it also meant "a steal loses zero characters" was only
+true when the steal landed exactly ON a chunk boundary (35/20/39/25 characters
+reached the thief at other offsets). At one character per check the answer is
+zero, everywhere.
+
+- The check is **bare on the happy path**: `typist()` compares
+  `GetForegroundWindow` with the armed target — no lock, no owner walk,
+  nothing that can block. Only a foreground that is NOT the target pays for
+  the full `checkpoint()`.
+- The **restore is verified, never assumed**: `SetForegroundWindow` succeeding
+  is a request to the window manager, not a fact, so the foreground is re-read
+  until it really is the target or `REFOCUS_SETTLE_S` (50 ms) runs out. That
+  50 ms is only the confirmation tail — the `guard()` call before it can
+  itself take seconds when a window has to be raised.
+- **Focus that cannot be brought back stops the typing**, and the phone is
+  TOLD: `type_text` returns what never reached the PC and
+  [Web Layer](web.md) turns it into a toast naming the size of the loss and
+  the start of what is missing. A remainder destroyed in silence is the
+  original failure wearing a different coat. The log carries both halves too —
+  the guard names the window holding the keyboard, the injector names the
+  damage.
+- **Half a character never goes out.** An unpaired surrogate (the page reads
+  printable characters by diffing UTF-16 strings and can hand us half an
+  emoji) cannot be encoded at all; discovering that per chunk threw
+  `UnicodeEncodeError` out of the middle of a sentence and killed the socket,
+  since the dispatcher catches only `WebSocketDisconnect`. The whole text is
+  checked once, before a single key goes out.
+- The checkpoint is handed to the injector as a plain callable
+  (`typist(layouts, conn)`). [Input Injector](input_injector.md) is the layer
+  BELOW and must know nothing about layouts, connections or fences —
+  inverting that import to give it a guard would be the layering defect this
+  project splits modules to avoid. `type_text` with no guard is exactly the
+  old behaviour, which is what every caller with nothing to fence wants.
+- Residual, stated honestly: a character is typed whole, so a steal landing
+  BETWEEN the two code units of one surrogate pair lets the low half follow
+  the high one out. At most one code unit — never a whole character.
+
 ## The layout is DEFENDED, not merely checked (owner decree 2026-08-06)
 His second message the same evening, shouting: *"kada uhvatimo fokus lejauta ne
 može nikakav program da izbaci fokus"* — and the reason a guard that only runs
@@ -59,13 +114,39 @@ focus while he speaks does not misplace one character: it takes the window his
 half hour of speech was meant for, and the round often dies with it (the phone
 now keeps a rescue copy of what it heard — [VoiceInput](../../android/__about/VoiceInput.md)).
 
-`watch(layouts, conn)` is therefore one task per connection, polling every
-`WATCH_POLL_S` (0.25 s): while the phone is showing a layout, a foreground
-outside its members is put back at once, by the cheapest route that works
-(`_refocus` — plain `SetForegroundWindow`, then the `AttachThreadInput` unlock,
-and only a minimized window pays for the full `raise_window`). The thief is
-logged once per `STEAL_LOG_QUIET_S`, so an app that fights back cannot write
-the log by itself.
+`watch(layouts, conn)` is therefore one task per connection: while the phone is
+showing a layout, a foreground outside its members is put back at once, by the
+cheapest route that works (`_refocus` — plain `SetForegroundWindow`, then the
+`AttachThreadInput` unlock, and only a minimized window pays for the full
+`raise_window`). The thief is logged once per `STEAL_LOG_QUIET_S`, so an app
+that fights back cannot write the log by itself.
+
+**Two sources, one decision** (build round R1, 2026-08-07). Windows announces
+every foreground change through [Focus Hook](focus_hook.md), which puts the
+restore at **2–5 ms** instead of up to 250 ms; the `WATCH_POLL_S` (0.25 s) poll
+**stays** as the backstop, because a hook can be refused at install time or
+dropped later by Windows. Both sources wake the SAME loop, so the decision is
+taken in one place, on a worker thread, whichever spoke — and `guard` is
+serialized by a lock, because two threads deciding the target at once would
+race over the pin and could raise two different windows.
+
+**The hook's callback may only SIGNAL** (`loop.call_soon_threadsafe`), and this
+is not a style preference: a WinEventProc runs inside Windows' own event
+dispatch, so calling `guard` from it was measured stalling a second caller for
+**2.99 s** — the guard waits on that lock, which is held across a window raise
+that waits for a frame to settle. Everything the desktop does with the
+foreground queues behind that, and the owner feels it as a juddering mouse.
+Worse, Windows silently DETACHES a hook that is slow to return, after which we
+would believe we had millisecond reaction while running on the poll alone. So
+the callback signals, the loop works, `focus_hook` logs any callback that
+overruns its budget, and `_log_silent_hook` reports (once) a hook that Windows
+still claims to hold but that announced nothing about a change the poll then
+had to undo.
+
+`watch` registers one listener, warns in the log if Windows refused it, and
+releases it when the connection ends — **synchronously**, because the web layer
+cancels this task without awaiting it, and a release needing one more turn of
+the event loop would simply never run.
 
 Two deliberate limits: the watcher **sleeps while the phone is away** (an
 excursion or a leave hands those windows back to the desk — pulling focus to
@@ -86,7 +167,23 @@ bug. Raising members in plain list order handed the keyboard to whichever
 window sat last in the grid, so one excursion was enough to move his dictation
 into the other pane.
 
+## Connections
+
+### Uses
+- [Focus Hook](focus_hook.md) — the instant announcement that the foreground
+  moved (the poll is the backstop, never the only defence)
+- [Window Manager](window_manager.md) — the user32 readers, `raise_window`,
+  and `Layout.last_member`
+
+### Used by
+- [Web Layer](web.md) — `guard()` before every message in `TYPING_KINDS`,
+  `retarget()` on every one in `RETARGET_KINDS`, `typist()` handed to
+  `type_text` / `_paste_text`, and `watch()` as one task per connection
+- [Input Injector](input_injector.md) — indirectly: it calls the `typist`
+  callable it is given, and imports nothing from here
+
 ## Cost
 One `GetForegroundWindow` (plus at most eight `GetWindow` owner hops) per
-typing message, on a worker thread. A raise happens only when focus was
-actually stolen — the normal path touches no window at all.
+typing message and per 40 typed characters, on a worker thread — microseconds
+each. A raise happens only when focus was actually stolen; the normal path
+touches no window at all.

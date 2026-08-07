@@ -36,15 +36,40 @@ server names before every keystroke:
    the phone, and a restored keystroke that logs nothing would only hide the
    next cause.
 
+And two rounds later (owner-approved build round R1, 2026-08-07) the last two
+gaps in that fence were closed:
+
+5. **The guard runs INSIDE a typed message, not only before it.** Typing is
+   MEASURED at ~1.84 ms per character on the owner's PC, so a 600-character
+   dictated sentence is over a SECOND of `SendInput` — a thief striking
+   inside it used to take the whole remainder with no check of any kind, and
+   nothing replays injected characters. `typist()` hands the injector a
+   check it runs before every character; the happy path is one bare
+   `GetForegroundWindow` (194 ns, 0.01% of a character), and only a
+   foreground that is not the target pays for the full `checkpoint()`. The
+   callable is passed DOWN, so the injector never imports back up.
+6. **Windows TELLS us the foreground moved** ([Focus Hook](focus_hook.py)):
+   2-5 ms instead of the poll's up to 250 ms. The poll stays as the backstop,
+   because a hook can be refused or dropped — and the hook's callback may
+   only SIGNAL this module's loop, never run the guard on Windows' own
+   dispatch thread (measured: it stalled a second caller for 2.99 s, which
+   the owner felt as a juddering mouse).
+7. **What could not be typed reaches the PHONE**, not just the log. He is
+   looking at his device while he speaks; a sentence destroyed in silence is
+   the original failure wearing a different coat.
+
 Split out of [Web Layer] on 2026-08-06 (THE STRUCTURE LAW): "where does typed
 input land" is one responsibility with its own rules and its own gate
-(`tests/test_focus_guard.py`), not an `if` in the message dispatcher.
+(`tests/test_focus_guard.py`, plus `tests/test_focus_hook.py` for the
+machinery), not an `if` in the message dispatcher.
 """
 
 import asyncio
 import logging
+import threading
 import time
 
+import focus_hook
 import window_manager
 
 logger = logging.getLogger(__name__)
@@ -63,6 +88,19 @@ WATCH_POLL_S = 0.25
 # One thief, one log line per this many seconds. An app that fights for the
 # foreground every 100 ms must not turn the server log into its own diary.
 STEAL_LOG_QUIET_S = 5.0
+# How long a mid-sentence checkpoint waits for the foreground to actually come
+# back AFTER the guard has asked for it. `SetForegroundWindow` returning
+# success is not the same as Windows having moved the foreground — it is a
+# request the window manager completes a moment later — so the target is
+# VERIFIED, not assumed.
+#
+# Honest about what this number is NOT: it is not the cost of a stolen
+# character. The `guard()` call one line above it can itself take SECONDS when
+# it has to raise a window — `window_manager.raise_window` waits for the frame
+# to settle (`SETTLE_TIMEOUT_S`, 1.5 s, and twice on the fallback path). This
+# is only the tail: the extra time spent confirming that the raise landed.
+REFOCUS_SETTLE_S = 0.05
+REFOCUS_POLL_S = 0.005
 
 
 # ═══════════════════════════ WINDOWS FACTS ═══════════════════════════
@@ -123,6 +161,12 @@ def describe(hwnd: int) -> str:
 
 
 # ═══════════════════════════ THE TARGET ═══════════════════════════
+# Three threads can ask "where may the keyboard be" at the same time now — the
+# message that types, the poll, and the hook — so the decision is taken one at
+# a time (see guard()).
+_GUARD_LOCK = threading.Lock()
+
+
 def retarget(conn: dict) -> None:
     """The owner just chose a window HIMSELF — a click the phone injected, a
     layout switch, `next_input`. The next keystroke re-reads the foreground
@@ -163,11 +207,23 @@ def guard(layouts, conn: dict, typing: bool = True) -> int:
     target's hwnd. Blocking (Win32 + a possible raise) — call it through
     `asyncio.to_thread`.
 
-    `typing=True` — before injecting, on every message that TYPES.
-    `typing=False` — the watcher below, four times a second. A layout is
-    defended continuously; the DESKTOP pin is not, because outside a layout
-    there is no fence to defend, only a memory of where typing began, and
-    fighting the whole desktop for it would be us stealing focus."""
+    `typing=True` — before injecting, on every message that TYPES, and again
+    between the chunks of one long one (`checkpoint`).
+    `typing=False` — the defence below: the poll four times a second AND the
+    foreground hook. A layout is defended continuously; the DESKTOP pin is
+    not, because outside a layout there is no fence to defend, only a memory
+    of where typing began, and fighting the whole desktop for it would be us
+    stealing focus.
+
+    SERIALIZED (2026-08-07): the poll is no longer the only voice — the hook
+    fires on its own thread the instant Windows moves the foreground, and two
+    threads deciding the target at once would race over `conn`'s pin and
+    could raise two different windows."""
+    with _GUARD_LOCK:
+        return _decide(layouts, conn, typing)
+
+
+def _decide(layouts, conn: dict, typing: bool) -> int:
     fg = _foreground()
     root = _owner_root(fg)
     lay = _active_layout(layouts, conn)
@@ -205,7 +261,131 @@ def guard(layouts, conn: dict, typing: bool = True) -> int:
     return _accept(conn, None, pin)
 
 
+# ═══════════════════════════ INSIDE ONE SENTENCE ═══════════════════════════
+def _holds(target: int) -> bool:
+    """Is `target` (or a dialog it owns) really the foreground RIGHT NOW?"""
+    if not target:
+        return False
+    fg = _foreground()
+    return fg == target or _owner_root(fg) == target
+
+
+def checkpoint(layouts, conn: dict) -> int:
+    """Between two chunks of ONE typed message: may the injector keep typing,
+    and into what? Returns the target's hwnd, or **0** when focus could not be
+    brought back — the caller must then stop, because every further character
+    would be typed into the thief.
+
+    Why this exists at all (the hole build round R1 was called to close): the
+    guard used to run once per MESSAGE. A 600-character dictated sentence is
+    20-60 ms of `SendInput`, and a window that takes focus inside those
+    milliseconds gets the rest of the sentence — silently, since nothing
+    replays injected characters and Windows reports no error.
+
+    The restore is VERIFIED, never assumed: `SetForegroundWindow` succeeding
+    is a request, not a fact, so the foreground is re-read until it really is
+    the target or `REFOCUS_SETTLE_S` runs out."""
+    target = guard(layouts, conn)
+    if _holds(target):
+        return target
+    deadline = time.monotonic() + REFOCUS_SETTLE_S
+    while time.monotonic() < deadline:
+        time.sleep(REFOCUS_POLL_S)
+        if _holds(target):
+            return target
+    logger.error("Focus could NOT be returned to %s — %s still holds it; the "
+                 "rest of what the phone is typing will NOT be sent",
+                 describe(target), describe(_foreground()))
+    return 0
+
+
+def loss_notice(lost: str) -> str:
+    """What the PHONE is told when typing was cut off — the size of the loss
+    and the start of what is missing, so he knows what to say again.
+
+    It lives here, not in the dispatcher, because it is this module's subject:
+    the whole point of the guard is that the owner is looking at his device,
+    not at a server log, and a sentence destroyed in silence is the original
+    failure wearing a different coat."""
+    return (f"{len(lost)} characters did NOT reach the PC — another window "
+            f"took the keyboard: “{lost[:40]}”")
+
+
+def typist(layouts, conn: dict):
+    """The checkpoint as the injector wants it: a zero-argument callable that
+    answers "may I keep typing, and where".
+
+    Handed IN to `InputInjector.type_text` on purpose — the injector is the
+    layer below and must know nothing about layouts, connections or fences;
+    inverting that import to give it a guard would be the layering defect this
+    project splits modules to avoid.
+
+    The happy path is BARE (measured on the owner's PC, 2026-08-07): one
+    `GetForegroundWindow` at 194 ns against the armed target — no lock, no
+    owner walk, nothing that can block. A foreground that is NOT the target is
+    the only case that pays for the full `checkpoint`. That measurement is
+    what made a check before EVERY CHARACTER affordable (a typed character
+    costs ~1.84 ms of `SendInput` on this machine, so the check is 0.01% of
+    it) — and a check per character is what takes the characters a thief can
+    still catch from "up to 39" down to zero."""
+    def check() -> int:
+        target = conn.get("pin")
+        if target and _foreground() == target:
+            return target
+        return checkpoint(layouts, conn)
+    return check
+
+
 # ═══════════════════════════ THE DEFENCE ═══════════════════════════
+def _log_silent_hook(conn: dict) -> None:
+    """Windows never says it detached a hook. The evidence is exactly this:
+    the POLL found focus outside the layout and had to put it back, while the
+    hook — which Windows still claims to hold — announced nothing at all.
+
+    Once per connection, because if it is true it stays true, and because the
+    point is to be TOLD we are down to the 250 ms backstop rather than to
+    believe we still have milliseconds."""
+    if conn.get("hook_silent"):
+        return
+    conn["hook_silent"] = True
+    logger.warning(
+        "The foreground hook is installed but announced nothing about a change "
+        "the poll then had to undo — Windows has most likely DETACHED it "
+        "(which is what it does to a hook that is slow to return). Reaction is "
+        "the %.2fs poll now, not milliseconds.", WATCH_POLL_S)
+
+
+def _defend(layouts, conn: dict, announced: bool) -> None:
+    """One defence pass, on a worker thread — never on the hook thread."""
+    before = _foreground()
+    events = focus_hook.event_count()
+    target = guard(layouts, conn, False)
+    if (target != before and not announced
+            and events == conn.get("hook_events") and focus_hook.installed()):
+        _log_silent_hook(conn)
+    conn["hook_events"] = events
+
+
+async def _wait_for_change(woken: asyncio.Event) -> bool:
+    """True when the hook announced a foreground change, False when the poll
+    interval simply elapsed. Both lead to the same decision — the hook only
+    makes it sooner."""
+    try:
+        await asyncio.wait_for(woken.wait(), WATCH_POLL_S)
+    except TimeoutError:
+        return False
+    woken.clear()
+    return True
+
+
+def _defending(conn: dict) -> bool:
+    """A layout is on screen and the phone is actually watching it. The
+    desktop pin is deliberately NOT defended (see `guard`), and windows the
+    phone has walked away from belong to the desk again."""
+    return (conn.get("active") is not None
+            and not conn.get("away") and not conn.get("left"))
+
+
 async def watch(layouts, conn: dict) -> None:
     """While the phone is showing a layout, NOTHING may take the keyboard out
     of it (owner decree 2026-08-06). One task per connection, cancelled with
@@ -220,9 +400,50 @@ async def watch(layouts, conn: dict) -> None:
 
     It sleeps while the phone is away (an excursion or a leave): those windows
     belong to the desk again, and pulling focus back to them there would be
-    exactly the sin this project spent two rounds fixing."""
-    while True:
-        await asyncio.sleep(WATCH_POLL_S)
-        if conn.get("active") is None or conn.get("away") or conn.get("left"):
-            continue
-        await asyncio.to_thread(guard, layouts, conn, False)
+    exactly the sin this project spent two rounds fixing.
+
+    TWO SOURCES, ONE DECISION (build round R1, 2026-08-07). Windows announces
+    every foreground change through [Focus Hook](focus_hook.py), which puts
+    the reaction at 2-5 ms instead of up to 250 ms — and the poll below STAYS,
+    because a hook can be refused at install time or dropped later. Both wake
+    this ONE loop, so the decision is taken in exactly one place, on a worker
+    thread, whichever source spoke."""
+    loop = asyncio.get_running_loop()
+    woken = asyncio.Event()
+
+    def _foreground_changed() -> None:
+        """Runs INSIDE Windows' own event dispatch, on the hook thread — so it
+        may only SIGNAL, never work.
+
+        The first version of this called `guard` straight from here and was
+        measured stalling Windows' dispatch for 2.99 s: `guard` waits on a
+        lock held across a window raise that waits for a frame to settle. A
+        WinEventProc that is slow to return is one Windows silently detaches,
+        which would have left us believing we had millisecond reaction while
+        running on the poll alone."""
+        loop.call_soon_threadsafe(woken.set)
+
+    hooked = await asyncio.to_thread(focus_hook.listen, _foreground_changed)
+    if not hooked:
+        logger.warning("No foreground hook — the layout is defended by the "
+                       "%.2fs poll alone", WATCH_POLL_S)
+    conn["hook_events"] = focus_hook.event_count()
+    try:
+        while True:
+            announced = await _wait_for_change(woken)
+            if not _defending(conn):
+                continue
+            await asyncio.to_thread(_defend, layouts, conn, announced)
+    finally:
+        # The connection is over: this listener goes, and with the last one the
+        # thread and the hook handle go too (nothing of ours outlives us).
+        #
+        # SYNCHRONOUS on purpose, unlike the `listen` above. The web layer
+        # cancels this task and never awaits it, so anything here that needed
+        # another turn of the event loop would simply never run — the hook
+        # would stay installed for the life of the process, which is the exact
+        # leak this block exists to prevent (caught by the gate, 2026-08-07).
+        # It is bounded by focus_hook.STOP_TIMEOUT_S (0.25 s) and in practice
+        # costs microseconds: the listener thread only signals, so it is
+        # always sitting in GetMessage ready to take WM_QUIT.
+        focus_hook.release(_foreground_changed)

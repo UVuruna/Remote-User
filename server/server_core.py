@@ -19,6 +19,8 @@ from dataclasses import dataclass, field
 import uvicorn
 
 import encoders
+import focus_hook
+import foreground_lock
 import monitors
 import pairing
 import traffic
@@ -64,8 +66,19 @@ class ServerController:
         # layouts and the only list of windows still standing always-on-top.
         self.layouts = window_manager.LayoutRegistry()
         # Whatever a previous run was killed holding, put right before we can
-        # possibly raise anything of our own.
+        # possibly raise anything of our own — the always-on-top band, and
+        # (round R2) Windows' foreground lock, which is the same discipline
+        # applied to a machine-wide setting.
         window_manager.repair_stranded()
+        foreground_lock.repair_stranded()
+        # …and only THEN take it, if the owner's switch says so. Applied here
+        # rather than in the window, because both entry points build a
+        # controller and the headless CLI is entitled to the same setting.
+        # Releasing it is NOT part of release_windows(): that runs on every
+        # server stop (Apply & restart), and this lock belongs to the PROCESS
+        # — the entry points release it on the way out (gui_main.py, main.py).
+        if SETTINGS.foreground_lock:
+            foreground_lock.apply(True)
 
     # -- lifecycle ---------------------------------------------------------
 
@@ -79,16 +92,26 @@ class ServerController:
         self._thread.start()
 
     def release_windows(self) -> None:
-        """Hand every window we raised back to the normal z-band, NOW, on the
-        calling thread. Deliberately not part of the async teardown: dropping
-        the topmost band is a handful of SetWindowPos calls that need no event
+        """THE exit call: hand every window we raised back to the normal
+        z-band and stop the foreground-hook thread, NOW, on the calling
+        thread. Deliberately not part of the async teardown: dropping the
+        topmost band is a handful of SetWindowPos calls that need no event
         loop, and the event loop is exactly what may be busy placing a 2x2
         layout when the owner hits Quit. Called before every stop, and again
-        from the process-exit hooks — it is idempotent."""
+        from the process-exit hooks — it is idempotent.
+
+        Every documented way out of this process funnels here: tray Quit,
+        server stop, Apply & restart, Ctrl+C, a console close, Qt's
+        aboutToQuit, `atexit`. Which is why the Win32 resources that must not
+        outlive us are released HERE and nowhere else."""
         try:
             window_manager.release_all()
         except Exception:  # nothing on the way out may raise
             logger.exception("Releasing the always-on-top windows failed")
+        try:
+            focus_hook.stop()
+        except Exception:
+            logger.exception("Stopping the foreground-hook listener failed")
 
     def stop(self, timeout: float = 10.0) -> None:
         """Stops uvicorn and waits for the thread to unwind.
