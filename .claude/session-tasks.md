@@ -123,6 +123,29 @@ dropped for them):
       v0.0.091. `kbShift` is 0 and the canvas transform is gone: the keyboard
       covers what it covers. The canvas still keeps its FULL height (it is
       never SQUEEZED — that half of his 2026-08-03 request stands).
+- [ ] 83. WHY DOES 10 fps FEEL SMOOTHER THAN 30 OR 60? (owner 2026-08-07 — and
+      he is asking the right question: "koja je svrha slati toliko velik
+      bitrate i mnogo frejmova ako to dovodi do suprotnog efekta"). His mouse
+      and his whole session feel SLOWER at the higher settings. Not a taste
+      question — a measurement one. The hypothesis to test first is queue
+      latency, not throughput: at native 4K the encoder and the Wi-Fi link
+      produce more than the phone can drain, the MSE buffer grows, and every
+      pointer move is drawn from a picture that is already old — the classic
+      bufferbloat shape, where MORE data means a LATER picture. Lowering fps
+      shortens the queue, so 10 fps feels immediate while 60 feels like syrup.
+      What to measure (the Traffic window already records the bytes): end-to-
+      end pointer→pixel latency at 10/30/60 and at full/⅔/½ resolution, the
+      MSE buffered-ahead length on the phone, and the encoder's own queue
+      depth. Then decide whether the defaults are simply wrong, whether the
+      quality panel should present LATENCY rather than fps, and whether the
+      client should drop frames to keep the buffer short.
+- [ ] 84. R1–R7 — NOT STARTED, and he asked directly. The plan of 2026-08-06
+      (focus C+A, Settings window, themes, Traffic spans, wheel order, gamepad
+      G1+G2) is tasks 65–71 below. Nothing of it has been built by anyone. R1
+      already carries his approval ("odradi kako si predložio, B ostavi kao
+      prekidač u settingsu"); R2–R7 and questions P1–P5 do not. He asked
+      whether agents should be launched onto them — that is his call and needs
+      one word.
 - [ ] 82. THE NOTIFICATION ONLY ARRIVES WHEN HE UNLOCKS THE PHONE — his words,
       and he is right that it is an absurdity: "notifikaciji posao je da
       obavesti korisnika kada NE radi to na telefonu, a mi čekamo da korisnik

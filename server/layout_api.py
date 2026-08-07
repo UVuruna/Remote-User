@@ -147,7 +147,11 @@ async def resolve_slot(ws, stream, slot: dict) -> tuple[int, str | None] | None:
 
 
 async def layout_create(ws, layouts, stream, conn: dict, msg: dict) -> None:
-    orient = "wide" if msg.get("orient") == "wide" else "portrait"
+    # ONE NAME PER THING (owner 2026-08-07): the shape is "landscape" or
+    # "portrait" everywhere — in the protocol, the UI and the docs. "wide" was
+    # the same thing under a second name and he banned it; it is still
+    # ACCEPTED here so a phone serving an older page keeps working.
+    orient = "landscape" if msg.get("orient") in ("landscape", "wide") else "portrait"
     slots = msg.get("slots") or []
     if not slots:
         await toast(ws, "Nothing selected — layout not created")

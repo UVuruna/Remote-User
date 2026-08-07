@@ -71,6 +71,7 @@ ALGORITHMIC = {
     # ride the wheel is a rule set of its own — the cap of 8, the per-process
     # reserve, and the owner's per-layout app ticks.
     "client/sets.js",
+    "client/grids.js",
     # Split out of web.py on 2026-08-05 (THE STRUCTURE LAW): presence is a
     # state machine with its own rules and its own gate, layout_api is the
     # phone's layout protocol. Both are algorithmic — they carry a flow.
@@ -85,6 +86,8 @@ ALGORITHMIC = {
     # project. Algorithmic — a process table read, a session-id -> transcript
     # -> project mapping, and a cache, all of which have to be explained.
     "server/agents.py",
+    "server/grids.py",
+    "client/loading.js",
     "server/gui/theme.py",
     # Split out of the three windows on 2026-08-06 (THE STRUCTURE LAW): the
     # same settle loop was copied three times and carried the same lie in

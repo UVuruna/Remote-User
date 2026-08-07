@@ -255,7 +255,7 @@ def check_a_grid_from_the_list_answers() -> bool:
     ws, conn, layouts = drive([
         {"type": "layout_list"},
         {"type": "layout_create", "mode": "grid", "grid": "2x1",
-         "orient": "wide",
+         "orient": "landscape",
          "slots": [{"hwnd": WIN_A, "tab": None, "x": 0.25, "y": 0.5},
                    {"hwnd": WIN_B, "tab": None, "x": 0.75, "y": 0.5}]},
     ])

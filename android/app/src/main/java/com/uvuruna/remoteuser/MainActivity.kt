@@ -760,13 +760,15 @@ class MainActivity : AppCompatActivity() {
 
         /** Layout focus locks the phone's rotation to the layout's chosen
          *  orientation (owner 2026-08-02); "" unlocks (full-desktop view,
-         *  rotation free). "wide" = landscape, "portrait" = portrait. */
+         *  rotation free). The page sends "landscape" or "portrait" — the owner
+         *  banned the word "wide" on 2026-08-07: one name per thing. "wide" is
+         *  still accepted so a page from an older PC keeps rotating. */
         @JavascriptInterface
         fun lockOrientation(mode: String) {
             runOnUiThread {
                 requestedOrientation = when (mode) {
                     "portrait" -> android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
-                    "wide" -> android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+                    "landscape", "wide" -> android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
                     else -> android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
                 }
             }

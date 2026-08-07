@@ -395,3 +395,18 @@
   50% { transform: translateY(6px); }
 }
 
+
+/* Dragging a layout row onto another (owner 2026-08-07, the Explorer gesture).
+   The row being carried fades; a legal target lights up; a FULL layout (four
+   windows) greys out the moment the drag starts, so the refusal is visible
+   before the finger arrives instead of arriving as a toast after it. */
+.lay-item.lay-drag { opacity: 0.45; }
+.lay-item.lay-full { opacity: 0.35; filter: grayscale(1); }
+.lay-item.lay-drop .lay-item-main {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-glow);
+}
+.lay-item.lay-gap { box-shadow: 0 -3px 0 -1px var(--accent); }
+/* A grid choice is a DRAWING of the grid (his sheet), not its name. */
+.lay-chip.lay-grid { padding: 8px 10px; }
+.lay-grid-ico { width: 30px; height: 30px; display: block; }

@@ -896,6 +896,36 @@ async def _receive_input(ws: WebSocket, injector: InputInjector, stream, token: 
         # a layout carries. Removed 2026-08-07 with the ticks themselves: the
         # PC reads what is running (server/agents.py) on every state frame, so
         # there is nothing left for anyone to declare.
+        elif kind == "layout_grid":
+            # The grid's ARRANGEMENT (owner 2026-08-07): a three-window layout
+            # picks which edge its single window takes; two and four may only
+            # change portrait/landscape. Lives beside the name and the aspect.
+            if not await asyncio.to_thread(
+                    layouts.set_grid, int(msg["index"]),
+                    str(msg.get("grid", "")), msg.get("orient")):
+                await _toast(ws, "That layout is gone")
+                await layout_api.send_layout_state(ws, layouts, conn)
+            else:
+                await layout_api.layout_focus(ws, layouts, stream, conn,
+                                              int(msg["index"]))
+        elif kind == "layout_merge":
+            # One layout dragged ONTO another becomes a grid of the two; the
+            # dragged one disappears (owner 2026-08-07).
+            src, dst = int(msg["source"]), int(msg["target"])
+            if not await asyncio.to_thread(layouts.merge, src, dst,
+                                           msg.get("grid")):
+                await _toast(ws, "Those two cannot make a grid")
+                await layout_api.send_layout_state(ws, layouts, conn)
+            else:
+                # The target's index slides down when the source sat above it.
+                await layout_api.layout_focus(ws, layouts, stream, conn,
+                                              dst - 1 if src < dst else dst)
+        elif kind == "layout_reorder":
+            # Dropping BETWEEN two rows — the list's own order, nothing moves
+            # on the PC (owner 2026-08-07).
+            await asyncio.to_thread(layouts.reorder, int(msg["source"]),
+                                    int(msg["before"]))
+            await layout_api.send_layout_state(ws, layouts, conn)
         elif kind == "layout_remove":
             index = int(msg["index"])
             await asyncio.to_thread(layouts.remove, index)
