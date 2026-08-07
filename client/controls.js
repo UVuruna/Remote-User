@@ -251,10 +251,73 @@ kbInput.addEventListener("input", (e) => {
 // the keyboard first, then hunting the IME's mic key. The page cannot listen
 // itself (Android WebView has no Speech API), so the shell does: the
 // `Android.startVoice()` bridge runs a SpeechRecognizer and calls
-// `__voiceResult(text)` back with each recognized utterance; `__voiceEnd`
+// `__voiceHeard(text, isFinal)` back per round (see below); `__voiceEnd`
 // closes one listening round — while the switcher is ON the page restarts it,
 // so dictation keeps flowing sentence after sentence. Only one of mic /
 // keyboard is ever ON (owner rule).
+
+// --- VOICE_DEDUP_START (tests/test_voice_dedup.py extracts this block) ----
+// Round-boundary overlap trim (owner design 2026-08-08, REPEAT of task 75 —
+// closed 0.0.293 / APK 0.0.091, reopened by 177 `Voice error 5 (online)`
+// (ERROR_CLIENT) lines in one session of his server.log). The 0.0.293 fix
+// trimmed a CUMULATIVE partial within one round (`VoiceInput.kt`'s old
+// `lastOut.startsWith`) and never asked what happens ACROSS rounds — but a
+// round that dies types a rescue of what it heard so far, and 250 ms later
+// the NEXT round starts on the SAME live microphone and re-transcribes the
+// tail of the same audio as an INDEPENDENT transcript, not a continuation.
+// A plain prefix check never catches that; what is needed is the longest
+// SUFFIX of what already went out that equals the PREFIX of what just came
+// in, on WORD boundaries, case- and punctuation-insensitive (his own
+// evidence crossed a boundary as "Da li" -> "da li").
+//
+// This lives on the PAGE, not in VoiceInput.kt (CLAUDE.md constraint 12's
+// own reasoning — a mapping ships with the page, not a new APK — and this
+// repo has no JVM test runner, so an unprovable Kotlin-only fix is exactly
+// how task 75 shipped half-done). The shell hands over the RAW per-round
+// text plus whether the round ended in a FINAL result or a RESCUE; every
+// trim happens here.
+//
+// ONE call per ROUND, never per partial: the shell calls this once per round
+// end (final or rescue), so a phrase he genuinely repeated twice IN ONE
+// BREATH — inside a single round's own transcript, i.e. within ONE call —
+// is never touched. Only the boundary BETWEEN two calls is ever trimmed.
+// Cleared on a final result (the utterance is over) and by the mic-off reset
+// below (a new sentence is starting).
+let voiceLastOut = "";
+
+function voiceNormWord(w) {
+  return w.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
+}
+
+function voiceWords(text) {
+  return text.split(/\s+/).filter(Boolean);
+}
+
+function voiceDedup(raw, isFinal) {
+  const rawWords = voiceWords(raw);
+  if (!rawWords.length) return "";
+  const lastWords = voiceWords(voiceLastOut);
+  const maxOverlap = Math.min(lastWords.length, rawWords.length);
+  let overlap = 0;
+  for (let cand = maxOverlap; cand > 0; cand--) {
+    let match = true;
+    for (let i = 0; i < cand; i++) {
+      if (voiceNormWord(lastWords[lastWords.length - cand + i]) !== voiceNormWord(rawWords[i])) {
+        match = false;
+        break;
+      }
+    }
+    if (match) { overlap = cand; break; }
+  }
+  const out = rawWords.slice(overlap).join(" ");
+  if (isFinal) {
+    voiceLastOut = ""; // the utterance is over — the next one is new
+  } else if (out) {
+    voiceLastOut = voiceLastOut ? `${voiceLastOut} ${out}` : out;
+  }
+  return out;
+}
+// --- VOICE_DEDUP_END -------------------------------------------------------
 
 let micOn = false;
 
@@ -292,6 +355,7 @@ function micStop() {
   if (!micOn) return;
   micOn = false;
   setMicActive(false);
+  voiceLastOut = ""; // the mic went off: whatever comes next is a new sentence
   if (micSupported()) window.Android.stopVoice();
 }
 
@@ -300,7 +364,16 @@ function toggleMic() {
   else micStart();
 }
 
-// Called by the shell (evaluateJavascript) with each recognized utterance.
+// Called by the shell with each round's RAW text (preferred bridge since
+// 2026-08-08 — see VOICE_DEDUP above): the page trims the round-boundary
+// overlap itself before typing.
+window.__voiceHeard = (text, isFinal) => {
+  const out = voiceDedup(text, isFinal);
+  if (out) sendTyped(out + " ");
+};
+
+// Called by the shell (evaluateJavascript) with each recognized utterance —
+// LEGACY path, kept for a shell too old to call __voiceHeard above.
 window.__voiceResult = (text) => {
   if (text) sendTyped(text + " ");
 };
