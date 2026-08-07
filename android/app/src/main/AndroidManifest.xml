@@ -11,10 +11,32 @@
          moment connectivity returns (flaky foreign Wi-Fi) — normal
          permission, granted automatically, no user prompt. -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-    <!-- Android 13+ gates every notification behind a runtime grant; the
-         app asks for it on the FIRST notice from the PC, not at startup
-         (ROADMAP Phase H, owner 2026-08-05). -->
+    <!-- Android 13+ gates every notification behind a runtime grant; the app
+         asks for it once at START, while the owner is looking at the app —
+         asking when the first notice arrives spent that notice on the dialog,
+         and in the background the dialog cannot even appear (owner 2026-08-06). -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- The waiting channel (owner decree 2026-08-07): a foreground service
+         holds one idle socket to the PC so a notice reaches this phone while
+         the app is closed. Without a foreground service Android kills the
+         process — and the socket with it — within minutes.
+
+         TYPE = connectedDevice, and it is the honest one: this service exists
+         solely to hold a network connection to ONE specific paired device,
+         the owner's own PC, which is precisely what that type describes.
+         `dataSync` would be the lazy pick and is wrong twice over — nothing
+         is being synchronised, and Android 15 deprecated it with a six-hour
+         cap that would kill this at the end of every working day.
+         `specialUse` is the escape hatch for things with no honest type. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
+    <!-- Doze can defer an unexempted app's network traffic while the device
+         is idle, which for us means a notice sitting on the wire until the
+         phone next wakes — the exact complaint the service exists to fix.
+         Only the USER can grant this; the app explains it in the page and
+         opens the system dialog, and never pretends to have it. -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
     <!-- Package visibility (Android 11+): without this, the system pretends
          Tailscale is not installed, so the error card could never tell
@@ -69,6 +91,14 @@
             android:exported="false"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|smallestScreenSize"
             android:windowSoftInputMode="adjustResize" />
+
+        <!-- The waiting state (owner decree 2026-08-07): "android strana čeka
+             signal, ne prima ništa od kompjutera, ali ostane u stanju čekanja
+             signala". Not exported — nothing but this app may start it. -->
+        <service
+            android:name=".NoticeService"
+            android:exported="false"
+            android:foregroundServiceType="connectedDevice" />
 
         <!-- Camera capture target (the Attach set's Camera button): the shot
              is written into this app's cache and handed to the page — no

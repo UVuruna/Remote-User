@@ -13,6 +13,17 @@ object Prefs {
     private const val KEY_LAN = "pairing_url"
     private const val KEY_TS = "tailscale_url"
 
+    /** Where the PAGE's own per-device preferences live (the `prefGet`/
+     *  `prefSet` bridge). Named here rather than in Bridge.kt because the
+     *  notice service reads one of them — the user's "speak / banner"
+     *  switches — while no page exists to ask (owner 2026-08-07). */
+    const val CLIENT_FILE = "client_prefs"
+
+    /** Both stored page URLs, LAN first: the notice service probes them in
+     *  this order exactly as MainActivity's resolver does. */
+    fun addresses(context: Context): List<String> =
+        listOfNotNull(lanUrl(context), tsUrl(context)).distinct()
+
     fun lanUrl(context: Context): String? =
         context.getSharedPreferences(FILE, Context.MODE_PRIVATE).getString(KEY_LAN, null)
 

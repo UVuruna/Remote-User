@@ -12,13 +12,33 @@ one where the owner is **not** looking at the phone:
 | Carrier | Reaches him when | Bridge |
 |---------|------------------|--------|
 | Android notification | the app is backgrounded, the screen is off | `Android.notify(title, text, tag)` |
-| Spoken aloud | his eyes and hands are on the PC | `Android.speak(text)` |
+| Spoken aloud | his eyes and hands are on the PC | `Android.speakAs(text, voice, rate)`, or `Android.speak(text)` on an older shell |
 | Toast + tone | he is looking at the page | in-page |
 
 The **tag is the agent's name**, so a second notice from the same agent
 replaces its own notification line while four agents keep four lines. That is
 the owner's requirement in one detail: *"da izbaci notifikaciju koja opisuje
 koji agent je završio"*.
+
+## HOW it speaks is the PC's decision (round R2, owner 2026-08-07)
+
+Nothing about the voice is stored on this phone. The desktop Settings window
+picks a voice and a speaking pace, and both ride on **every** `notify` frame
+(`msg.voice`, `msg.rate`) — so a reconnect can never leave the phone speaking
+in a voice the desktop no longer selects. `speakAs` is preferred and plain
+`speak` is the fallback: the page is served by the PC while the shell is
+installed separately, so the two versions drift, and a notice must never be
+lost to a shell version.
+
+`sendTtsInfo()` is the other half. On every connection it asks
+`Android.ttsVoices()` and sends `tts_info {voices:[{name, label, locale}…]}`
+— the ONLY source the desktop's Voice dropdown can have, because a
+TextToSpeech engine's voices differ per device, per language pack, per
+Android version. A dev browser has no bridge and simply sends nothing.
+
+`msg.speak` still wins over everything: the desktop's "Say it out loud" off
+sends `false`, and the banner is raised regardless — muting one carrier never
+loses a notice.
 
 ## Per-device switches
 
@@ -31,13 +51,38 @@ between the LAN and Tailscale addresses):
 - `tone` — the in-page chime (default **OFF**: it is the one that annoys when
   the phone sits on the desk beside the PC)
 
+## The notice card (owner decree 2026-08-07)
+
+His report: *"notifikacije mi stižu tek kada podignem aplikaciju iako je sve
+vreme otvorena u pozadini"*. The shell now holds a small waiting channel of
+its own so a notice arrives with **no page at all**
+([NoticeService](../../android/__about/NoticeService.md)) — and that service
+needs one thing only the user can give it: permission to run without Android
+deferring its traffic while the phone is idle.
+
+Everything a user must do is explained IN the app and nowhere else (hard owner
+principle), so the words live here, on the page, beside every other piece of
+guidance; the shell only opens the system dialog (`Android.noticeSetup()`).
+`Android.noticeState()` supplies `{running, battery, notifications}` and the
+card says something only when the exemption is missing.
+
+**Offered once per app VERSION**, not once per device. "Not now" has to mean
+something — a card that returns on every connect is the nagging he banned —
+but a permanent refusal recorded by one tap would silently disable the feature
+forever on a phone whose owner did not read the card. An update is the
+natural, self-limiting moment to ask again. `window.__noticeStateChanged` is
+called by the shell when the user returns from the dialog, so the card leaves
+the screen the instant the exemption is granted.
+
 ## Connections
 
 ### Uses
 - [Controls](controls.md) — `showToast`, `prefGet`/`prefSet`, `send` (the
-  `client_log` diagnostics channel)
-- the shell's bridge — `Android.notify` / `Android.speak`
-  ([Android (folder)](../../android/___android.md), `Notifier.kt`)
+  `client_log` diagnostics channel), `keepFocus`
+- [Panels](panels.md) — `ghostClickArmor` for the notice card
+- the shell's bridge — `Android.notify` / `Android.speak` /
+  `Android.noticeState` / `Android.noticeSetup`
+  ([Bridge](../../android/__about/Bridge.md), `Notifier.kt`)
 
 ### Used by
 - [Connection](connection.md) — `msg.type === "notify"` → `handleNotify(msg)`
@@ -52,6 +97,12 @@ between the LAN and Tailscale addresses):
   permission and a missing TTS engine each land one `client_log` line in the
   PC's server log and leave the other two paths working. The owner never gets
   a panel about it — diagnostics go to the log, per his 2026-08-05 rule.
-- **Nothing is stored or replayed.** A notice that arrives while no phone is
-  connected is dropped by the server; the page never keeps a history to
-  re-show, because a stale alarm is worse than none.
+- **The page keeps no history.** A notice the page never saw was carried by
+  another channel or held by the server (which stamps it with the time it
+  happened, so `notifyWhen` can say "8 min ago"); this module never re-shows
+  anything, because a stale alarm is worse than none.
+- **This module is now one of THREE places a notice can land**, and the choice
+  is the PC's alone: the page while it is open, the shell's waiting channel
+  while it is not, and the server's short queue when neither exists. The page
+  needs no de-duplication because the server's `deliver()` is a chain of
+  returns — see [Notify (server)](../../server/__about/notify.md).

@@ -42,4 +42,12 @@
     <string name="tailscale_no_app">Could not open Tailscale from here — open it from the home screen and turn it on.</string>
     <string name="repair">Scan a new QR</string>
     <string name="foreign_wifi_warning">Unfamiliar Wi-Fi — your PC session is protected by the encrypted tunnel. Still, be careful on public networks.</string>
+
+    <!-- The waiting channel (owner decree 2026-08-07). Android will not let a
+         foreground service hide its notification, so this one is written to be
+         worth the line it takes: it says what the app is doing while it looks
+         idle, and why the line is there at all. -->
+    <string name="notice_service_title">Waiting for your PC</string>
+    <string name="notice_service_body">Ready to tell you the moment an agent on your PC finishes or needs you — even with this app closed. Nothing is being streamed and nothing is being sent; the phone is only listening. Android requires this line to be shown.</string>
+    <string name="notice_battery_no_screen">This phone has no battery-optimisation screen to open. Look for Battery → Remote User in Settings and allow it to run in the background.</string>
 </resources>

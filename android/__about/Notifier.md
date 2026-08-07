@@ -34,6 +34,31 @@ arriving before `onInit` is held and drained the moment the engine reports
 success; a failed init clears the queue and logs why. `release()` (called from
 `MainActivity.onDestroy`) shuts the engine down.
 
+Since round R2 the engine is bound in `init`, not at the first notice. It
+always had that one reason; the second is new — `voices()` is asked the
+moment the page connects, and an engine that has not bound yet has nothing to
+report.
+
+## HOW it speaks comes from the PC (round R2, owner 2026-08-07)
+
+`speak(text, voice, rate)` applies both before it says anything:
+
+- **rate** is `TextToSpeech.setSpeechRate` (1 = the engine's normal pace); the
+  desktop offers 0.8 / 1 / 1.25 / 1.5.
+- **voice** is a `Voice.name` this device itself reported. A voice the device
+  does NOT have falls back to the engine's default and logs a warning — the PC
+  may be remembering a different phone, and a missing voice must never mean a
+  silent notice.
+
+`voices()` is the list the desktop chooses from: JSON `[{name, label,
+locale}…]`, where `name` is the identity the PC stores and sends back and
+`label` is what a person reads (`"English female_2"` — the locale's display
+language plus the distinguishing tail of the voice name). Voices whose data is
+not downloaded (`KEY_FEATURE_NOT_INSTALLED`) are left out: offering one on the
+PC would be a choice that silently fails. `getVoices()` throws on real devices
+whose engine reports a null voice set, so it is wrapped — an empty list is a
+usable answer, a crashed shell is not.
+
 ## Connections
 
 ### Uses
