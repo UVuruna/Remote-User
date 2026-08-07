@@ -98,11 +98,11 @@ staircase ([Gestures](gestures.md)) has applied, per layout index; `send()`
 shifts the indices down when a `layout_remove` goes out.
 
 ## `kbShift` (owner 2026-08-03)
-The canvas keeps its full height when the soft keyboard opens and is shifted
-up instead of being squeezed ([Render](render.md)). Pointer events are
-reported against the VISIBLE viewport, so `toCanvasPx` adds `kbShift` back to
-land in canvas space — every gesture goes through it, so this is the single
-place that needs to know.
+The canvas keeps its full height when the soft keyboard opens — it is never
+SQUEEZED ([Render](render.md)) — and since 2026-08-07 it is not LIFTED
+either: the keyboard covers what it covers. `kbShift` is therefore 0 and
+`toCanvasPx` is a straight mapping. It is kept as the ONE place a future
+lift would go, because every gesture already passes through it.
 
 ## The hide reason comes from the shell (owner failure 2026-08-05)
 

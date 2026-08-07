@@ -209,27 +209,30 @@ Three more corrections from the same audit:
   reach. The returned index map is what lets `state()` follow the focused
   layout through a prune instead of pointing at whatever slid into its place.
 
-## The layout carries its own app sets (owner 2026-08-06)
+## A layout carries NO answer about its app sets (owner 2026-08-07)
 
-`Layout.app_sets` is the list of app-aware sets the owner ticked for that
-layout, and it settles a question no amount of string matching could. Probing
-his PC with a Claude Code conversation open found the window titled
+`Layout.app_sets` existed for exactly one day and this section is its
+tombstone, because the mistake is worth more than the feature was.
+
+The problem it answered is real. Probing his PC with a Claude Code
+conversation open found the window titled
 `Ispravka UI dizajna meni… - Remote User - Visual Studio Code [Administrator]`
 and its tab `Ispravka UI dizajna meni…, Window 2: Editor Group 1` — Claude
 Code names itself after the CONVERSATION. Beside it sat `prompt.txt` with an
-identical UIA class, empty `AutomationId` and `HelpText`; a walk of the whole
+identical UIA class and empty `AutomationId`/`HelpText`; a walk of the whole
 extracted window (20 elements) found no "claude" anywhere, VSCode keeping its
-webview content out of accessibility. So `title` could never identify it, and
-the mark comes from the owner instead.
+webview content out of accessibility. No string on this machine identifies it.
 
-Three states, and the difference matters:
+The answer chosen on 2026-08-06 was to make the OWNER tick it at creation. The
+answer built the *same day* was `server/agents.py`, which reads the process
+table and knows. Both shipped, and the tick list won: the client answered a
+layout that carried the list "from it ALONE". So the list — written once, out
+of whatever the PC happened to see in that second — outranked a live detection
+that was saying `claude` on every `layout_state`, forever, and his Claude
+layout offered the VS Code wheel and nothing else.
 
-| `app_sets` | meaning |
-|---|---|
-| `None` | never chosen — a layout made before this version; the client falls back to the process/title guess |
-| `[]` | a real answer: **no** app shortcuts on this layout |
-| `["VSCode", "Claude"]` | exactly these ride while it is focused |
-
-Set at creation (`create(..., app_sets=...)`), changed later by
-`set_app_sets()` behind the `layout_apps` message, and carried in `state()`.
-`title` stays on the Layout — it is what the fallback still reads.
+**The rule that came out of it: never store an answer the PC can read.**
+`state()` calls `agents.agents_for(lay.title, live)` on every frame, with one
+snapshot for the whole frame. `Layout.title` stays — it is the window's own
+title, never the owner's rename, and it is what names the PROJECT a live agent
+session can be matched to.
