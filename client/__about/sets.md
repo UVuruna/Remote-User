@@ -79,10 +79,37 @@ never a substring, and a title that looks like a document (`CLAUDE.md`,
 `notes.txt — Visual Studio Code`) never matches. Without that rule the
 fallback would put the Claude wheel on every open copy of the constitution.
 
+## The owner's WHEEL ORDER (build round R5, 2026-08-07)
+
+`wheelOrder` — a list of set NAMES from `actions.json`'s `wheel_order`,
+written by the desktop Controls editor's "Wheel order…" dialog — decides
+what ORDER `allCats()` hands to `controls.js`. Position 1 is the desktop
+list's TOP, which `openWheel()` already draws at 12 o'clock (`angle = -PI/2
++ i * 2*PI/n`, i=0 straight up, increasing i sweeping CLOCKWISE); sorting the
+array is the whole feature, nothing about the drawing changed.
+
+`sortByWheelOrder(list)` runs on the list `allCats()` has ALREADY filtered
+to whatever is actually going to ride — a set the owner mentions but that is
+currently off (unticked, or an app set whose layout is not focused) was
+never in that list, so the ring closes up with no hole where it would have
+sat. A set the order does not mention (a future version's addition) sorts to
+the END, in its ORIGINAL relative order among the other unmentioned sets
+(stable sort — never dropped arbitrarily into the middle of the owner's own
+arrangement). Missing/empty `wheelOrder` is a no-op — `allCats()` returns
+exactly what it always did, which is what "a user who never opens the new
+list sees no change" means in code.
+
+The cap trim (above) runs AFTER the sort, unchanged — it still drops
+non-required sets from the array's own end, which after sorting means it
+drops the LAST set in the owner's own arrangement, never an arbitrary one.
+
 ## Related
 
 - [sets flow](../__flow/sets.md) — the order things happen in
 - [panels](panels.md) — the Sets picker that renders these rules
 - [controls](controls.md) — the wheel and the D-pad groups
 - [layouts](layouts.md) — where the per-layout ticks are chosen
-- `tests/test_app_set_wheel.py` — the guard, six rules
+- [Controls Order](../../server/gui/__about/controls_order.md) — the desktop
+  side that writes `wheel_order`
+- `tests/test_app_set_wheel.py` — the guard, twelve rules (four of them the
+  wheel order)

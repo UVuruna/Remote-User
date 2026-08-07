@@ -1,6 +1,10 @@
 {
   "left": 0,
   "right": 1,
+  "wheel_order": [
+    "Mouse", "Input", "Attach", "Edit", "Navigate", "Cursor", "Media",
+    "Windows", "Settings", "VSCode", "Claude", "Chrome", "Explorer"
+  ],
   "categories": [
     {
       "name": "Mouse",

@@ -49,6 +49,12 @@ layout focus changes ──▶ refreshCategories() ──▶ allCats()
 `enforceWheelCap()` it has nothing left to trim — which is the point: the
 picker's counter and the wheel now say the same number.
 
+Between the concatenation and the trim, `allCats()` calls
+`sortByWheelOrder(list)` (build round R5, 2026-08-07) — reordering by
+`wheelOrder` (set names, from the desktop's "Wheel order…" list) BEFORE the
+cap trim, so an over-cap ring still drops from the OWNER's own arrangement's
+end, not from whatever order the three sources happened to concatenate in.
+
 ## 3. A tick in the Sets picker
 
 ```

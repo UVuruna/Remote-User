@@ -32,6 +32,15 @@ function connect() {
     // alone (a timer task can run between the socket opening and this
     // handler).
     sock.authSent = true;
+    // What THIS phone can speak with, once per connection (owner round R2).
+    // The PC cannot enumerate another device's text-to-speech engine, so the
+    // desktop Settings window's Voice dropdown has exactly one source: us.
+    sendTtsInfo();
+    // The one step Android will not let the app take for itself (owner decree
+    // 2026-08-07): the notice service may only reach him with the app closed
+    // if this phone stops deferring it. Explained on the page, granted in a
+    // system dialog — and offered at most once per app version.
+    offerNoticeSetup();
     if (qualityOverridden()) sendQuality();
     lastSentViewport = { x: 0, y: 0, w: 1, h: 1 };
     scheduleViewport();
@@ -63,6 +72,10 @@ function connect() {
         // The PC's own quality settings — the quality panel can only go BELOW
         // them, so it shows them and greys out the unreachable steps.
         setStreamBase(msg.base || null);
+        // How this phone should LOOK, decided on the DESKTOP (build round R3,
+        // owner answer P4). Applied straight to CSS variables — the page
+        // never asks the device and offers no menu of its own.
+        applyUi(msg.ui || null);
         refreshQualityButtons();
         detailRegion = { x: 0, y: 0, w: 1, h: 1 };
         if (baseBitmap) { baseBitmap.close(); baseBitmap = null; }
@@ -82,6 +95,11 @@ function connect() {
         categories = msg.categories || [];
         appSets = msg.app_sets || [];
         customSets = msg.custom_sets || [];
+        // Wheel order (owner build round R5, 2026-08-07): the desktop
+        // Controls editor's "Wheel order…" list, a list of set NAMES —
+        // client/sets.js sorts by it; missing/empty = today's order,
+        // unchanged (a user who never opens the new list sees no change).
+        wheelOrder = msg.wheel_order || [];
         groups.left = Math.min(msg.left ?? 0, categories.length - 1);
         groups.right = Math.min(msg.right ?? 0, categories.length - 1);
         // The cap of 8 is a LAW over the STORED state too (owner 2026-08-06):
