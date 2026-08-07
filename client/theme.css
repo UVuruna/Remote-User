@@ -15,16 +15,24 @@
    source of truth.
 
    THE AXES ARE INDEPENDENT:
-     data-theme = dark | light | colored     — surfaces, ink, shadows
+     data-theme = dark | light | colored | colored-light
+                                             — surfaces, ink, shadows
      data-fill  = transparent | full         — outlined buttons, or filled
 
-   `colored` keeps the dark surfaces on purpose: what sits behind the controls
-   is the PC's own screen, and a colour per SET is a statement about the
-   buttons, not about the page. Its set colour arrives per element as
-   `--set-color` (and `--set-ink`, computed from that colour's luminance by
-   theme.js) so a button's own text can never land unreadable on its own
-   colour — the phone audit's contrast check runs in every combination
-   (tests/test_layout_audit.py). */
+   THE COLOURED LOOK HAS TWO SURFACES (owner correction 2026-08-07: the set
+   colours must be "jako tamne nijanse" on a dark page and "ona klasična
+   jaka" — strong, vivid, in the lettering — on a light one). Both sentences
+   are true of the same look on two different pages, so `colored` is a dark
+   page and `colored-light` is a light one; the surface tokens below are
+   shared with the two monochrome themes and only the PALETTE differs, and
+   that palette is chosen on the DESKTOP (server/config.py → `set_colors`)
+   and arrives already resolved. This page never holds two tables.
+
+   The set colour arrives per element as `--set-color` (plus `--set-fill`,
+   `--set-ink` and `--set-line`, all computed by theme.js from the surface
+   the text really lands on) so a button's own label can never land
+   unreadable on its own colour — the phone audit's contrast check runs in
+   every combination (tests/test_layout_audit.py). */
 
 :root {
   /* --- DARK (the default, and the base every other theme overrides) ------ */
@@ -73,8 +81,15 @@
 /* --- LIGHT ---------------------------------------------------------------
    Elevation INVERTS (DESIGN.md): the raised card is the whitest thing and the
    page sits a step below it. The accent is DEEPENED — the dark theme's
-   #38bdf8 sits at 2.2:1 on white and is unreadable there. */
-body[data-theme="light"] {
+   #38bdf8 sits at 2.2:1 on white and is unreadable there.
+
+   `colored-light` is THE SAME PAGE. A light surface is a light surface
+   whether or not the buttons carry a set colour, and duplicating twenty
+   tokens so the coloured variant could own them would be two files to retune
+   the day the owner changes the page grey. Only the per-set rules at the
+   bottom of this file tell the two apart. */
+body[data-theme="light"],
+body[data-theme="colored-light"] {
   --surface-0: #eceef6;
   --card: #ffffff;
   /* THE FILL AXIS MUST DO SOMETHING HERE (owner grader, 2026-08-07 — 7/10:
@@ -122,9 +137,12 @@ body[data-theme="light"] {
 }
 
 /* --- COLORED -------------------------------------------------------------
-   The dark surfaces, and every SET wearing its own colour. Only the buttons
-   change: panels, cards and the stream stay exactly as they are in dark,
-   because the colour is a statement about which set your finger is on. */
+   Every SET wearing its own colour, on the dark page (`colored`) or the light
+   one (`colored-light`). Only the buttons change: panels, cards and the
+   stream stay exactly as the matching monochrome theme renders them, because
+   the colour is a statement about which set your finger is on — not about
+   the page. Both variants therefore inherit their surfaces above and add
+   nothing here but the per-set rules at the bottom. */
 
 /* --- FILL: full ----------------------------------------------------------
    Outlined controls become filled ones. `--glass-fill` is what every button,
@@ -138,10 +156,17 @@ body[data-fill="full"] {
 }
 
 /* --- The per-set colour -------------------------------------------------
-   theme.js sets `--set-color` and `--set-ink` on the element that OWNS a set
-   (a D-pad group, a wheel item), so both the group's own buttons and its
-   category button inherit them. Outside `colored` the variables are simply
-   never read.
+   theme.js sets `--set-color` and its three derived tokens on the element
+   that OWNS a set (a D-pad group, a wheel item), so both the group's own
+   buttons and its category button inherit them. Outside the two coloured
+   themes the variables are simply never read.
+
+   ONE SELECTOR FOR BOTH SURFACES — `[data-theme^="colored"]` matches
+   `colored` and `colored-light` and nothing else. The rules below are
+   identical on either page BY CONSTRUCTION: every value they use is computed
+   by theme.js against the surface actually in force, so the light page needs
+   no rule of its own. A duplicated block per surface would be the first
+   thing to fall out of step.
 
    OUTLINED: the colour is the outline AND the ink — it is drawn over the
    stream, and a filled patch would hide the very screen the user is aiming
@@ -151,43 +176,46 @@ body[data-fill="full"] {
    surface it lands on — and the surface an outlined button's label lands on is
    `--glass-fill` over the page, never the solid set colour. So the border
    keeps `--set-color` exactly as the desktop tuned it, and the ink is
-   `--set-line`: the SAME colour lifted along the line toward white (or black
-   on a light page) until it measures readable THERE. Most sets are returned
-   untouched; the darker half of the palette is not. (The wheel's veil — what
-   the grader actually measured through — was never an ink problem and is
-   fixed where it belongs: client/style.css → `body.wheel-open::before`.)
+   `--set-line`: the SAME hue and the SAME saturation with only its LIGHTNESS
+   walked — up on the dark page, down on the light one — until it measures
+   readable there. That is why a dark-page palette may be as dark as it likes
+   without the outlined look going grey: lightening in HSL keeps the colour,
+   where the old lift toward white bled it out (owner correction 2026-08-07).
+   (The wheel's veil — what the grader actually measured through — was never
+   an ink problem and is fixed where it belongs: client/style.css →
+   `body.wheel-open::before`.)
    FILLED: the fill is `--set-fill` — `--set-color` itself, unless
    black-or-white ink cannot clear AA on the raw hue at all (a colour sitting
    near the crossover fails both almost equally, so no ink choice alone can
-   save it — VSCode's #3B82F6 is the one shipped colour that needs this), in
-   which case it is nudged the shortest distance toward whichever extreme
-   gets it there — and `--set-ink` is chosen against THAT surface, so a pale
-   yellow set gets black text and a deep orange one gets white. */
-body[data-theme="colored"] .ctl,
-body[data-theme="colored"] .wheel-item {
+   save it), in which case its lightness is walked the shorter way until one
+   of them does — and `--set-ink` is chosen against THAT surface, so a light
+   amber set gets black text and a deep teal one gets white. Neither shipped
+   palette needs the correction today; it is the net under a colour the owner
+   retunes tomorrow. */
+body[data-theme^="colored"] .ctl,
+body[data-theme^="colored"] .wheel-item {
   border-color: var(--set-color, var(--border));
   color: var(--set-line, var(--set-color, var(--text-primary)));
 }
-body[data-theme="colored"] .ctl .lbl {
+body[data-theme^="colored"] .ctl .lbl {
   color: var(--set-line, var(--set-color, var(--text-primary)));
 }
-body[data-theme="colored"][data-fill="full"] .ctl,
-body[data-theme="colored"][data-fill="full"] .wheel-item {
-  /* --set-fill is --set-color nudged the shortest distance toward black or
-     white ONLY when neither ink clears AA on the raw hue (theme.js →
-     fillOn) — a border still wears the untouched --set-color, so the set's
-     identity colour is never lost, only the odd near-crossover fill (today
-     just VSCode) gets a small, principled push. */
+body[data-theme^="colored"][data-fill="full"] .ctl,
+body[data-theme^="colored"][data-fill="full"] .wheel-item {
+  /* --set-fill is --set-color with its lightness nudged the shorter way ONLY
+     when neither ink clears AA on the raw hue (theme.js → fillOn) — a border
+     still wears the untouched --set-color, so the set's identity colour is
+     never lost. */
   background: var(--set-fill, var(--set-color, var(--glass-fill)));
   color: var(--set-ink, var(--text-primary));
 }
-body[data-theme="colored"][data-fill="full"] .ctl .lbl {
+body[data-theme^="colored"][data-fill="full"] .ctl .lbl {
   color: var(--set-ink, var(--text-primary));
 }
 /* An ACTIVE toggle (Keys on, Scroll on) keeps meaning "switched on", so it
    still glows — in the set's own colour rather than the one accent. */
-body[data-theme="colored"] .ctl.active,
-body[data-theme="colored"] .ctl.held {
+body[data-theme^="colored"] .ctl.active,
+body[data-theme^="colored"] .ctl.held {
   box-shadow: 0 0 0 3px var(--set-glow, var(--accent-glow)),
               0 0 22px var(--set-glow, var(--accent-glow));
 }

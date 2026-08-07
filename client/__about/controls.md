@@ -235,4 +235,4 @@ Two calls into [theme.js](theme.md), and nothing else changed here:
   element painted is the one that OWNS the set — the D-pad GROUP, or a wheel
   item — so its four buttons, its category button and all their labels inherit
   `--set-color` / `--set-ink` / `--set-glow` in one write instead of five. A
-  no-op in every theme but `colored`.
+  no-op in every theme but the two coloured ones.

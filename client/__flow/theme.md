@@ -30,12 +30,17 @@ items without a shape of their own, so a dedicated `--wheel-border` token
 ```
 DESKTOP                                          PHONE
 Settings → APPEARANCE
-  ├─ "The phone" [Dark|Light|Colored]
+  ├─ "The phone" [Dark|Light|Colored dark|Colored light]
   └─ "The phone" [Outlined|Filled]
         │ save_user_settings(phone_theme / phone_fill)
         ▼
   config.SETTINGS  ──►  config.ui_config()
-                          {theme, fill, colors: SET_COLORS}
+                          {theme, fill, colors: set_colors()}
+                              │   ↑ the DESKTOP picks the palette:
+                              │     colored-light → SET_COLORS_LIGHT
+                              │     anything else → SET_COLORS_DARK
+                              │     (one flat map on the wire — the phone
+                              │      never learns two tables exist)
                               │
                               │  web._send_config()  →  `config` frame
                               ▼
@@ -121,21 +126,25 @@ renderGroup("left")
   cat = allCats()[groups.left]                e.g. {name: "Mouse", …}
   paintSet(host, "Mouse", "--glass-fill")
         │
-        ├─ setColors()["Mouse"]  →  "#38BDF8"
-        ├─ fillOn(rgb over page) →  #38BDF8 already clears AA  →  unnudged
-        ├─ inkOn(that fill)      →  luminance 0.44 > 0.179 → "#0b1220"
+        ├─ setColors()["Mouse"]  →  "#1D6A86"   (the DARK palette)
+        ├─ fillOn(rgb over page) →  clears AA as it is  →  unnudged
+        ├─ inkOn(that fill)      →  luminance 0.12 < 0.179 → "#ffffff"
         ├─ lineOn(rgb, tokenSurface("--glass-fill"))
-        │       →  #38BDF8 already clears AAA (7:1) on the outlined tint
-        │       →  unlifted; VSCode's #3B82F6 is the one that lifts
+        │       →  a #1D6A86 label on the 20% tint is far under 7:1, so its
+        │          HSL LIGHTNESS is walked up (hue 196, saturation 64% held)
+        │       →  rgb(77 179 216) — the same teal, lighter. Never a mix
+        │          toward white: that would drain the saturation the owner
+        │          asked to keep.
         └─ host.style:
-              --set-color: #38BDF8        (untouched — border, everywhere)
-              --set-fill:  rgb(56 189 248) (nudged fill — FULL background)
-              --set-ink:   #0b1220         (ink ON --set-fill — FULL label)
-              --set-line:  rgb(56 189 248) (ink ON the outlined tint — OUTLINED label)
-              --set-glow:  rgb(56 189 248 / 0.30)
+              --set-color: #1D6A86         (untouched — border, everywhere)
+              --set-fill:  rgb(29 106 134) (fill — FULL background)
+              --set-ink:   #ffffff         (ink ON --set-fill — FULL label)
+              --set-line:  rgb(77 179 216) (ink ON the outlined tint — OUTLINED label)
+              --set-glow:  rgb(77 179 216 / 0.30)  (the LIFTED colour — an
+                            ON halo must be seen against the page)
                     │
                     ▼  inherited by every .ctl inside the group
-          theme.css, data-theme="colored":
+          theme.css, data-theme^="colored"  (dark page AND light page):
             border            = var(--set-color)                (always)
             transparent label = var(--set-line, var(--set-color))
             full  background  = var(--set-fill, var(--set-color))
@@ -229,8 +238,8 @@ for size in (portrait 412x915, landscape 915x412):
               no  → the audit FAILS, naming both looks
               yes → page.screenshot(...)
         ├─ __contrast(#wheel) + (#group-left) + (#group-right)
-        │     the surfaces `colored` actually paints, wheel OPEN and SHUT
-        ├─ __sweepSetColours(all 13 SET_COLORS)
+        │     the surfaces a coloured theme actually paints, wheel OPEN and SHUT
+        ├─ __sweepSetColours(all 13 names of the palette in force)
         │     not only the two or three a fixture happens to show
         └─ portrait, or the default look → every panel
               inView · noPageScroll · noClip · __contrast(card)

@@ -107,7 +107,7 @@ style.css
 theme.css   :root                      every colour, dark by default
             body[data-theme="light"]   surfaces invert, accent deepens,
                                        ink shadows flip black -> white
-            body[data-theme="colored"] dark surfaces + per-set --set-color
+            body[data-theme^="colored"] per-set --set-color (dark or light page)
             body[data-fill="full"]     --glass-fill/--chip -> --fill-solid
       |
       v  (loaded first)

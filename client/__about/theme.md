@@ -3,7 +3,7 @@
 One feature, two files, one doc (the same arrangement `layouts.css` and
 `layouts.js` already use):
 
-- **`client/theme.css`** — every colour the client uses, in three themes and
+- **`client/theme.css`** — every colour the client uses, in four themes and
   two fills. Nothing in it positions anything.
 - **`client/theme.js`** — which of those are in force right now, and the
   colour each SET wears.
@@ -11,6 +11,21 @@ One feature, two files, one doc (the same arrangement `layouts.css` and
 Built in **build round R3** (owner-approved 2026-08-07), answering the round's
 open question **P4** with "the phone's theme is chosen ON THE DESKTOP ONLY"
 and **P5** with "adopt the proposed set-colour palette and tune later".
+
+**He tuned it the next day, and the tuning changed the shape of the feature**
+(owner, 2026-08-07):
+
+> "one boje koje si osmislio — kada je DARK tema treba da budu jako tamne
+> nijanse, dakle mali lightness/brightness; a ovaj mod LIGHT treba da ima jako
+> svetla slova, velikim, u boji, dakle ona klasična jaka. Sto saturacija ne
+> treba ni u jednom modu."
+
+Two sentences, two pages, and they cannot both be true of one table of
+colours: on a dark page the colour is the BODY of the button and the white
+label does the reading, so it must be dark; on a light page the colour is the
+INK, so it must be strong. So the coloured look gained a second surface
+(`colored-light`) and a second palette, and the lift that makes a colour
+readable stopped bleeding it white. See [The set colours](#the-set-colours).
 
 ## The one rule everything else follows
 
@@ -26,24 +41,32 @@ built by `config.ui_config()`.
 
 | Attribute on `<body>` | Values | What it decides |
 |---|---|---|
-| `data-theme` | `dark` · `light` · `colored` | surfaces, ink, shadows |
+| `data-theme` | `dark` · `light` · `colored` · `colored-light` | surfaces, ink, shadows |
 | `data-fill` | `transparent` · `full` | outlined buttons, or filled ones |
 
-They are independent, so there are **six** real renderings of every surface —
-and the audit measures all six (below).
+They are independent, so there are **eight** real renderings of every surface
+— and the audit measures all eight (below).
 
 - **dark** — today's look, unchanged. It is the `:root` block, and the other
-  two are overrides of it.
+  three are overrides of it.
 - **light** — elevation INVERTS (DESIGN.md): the raised card is the whitest
   thing and the page sits a step below it. The accent is deepened to `#0369a1`
   because the dark theme's `#38bdf8` sits at 2.2:1 on white. The icon and
   label shadows flip from black to white — the controls float over the PC's
   own screen, which can be any colour, so dark ink over a dark window needs a
   light halo or it vanishes.
-- **colored** — the DARK surfaces, with every set wearing its own colour. The
-  surfaces stay dark on purpose: what sits behind the controls is the PC's
-  screen, and a colour per set is a statement about the buttons, not about the
-  page.
+- **colored** — the DARK surfaces, with every set wearing its own colour.
+- **colored-light** — the LIGHT surfaces, same idea. It shares every surface
+  token with `light` (a light page is a light page whether or not the buttons
+  are coloured; duplicating twenty tokens would be two files to retune the day
+  the page grey changes) and differs only in that the per-set rules apply and
+  a different palette arrives.
+
+The two coloured themes are ONE selector in the stylesheet —
+`body[data-theme^="colored"]` — because every value those rules use is
+computed by `theme.js` against the surface actually in force. Nothing about
+the light page needs a rule of its own, and a duplicated block per surface
+would be the first thing to fall out of step.
 
 `full` is carried by ONE token. `--glass-fill` (and its three relatives) is
 what every button, chip and wheel item already paints itself with, so
@@ -78,25 +101,35 @@ both now fixed in `theme.js`:
   LABEL is text (a 9 px semibold `.lbl` wants 4.5:1, not the large-text
   floor), and it lands on `--glass-fill` composited over the page, never on
   the solid hue — a colour that reads fine AS a fill can still be a poor INK
-  on that translucent surface. `--set-line` (`lineOn()`) is the same hue
-  lifted along the straight line toward whichever of black/white the surface
-  is further from, stopping at the FIRST step that clears **7:1 (AAA)** —
-  not 4.5, because these buttons float over the PC's own unknowable screen,
-  and AAA is the margin an unknown backdrop is owed. Most of the shipped
-  palette needs no lift at all; the heaviest is VSCode's `#3B82F6`.
+  on that translucent surface. `--set-line` (`lineOn()`) is the same colour
+  with only its **HSL lightness** walked away from the surface — up on a dark
+  page, down on a light one — stopping at the FIRST step that clears **7:1
+  (AAA)**, not 4.5, because these buttons float over the PC's own unknowable
+  screen and AAA is the margin an unknown backdrop is owed.
+  **Lightness, not a mix toward white** (owner correction 2026-08-07): mixing
+  toward white raises lightness AND drains saturation, so a palette of dark
+  shades would have arrived on the phone as a row of greys — the previous
+  version's own comment claimed "hue and saturation ride along" and that was
+  simply false of a straight RGB mix. Walking lightness in HSL keeps both, so
+  a dark teal lifts to a lighter teal, and that is what lets the dark page's
+  palette be as dark as the owner asked while the OUTLINED look stays
+  legible.
 - **Filled**: the fill really is the hue, so black-or-white ink (`inkOn()`,
   whichever of the two wins on that exact colour) is correct in principle —
   but for a hue sitting near the luminance crossover (~0.179) BOTH options
   read poorly at almost the same weak ratio, and no ink choice can rescue
   that (VSCode's `#3B82F6` again: even its BETTER ink measured 4.27:1, under
-  AA). The only remaining lever is the fill's own luminance: `--set-fill`
-  (`fillOn()`) nudges the raw hue the SHORTEST distance — toward black or
-  toward white, whichever clears AA in fewer steps — so the set stays
-  unmistakably its own colour and only a hue that actually needs it moves at
-  all (today just VSCode in the shipped thirteen). `--set-ink` is then chosen
-  against that same nudged surface, never the raw hue. The border still wears
-  the untouched `--set-color`, so a 1px ring never drifts from the desktop's
-  own table.
+  AA). The only remaining lever is the fill's own lightness: `--set-fill`
+  (`fillOn()`) walks it the SHORTER way — darker or lighter, whichever clears
+  AA in fewer steps — so the set stays unmistakably its own hue at its own
+  saturation. `--set-ink` is then chosen against that same surface, never the
+  raw hue. The border still wears the untouched `--set-color`, so a 1px ring
+  never drifts from the desktop's own table.
+  **Neither shipped palette triggers it today** — both are chosen at
+  lightnesses that clear AA on their own, so what the desktop shows is
+  exactly what the phone paints. `fillOn` stays as the net under a colour the
+  owner retunes tomorrow, because the day he does is the day nobody is
+  measuring.
 - **The category button's own 0.85 opacity (`.ctl.cat`) is a REAL dilution,
   priced in up front.** It sits translucently over its own fill, pulling its
   ink 15% back toward that fill — a photograph of the phone shows exactly
@@ -114,19 +147,57 @@ both now fixed in `theme.js`:
 
 ## The set colours
 
-The palette is the desktop's `SET_COLORS` table (`server/config.py`), shipped
-verbatim in `ui.colors`:
+**Two tables, one per surface** (`server/config.py` — owner correction
+2026-08-07, replacing the single table he had adopted the day before). The
+DESKTOP resolves which one a theme wears (`config.set_colors`), so the wire
+shape never changed: `ui.colors` is still one flat `{set: hex}` map and this
+page has no idea two tables exist. Sending both and letting the phone choose
+would have put the same decision in two places, and the phone's copy is the
+one that drifts.
 
-Mouse `#38BDF8` · Input `#4ADE80` · Settings `#94A3B8` · Edit `#A78BFA` ·
-Attach `#F59E0B` · Navigate `#2DD4BF` · Media `#F87171` · Windows `#818CF8` ·
-VSCode `#3B82F6` · Chrome `#FACC15` · Explorer `#FB923C` · Claude `#D97757` ·
-Cursor `#F472B6`
+**`SET_COLORS_DARK`** — dark shades, HSL lightness **22–40%**, saturation
+capped at **66%**. The floor is measured, not taste: darker than that and the
+fill stops reading as a button against the `#0f172a` page. The ceiling is
+where a white label stops clearing AA on it.
 
-A **custom** set is not in that table and never will be — the owner names his
+Mouse `#1D6A86` · Input `#1C693C` · Settings `#4B5B71` · Edit `#572B82` ·
+Attach `#7D561C` · Navigate `#175E57` · Media `#86282E` · Windows `#354297` ·
+VSCode `#1C3878` · Chrome `#5D5113` · Explorer `#944D1E` · Claude `#8D4834` ·
+Cursor `#7E2A57`
+
+**`SET_COLORS_LIGHT`** — the classic strong inks, lightness **26–54%**,
+saturation capped at **72%**: vivid enough to be "ona klasična jaka" and dark
+enough to be read on `#eceef6`.
+
+Mouse `#186B89` · Input `#14713B` · Settings `#476185` · Edit `#702BB6` ·
+Attach `#C38322` · Navigate `#146F65` · Media `#BA2630` · Windows `#4356D0` ·
+VSCode `#204DB6` · Chrome `#A58E1D` · Explorer `#DC7028` · Claude `#A3472E` ·
+Cursor `#B02971`
+
+Neither reaches 100% saturation, in either mode — that was the third of his
+three sentences. The two ceilings differ because the jobs differ: 72% is what
+the classic strong inks actually measure, and on a dark page a shade that
+saturated turns muddy as it darkens.
+
+**Hue AND lightness separate the sets that share the wheel** — the one
+property of the first palette worth keeping. The four blues (Mouse 196,
+Settings 215, VSCode 222, Windows 232) and the four warms (Claude 13,
+Explorer 24, Attach 36, Chrome 50) are pulled apart in lightness as well as
+hue, so an eye that cannot tell two hues apart still has a second signal.
+
+A **custom** set is not in either table and never will be — the owner names his
 own sets in the Controls editor. `setColors()` therefore hands each unnamed
-set the next colour of the SAME palette that nothing already wears, in the
+set the next colour of the palette IN FORCE that nothing already wears, in the
 order the sets arrive, cycling if he ever makes more sets than there are
-colours. One table to tune, no second list to keep in step.
+colours. One table per surface, no third list to keep in step.
+
+**The ACTIVE halo rides the LIFTED colour too** (same correction). `--set-glow`
+used to be the raw hex at 0.30 alpha, which was fine while the palette was
+bright and became no signal at all the moment it went dark — a `#1C3878` navy
+halo on a `#0f172a` page. It is now derived from `--set-line`, which is by
+construction far from its surface (lighter on a dark page, darker on a light
+one), so "switched on" stays visible in both coloured themes without a token
+per theme.
 
 `paintSet(el, name, surfaceVar)` writes `--set-color`, `--set-fill`,
 `--set-ink`, `--set-line` and `--set-glow` onto the element that OWNS a set —
@@ -136,17 +207,19 @@ names the token the caller's OWN buttons are painted with (`--glass-fill` for
 a D-pad button, `--glass-strong` for a wheel item — really different
 surfaces, 0.20 vs 0.85 of the same navy, and therefore different lifts); the
 caller states it because it is the only one that knows. The properties are
-written in every theme and READ only in `colored`: a rule that has to un-set
+written in every theme and READ only in the two coloured ones: a rule that has to un-set
 itself when the theme changes is a rule that will one day be left behind.
 
 ## The ink is COMPUTED, never tabled
 
 `inkOn(surface)` returns `#0b1220` or `#ffffff`, whichever actually has the
 better contrast on that exact surface — black and white cross over at a
-relative luminance of about **0.179**. That is what keeps `colored` readable
-without anyone tuning anything: the owner may retune `SET_COLORS` on the
-desktop whenever he likes, and a hand-written ink per colour would be wrong
-the first time he did (rules/CODE.md → Compute, Don't Generate). `lineOn()`
+relative luminance of about **0.179**. That is what keeps the coloured themes
+readable without anyone tuning anything: the owner may retune the palette on
+the desktop whenever he likes — he did, one day after adopting the first one,
+and not one ink rule had to change — and a hand-written ink per colour would
+have been wrong the first time he did (rules/CODE.md → Compute, Don't
+Generate). `lineOn()`
 and `fillOn()` (above) are the same idea applied to the two surfaces that
 actually exist — a translucent tint, and a fill that may need its own small
 nudge — rather than one function pretending both are the same question.
@@ -199,7 +272,7 @@ saying "dark, outlined".
 
 ## What proves it
 
-`tests/test_layout_audit.py` sweeps **all six looks**. Its CONTRAST check
+`tests/test_layout_audit.py` sweeps **all eight looks**. Its CONTRAST check
 composites every translucent layer down to the page floor — read from the
 live `--surface-0`, never a literal, so it is honest in light as well as
 dark — AND every visible full-viewport layer painted ABOVE the element (the
@@ -213,8 +286,9 @@ smaller than that, so it is held to 4.5:1 unless it genuinely qualifies as
 large.
 
 `__sweepSetColours(names)` repaints the real D-pad and the real wheel with
-**every** colour in the desktop's `SET_COLORS` table, not only the two or
-three a fixture happens to show — a set the owner darkens tomorrow is
+**every** colour of the palette the theme in force actually ships (the audit
+fetches it through `config.ui_config()`, so the light page is never measured
+with the dark table), not only the two or three a fixture happens to show — a set the owner darkens tomorrow is
 measured today, on both surfaces, in every look.
 
 **And every look-named screenshot now has to BE that look** (`_shoot`, same
@@ -238,3 +312,5 @@ server.
 - [controls.js](controls.md) — calls `paintSet` per group and per wheel item.
 - [sets.js](sets.md) — what the set list is in the first place.
 - `server/gui/theme.py` — the desktop's own two palettes, same family.
+- [config.py](../../server/__about/config.md) — where the two set palettes
+  live and which theme wears which.
