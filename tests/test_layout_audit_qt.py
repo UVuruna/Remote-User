@@ -12,8 +12,11 @@ owner keeps reporting by hand:
 
   A. CLIPPED      - a widget got less room than it minimally needs
   B. ELIDED       - text does not fit its own element ("shift+tab" -> "ift+tab")
-  C. SCROLL+SLACK - something scrolls while a spacer in the same window holds
-                    unused space (the 300-px-empty-dialog screenshot)
+  C. SCROLL+SLACK - something scrolls while the same window holds unused
+                    space: a SPACER on the way up (the 300-px-empty-dialog
+                    screenshot) or a stretched ITEM VIEW anywhere in the
+                    window (the Controls editor's set list, 242 px idle beside
+                    a table hiding three rows - see `idle_view_slack`)
   D. ITEM CUT     - a row of a list/table is wider than the column it sits in
                     (Qt's item views truncate silently; the widget checks
                     above never see item text)
@@ -51,8 +54,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "server"))
 from PySide6.QtCore import QSize, Qt  # noqa: E402
 from PySide6.QtGui import QPixmap  # noqa: E402
 from PySide6.QtWidgets import (  # noqa: E402
-    QAbstractScrollArea, QApplication, QCheckBox, QHeaderView, QLabel, QLayout,
-    QLineEdit, QListWidget, QPushButton, QSpacerItem, QTableWidget, QWidget,
+    QAbstractItemView, QAbstractScrollArea, QApplication, QCheckBox,
+    QHeaderView, QLabel, QLayout, QLineEdit, QListWidget, QPushButton,
+    QSpacerItem, QTableWidget, QWidget,
 )
 
 # px of slack tolerated before a spacer counts as "unused space"
@@ -96,12 +100,33 @@ def _fake_controller() -> SimpleNamespace:
                            start=lambda: None, stop=lambda: None)
 
 
-# The longest sentence the notify switch can print under itself: the switch
-# reports its own failures there, and a failure names a PATH. Measured, not
-# guessed - this exact string is what the owner photographed on 2026-08-06
-# with the QR and its link overlapping each other above it.
-NOTIFY_WORST = ("[Errno 2] No such file or directory: 'C:\\\\Program Files\\\\"
-                "Remote User\\\\_internal\\\\setup\\\\agent_hook.py'")
+# The longest sentence the notify switch can print under itself. Until round
+# R2's SECOND independent grader (2026-08-07) this constant was the RAW
+# "[Errno 2] No such file or directory: ...\_internal\setup\agent_hook.py"
+# the owner photographed on 2026-08-06 - a real bug at the time, but
+# notify._hook_module() has printed a plain-language sentence for that exact
+# case since v0.0.251, so the fixture was sizing the window for a caption the
+# product can no longer produce (and grading it in plain grey, which is what
+# made the STILL-real finding - no failure caption anywhere in this window
+# had a distinct colour - read as if the text itself were still the bug).
+# SIX sentences can land in that slot, and the fixture must measure whichever
+# is longest TODAY rather than naming one. Pinning a single constant is how
+# this gate came to be photographing the raw
+# "[Errno 2] ...\_internal\setup\agent_hook.py" for two versions after the bug
+# behind it was fixed - a stale fixture teaches a false lesson, and this one
+# was teaching that a solved packaging bug was still live. Every candidate is
+# IMPORTED from the module that owns it and the longest wins by measurement,
+# so no edit to any of them can leave the window sized for a string the
+# product no longer prints.
+from gui.settings_window import NOTIFY_OFF_TEXT, NOTIFY_ON_TEXT  # noqa: E402
+from notify import (  # noqa: E402
+    HOOK_CHANGE_FAILED_TEXT, MISSING_SCRIPT_TEXT, NO_PYTHON_TEXT,
+    UNLOADABLE_SCRIPT_TEXT,
+)
+
+NOTIFY_WORST = max((NOTIFY_ON_TEXT, NOTIFY_OFF_TEXT, NO_PYTHON_TEXT,
+                    HOOK_CHANGE_FAILED_TEXT, MISSING_SCRIPT_TEXT,
+                    UNLOADABLE_SCRIPT_TEXT), key=len)
 
 
 def make_main_window() -> QWidget:
@@ -129,13 +154,19 @@ def make_main_window() -> QWidget:
 
 
 def _late_content(window) -> None:
-    """The update offer and the notify switch's failure line — the two things
-    that reach this window after it was built and measured."""
+    """The update offer — the one thing that still reaches this window after
+    it was built and measured.
+
+    The notify switch's failure line used to be planted here too. It left with
+    the switch in round R2 (it lives in the Settings window now) and is
+    planted there instead, by `make_settings_window` — the string itself is
+    still NOTIFY_WORST, because it is still the longest sentence this app
+    prints under a checkbox.
+    """
     window._update = SimpleNamespace(version="9.9.999", installer_url="http://x/y.exe",
                                      page_url="http://x")
     window._update_state = "found"
-    window.notify_caption.setText(NOTIFY_WORST)
-    window._refresh()             # the refresh tick that shows both of them
+    window._refresh()             # the refresh tick that shows it
 
 
 def make_main_window_from_tray() -> QWidget:
@@ -161,12 +192,11 @@ def make_main_window_from_tray() -> QWidget:
 
 def make_controls_editor() -> QWidget:
     from gui.controls_editor import ControlsEditor
-    from gui.theme import QSS
     editor = ControlsEditor()
-    # In the app this dialog is a child of MainWindow and inherits the theme;
-    # a bare instance would be measured WITHOUT it — and the QSS is where the
-    # combo min-width that caused "ift+tab" lives. Measure what ships.
-    editor.setStyleSheet(QSS)
+    # The theme is on the APPLICATION since build round R3 (gui/theme.py ->
+    # apply_theme), so a bare instance is already styled — including the combo
+    # min-width that caused "ift+tab". `main()` below applies the palette
+    # under audit before building anything.
     # Fullest state: the set with the longest command pool selected.
     entries = editor._entries()
     if entries:
@@ -185,9 +215,20 @@ def make_chord_recorder() -> QWidget:
     return ChordRecorder()
 
 
+def make_wheel_order_dialog() -> QWidget:
+    """Build round R5 (2026-08-07): the wheel-order ring, in its FULLEST
+    real state — every set the shipped file has (categories + app sets),
+    the longest real names among them."""
+    from gui.controls_data import natural_order, shipped_actions_path
+    from gui.controls_order import WheelOrderDialog
+    import json
+    data = json.loads(shipped_actions_path().read_text(encoding="utf-8"))
+    names = natural_order(data)
+    return WheelOrderDialog(names, names)
+
+
 def make_traffic_window() -> QWidget:
     import traffic
-    from gui.theme import QSS
     from gui.traffic_window import TrafficWindow
     # FULLEST state (the 2026-08-05 lesson: an empty panel measures nothing):
     # a phone connected and reporting its own counters, and an absence long
@@ -200,8 +241,41 @@ def make_traffic_window() -> QWidget:
     traffic.METER.note_phone({"app_rx": 9 << 20, "app_tx": 9 << 20,
                               "dev_rx": 9 << 30, "dev_tx": 9 << 30})
     window = TrafficWindow()
-    window.setStyleSheet(QSS)   # in the app it inherits MainWindow's theme
     window._refresh()
+    return window
+
+
+def make_settings_window() -> QWidget:
+    """The Settings window in its FULLEST state (round R2).
+
+    Three things make this window bigger than a fresh install ever shows, and
+    all three are planted here rather than hoped for:
+
+      - the phone has reported VOICES, with names as long as a real engine
+        produces ("English (United Kingdom) female_2") — they size the widest
+        combo in the window;
+      - a voice is SAVED that the phone did not report, which adds the
+        "remembered, phone not connected" entry, longer than any real one;
+      - the agent-hook switch is showing a FAILURE — the longest sentence this
+        window can print (`notify.NO_PYTHON_TEXT`), through the SAME
+        `_set_caption` the real toggle handler uses, so the shot proves the
+        error COLOUR too, not just the words (round R2's second independent
+        grader, 2026-08-07: a raw exception once stood here in plain caption
+        grey — see NOTIFY_WORST's own comment above).
+    """
+    import notify
+    from gui.settings_window import SettingsWindow
+    notify.set_voices([
+        {"name": "en-gb-x-gba#female_2", "label": "English female_2", "locale": "en-GB"},
+        {"name": "sr-rs-x-srb#male_1", "label": "Serbian male_1", "locale": "sr-RS"},
+    ])
+    from config import SETTINGS, apply as apply_settings
+    apply_settings(notify_voice="a-voice-this-phone-no-longer-has")
+    window = SettingsWindow(_fake_controller(), lambda: None)
+    window.setAttribute(Qt.WidgetAttribute.WA_DontShowOnScreen, True)
+    window.show()               # …resolves the QSS font, then the worst caption
+    window._set_caption(window.notify_caption, NOTIFY_WORST, error=True)
+    assert SETTINGS.notify_voice   # the planted state really is in place
     return window
 
 
@@ -210,7 +284,9 @@ WINDOWS: list[tuple[str, object]] = [
     ("MainWindow (reopened from the tray)", make_main_window_from_tray),
     ("ControlsEditor", make_controls_editor),
     ("ChordRecorder", make_chord_recorder),
+    ("WheelOrderDialog", make_wheel_order_dialog),
     ("TrafficWindow", make_traffic_window),
+    ("SettingsWindow", make_settings_window),
 ]
 
 
@@ -422,6 +498,57 @@ def ancestor_spacer_slack(widget: QWidget, window: QWidget,
     return slack
 
 
+def view_content(view: QAbstractItemView, vertical: bool) -> int:
+    """How much of the view's own axis its ROWS (or columns) actually use."""
+    model = view.model()
+    if model is None:
+        return 0
+    if vertical:
+        return sum(view.sizeHintForRow(r) for r in range(model.rowCount()))
+    return sum(view.sizeHintForColumn(c) for c in range(model.columnCount()))
+
+
+def idle_view_slack(scroller: QWidget, window: QWidget,
+                    vertical: bool) -> list[str]:
+    """THE BLIND SPOT THIS CHECK HAD (2026-08-07).
+
+    `ancestor_spacer_slack` above counts only `QSpacerItem`s, and only on the
+    path from the scrolling widget up to the window. The Controls editor's
+    failure was neither: its set list — a SIBLING, in the other column — was
+    handed 822 px for 580 px of rows and simply STRETCHED, holding 242 px of
+    nothing while the commands table beside it hid three of thirteen rows
+    behind a scrollbar. An independent grader measured that hole off the
+    screenshot twice; this file reported PASS both times, because a stretched
+    widget owns its slack instead of parking it in a spacer.
+
+    So idle space is measured where it can be measured HONESTLY: an item view
+    knows exactly how much of itself its rows use. Views that contain, or are
+    contained by, the scrolling widget are skipped — a scroll area's own idle
+    tail is not slack somewhere else.
+
+    Honest limit: this sees item views, not every stretched widget. A generic
+    "size minus sizeHint" sweep convicts every legitimately stretched
+    container in the tree (a group box whose child wants the room), and a check
+    that cries wolf gets deleted. Item views are where this project's holes
+    have actually appeared, twice.
+    """
+    slack = []
+    for widget in walk(window):
+        if widget is scroller or not isinstance(widget, QAbstractItemView):
+            continue
+        if widget.isAncestorOf(scroller) or scroller.isAncestorOf(widget):
+            continue
+        viewport = widget.viewport()
+        extent = viewport.height() if vertical else viewport.width()
+        idle = extent - view_content(widget, vertical)
+        if idle > SLACK_TOLERANCE:
+            slack.append(
+                f"{widget.__class__.__name__}"
+                f"'{widget.objectName() or '-'}' is stretched to {extent}px "
+                f"for {extent - idle}px of rows — {idle}px standing idle")
+    return slack
+
+
 def check_scroll_with_free_space(window: QWidget) -> list[str]:
     problems = []
     for widget in walk(window):
@@ -431,8 +558,9 @@ def check_scroll_with_free_space(window: QWidget) -> list[str]:
                           ("horizontally", widget.horizontalScrollBar())):
             if bar is None or bar.maximum() <= 0:
                 continue
-            slack = ancestor_spacer_slack(
-                widget, window, vertical=(name == "vertically"))
+            vertical = name == "vertically"
+            slack = (ancestor_spacer_slack(widget, window, vertical)
+                     + idle_view_slack(widget, window, vertical))
             if slack:
                 problems.append(
                     f"SCROLL+SLACK {widget.__class__.__name__} "
@@ -452,11 +580,37 @@ def audit(window: QWidget, label: str) -> list[str]:
         + check_scroll_with_free_space(window))]
 
 
-def shot_name(name: str) -> str:
-    return "".join(c if c.isalnum() else "_" for c in name).strip("_") + ".png"
+# BOTH PALETTES, every window (build round R3, 2026-08-07). A light theme is
+# not a repaint of a dark one: a translucent white border vanishes on white, a
+# 16 %-alpha wash reads as nothing on a card, and an icon whose ink was baked
+# in at build time turns invisible. None of that is caught by looking at the
+# dark run twice, so the whole registry is audited under each palette and each
+# window is SHOT under each — the light shots carry a `__light` suffix so the
+# dark ones keep the names the existing proof lines already use.
+PALETTES = ("dark", "light")
 
 
-def audit_window(app: QApplication, name: str, factory) -> list[str]:
+def use_palette(app: QApplication, palette: str) -> None:
+    """Make `palette` the one every window built after this call is born in.
+
+    The SETTING is changed too, not just the live palette: MainWindow applies
+    `SETTINGS.ui_theme` in its own constructor, so a guard that only called
+    apply_theme would have the main window flip the whole app back.
+    """
+    import config
+    from gui import theme
+    config.apply(ui_theme=palette)
+    theme.apply_theme(palette)
+    app.processEvents()
+
+
+def shot_name(name: str, palette: str = "dark") -> str:
+    stem = "".join(c if c.isalnum() else "_" for c in name).strip("_")
+    return stem + ("" if palette == "dark" else f"__{palette}") + ".png"
+
+
+def audit_window(app: QApplication, name: str, factory,
+                 palette: str = "dark") -> list[str]:
     window: QWidget = factory()
     # The layout runs for real - real fonts, real DPI - but nothing appears on
     # the owner's screen while a guard runs.
@@ -492,7 +646,7 @@ def audit_window(app: QApplication, name: str, factory) -> list[str]:
             shot.setDevicePixelRatio(2)
             shot.fill(Qt.transparent)
             window.render(shot)
-            shot.save(str(SHOT_DIR / shot_name(name)))
+            shot.save(str(SHOT_DIR / shot_name(name, palette)))
 
     window.close()
     return problems
@@ -501,8 +655,11 @@ def audit_window(app: QApplication, name: str, factory) -> list[str]:
 def test_layout_audit() -> None:
     app = make_app()
     problems: list[str] = []
-    for name, factory in WINDOWS:
-        problems += audit_window(app, name, factory)
+    for palette in PALETTES:
+        use_palette(app, palette)
+        for name, factory in WINDOWS:
+            problems += [f"[{palette}] {p}"
+                         for p in audit_window(app, name, factory, palette)]
     assert not problems, (
         "THE SPACE & LEGIBILITY LAW (rules/GUI.md) - runtime audit failed:\n  "
         + "\n  ".join(problems)
@@ -515,16 +672,19 @@ def test_layout_audit() -> None:
 def main() -> int:
     app = make_app()
     failed = False
-    for name, factory in WINDOWS:
-        problems = audit_window(app, name, factory)
-        if problems:
-            failed = True
-            print(f"{name}: FAIL", file=sys.stderr)
-            for p in problems:
-                print("  " + p, file=sys.stderr)
-        else:
-            print(f"{name}: PASS (declared minimum "
-                  f"{factory.__name__} audited at minimum and +50%)")
+    for palette in PALETTES:
+        use_palette(app, palette)
+        print(f"--- {palette} palette ---")
+        for name, factory in WINDOWS:
+            problems = audit_window(app, name, factory, palette)
+            if problems:
+                failed = True
+                print(f"{palette}/{name}: FAIL", file=sys.stderr)
+                for p in problems:
+                    print("  " + p, file=sys.stderr)
+            else:
+                print(f"{palette}/{name}: PASS (declared minimum "
+                      f"{factory.__name__} audited at minimum and +50%)")
     return 1 if failed else 0
 
 

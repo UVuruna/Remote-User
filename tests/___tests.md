@@ -37,6 +37,26 @@ plus the WIRING: the real `InputInjector.move()` (with `SendInput` stubbed
 out, so the build machine's cursor is never touched) must raise the alarm
 that the web layer forwards to the phone, and clear it once read.
 
+**The gamepad** (build rounds G1/G2, 2026-08-07) is gated in the same file
+and by the same standard: synthetic pad events are driven through the page's
+REAL mapping (`__padButton` / `__padAxis` — the two names the Android shell
+calls) and the exact protocol that must come out is asserted. A D-pad arrow
+presses the LEFT group's button in that direction and HOLDS the PC button
+while the key is held; a face button presses the RIGHT group's, on the
+RELEASE; L2/R2 are Layout (+) / Hide; the left stick steers on the tuned
+curve at three deflections including the deadzone; the right stick scrolls
+(and up is up); L1 held + a stick + release picks a wheel category and fires
+NO button; a short shoulder tap steps the layout bar instead. Because the pad
+is only ever let in through `buttonPress()` — the same activator a finger's
+`pointerup` runs — this block also pins that there is no second button path
+left to drift away from the pointercancel rescue (CLAUDE.md constraint 9).
+
+The **stick curve is pinned by SHAPE, not by number**: the gate reads
+`PAD_DEADZONE` / `PAD_CURVE` / `PAD_CURSOR_SPEED` out of the page and
+recomputes the expected coordinate independently. The owner's answer to the
+open question was "start from this table and tune it on the real controller",
+so retuning the feel may never turn a build red — changing the FORMULA must.
+
 The control layout comes from `tests/fixtures/actions.json` — pinned on
 purpose: the repo `actions.json` is the owner's hand-edited file, and a
 layout edit there must never block a build.
@@ -79,6 +99,25 @@ its own horizontal scroll (2026-08-05). Also checks the D-PAD BUTTONS: a set's
 pool may hold reserve commands whose names are longer than the shipped four
 ("Copy path", "Go to file"), the law forbids eliding them, so the label wraps —
 and the wrapped label must still sit fully inside its 58 px button.
+
+**SIX LOOKS, not one** (build round R3, 2026-08-07). The desktop now chooses
+one of three phone themes (dark / light / colored) and one of two fills
+(outlined / filled), so there are six real renderings of every surface and a
+theme audited in one combination is not audited. The full panel sweep runs in
+every combination at PORTRAIT (narrowest cards, where a row starves first);
+landscape keeps the default look, because what landscape tests is GEOMETRY and
+geometry does not change with a colour. Three things changed with it:
+
+- the contrast check's page FLOOR is read from the live `--surface-0` instead
+  of the dark theme's literal `[15, 23, 42]` — otherwise every light panel
+  would have been scored against a dark page that is not there;
+- the check moved into one installed `window.__contrast(root)` so the panels,
+  the D-pad and the wheel are judged by the same function, not three copies;
+- **the D-pad groups and the category wheel are measured too.** That is where
+  a set's colour actually lands in `colored`, and no panel check had ever
+  looked at them. Self-tested by forcing `theme.js`'s `INK_CROSSOVER` high so
+  every ink comes out white: thirteen labels go red at 1.74–2.72:1 in
+  `colored/full`, in both orientations, and green again when it is put back.
 
 Run: `.venv\Scripts\python tests/test_layout_audit.py`
 
@@ -152,6 +191,16 @@ PASS over the window he had photographed twice). Two holes, both closed:
   `.claude/shots/` by the audit itself, so the picture the layout gate grades
   can never be of a different build than the one just measured.
 
+- **BOTH PALETTES** (build round R3, 2026-08-07). The whole registry is built
+  and audited under dark and then under light, and each window is shot in
+  each — the light shots carry a `__light` suffix so the dark ones keep the
+  filenames the existing proof lines already point at. A light theme is not a
+  repaint of a dark one: a translucent white border vanishes on white, a
+  16 %-alpha wash reads as nothing on a card, and an icon whose ink was baked
+  in at build time turns invisible. `use_palette()` sets `SETTINGS.ui_theme`
+  as well as calling `apply_theme`, because `MainWindow` applies that setting
+  in its own constructor and would otherwise flip the app back.
+
 Run: `.venv\Scripts\python tests/test_layout_audit_qt.py` — also a full-run
 guard in `run_guards.py`.
 
@@ -171,6 +220,39 @@ no real windows — the window calls are stubbed.
 Run: `.venv\Scripts\python tests/test_presence.py` — also a fail-closed step
 in `build.py` (0c/6).
 
+### `test_notice_channel.py` — Notice Channel Gate
+Proves that a notice reaches the phone while the owner is **not looking at
+it**. His report on 2026-08-07: *"notifikacije mi stižu tek kada podignem
+aplikaciju iako je sve vreme otvorena u pozadini"*. The cause was structural —
+every notice rode the streaming socket, and that socket is closed on purpose
+the moment the page hides (project CLAUDE.md constraint 8), so at the exact
+moment a notice mattered there was no channel and the server queued it until
+he opened the app himself.
+
+Eight checks against a REAL server (`web.create_app` with a fake stream,
+registry and injector) and a real HTTP client standing in for the phone's
+foreground service: `/notices` refusing a bad token; a notice arriving whole
+down the waiting channel with the page closed; **a waiting phone never
+counting as a present phone** (the one-device slot empty, `stats.clients` 0,
+the capture not started, the layout registry untouched, neither
+`presence.watchdog` nor `focus_guard.watch` armed — a notice connection that
+looked present would nail his own windows always-on-top over his desk); the
+idle channel carrying one beat byte and nothing else; an open page taking a
+notice ALONE, never twice; a page dying mid-notice falling through to the
+channel instead of into the queue; and the queue being the last resort, drained
+oldest-first the moment the phone starts waiting again.
+
+Every check was shown red on a planted defect before being trusted — including
+one plant that revealed a real weakness in the gate itself (the isolation check
+ran after another check's `reset()` and would have scrubbed a live defect out
+from under itself; it runs first now).
+
+The Kotlin half — `NoticeService`, `NoticeLink`, `Bridge` — cannot be exercised
+here: there is no Android runtime on the build machine. What this gate pins is
+the PC's half of the contract and the exact bytes the shell must read.
+
+Run: `.venv\Scripts\python tests/test_notice_channel.py`
+
 ### `test_focus_guard.py` — Focus Gate
 Proves that what the phone types lands where the owner is LOOKING. `SendInput`
 has no target, so before 2026-08-06 every dictated character went to whatever
@@ -181,20 +263,70 @@ still showing the PC. The owner reported it three times in one evening, and
 the fourth report WAS the bug: a sentence dictated for another project arrived
 in this project's session.
 
-Eleven checks, no Windows and no browser (every user32 call is answered by a
-fake): the layout fence refusing a foreign foreground and handing focus back
-to the member being typed into; the fence holding on a fresh connection with
-no pin yet; a move the owner made INSIDE the layout being followed, not
-fought; a dialog of a member (Save As…) counting as that member; the desktop
-pin arming on the burst's first key and restoring `topmost=False`; a click /
-`next_input` / layout switch re-arming it while a thief arms nothing; the
-thief being NAMED in the log; `LayoutRegistry.focus()` raising the keyboard
-member LAST (one excursion used to move dictation into the other pane);
-`prune` moving the target off a window closed at the desk; and the whole path
-through the real `web._receive_input` dispatcher.
+Twenty-three checks, no browser and (for the policy half) no real windows —
+every user32 call is answered by a fake: the layout fence refusing a foreign
+foreground and handing focus back to the member being typed into; the fence
+holding on a fresh connection with no pin yet; a move the owner made INSIDE
+the layout being followed, not fought; a dialog of a member (Save As…)
+counting as that member; the desktop pin arming on the burst's first key and
+restoring `topmost=False`; a click / `next_input` / layout switch re-arming it
+while a thief arms nothing; the thief being NAMED in the log;
+`LayoutRegistry.focus()` raising the keyboard member LAST (one excursion used
+to move dictation into the other pane); `prune` moving the target off a window
+closed at the desk; and the whole path through the real `web._receive_input`
+dispatcher.
+
+**Build round R1 (owner-approved 2026-08-07) closed the hole INSIDE one
+message.** `SendInput` types one code unit at a time, and it was MEASURED on
+the owner's PC at ~1.84 ms per character — a 600-character dictated sentence
+is over a SECOND during which a thief used to get the remainder. The gate
+proves that a steal at EIGHT different offsets costs zero characters and the
+rest still lands in the right window; that a steal inside an emoji costs at
+most that character's tail, never a whole character; that typing which cannot
+be re-aimed STOPS and names both the thief and what was never sent; that the
+**phone is told** what never reached the PC; that half a character never goes
+out and never raises into the dispatcher; that a caller passing no guard
+behaves exactly as before; and that the real dispatcher hands the injector the
+checkpoint.
 
 Run: `.venv\Scripts\python tests/test_focus_guard.py` — also a fail-closed
-step in `build.py` (0e/6).
+step in `build.py` (0e/6) and a full-run check in `run_guards.py`.
+
+### `test_focus_hook.py` — Focus Hook Gate
+The other half of the focus work, split out on 2026-08-07 when the two
+subjects together crossed THE STRUCTURE LAW's 1,000 lines: `test_focus_guard`
+proves the POLICY, this proves the MACHINERY that carries it.
+
+Nine checks: the hook announcement defending the layout measurably before a
+poll tick could have; **the callback only SIGNALLING** — a WinEventProc runs
+inside Windows' own event dispatch, and the first version called the guard
+from there, measured stalling a second caller for 2.99 s (the owner felt it as
+a juddering mouse); the log line when a listener overruns that contract;
+a hook that Windows still claims to hold but that has gone quiet being reported
+once; the 0.25 s poll still defending when Windows refuses the hook; the
+thread's start / stop / unhook / restart; a timed-out `stop()` keeping the
+thread's identity instead of orphaning it with the hook still installed and
+letting a second one be built over it; every documented exit path really
+calling `ServerController.release_windows` — **parsed with `ast` inside the
+function that handles that exit**, because a file-wide grep stays green when
+tray Quit stops calling it while another line still names it; and two threads
+never deciding the target at once.
+
+**It installs no real hook and touches no real window.** The owner works on
+this machine: a hook or a thread a FAILING test forgot to release is his mouse
+juddering, not a red line in a terminal. The thread, the joins and the identity
+book are real; Windows is faked.
+
+Run: `.venv\Scripts\python tests/test_focus_hook.py` — also a fail-closed step
+in `build.py` (0e/6) and a full-run check in `run_guards.py`.
+
+### `_focus_fakes.py` — the fake Windows both focus gates share
+`FakeWin32` (the user32 calls the guard makes), `Raises` (records what would
+have been raised, raises nothing), `FakeHookWin32` (the four calls
+`focus_hook` makes into Windows, incl. a `deaf` mode that swallows `WM_QUIT`
+so a timed-out stop can be tested on purpose), `TypeSpy` (the REAL injector
+with only `SendInput` replaced, recording every UTF-16 unit and the window
+that would have received it), the fake socket/injector, and the shared runner.
 
 ### `test_layout_protocol.py` — Layout Gate
 Proves that EVERY layout message the phone can send answers it. Born from the
@@ -208,7 +340,7 @@ carried nothing, because **no test walked this path** — four guards, an input
 gate, a presence gate, a notify gate and a focus gate, and the phone's entire
 layout protocol had none.
 
-Five checks driving the REAL `web._receive_input` dispatcher over the REAL
+Six checks driving the REAL `web._receive_input` dispatcher over the REAL
 `layout_api` and `LayoutRegistry`, with only Windows faked (user32, the window
 list, UIA, the process table): create from a LIST (windows plus the tabs of
 tab-capable apps), create by TAPPING a window, create → focus → desktop,
@@ -217,8 +349,123 @@ and a 2×1 grid built from the list. A handler that raises, or that answers the
 phone with nothing, fails here. Self-tested by replanting the defect: the
 first check reports the exact `UnboundLocalError` and fails.
 
+**And two checks that follow the Move handle to the WINDOWS** (owner report
+2026-08-07, the second round of the same bug — 10:13 portrait, handle dragged
+to the TOP, the window still vertically centred). The round before had measured
+`grids._fit_rect` and `Layout.pos`, found both correct, and called the feature
+verified; both WERE correct, and the value died between them and the desk. The
+check that touched `layout_aspect` could not see it, because it asserted on a
+stored NUMBER (`layouts[0].pos == 0.25`) while `place_window` was a fake that
+threw its rect away. So `install_fakes(track_placement=True)` now MODELS the
+desk — every commanded rect is recorded and becomes the window's real frame —
+and the two checks assert on the RECT:
+- *the Move handle reaches the WINDOWS* — solo **and** grid, portrait **and**
+  landscape: `pos` 0 pins the region to the free axis's near edge, 1000 to its
+  far edge, 500 centres it, and the region's SIZE never changes between them.
+- *the same position applied again still moves the windows* — the member
+  drifts off its rect between applies (an app re-laying itself out, a restore,
+  a snap) and the SAME `pos` must put it back. This is the root cause: the old
+  guard trusted `Layout.arranged_pos`, a note of what was commanded, so one
+  drift pinned the layout forever and every later Apply placed nothing.
+
+Both were proven by planting the defect back: dropping `pos` in
+`layout_api.layout_aspect` turns the first red with every position landing at
+`y=290` — the owner's centred window, to the pixel — and restoring the
+remembered-only guard in `LayoutRegistry.focus` turns the second red with
+*"apply #2 of pos=0 placed NOTHING"*.
+
 Run: `.venv\Scripts\python tests/test_layout_protocol.py` — also a
 fail-closed step in `build.py` (0f/6).
+
+### `test_stream_lifecycle.py` — Stream Lifecycle Gate
+Proves that a client which is GONE takes its encoder with it. Born from the
+2026-08-07 live failure, found in the owner's own running app while his mouse
+juddered: **one leaked H.264 session ran for four hours at native 4K with no
+phone connected at all** — 12,924 s of `ffmpeg.exe` CPU, `_sessions` never
+empty again (so capture could never stop), and 1,890 `Client stream backlog —
+resetting the H.264 session` warnings, one every ~7 s, for a client that had
+disconnected at 12:05.
+
+Root cause, dated to the millisecond by his server log: `await
+asyncio.to_thread(manager.open_session, …)` **cannot be cancelled.** The socket
+died 910 ms after auth; the awaiting coroutine raised `CancelledError` at once;
+the worker thread ran on and finished the encoder 219 ms later, registering a
+session whose only reference had just been thrown away. `close_session` was
+never called for it, and its `push` callback kept overflowing a queue nobody
+would ever drain again.
+
+Seven checks driving the REAL `web._stream_h264` loop over the REAL
+`H264Session` / `H264Manager`, with only the process and the frame source faked
+(a stand-in on ffmpeg's exact pipe contract, emitting a minimal but genuine
+`ftyp`+`moov(avcC)` init segment — no dxcam, no ffmpeg, no 4K, because the
+owner's CPU was already saturated by the very bug under repair): **cancelled
+mid-open** (the live bug — the fake encoder's `head_delay` is that 219 ms
+window, widened), a clean close, a 4409 takeover / silent network death
+mid-stream, an exception in the send path, server stop mid-spawn, **no reset
+ever fires for a client with no live socket**, and — the check that keeps the
+gate honest — **a live but SLOW client still is reset**, so the suite can never
+pass by having the backlog feature deleted.
+
+Every check ends on one verdict: the active count is zero, capture is stopped,
+every encoder is terminated, and (unless the check asked for one) not one reset
+was logged.
+
+Self-tested by planting each defect separately, which is how the two defences
+were shown to be genuinely independent:
+
+| Planted | What goes red |
+|---------|---------------|
+| `open_session` ignores `owner.take()`'s answer (the live code) | only *cancelled mid-open* — the other six stay green, and the dead-client check proves the queue guard alone still silences the log |
+| `owner.release()` removed from `_stream_h264`'s cancellation path | only *cancelled mid-open* |
+| the `if not o.alive` guard removed from `push` | only *a client with no live socket is NEVER reset* |
+
+The dead-client check disables the first defence ON PURPOSE (`DeafOwner`, a
+claim that accepts every session and remembers none — exactly the pre-fix
+world) so the second defence is tested on its own, and it asserts that the leak
+it planted was real (`leaked == 1`) so it can never quietly decay into testing
+nothing.
+
+Run: `.venv\Scripts\python tests/test_stream_lifecycle.py` — also a
+fail-closed step in `build.py` (0g/6).
+
+### `test_actions_migration.py` — Actions Migration Gate
+Proves that a NEW VERSION'S FIELDS actually reach the owner's own
+`%LOCALAPPDATA%\RemoteUser\actions.json`. His copy is seeded once, at his first
+install, and never replaced — `merge_shipped_pools` is the only path a later
+version has into it, and until 2026-08-07 it copied a **hardcoded list of field
+names** (`name, icon, required, process, title`). Anything invented after that
+list was written silently never arrived. The bill: the shipped Claude app set
+gained `"agent": "claude"` on 2026-08-06, his copy never did, so the set could
+only match by TITLE — and Claude Code names its VS Code tab after the
+CONVERSATION, making the condition unsatisfiable forever. **He reported the
+Claude set missing across four or five releases.** The same engine had already
+kept "Anywhere" in his Settings set after the update that replaced it, and
+`wheel_order` (build round R5) was one release from joining them.
+
+Why every guard stayed green through all of it, which is the part worth
+remembering: `tests/test_controls_sets.py` builds its "user file" with
+`user = copy(shipped)`. **A user file made out of the shipped file already has
+every new field**, so the guards proved the repo's actions.json to itself and
+could not fail. This gate therefore starts from an OLDER shape — the owner's
+real file, held as literal text, not derived from the shipped one — and it does
+NOT test for the field named `agent`: it plants a field name nobody has
+invented, because a gate written around today's field would ship broken on
+tomorrow's.
+
+Six checks: his real file receives the agent switch · a field nobody has
+invented yet arrives · a new top-level key arrives (`wheel_order`, plus an
+invented one) · everything he owns survives (`active`, `order_land`,
+`order_port`, `enabled`, `wheel_order`, `custom_sets`, `left`/`right`, and his
+button renames) · a field we retired stops lying · a set he has never had
+arrives whole.
+
+Self-tested by planting the defect: restoring the old hardcoded field list and
+removing the top-level migration turns **four of the six red**, while all four
+merge checks in `test_controls_sets.py` stay **green** — the exact shape of the
+failure this gate exists to end.
+
+Run: `.venv\Scripts\python tests/test_actions_migration.py` — also in
+`run_guards.py` and a fail-closed step in `build.py` (0h/6).
 
 ### Guard tests (THE LAWS — rules/CODE.md → Enforcement, rules/DOCS.md → Enforcement)
 Five standard-named guard tests, a fast runner, and a small shared helper —
@@ -269,8 +516,8 @@ four installed 2026-08-01 alongside the MD-First 2.0 docs migration, the fifth
   arithmetic and miss the law. Skipped, not failed, when node is absent.
   Self-tested by re-enabling `Cursor` in the shipped file — "the shipped
   actions.json ticks 9 sets by default".
-- `run_guards.py` — runs all guards (or, with `--fast`, structure +
-  config-sections + the static layout law — a grep costs nothing, so it
+- `run_guards.py` — runs all guards plus the focus gate (or, with `--fast`,
+  structure + config-sections + the static layout law — a grep costs nothing, so it
   belongs in the PostToolUse hook's budget; the Qt audit is full-run only,
   it builds a QApplication); exits 2 on any failure. Wired into
   `.claude/settings.json` (PostToolUse `--fast`, Stop full). Run directly:

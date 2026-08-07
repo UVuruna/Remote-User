@@ -36,8 +36,8 @@ flowchart TB
     C -- yes, click --> D["injector.click(button) — current cursor position"]
     C -- yes, down/up --> E["injector.button_down/up(x, y, button)"]
     B -- pointer_move --> F["injector.move(x, y)"]
-    B -- scroll --> G["injector.wheel(x, y, ticks)"]
-    B -- key_text --> H["injector.type_text(text)"]
+    B -- scroll --> G["injector.wheel(x, y, ticks, hticks=msg.get('hticks', 0))"]
+    B -- key_text --> H["injector.type_text(text, focus_guard.typist(...))<br/>on a thread, foreground re-checked every 40 characters"]
     B -- key_special --> I["injector.press_key(key)"]
     B -- paste_text --> I2["_paste_text: clipboard.copy_text → ctrl+v → Enter"]
     B -- viewport --> J{stream.mode == jpeg?}
@@ -66,13 +66,15 @@ flowchart TB
 ```mermaid
 flowchart TB
     A["LOOP forever (task runs until cancelled on disconnect)"] --> B["new bounded queue (h264_queue_chunks)"]
-    B --> C["push(item): put_nowait; on QueueFull -> drain + sentinel None\n(reset the WHOLE session -- bytes are never dropped individually)"]
-    C --> D["manager.open_session(on_data=push, on_end=push(None))"]
-    D -- RuntimeError/OSError --> E["toast + ws.close(1011); return"]
+    B --> B2["owner = manager.new_owner() -- the CLAIM, made before the encoder thread exists"]
+    B2 --> C["push(item): if NOT owner.alive -> drop silently;\nelse put_nowait; on QueueFull -> drain + sentinel None\n(reset the WHOLE session -- bytes are never dropped individually)"]
+    C --> D["manager.open_session(on_data=push, on_end=push(None), owner=owner)"]
+    D -- RuntimeError/OSError --> E["owner.release(); toast + ws.close(1011); return"]
+    D -- CANCELLED --> E2["owner.release(); re-raise\n(the thread runs on -- the claim is what closes what it builds)"]
     D -- ok --> F["_send_config(ws, manager, token, codec=session.codec)"]
     F --> G["WHILE chunk := queue.get() is not None: ws.send_bytes(chunk)"]
     G -- disconnect/RuntimeError --> H[return -- receive loop logs the disconnect]
-    G -- queue yields None --> I["finally: manager.close_session(session)"]
+    G -- queue yields None --> I["finally: owner.release() -- closes the session"]
     I --> J{session lived < 2s?}
     J -- yes --> K["sleep 1s -- pace a fast error loop"]
     J -- no --> A
@@ -105,17 +107,33 @@ Pseudocode:
     _stream_h264(ws, manager, token):
         LOOP forever:
             queue = bounded Queue(h264_queue_chunks)
-            push(item): put_nowait; ON QueueFull -> drain queue, put None
+            owner = manager.new_owner()      # the claim -- see h264_streamer flow
+            push(item): IF NOT owner.alive -> RETURN     # nothing reads this queue
+                        put_nowait; ON QueueFull -> drain queue, put None
                         (a full queue means the client cannot keep up -- the WHOLE
                         session resets; H.264 bytes cannot be dropped individually)
             TRY: session = manager.open_session(on_data=push, on_end=lambda: push(None),
-                                                quality=conn["quality"])  # phone panel overrides
+                                                quality=conn["quality"],  # phone panel overrides
+                                                owner=owner)
                  # (a changed `quality` message resets the session via conn["reset_stream"];
                  #  the loop reopens here with the new fps/res/bitrate)
-            EXCEPT (RuntimeError, OSError): toast "stream failed", close(1011), return
+            EXCEPT (RuntimeError, OSError): owner.release(); toast, close(1011), return
+            EXCEPT BaseException:            # cancelled -- socket death, 4409, server stop
+                 owner.release(); re-raise   # to_thread cannot cancel the thread it started
             send config (with the session's parsed codec)
             WHILE (chunk := queue.get()) is not None:
                 ws.send_bytes(chunk)
-            FINALLY: manager.close_session(session)
+            FINALLY: owner.release()         # closes the session; silences push
             IF this session lived < 2s -> sleep 1s (paces a fast error loop)
             # loop reopens a fresh session automatically
+
+## Build round R3 (2026-08-07) — themes
+
+```
+_send_config(ws, stream, token, codec)
+   payload = { type, monitor_width, monitor_height, stream, hand,
+               tailscale_url, app_version, apk_version,
+               base: _stream_base(stream),
+               ui:   ui_config() }        <- R3: {theme, fill, colors}
+   + codec (H.264 only)
+```

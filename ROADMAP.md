@@ -278,6 +278,23 @@ Scope when built (~½ session):
 - [ ] **H3 — which events deserve a sound.** Owner's call: agent finished /
   agent is waiting for an answer (a permission prompt is the one worth
   hearing) / build finished. Per-event on/off in the phone's Settings.
+- [~] **H4 — the waiting channel** (owner decree 2026-08-07, his report:
+  *"notifikacije mi stižu tek kada podignem aplikaciju iako je sve vreme
+  otvorena u pozadini"*). H1's assumption — "the socket the phone already
+  holds" — is false by design: the page closes that socket the moment it
+  hides (constraint 8), so at the exact moment a notice matters there is no
+  channel, and the 2026-08-06 queue had quietly become the delivery path.
+  His decision: *"Radimo taj mali servis — samo je važno da ta komunikacija
+  … bude minimalna … android strana čeka signal, ne prima ništa od
+  kompjutera, ali ostane u stanju čekanja signala."* Built: a
+  `connectedDevice` foreground service holding one idle `GET /notices`
+  (server writes one byte a minute, the phone writes nothing), the PC
+  choosing exactly one carrier per notice so none can arrive twice, and the
+  battery-optimisation exemption explained and requested in the page. The
+  streaming session still dies when the page hides, and a waiting channel is
+  never counted as a present phone. Gated by
+  `tests/test_notice_channel.py`. **`[~]` — shipped, unconfirmed:** the
+  Kotlin half has never run, on any device, until the owner installs it.
 
 ---
 
