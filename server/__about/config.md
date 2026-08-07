@@ -58,17 +58,42 @@ serves at /app.apk. The phone's update banner compares against THIS, not
 `app_version()`: the APK does not change with desktop-only releases, and the
 old comparison offered a phantom update forever.
 
-## Build round R3 (2026-08-07) — themes
+## Build round R3 (2026-08-07) — themes; CORRECTED to three axes (2026-08-08)
 
-### APPEARANCE (build round R3, owner-approved 2026-08-07)
+### APPEARANCE (build round R3, owner-approved 2026-08-07; owner correction 2026-08-08)
 
-Three settings and two tables, all in `USER_ADJUSTABLE` or their own section:
+Four settings and two tables, all in `USER_ADJUSTABLE` or their own section:
 
 | Key | Values | What it is |
 |---|---|---|
 | `ui_theme` | `dark` / `light` | THIS PC's palette (`server/gui/theme.py`) |
-| `phone_theme` | `dark` / `light` / `colored` / `colored-light` | the PHONE's |
+| `phone_theme` | `dark` / `light` | the PHONE PAGE's |
+| `phone_colored` | `True` / `False` | do the D-pad + wheel wear each set's colour |
 | `phone_fill` | `transparent` / `full` | outlined buttons, or filled |
+
+**THREE INDEPENDENT AXES, not a fourth theme name** (owner correction
+2026-08-08, replacing the 2026-08-07 shape). His own words: *"teme postoje
+samo dve, svetla i tamna … a ove komande … on može da bude obojen, neobojen,
+i može da bude transparentan ili pun. dakle to je ukupno osam kombinacija."*
+The 2026-08-07 shape folded colour into `phone_theme` itself (`"colored"` /
+`"colored-light"`), producing the same eight looks by accident but claiming
+the page has four themes when the owner's own model is two themes plus two
+switches that belong to the CONTROLS — the D-pad groups and the radial
+wheel — not the page. `phone_theme` is back to two values; `phone_colored` is
+new and independent of both `phone_theme` and `phone_fill`.
+
+**Backward compatibility — a saved choice is TRANSLATED, never reset.** A
+`settings.json` written before this correction may still hold
+`phone_theme: "colored"` / `"colored-light"`. `_migrate_legacy_ui()` runs on
+every read (`load_user_settings`) and on `save_user_settings`'s own re-read
+of the current file (so the file self-heals on its very next save), turning
+`"colored"` into `{"phone_theme": "dark", "phone_colored": True}` and
+`"colored-light"` into `{"phone_theme": "light", "phone_colored": True}` —
+exactly the owner's original choice, spelled with two fields instead of one.
+The SAME situation reaches the phone from a different direction — a device's
+own cached `ui` (`prefGet("uiLook")`), written by an older page — and is
+translated there too, in `client/theme.js` → `legacyTheme()`; see
+[theme.md](../../client/__about/theme.md).
 
 ### The two set palettes (owner correction 2026-08-07)
 
@@ -106,12 +131,14 @@ phone hands each unnamed one the next colour of the palette IN FORCE that
 nothing already wears (`client/theme.js`). One table per surface, no third
 list to keep in step.
 
-`set_colors(theme=None)` answers "which palette does this theme wear", and it
-is the ONLY place that decides. `ui_config()` is the whole APPEARANCE half of
-a `config` frame, `{theme, fill, colors}`, with the palette already resolved —
-so the wire shape never changed and the phone still receives one flat
-`{set: hex}` map. Both live here rather than in `web.py` on purpose: the
-desktop owns this decision, this file owns the desktop's settings, and the web
-layer's job is only to put it on the wire. Sending both tables and letting the
-page choose would have put one decision in two places, and the page's copy is
-the one that drifts.
+`set_colors(theme=None)` answers "which palette does this theme wear" —
+chosen by `phone_theme` alone (`"light"` → `SET_COLORS_LIGHT`, else
+`SET_COLORS_DARK`), never by whether `phone_colored` is even on — and it is
+the ONLY place that decides. `ui_config()` is the whole APPEARANCE half of a
+`config` frame, `{theme, colored, fill, colors}`, with the palette already
+resolved — so the wire shape for `colors` never changed and the phone still
+receives one flat `{set: hex}` map. Both live here rather than in `web.py` on
+purpose: the desktop owns this decision, this file owns the desktop's
+settings, and the web layer's job is only to put it on the wire. Sending both
+tables and letting the page choose would have put one decision in two places,
+and the page's copy is the one that drifts.

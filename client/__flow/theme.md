@@ -25,45 +25,76 @@ see; they now sit as low as dark's. Dropping the fill left unselected wheel
 items without a shape of their own, so a dedicated `--wheel-border` token
 (stronger on light) replaced the plain `--border` on `.wheel-item`/`.wheel-x`.
 
+## The axis correction, 2026-08-08 — one theme name split into two fields
+
+```
+BEFORE (build round R3, 2026-08-07)             AFTER (owner correction)
+
+  phone_theme: "dark" | "light" |                phone_theme:   "dark" | "light"
+               "colored" | "colored-light"       phone_colored: True | False
+  phone_fill:  "transparent" | "full"            phone_fill:    "transparent" | "full"
+
+  4 theme values x 2 fills = 8 looks              2 x 2 x 2 = 8 looks, SAME EIGHT,
+  ("colored"/"colored-light" fold the             but colour is now the CONTROLS'
+   colour question into the PAGE's theme)         own switch, not a page theme
+
+  <body data-theme="colored-light"                <body data-theme="light"
+        data-fill="full">                               data-colored="true"
+                                                          data-fill="full">
+```
+
+His words: *"teme postoje samo dve, svetla i tamna … a ove komande … on može
+da bude obojen, neobojen, i može da bude transparentan ili pun."* Same eight
+renderings, correct model: two themes (the sun/moon switcher) and two
+switches that belong to the D-pad groups and the radial wheel.
+
 ## Where a look comes from, end to end
 
 ```
 DESKTOP                                          PHONE
 Settings → APPEARANCE
-  ├─ "The phone" [Dark|Light|Colored dark|Colored light]
+  ├─ "The phone" [Dark|Light]
+  ├─ "The phone" [Coloured|Plain]
   └─ "The phone" [Outlined|Filled]
-        │ save_user_settings(phone_theme / phone_fill)
+        │ save_user_settings(phone_theme / phone_colored / phone_fill)
         ▼
   config.SETTINGS  ──►  config.ui_config()
-                          {theme, fill, colors: set_colors()}
+                          {theme, colored, fill, colors: set_colors()}
                               │   ↑ the DESKTOP picks the palette:
-                              │     colored-light → SET_COLORS_LIGHT
-                              │     anything else → SET_COLORS_DARK
-                              │     (one flat map on the wire — the phone
-                              │      never learns two tables exist)
+                              │     phone_theme == "light" → SET_COLORS_LIGHT
+                              │     anything else           → SET_COLORS_DARK
+                              │     (chosen by THEME alone, never gated on
+                              │      `colored` — one flat map on the wire,
+                              │      the phone never learns two tables exist)
                               │
                               │  web._send_config()  →  `config` frame
                               ▼
-                        connection.js: applyUi(msg.ui)   ← as it arrived,
-                              │                             absence included
+                connection.js: applyUi(msg.ui)   ← as it arrived,
+                              │                     absence included
                               ▼
                     ┌─────────────────────────────────────────┐
                     │  no `ui` at all?  → return. nothing      │
                     │  happens: no state, no pref, no repaint  │
                     │                                          │
-                    │  otherwise: ui = mergedUi(ui, next)      │
-                    │    theme  = next.theme  ?? ui.theme      │
-                    │    fill   = next.fill   ?? ui.fill       │
-                    │    colors = next.colors ?? ui.colors     │
+                    │  otherwise: next = legacyTheme(msg.ui)   │
+                    │             ui = mergedUi(ui, next)      │
+                    │    theme   = next.theme   ?? ui.theme    │
+                    │    colored = next.colored ?? ui.colored  │
+                    │             (explicit-undefined check —  │
+                    │              a boolean "false" is real)  │
+                    │    fill    = next.fill    ?? ui.fill     │
+                    │    colors  = next.colors  ?? ui.colors   │
                     │  (the base is THE LOOK IN FORCE — the    │
-                    │   cache — never UI_DEFAULT)              │
+                    │   cache — never UI_DEFAULT)               │
                     └─────────────────────────────────────────┘
                               │
                   ┌───────────┴────────────┐
                   ▼                        ▼
         prefSet("uiLook", …)      writeLook()
-        (the head start for            <body data-theme=… data-fill=…>
-         the NEXT page load)                │
+        (the head start for            <body data-theme=…
+         the NEXT page load)                  data-colored=…
+                                               data-fill=…>
+                                            │
                                             ▼
                                       theme.css takes over
                                       (every token re-resolves)
@@ -74,13 +105,41 @@ Settings → APPEARANCE
                                     → openWheel()   → paintSet(item)
 ```
 
+## Backward compatibility — the OLD four-value `theme`, translated not reset
+
+```
+legacyTheme(next):
+    next.theme == "colored"       → { ...next, theme:"dark",  colored: next.colored ?? true }
+    next.theme == "colored-light" → { ...next, theme:"light", colored: next.colored ?? true }
+    anything else                 → next, unchanged
+
+Called from INSIDE mergedUi(), the single point every incoming `ui` object
+passes through — so both paths that can still hand this file the old shape
+go through the SAME translation:
+
+  1. A server not yet rebuilt        →  msg.ui  (the `config` frame)
+  2. THIS DEVICE'S OWN cache          →  prefGet("uiLook"), read by
+     (written by an older page,          restoreUi() at load — BEFORE any
+      before this build ever ran)        socket exists, so a server-side
+                                          translation alone could never
+                                          reach it
+```
+
+The server side of the same correction is `config._migrate_legacy_ui()` —
+runs on every `load_user_settings()` AND on `save_user_settings()`'s own
+re-read of the current file, so a `settings.json` written under the old model
+self-heals on its very next save. Neither path resets the owner's choice —
+"colored-light" meant light-page-with-colour, and that is exactly
+`{theme:"light", colored:true}` spelled with two fields instead of one.
+
 ## Page load, before the socket says anything
 
 ```
 theme.js loads (after controls.js — it uses prefGet/IN_APP)
   │
-  ├─ restoreUi()      read the cached {theme, fill, colors}
-  │     └─ writeLook()  <body> gets its two attributes NOW
+  ├─ restoreUi()      read the cached {theme, colored, fill, colors}
+  │     └─ mergedUi(UI_DEFAULT, cached)  ← legacyTheme() runs here too
+  │     └─ writeLook()  <body> gets its three attributes NOW
   │
   └─ …the page paints in the right look, once.
         A `config` arriving later either confirms it (no visible change),
@@ -91,7 +150,8 @@ theme.js loads (after controls.js — it uses prefGet/IN_APP)
 ## The reset that used to happen half a second after every connect
 
 The bug a third independent grader measured on 2026-08-07, and what replaced
-it:
+it (unchanged by the 2026-08-08 axis correction — `colored` follows the exact
+same ignore-or-merge rule `theme` and `fill` already had):
 
 ```
 BEFORE                                    AFTER
@@ -126,7 +186,12 @@ renderGroup("left")
   cat = allCats()[groups.left]                e.g. {name: "Mouse", …}
   paintSet(host, "Mouse", "--glass-fill")
         │
-        ├─ setColors()["Mouse"]  →  "#1D6A86"   (the DARK palette)
+        ├─ setColors()["Mouse"]  →  "#1D6A86"   (the DARK palette — chosen by
+        │                                         phone_theme alone; painted
+        │                                         onto the element whether or
+        │                                         not data-colored is true —
+        │                                         theme.css only READS it
+        │                                         under data-colored="true")
         ├─ fillOn(rgb over page) →  clears AA as it is  →  unnudged
         ├─ inkOn(that fill)      →  luminance 0.12 < 0.179 → "#ffffff"
         ├─ lineOn(rgb, tokenSurface("--glass-fill"))
@@ -144,7 +209,7 @@ renderGroup("left")
                             ON halo must be seen against the page)
                     │
                     ▼  inherited by every .ctl inside the group
-          theme.css, data-theme^="colored"  (dark page AND light page):
+          theme.css, data-colored="true"  (whichever theme is in force):
             border            = var(--set-color)                (always)
             transparent label = var(--set-line, var(--set-color))
             full  background  = var(--set-fill, var(--set-color))
@@ -225,20 +290,19 @@ for size in (portrait 412x915, landscape 915x412):
                                                 the element too, and floors
                                                 each leaf at 3:1 or 4.5:1
                                                 by its own font-size/weight
-    for look in the six (theme × fill):
-        _apply_look(theme, fill, colors)
-          ├─ config.apply(phone_theme, phone_fill)   ← the DESKTOP's own
-          │                                            setting, in-process,
-          │                                            so every later
-          │                                            `config` frame agrees
-          └─ applyUi({theme, fill, colors})          ← the app's own entry point
+    for look in the eight (theme x colored x fill):
+        _apply_look(theme, colored, fill)
+          ├─ config.apply(phone_theme, phone_colored, phone_fill)
+          │      ← the DESKTOP's own setting, in-process, so every later
+          │        `config` frame agrees
+          └─ applyUi({theme, colored, fill, colors})  ← the app's own entry point
 
         every look-named screenshot goes through _shoot():
-            body.dataset.theme / .fill == the look asked for?
+            body.dataset.theme / .colored / .fill == the look asked for?
               no  → the audit FAILS, naming both looks
               yes → page.screenshot(...)
         ├─ __contrast(#wheel) + (#group-left) + (#group-right)
-        │     the surfaces a coloured theme actually paints, wheel OPEN and SHUT
+        │     the surfaces a coloured look actually paints, wheel OPEN and SHUT
         ├─ __sweepSetColours(all 13 names of the palette in force)
         │     not only the two or three a fixture happens to show
         └─ portrait, or the default look → every panel

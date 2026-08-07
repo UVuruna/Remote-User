@@ -1,32 +1,43 @@
 /* Every colour the phone client uses, in one file — build round R3
-   (owner-approved 2026-08-07).
+   (owner-approved 2026-08-07), CORRECTED to three independent axes
+   2026-08-08.
 
    WHY IT IS ITS OWN FILE. style.css was already the biggest thing in client/
-   and three themes times two fills would have burst it (THE STRUCTURE LAW).
-   The seam is a real responsibility, not a size trick: this file answers
-   "what colour is anything", style.css and layouts.css answer "what shape and
-   where". Nothing here positions anything; nothing there names a colour.
+   and three axes would have burst it (THE STRUCTURE LAW). The seam is a real
+   responsibility, not a size trick: this file answers "what colour is
+   anything", style.css and layouts.css answer "what shape and where".
+   Nothing here positions anything; nothing there names a colour.
 
-   THE THEME IS CHOSEN ON THE DESKTOP AND NOWHERE ELSE (owner answer P4). The
-   page receives `config.ui = {theme, fill, colors}`, client/theme.js writes
-   `data-theme` / `data-fill` onto <body>, and every rule below hangs off those
-   two attributes. There is no menu on the phone, nothing is auto-detected,
-   and the device's own dark/light preference is deliberately ignored — one
-   source of truth.
+   THE LOOK IS CHOSEN ON THE DESKTOP AND NOWHERE ELSE (owner answer P4). The
+   page receives `config.ui = {theme, colored, fill, colors}`, client/theme.js
+   writes `data-theme` / `data-colored` / `data-fill` onto <body>, and every
+   rule below hangs off those three attributes. There is no menu on the phone,
+   nothing is auto-detected, and the device's own dark/light preference is
+   deliberately ignored — one source of truth.
 
-   THE AXES ARE INDEPENDENT:
-     data-theme = dark | light | colored | colored-light
-                                             — surfaces, ink, shadows
-     data-fill  = transparent | full         — outlined buttons, or filled
+   THE THREE AXES ARE INDEPENDENT (owner correction 2026-08-08 — his own
+   words: "teme postoje samo dve, svetla i tamna … a ove komande … on može da
+   bude obojen, neobojen, i može da bude transparentan ili pun"). The
+   2026-08-07 shape folded colour into a FOURTH theme name ("colored" /
+   "colored-light"), which rendered the same eight looks by accident but said
+   the page has four themes when the owner's own model is two themes plus two
+   switches that belong to the CONTROLS, not the page:
+     data-theme   = dark | light             — surfaces, ink, shadows
+     data-colored = true | false             — do the D-pad + wheel wear a
+                                                set's own colour, or the
+                                                theme's plain foreground
+     data-fill    = transparent | full       — outlined buttons, or filled
+   2 x 2 x 2 = 8 real renderings of every control.
 
-   THE COLOURED LOOK HAS TWO SURFACES (owner correction 2026-08-07: the set
-   colours must be "jako tamne nijanse" on a dark page and "ona klasična
-   jaka" — strong, vivid, in the lettering — on a light one). Both sentences
-   are true of the same look on two different pages, so `colored` is a dark
-   page and `colored-light` is a light one; the surface tokens below are
-   shared with the two monochrome themes and only the PALETTE differs, and
-   that palette is chosen on the DESKTOP (server/config.py → `set_colors`)
-   and arrives already resolved. This page never holds two tables.
+   THE COLOURED LOOK SHARES EVERY SURFACE WITH THE PLAIN ONE (owner's third
+   sentence: colour is a statement about the CONTROLS, not the page — "jako
+   tamne nijanse" on a dark page and "ona klasična jaka" — strong, vivid, in
+   the lettering — on a light one). `data-colored="true"` therefore adds
+   nothing to the page's own surfaces, cards or shadows; it only reaches the
+   `.ctl` / `.wheel-item` rules at the bottom of this file, and the PALETTE
+   those rules draw from is chosen by the THEME axis alone
+   (server/config.py → `set_colors`) and arrives already resolved. This page
+   never holds two tables.
 
    The set colour arrives per element as `--set-color` (plus `--set-fill`,
    `--set-ink` and `--set-line`, all computed by theme.js from the surface
@@ -74,7 +85,7 @@
   --ink-shadow: rgb(0 0 0 / 0.70);
   --lbl-shadow: rgb(0 0 0 / 0.85);
   --card-shadow: rgb(0 0 0 / 0.45);
-  /* What a FILLED button is filled with when the theme is not `colored`. */
+  /* What a FILLED button is filled with when `data-colored="false"`. */
   --fill-solid: #1e293b;
 }
 
@@ -83,13 +94,14 @@
    page sits a step below it. The accent is DEEPENED — the dark theme's
    #38bdf8 sits at 2.2:1 on white and is unreadable there.
 
-   `colored-light` is THE SAME PAGE. A light surface is a light surface
-   whether or not the buttons carry a set colour, and duplicating twenty
-   tokens so the coloured variant could own them would be two files to retune
-   the day the owner changes the page grey. Only the per-set rules at the
-   bottom of this file tell the two apart. */
-body[data-theme="light"],
-body[data-theme="colored-light"] {
+   COLOURED CONTROLS ON A LIGHT PAGE ARE THE SAME PAGE (owner correction
+   2026-08-08 — colour is now `data-colored`, its own axis, never a second
+   `data-theme` value). A light surface is a light surface whether or not the
+   buttons carry a set colour, and duplicating twenty tokens so the coloured
+   case could own them would be two files to retune the day the owner changes
+   the page grey. Only the per-set rules at the bottom of this file, gated on
+   `data-colored="true"`, tell the two apart. */
+body[data-theme="light"] {
   --surface-0: #eceef6;
   --card: #ffffff;
   /* THE FILL AXIS MUST DO SOMETHING HERE (owner grader, 2026-08-07 — 7/10:
@@ -137,12 +149,13 @@ body[data-theme="colored-light"] {
 }
 
 /* --- COLORED -------------------------------------------------------------
-   Every SET wearing its own colour, on the dark page (`colored`) or the light
-   one (`colored-light`). Only the buttons change: panels, cards and the
-   stream stay exactly as the matching monochrome theme renders them, because
-   the colour is a statement about which set your finger is on — not about
-   the page. Both variants therefore inherit their surfaces above and add
-   nothing here but the per-set rules at the bottom. */
+   Every SET wearing its own colour, on top of whichever theme (dark or
+   light) is in force — `data-colored="true"` is its own axis (owner
+   correction 2026-08-08), independent of `data-theme` and `data-fill` alike.
+   Only the buttons change: panels, cards and the stream stay exactly as the
+   theme alone renders them, because the colour is a statement about which
+   set your finger is on — not about the page. This block therefore inherits
+   every surface above and adds nothing here but the per-set rules below. */
 
 /* --- FILL: full ----------------------------------------------------------
    Outlined controls become filled ones. `--glass-fill` is what every button,
@@ -158,15 +171,14 @@ body[data-fill="full"] {
 /* --- The per-set colour -------------------------------------------------
    theme.js sets `--set-color` and its three derived tokens on the element
    that OWNS a set (a D-pad group, a wheel item), so both the group's own
-   buttons and its category button inherit them. Outside the two coloured
-   themes the variables are simply never read.
+   buttons and its category button inherit them. When `data-colored="false"`
+   the variables are simply never read.
 
-   ONE SELECTOR FOR BOTH SURFACES — `[data-theme^="colored"]` matches
-   `colored` and `colored-light` and nothing else. The rules below are
-   identical on either page BY CONSTRUCTION: every value they use is computed
-   by theme.js against the surface actually in force, so the light page needs
-   no rule of its own. A duplicated block per surface would be the first
-   thing to fall out of step.
+   ONE SELECTOR FOR BOTH SURFACES — `[data-colored="true"]` matches
+   regardless of `data-theme`. The rules below are identical on either page
+   BY CONSTRUCTION: every value they use is computed by theme.js against the
+   surface actually in force, so the light page needs no rule of its own. A
+   duplicated block per surface would be the first thing to fall out of step.
 
    OUTLINED: the colour is the outline AND the ink — it is drawn over the
    stream, and a filled patch would hide the very screen the user is aiming
@@ -192,16 +204,16 @@ body[data-fill="full"] {
    amber set gets black text and a deep teal one gets white. Neither shipped
    palette needs the correction today; it is the net under a colour the owner
    retunes tomorrow. */
-body[data-theme^="colored"] .ctl,
-body[data-theme^="colored"] .wheel-item {
+body[data-colored="true"] .ctl,
+body[data-colored="true"] .wheel-item {
   border-color: var(--set-color, var(--border));
   color: var(--set-line, var(--set-color, var(--text-primary)));
 }
-body[data-theme^="colored"] .ctl .lbl {
+body[data-colored="true"] .ctl .lbl {
   color: var(--set-line, var(--set-color, var(--text-primary)));
 }
-body[data-theme^="colored"][data-fill="full"] .ctl,
-body[data-theme^="colored"][data-fill="full"] .wheel-item {
+body[data-colored="true"][data-fill="full"] .ctl,
+body[data-colored="true"][data-fill="full"] .wheel-item {
   /* --set-fill is --set-color with its lightness nudged the shorter way ONLY
      when neither ink clears AA on the raw hue (theme.js → fillOn) — a border
      still wears the untouched --set-color, so the set's identity colour is
@@ -209,13 +221,13 @@ body[data-theme^="colored"][data-fill="full"] .wheel-item {
   background: var(--set-fill, var(--set-color, var(--glass-fill)));
   color: var(--set-ink, var(--text-primary));
 }
-body[data-theme^="colored"][data-fill="full"] .ctl .lbl {
+body[data-colored="true"][data-fill="full"] .ctl .lbl {
   color: var(--set-ink, var(--text-primary));
 }
 /* An ACTIVE toggle (Keys on, Scroll on) keeps meaning "switched on", so it
    still glows — in the set's own colour rather than the one accent. */
-body[data-theme^="colored"] .ctl.active,
-body[data-theme^="colored"] .ctl.held {
+body[data-colored="true"] .ctl.active,
+body[data-colored="true"] .ctl.held {
   box-shadow: 0 0 0 3px var(--set-glow, var(--accent-glow)),
               0 0 22px var(--set-glow, var(--accent-glow));
 }
