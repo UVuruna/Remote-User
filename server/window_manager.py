@@ -25,7 +25,8 @@ import time
 import agents
 from config import SETTINGS
 from grids import (  # the layout GEOMETRY lives there (THE STRUCTURE LAW)
-    GRID_CELLS, GRID_TEMPLATES, _cells, _normalize, layout_region, normalize_grid,
+    GRID_CELLS, GRID_TEMPLATES, _cells, _normalize, at_rect, layout_region,
+    normalize_grid,
 )
 
 logger = logging.getLogger(__name__)
@@ -324,7 +325,6 @@ def _work_area(mon_rect: tuple[int, int, int, int]) -> tuple[int, int, int, int]
 SETTLE_TIMEOUT_S = 1.5
 SETTLE_POLL_S = 0.03
 SETTLE_STABLE_READS = 4
-PLACE_TOLERANCE_PX = 8   # DWM frame rounding; anything past this is "not there"
 PLACE_RETRIES = 1        # one extra SetWindowPos when the first shot missed
 
 
@@ -358,17 +358,17 @@ def wait_settled(hwnd: int, timeout_s: float = SETTLE_TIMEOUT_S) -> bool:
     return False
 
 
-def _at_rect(rect: tuple[int, int, int, int],
-             target: tuple[int, int, int, int]) -> bool:
-    """The commanded spot, honestly: top-left within tolerance, size at least
-    the cell (apps with a bigger minimum size end up larger — owner-accepted,
-    the phone letterboxes)."""
-    x, y, w, h = rect
-    tx, ty, tw, th = target
-    return (abs(x - tx) <= PLACE_TOLERANCE_PX
-            and abs(y - ty) <= PLACE_TOLERANCE_PX
-            and w >= tw - PLACE_TOLERANCE_PX
-            and h >= th - PLACE_TOLERANCE_PX)
+def _standing(hwnds, targets) -> bool:
+    """Are the members REALLY on the rects their layout claims? `arranged_*`
+    records an INTENTION, never a measurement, so a member that has since
+    moved (app re-layout, a restore out of the taskbar, a snap, a placement
+    that did not take) turns it into a lie — and a guard that trusts it stops
+    placing the windows for good. See `LayoutRegistry.focus`."""
+    for hwnd, target in zip(hwnds, targets):
+        rect = None if user32.IsIconic(hwnd) else _frame_rect(hwnd)
+        if rect is None or not at_rect(rect, target):
+            return False
+    return True
 
 
 def wait_landed(hwnd: int, target: tuple[int, int, int, int],
@@ -383,7 +383,7 @@ def wait_landed(hwnd: int, target: tuple[int, int, int, int],
         rect = None
         if user32.IsWindow(hwnd) and not user32.IsIconic(hwnd):
             rect = _frame_rect(hwnd)
-        if rect is not None and rect == last and _at_rect(rect, target):
+        if rect is not None and rect == last and at_rect(rect, target):
             stable += 1
             if stable >= SETTLE_STABLE_READS:
                 return True
@@ -740,19 +740,32 @@ class LayoutRegistry:
         lay = self.layouts[index]
         placed = True
         aspect = device_ratio if lay.orient == "portrait" else 1.0 / device_ratio
+        # WHERE THE MEMBERS BELONG — computed fresh on every focus. It is pure
+        # arithmetic (grids.py), so asking is cheaper than remembering wrong.
+        region = layout_region(_work_area(mon_rect), aspect, lay.ratio, lay.pos)
+        targets = (_cells(region, lay.template, lay.orient)[:len(lay.members)]
+                   if lay.template else [region])
+        members = lay.members[:len(targets)]
+        # AND THE ARRANGEMENT IS VERIFIED, NEVER MERELY REMEMBERED (owner
+        # 2026-08-07, the Move handle's second round: "uvek ostavi centrirano").
+        # `arranged_*` alone used to be the guard, written from an INTENTION
+        # before place_window was even called — so once a member left its rect,
+        # every later Apply of the same position matched the remembered value
+        # and re-placed NOTHING. A claim about windows is MEASURED (the law
+        # layout_state already lives by, owner 2026-08-04).
         if (abs(aspect - lay.aspect) > 0.05 or lay.arranged_ratio != lay.ratio
-                or lay.arranged_pos != lay.pos):
-            # A different device, or the owner changed this layout's aspect
-            # or position — rebuild the arrangement.
+                or lay.arranged_pos != lay.pos or not _standing(members, targets)):
             lay.aspect = aspect
-            lay.arranged_ratio = lay.ratio
-            lay.arranged_pos = lay.pos
-            region = layout_region(_work_area(mon_rect), aspect, lay.ratio, lay.pos)
-            if lay.template:
-                for hwnd, cell in zip(lay.members, _cells(region, lay.template, lay.orient)):
-                    placed = place_window(hwnd, cell) and placed
-            else:
-                placed = place_window(lay.members[0], region)
+            for hwnd, cell in zip(members, targets):
+                placed = place_window(hwnd, cell) and placed
+            # Only an arrangement that LANDED is written down; a refusal leaves
+            # the note unwritten so the next focus tries again.
+            lay.arranged_ratio = lay.ratio if placed else None
+            lay.arranged_pos = lay.pos if placed else -1.0
+            if not placed:
+                logger.warning("Layout %r did not take its arrangement "
+                               "(ratio=%s pos=%.3f) — it will be retried",
+                               lay.name, lay.ratio, lay.pos)
         # The member that holds the KEYBOARD is raised last, so it is the one
         # left in the foreground (owner 2026-08-06). Raising in plain list
         # order handed the keyboard to whatever sat last in the grid, and an
@@ -765,13 +778,13 @@ class LayoutRegistry:
             raise_window(hwnd)
         self.last_focus = (index, lay.name)  # where the next session resumes
         if lay.template:
-            cells = _cells(layout_region(_work_area(mon_rect), lay.aspect,
-                                         lay.ratio, lay.pos),
-                           lay.template, lay.orient)
-            region = cells[0]
-            x2 = max(c[0] + c[2] for c in cells[:len(lay.members)])
-            y2 = max(c[1] + c[3] for c in cells[:len(lay.members)])
-            region = (region[0], region[1], x2 - region[0], y2 - region[1])
+            # The union of the cells the members actually occupy — the same
+            # `targets` that were just placed, never a second computation of
+            # them (one source, so the frame can never disagree with the desk).
+            x2 = max(c[0] + c[2] for c in targets)
+            y2 = max(c[1] + c[3] for c in targets)
+            region = (targets[0][0], targets[0][1],
+                      x2 - targets[0][0], y2 - targets[0][1])
         else:
             region = _frame_rect(lay.members[0])
             if region is None:

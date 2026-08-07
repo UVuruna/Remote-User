@@ -69,6 +69,23 @@ def layout_region(work_area, aspect: float,
         return _fit_rect(box, ratio[0] / ratio[1], pos)
     return box
 
+
+PLACE_TOLERANCE_PX = 8   # DWM frame rounding; anything past this is "not there"
+
+
+def at_rect(rect, target) -> bool:
+    """Is a window's visible frame ON the rect it was commanded to take?
+    Honestly: top-left within tolerance, size at least the cell (apps with a
+    bigger minimum size end up larger — owner-accepted, the phone letterboxes).
+    Pure arithmetic, so it lives here with the rest of the geometry."""
+    x, y, w, h = rect
+    tx, ty, tw, th = target
+    return (abs(x - tx) <= PLACE_TOLERANCE_PX
+            and abs(y - ty) <= PLACE_TOLERANCE_PX
+            and w >= tw - PLACE_TOLERANCE_PX
+            and h >= th - PLACE_TOLERANCE_PX)
+
+
 def normalize_grid(grid: str | None) -> str | None:
     """A stored or incoming grid name → one this version knows, or None for a
     solo layout. Layouts made before 2026-08-07 carry `2x1`/`1x2`/`2x2`."""

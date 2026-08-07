@@ -91,7 +91,16 @@ def fake_windows():
     ]
 
 
-def install_fakes() -> None:
+PLACED: list[tuple[int, tuple[int, int, int, int]]] = []
+FRAME: dict[int, tuple[int, int, int, int]] = {}
+
+
+def install_fakes(track_placement: bool = False) -> None:
+    """`track_placement` swaps the do-nothing `place_window` for a MODEL of the
+    desk: every commanded rect is recorded AND becomes the window's real frame,
+    so `_frame_rect` afterwards answers where the window actually stands. That
+    is what lets a check assert on the RECT instead of on a stored number —
+    see `check_the_move_handle_reaches_the_windows`."""
     fake = FakeWin32([WIN_A, WIN_B])
     window_manager.user32 = fake
     window_manager.dwmapi = fake
@@ -107,6 +116,17 @@ def install_fakes() -> None:
     window_manager.freeze_transitions = lambda hwnd, disabled=True: None
     window_manager.wait_minimized = lambda hwnds, timeout_s=0: None
     window_manager._frame_rect = lambda hwnd: (0, 0, 1000, 1000)
+    if track_placement:
+        PLACED.clear()
+        FRAME.clear()
+
+        def place(hwnd, rect):
+            PLACED.append((hwnd, tuple(rect)))
+            FRAME[hwnd] = tuple(rect)
+            return True
+
+        window_manager.place_window = place
+        window_manager._frame_rect = lambda hwnd: FRAME.get(hwnd, (0, 0, 1000, 1000))
     window_manager._title = lambda hwnd: "Remote User - Visual Studio Code"
     window_manager._process_name = lambda hwnd: "code.exe"
     window_manager._process_path = lambda hwnd: "C:/code.exe"
@@ -265,6 +285,111 @@ def check_a_grid_from_the_list_answers() -> bool:
             and layouts.layouts[0].members == [WIN_A, WIN_B])
 
 
+# ═══════════════ the Move handle, followed to the WINDOWS ═══════════════
+# Owner report 2026-08-07, the SECOND round of the same bug: he sets 10:13
+# portrait, drags the Move handle to the TOP, presses Apply — and the window
+# comes out vertically centred. "uvek ostavi centrirano."
+#
+# The round before it measured `_fit_rect(box, aspect, pos)` and `Layout.pos`,
+# found both correct, and called the feature verified. Both WERE correct. The
+# value died between them and the desk, and no check in this file could see it
+# because the one that touched `layout_aspect` asserted on a stored NUMBER
+# (`layouts[0].pos == 0.25`) while `place_window` was a fake that threw its
+# rect away. So these checks assert on the RECT — where the window is told to
+# stand — for a solo layout AND a grid, portrait AND landscape.
+
+RATIO_W, RATIO_H = 10, 13     # the owner's own pair
+
+
+def union(rects) -> tuple[int, int, int, int]:
+    x = min(r[0] for r in rects)
+    y = min(r[1] for r in rects)
+    return (x, y, max(r[0] + r[2] for r in rects) - x,
+            max(r[1] + r[3] for r in rects) - y)
+
+
+def aspect_run(mode: str, orient: str, positions: list, drift: bool = False):
+    """Create a layout, then apply `layout_aspect` at each position through the
+    REAL dispatcher. Returns one union rect per position (None = nothing was
+    placed). `drift` moves the window off its rect between positions — an app
+    re-laying itself out, a restore, a snap: the desk the server must re-read."""
+    install_fakes(track_placement=True)
+    conn, layouts = fresh_conn(), window_manager.LayoutRegistry()
+    slots = [{"hwnd": WIN_A, "tab": None, "x": 0.5, "y": 0.5}]
+    if mode == "grid":
+        slots.append({"hwnd": WIN_B, "tab": None, "x": 0.5, "y": 0.5})
+    ws, conn, layouts = drive([
+        {"type": "layout_create", "mode": mode, "grid": "2" if mode == "grid" else None,
+         "orient": orient, "slots": slots, "name": "Work"}], conn, layouts)
+    out = []
+    for pos in positions:
+        if drift:
+            for hwnd in list(FRAME):
+                x, y, w, h = FRAME[hwnd]
+                FRAME[hwnd] = (x, y + 400, w, h)   # the window wandered
+        PLACED.clear()
+        ws, conn, layouts = drive([
+            {"type": "layout_aspect", "index": 0,
+             "w": RATIO_W, "h": RATIO_H, "pos": pos}], conn, layouts)
+        out.append(union([r for _, r in PLACED]) if PLACED else None)
+    return out
+
+
+def check_the_move_handle_reaches_the_windows() -> bool:
+    """0 = the free axis's near edge, 1000 = its far edge, 500 = centred — read
+    off the rect the server commands, not off anything it stored."""
+    ml, mt, mw, mh = MON
+    ok = True
+    for mode in ("solo", "grid"):
+        for orient in ("portrait", "landscape"):
+            top, mid, bottom = aspect_run(mode, orient, [0, 500, 1000])
+            if not (top and mid and bottom):
+                print(f"  DETAIL {mode}/{orient}: a position placed NOTHING")
+                ok = False
+                continue
+            # Only the position may differ — the shape must not.
+            if not (top[2] == mid[2] == bottom[2] and top[3] == mid[3] == bottom[3]):
+                print(f"  DETAIL {mode}/{orient}: the region changed SIZE: "
+                      f"{top} {mid} {bottom}")
+                ok = False
+            if orient == "portrait":
+                near, far, size, span, origin = top[1], bottom[1], top[3], mh, mt
+                centre = mid[1]
+            else:
+                near, far, size, span, origin = top[0], bottom[0], top[2], mw, ml
+                centre = mid[0]
+            slack = span - size
+            good = (abs(near - origin) <= 2                     # pinned near
+                    and abs(far - (origin + slack)) <= 2        # pinned far
+                    and abs(centre - (origin + slack // 2)) <= 2)  # centred
+            if not good or slack < 100:
+                print(f"  DETAIL {mode}/{orient}: near={near} centre={centre} "
+                      f"far={far} slack={slack} (origin {origin})")
+                ok = False
+    return ok
+
+
+def check_the_same_position_applied_again_still_moves_the_windows() -> bool:
+    """THE REPEAT, gated. `Layout.arranged_pos` records what was COMMANDED, so
+    once a member left its rect (an app re-laying itself out, a restore out of
+    the taskbar, a Windows snap) the guard matched on every later Apply of the
+    SAME position and placed NOTHING — the phone's panel moved, the PC never
+    did again, "uvek ostavi centrirano". The desk is re-read now."""
+    ml, mt, mw, mh = MON
+    ok = True
+    for mode in ("solo", "grid"):
+        runs = aspect_run(mode, "portrait", [0, 0, 0], drift=True)
+        for i, rect in enumerate(runs):
+            if rect is None:
+                print(f"  DETAIL {mode}: apply #{i + 1} of pos=0 placed NOTHING")
+                ok = False
+            elif abs(rect[1] - mt) > 2:
+                print(f"  DETAIL {mode}: apply #{i + 1} landed at y={rect[1]}, "
+                      f"not on the top edge {mt}")
+                ok = False
+    return ok
+
+
 CHECKS = [
     ("create from a LIST answers the phone", check_create_from_a_list_answers),
     ("the list probes the process table ONCE, not per entry",
@@ -274,6 +399,10 @@ CHECKS = [
     ("rename / aspect / remove all answer",
      check_rename_apps_aspect_remove_all_answer),
     ("a 2x1 grid built from the list", check_a_grid_from_the_list_answers),
+    ("the Move handle reaches the WINDOWS (solo/grid, portrait/landscape)",
+     check_the_move_handle_reaches_the_windows),
+    ("the same position applied again still moves the windows",
+     check_the_same_position_applied_again_still_moves_the_windows),
 ]
 
 

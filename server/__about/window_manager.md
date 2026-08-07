@@ -110,9 +110,27 @@ layer on `layout_focus -1`) means the desktop IS the state to resume into.
 Each layout carries its own `ratio` (W:H, `None` = the phone's own shape) and
 `pos` (0–1 fraction of the free-axis slack, 0.5 = centered — the phone's Move
 handle), set from the phone's aspect panel via `set_ratio(index, w, h, pos)`
-and applied by the next `focus` (which is what re-places the windows —
-`arranged_ratio`/`arranged_pos` record what they currently stand in, so a
-change forces the rebuild). Both ride in `layout_state` entries.
+and applied by the next `focus` (which is what re-places the windows). Both
+ride in `layout_state` entries.
+
+**The arrangement is VERIFIED, never merely remembered** (owner report
+2026-08-07 — the Move handle's SECOND round: he set 10:13 portrait, dragged the
+handle to the top, pressed Apply, and the window came out vertically centred,
+"uvek ostavi centrirano"). `arranged_ratio`/`arranged_pos` are a note of what
+was COMMANDED — they are written from an intention, and the old guard was that
+note alone. So the moment a member left its rect for any reason (the app
+re-laying itself out, a restore out of the taskbar, a Windows snap, a
+placement that quietly did not take), the note became a lie and every later
+Apply of the SAME position matched it and re-placed NOTHING: the phone's panel
+moved and the PC never did again. `focus` therefore computes the targets fresh
+every time and asks `_standing(members, targets)` where the windows REALLY
+are (`grids.at_rect`, the same ±8 px tolerance `wait_landed` uses, so a
+min-size app that legitimately sits larger never re-places forever); and the
+note is written only when the placement LANDED — a refusal leaves it unwritten
+(`None` / `-1.0`), logs a warning naming the layout, and the next focus tries
+again. Same law `layout_state` already lives by (owner 2026-08-04): a claim
+about windows is measured, not remembered. Gated by
+`tests/test_layout_protocol.py`, which asserts on the placement RECT.
 
 `layout_region(mon_rect, aspect, ratio, pos)` is the single place the rule
 lives: the DEVICE shape gives the outer box (`_region_rect`), and the override
