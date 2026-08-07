@@ -66,7 +66,22 @@ everything here composes and frames WINDOWS on it.
   sends `layout_aspect {index, w, h}` on a 1000-scale (`0/0` = Screen).
 - **Creation** — `openSourceChooser`, `armNextTap`, `handleLayoutOffer`,
   `renderCreationPanel`, `cancelCreation`, `slotFromOffer`/`slotFromEntry`,
-  `GRID_CELLS`.
+  `titleChip`, `GRID_CELLS`.
+- **A window title is never cut** (owner 2026-08-06, fixed 2026-08-07). The
+  chosen-slot chips and the creation list both used to shorten a title in JS
+  — `s.title.slice(0, 29) + "…"` — which is a truncation the DOM cannot see:
+  the element fits perfectly, `scrollWidth === clientWidth`, and every clip
+  check in the layout audit reported PASS while 225 device px stood idle on
+  that row. His words: *"čip sa izabranim prozorom skraćuje naziv na 'Claude
+  Code - Remote User - V…', a pun naziv se na tom ekranu ne vidi nigde kada
+  polje Name već prepišeš"*. `titleChip` now adds `.lay-title`, which lets a
+  chip take the free width and then WRAP — the same treatment
+  `.lay-item-main span` gives the same titles in the layout list, not a second
+  one. **And that chip is the answer to the second half of his complaint:**
+  the Name field may be retyped to anything, the chip above it still carries
+  the window's own full title. The audit gained the tooth this class needed —
+  `__truncated`, an ellipsis in the text itself beside free width on its row
+  (see [tests](../../tests/___tests.md)).
 
 ## Design Decisions
 

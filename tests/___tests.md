@@ -100,6 +100,37 @@ pool may hold reserve commands whose names are longer than the shipped four
 ("Copy path", "Go to file"), the law forbids eliding them, so the label wraps —
 and the wrapped label must still sit fully inside its 58 px button.
 
+**TEXT CUT BEFORE THE DOM EVER SEES IT** (`__truncated`, independent grader
+2026-08-07 — the hole that let the owner's own complaint pass three rounds
+green). Every other clip check in this file measures the DOM: `scrollWidth >
+clientWidth`, a card wider than its viewport, a label outside its button. A
+string JavaScript shortened BEFORE the node existed defeats all of them by
+construction — `client/layouts.js` did `s.title.slice(0, 29) + "…"`, so the
+element fitted perfectly and the audit could only report PASS while 225 device
+px stood idle on the same row and the owner was writing *"a pun naziv se na tom
+ekranu ne vidi nigde"*. The tell such a cut leaves is the ellipsis IN THE TEXT,
+so that is what is measured: a text node ending in "…" (or "...") with more
+than 24 CSS px still free to its right on its own row, failing with the string,
+the element and the number. CSS elision leaves no ellipsis in the text — that
+case belongs to the `scrollWidth` check, and the two together cover both ways a
+string can be shortened. The one deliberate ellipsis this app draws ("More
+languages (2)…") declares itself with `data-opens-more` in `client/panels.js`,
+in the product rather than in an allow-list nobody editing the product would
+see. Self-tested by planting the cap again: 14 checks fail, naming *"Claude
+Code - Remote User - V…" … was cut with 129 CSS px still free on its row*.
+
+**THE REGION FRAME OPENS CLEAR OF EVERY CONTROL** (same grader). `#region-panel`
+draws at z-index 55, above every control, so a newborn grab frame lying on one
+paints its dashed edge and its 44 px handles across that control's label — his
+picture read "Layou" where the corner button says "Layout". The default rect is
+now placed in the band the chrome leaves free, and this check measures the
+frame, its four handles and its hint bar against every `.corner`,
+`#layout-bar` and `.group` rect, in both orientations. The panel's own entry in
+`PANELS` was also changed to open at that default (`rgBox = null`): it used to
+be staged into the top-left corner, which proved nothing about the bottom-centre
+bar it claimed to test and handed every grader a picture of a state the product
+never opens in.
+
 **SIX LOOKS, not one** (build round R3, 2026-08-07). The desktop now chooses
 one of three phone themes (dark / light / colored) and one of two fills
 (outlined / filled), so there are six real renderings of every surface and a
@@ -118,6 +149,46 @@ geometry does not change with a colour. Three things changed with it:
   looked at them. Self-tested by forcing `theme.js`'s `INK_CROSSOVER` high so
   every ink comes out white: thirteen labels go red at 1.74–2.72:1 in
   `colored/full`, in both orientations, and green again when it is put back.
+
+**A LOOK-NAMED SHOT MUST BE THAT LOOK** (`_shoot`, 2026-08-07 — the tooth this
+file was missing, and the reason three rounds of independent graders were
+handed pictures of the wrong look while every check printed PASS). Twelve
+`Controls*` pictures carry a theme and a fill in their filenames, and nothing
+here had ever compared those two words with `body.dataset.theme` /
+`body.dataset.fill` at the instant the shutter fired. Two of the twelve
+therefore showed a different look: `Controls_dark_full.png` was byte-identical
+to `Controls.png` (max per-channel diff 0 over all 1,507,920 pixels; both
+87,024 px of the 20 % tint `rgb(18,26,45)`, never the solid `rgb(30,41,59)`),
+and `Controls_light_transparent_landscape.png` rendered the dark page
+`(15,23,42)` where its portrait twin renders `(236,238,246)`. Both were
+labelled `audit: PASS`. Two things close it:
+
+- `_shoot(page, label, look, results)` is now the ONLY way a look-named shot is
+  written. It reads the two dataset attributes, records a per-shot result, and
+  **FAILS the audit** — not warns — when they disagree, printing `asked for
+  X/Y, the page was showing A/B at the shutter`. The picture is still written:
+  a grader has to be able to see what was measured.
+- The drift itself is gone at both ends. `_apply_look` also calls
+  `config.apply(phone_theme=…, phone_fill=…)` — the audit runs the real server
+  in THIS process, so the look it asks for is the look every later `config`
+  frame carries, instead of the audit fighting its own server (in-memory only;
+  `save_user_settings` is the sole writer of the owner's file). And the page's
+  readiness gate now waits for `monitor.w > 0`, the socket's first `config`:
+  `#group-left button` goes green about **1.4 s** earlier — the D-pad renders
+  from the page's own defaults — and everything done in that window used to be
+  silently overwritten when the frame finally landed. Exactly one look per
+  browser context was being stomped, which is why the wrong picture moved from
+  run to run.
+
+Self-tested by planting the reset back: `_apply_look` was made to close the
+socket and wait 2.5 s, delivering a `config` between the request and the
+shutter exactly as it used to happen by accident. **35 look-named shots go
+red** in one run (`the shot shows the look it is named for: Controls dark
+full → FAIL`), `Controls.png` and `Controls_dark_full.png` return to a
+per-channel difference of **0**, and every `light` shot returns to the dark
+page. Restored, the audit is green and the same pair differs by R13 G16 B15
+across 134,804 pixels (8.94 %), with the filled shot carrying 87,023 px of the
+solid `rgb(30,41,59)`.
 
 Run: `.venv\Scripts\python tests/test_layout_audit.py`
 
@@ -162,6 +233,23 @@ arrive, and hands it back for the audit to show again — proving the minimum is
 re-measured on the way BACK. Self-tested the same way (signature on
 `isVisible()` + a settle-once `showEvent` restored): `CLIPPED … has 869x837,
 needs at least 618x880`.
+
+**It is a measurement case and NOT a second picture** (`NO_SHOT`, 2026-08-07 —
+independent graders reported it three times: `MainWindow.png` and
+`MainWindow__reopened_from_the_tray.png` were byte-identical, md5
+`12c59bd6ae08`, as were their light pair `c72b15932b44` — four proof lines
+standing over two pictures). Measured before deciding: both windows built,
+each resized to its own declared minimum and rendered at 2x, in both palettes.
+All four report **minimum 463x685, sizeHint 463x657**, and the two pixel
+buffers hash the same in each palette (`7ce0566f4066` dark, `3bcd7da153a3`
+light). They cannot differ, and not by accident — the tray factory reaches the
+identical widget state by a longer road. What the case proves is that the
+hidden round trip leaves no WRONG FLOOR behind, a claim about numbers, and a
+photograph says nothing about it. So the case stays in `WINDOWS` and its name
+goes into `NO_SHOT`: `audit_window` skips the screenshot only, never the
+checks. A picture that is a copy of another picture is not evidence — it is a
+second proof line that costs a grader a second look and returns the first
+look's answer.
 
 **E. OVERLAP, and REAL FONTS** (owner 2026-08-06, after this guard reported
 PASS over the window he had photographed twice). Two holes, both closed:
