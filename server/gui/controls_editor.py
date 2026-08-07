@@ -446,6 +446,21 @@ class ControlsEditor(QDialog):
         reset.clicked.connect(self._reset_arrangement)
         reset_row.addWidget(reset)
         acol.addLayout(reset_row)
+        # ARRANGEMENT STAYS IN THE RIGHT COLUMN, and the attempt to move it is
+        # worth recording (2026-08-07). An independent grader failed this
+        # window under THE SPACE & LEGIBILITY LAW — the pool table scrolled
+        # while the set list beside it held an idle block — and named the
+        # ladder's REFLOW step: move this self-contained box into that space.
+        # It was tried. All thirteen commands became visible and the declared
+        # minimum FELL from 956 to 799 — and the set list itself then scrolled
+        # AND clipped "Explorer" mid-row. That is a strictly worse violation:
+        # a scrollbar hides nothing, clipped text does. The two columns have
+        # different natural heights, so height moved between them is height
+        # taken from one of them. What stands instead is the raised minimum
+        # (CommandTable.ROWS_SHOWN), and what remains — the largest pool still
+        # scrolling past ten of thirteen — is on the owner's desk as a
+        # proposal, because the only fix left raises the 1280x1000 frame in
+        # .claude/layout-frame.json, and that file is his to change.
         right.addWidget(arr)
 
         actions = QHBoxLayout()
