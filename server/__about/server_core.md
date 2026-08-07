@@ -46,11 +46,24 @@ One instance per process; states `"stopped" → "starting" → "running" → "st
 - **`repair_stranded()` runs in `__init__`**, before anything of ours can
   raise a window: whatever a killed previous run left standing is put right
   first (see [Window Manager](window_manager.md) — the topmost ledger).
-- **`release_windows()`** drops the whole band synchronously on the calling
-  thread. It runs FIRST in `stop()` — ahead of `force_exit` and a join that
-  can wait out its full 10 s while the server thread is mid-placement — and
-  FIRST in `_serve`'s `finally`, ahead of the encoder teardown, so a hanging
-  ffmpeg terminate cannot eat the one thing the owner notices.
+- **`foreground_lock.repair_stranded()` runs beside it** (round R2), and only
+  then does `__init__` raise the lock if the owner's switch says so. It is
+  applied HERE rather than in the window because both entry points build a
+  controller and the headless CLI is entitled to the same setting — but it is
+  deliberately NOT released by `release_windows()`, which also runs on every
+  server stop. The lock belongs to the PROCESS; `gui_main.py` and `main.py`
+  release it on the way out. See [Foreground Lock](foreground_lock.md).
+- **`release_windows()` is THE exit call.** It drops the whole always-on-top
+  band synchronously on the calling thread AND stops the foreground-hook
+  listener ([Focus Hook](focus_hook.md) — a Win32 hook and its thread are the
+  same kind of leftover as a stranded topmost window). It runs FIRST in
+  `stop()` — ahead of `force_exit` and a join that can wait out its full 10 s
+  while the server thread is mid-placement — and FIRST in `_serve`'s
+  `finally`, ahead of the encoder teardown, so a hanging ffmpeg terminate
+  cannot eat the one thing the owner notices. Every documented way out
+  funnels here: tray Quit, server stop, Apply & restart, Ctrl+C, a console
+  close/logoff, Qt's `aboutToQuit`, `atexit`. It is idempotent, and both
+  halves are wrapped so nothing on the way out can raise.
 - **`traffic.METER.start()`** begins sampling with the first server start and
   never stops: a stopped server has to read as a line of zeros on the owner's
   graph, never as a hole where anything could have happened.

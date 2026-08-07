@@ -10,8 +10,12 @@ foreground at that instant. So anything on the PC that takes focus while he
 speaks — an app starting, a dialog, another agent's editor window — takes the
 rest of his sentence too, silently, with the stream still showing the PC.
 
-What is proven here, without Windows and without a browser (every user32 call
-window_manager makes is answered by a fake):
+This file proves the POLICY — where typed input may land. The machinery that
+carries it (the foreground hook, its thread, the exit paths, the lock) is
+proven next door in `test_focus_hook.py`; the two were split on 2026-08-07
+when together they crossed THE STRUCTURE LAW's 1,000 lines. Neither touches
+the owner's desktop: every Win32 call is answered by a fake
+([_focus_fakes.py](_focus_fakes.py)).
 
 1. IN A LAYOUT the fence is the layout: a foreground outside its members is
    refused, focus is handed back to the member that was being typed into, and
@@ -28,78 +32,30 @@ window_manager makes is answered by a fake):
 5. The thief is NAMED in the log every time — the app being the last to know
    is what cost three trips back to the phone.
 
-Run:  .venv\\Scripts\\python tests/test_focus_guard.py
+And the hole closed by build round R1 (owner-approved, 2026-08-07): the fence
+stood only BETWEEN messages. Typing is measured at ~1.84 ms per character on
+this PC, so a dictated sentence is over a SECOND of `SendInput` during which a
+thief got the rest of it, unlogged and unreplayed. The foreground is now
+checked before every character (`TYPE_CHUNK_CHARS`, sized from that
+measurement); a steal anywhere costs zero characters, a steal that cannot be
+undone STOPS the typing rather than feeding the thief, and what was lost is
+TOLD TO THE PHONE — not buried in a log he is not reading while he speaks.
+
+Run:  .venv\Scripts\python tests/test_focus_guard.py
 """
 
 import asyncio
-import json
-import logging
 import sys
+import time
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "server"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-import focus_guard  # noqa: E402
-import web  # noqa: E402
-import window_manager  # noqa: E402
-
-MEMBER_A, MEMBER_B, DIALOG, THIEF = 0x10, 0x20, 0x30, 0x99
-
-
-class FakeWin32:
-    """The handful of user32 calls the guard makes. `fg` is the foreground,
-    `owner` maps a window to the one that raised it (GW_OWNER)."""
-
-    def __init__(self, fg=0, alive=(), owner=None):
-        self.fg = fg
-        self.alive = set(alive)
-        self.owner = dict(owner or {})
-
-    def GetForegroundWindow(self):        # noqa: N802 — mirrors the Win32 name
-        return self.fg
-
-    def GetWindow(self, hwnd, cmd):       # noqa: N802
-        return self.owner.get(hwnd, 0) if cmd == focus_guard.GW_OWNER else 0
-
-    def IsWindow(self, hwnd):             # noqa: N802
-        return 1 if hwnd in self.alive else 0
-
-    def __getattr__(self, name):
-        return lambda *a, **k: 0          # ShowWindow, SetWindowPos, … no-ops
-
-
-class Raises(list):
-    """Records (hwnd, topmost) of every raise the guard asks for."""
-
-    def install(self):
-        window_manager.raise_window = lambda hwnd, topmost=True: \
-            self.append((hwnd, topmost))
-        return self
-
-
-def with_win32(fg, alive=(), owner=None) -> FakeWin32:
-    fake = FakeWin32(fg, alive, owner)
-    window_manager.user32 = fake
-    window_manager.dwmapi = fake
-    window_manager._process_name = lambda hwnd: f"app{hwnd:x}.exe"
-    window_manager._title = lambda hwnd: f"window {hwnd:#x}"
-    return fake
-
-
-def layout_with(members, last_member=None) -> window_manager.LayoutRegistry:
-    reg = window_manager.LayoutRegistry()
-    lay = window_manager.Layout("Work", "code.exe", list(members),
-                                "2x1" if len(members) > 1 else None,
-                                "portrait", 0.5)
-    lay.last_member = last_member or members[0]
-    reg.layouts.append(lay)
-    return reg
-
-
-def fresh_conn(active=None) -> dict:
-    return {"ratio": 9 / 16, "active": active, "region": None, "quality": None,
-            "seen": 0.0, "away": None, "left": False,
-            "pin": None, "pin_stale": True}
+from _focus_fakes import (  # noqa: E402
+    DIALOG, MEMBER_A, MEMBER_B, THIEF, Catch, FakeInjector, FakeWs, Raises,
+    TypeSpy, focus_guard, fresh_conn, input_injector, layout_with, run_checks,
+    web, window_manager, with_win32,
+)
 
 
 # ═══════════════════ 1. the layout is a fence ═══════════════════
@@ -177,19 +133,9 @@ def check_the_thief_is_named_in_the_log() -> bool:
     """A restored keystroke that logs nothing would only hide the next cause."""
     with_win32(fg=THIEF, alive=(MEMBER_A, THIEF))
     Raises().install()
-    records: list[str] = []
-
-    class Catch(logging.Handler):
-        def emit(self, record):
-            records.append(record.getMessage())
-
-    handler = Catch()
-    focus_guard.logger.addHandler(handler)
-    try:
+    with Catch(focus_guard.logger) as caught:
         focus_guard.guard(layout_with([MEMBER_A]), fresh_conn(active=0))
-    finally:
-        focus_guard.logger.removeHandler(handler)
-    return any(f"{THIEF:#x}" in line and "app99.exe" in line for line in records)
+    return caught.naming(THIEF)
 
 
 # ═══════════════════ 2b. the layout is DEFENDED, not merely checked ═══════════════════
@@ -244,21 +190,11 @@ def check_one_thief_is_logged_once_not_every_poll() -> bool:
     server log by itself."""
     with_win32(fg=THIEF, alive=(MEMBER_A, THIEF))
     Raises().install()
-    records: list[str] = []
-
-    class Catch(logging.Handler):
-        def emit(self, record):
-            records.append(record.getMessage())
-
-    handler = Catch()
-    focus_guard.logger.addHandler(handler)
     reg, conn = layout_with([MEMBER_A]), fresh_conn(active=0)
-    try:
+    with Catch(focus_guard.logger) as caught:
         for _ in range(5):
             focus_guard.guard(reg, conn, False)
-    finally:
-        focus_guard.logger.removeHandler(handler)
-    return len(records) == 1
+    return len(caught.records) == 1
 
 
 # ═══════════════════ 3. the other half: the re-focus order ═══════════════════
@@ -286,34 +222,6 @@ def check_prune_moves_the_target_off_a_closed_window() -> bool:
 
 
 # ═══════════════════ 4. end to end, through the real dispatcher ═══════════════════
-class FakeInjector:
-    def __init__(self):
-        self.typed: list[str] = []
-
-    def type_text(self, text):
-        self.typed.append(text)
-
-    def __getattr__(self, name):
-        return lambda *a, **k: None
-
-
-class FakeWs:
-    def __init__(self, messages):
-        self._messages = list(messages)
-        self.sent: list = []
-
-    async def receive_text(self) -> str:
-        if not self._messages:
-            raise web.WebSocketDisconnect(1000)
-        return json.dumps(self._messages.pop(0))
-
-    async def send_text(self, text: str) -> None:
-        self.sent.append(json.loads(text))
-
-    async def close(self, code: int = 1000) -> None:
-        pass
-
-
 def check_dictation_through_the_dispatcher() -> bool:
     """The whole path the owner's voice takes: `key_text` from the phone while
     a thief holds the foreground. The text must still arrive — in the layout."""
@@ -355,6 +263,161 @@ def check_a_click_message_re_arms_through_the_dispatcher() -> bool:
     return conn["pin_stale"] is True
 
 
+# ═══════════════════ 5. INSIDE one sentence (build round R1) ═══════════════════
+SENTENCE = ("ovo je jedna duga izdiktirana rečenica koja se ubacuje znak po "
+            "znak i mora cela da stigne tamo gde on gleda")
+ASTRAL = "svaka reč 🎉 i još 🚀 emoji koje moraju stići cele "
+
+
+def check_a_steal_anywhere_in_a_sentence_loses_nothing() -> bool:
+    """The hole the guard did not cover: `SendInput` types one code unit at a
+    time — measured ~1.84 ms per character on this PC, so a 600-character
+    dictated sentence is over a SECOND long, and a window that takes focus
+    inside that stretch used to receive the remainder. Nothing replays
+    injected characters and Windows reports no error, so the owner only ever
+    found out by reading his own sentence in another project.
+
+    Placements matter, and this is the correction of a claim that was too
+    generous: with 40-character chunks "zero lost" was true only when the
+    steal landed exactly ON a boundary (35/20/39/25 characters reached the
+    thief at other offsets). One character per check is what makes zero true
+    everywhere — see TYPE_CHUNK_CHARS for what that costs."""
+    for steal_at in (1, 7, 20, 39, 40, 41, 55, 80):
+        fake = with_win32(fg=MEMBER_A, alive=(MEMBER_A, MEMBER_B, THIEF))
+        raises = Raises().install(fake)
+        reg = layout_with([MEMBER_A, MEMBER_B], last_member=MEMBER_A)
+        conn = fresh_conn(active=0)
+        focus_guard.guard(reg, conn)       # the message's own guard, as web.py runs it
+        spy = TypeSpy(fake, steal_at=steal_at)
+        lost = spy.type_text(SENTENCE, focus_guard.typist(reg, conn))
+        if (lost or spy.text != SENTENCE or not spy.landed_only_in(MEMBER_A)
+                or raises != [(MEMBER_A, True)]):
+            return False
+    return True
+
+
+def check_a_steal_inside_an_emoji_costs_at_most_its_tail() -> bool:
+    """Astral characters, which the BMP-only cases above cannot speak for. A
+    character is typed as a whole (two code units for an emoji), so a steal
+    landing BETWEEN those two halves is the one thing a per-character check
+    cannot pre-empt: the low surrogate follows the high one out. The honest
+    guarantee is therefore "never a whole character, at most the tail of the
+    one in flight" — and the text still arrives complete."""
+    for steal_at in (1, 2, 11, 12, 13, 24, 25):
+        fake = with_win32(fg=MEMBER_A, alive=(MEMBER_A, THIEF))
+        Raises().install(fake)
+        reg, conn = layout_with([MEMBER_A]), fresh_conn(active=0)
+        focus_guard.guard(reg, conn)
+        spy = TypeSpy(fake, steal_at=steal_at)
+        lost = spy.type_text(ASTRAL, focus_guard.typist(reg, conn))
+        stolen = [unit for unit, fg in spy.units if fg == THIEF]
+        if lost or spy.text != ASTRAL or len(stolen) > 1:
+            return False
+        # ...and what it could catch is only ever half of a surrogate pair
+        if stolen and not 0xDC00 <= stolen[0] <= 0xDFFF:
+            return False
+    return True
+
+
+def check_typing_stops_and_says_so_when_focus_is_lost() -> bool:
+    """When focus CANNOT be brought back, the rest is not sent — a thief must
+    never be fed — and both halves are in the log: the guard names the window
+    holding it, the injector names how much never arrived. Text dropped in
+    silence is exactly how this failure survived three reports."""
+    fake = with_win32(fg=MEMBER_A, alive=(MEMBER_A, THIEF))
+    Raises().install()                          # the raise is refused: focus stays gone
+    reg, conn = layout_with([MEMBER_A]), fresh_conn(active=0)
+    focus_guard.guard(reg, conn)
+    spy = TypeSpy(fake, steal_at=40)
+    with Catch(focus_guard.logger, input_injector.logger) as caught:
+        lost = spy.type_text(SENTENCE, focus_guard.typist(reg, conn))
+    return (spy.text == SENTENCE[:40] and lost == SENTENCE[40:]
+            and spy.landed_only_in(MEMBER_A)
+            and caught.naming(THIEF)
+            and any("ABORTED" in line for line in caught.records))
+
+
+def check_the_phone_is_told_what_was_lost() -> bool:
+    """Destroying the rest of a dictated sentence and saying so only in the
+    server log is the very failure this module exists to end — he is looking
+    at his phone, not at a log. The loss must reach the device, naming its
+    size and the start of what is missing so he knows what to say again."""
+    fake = with_win32(fg=MEMBER_A, alive=(MEMBER_A,))
+    Raises().install(fake)
+    gone = "ostatak rečenice koji nikada nije stigao"
+    injector = FakeInjector(lost=gone)
+    box: dict = {}
+
+    async def run():
+        ws = FakeWs([{"type": "key_text", "text": "cela rečenica"}])
+        box["ws"] = ws
+        try:
+            await web._receive_input(ws, injector=injector, stream=None,
+                                     token="t", layouts=None, conn=fresh_conn())
+        except web.WebSocketDisconnect:
+            pass
+
+    asyncio.run(run())
+    toasts = [m for m in box["ws"].sent if m.get("type") == "toast"]
+    return (len(toasts) == 1 and str(len(gone)) in toasts[0]["text"]
+            and gone[:20] in toasts[0]["text"])
+
+
+def check_half_a_character_never_goes_out_and_never_raises() -> bool:
+    """A lone surrogate cannot be encoded to UTF-16 at all. Discovering that
+    per chunk threw `UnicodeEncodeError` out of the middle of a sentence —
+    part typed, the rest gone, and the exception escaping into the WebSocket
+    dispatcher, which catches only `WebSocketDisconnect`: the socket died
+    mid-dictation. It is reachable — the page reads printable characters by
+    diffing UTF-16 strings and can hand us half an emoji."""
+    fake = with_win32(fg=MEMBER_A, alive=(MEMBER_A,))
+    half = "zdravo \ud83c svete"
+    spy = TypeSpy(fake)
+    lost = spy.type_text(half, lambda: MEMBER_A)
+    plain = TypeSpy(fake)                       # ...and with no fence either
+    plain.type_text(half)
+    return (lost == "\ud83c" and spy.text == "zdravo  svete"
+            and plain.text == "zdravo  svete"
+            and all(not 0xD800 <= unit <= 0xDFFF for unit, _ in spy.units))
+
+
+def check_typing_without_a_fence_is_unchanged() -> bool:
+    """Callers with no connection to fence pass no guard and get exactly the
+    old behaviour. And the cut is by CHARACTER, never by code unit: a chunk
+    boundary inside a surrogate pair would split an emoji in half."""
+    fake = with_win32(fg=MEMBER_A, alive=(MEMBER_A,))
+    plain = TypeSpy(fake)
+    plain.type_text(SENTENCE)                   # the old one-argument call still works
+    emoji, boundaries = TypeSpy(fake), []
+    emoji.type_text("🎉" * 60,
+                    lambda: (boundaries.append(len(emoji.units)), MEMBER_A)[1])
+    return (plain.text == SENTENCE and emoji.text == "🎉" * 60
+            # every check fell BETWEEN characters — an odd count would mean a
+            # surrogate pair was cut in half
+            and boundaries and all(n % 2 == 0 for n in boundaries))
+
+
+def check_the_dispatcher_hands_the_injector_the_fence() -> bool:
+    """The wiring: `key_text` must reach the injector WITH the checkpoint, or
+    everything above is dead code in a live build."""
+    fake = with_win32(fg=THIEF, alive=(MEMBER_A, THIEF))
+    Raises().install(fake)
+    reg, conn = layout_with([MEMBER_A]), fresh_conn(active=0)
+    injector = FakeInjector()
+
+    async def run():
+        ws = FakeWs([{"type": "key_text", "text": "zdravo"}])
+        try:
+            await web._receive_input(ws, injector=injector, stream=None,
+                                     token="t", layouts=reg, conn=conn)
+        except web.WebSocketDisconnect:
+            pass
+
+    asyncio.run(run())
+    return (injector.typed == ["zdravo"] and callable(injector.guards[0])
+            and injector.guards[0]() == MEMBER_A)
+
+
 CHECKS = [
     ("a focus thief never gets the keystroke", check_a_thief_never_gets_the_keystroke),
     ("the fence holds on a fresh connection (no pin yet)",
@@ -382,26 +445,26 @@ CHECKS = [
      check_dictation_through_the_dispatcher),
     ("a click message re-arms the target through the dispatcher",
      check_a_click_message_re_arms_through_the_dispatcher),
+    ("a steal ANYWHERE in a sentence loses nothing",
+     check_a_steal_anywhere_in_a_sentence_loses_nothing),
+    ("a steal inside an emoji costs at most its tail, never a character",
+     check_a_steal_inside_an_emoji_costs_at_most_its_tail),
+    ("typing stops — and says so — when focus cannot be restored",
+     check_typing_stops_and_says_so_when_focus_is_lost),
+    ("the phone is TOLD what never reached the PC",
+     check_the_phone_is_told_what_was_lost),
+    ("half a character never goes out, and never raises into the dispatcher",
+     check_half_a_character_never_goes_out_and_never_raises),
+    ("without a fence the injector behaves exactly as before",
+     check_typing_without_a_fence_is_unchanged),
+    ("the dispatcher hands the injector the mid-sentence fence",
+     check_the_dispatcher_hands_the_injector_the_fence),
 ]
 
 
 def main() -> int:
-    print("=== FOCUS GATE ===")
-    failed = 0
-    for name, fn in CHECKS:
-        try:
-            ok = fn()
-        except Exception as e:  # a crashing check is a failing check
-            ok = False
-            print(f"  ERROR {name}: {e!r}")
-        print(f"  {'PASS' if ok else 'FAIL'}  {name}")
-        failed += 0 if ok else 1
-    print()
-    if failed:
-        print(f"FOCUS GATE FAILED — {failed} check(s).")
-        return 1
-    print("FOCUS GATE PASSED — typed input lands where the owner is looking.")
-    return 0
+    return run_checks("FOCUS GATE", CHECKS,
+                      "typed input lands where the owner is looking.")
 
 
 def test_focus_guard():
