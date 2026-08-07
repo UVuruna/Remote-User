@@ -12,19 +12,28 @@ in flight.)
       da ih zatvaram". Always the SAME 1–4 word fragment, repeated exactly
       ONCE, at short intervals.
       REPEAT of task 75, closed as fixed in 0.0.293 / APK v0.0.091.
-      THE PROCESS CAUSE, per THE REPEAT LAW, and task 75's claim was not false
-      in whole — it killed the 40× cumulative shred, and that shape is gone.
-      What it did was test ONLY the failure it was written for. It asked "does
-      a dying round re-type its own growing partial?" and proved no. It never
-      asked what happens when TWO DIFFERENT ROUNDS MEET: a round dies, types
-      its rescue, and 250 ms later a fresh round starts on the SAME live
-      microphone and produces an INDEPENDENT transcript of the same tail of
-      audio. That text is not a continuation, so `startsWith` can never see it.
-      The class: a fix proven against one failure shape and closed, while a
-      structurally different failure wearing the SAME symptom (duplicated
-      words) and the SAME log signature (ERROR_CLIENT) went unasked. The
-      evidence for the untested case was in the same log the original fix read
-      a shorter version of.
+      PROCESS CAUSE: task 75 CLAIMED "the mic stops repeating what he already
+      said" and that claim RESTED ON one guard case — a dying round must not
+      re-type its own growing partial — written from the same belief as the
+      fix: that the duplication comes from ONE round repeating ITSELF. That
+      evidence could be green while the app was broken because the belief was
+      only half the truth. The trim it proved (`lastOut.startsWith`) is exact
+      for a CUMULATIVE partial inside one round, and the 40× shred it was
+      built for is genuinely dead. But it can never fire ACROSS rounds: a
+      round dies, types its rescue, and 250 ms later a FRESH round starts on
+      the SAME live microphone and transcribes the same tail of audio
+      INDEPENDENTLY — that text is not a continuation of the last, it is a new
+      transcription that merely OVERLAPS it, so no prefix check can see it.
+      The class of the mistake: a fix proven against the one failure shape it
+      was written for and then CLOSED, while a structurally different failure
+      wearing the same symptom (duplicated words) and the same log signature
+      (ERROR_CLIENT) was never asked about. The evidence for the untested case
+      was already in the same log the original fix read a shorter version of —
+      177 ERROR_CLIENTs say the rounds die constantly, and a round boundary
+      every three seconds is a seam every three seconds. What would have
+      caught it: asking not "does my fix work?" but "what else produces this
+      exact symptom?" — and a gate that drives TWO consecutive rounds, which
+      is now tests/test_voice_dedup.py.
       HIS EVIDENCE, %LOCALAPPDATA%/RemoteUser/server.log: 177 lines of
       `Phone: [voice] Voice error 5 (online)` = ERROR_CLIENT, arriving roughly
       every 3 s for the whole session (00:12:50 → 00:18:45).
