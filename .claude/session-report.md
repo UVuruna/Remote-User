@@ -1,86 +1,58 @@
-SESSION: 066d3fc9-cfb7-44af-bbf2-910437cf5930
-RELEASE: https://github.com/UVuruna/Remote-User/releases/tag/v0.0.091
+# FINAL REPORT — Round 15 (2026-08-07)
 
-- [~] 73. THE APP MUST NOTICE A RELEASE WHILE IT RUNS — SHIPPED, unconfirmed — `main_window._check_updates` said it in its own docstring: "one GitHub check per start". His installed exe is 0.0.089, running since 2026-08-06 19:49:58; v0.0.090 was published at 20:06 — seventeen minutes later, into an app that had already asked. Now a 15-minute QTimer that never disturbs an update already in flight. HIS EVIDENCE proves the DEFECT (installed binary + today's traceback from a line fixed yesterday); the FIX is unseen until he installs v0.0.091 — the last install he has to start by hand. Commit 0.0.295.
-- [x] 74. THE LAW he ordered — DONE — root CLAUDE.md law 6 (THE REPEAT LAW), rules/PLAN.md → The Session Task List, teeth in rules/hooks/session_tasks_guard.py: a `REPEAT OF` block with no `PROCESS CAUSE:` is blocked; a `[x]` REPEAT with neither `OWNER CONFIRMED` nor `HIS EVIDENCE:` is blocked; `[~]` (shipped, he has not seen it) passes. SELF-TESTED on all four paths, and it caught this very round twice — once legitimately, once on the law's own name, which is why it matches `REPEAT OF` and not the bare word. Root-repo commit 0.0.030.
-- [~] 75. THE DICTATION SPAM — SHIPPED, unconfirmed — REPEAT OF task 61's rescue copy. PROCESS CAUSE: that round added the rescue and tested that a dying round types what it heard; it never asked what happens when rounds die four times a second, and the answer was in the same log it was reading. "The phone types something" was proven; "the phone types it once" was never stated. HIS EVIDENCE: server.log 11:30:05 → 11:30:12, forty × `Voice error 5 (online)` = ERROR_CLIENT, plus both of his messages to us this morning, shredded. Root cause: `startListening` on a still-running recognizer is refused with ERROR_CLIENT, the page retries after 250 ms, and every refusal ran `deliver(null)` — with cumulative partials that re-types the whole sentence so far. Fixed at both ends: cancel before start, and `lastOut` trims a rescue to what has not been typed. Commit 0.0.293, APK 0.0.091.
-- [~] 76. THE CLAUDE SET — SHIPPED, unconfirmed — REPEAT OF tasks 25, 41, 55, 58: four numbers, four `[x]`, one bug. PROCESS CAUSE: round 11c built the detection he demanded (`server/agents.py`) and closed it, but never removed what detection replaced. `sets.js` kept `if (Array.isArray(lay.app_sets)) return lay.app_sets.includes(s.name)` — "answered from it ALONE" — and the creation panel kept writing that list at creation time, so a live `agents: ["claude"]` on every state frame was discarded by a copy of an older answer. Its guard case was named "the layout's own ticks win over the title guess": a test that PINNED the defect as intended behaviour and therefore could never go red. Ticks removed end to end (creation panel, rename panel, `layout_apps`, `Layout.app_sets`, `layout_state`); the guard now asserts the opposite and fails on the old line. Commit 0.0.294.
-- [~] 77. THE SLOW LOAD — SHIPPED, unconfirmed — `agents.agents_for()` was called bare from the async handlers (layout_api.py:70/103/112), once per window and once per tab: a 1.85 s PowerShell probe MEASURED on his PC, with the whole event loop stopped — no stream, no heartbeats — every time the 2 s cache lapsed, which a slow `uia.list_tabs` between two windows guaranteed. One snapshot per request, in a thread. Gate counts the probes and fails at two. Measured end-to-end after the fix: 1.63 s, 22 entries, one probe. Commit 0.0.294.
-- [x] 78. Round close — DONE — APK 0.0.091 (Kotlin changed) + full desktop build (payload gate, INPUT/PRESENCE/NOTIFY/FOCUS/LAYOUT gates, PyInstaller smoke test, signed exe and installer, VERIFY FileVersion 0.0.091) and GIT RELEASE published: https://github.com/UVuruna/Remote-User/releases/tag/v0.0.091 — guards 4/4 full, phone layout audit 26/26, app-set wheel 8/8, layout protocol 6/6, controls sets green.
-- [~] 79. THE MOVE HANDLE DOES NOT MOVE — SHIPPED, unconfirmed — REPEAT OF round 3's task 2, closed as DONE 0.0.169 on "guards + load test + INPUT GATE pass". PROCESS CAUSE: everything that round built was correct — protocol, server placement, `dragMove`'s arithmetic — and its tests proved exactly that. None of them ever delivered a TOUCH, so both defects, which live in the gesture layer, were invisible to all of them. Two real causes, each reproduced in the audit before being fixed: (a) the re-centre fired on `pointerdown` for any contact within 350 ms, so tap-then-drag was read as a double tap — region back to the MIDDLE and no pointer capture, so the drag died too; his sentence contains both halves; (b) `moveTapAt` started at 0, a real `performance.now()` reading meaning "a tap at page load", so any tap in the first 350 ms re-centred — landscape failed on this while portrait passed at 623 ms. A THEORY THAT DID NOT HOLD is recorded in the code and the commit: `touch-action` on `.asp-move` was the first diagnosis and is WRONG (`body` declares `touch-action: none` and the restriction is cumulative), so that check could not fail and was thrown away rather than kept green. Commit 0.0.296.
-- [~] 80. THE KEYBOARD MUST NOT LIFT THE VIEW — SHIPPED, unconfirmed — `kbShift` is 0 and the canvas transform is gone. The canvas still keeps its FULL height, so the picture is never SQUEEZED — that half of his 2026-08-03 request stands; only the lift, which carried the line he was typing off the top of the screen, is withdrawn. Commit 0.0.295.
-- [ ] 81. DRAG A LAYOUT ROW INTO ANOTHER TO MAKE A GRID — NOT STARTED, four questions with him. He said explicitly to ask rather than invent, and the questions are not cosmetic: what the two source layouts become, which grid template a drop chooses, whether a drop onto an existing grid extends it, and whether the same drag also reorders the list.
+**Released: v0.0.093** — https://github.com/UVuruna/Remote-User/releases/tag/v0.0.093
+Installer signed, APK bundled. 17 commits (0.0.305–0.0.321). Sixteen agents,
+three independent visual graders, four grading passes.
 
-# Final Report — round 14 (2026-08-07): why "done" kept not being done
+His order this round: *"ti si agent koji će da vodi ovaj posao ... da angažuje
+druge agente, da ih proverava, i na kraju da me obavesti kada se sve završi."*
 
-NOT DONE: **task 81** (drag a layout row onto another to build a grid) — his
-new feature, not started, because he said to ask rather than invent and the
-four questions genuinely change what gets built. Everything else he raised
-today is built, gated and released as **v0.0.091**, and marked `[~]`: shipped,
-and he has not seen it work yet. That state did not exist this morning.
+---
 
-## The finding that explains the circle
+## Per task
 
-He asked for the process cause before the code, and the process cause is not a
-matter of judgement — it is two lines from his own machine:
+| # | Task | State | Evidence |
+|---|---|---|---|
+| 85 | R1 focus C+A | `[~]` | Per-CHARACTER guard (SendInput 921 µs/key vs GetForegroundWindow 194 ns = 0.11% cost); loss on a mid-sentence steal went from "up to 39 chars" to ZERO; the phone is toasted what never arrived. 25 gate checks across two files, defect-planted. An independent verifier found 5 defects in the first version and all were fixed. |
+| 86 | The grid is a picture | `[~]` | Count and orientation are drawings; the sketch's outer box is wide for landscape, tall for portrait. Graded 9/10 twice, independently. |
+| 87 | R2 Settings window | `[~]` | Four cards; Stream moved in (his P1); notification speak/voice/pace; the B focus-lock with ledger + next-start repair; a real Task-Scheduler autostart switch. No exception text ever reaches the user. |
+| 88 | R4 Traffic | `[~]` | "Od starta" + "Sve" read 1.33M rows in 3.3 s off the UI thread (2,789 event-loop pumps during the read); one unit per axis; legend swatches read from the same functions that paint the lines. 9/10 both palettes. |
+| 89 | R5 wheel order | `[~]` | Drawn ring + ladder; `wheel_order` preserved across updates. It also needed one line in `_load_actions` — without it the feature was a no-op for every user, fresh installs included. |
+| 90 | R3 themes | `[~]` | Two palettes compared at import; app-wide QSS; phone dark/light/coloured × transparent/full via `config.ui`. The coloured theme's labels went 2.66:1 → 8.10:1 once the wheel's veil stopped painting over our buttons. |
+| 91 | R6+R7 gamepad | `[~]` | A pad press runs through `buttonPress()` — the same activator a finger's pointerup runs — so CLICK/HOLD cannot drift. 30 gate checks, defect-planted 7 ways. Horizontal scroll closed (`hticks`). |
+| 93 | The ghost client | `[~]` | Four hours of 4K encoding for a phone that was not there; 12,924 s of ffmpeg CPU. `await asyncio.to_thread(open_session)` cannot be cancelled. Fixed with a claim made before the encoder exists + a second, independent rule in `push`. |
+| 94 | Claude never detected | `[~]` | The switch never reached HIS actions.json; every guard built its "user file" as a copy of ours. The migration rule is inverted and forward-compatible; detection reads `~/.claude/sessions/<pid>.json`. Verified live on his machine: `{'claude': ['remote user','uvuruna']}`. |
+| 95 | Notices while the phone is in his pocket | `[~]` | His decision, quoted: the small service, minimal channel. One idle `GET /notices`, one byte a minute, ~150 KB/day. A waiting channel is structurally never a present phone. |
+| — | Move handle (`pos`) | `[~]` | Third report. `arranged_pos` was a note of what was COMMANDED; once a member left its rect every later Apply placed nothing. Arrangement is MEASURED now. |
+| 92 | Visual proof | `[x]` | 55 entries, none below 8. Four passes; where two graders disagreed the LOWER stood. |
+| 96 | Caret-aware keyboard | NOT BUILT | His decision recorded with his refinement (only the PICTURE moves, never the navy filler; only if the caret would really be covered). Scheduled next, deliberately, so today's work reaches him first. |
 
-    installed exe: 0.0.089     running since 2026-08-06 19:49:58
-    v0.0.090 published                       2026-08-06 20:06
+`[~]` = shipped, and HIS machine has not confirmed it. Only his screen closes these.
 
-    his server.log, TODAY 11:35:07:
-      File "layout_api.py", line 86, in layout_list
-      UnboundLocalError: cannot access local variable 'mon_rect'
+## Found by LOOKING, not by any test
+Every text input invisible in light (Δ1 per channel) · the dropdown caret a solid
+square · Filled vs Outlined byte-identical on the default theme · the window title
+cut at 30 chars beside 112 px of empty space (named in three previous rounds and
+rounded up in all three) · "Send" printed twice · the status pill covering the
+wheel's 12-o'clock label · seven of ten phone panels scrolling in landscape beside
+495 px of idle width · the editor calling a TYPED command a "chord".
 
-Line 86 is the bug fixed in 0.0.290 and released as v0.0.090; the repo's line
-93 has read `rect = mon_rect(stream)` since yesterday evening. So "create from
-a list still does not work" was TRUE on his device and the fix was real — he
-has never run it. `_check_updates` is documented "one GitHub check per start",
-his app had been running for seventeen minutes when v0.0.090 appeared, and it
-never asked again.
+## Not in v0.0.093
+The editor's "types" label (0.0.321) landed after the installer was built.
 
-That is the mechanical half of "I give ten tasks, the agent says all ten are
-done, half are unchanged". We ship; the release is real; the app in front of
-him is from before it; the next round re-diagnoses a fixed bug and the week is
-gone. Fixed in code (task 73) — but the code fix only takes effect once he
-installs v0.0.091 by hand, which is the last time that will be true.
+## Open, named rather than rounded away
+Toast ink 2.25:1 · dark error line 3.89:1 (DESIGN.md's own token) · the detail
+panel still says "Shortcut (chord)" for a typed command · `_paste_text`'s Enter is
+unguarded for 120 ms · ChordRecorder has never been photographed.
 
-## The other half, and it is ours
-
-Three tasks in this round were REPEATS, and the record shows one mechanism
-behind all of them: **"done" had come to mean "my own test is green"**, and a
-test written from the same belief that produced the bug cannot go red.
-
-- The Claude set carried FOUR task numbers and four `[x]` (25, 41, 55, 58).
-  Round 11c built the detection he demanded and left the tick list that
-  overruled it — with a guard case named "the layout's own ticks win over the
-  title guess". The test pinned the defect AS THE RULE.
-- The Move handle was closed on "guards + load test + INPUT GATE pass". Every
-  piece was correct; nothing had ever delivered a touch, and both real defects
-  live in the gesture layer.
-- The dictation rescue copy was tested for the round it was written for. Four
-  collisions a second was never asked, and the answer was in the log that
-  round was already reading.
-
-THE REPEAT LAW (root CLAUDE.md law 6) is the answer he ordered: when he
-reports something a previous round closed, the FIRST deliverable is why that
-claim was false; the code is second. A task may be `[x]` only on his word or
-evidence from HIS machine; otherwise `[~]`, carried forward until he closes
-it. Teeth in `rules/hooks/session_tasks_guard.py`, self-tested on four paths —
-and it blocked this very round twice, once correctly and once on the law's own
-name, which is why it matches `REPEAT OF` rather than the bare word.
-
-`[~]` is not a demand that he verify the whole app. It applies to what he
-reported and we claim to have fixed. A round still ships, still closes, still
-releases — it simply stops calling a thing proven when the only witness is its
-own author.
-
-## What is in v0.0.091
-
-| His report | Cause | Where |
-|---|---|---|
-| mic spams the sentence until switched off | `startListening` on a live recognizer → ERROR_CLIENT storm × cumulative partials × deliver-on-every-error | APK, 0.0.293 |
-| wheel offers only VS Code inside Claude | the tick list written at creation outranked live detection | 0.0.294 |
-| "create from a list" dead | fixed in v0.0.090; he runs 0.0.089 | 0.0.295 delivers it |
-| layout setup takes very long | 1.85 s process probe per entry, on the event loop | 0.0.294 |
-| Move handle stays centred | tap-then-press read as double tap; timer origin at 0 | 0.0.296 |
-| keyboard pushes the typed text out of sight | the canvas was lifted by the keyboard's height | 0.0.295 |
+## My own failures this round
+1. I told him PID 28016 was our leftover server and gave him a kill command. It
+   was not ours — `server/main.py` parses no arguments. An agent caught it, not me.
+2. I asked him to choose the notification mechanism. He had chosen it that same
+   day at 12:20. The task list said "waiting on him" and I trusted the note over
+   his words.
+3. I dispatched overlapping briefs twice; two agents stood down rather than
+   corrupt the tree. Their judgement was better than my dispatching.
+4. An agent of mine benchmarked real `SendInput` — ~200,000 mouse events into his
+   live session. That was his frozen mouse. The rule now: fake the Win32 layer; a
+   real measurement needs his window of time, agreed first.
