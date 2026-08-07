@@ -11,6 +11,8 @@ import android.speech.tts.TextToSpeech
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import org.json.JSONArray
+import org.json.JSONObject
 import java.util.Locale
 
 /**
@@ -34,6 +36,14 @@ import java.util.Locale
  *
  * The page decides which of the two to use (its own per-device switches) —
  * this class only knows how to deliver.
+ *
+ * HOW it speaks is the PC's decision (owner round R2, 2026-08-07). The desktop
+ * Settings window offers a voice and a speaking pace, and both ride on every
+ * notify frame rather than being pushed here once: nothing about the voice is
+ * then stored on the phone, so no reconnect can leave it speaking in a voice
+ * the desktop no longer selects. The list of voices to choose FROM can only
+ * come from here — a TextToSpeech engine's voices differ per device, per
+ * language pack, per Android version, and the PC cannot see any of it.
  */
 class Notifier(private val ctx: Context) {
 
@@ -49,6 +59,12 @@ class Notifier(private val ctx: Context) {
     private var tts: TextToSpeech? = null
     private var ttsReady = false
     private val pending = ArrayList<String>()
+    // What the PC last asked for. `speechRate` is TextToSpeech's own scale
+    // (1 = the engine's normal pace); `voiceName` is a Voice.name exactly as
+    // this device reported it, and an empty one means "whatever the engine
+    // thinks best for its locale".
+    private var speechRate = 1f
+    private var voiceName = ""
 
     init {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -63,6 +79,12 @@ class Notifier(private val ctx: Context) {
             ctx.getSystemService(NotificationManager::class.java)
                 ?.createNotificationChannel(channel)
         }
+        // Bound at START, not at the first notice. It always had one reason —
+        // the first speak() after a cold start otherwise lands after the
+        // sentence it was asked to say — and round R2 gave it a second:
+        // `voices()` is asked the moment the page connects, and an engine that
+        // has not bound yet has nothing to report.
+        ensureEngine()
     }
 
     /** Raises (or replaces) one agent's notification. */
@@ -97,16 +119,82 @@ class Notifier(private val ctx: Context) {
         }
     }
 
-    /** Says it out loud. Queues until the engine is ready, never drops. */
-    fun speak(text: String) {
+    /** Says it out loud, in the voice and at the pace the PC asked for.
+     *  Queues until the engine is ready, never drops. */
+    fun speak(text: String, voice: String = "", rate: Float = 1f) {
         if (text.isBlank()) return
-        val engine = tts
-        if (engine != null && ttsReady) {
-            engine.speak(text, TextToSpeech.QUEUE_ADD, null, "agent")
-            return
-        }
+        setSpeechRate(rate)
+        setVoice(voice)
         synchronized(pending) { pending.add(text) }
-        if (engine != null) return          // still initialising — it will drain
+        if (ttsReady) drain() else ensureEngine()
+    }
+
+    /** Every voice this DEVICE has, as JSON the page forwards to the PC:
+     *  `[{name, label, locale}, …]`. `name` is the identity the PC stores and
+     *  sends back; `label` is what a person reads. Empty when the engine has
+     *  not bound yet or has none — the desktop window then says so instead of
+     *  pretending the phone is mute. */
+    fun voices(): String {
+        ensureEngine()
+        val array = JSONArray()
+        val engine = tts
+        if (engine == null || !ttsReady) return array.toString()
+        try {
+            for (voice in engine.voices.orEmpty()) {
+                // A voice whose data is not downloaded cannot say anything —
+                // offering it on the PC would be a choice that silently fails.
+                if (voice.features?.contains(
+                        TextToSpeech.Engine.KEY_FEATURE_NOT_INSTALLED) == true) continue
+                val variant = voice.name.substringAfterLast('#')
+                    .removeSuffix("-local").removeSuffix("-network")
+                array.put(JSONObject()
+                    .put("name", voice.name)
+                    .put("label", "${voice.locale.displayLanguage} $variant".trim())
+                    .put("locale", voice.locale.toLanguageTag()))
+            }
+        } catch (e: Exception) {
+            // getVoices() is documented to work and throws on real devices
+            // anyway (engines that report a null voice set). An empty list is
+            // a usable answer; a crashed shell is not.
+            Log.w(TAG, "Could not list the text-to-speech voices", e)
+        }
+        return array.toString()
+    }
+
+    private fun setSpeechRate(rate: Float) {
+        speechRate = if (rate > 0f) rate else 1f
+        if (ttsReady) tts?.setSpeechRate(speechRate)
+    }
+
+    private fun setVoice(name: String) {
+        voiceName = name
+        if (ttsReady) applyVoice()
+    }
+
+    private fun applyVoice() {
+        val engine = tts ?: return
+        if (voiceName.isEmpty()) return          // the engine's own choice
+        // A voice this device does not have falls back to the default: the PC
+        // may be remembering a phone that is no longer this one, and a missing
+        // voice must never mean a silent notice.
+        val match = try {
+            engine.voices.orEmpty().firstOrNull { it.name == voiceName }
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not read the voice list", e); null
+        }
+        if (match != null) engine.voice = match
+        else Log.w(TAG, "Voice '$voiceName' is not on this device — using the default")
+    }
+
+    private fun drain() {
+        val queued = synchronized(pending) {
+            val copy = ArrayList(pending); pending.clear(); copy
+        }
+        queued.forEach { tts?.speak(it, TextToSpeech.QUEUE_ADD, null, "agent") }
+    }
+
+    private fun ensureEngine() {
+        if (tts != null) return             // bound, or still binding
         tts = TextToSpeech(ctx) { status ->
             ttsReady = status == TextToSpeech.SUCCESS
             if (!ttsReady) {
@@ -117,10 +205,9 @@ class Notifier(private val ctx: Context) {
             // The default locale is the phone's, which is what the owner
             // hears best; an engine without it falls back on its own.
             tts?.language = Locale.getDefault()
-            val queued = synchronized(pending) {
-                val copy = ArrayList(pending); pending.clear(); copy
-            }
-            queued.forEach { tts?.speak(it, TextToSpeech.QUEUE_ADD, null, "agent") }
+            tts?.setSpeechRate(speechRate)
+            applyVoice()
+            drain()
         }
     }
 
@@ -129,5 +216,7 @@ class Notifier(private val ctx: Context) {
         tts?.shutdown()
         tts = null
         ttsReady = false
+        voiceName = ""
+        speechRate = 1f
     }
 }

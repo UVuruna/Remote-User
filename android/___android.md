@@ -11,11 +11,30 @@ scanner). Package `com.uvuruna.remoteuser`, min Android 8 (API 26).
 
 | File | Tier | One line |
 |------|------|----------|
-| `MainActivity.kt` | Algorithmic | WebView shell — dual-address resolve/failover state machine, self-healing error card, network callbacks, JS bridge, immersive UI — [about](__about/MainActivity.md) · [flow](__flow/MainActivity.md) |
+| `MainActivity.kt` | Algorithmic | WebView shell — dual-address resolve/failover state machine, self-healing error card, network callbacks, immersive UI — [about](__about/MainActivity.md) · [flow](__flow/MainActivity.md) |
+| `Bridge.kt` | Standard | `window.Android` — every name the PAGE calls; the shell's compatibility surface (split from MainActivity 2026-08-07) — [about](__about/Bridge.md) |
+| `Gamepad.kt` | Standard | the Bluetooth game controller — keys and sticks captured before the WebView sees them and forwarded to the page, which owns the whole mapping (build round G1, 2026-08-07) — [about](__about/Gamepad.md) |
 | `OnboardingActivity.kt` | Standard | first-run pairing screen — automatic funnel handoff + manual QR-scan/paste fallback — [about](__about/OnboardingActivity.md) |
 | `VoiceInput.kt` | Standard | dictation subsystem — user-chosen language, engine choice, silent model download, silent diagnostics (split from MainActivity 2026-08-05) — [about](__about/VoiceInput.md) |
 | `Notifier.kt` | Standard | notifications + speech for the PC's notices — one line per agent, TTS queued until the engine is ready (ROADMAP Phase H, 2026-08-05) — [about](__about/Notifier.md) |
-| `Prefs.kt` | Trivial | `SharedPreferences` wrapper for the two stored addresses (LAN URL from pairing, Tailscale URL learned from the page) |
+| `NoticeService.kt` | Standard | the foreground service that lets a notice reach this phone with NO page — the permanent notification Android demands, the battery-optimisation ask, delivery (owner decree 2026-08-07) — [about](__about/NoticeService.md) |
+| `NoticeLink.kt` | Algorithmic | the waiting state itself — one thread blocked on `GET /notices`, the PC's 60 s beat, connect/read/backoff (owner decree 2026-08-07) — [about](__about/NoticeLink.md) · [flow](__flow/NoticeLink.md) |
+| `Prefs.kt` | Trivial | `SharedPreferences` wrapper for the two stored addresses (LAN URL from pairing, Tailscale URL learned from the page) plus the name of the page's own preference store |
+
+## Two channels, and only one of them is a session
+
+The streaming session dies the moment the page hides — the owner's security
+rule, and what the presence protocol, the topmost ledger and the layout
+defence all rest on. That is exactly why an agent's notice used to arrive only
+when he opened the app (his report, 2026-08-07).
+
+So the shell holds a **second, minimal** channel that carries notices and
+nothing else: `NoticeService` + `NoticeLink`, one idle socket, the phone
+sending nothing at all. The PC keeps the two apart structurally — `/notices`
+never touches the one-device slot presence is built on — so a waiting phone is
+never mistaken for a present one, and nothing it does can hold a window
+always-on-top over the owner's desk. See
+[Notify (server)](../server/__about/notify.md).
 
 **Other files in this folder (not source-tier — resources and build config):**
 - `app/src/main/res/` — dark brand theme (same slate/cyan palette as the
@@ -30,7 +49,13 @@ scanner). Package `com.uvuruna.remoteuser`, min Android 8 (API 26).
   "installed but off"; `MainActivity` is not exported, declares
   `configChanges="orientation|screenSize|…"` so rotation never recreates the
   WebView, and `usesCleartextTraffic="true"` (the server speaks plain HTTP on
-  the LAN/Tailscale private network)
+  the LAN/Tailscale private network). Since 2026-08-07 it also declares
+  `NoticeService` with `foregroundServiceType="connectedDevice"` — the honest
+  type, since the service exists to hold a network connection to ONE paired
+  device, the owner's PC (`dataSync` is deprecated in Android 15 with a
+  six-hour cap; `specialUse` is for things with no honest type) — plus
+  `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_CONNECTED_DEVICE` and
+  `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`
 - `build.gradle.kts` / `settings.gradle.kts` — AGP 8.7, Kotlin 2.0, SDK 35;
   version comes from `setup/app_info.json` via build properties; release
   signing from environment variables (never committed)
@@ -60,13 +85,13 @@ phone app too. No file shuffling, ever.
 ### Uses
 - [Client (folder)](../client/___client.md) — the entire product UI, loaded
   into the WebView (`client/index.html`); the `Android` JS bridge
-  (`rescan`/`setTailscaleUrl`/`appVersion`/`update`/`lockOrientation`) and the `config`
+  ([Bridge](__about/Bridge.md) — every name the page calls) and the `config`
   WebSocket message are the two-way contact points between the shell and the
   page's own [Connection](../client/__about/connection.md) script (the JS bridge calls and `config` handling both live there)
 - [Server (folder)](../server/___server.md) — conceptually the HTTP/WS peer
   this shell talks to over the network (`GET /ping` reachability probe,
-  `GET /app.apk`, the page's own `/ws` connection via
-  [Web Layer](../server/__about/web.md)). This is **not a code dependency** — the
+  `GET /app.apk`, `GET /notices` for the waiting channel, the page's own `/ws`
+  connection via [Web Layer](../server/__about/web.md)). This is **not a code dependency** — the
   shell never imports server code, it only speaks HTTP/WebSocket to whatever
   process answers at the resolved address
 

@@ -67,8 +67,22 @@ function notifyTone() {
   }
 }
 
+// What this device can SPEAK with — reported once per connection (owner round
+// R2). Only the shell can ask Android's TextToSpeech engine, and only the
+// phone has one at all, so the desktop Settings window's Voice dropdown is fed
+// from here or it is empty. A dev browser simply sends nothing.
+function sendTtsInfo() {
+  if (!IN_APP || !window.Android.ttsVoices) return;
+  try {
+    const voices = JSON.parse(window.Android.ttsVoices() || "[]");
+    if (voices.length) send({ type: "tts_info", voices });
+  } catch (err) {
+    send({ type: "client_log", text: `[notify] tts_info failed: ${err.message}` });
+  }
+}
+
 // One incoming notice. `msg` is the server's `notify` frame:
-// {agent, event, title, text, speak}.
+// {agent, event, title, text, speak, voice, rate}.
 // How long ago it happened, in words — only when that is not "just now".
 // A notice held while the phone was away (server/notify.py) must not pretend
 // it has only this second arrived (owner 2026-08-06).
@@ -95,8 +109,15 @@ function handleNotify(msg) {
     }
   }
   if (prefs.speak && msg.speak !== false && window.Android && Android.speak) {
+    const spoken = body ? `${title}. ${body}` : title;
     try {
-      Android.speak(body ? `${title}. ${body}` : title);
+      // HOW it is said is the PC's decision and rides on every frame (owner
+      // round R2) — nothing about the voice is stored on this phone, so a
+      // reconnect can never leave it speaking in a voice the desktop no
+      // longer selects. `speakAs` is the newer shell; an older one still has
+      // plain `speak`, and a notice must never be lost to a shell version.
+      if (Android.speakAs) Android.speakAs(spoken, String(msg.voice || ""), Number(msg.rate) || 1);
+      else Android.speak(spoken);
     } catch (err) {
       send({ type: "client_log", text: `[notify] speech failed: ${err.message}` });
     }
@@ -104,3 +125,108 @@ function handleNotify(msg) {
   if (prefs.tone) notifyTone();
   if (!document.hidden) showToast(body ? `${title} — ${body}` : title);
 }
+
+// --- "Notices while the app is closed" (owner decree 2026-08-07) -----------
+// His report: *"notifikacije mi stižu tek kada podignem aplikaciju iako je sve
+// vreme otvorena u pozadini"*. The shell now holds a small waiting channel of
+// its own so a notice arrives with no page at all (NoticeService.kt) — and
+// that service needs ONE thing only the user can give it: permission to run
+// without Android deferring its traffic while the phone is idle.
+//
+// Everything a user must do is explained IN the app and nowhere else (hard
+// owner principle), so the words live here, on the page, beside every other
+// piece of guidance — the shell only opens the system dialog.
+
+const noticePanel = document.getElementById("notice-panel");
+const noticeOpened = { t: 0 };
+ghostClickArmor(noticePanel, noticeOpened);   // panels.js, loaded before this
+
+function noticeShellState() {
+  if (!IN_APP || !window.Android.noticeState) return null;
+  try {
+    return JSON.parse(window.Android.noticeState());
+  } catch (err) {
+    send({ type: "client_log", text: `[notify] noticeState failed: ${err.message}` });
+    return null;
+  }
+}
+
+function renderNoticeCard(state) {
+  noticePanel.innerHTML = "";
+  const card = document.createElement("div");
+  card.className = "sets-card";
+  card.innerHTML = `<h2>Notices while the app is closed</h2>
+    <p class="sets-sub">Your PC tells this phone the moment an agent finishes
+    or needs you — with Remote User closed and the screen off. It is not a
+    stream: the phone only listens, and it costs about as much as a chat app
+    sitting idle.</p>
+    <p class="sets-sub">Android holds messages back for apps it has put to
+    sleep, so it has to be told to leave this one alone. One tap, one system
+    dialog, and it is done for good.</p>` +
+    (state && state.notifications === false
+      ? `<p class="sets-sub">Notifications are also switched off for Remote
+         User right now. Android Settings → Apps → Remote User →
+         Notifications turns them back on — without that, notices can only be
+         spoken.</p>`
+      : "");
+
+  const allow = document.createElement("button");
+  allow.type = "button";
+  allow.className = "sets-done";
+  allow.textContent = "Allow it to run in the background";
+  keepFocus(allow, () => {
+    try {
+      window.Android.noticeSetup();
+    } catch (err) {
+      send({ type: "client_log", text: `[notify] noticeSetup failed: ${err.message}` });
+    }
+  });
+  card.appendChild(allow);
+
+  const later = document.createElement("button");
+  later.type = "button";
+  later.className = "sets-row";
+  later.textContent = "Not now";
+  keepFocus(later, closeNoticeCard);
+  card.appendChild(later);
+
+  noticePanel.appendChild(card);
+  noticePanel.hidden = false;
+  noticeOpened.t = performance.now();
+}
+
+function closeNoticeCard() {
+  noticePanel.hidden = true;
+  noticePanel.innerHTML = "";
+}
+
+// Offered ONCE PER APP VERSION, not once per device: "Not now" has to mean
+// something (a card that returns on every connect is the nagging the owner
+// banned), but a permanent refusal recorded by one tap would silently disable
+// the feature forever on a phone whose owner did not read the card. An update
+// is the natural, self-limiting moment to ask again.
+function offerNoticeSetup() {
+  const state = noticeShellState();
+  if (!state) return;                 // dev browser, or a shell without it
+  if (state.battery) {
+    closeNoticeCard();                // already granted — nothing to say
+    return;
+  }
+  let version = "1";
+  try { version = window.Android.appVersion() || "1"; } catch {}
+  if (prefGet("noticeOffered") === version) return;
+  prefSet("noticeOffered", version);
+  renderNoticeCard(state);
+}
+
+// Called by the shell when the user comes back from the system dialog, so the
+// card leaves the screen the instant the exemption is granted instead of
+// waiting for a reconnect.
+window.__noticeStateChanged = () => {
+  const state = noticeShellState();
+  if (!state || state.battery) closeNoticeCard();
+};
+
+noticePanel.addEventListener("pointerdown", (e) => {
+  if (e.target === noticePanel) closeNoticeCard();   // backdrop tap = later
+});

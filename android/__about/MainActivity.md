@@ -41,6 +41,8 @@ alone undersells it.
 - [Prefs (script)](../app/src/main/java/com/uvuruna/remoteuser/Prefs.kt) — reads both stored URLs every
   `resolveAndLoad`; writes the Tailscale URL from the JS bridge; read by
   `Client.shouldOverrideUrlLoading` to recognize "our server" by port
+- [Gamepad](Gamepad.md) — every pad key and stick event is offered to it
+  before the view hierarchy sees it; released on `onPause`
 - [Onboarding Activity](OnboardingActivity.md) — `repair()` launches it
   (`EXTRA_FORCE`) when no LAN address is stored, or the user taps "Scan a
   new QR" on the error card
@@ -75,6 +77,20 @@ failover core — see the flow doc), `scheduleRetry(epoch)`, `pingOk(url)`
 `repair()` (hands off to `OnboardingActivity`), `onResume()` /
 `onPause()` / `onDestroy()` lifecycle wiring.
 
+### The game controller — claimed before the WebView (build round G1, 2026-08-07)
+
+`dispatchKeyEvent` / `dispatchGenericMotionEvent` route every event into
+[Gamepad](Gamepad.md) first, so pad keys never reach the view hierarchy: the
+WebView's own D-pad focus handling would otherwise fight the page's mapping for
+every arrow press. Anything not from a gamepad/joystick source falls straight
+through untouched. `onPause` calls `pad.releaseAll()` — a release this shell
+never saw would leave a PC mouse button held for the rest of the session.
+
+The Activity owns the instance (and hands it the `evaluateJavascript` sink)
+for the same reason it owns `voice`: it is the thing with a WebView. The
+mapping itself is not here and not in the APK at all — it is the page's
+([Gamepad (phone)](../../client/__about/gamepad.md)).
+
 ### netCallback (`ConnectivityManager.NetworkCallback`, anonymous, field)
 Registered via `registerDefaultNetworkCallback` in `onCreate`, unregistered
 in `onDestroy`. `onAvailable` kicks a silent `resolveAndLoad` when the error
@@ -82,50 +98,60 @@ card is showing; `onCapabilitiesChanged` tracks whether the default network
 carries a Wi-Fi transport (`onWifi`) and re-arms the foreign-Wi-Fi toast the
 next time Wi-Fi drops.
 
-### Bridge (inner class, `@JavascriptInterface`, exposed as `Android`)
-The page's only way to reach the shell.
-- `rescan()`: reopens `OnboardingActivity` (called when the page's own token
-  gets rejected server-side)
-- `setTailscaleUrl(url)`: persists the works-anywhere address handed over on
-  every `config`; blank means the PC currently has no Tailscale address
-- `appVersion()`: this shell's `versionName`, compared by the page against
-  the server's `config.app_version` to decide whether to show the in-app
-  update banner
-- `update(url)`: opens `/app.apk` (same PC) in the system browser — the
-  WebView itself has no download pipeline, so the browser is only the
-  download UI; Android installs over this app on the same signature
-- `lockOrientation(mode)`: layout focus locks the phone's rotation to the
-  layout's chosen orientation (`"portrait"` / `"wide"`), `""` unlocks — the
-  full-desktop view rotates freely (owner 2026-08-02)
-- `transport()`: `"cellular"` / `"wifi"` / `""` — the page's auto quality
-  mode reduces the stream only on mobile data (owner spec 2026-08-02)
-- `prefGet(key)` / `prefSet(key, value)`: origin-independent per-device
-  storage (SharedPreferences `client_prefs`) for the page's preferences —
-  localStorage is keyed by ORIGIN and this shell deliberately alternates
-  between the LAN and Tailscale addresses, which silently split saved state
-  into two diverging copies (owner bug 2026-08-05: the sets picker "rotated"
-  between two states). `""` = absent, so the page falls back to localStorage
-- `startVoice()` / `stopVoice()`: the page's Mic switcher (owner 2026-08-04)
-  — one `SpeechRecognizer` listening round per call; results reach the page
-  via `__voiceResult(text)`, round-end via `__voiceEnd(reason)` (`"denied"` /
-  `"unavailable"` / `""`), and the page restarts rounds while its switcher is
-  ON. First use asks the `RECORD_AUDIO` runtime permission once. The whole
-  subsystem — user-CHOSEN dictation language, engine choice, silent model
-  download, silent diagnostics — lives in [VoiceInput](VoiceInput.md)
-  (split 2026-08-05, THE STRUCTURE LAW).
-- `voiceLangs()` / `voiceChosen()` / `voiceSetLang(tag)` / `voiceState()` /
-  `voiceMuteBeeps()` / `voiceSetMuteBeeps(on)`: the dictation setup card's
-  bridge (owner rounds 2 and 4, 2026-08-05) — candidate languages with
-  statuses (`extra` = beyond the phone's own), the stored single choice,
-  the `"downloading"` state that styles the Mic button, and the
-  listening-beeps mute (default ON). Delegates to
-  [VoiceInput](VoiceInput.md); `onPause`/`onResume` gate the whole
-  subsystem — LOCK stops everything (owner round 4). Note the hard platform limit: an app
-  cannot open the KEYBOARD's own voice typing (Gboard mic) — no API switches
-  another IME into voice mode; this in-place recognizer is the closest
-  invisible equivalent, and the visible Google dialog
-  (`ACTION_RECOGNIZE_SPEECH` activity) is the fallback plan if quality still
-  disappoints.
+### The JS bridge — MOVED OUT on 2026-08-07
+
+`window.Android` used to be an inner class here. It is now its own file,
+[Bridge](Bridge.md) (THE STRUCTURE LAW — this file stood at 978 lines of a
+1,000 ceiling and the notice-service round had to add to it).
+
+The line is not "the file got long"; that only forced the question. This class
+is **the window** — the WebView, the two stored addresses and the probe that
+picks one, the native error card, system bars, Android lifecycle — and nothing
+in it is addressed by name from outside the app. `Bridge` is **the protocol**:
+every method there is a name the PAGE calls, and the page arrives fresh from
+whichever PC answered while the shell is whatever APK is installed. Those
+signatures are a compatibility surface that outlives either side's version,
+and that belongs in one readable place.
+
+What stays here, because Activity Result launchers are the Activity's own:
+`startVoiceInput()` (the `RECORD_AUDIO` ask, counted as an EXCURSION so the PC
+does not hand the owner's windows back mid-sentence), `postNotice()` (the
+`POST_NOTIFICATIONS` ask, holding the notice until it is granted), and
+`askBatteryExemption()`.
+
+The members `Bridge` reaches are `internal` — `onWifi`, `onCellular`,
+`excursions`, `screenIsAway()`, `repair()`, `voice`, `notifier`, plus those
+three helpers. **That list IS the shell's capability surface**, and making it
+visible was half the point of the split.
+
+### NoticeService — started here, outlives this Activity
+
+`onCreate` starts [NoticeService](NoticeService.md), the small foreground
+service that lets an agent's notice reach the phone with **no page at all**
+(owner decree 2026-08-07). Started from `onCreate` because Android 12+ refuses
+a foreground service start from the background, and that is the one moment the
+app is certainly in the foreground; never stopped by us, because the whole
+point is that it keeps waiting after the Activity is gone.
+
+Nothing about the streaming session changed: the page still closes its socket
+the moment it hides, and `hideReason()` still answers exactly as before. The
+notice channel is a second, separate line that the PC never counts as a
+present phone.
+
+### askBatteryExemption — and why it uses a launcher
+
+Doze can defer an unexempted app's network traffic while the device is idle,
+which for the notice channel means a notice sitting on the wire until the
+phone next wakes — the very complaint the service exists to fix. Only the user
+can grant the exemption, so the page explains it (the notice card in
+[Notify (client)](../../client/__about/notify.md)) and this opens the system
+dialog.
+
+It goes through an `ActivityResultLauncher` rather than a bare
+`startActivity` for one reason that matters: it gives us the moment the user
+comes BACK, so the excursion count is balanced. An unbalanced one would make
+`hideReason()` answer `"excursion"` forever, and the PC would hold layout
+windows over his desk through every later screen lock.
 
 ### Client (inner class, `WebViewClient`)
 - `shouldOverrideUrlLoading`: keeps navigation to the paired server's own

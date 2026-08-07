@@ -9,7 +9,6 @@ import android.graphics.Bitmap
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
-import android.net.TrafficStats
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -17,9 +16,11 @@ import android.app.KeyguardManager
 import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
+import android.provider.Settings
+import android.view.KeyEvent
+import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
-import android.webkit.JavascriptInterface
 import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
@@ -36,7 +37,6 @@ import androidx.core.content.FileProvider
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
-import org.json.JSONObject
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
@@ -58,10 +58,16 @@ import java.util.concurrent.TimeUnit
  *    it names the actual CAUSE (no network / Tailscale missing / Tailscale
  *    off / PC down) with the one button that fixes THAT cause
  *  - a one-time heads-up when the session runs over an unfamiliar Wi-Fi
- *  - `Android.rescan()` / `Android.setTailscaleUrl()` JS bridge
  *  - the screen stays on; rotation never recreates the session; leaving the
  *    app pauses the page (its visibility rule closes the stream — owner
  *    security decision)
+ *  - it starts NoticeService, the small waiting channel that lets an agent's
+ *    notice reach this phone with no page at all (owner decree 2026-08-07)
+ *
+ *  The JS bridge itself — `window.Android`, every name the page calls — lives
+ *  in Bridge.kt (split 2026-08-07, THE STRUCTURE LAW): being the window and
+ *  being the page's protocol are two jobs, and only the second one is a
+ *  compatibility surface that has to outlive both sides' versions.
  */
 class MainActivity : AppCompatActivity() {
 
@@ -76,8 +82,11 @@ class MainActivity : AppCompatActivity() {
     private val handler = Handler(Looper.getMainLooper())
     private var connectivity: ConnectivityManager? = null
     private var resolveEpoch = 0 // UI thread only — voids stale resolver threads and timers
-    private var onWifi = false // default network carries a Wi-Fi transport (UI thread only)
-    @Volatile private var onCellular = false // for the page's auto quality mode (any thread)
+    // `internal` from here down = the shell capability surface Bridge.kt is
+    // allowed to reach (split 2026-08-07). Nothing else in the app touches
+    // them, and the short list is the point: if it grows, the seam moved.
+    internal var onWifi = false // default network carries a Wi-Fi transport (UI thread only)
+    @Volatile internal var onCellular = false // for the page's auto quality mode (any thread)
     private var warnedForeignWifi = false
     // Document health: a LIVE page must never be reloaded by the recovery
     // machinery — its own JS reconnects the WebSocket in milliseconds, while
@@ -97,7 +106,7 @@ class MainActivity : AppCompatActivity() {
      *  reported as an excursion and the owner's Chrome and VSCode hovered over
      *  his desk for five minutes (his report, twice, 2026-08-05). The shell is
      *  the only component that KNOWS, so the shell is what answers now. */
-    private var excursions = 0
+    internal var excursions = 0
     /** The activity is between onStart and onStop — i.e. there is a window on
      *  screen to load a page into. */
     private var started = false
@@ -171,10 +180,26 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-    private val audioPermission =
+    internal val audioPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
             endExcursion()
             if (granted) voice.listen() else voice.deny()
+        }
+
+    /** The battery-optimisation dialog (owner decree 2026-08-07). A launcher
+     *  rather than a bare startActivity for one reason that matters: it gives
+     *  us the moment the user comes BACK, so the excursion count is balanced
+     *  — an unbalanced one would make `hideReason()` answer "excursion"
+     *  forever, and the PC would hold layout windows over his desk through
+     *  every later screen lock. The page re-reads the state on return, so its
+     *  card disappears the instant the exemption is granted. */
+    private val batteryDialog =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+            endExcursion()
+            if (::web.isInitialized) {
+                web.evaluateJavascript(
+                    "window.__noticeStateChanged && __noticeStateChanged()", null)
+            }
         }
 
     /** Android 13+ asks before ANY app may raise a notification. Requested on
@@ -182,9 +207,9 @@ class MainActivity : AppCompatActivity() {
      *  feature on is never asked, and the ask arrives with its reason
      *  visible on screen (owner principle — nothing unexplained). */
     // A notice that arrived before the permission did (see `notify` below).
-    private var pendingNotice: Triple<String, String, String>? = null
+    internal var pendingNotice: Triple<String, String, String>? = null
 
-    private val notifyPermission =
+    internal val notifyPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
             val held = pendingNotice
             pendingNotice = null
@@ -219,6 +244,13 @@ class MainActivity : AppCompatActivity() {
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         hideSystemBars()
         askNotificationPermission()
+        // The waiting channel (owner decree 2026-08-07). Started here and
+        // never stopped by us: it outlives this Activity on purpose — the
+        // whole point is that a notice reaches him when there is no page.
+        // Started from onCreate because Android 12+ refuses a foreground
+        // service start from the background, and this is the one moment the
+        // app is certainly in the foreground.
+        NoticeService.start(this)
 
         errorView = findViewById(R.id.error_view)
         errorTitle = findViewById(R.id.error_title)
@@ -242,7 +274,7 @@ class MainActivity : AppCompatActivity() {
         // reported it five times — the page kills the CSS focus ring, this
         // kills the platform one). API 26 = our minSdk, so no guard needed.
         web.defaultFocusHighlightEnabled = false
-        web.addJavascriptInterface(Bridge(), "Android")
+        web.addJavascriptInterface(Bridge(this), "Android")
         web.webViewClient = Client()
         web.webChromeClient = Chrome()
 
@@ -270,16 +302,33 @@ class MainActivity : AppCompatActivity() {
     // ── Voice input ── lives in VoiceInput.kt (split 2026-08-05, THE
     // STRUCTURE LAW): SpeechRecognizer rounds, the user-chosen dictation
     // language, on-device model download and the silent diagnostics chain.
-    private val voice by lazy {
+    internal val voice by lazy {
         VoiceInput(this) { code ->
             if (::web.isInitialized) web.evaluateJavascript(code, null)
         }
     }
 
+    // ── Game controller ── lives in Gamepad.kt (build round G1, owner spec
+    // 2026-08-07): the pad pairs with the PHONE and the WebView does not
+    // reliably expose the Gamepad API, so this shell forwards its keys and
+    // sticks to the page — which owns the whole mapping.
+    internal val pad by lazy {
+        Gamepad { code -> if (::web.isInitialized) web.evaluateJavascript(code, null) }
+    }
+
+    /** Pad keys are taken BEFORE the view hierarchy sees them: the WebView's
+     *  own D-pad focus handling would otherwise fight the mapping for every
+     *  arrow press. Everything that is not a pad falls straight through. */
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean =
+        pad.key(event) || super.dispatchKeyEvent(event)
+
+    override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean =
+        pad.motion(event) || super.dispatchGenericMotionEvent(event)
+
     // ── Notifications ── lives in Notifier.kt (ROADMAP Phase H, owner
     // 2026-08-05): a job on the PC finished, and the phone says WHICH agent.
     // Lazy, because most sessions never receive one.
-    private val notifier by lazy { Notifier(this) }
+    internal val notifier by lazy { Notifier(this) }
 
     private fun launchCamera() {
         val dir = File(cacheDir, "camera").apply { mkdirs() }
@@ -564,7 +613,7 @@ class MainActivity : AppCompatActivity() {
         if (hasFocus && ::web.isInitialized) hideSystemBars()
     }
 
-    private fun repair() {
+    internal fun repair() {
         // The stored addresses SURVIVE until a new pairing succeeds
         // (OnboardingActivity.tryConnect overwrites them). Wiping them here
         // meant one mis-tap of "Scan a new QR" while away from home
@@ -612,11 +661,11 @@ class MainActivity : AppCompatActivity() {
 
     /** Called at the moment the shell itself launches something that will
      *  hide the page. Paired with endExcursion() in every result callback. */
-    private fun beginExcursion() {
+    internal fun beginExcursion() {
         excursions++
     }
 
-    private fun endExcursion() {
+    internal fun endExcursion() {
         if (excursions > 0) excursions--
     }
 
@@ -625,7 +674,7 @@ class MainActivity : AppCompatActivity() {
      *  from the moment the screen goes dark; the keyguard covers "screen on,
      *  but locked" (a lock button press on some OEM builds, a smart-lock
      *  timeout). Either one is the end of the session, full stop. */
-    private fun screenIsAway(): Boolean {
+    internal fun screenIsAway(): Boolean {
         val power = getSystemService(Context.POWER_SERVICE) as? PowerManager
         if (power != null && !power.isInteractive) return true
         val keyguard = getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager
@@ -654,226 +703,76 @@ class MainActivity : AppCompatActivity() {
         // kept cycling and beeping under a locked screen. Cancel the running
         // round here and refuse new ones until onResume.
         voice.onBackground()
+        // Whatever the pad is holding goes UP with us (build round G1): a
+        // release this shell never sees would leave a PC mouse button down for
+        // the rest of the session.
+        pad.releaseAll()
         if (::web.isInitialized) web.onPause()
         super.onPause()
     }
 
-    private inner class Bridge {
-        @JavascriptInterface
-        fun rescan() {
-            runOnUiThread { repair() }
+    // ── The page's API surface ── lives in Bridge.kt (split 2026-08-07, THE
+    // STRUCTURE LAW). Every method there is a name the PAGE calls, and the
+    // page is served by the PC while this shell is installed separately — so
+    // that list is a compatibility contract, a different job from being the
+    // window. What Bridge needs of this Activity is exactly the `internal`
+    // members above and the three helpers below; that list IS the shell's
+    // capability surface, and making it visible was half the point.
+
+    /** Mic tap: the recogniser needs a runtime grant, and asking for one
+     *  hides the page — which the shell must count as an EXCURSION or the PC
+     *  hands the owner's windows back mid-sentence (presence). Kept here
+     *  rather than in Bridge because permission launchers are the Activity's. */
+    internal fun startVoiceInput() {
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) ==
+            PackageManager.PERMISSION_GRANTED
+        ) voice.listen()
+        else {
+            beginExcursion()   // the permission dialog hides the page
+            audioPermission.launch(Manifest.permission.RECORD_AUDIO)
         }
+    }
 
-        /** The page calls this on every `config` — the works-anywhere address
-         *  (fresh token included) persists here. Blank = the PC lost Tailscale. */
-        @JavascriptInterface
-        fun setTailscaleUrl(url: String) {
-            Prefs.setTsUrl(this@MainActivity, url.ifBlank { null })
+    /** One notice, arriving while the owner IS looking at the app. Same
+     *  reason as above: the permission launcher lives here. */
+    internal fun postNotice(title: String, text: String, tag: String) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) !=
+            PackageManager.PERMISSION_GRANTED) {
+            // Ask, and REMEMBER what was being said — the notice used to be
+            // dropped here ("this one is lost; the next lands"), which is how
+            // the owner's first agent finish arrived as a toast and never
+            // reached his notification tray (2026-08-06). It is posted the
+            // moment he grants it.
+            pendingNotice = Triple(title, text, tag)
+            notifyPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+            return
         }
+        notifier.post(title, text, tag)
+    }
 
-        /** This shell's version — the page compares it with the server's
-         *  `config.app_version` and offers the in-app update banner. */
-        @JavascriptInterface
-        fun appVersion(): String =
-            packageManager.getPackageInfo(packageName, 0).versionName ?: "0"
-
-        /** Origin-independent per-device storage for the page's preferences
-         *  (sets picker, quality, one-time banners). localStorage is keyed
-         *  by ORIGIN, and this shell deliberately alternates between two
-         *  addresses (LAN / Tailscale) — pure localStorage silently split
-         *  the page's saved state into two diverging copies (owner bug
-         *  report 2026-08-05: the sets picker "rotated" between states).
-         *  "" = absent, so the page can fall back to localStorage. */
-        @JavascriptInterface
-        fun prefGet(key: String): String =
-            getSharedPreferences("client_prefs", MODE_PRIVATE)
-                .getString("p_$key", "") ?: ""
-
-        @JavascriptInterface
-        fun prefSet(key: String, value: String) {
-            getSharedPreferences("client_prefs", MODE_PRIVATE)
-                .edit().putString("p_$key", value).apply()
-        }
-
-        /** The page's auto quality mode: reduced stream only on mobile data
-         *  (owner spec 2026-08-02). "cellular" / "wifi" / "". */
-        @JavascriptInterface
-        fun transport(): String = when {
-            onCellular -> "cellular"
-            onWifi -> "wifi"
-            else -> ""
-        }
-
-        /** WHY the page is being hidden — the question the page kept getting
-         *  wrong on its own (owner failure 2026-08-05, twice: his Chrome and
-         *  VSCode left hovering over his desk). Three answers, and the server
-         *  treats anything it does not recognise as the end of the session:
-         *
-         *  "lock"      — the screen is off or the device is locked. ALWAYS the
-         *                end, whatever else is going on: nothing of ours may
-         *                stay above the owner's desk while he is not looking.
-         *  "excursion" — THIS shell launched a picker / camera / voice /
-         *                permission dialog and is still waiting for its
-         *                result. The owner is with us; the PC holds the layout.
-         *  ""          — the app was switched away or closed. The end.
-         *
-         *  The lock test comes first on purpose: a picker can be open when the
-         *  screen goes off, and the screen wins. */
-        @JavascriptInterface
-        fun hideReason(): String = when {
-            screenIsAway() -> "lock"
-            excursions > 0 -> "excursion"
-            else -> ""
-        }
-
-        /** What this phone has spent, straight from Android (cumulative since
-         *  boot): our own UID and the whole device. The PC's Traffic window
-         *  subtracts a reading taken before an absence from one taken after
-         *  it — which is how "does it keep running while the screen is off"
-         *  gets an answer measured BY THE PHONE instead of argued about
-         *  (owner 2026-08-05). UNSUPPORTED (-1) is reported as 0. */
-        @JavascriptInterface
-        fun netStats(): String {
-            fun ok(value: Long) = if (value == TrafficStats.UNSUPPORTED.toLong()) 0L else value
-            val uid = applicationInfo.uid
-            return JSONObject()
-                .put("app_rx", ok(TrafficStats.getUidRxBytes(uid)))
-                .put("app_tx", ok(TrafficStats.getUidTxBytes(uid)))
-                .put("dev_rx", ok(TrafficStats.getTotalRxBytes()))
-                .put("dev_tx", ok(TrafficStats.getTotalTxBytes()))
-                .toString()
-        }
-
-        /** Hold the screen awake while the owner is actually working, release
-         *  it when he stops. The flag used to be set once in onCreate and
-         *  never cleared, so the tablet NEVER slept by itself: the presence
-         *  signal the whole layout design rests on could only fire if he
-         *  locked it by hand, and the screen burned battery over a stream
-         *  nobody was watching (audit 2026-08-05). */
-        @JavascriptInterface
-        fun keepAwake(on: Boolean) {
-            runOnUiThread {
-                if (on) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-                else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-            }
-        }
-
-        /** Layout focus locks the phone's rotation to the layout's chosen
-         *  orientation (owner 2026-08-02); "" unlocks (full-desktop view,
-         *  rotation free). The page sends "landscape" or "portrait" — the owner
-         *  banned the word "wide" on 2026-08-07: one name per thing. "wide" is
-         *  still accepted so a page from an older PC keeps rotating. */
-        @JavascriptInterface
-        fun lockOrientation(mode: String) {
-            runOnUiThread {
-                requestedOrientation = when (mode) {
-                    "portrait" -> android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
-                    "landscape", "wide" -> android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
-                    else -> android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-                }
-            }
-        }
-
-        /** The page's Mic switcher (owner 2026-08-04): start one listening
-         *  round. Results/round-end come back via __voiceResult/__voiceEnd;
-         *  the page restarts rounds while its switcher stays ON. The whole
-         *  subsystem lives in VoiceInput.kt. */
-        @JavascriptInterface
-        fun startVoice() {
-            runOnUiThread {
-                if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) ==
-                    PackageManager.PERMISSION_GRANTED
-                ) voice.listen()
-                else {
-                    beginExcursion()   // the permission dialog hides the page
-                    audioPermission.launch(Manifest.permission.RECORD_AUDIO)
-                }
-            }
-        }
-
-        @JavascriptInterface
-        fun stopVoice() {
-            runOnUiThread { voice.cancel() }
-        }
-
-        /** The dictation setup card (owner round 2, 2026-08-05): candidate
-         *  languages with their on-device status, the stored choice, and the
-         *  download state that styles the Mic button. */
-        @JavascriptInterface
-        fun voiceLangs(): String = voice.candidates()
-
-        @JavascriptInterface
-        fun voiceChosen(): String = voice.chosenTag()
-
-        @JavascriptInterface
-        fun voiceSetLang(tag: String) {
-            runOnUiThread { voice.setChosen(tag) }
-        }
-
-        @JavascriptInterface
-        fun voiceState(): String = voice.state()
-
-        /** Listening beeps (owner round 4, 2026-08-05): Android tones every
-         *  round start/stop and rounds cycle on each silence — muted by
-         *  default while dictating, the card's checkbox flips it. */
-        @JavascriptInterface
-        fun voiceMuteBeeps(): Boolean = voice.muteBeepsPref()
-
-        @JavascriptInterface
-        fun voiceSetMuteBeeps(on: Boolean) {
-            runOnUiThread { voice.setMuteBeepsPref(on) }
-        }
-
-        /** A job on the PC finished (ROADMAP Phase H, owner 2026-08-05). The
-         *  AGENT's name leads, and it is also the notification TAG, so the
-         *  same agent replaces its own line while several agents keep one
-         *  line each. */
-        @JavascriptInterface
-        fun notify(title: String, text: String, tag: String) {
-            runOnUiThread {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-                    checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) !=
-                    PackageManager.PERMISSION_GRANTED) {
-                    // Ask, and REMEMBER what was being said — the notice used
-                    // to be dropped here ("this one is lost; the next lands"),
-                    // which is how the owner's first agent finish arrived as a
-                    // toast and never reached his notification tray
-                    // (2026-08-06). It is posted the moment he grants it.
-                    pendingNotice = Triple(title, text, tag)
-                    notifyPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
-                    return@runOnUiThread
-                }
-                notifier.post(title, text, tag)
-            }
-        }
-
-        /** Says the notice out loud (owner: "izgovori neku reč"). */
-        @JavascriptInterface
-        fun speak(text: String) {
-            runOnUiThread { notifier.speak(text) }
-        }
-
-        /** Update tap: open /app.apk (on the SAME PC) in the system browser —
-         *  it downloads and Android installs over this app (same signature).
-         *  The WebView itself has no download pipeline; the browser here is
-         *  only the download UI. */
-        @JavascriptInterface
-        fun update(url: String) {
-            runOnUiThread {
-                val view = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-                try {
-                    startActivity(view)
-                } catch (e: Exception) {
-                    // Some setups resolve no direct handler ("no app can open
-                    // this" — owner report 2026-08-02); the chooser always
-                    // offers whatever browsers exist.
-                    try {
-                        startActivity(Intent.createChooser(view, "Download the update"))
-                    } catch (e2: Exception) {
-                        // truly nothing to hand the download to — the page's
-                        // toast already told the user what should have happened
-                    }
-                }
+    /** Ask Android to stop deferring this app (owner decree 2026-08-07). The
+     *  foreground service keeps the notice socket's PROCESS alive, but Doze
+     *  can still hold its traffic until the phone next wakes — which is the
+     *  very complaint the service exists to fix. Only the user can grant
+     *  this, so the page explains it in his own words and this opens the
+     *  system dialog; a refusal is a state, never an error.
+     *
+     *  On a phone whose OEM has removed the dialog the intent resolves to
+     *  nothing — the general battery-settings screen is the fallback, and the
+     *  page's card still says what to look for there. */
+    internal fun askBatteryExemption() {
+        beginExcursion()   // a system dialog hides the page — not a leave
+        try {
+            batteryDialog.launch(NoticeService.batteryIntent(this))
+        } catch (e: Exception) {
+            try {
+                batteryDialog.launch(
+                    Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+            } catch (e2: Exception) {
+                endExcursion()
+                Toast.makeText(this, R.string.notice_battery_no_screen,
+                    Toast.LENGTH_LONG).show()
             }
         }
     }
