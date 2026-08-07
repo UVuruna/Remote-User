@@ -322,11 +322,17 @@ body.wheel-open::before {
 
 /* --- "Access from anywhere" banner + guided wizard ------------------------ */
 
+/* Bounded on BOTH sides, like the Region bar below and for the same reason:
+   `left: 50%` alone gives a shrink-to-fit box an available width of exactly
+   50vw, so "Use from anywhere — set up" broke over two lines on a 412 px
+   phone while the other half of the row stood empty (2026-08-07). */
 #anywhere-banner {
   position: fixed;
   bottom: calc(var(--space-m) + var(--kb) + env(safe-area-inset-bottom, 0px));
-  left: 50%;
-  transform: translateX(-50%);
+  left: calc(var(--space-m) + var(--corner) + var(--space-s));
+  right: calc(var(--space-m) + var(--corner) + var(--space-s));
+  width: fit-content;
+  margin-inline: auto;
   padding: 10px 18px;
   border-radius: var(--radius-pill);
   border: 1px solid var(--border);
@@ -341,6 +347,11 @@ body.wheel-open::before {
 }
 #anywhere-banner svg { width: 16px; height: 16px; flex: none; }
 #anywhere-banner[hidden] { display: none; }
+/* The Region grab's own bar takes the bottom centre while the frame is up —
+   the promo pill shares that anchor EXACTLY, so it showed through the bar's
+   translucent background with the Send button sitting on its words. One of
+   the two has to go, and it is not the bar the gesture needs. */
+body.region-open #anywhere-banner { display: none; }
 
 /* In-app update offer — pill under the status, shown when the PC server
    carries a newer APK than this shell */
@@ -546,6 +557,21 @@ body.hidden-controls #update-banner { display: none; }
    the width — two ~180 px columns, which made the layout list measurably
    worse, not better. Measured, not assumed.) */
 @media (orientation: landscape) and (max-height: 560px) {
+  /* The status pill sits centred at the top — and in a short landscape screen
+     that is exactly where the category wheel's 12-o'clock item is, so the pill
+     painted over its label and hid it (independent grader, 2026-08-07). The
+     wheel cannot move: its bottom item already ends just above the D-pads.
+     The pill can — ~300 CSS px stand empty either side of the ring, so while
+     the wheel is open it moves into the left one. This is EVERY toast, not
+     just the connect message: `toast {text}` uses the same pill. Portrait is
+     untouched, and the pill returns to centre the moment the wheel closes. */
+  body.wheel-open #status {
+    left: var(--space-m);
+    transform: none;
+    max-width: calc(50% - 185px);
+    overflow-wrap: anywhere;
+  }
+
   body .sets-card,
   body .lay-card {
     width: min(760px, 100%);
@@ -811,25 +837,47 @@ body.hidden-controls .corner-tl { display: none; }
 }
 .rg-move svg { width: 26px; height: 26px; filter: drop-shadow(0 1px 2px var(--ink-shadow)); }
 
+/* THE BAR WAS NEVER ALLOWED TO BE WIDER THAN HALF THE PHONE (independent
+   grader, 2026-08-07 — "Drag the corners, then Send" broken into FOUR lines).
+   `left: 50%` with no `right` gives an absolutely positioned, shrink-to-fit
+   box an AVAILABLE width of exactly 50vw: 206 px on a 412 px phone, of which
+   the Send button, the ✕ and the padding took 177 — so the hint was laid out
+   in the 29 px that were left, while ~118 device px stood idle on its own row
+   and the whole canvas above it was empty. `max-width` could not help; the
+   constraint was the available width, not the cap.
+
+   Ladder rung 1, then 2 (THE SPACE & LEGIBILITY LAW). Rung 1: the bar is now
+   bounded on BOTH sides, so it grows into the width that was standing idle —
+   bounded by the corner column so it never runs under the D-pad. Rung 2: the
+   row WRAPS, so on a narrow phone the hint takes a line of its own and the
+   buttons sit under it, whole, instead of the sentence being shredded. On a
+   landscape screen everything fits one line again, by measurement, not by a
+   media query. */
 .rg-bar {
   position: absolute;
-  left: 50%;
+  left: calc(var(--space-m) + var(--corner) + var(--space-s));
+  right: calc(var(--space-m) + var(--corner) + var(--space-s));
   bottom: calc(var(--space-m) + var(--kb));
-  transform: translateX(-50%);
+  width: fit-content;
+  margin-inline: auto;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
+  justify-content: center;
   gap: var(--space-s);
-  max-width: calc(100vw - 2 * var(--space-m));
   padding: var(--space-s) var(--space-m);
   border-radius: var(--radius-pill);
   background: var(--bar);
   border: 1px solid var(--border);
 }
 /* The hint wraps instead of eliding — SPACE & LEGIBILITY, same rule the D-pad
-   labels follow. */
+   labels follow. It is the one item allowed to give width back (`flex-shrink`)
+   AFTER the row has wrapped, never before. */
 .rg-hint {
+  flex: 0 1 auto;
   color: var(--text-secondary);
   font: 500 13px/1.25 system-ui, sans-serif;
+  text-align: center;
   white-space: normal;
   overflow-wrap: anywhere;
 }

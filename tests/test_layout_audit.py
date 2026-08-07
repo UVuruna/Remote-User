@@ -55,9 +55,12 @@ COLOUR_SHOTS = {"Sets picker", "Quality panel", "Dictation card"}
 # arrangement row draws the four landscape three-window variants that no
 # picture had ever shown. The controls and the wheel are shot in landscape in
 # every look, separately, below.
+# The Region grab joined them on 2026-08-07: its bar is the panel whose
+# layout depends most on the width it is given, and landscape is where it
+# gets three times as much of it.
 LANDSCAPE_SHOTS = {"Creation panel + Name field", "Grid arrangement choice",
                    "Sets picker", "Quality panel", "Dictation card",
-                   "Layout list with rename"}
+                   "Layout list with rename", "Region grab"}
 
 
 def _grid_audit() -> bool:
@@ -268,6 +271,64 @@ window.__contrast = (root) => {
   return bad;
 };
 
+// TEXT CUT BEFORE THE DOM EVER SEES IT (independent grader, 2026-08-07 — the
+// hole that let the owner's OWN complaint pass three rounds green). Every
+// clip test in this file measures the DOM: `scrollWidth > clientWidth`, a
+// card wider than its viewport, a label outside its button. A string that
+// JavaScript shortened BEFORE creating the node defeats all of them by
+// construction — `client/layouts.js` did `s.title.slice(0, 29) + "…"`, so the
+// element fitted perfectly, `scrollWidth === clientWidth`, and the audit could
+// only ever report PASS while 225 device px stood idle on the same row and
+// the owner was writing "a pun naziv se na tom ekranu ne vidi nigde".
+//
+// The tell such a cut leaves behind is the ellipsis IN THE TEXT ITSELF, so
+// that is what this measures: any text node that ends in "…" (or "...") while
+// there is free width to its right on its own row. CSS elision leaves no
+// ellipsis in the text — that case is the scrollWidth check's, and the two
+// together cover both ways a string can be shortened.
+//
+// The one deliberate ellipsis this app draws ("More languages (2)…", which
+// means "there is more behind me") declares itself with `data-opens-more` in
+// client/panels.js. An allow-list of strings HERE would have been the same
+// thing written where nobody editing the product would see it.
+window.__truncated = (root) => {
+  const bad = [];
+  const cs = getComputedStyle(root);
+  const rr = root.getBoundingClientRect();
+  // The right edge of the column the text is laid out in — the card's own
+  // content box, which is exactly what the grader measured by hand (chip ends
+  // at 523, the column runs to 748).
+  //
+  // Honest limit: on a SHORT landscape screen the card is a two-column
+  // multicol (style.css), so an element in the first column is measured
+  // against the second column's right edge and looks freer than it is. That
+  // errs toward FAILING, never toward passing, which is the only direction a
+  // tooth may err in.
+  const colRight = rr.right - (parseFloat(cs.paddingRight) || 0) -
+                              (parseFloat(cs.borderRightWidth) || 0);
+  const walk = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  for (let n = walk.nextNode(); n; n = walk.nextNode()) {
+    const t = (n.nodeValue || '').replace(/\\s+$/, '');
+    if (!/(\\u2026|\\.\\.\\.)$/.test(t)) continue;
+    const el = n.parentElement;
+    if (!el || el.closest('[data-opens-more]')) continue;
+    const st = getComputedStyle(el);
+    if (st.display === 'none' || st.visibility === 'hidden') continue;
+    const range = document.createRange();
+    range.selectNodeContents(n);
+    const rects = [...range.getClientRects()].filter((r) => r.width > 0);
+    if (!rects.length) continue;
+    const last = rects[rects.length - 1];
+    const free = Math.round(colRight - last.right);
+    if (free > 24) {
+      bad.push('"' + t.trim().slice(-30) + '" [' + el.tagName.toLowerCase() +
+               '.' + (el.className || '-') + '] was cut with ' + free +
+               ' CSS px still free on its row');
+    }
+  }
+  return bad;
+};
+
 // EVERY COLOUR IN THE TABLE, not merely the three the fixture happens to show
 // (independent grader, 2026-08-07: "that tooth is the only safety net for
 // `colored` when the owner retunes his palette"). tests/fixtures/actions.json
@@ -303,9 +364,53 @@ def _apply_look(page, theme, fill, colors):
 
     Through `applyUi`, the app's OWN entry point — the same function the
     `config` frame calls — so the audit can never be measuring a state the
-    product cannot actually reach."""
+    product cannot actually reach.
+
+    AND THROUGH THE DESKTOP, which is the only place a look is really chosen
+    (client/__about/theme.md). This audit runs the real server in THIS process,
+    so `config.apply` moves the same `SETTINGS.phone_theme` / `phone_fill` the
+    Appearance card writes, and every `config` frame the server sends from now
+    on carries the look this sweep asked for. Without it the audit was fighting
+    its own server: the page's readiness gate (`#group-left button`) goes green
+    about 1.4 s before the socket's first `config` lands, so the first look
+    applied inside that window was silently dragged back to the shipped default
+    — one wrong picture per browser context, which is exactly the two of twelve
+    a third independent grader found by sampling page colours (2026-08-07).
+    In-memory only; `save_user_settings` is the only writer of the owner's file
+    and is never called here."""
+    import config as server_config
+    server_config.apply(phone_theme=theme, phone_fill=fill)
     page.evaluate("([t, f, c]) => applyUi({ theme: t, fill: f, colors: c })",
                   [theme, fill, colors])
+
+
+def _shoot(page, label, look, results):
+    """Write a look-named screenshot — after PROVING the page is still wearing
+    that look.
+
+    THE ASSERTION THIS FILE WAS MISSING, and the reason three rounds of
+    independent graders were handed pictures of the wrong look while every
+    check printed PASS (2026-08-07). Nothing here compared what `_apply_look`
+    ASKED for against what `<body>` was actually showing when the shutter
+    fired, so a `config` frame arriving in between — the product bug this round
+    also fixes, and any future variant of it — renamed the look and nobody
+    noticed. `Controls_dark_full.png` was byte-identical to `Controls.png` over
+    the whole control surface; `Controls_light_transparent_landscape.png`
+    rendered the dark palette. Both were labelled `audit: PASS`.
+
+    It FAILS the audit rather than warning, because a warning on a picture is
+    worth nothing: the picture is the deliverable, and a mislabelled one costs a
+    whole grading round. The shot is still written — the grader has to be able
+    to SEE what was measured — but the run goes red and names both looks."""
+    got = page.evaluate(
+        "() => [document.body.dataset.theme, document.body.dataset.fill]")
+    ok = (got[0], got[1]) == (look[0], look[1])
+    results[f"the shot shows the look it is named for: {label}"] = ok
+    if not ok:
+        print(f"  DETAIL look drift @ {label}: asked for {look[0]}/{look[1]}, "
+              f"the page was showing {got[0]}/{got[1]} at the shutter")
+    SHOT_DIR.mkdir(parents=True, exist_ok=True)
+    page.screenshot(path=str(SHOT_DIR / _shot_name(label)))
 
 
 _GROUPS_JS = ("__contrast(document.getElementById('group-left'))"
@@ -332,7 +437,8 @@ def _check_controls(page):
         "() => __contrast(document.getElementById('wheel')).concat(" + _GROUPS_JS + ")")
 
 
-def _check_panel(page, name, open_js, close_js, card_sel, shot=False):
+def _check_panel(page, name, open_js, close_js, card_sel, shot=False,
+                 look=None, results=None):
     """Opens one overlay panel and verifies: the card sits fully inside the
     viewport, the page gained no horizontal overflow, no element inside the
     card is clipped horizontally, and every leaf of text in it can be read."""
@@ -362,7 +468,10 @@ def _check_panel(page, name, open_js, close_js, card_sel, shot=False):
           const noScrollWithSlack = !(hidden > 1 && freeW > 24);
           return { inView, noPageScroll, noClip, noScrollWithSlack,
                    hiddenPx: hidden, freeWidthPx: Math.round(freeW),
-                   contrast: __contrast(card) };
+                   contrast: __contrast(card),
+                   // …and the cut this file could not see until 2026-08-07:
+                   // a string JavaScript shortened before the DOM existed.
+                   truncated: __truncated(card) };
         }""",
         card_sel,
     )
@@ -371,12 +480,13 @@ def _check_panel(page, name, open_js, close_js, card_sel, shot=False):
         # panels is the only thing that can carry a colour verdict — the very
         # thing the owner had to report by eye on 2026-08-06. Written by the
         # audit itself, so it can never be of a different build than the one
-        # just measured.
-        SHOT_DIR.mkdir(parents=True, exist_ok=True)
-        page.screenshot(path=str(SHOT_DIR / _shot_name(name)))
+        # just measured — and, since 2026-08-07, never of a different LOOK
+        # than the one in its own filename (`_shoot`).
+        _shoot(page, name, look, results)
     page.evaluate(close_js)
     passed = (ok["inView"] and ok["noPageScroll"] and ok["noClip"]
-              and ok["noScrollWithSlack"] and not ok["contrast"])
+              and ok["noScrollWithSlack"] and not ok["contrast"]
+              and not ok["truncated"])
     return passed, ok
 
 
@@ -424,12 +534,20 @@ PANELS = (
      "renderDictationCard()",
      "closeDictationPanel()", "#dictation-panel .sets-card"),
     # The Region grab (owner 2026-08-05). Its bar is the part that
-    # can starve: hint + Send + ✕ on one line above the keyboard
-    # inset, on a 412 px phone. Opened with the frame pushed into
-    # the corner, which is where a bar overlap would show first.
+    # can starve: hint + Send + ✕ above the keyboard inset, on a
+    # 412 px phone.
+    #
+    # OPENED AS THE USER MEETS IT — `rgBox = null` — since 2026-08-07.
+    # It used to be staged into the top-left corner "where a bar
+    # overlap would show first", which was wrong twice: the bar is
+    # pinned bottom-centre and never moves with the frame, so the
+    # staging proved nothing about it, and the picture every grader
+    # was handed showed a frame lying across the Layout button
+    # (label read "Layou") in a position the product never opens in.
+    # A staged state nobody can reach is not evidence; the frame's
+    # real birthplace is now measured by its own check below.
     ("Region grab",
-     "openRegionPanel();"
-     "rgBox.x = 4; rgBox.y = 4; rgBox.w = 60; rgBox.h = 60; rgApply()",
+     "rgBox = null; openRegionPanel()",
      "closeRegionPanel()", "#region-panel .rg-bar"),
     # The command chooser (owner idea 2026-08-05): the longest
     # real case is the Claude Thinking button's six levels.
@@ -536,6 +654,13 @@ def main() -> int:
             page.on("pageerror", lambda e: errors.append(str(e)))
             page.goto(f"http://127.0.0.1:{gate.PORT}/?token={gate.TOKEN}")
             page.wait_for_selector("#group-left button", timeout=8000)
+            # …AND for the socket's first `config` to have landed. The D-pad
+            # renders from the page's own defaults, so the selector above goes
+            # green about 1.4 s before the server has said a word — measured,
+            # 2026-08-07 — and everything the audit did in that window was
+            # overwritten by the config frame when it finally arrived. `monitor`
+            # stays 0x0 until that frame, so it is the honest readiness signal.
+            page.wait_for_function("() => monitor.w > 0", timeout=10000)
             # The REAL app sets, from the shipped actions.json — the panels
             # that list them must be measured with the names the owner will
             # actually see, not with invented short ones.
@@ -562,15 +687,14 @@ def main() -> int:
                 results[f"controls contrast @ {label} @ {look_name}"] = not bad
                 if bad:
                     print(f"  DETAIL controls @ {label} @ {look_name}: {bad}")
-                SHOT_DIR.mkdir(parents=True, exist_ok=True)
-                page.screenshot(path=str(SHOT_DIR / _shot_name(
-                    _shot_label("Controls and wheel", look, portrait))))
+                _shoot(page, _shot_label("Controls and wheel", look, portrait),
+                       look, results)
                 page.evaluate("closeWheel()")
                 # …and the working screen WITHOUT the wheel. Both orientations,
                 # every look: a phone that runs in landscape and has never been
                 # photographed there has been measured, not looked at.
-                page.screenshot(path=str(SHOT_DIR / _shot_name(
-                    _shot_label("Controls", look, portrait))))
+                _shoot(page, _shot_label("Controls", look, portrait),
+                       look, results)
 
                 # EVERY colour of the desktop's table, on both surfaces — not
                 # only the three the pinned fixture puts on screen.
@@ -592,7 +716,8 @@ def main() -> int:
                             (look == DEFAULT_LOOK and name in LANDSCAPE_SHOTS))
                     passed, detail = _check_panel(
                         page, _shot_label(name, look, portrait),
-                        open_js, close_js, sel, shot=shot)
+                        open_js, close_js, sel, shot=shot,
+                        look=look, results=results)
                     results[f"{name} @ {label} @ {look_name}"] = passed
                     if not passed:
                         print(f"  DETAIL {name} @ {label} @ {look_name}: {detail}")
@@ -689,6 +814,39 @@ def main() -> int:
                   return aspecting.pos === 0.9;
                 }""")
             page.evaluate("closeLayoutPanel()")
+
+            # THE REGION FRAME IS BORN WHERE NOTHING OF OURS IS (independent
+            # grader, 2026-08-07 — his picture read "Layou" where the corner
+            # button says "Layout"). `#region-panel` draws at z-index 55, above
+            # every control, so a frame, a 44 px handle or the hint bar sitting
+            # on a control paints straight across its label — and the law's
+            # subject is content the user must read. The default rect used to
+            # be two percentages that knew nothing about the chrome; it is now
+            # placed in the band the chrome leaves free, and this is the tooth
+            # that keeps it there when the chrome next changes size.
+            #
+            # The BAR is measured with it, because the ladder fix that gave the
+            # hint its width (bounded both sides instead of `left: 50%`) is
+            # exactly the kind of change that could push it under the D-pad.
+            page.evaluate("rgBox = null; openRegionPanel()")
+            page.wait_for_selector("#region-panel .rg-box", state="visible",
+                                   timeout=4000)
+            results[f"the Region frame opens clear of every control @ {label}"] = (
+                page.evaluate(
+                    """() => {
+                      const mine = [...document.querySelectorAll(
+                        '.rg-box, .rg-h, .rg-bar')].map((e) => e.getBoundingClientRect());
+                      const theirs = [...document.querySelectorAll(
+                        '.corner, #layout-bar, .group')]
+                        .map((e) => e.getBoundingClientRect())
+                        .filter((r) => r.width > 0 && r.height > 0);
+                      const hits = (a, b) => a.left < b.right && b.left < a.right &&
+                                             a.top < b.bottom && b.top < a.bottom;
+                      return mine.length > 0 && theirs.length > 0 &&
+                             theirs.every((t) => mine.every((m) => !hits(m, t)));
+                    }"""))
+            page.evaluate("closeRegionPanel()")
+
             results[f"no page errors @ {label}"] = not errors
             ctx.close()
         browser.close()

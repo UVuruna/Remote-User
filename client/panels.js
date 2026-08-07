@@ -268,6 +268,11 @@ function renderDictationCard() {
     more.type = "button";
     more.className = "sets-row dict-more";
     more.textContent = `More languages (${rest.length})…`;
+    // This row's ellipsis means "there is more behind me", not "your text was
+    // cut" — the audit's truncation check (tests/test_layout_audit.py) reads
+    // this marker, so the ONE deliberate ellipsis this app draws is declared
+    // in the product instead of being spelled out in a test's allow-list.
+    more.dataset.opensMore = "";
     keepFocus(more, () => {
       dictMoreOpen = true;
       renderDictationCard();
