@@ -1,5 +1,84 @@
 # Session Tasks — 2026-08-05 (owner-defined, enforced by the root Stop hook)
 
+WAITING_ON_OWNER: no
+
+## Round 14 (owner 2026-08-07, furious — "uvek je prioritet rešiti ZAŠTO je
+## došlo do toga u komunikaciji sa agentima, tek sekundarno bag aplikacije")
+
+THE PROCESS FINDING, and it is the whole explanation of the circle he is in.
+Not reasoned — read off his own machine this morning:
+
+    installed exe: 0.0.089     built 2026-08-06 19:22:58
+    running since  2026-08-06 19:49:58   (never restarted)
+    latest release v0.0.090    published 2026-08-06 20:06 local
+
+    his server.log, TODAY 11:35:07:
+      File "layout_api.py", line 86, in layout_list
+      UnboundLocalError: cannot access local variable 'mon_rect'
+
+Line 86 is the bug that was FIXED in 0.0.290 and RELEASED as v0.0.090 — the
+repo's line 93 reads `rect = mon_rect(stream)`. So "create from a list still
+does not work" is TRUE on his device and the fix is real: he has never run it.
+`main_window._check_updates` is documented "ONE GitHub check per start", his
+app has been running since 17 minutes BEFORE v0.0.090 existed, so the update
+button could not appear, and it never will until he restarts by hand.
+
+That is the mechanical cause of "I give 10 tasks, the agent says all 10 are
+done, half of them are unchanged": we ship, the release is real, and the app
+in front of him is from before it. Every following round then re-diagnoses a
+fixed bug and burns his week. The code half of the process fix is task 73; the
+rule half is task 74.
+
+- [ ] 73. THE APP MUST NOTICE A RELEASE WHILE IT RUNS — not once per start.
+- [ ] 74. THE LAW he ordered: a repeat report is a PROCESS failure first
+      (why did the previous round claim it done), the code bug second. Root
+      CLAUDE.md + teeth in rules/hooks/session_tasks_guard.py.
+- [ ] 75. THE DICTATION SPAM — his message this morning IS the evidence (one
+      sentence typed ~40 times, each copy one word longer). His log, 11:30:05
+      → 11:30:12: 40 × `Voice error 5 (online)` = ERROR_CLIENT, and
+      VoiceInput.onError calls deliver(null) for EVERY error, which types the
+      cumulative partial again each time.
+- [ ] 76. THE CLAUDE SET — he is IN Claude and the wheel offers only VS Code.
+      REPEAT of tasks 25, 41, 55, 58 — four numbers, four `[x]`, one bug.
+      PROCESS CAUSE: his instruction was implemented BACKWARDS and the record
+      shows exactly where. Round 11c built the detection he asked for
+      (agents.py, 0.0.266) and closed task 58 as "CLAUDE DETECTED". It never
+      removed the thing detection replaced. sets.js:88 kept reading
+      `if (Array.isArray(lay.app_sets)) return lay.app_sets.includes(s.name)`
+      — "a layout that HAS the list is answered from it ALONE" — and the
+      creation panel kept writing that list. So detection ran on every state
+      frame, said "claude", and was discarded by a copy of an older answer.
+      The task's evidence was a guard case named "the layout's own ticks win
+      over the title guess": a test that PINNED the defect as the intended
+      behaviour. That is the shape of the whole failure — the guard could not
+      have gone red, because it was written from the same wrong belief.
+- [ ] 77. THE SLOW LOAD — `agents.agents_for()` is called from the async
+      handlers with NO thread (layout_api.py:70/103/112): a 1.85 s PowerShell
+      probe measured on his PC, blocking the whole event loop (stream,
+      heartbeats, everything) once per entry whose 2 s cache expired.
+- [ ] 78. Round close — APK + full desktop build + GIT RELEASE, and the
+      release is only DELIVERED when he is running it.
+
+His UV/prompt.txt of 2026-08-07, three more (added mid-turn; NOTHING above is
+dropped for them):
+- [ ] 79. THE MOVE HANDLE DOES NOT MOVE — he shrank a layout's region on the
+      tablet, dragged it DOWN, and it stayed centred. REPEAT of task 2 of
+      round 3 ("layout_aspect {pos} + Layout.pos/_fit_rect placement + preview
+      drag"), closed as DONE 0.0.169 with "guards + load test + INPUT GATE
+      pass" as its evidence.
+      PROCESS CAUSE: to be named from the code before the fix — the round that
+      closed it never had the feature in front of it on a device, and its
+      evidence proves only that the round's own tests ran.
+- [ ] 80. THE KEYBOARD MUST NOT LIFT THE VIEW — the current offset pushes the
+      very text he is typing out of sight. Decision (his): the keyboard simply
+      covers what it covers; no shifting of the layout view, ever.
+- [ ] 81. DRAG A LAYOUT ROW (new feature, needs his answers first) — long
+      press a row in the layout list, drag it up/down, and dropping it ON
+      another row makes a GRID of the two, "like holding a file in Explorer
+      and dragging it into a folder". He explicitly said to ASK rather than
+      invent — questions go to him before any code.
+
+
 ISPORUKA (round 6): kod = the TOPMOST leak killed at its two proven roots
 (lock is never an excursion — the reason comes from the Android shell, not a
 90 s JS timer; and no window stays topmost on ANY exit path, with a
@@ -45,8 +124,37 @@ checkbox form per the new Final Report gate):
 - [x] check ALL groups after the Win-in-Mouse corruption (slika 3)
 - [x] root rule with teeth: a delivering session ends with the per-task final report (machine-wide)
 
-WAITING_ON_OWNER: yes   (round 13 — the owner's three questions are answered
-and the choice between C / A / B is his; nothing is built until he answers)
+WAITING_ON_OWNER: yes   (round 13 — the owner APPROVED C+A+B and dropped a
+large new batch; per his explicit order the PLAN went first, as a rendered
+HTML page. The plan is PUBLISHED:
+https://claude.ai/code/artifact/da670d11-4913-454b-9763-66e4851f5b2f
+with build order R1-R7 and questions P1-P5 (each with a recommendation);
+building starts the moment he confirms — "sve po preporukama" also unlocks
+the whole board. No code was touched this turn.)
+
+Round-13 batch (owner 2026-08-06 mid-turn message; plan pending approval —
+each round ends in its own build + GIT RELEASE):
+- [ ] R1: focus C+A — chunked type_text with a foreground re-check between
+      chunks + SetWinEventHook instant refocus (0.25 s poll stays as backstop).
+      APPROVED already.
+- [ ] R2: Settings window (Izgled / Notifikacije / Fokus / Pokretanje) + icon
+      buttons without "…" on the main window + the focus-lock switch (B,
+      default OFF, no SPIF_UPDATEINIFILE, ledger + next-start repair) +
+      notification voice/tempo/sound-off (phone reports voices via tts_info;
+      small APK change in Notifier.kt)
+- [ ] R3: themes — desktop dark/light QSS + sun/moon switch (PromptPainter
+      pattern) top-right after RUNNING and in Settings; Android
+      dark/light/colored × transparent/full + per-set colors via config.ui
+- [ ] R4: Traffic — "Od starta" + "Sve (iz fajla)" spans (csv downsampled),
+      Y-axis gridlines at nice values, X time labels, hover crosshair with
+      time + both rates
+- [ ] R5: wheel order — Controls editor ladder, wheel_order in actions.json,
+      top = position 1 then clockwise; app sets keep their slot when riding
+- [ ] R6: gamepad G1 — shell KeyEvent/MotionEvent bridge (WebView has no
+      Gamepad API), dpad→left group, face buttons→right group, L2=Layout,
+      R2=Hide, left stick=cursor, right stick=scroll
+- [ ] R7: gamepad G2 — L1/R1 hold opens that side's wheel + stick points +
+      release picks, short L1/R1 = layout ‹ ›, on-screen button feedback
 
 ROUND 4 IMPLEMENTED (owner approved "moze sve i bipovi kao checkbox"):
 (a) shipped-pools merge now ALSO runs once at server start
@@ -749,9 +857,65 @@ WHAT THE ANSWERS WERE, so the next session does not re-derive them:
       takes focus gets the REST of the sentence — and injected characters are
       not replayed by anything. Neither the 0.25 s watcher nor proposal A closes
       this; only chunking does. Proposed as option C (guard between chunks of
-      ~40 chars; GetForegroundWindow costs microseconds). NOT BUILT — waiting on
-      his answer. Recommendation given: C + A, with B as an optional Settings
-      switch (default off, no SPIF_UPDATEINIFILE, ledger-reverted).
+      ~40 chars; GetForegroundWindow costs microseconds). OWNER APPROVED C+A+B
+      ("odradi kako si predložio, B ostavi kao prekidač u settingsu") — this
+      task is the C half of build round R1.
+
+OWNER'S BATCH of 2026-08-06 (his long message; his order: PLAN FIRST as HTML —
+delivered this turn: https://claude.ai/code/artifact/8e162995-1e65-4eb8-961e-e4bbde6e91c4
+Build order R1-R7 lives on that page; questions P1-P5 pending):
+- [ ] 65. R1 — Focus C (chunked type_text with foreground re-check between
+      chunks) + A (SetWinEventHook EVENT_SYSTEM_FOREGROUND thread, ms reaction,
+      0.25 s poll stays as the belt) — server only; gate cases in
+      tests/test_focus_guard.py; build + GIT RELEASE.
+- [ ] 66. R2 — the desktop SETTINGS window (server/gui/settings_window.py, 4th
+      window in the Qt layout audit) + icon buttons WITHOUT "…" on
+      Controls/Traffic/Settings (SVG icons in assets/, never font glyphs) + B
+      switch ("Ne daj aplikacijama da otimaju fokus", default OFF, no
+      SPIF_UPDATEINIFILE, ledger + next-start repair) + Notifications section:
+      speak on/off (notify frame `speak` — no APK), voice picker (phone reports
+      voices via new Android.ttsVoices bridge + one message), tempo
+      (setSpeechRate — APK). Answered his "šta još pripada tu": update_check
+      (exists, no UI) + autostart Task-Scheduler switch (reads real state);
+      `hand` stays buried (dead since 2026-08-02). Build + APK + GIT RELEASE.
+- [ ] 67. R3 — THEMES. Desktop: dual palette in theme.py (light proposal on
+      the plan page), applied app-wide so every window/submenu follows;
+      Day/Night switcher top-right AFTER the RUNNING pill + a row in Settings;
+      PromptPainter-pattern transition (snapshot cover fade ~300 ms + knob
+      slide ~600 ms). Android: dark/light/colored × transparent/full via new
+      `config.ui` field (server-side user settings; page applies CSS vars;
+      prefs-cached against first-paint flash; NO APK); colored = per-set
+      preset colors editable in Settings (palette proposed on the page, P5);
+      ink by luminance; the phone audit's WCAG contrast tooth covers it.
+      Splittable R3a desktop / R3b android. Build + GIT RELEASE.
+- [ ] 68. R4 — TRAFFIC: spans "Od starta servera" + "Sve iz zapisa" (read
+      traffic.csv, minute buckets; csv already appends every sample, rotates
+      at 20 MB); Y gridlines at nice steps (1/2/5×10^n) with labels; hover =
+      crosshair + tooltip (time to the second, both directions, "niko povezan"
+      inside the grey band). QPainter only. Build + GIT RELEASE.
+- [ ] 69. R5 — WHEEL ORDER: "Točak" ladder in the Controls editor (reuses
+      OrderList) — top of list = 12 o'clock, then clockwise; stored as
+      `wheel_order` in actions.json; merge_shipped_pools preserves it; client
+      sets.js sorts; non-riding sets skipped, unknown new sets appended;
+      default = today's order. Build + GIT RELEASE.
+- [ ] 70. R6 — GAMEPAD G1: shell captures controller input (dispatchKeyEvent /
+      dispatchGenericMotionEvent, SOURCE_GAMEPAD|JOYSTICK — WebView has no
+      reliable Gamepad API) → bridge to page; D-pad = LEFT group's 4 buttons,
+      face △◻○✕ = RIGHT group's (top/left/right/bottom), presses run through
+      the SAME on-screen button code so CLICK/HOLD holds; L2 = Layout (+),
+      R2 = Hide (his spec); left stick = cursor (deadzone+expo), right stick =
+      scroll (P2 proposals). INPUT GATE cases with synthetic pad events; APK;
+      build + GIT RELEASE.
+- [ ] 71. R7 — GAMEPAD G2: L1/R1 hold opens that side's wheel, stick points
+      (frame around the set), release picks (his spec); L1/R1 tap = layout
+      ‹ › ; Start = Keys, Select = layout list; L3 = double click, R3 = middle
+      (P2 proposals); on-screen buttons light when the pad presses them. APK;
+      build + GIT RELEASE.
+- [ ] 72. Questions P1-P5 on the plan page await his verdicts (each carries a
+      recommendation): P1 stream combos move into Settings? · P2 gamepad
+      proposal mappings · P3 both long Traffic spans? · P4 phone theme changed
+      from desktop only? · P5 the set-color palette. "Sve po preporukama"
+      resolves all five.
 
 Round 12b (mid-turn, furious — a REGRESSION he hit while this round was closing):
 - [x] 64. "layout, kreiraj iz liste, nista se ne desava" — the loading cube spun
