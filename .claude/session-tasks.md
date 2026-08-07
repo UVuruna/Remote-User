@@ -1,6 +1,10 @@
 # Session Tasks — 2026-08-05 (owner-defined, enforced by the root Stop hook)
 
-WAITING_ON_OWNER: no
+WAITING_ON_OWNER: yes   (round 14 shipped as v0.0.091; task 81 — the drag-a-row
+layout grid — is his new FEATURE and he explicitly said to ask rather than
+invent, so its four questions are with him. Everything else in the round is
+built, released, and marked `[~]`: shipped, and HE has not seen it yet — the
+honest state THE REPEAT LAW created this morning.)
 
 ## Round 14 (owner 2026-08-07, furious — "uvek je prioritet rešiti ZAŠTO je
 ## došlo do toga u komunikaciji sa agentima, tek sekundarno bag aplikacije")
@@ -29,16 +33,36 @@ in front of him is from before it. Every following round then re-diagnoses a
 fixed bug and burns his week. The code half of the process fix is task 73; the
 rule half is task 74.
 
-- [ ] 73. THE APP MUST NOTICE A RELEASE WHILE IT RUNS — not once per start.
-- [ ] 74. THE LAW he ordered: a repeat report is a PROCESS failure first
-      (why did the previous round claim it done), the code bug second. Root
-      CLAUDE.md + teeth in rules/hooks/session_tasks_guard.py.
-- [ ] 75. THE DICTATION SPAM — his message this morning IS the evidence (one
-      sentence typed ~40 times, each copy one word longer). His log, 11:30:05
-      → 11:30:12: 40 × `Voice error 5 (online)` = ERROR_CLIENT, and
-      VoiceInput.onError calls deliver(null) for EVERY error, which types the
-      cumulative partial again each time.
-- [ ] 76. THE CLAUDE SET — he is IN Claude and the wheel offers only VS Code.
+- [~] 73. THE APP MUST NOTICE A RELEASE WHILE IT RUNS — done 0.0.295, shipped
+      v0.0.091. `_check_updates` said it in its own docstring: "one GitHub
+      check per start". Now every 15 minutes, never disturbing an update
+      already in flight. HIS EVIDENCE for the DEFECT (installed 0.0.089 +
+      today's traceback from a line fixed yesterday); the FIX is unseen by him
+      until he installs v0.0.091 — which is the last install he has to do by
+      hand.
+- [x] 74. THE LAW he ordered — root CLAUDE.md law 6 (THE REPEAT LAW),
+      rules/PLAN.md → The Session Task List, teeth in
+      rules/hooks/session_tasks_guard.py. Self-tested on all four paths:
+      REPEAT without PROCESS CAUSE blocked; `[x]` REPEAT without OWNER
+      CONFIRMED / HIS EVIDENCE blocked; the same block as `[~]` passes; `[x]`
+      with his evidence passes. Nothing here waits on his device.
+- [~] 75. THE DICTATION SPAM — done 0.0.293, shipped in APK 0.0.091.
+      REPEAT of task 61 (the rescue copy, "nothing spoken is thrown away").
+      PROCESS CAUSE: that round added a rescue copy and tested that a dying
+      round types what it heard. It never asked what happens when rounds die
+      four times a second — and it had the answer in the same log it was
+      reading. The gap is a class, not an oversight: a feature was tested for
+      the case it was written for and for no other, and "the phone types
+      something" was proven while "the phone types it once" was never stated.
+      HIS EVIDENCE: server.log 11:30:05 → 11:30:12, forty × `Voice error 5
+      (online)` = ERROR_CLIENT, and his own two messages to us this morning,
+      shredded. Root cause: `startListening` on a still-running recognizer is
+      refused with ERROR_CLIENT, the page retries after 250 ms, and every
+      refusal ran `deliver(null)` — with cumulative partials, that re-types
+      the whole sentence so far. Fixed at both ends (cancel before start;
+      `lastOut` trims a rescue to what has not been typed).
+- [~] 76. THE CLAUDE SET — done 0.0.294, shipped v0.0.091. He is IN Claude and
+      the wheel offers only VS Code.
       REPEAT of tasks 25, 41, 55, 58 — four numbers, four `[x]`, one bug.
       PROCESS CAUSE: his instruction was implemented BACKWARDS and the record
       shows exactly where. Round 11c built the detection he asked for
@@ -52,26 +76,53 @@ rule half is task 74.
       over the title guess": a test that PINNED the defect as the intended
       behaviour. That is the shape of the whole failure — the guard could not
       have gone red, because it was written from the same wrong belief.
-- [ ] 77. THE SLOW LOAD — `agents.agents_for()` is called from the async
-      handlers with NO thread (layout_api.py:70/103/112): a 1.85 s PowerShell
-      probe measured on his PC, blocking the whole event loop (stream,
-      heartbeats, everything) once per entry whose 2 s cache expired.
-- [ ] 78. Round close — APK + full desktop build + GIT RELEASE, and the
-      release is only DELIVERED when he is running it.
+- [~] 77. THE SLOW LOAD — done 0.0.294, shipped v0.0.091. `agents.agents_for()`
+      was called from the async handlers with NO thread
+      (layout_api.py:70/103/112): a 1.85 s PowerShell probe MEASURED on his PC,
+      blocking the whole event loop (stream, heartbeats, everything) once per
+      entry whose 2 s cache had lapsed — and a slow `uia.list_tabs` between two
+      windows guaranteed the lapse. One snapshot per request, in a thread; the
+      layout gate counts the probes and fails at two.
+      NOT the cause of "create from a list does nothing" — that was
+      v0.0.089 (see the header). Measured end-to-end here after the fix:
+      1.63 s, 22 entries, one probe.
+- [x] 78. Round close — APK 0.0.091 (Kotlin changed) + full desktop build
+      (payload gate, INPUT/PRESENCE/NOTIFY/FOCUS/LAYOUT gates, smoke test,
+      signed exe and installer, VERIFY FileVersion 0.0.091) and GIT RELEASE
+      published: https://github.com/UVuruna/Remote-User/releases/tag/v0.0.091
+      Guards 4/4 full, phone layout audit 26/26, app-set wheel 8/8, layout
+      protocol 6/6, controls sets, INPUT/PRESENCE/NOTIFY/FOCUS gates green.
 
 His UV/prompt.txt of 2026-08-07, three more (added mid-turn; NOTHING above is
 dropped for them):
-- [ ] 79. THE MOVE HANDLE DOES NOT MOVE — he shrank a layout's region on the
-      tablet, dragged it DOWN, and it stayed centred. REPEAT of task 2 of
-      round 3 ("layout_aspect {pos} + Layout.pos/_fit_rect placement + preview
-      drag"), closed as DONE 0.0.169 with "guards + load test + INPUT GATE
-      pass" as its evidence.
-      PROCESS CAUSE: to be named from the code before the fix — the round that
-      closed it never had the feature in front of it on a device, and its
-      evidence proves only that the round's own tests ran.
-- [ ] 80. THE KEYBOARD MUST NOT LIFT THE VIEW — the current offset pushes the
-      very text he is typing out of sight. Decision (his): the keyboard simply
-      covers what it covers; no shifting of the layout view, ever.
+- [~] 79. THE MOVE HANDLE DOES NOT MOVE — done 0.0.296, shipped v0.0.091.
+      REPEAT of task 2 of round 3 (`layout_aspect {pos}` + `Layout.pos` +
+      preview drag), closed as DONE 0.0.169 on "guards + load test + INPUT
+      GATE pass".
+      PROCESS CAUSE: every piece that round built was correct — the protocol,
+      the server placement, `dragMove`'s arithmetic — and its tests proved
+      exactly that. Not one of them ever DELIVERED A TOUCH to the handler, so
+      the two defects that live in the gesture layer were invisible to all of
+      them. "The feature is implemented" was tested; "a finger can use it" was
+      not, and only the second one is the task.
+      TWO real causes, both now reproduced by the audit before being fixed:
+      (a) the re-centre fired on `pointerdown` for ANY contact within 350 ms of
+      the previous one, so tap-then-drag was read as a double tap — it put the
+      region back in the MIDDLE and returned without capturing the pointer, so
+      the drag died too; his sentence had both halves in it. (b) `moveTapAt`
+      started at 0, a real `performance.now()` reading meaning "a tap at page
+      load", so any tap in the page's first 350 ms re-centred. Landscape
+      failed on (b) while portrait passed at 623 ms.
+      A THEORY THAT DID NOT HOLD, recorded so nobody spends the hour again:
+      the first diagnosis was `touch-action` on `.asp-move` (it does not
+      inherit). WRONG — `body` declares `touch-action: none` and the
+      restriction is cumulative down the tree, so the browser can never claim
+      that drag as a scroll. The check written for it could not fail; it was
+      thrown away, not kept green.
+- [~] 80. THE KEYBOARD MUST NOT LIFT THE VIEW — done 0.0.295, shipped
+      v0.0.091. `kbShift` is 0 and the canvas transform is gone: the keyboard
+      covers what it covers. The canvas still keeps its FULL height (it is
+      never SQUEEZED — that half of his 2026-08-03 request stands).
 - [ ] 81. DRAG A LAYOUT ROW (new feature, needs his answers first) — long
       press a row in the layout list, drag it up/down, and dropping it ON
       another row makes a GRID of the two, "like holding a file in Explorer

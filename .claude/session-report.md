@@ -1,185 +1,86 @@
-SESSION: b8d8ce25-5cc2-4f32-9fc5-60a910985a1f
-RELEASE: https://github.com/UVuruna/Remote-User/releases/tag/v0.0.090 (supersedes v0.0.089 — same round, one regression fixed on top)
+SESSION: 066d3fc9-cfb7-44af-bbf2-910437cf5930
+RELEASE: https://github.com/UVuruna/Remote-User/releases/tag/v0.0.091
 
-- [x] 64. "layout, kreiraj iz liste, nista se ne desava" — the loading cube spun — DONE — root cause read from his own server log (three tracebacks, 19:56:24 / 19:56:31 / 19:56:39): UnboundLocalError at layout_api.py:86, `mon_rect = mon_rect(stream)` shadowed the module's own function so the right-hand call raised before anything was sent; the socket died and the phone reconnected into a spinner. Introduced in 0.0.266, shipped in v0.0.088 and v0.0.089. Fix: `rect = mon_rect(stream)`. Gate: tests/test_layout_protocol.py (5 checks, every layout message through the real web._receive_input + real LayoutRegistry), fail-closed as build.py step 0f, SELF-TESTED by replanting the defect — check 1 fails with that exact UnboundLocalError. Commit 0.0.290, released v0.0.090.
-- [x] 61. FOCUS NEVER LEAVES THE BOX HE IS DICTATING INTO — server/focus_guard.py. — DONE — root cause: SendInput has no target, so every dictated character went to whatever window Windows called the foreground; half of it was ours (focus() raised layout members in list order, so a re-focus after an excursion handed the keyboard to the last window of the grid — his log: excursions 18:38:56, 18:41:50). Fix: focus_guard decides the target before every typing message (layout = fence, desktop = pin, GW_OWNER dialog = target, thief named in the log), Layout.last_member raised last, and focus_guard.watch defends a focused layout every 0.25 s; phone half: VoiceInput keeps a rescue copy (EXTRA_PARTIAL_RESULTS) so a dying round types what it heard instead of deleting it. Evidence: tests/test_focus_guard.py 15/15 incl. the whole path through the real web._receive_input dispatcher, fail-closed as build.py step 0e; commits 0.0.280, 0.0.282, 0.0.283.
-- [x] 63. The tray toast — the "already told" flag lived only in the window — DONE — the flag lived only in the MainWindow object, so every start of the app produced the toast again; now SETTINGS.tray_notice_path (a marker file beside the user data) makes once mean once, and the window footer carries the same sentence permanently. His screenshot's sender was "Python" = a dev instance, which is stated to him, not hidden. Evidence: commit 0.0.281, guards 4/4 and the Qt layout audit 5/5 re-run after the change.
-- [x] 62. Round close — APK 0.0.089 (Kotlin changed) + full desktop build (payload — DONE — APK 0.0.089 built (2.9 MB, Kotlin changed), then the full desktop build with every gate green (payload gate, INPUT, PRESENCE, NOTIFY 15/15, FOCUS 15/15, smoke test, signed exe + installer, VERIFY FileVersion 0.0.089) and the GIT RELEASE published: https://github.com/UVuruna/Remote-User/releases/tag/v0.0.089
+- [~] 73. THE APP MUST NOTICE A RELEASE WHILE IT RUNS — SHIPPED, unconfirmed — `main_window._check_updates` said it in its own docstring: "one GitHub check per start". His installed exe is 0.0.089, running since 2026-08-06 19:49:58; v0.0.090 was published at 20:06 — seventeen minutes later, into an app that had already asked. Now a 15-minute QTimer that never disturbs an update already in flight. HIS EVIDENCE proves the DEFECT (installed binary + today's traceback from a line fixed yesterday); the FIX is unseen until he installs v0.0.091 — the last install he has to start by hand. Commit 0.0.295.
+- [x] 74. THE LAW he ordered — DONE — root CLAUDE.md law 6 (THE REPEAT LAW), rules/PLAN.md → The Session Task List, teeth in rules/hooks/session_tasks_guard.py: a `REPEAT OF` block with no `PROCESS CAUSE:` is blocked; a `[x]` REPEAT with neither `OWNER CONFIRMED` nor `HIS EVIDENCE:` is blocked; `[~]` (shipped, he has not seen it) passes. SELF-TESTED on all four paths, and it caught this very round twice — once legitimately, once on the law's own name, which is why it matches `REPEAT OF` and not the bare word. Root-repo commit 0.0.030.
+- [~] 75. THE DICTATION SPAM — SHIPPED, unconfirmed — REPEAT OF task 61's rescue copy. PROCESS CAUSE: that round added the rescue and tested that a dying round types what it heard; it never asked what happens when rounds die four times a second, and the answer was in the same log it was reading. "The phone types something" was proven; "the phone types it once" was never stated. HIS EVIDENCE: server.log 11:30:05 → 11:30:12, forty × `Voice error 5 (online)` = ERROR_CLIENT, plus both of his messages to us this morning, shredded. Root cause: `startListening` on a still-running recognizer is refused with ERROR_CLIENT, the page retries after 250 ms, and every refusal ran `deliver(null)` — with cumulative partials that re-types the whole sentence so far. Fixed at both ends: cancel before start, and `lastOut` trims a rescue to what has not been typed. Commit 0.0.293, APK 0.0.091.
+- [~] 76. THE CLAUDE SET — SHIPPED, unconfirmed — REPEAT OF tasks 25, 41, 55, 58: four numbers, four `[x]`, one bug. PROCESS CAUSE: round 11c built the detection he demanded (`server/agents.py`) and closed it, but never removed what detection replaced. `sets.js` kept `if (Array.isArray(lay.app_sets)) return lay.app_sets.includes(s.name)` — "answered from it ALONE" — and the creation panel kept writing that list at creation time, so a live `agents: ["claude"]` on every state frame was discarded by a copy of an older answer. Its guard case was named "the layout's own ticks win over the title guess": a test that PINNED the defect as intended behaviour and therefore could never go red. Ticks removed end to end (creation panel, rename panel, `layout_apps`, `Layout.app_sets`, `layout_state`); the guard now asserts the opposite and fails on the old line. Commit 0.0.294.
+- [~] 77. THE SLOW LOAD — SHIPPED, unconfirmed — `agents.agents_for()` was called bare from the async handlers (layout_api.py:70/103/112), once per window and once per tab: a 1.85 s PowerShell probe MEASURED on his PC, with the whole event loop stopped — no stream, no heartbeats — every time the 2 s cache lapsed, which a slow `uia.list_tabs` between two windows guaranteed. One snapshot per request, in a thread. Gate counts the probes and fails at two. Measured end-to-end after the fix: 1.63 s, 22 entries, one probe. Commit 0.0.294.
+- [x] 78. Round close — DONE — APK 0.0.091 (Kotlin changed) + full desktop build (payload gate, INPUT/PRESENCE/NOTIFY/FOCUS/LAYOUT gates, PyInstaller smoke test, signed exe and installer, VERIFY FileVersion 0.0.091) and GIT RELEASE published: https://github.com/UVuruna/Remote-User/releases/tag/v0.0.091 — guards 4/4 full, phone layout audit 26/26, app-set wheel 8/8, layout protocol 6/6, controls sets green.
+- [~] 79. THE MOVE HANDLE DOES NOT MOVE — SHIPPED, unconfirmed — REPEAT OF round 3's task 2, closed as DONE 0.0.169 on "guards + load test + INPUT GATE pass". PROCESS CAUSE: everything that round built was correct — protocol, server placement, `dragMove`'s arithmetic — and its tests proved exactly that. None of them ever delivered a TOUCH, so both defects, which live in the gesture layer, were invisible to all of them. Two real causes, each reproduced in the audit before being fixed: (a) the re-centre fired on `pointerdown` for any contact within 350 ms, so tap-then-drag was read as a double tap — region back to the MIDDLE and no pointer capture, so the drag died too; his sentence contains both halves; (b) `moveTapAt` started at 0, a real `performance.now()` reading meaning "a tap at page load", so any tap in the first 350 ms re-centred — landscape failed on this while portrait passed at 623 ms. A THEORY THAT DID NOT HOLD is recorded in the code and the commit: `touch-action` on `.asp-move` was the first diagnosis and is WRONG (`body` declares `touch-action: none` and the restriction is cumulative), so that check could not fail and was thrown away rather than kept green. Commit 0.0.296.
+- [~] 80. THE KEYBOARD MUST NOT LIFT THE VIEW — SHIPPED, unconfirmed — `kbShift` is 0 and the canvas transform is gone. The canvas still keeps its FULL height, so the picture is never SQUEEZED — that half of his 2026-08-03 request stands; only the lift, which carried the line he was typing off the top of the screen, is withdrawn. Commit 0.0.295.
+- [ ] 81. DRAG A LAYOUT ROW INTO ANOTHER TO MAKE A GRID — NOT STARTED, four questions with him. He said explicitly to ask rather than invent, and the questions are not cosmetic: what the two source layouts become, which grid template a drop chooses, whether a drop onto an existing grid extends it, and whether the same drag also reorders the list.
 
-# Final Report — round 12 (2026-08-06): the dictation that went somewhere else
+# Final Report — round 14 (2026-08-07): why "done" kept not being done
 
-The report that opened this session was itself the evidence: the first
-paragraph of his message is a sentence he dictated for ANOTHER project, and it
-arrived here.
+NOT DONE: **task 81** (drag a layout row onto another to build a grid) — his
+new feature, not started, because he said to ask rather than invent and the
+four questions genuinely change what gets built. Everything else he raised
+today is built, gated and released as **v0.0.091**, and marked `[~]`: shipped,
+and he has not seen it work yet. That state did not exist this morning.
 
-NOT DONE / BLOCKED: **nothing is left undone — every task he gave is finished
-and shipped**. (Say this the right way round: an earlier version of this line
-read "none of what he asked", which in Serbian reads as "I did nothing you
-asked" — the exact opposite. A status line that can be read as its own
-opposite is a broken status line.) One thing is stated, not hidden: I could not name the specific program that stole his focus tonight,
-because nothing in the app was watching. From this version the server log
-names it (exe + title) every time it tries — and it no longer succeeds inside
-a layout.
+## The finding that explains the circle
 
-## Root cause, in one line
-`SendInput` has no target. Every dictated character went to whatever window
-Windows called the FOREGROUND at that instant, so anything on the PC that took
-focus mid-sentence took the rest of the sentence with it — silently, with no
-error, while the stream still showed the PC.
+He asked for the process cause before the code, and the process cause is not a
+matter of judgement — it is two lines from his own machine:
 
-Half of it was OURS, and his own server log dates it: a picker or permission
-dialog closes the socket (excursions at 18:38:56 and 18:41:50), the page
-re-focuses the layout on the new connection, and `focus()` raised members in
-LIST order — so the keyboard went to whichever window sat last in the grid,
-which for him is the other agent's session.
+    installed exe: 0.0.089     running since 2026-08-06 19:49:58
+    v0.0.090 published                       2026-08-06 20:06
 
-## Per task
+    his server.log, TODAY 11:35:07:
+      File "layout_api.py", line 86, in layout_list
+      UnboundLocalError: cannot access local variable 'mon_rect'
 
-### 61 — the focus guard (see the line above for status + evidence)
-  `server/focus_guard.py`: the target is decided BEFORE every message that
-  types. In a layout the fence is the layout (a foreign foreground is refused
-  and focus handed back to the member he was typing in); at the desktop the
-  target is the window the typing burst started in, re-armed only by what he
-  does on purpose; a dialog of the target counts as the target (GW_OWNER
-  chain, never process identity — every VSCode window shares one process and
-  one of them is the thief); the thief is NAMED in the log.
-  After his second message, shouted: the layout is **defended**, not merely
-  checked — `focus_guard.watch` polls every 0.25 s, because the recognizer
-  delivers a whole utterance only at the END of a round, so a guard that waits
-  for a keystroke arrives after the damage. It sleeps while the phone is away.
-  `Layout.last_member` fixes the other half: the keyboard member is raised
-  LAST on every re-focus.
-  Phone half: `VoiceInput` keeps a rescue copy of what it has already heard
-  (`EXTRA_PARTIAL_RESULTS`), so a round that dies — the `ERROR_CLIENT` lines
-  that fill his log — types those words instead of deleting them; `deliver()`
-  is the only exit, so nothing is typed twice.
-  Evidence: `tests/test_focus_guard.py` 15/15, including the whole path
-  through the real `web._receive_input` dispatcher, fail-closed as step 0e of
-  `build.py`. Commits 0.0.280, 0.0.283.
+Line 86 is the bug fixed in 0.0.290 and released as v0.0.090; the repo's line
+93 has read `rect = mon_rect(stream)` since yesterday evening. So "create from
+a list still does not work" was TRUE on his device and the fix was real — he
+has never run it. `_check_updates` is documented "one GitHub check per start",
+his app had been running for seventeen minutes when v0.0.090 appeared, and it
+never asked again.
 
-### 63 — the tray toast (status + evidence above)
-  The "already
-  told" flag lived only in the window object, so every start of the app
-  produced it again. A marker file (`SETTINGS.tray_notice_path`) makes once
-  mean once. Noted for him: his screenshot showed the sender as **Python**, so
-  that one came from a dev instance, not the installed app. Commit 0.0.281.
+That is the mechanical half of "I give ten tasks, the agent says all ten are
+done, half are unchanged". We ship; the release is real; the app in front of
+him is from before it; the next round re-diagnoses a fixed bug and the week is
+gone. Fixed in code (task 73) — but the code fix only takes effect once he
+installs v0.0.091 by hand, which is the last time that will be true.
 
-### 62 — round close (status + evidence above)
-  APK 0.0.089 (Kotlin changed) + full desktop
-  build and GIT RELEASE v0.0.089.
+## The other half, and it is ours
 
-## Gates on the released tree
+Three tasks in this round were REPEATS, and the record shows one mechanism
+behind all of them: **"done" had come to mean "my own test is green"**, and a
+test written from the same belief that produced the bug cannot go red.
 
-guards 4/4 · INPUT GATE · PRESENCE GATE · NOTIFY GATE 15/15 · **FOCUS GATE
-15/15 (new, step 0e)** · Qt layout audit 5/5 · phone layout audit · client
-load test · PyInstaller smoke test · payload gate · signed exe + installer ·
-VERIFY FileVersion 0.0.089.
+- The Claude set carried FOUR task numbers and four `[x]` (25, 41, 55, 58).
+  Round 11c built the detection he demanded and left the tick list that
+  overruled it — with a guard case named "the layout's own ticks win over the
+  title guess". The test pinned the defect AS THE RULE.
+- The Move handle was closed on "guards + load test + INPUT GATE pass". Every
+  piece was correct; nothing had ever delivered a touch, and both real defects
+  live in the gesture layer.
+- The dictation rescue copy was tested for the round it was written for. Four
+  collisions a second was never asked, and the answer was in the log that
+  round was already reading.
 
-## What he should watch for
-If anything still pulls focus while he dictates, the server log now says who:
-`Focus left the layout the phone is showing — <exe> "<title>" (0x…)`. That
-line is the next fix's starting point, and it did not exist before tonight.
+THE REPEAT LAW (root CLAUDE.md law 6) is the answer he ordered: when he
+reports something a previous round closed, the FIRST deliverable is why that
+claim was false; the code is second. A task may be `[x]` only on his word or
+evidence from HIS machine; otherwise `[~]`, carried forward until he closes
+it. Teeth in `rules/hooks/session_tasks_guard.py`, self-tested on four paths —
+and it blocked this very round twice, once correctly and once on the law's own
+name, which is why it matches `REPEAT OF` rather than the bare word.
 
-SESSION: 0eb7cbe2-d779-4c9d-9ec7-0a3d35d0897a
-RELEASE: https://github.com/UVuruna/Remote-User/releases/tag/v0.0.088
+`[~]` is not a demand that he verify the whole app. It applies to what he
+reported and we claim to have fixed. A round still ships, still closes, still
+releases — it simply stops calling a thing proven when the only witness is its
+own author.
 
-# Final Report — rounds 11 / 11b / 11c (2026-08-06)
+## What is in v0.0.091
 
-One session, three rounds, because twice what I reported as fixed was not.
-
-NOT DONE / BLOCKED: **none**. One limit remains open by design and was stated
-to him, not hidden: with the phone app FULLY CLOSED a notice cannot arrive at
-the moment it happens — it arrives on his return — unless he asks for an
-Android foreground service, which costs a permanent tray entry and battery.
-
-WHAT I GOT WRONG, twice, plainly: I reported v0.0.086 as fixing his overlap on
-the strength of a guard that measured SIZES and an audit run with substitute
-FONTS. Both were green; his screen was not. And the round before this one told
-him that detecting a Claude conversation was impossible after probing exactly
-one source. Neither was a coding error — both were stopping too early and
-reporting the stop as an answer.
-
-## Gates on the released tree
-
-guards 4/4 · APP-SET WHEEL 8/8 (two new) · CONTROL SETS · INPUT · PRESENCE ·
-NOTIFY 15/15 (three new) · Qt layout audit 5/5 on the REAL platform fonts,
-now with an OVERLAP check · phone layout audit with a CONTRAST check · client
-load test · PyInstaller smoke test · payload gate · signed exe + installer.
-Every new check self-tested by replanting the defect and watching it fail.
-
-## Per task
-
-- [x] find why VSCode vanished when Claude arrived, and bring it back — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
-- [x] Claude set only on the Claude conversation tab, never on a document — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
-- [x] both app sets ticked = 6 free wheel slots, not 7 (app sets charge the cap) — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
-- [x] set list split into sections: standard / app-aware / custom — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
-- [x] real icons for VSCode, Chrome, Explorer instead of the generic window — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
-- [x] Arrangement: short title, D-pad + Stack names, Default button below the lists — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
-- [x] check ALL groups after the Win-in-Mouse corruption (slika 3) — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
-- [x] root rule with teeth: a delivering session ends with the per-task final report (machine-wide) — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
-- [x] 1. Mic (Input set) non-English recognition — REAL debugging, not — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
-- [x] 2. Layout resize panel: center Move handle (✥) — drag repositions the — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
-- [x] 3. Sets picker rotating state — DONE 0.0.169, two root causes: — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
-- [x] 4. Quality panel — DONE 0.0.169: FPS Max/10/15/30/60, res full/⅔/½, — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
-- [x] 5. Font-zoom staircase (layout focus only) — DONE 0.0.169: — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
-- [x] 6. Session close — DONE: APK 0.0.074 built (Kotlin compiled), full — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
-- [x] 7. Layout custom NAME — DONE 0.0.175 — the auto name (target window title) stays the — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
-- [x] 8. Z-ORDER — owner decided 2026-08-05 to KEEP the topmost band and — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
-- [x] 9. DONE 0.0.174 (root cause: no liveness signal at all — the server — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
-- [x] 10. DONE 0.0.175. Aspect panel Move handle icon — the ✥ glyph renders as a fat cross — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
-- [x] 11. Session close — DONE: APK 0.0.076 built, full desktop build passed — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
-- [x] 12. DONE — Controls editor obeys THE SPACE & LEGIBILITY LAW. Causes found: — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
-- [x] 13. DONE — Teeth: tests/test_layout_law.py (static, in --fast) + — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
-- [x] 14. DONE — Presets carry more than 4 commands: `buttons` is the pool, — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
-- [x] 15. DONE — Reserve commands per set (ACTIONS.md table), incl. the — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
-- [x] 16. DONE — Built-in rows tell the truth: load_client_builtins() parses — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
-- [x] 17. DONE — Session close: docs of every changed module updated — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
-- [x] 18. FOLLOW-UP RELEASE v0.0.079 — the Stop gate flagged theme.py as — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
-- [x] 19. Arrangement ladder (owner 1A) — raising a command must move the — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
-- [x] 20. Portrait ordinals (owner 1B) — a column has no left/right: the — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
-- [x] 21. Mouse side buttons (owner 2) — Btn 4 / Btn 5 (XBUTTON1/2) as — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
-- [x] 22. Settings pool (owner 4) — Next box and Snap removed; the five that — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
-- [x] 23. Icons for the commands that have none (owner 5) — proposal page — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
-- [x] 24. Region (owner 3) — free-size/free-position rectangle on the phone, — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
-- [x] 25. Claude app set (owner 6) — feasible; answer delivered. Needs (a) a — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
-- [x] 27. Quality hierarchy (owner report: "desktop settings do nothing") — — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
-- [x] 26. Round close for 23–25 — the code shipped as 0.0.198 + 0.0.199; the — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
-- [x] 28. DONE 0.0.200 — a LOCK is never an excursion. ROOT CAUSE from the — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
-- [x] 29. DONE 0.0.201 — the topmost ledger. clear_topmost() existed and was — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
-- [x] 30. DONE 0.0.203 — the Traffic window. MeteredSocket wraps the socket — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
-- [x] 31. DONE 0.0.202 — the audit's remaining leaks, none of them reachable — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
-- [x] 32. DONE — SHIPPED as v0.0.081: — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
-- [x] 23. ICONS — the whole proposal page accepted by the owner. 40 new faces — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
-- [x] 24. REGION — free-size/free-position frame, captured and pasted at once — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
-- [x] 25. CLAUDE app set — `title` match beside `process` (Layout keeps the — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
-- [x] 26. RENAME any button of any shipped set (owner's new requirement — the — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
-- [x] 27. Image dropped from the Attach pool. DONE 0.0.198. — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
-- [x] 33. "The PC calls you" (owner go + refinement 2026-08-05: several — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
-- [x] 33b. Thinking button (owner correction with the screenshot): `/effort` — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
-- [x] 34. DONE — the round close both rounds were waiting for. One release — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
-- [x] 35. PROBLEM: "zašto je WIN u MOUSE i nema RIGHT CLICK" — FIXED 0.0.210, — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
-- [x] 36. "Zašto je nestao VSCode kad si ubacio Claude" (editor half) — FIXED — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
-- [x] 37. Thinking = a CHOICE, not a command (owner idea: "u centar da — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
-- [x] 38. Sets picker grouping + group NAMES (his item 2) — DONE 0.0.214 — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
-- [x] 39. Arrangement section (his item 3) — already done by the parallel — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
-- [x] 40. Round close — DONE: full desktop build (INPUT/PRESENCE/NOTIFY — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
-- [x] 41. WHY THE CLAUDE SET NEVER SHOWED — root cause PROVEN by probing his — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
-- [x] 42. WHY NINE COULD BE TICKED (his item 2, cap of 8 confirmed as LAW) — — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
-- [x] 43. THE LIVE BADGE (his item 3) — the app rows now carry "ON THE WHEEL — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
-- [x] 44. NOTIFICATIONS DON'T WORK EITHER (his follow-up question) — correct, — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
-- [x] 45. STRUCTURE LAW — controls.js hit 1000 lines mid-round; the — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
-- [x] 46. Round close — APK 0.0.085 + full desktop build (INPUT + PRESENCE + — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
-- [x] 47. OVERLAP WITH THE UPDATE BUTTON (screenshot 1) and OVERLAP AT THE QR — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
-- [x] 48. NOTIFICATIONS CANNOT BE SWITCHED ON in the installed app - the root — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
-- [x] 49. THE CHECKBOX IS VISUALLY UNACCEPTABLE - correct: a QCheckBox had no — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
-- [x] 50. THE TICK BESIDE THE SELECTED SETS - delivered. Every set row carries — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
-- [x] 51. Round close - full desktop build (INPUT + PRESENCE + NOTIFY gates, — DONE — closed and evidenced in an earlier round of this same task list (.claude/session-tasks.md carries its root cause, fix and proof); this session did not re-verify it.
-- [x] 52. THE OVERLAP IS STILL THERE ON v0.0.086 — REAL cause found and fixed: — DONE — v0.0.086's fix was real but not HIS bug. Cause: minimumSizeHint() quotes a WRAPPING label at ONE line, so the column was 48 px short and Qt spends a shortfall by OVERLAPPING, not clipping — every widget reported full size, which is why the guard was green. Reproduced at his 125% scaling before (qr 17..233, url at 195) and clean after. heightForWidth in one shared module (server/gui/sizing.py); the URL label deleted. Commit 0.0.258, shipped v0.0.087.
-- [x] 53. COLOURS — cause: .sets-row sets no background, harmless on a <label> — DONE — .sets-row sets no background, harmless on a <label>, fatal on a <button>: the WebView paints its light default under near-white ink. Fixed; contrast tooth added (WCAG against the COMPOSITED backdrop). Self-test: all six chooser rows report 1.05:1 with the defect replanted. Found two more nobody reported. Commit 0.0.259.
-- [x] 54. NOTIFICATIONS — answered from HIS log, not from belief: the hook — DONE — answered from his own server.log: 17:30:51 and 17:33:02, both 200, phone connected since 17:30:03. The PC half worked; the broken link was Android POST_NOTIFICATIONS. He confirmed the same evening. Fixed properly in task 59.
-- [x] 55. CLAUDE — the earlier 'impossible' was WRONG, and proven wrong on his — DONE — the investigation reversed an earlier 'impossible'; he gave the go the same evening and it is BUILT in task 58.
-- [x] 56. Round close — full desktop build (payload gate, INPUT/PRESENCE/NOTIFY — DONE — v0.0.087 released with the overlap fix, the colour fixes and the three new guards.
-- [x] 57. THE TICKS — done exactly as specified: own strip on the LEFT with the — DONE — ticks in their own strip on the LEFT, icon and name indented past them; GREY where the set is `required`, WHITE where it is his to switch; App-aware rows ticked and their checkbox made live (the phone already read the same `enabled` flag, so a blank row hid a working switch). Evidence: the list rendered to PNG and inspected. Commit 0.0.265.
-- [x] 58. CLAUDE DETECTED — server/agents.py reads the process table: a live — DONE — server/agents.py: a live claude.exe carries --resume=<session-id>, the id names a transcript whose `cwd` names the project, the VS Code title ends in that folder. Sent as `agents` per layout and per creation entry; the Claude set claims it with "agent": "claude"; his own ticks still win. Verified on HIS machine (three live projects matched his three titles; a Notepad title matched nothing) and pinned by two guard cases, self-tested. Commit 0.0.266.
-- [x] 59. NOTIFICATIONS — three fixes. (a) POST_NOTIFICATIONS asked once at app — DONE, with one limit stated — permission asked at START (and a notice arriving before the answer is held, not dropped), an absent phone's notice WAITS 30 min and arrives oldest-first with '8 min ago', and the hook says 'needs you' because a Stop hook fires at every turn end. Three guard cases. What remains, by design and told to him: with the app fully closed nothing arrives at that moment, only on his return, unless he wants a foreground service. Commits 0.0.267, 0.0.269.
-- [x] 60. Round close — APK 0.0.088 (Kotlin changed) + full desktop build — DONE — APK 0.0.088 (Kotlin changed) + full desktop build with every gate, signed, VERIFY FileVersion 0.0.088, and the GIT RELEASE published: https://github.com/UVuruna/Remote-User/releases/tag/v0.0.088
+| His report | Cause | Where |
+|---|---|---|
+| mic spams the sentence until switched off | `startListening` on a live recognizer → ERROR_CLIENT storm × cumulative partials × deliver-on-every-error | APK, 0.0.293 |
+| wheel offers only VS Code inside Claude | the tick list written at creation outranked live detection | 0.0.294 |
+| "create from a list" dead | fixed in v0.0.090; he runs 0.0.089 | 0.0.295 delivers it |
+| layout setup takes very long | 1.85 s process probe per entry, on the event loop | 0.0.294 |
+| Move handle stays centred | tap-then-press read as double tap; timer origin at 0 | 0.0.296 |
+| keyboard pushes the typed text out of sight | the canvas was lifted by the keyboard's height | 0.0.295 |
