@@ -85,8 +85,20 @@ function clampView() {
   view.ty = Math.min(Math.max(view.ty, hy + R.h * f.scale - (R.y + R.h) * s), hy - R.y * s);
 }
 
+// What the canvas is CLEARED with before the PC's picture is drawn on it —
+// the theme's own page colour, not a literal (build round R3). It shows
+// wherever the stream does not reach: before the first frame, in the
+// letterbox around a layout region, and behind a panel's scrim. Cached,
+// because `redraw` runs at frame rate and `getComputedStyle` has no business
+// on a hot path; client/theme.js refreshes it whenever the look changes.
+let canvasBg = "#0f172a";
+
+function setCanvasBackdrop(color) {
+  if (color) canvasBg = color;
+}
+
 function redraw() {
-  ctx.fillStyle = "#0f172a";
+  ctx.fillStyle = canvasBg;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   const D = drawnRect();
   ctx.save();

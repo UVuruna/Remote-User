@@ -4,9 +4,12 @@ Protocol (see project CLAUDE.md):
 - client → server, JSON text: auth, pointer_down, pointer_up, click (at the
   current cursor, no coordinates), press (one half of a CLICK/HOLD mouse
   button — down on finger-land, up on lift, at the current cursor),
-  pointer_move, scroll, viewport (JPEG mode only), key_text, key_special,
+  pointer_move, scroll (vertical `ticks` + optional horizontal `hticks`),
+  viewport (JPEG mode only), key_text, key_special,
   chord, monitor_switch, screenshot (optionally with the region the phone
-  views + paste=true — crops and injects Ctrl+V)
+  views + paste=true — crops and injects Ctrl+V), tts_info (the voices the
+  phone can speak with, once per connection — the desktop Settings window
+  draws its Voice dropdown from them)
 - server → client, JSON text: `config` after auth and after every stream
   (re)start — monitor size plus `stream` ("h264" | "jpeg") and, in H.264 mode,
   the MSE `codec` string parsed from the live init segment; `actions` (radial
@@ -23,7 +26,7 @@ The `stream` argument everywhere is either an H264Manager or a JpegStreamer —
 one duck interface: mode, width, height, monitor_index, output_count(),
 switch_to(), take_screenshot(); the JPEG side adds set_viewport() plus
 start()/stop() (its capture runs on demand, driven by FrameHub.subscribers),
-the H.264 side open_session()/close_session().
+the H.264 side new_owner()/open_session()/close_session().
 """
 
 import asyncio
@@ -56,7 +59,7 @@ import presence
 import traffic
 import uia
 import window_manager
-from config import SETTINGS, apk_version, app_version
+from config import SETTINGS, apk_version, app_version, ui_config
 from input_injector import BUTTON_FLAGS, InputInjector
 from layout_api import toast as _toast
 
@@ -431,11 +434,19 @@ async def _stream_h264(ws: WebSocket, manager, token: str,
         while conn.get("paused"):
             await asyncio.sleep(0.25)
         queue: asyncio.Queue = asyncio.Queue(maxsize=SETTINGS.h264_queue_chunks)
+        # This iteration's CLAIM on its session, made on the event loop BEFORE
+        # the encoder thread exists — `asyncio.to_thread` cannot cancel the
+        # thread it started (h264_streamer.SessionOwner; live 2026-08-07).
+        owner = manager.new_owner()
 
-        def push(item, q=queue) -> None:
+        def push(item, q=queue, o=owner) -> None:
             # H.264 bytes cannot be dropped individually (the stream would
             # corrupt). A full queue means the client cannot keep up — drop
             # the WHOLE session: clear and sentinel; the loop reopens fresh.
+            # A released claim means nothing reads this queue ever again: that
+            # backlog is a DEAD phone, not a slow one (see SessionOwner).
+            if not o.alive:
+                return
             try:
                 q.put_nowait(item)
             except asyncio.QueueFull:
@@ -457,12 +468,20 @@ async def _stream_h264(ws: WebSocket, manager, token: str,
                 lambda chunk, p=push: loop.call_soon_threadsafe(p, chunk),
                 lambda p=push: loop.call_soon_threadsafe(p, None),
                 conn.get("quality"),
+                owner,
             )
         except (RuntimeError, OSError) as e:
+            owner.release()
             logger.error("H.264 session failed to open: %s", e)
             await _toast(ws, "Stream failed to start — see server log")
             await ws.close(code=1011)
             return
+        except BaseException:
+            # Cancellation lands HERE (socket death, 4409 takeover, server
+            # stop) and the ffmpeg spawn it interrupted runs on regardless.
+            # Releasing the claim closes whatever that thread produces.
+            owner.release()
+            raise
         try:
             await _send_config(ws, manager, token, codec=session.codec)
             while (chunk := await queue.get()) is not None:
@@ -472,7 +491,9 @@ async def _stream_h264(ws: WebSocket, manager, token: str,
         finally:
             # Synchronous on purpose: it must run even mid-cancellation, and it
             # is fast (terminate ffmpeg; capture stop wakes within one frame).
-            manager.close_session(session)
+            # One call closes the session AND silences the queue closure, so
+            # the two can never disagree about who is gone.
+            owner.release()
         if loop.time() - started < 2.0:
             await asyncio.sleep(1.0)  # a session dying this fast is an error loop — pace it
 
@@ -481,7 +502,6 @@ INPUT_BLOCKED_TOAST = (
     "The PC is blocking remote input — an administrator window or the lock "
     "screen has focus on the PC."
 )
-
 
 async def _send_cursor(ws: WebSocket, injector: InputInjector) -> None:
     """Streams the PC cursor position for the client-drawn virtual cursor.
@@ -548,7 +568,8 @@ def _load_actions() -> dict:
     connect). A missing or invalid file is logged and yields no categories —
     never a crash."""
     _merge_shipped_actions()
-    empty = {"categories": [], "app_sets": [], "custom_sets": [], "left": 0, "right": 0}
+    empty = {"categories": [], "app_sets": [], "custom_sets": [], "left": 0,
+             "right": 0, "wheel_order": []}
     try:
         data = json.loads(SETTINGS.actions_path.read_text(encoding="utf-8"))
         return {
@@ -563,6 +584,11 @@ def _load_actions() -> dict:
             "custom_sets": data.get("custom_sets", []),
             "left": data.get("left", 0),
             "right": data.get("right", 0),
+            # Where each set sits on the phone's wheel (build round R5, owner
+            # 2026-08-07): position 1 is 12 o'clock, then clockwise. Without
+            # this line the desktop editor saves an order the phone never sees
+            # — the whole feature is a no-op, on a fresh install too.
+            "wheel_order": data.get("wheel_order", []),
         }
     except FileNotFoundError:
         logger.warning("actions.json not found at %s — no action categories", SETTINGS.actions_path)
@@ -612,6 +638,10 @@ async def _send_config(ws: WebSocket, stream, token: str, codec: str | None = No
         # to grey out the steps that can never take effect (owner 2026-08-05:
         # picking 30 fps under a 10 fps PC changed nothing and said nothing).
         "base": _stream_base(stream),
+        # How the phone should LOOK (build round R3, owner 2026-08-07) —
+        # theme, fill and the per-set colours, decided on the DESKTOP and
+        # nowhere else. Built in config.ui_config(); this file only ships it.
+        "ui": ui_config(),
     }
     if codec:
         payload["codec"] = codec
@@ -676,7 +706,7 @@ async def _screenshot(ws: WebSocket, stream, injector: InputInjector, msg: dict)
                      else "Clipboard busy — try again")
 
 
-def _paste_text(injector: InputInjector, text: str, enter: bool) -> None:
+def _paste_text(injector: InputInjector, text: str, enter: bool, guard=None) -> str:
     """Writes `text` into the focused box on the PC through the clipboard.
 
     Blocking on purpose (the caller runs it in a thread): the clipboard write,
@@ -684,17 +714,29 @@ def _paste_text(injector: InputInjector, text: str, enter: bool) -> None:
     the paste to land before the next key. Falls back to typing the text
     character by character when the clipboard is busy — an owner watching his
     phone would otherwise see a button that silently did nothing.
+
+    Returns what did NOT reach the PC ("" = all of it landed) for the toast.
     """
     if not text:
-        return
+        return ""
     if clipboard.copy_text(text):
         injector.press_chord("ctrl+v")
     else:
         logger.warning("Clipboard busy — typing %r instead of pasting it", text[:40])
-        injector.type_text(text)
+        # Typed character by character now, so it needs the same mid-sentence
+        # fence as dictation does (focus_guard.typist).
+        lost = injector.type_text(text, guard)
+        if lost:
+            # Half a command must never be SUBMITTED: Enter is what makes a
+            # slash command run, and running the fragment that happened to
+            # arrive is worse than running nothing.
+            logger.error("Enter withheld — %d characters of %r never reached "
+                         "the PC", len(lost), text[:40])
+            return lost
     if enter:
         time.sleep(PASTE_ENTER_DELAY)
         injector.press_key("enter")
+    return ""
 
 
 # Which messages TYPE (their effect lands in whatever window holds the
@@ -798,9 +840,19 @@ async def _receive_input(ws: WebSocket, injector: InputInjector, stream, token: 
         elif kind == "pointer_move":
             injector.move(float(msg["x"]), float(msg["y"]))
         elif kind == "scroll":
-            injector.wheel(float(msg["x"]), float(msg["y"]), float(msg["ticks"]))
+            # `hticks` is optional (backward compat: an older page that sends
+            # only `ticks` scrolls exactly as before — absent means zero, no
+            # horizontal event at all, see InputInjector.wheel).
+            injector.wheel(float(msg["x"]), float(msg["y"]), float(msg["ticks"]),
+                            float(msg.get("hticks", 0.0)))
         elif kind == "key_text":
-            injector.type_text(str(msg["text"]))
+            # The fence goes INTO the injection, not just before it: typing a
+            # dictated sentence takes ~1.1 s of SendInput, and whatever a thief
+            # still costs us is TOLD to the phone (focus_guard, round R1).
+            lost = await asyncio.to_thread(injector.type_text, str(msg["text"]),
+                                           focus_guard.typist(layouts, conn))
+            if lost:
+                await _toast(ws, focus_guard.loss_notice(lost))
         elif kind == "key_special":
             injector.press_key(str(msg["key"]))
         elif kind == "paste_text":
@@ -811,8 +863,11 @@ async def _receive_input(ws: WebSocket, injector: InputInjector, stream, token: 
             # and one atomic insert cannot be raced by it. Enter is a separate
             # press so `enter: false` can leave the menu standing for the
             # finger to pick from.
-            await asyncio.to_thread(_paste_text, injector, str(msg.get("text", "")),
-                                    bool(msg.get("enter", True)))
+            lost = await asyncio.to_thread(
+                _paste_text, injector, str(msg.get("text", "")),
+                bool(msg.get("enter", True)), focus_guard.typist(layouts, conn))
+            if lost:
+                await _toast(ws, focus_guard.loss_notice(lost))
         elif kind == "viewport":
             if stream.mode == "jpeg":
                 stream.set_viewport(
@@ -870,6 +925,12 @@ async def _receive_input(ws: WebSocket, injector: InputInjector, stream, token: 
                     "default quality" if quality is None else
                     f"{quality['fps'] or 'max'} fps · {quality['res']} res · "
                     f"{quality['bitrate']} bitrate"))
+        elif kind == "tts_info":
+            # The phone lists the text-to-speech voices IT has, once per
+            # connection (owner round R2, 2026-08-07). The PC cannot
+            # enumerate another device's TTS engine, so this is the only
+            # source the desktop Settings window's "Voice" dropdown can have.
+            notify.set_voices(msg.get("voices"))
         elif kind == "client_log":
             # Silent phone-side diagnostics (owner round 2, 2026-08-05: voice
             # evidence goes to THIS log, never to a panel on the phone).

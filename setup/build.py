@@ -210,6 +210,18 @@ def input_gate() -> None:
     # and he only finds out by NOT being told something.
     step("0d/6  NOTIFY GATE — the PC names the agent, the phone says it (tests/test_notify.py)")
     run([sys.executable, str(PROJECT_DIR / "tests" / "test_notify.py")])
+    # ...and that the notice REACHES him when he is not looking at the phone
+    # (owner report 2026-08-07: "notifikacije mi stižu tek kada podignem
+    # aplikaciju"). The notice used to ride the streaming socket, which the
+    # page closes on purpose the moment it hides — so a release where the
+    # waiting channel regressed would be silently back to "be looking at it
+    # already". Two defects this pins are invisible from the outside: a
+    # notice delivered TWICE (two carriers instead of a chain of returns) and
+    # a notice connection counted as a PRESENT phone, which would nail his
+    # own windows always-on-top over his desk from a phone in his pocket.
+    step("0d/6  NOTICE CHANNEL GATE — it reaches a closed page, once "
+         "(tests/test_notice_channel.py)")
+    run([sys.executable, str(PROJECT_DIR / "tests" / "test_notice_channel.py")])
     # And for WHERE typed input lands (owner 2026-08-06): `SendInput` has no
     # target, so a release that lets the foreground decide sends the owner's
     # dictation into whatever window happened to take focus mid-sentence —
@@ -217,6 +229,13 @@ def input_gate() -> None:
     # cannot see it happen: the stream still shows the PC.
     step("0e/6  FOCUS GATE — typed input lands where he is looking (tests/test_focus_guard.py)")
     run([sys.executable, str(PROJECT_DIR / "tests" / "test_focus_guard.py")])
+    # ...and the machinery that carries it there, split out on 2026-08-07 when
+    # the two subjects crossed THE STRUCTURE LAW's 1,000 lines. This half is
+    # where the dangerous defects live: a hook callback that blocks Windows'
+    # own dispatch (measured 2.99 s — the owner felt it as a juddering mouse)
+    # and a stop() that orphans its thread with the hook still installed.
+    step("0e/6  FOCUS HOOK GATE — instant, and it leaves nothing behind (tests/test_focus_hook.py)")
+    run([sys.executable, str(PROJECT_DIR / "tests" / "test_focus_hook.py")])
     # And the phone's whole LAYOUT protocol (owner report 2026-08-06: "layout,
     # kreiraj iz liste, ništa se ne dešava"). One shadowed name in
     # layout_list — `mon_rect = mon_rect(stream)` — raised UnboundLocalError
@@ -227,6 +246,28 @@ def input_gate() -> None:
     # build.
     step("0f/6  LAYOUT GATE — every layout message answers the phone (tests/test_layout_protocol.py)")
     run([sys.executable, str(PROJECT_DIR / "tests" / "test_layout_protocol.py")])
+    # And that a phone which has GONE takes its encoder with it (live failure
+    # 2026-08-07). Cancelling `asyncio.to_thread(open_session)` does not stop
+    # the thread, so one leaked session ran four hours at native 4K with
+    # nobody watching — 12,924 s of ffmpeg CPU, 1,890 "stream backlog"
+    # warnings, and the owner's own mouse juddering at his desk. Nothing in
+    # the suite walked a connection's END, which is why every gate was green
+    # over it for three days.
+    step("0g/6  STREAM LIFECYCLE GATE — a client that is gone leaves nothing "
+         "behind (tests/test_stream_lifecycle.py)")
+    run([sys.executable, str(PROJECT_DIR / "tests" / "test_stream_lifecycle.py")])
+    # And that what this build INVENTS actually reaches the owner's own
+    # actions.json (owner report 2026-08-07, the fifth on one bug). His copy
+    # is seeded once at install and never replaced, so the merge is the only
+    # path a new field has into it — and the merge copied a hardcoded list of
+    # field names. The Claude set's `agent` switch was invented on 2026-08-06,
+    # never arrived, and left the set matchable only by a title Claude Code
+    # never writes. Every guard was green over it for four releases because
+    # every guard built its "user file" out of the SHIPPED file. A build must
+    # not ship a field it cannot deliver.
+    step("0h/6  ACTIONS MIGRATION GATE — a new version's fields reach HIS file "
+         "(tests/test_actions_migration.py)")
+    run([sys.executable, str(PROJECT_DIR / "tests" / "test_actions_migration.py")])
 
 
 def generate_icons() -> None:
@@ -321,6 +362,20 @@ def build_pyinstaller() -> Path:
     # frozen code resolves under BUNDLE_DIR is listed here.
     missing = [rel for rel in ("client/index.html", "actions.json",
                                "assets/logo.svg", "assets/check.svg",
+                               # …and its light-palette twin: QSS `image:`
+                               # cannot re-tint, so each palette loads its own
+                               # tick file (gui/theme.py token `checkAsset`)
+                               # and its own combo caret (`caretAsset`).
+                               "assets/check-light.svg",
+                               "assets/caret.svg", "assets/caret-light.svg",
+                               # The three door buttons on the main window
+                               # (round R2). A missing icon does not crash —
+                               # `theme.icon()` logs and returns an empty one
+                               # — which is exactly why it needs a gate: the
+                               # owner would just see three unlabelled-looking
+                               # buttons and nobody would know why.
+                               "assets/icon-controls.svg", "assets/icon-traffic.svg",
+                               "assets/icon-settings.svg",
                                "setup/app_info.json", "setup/agent_hook.py")
                if not (app_dir / "_internal" / rel).exists()]
     if missing:

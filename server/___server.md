@@ -17,10 +17,12 @@ The PC side of Remote User: captures the screen, streams it over WebSocket as H.
 | `input_injector.py` | Algorithmic | Win32 `SendInput` injection + the `InjectionMonitor` self-check tripwire — [about](__about/input_injector.md) · [flow](__flow/input_injector.md) |
 | `web.py` | Algorithmic | FastAPI app — the WebSocket protocol handler, HTTP routes, stream dispatch — [about](__about/web.md) · [flow](__flow/web.md) |
 | `presence.py` | Algorithmic | is the owner still working with us, and whose desk are we on — heartbeat, the `away` reason, the excursion hold, and the rule that local input at THIS PC outranks all of it — [about](__about/presence.md) · [flow](__flow/presence.md) |
-| `focus_guard.py` | Algorithmic | WHERE typed input lands — the layout is a fence for the phone's keyboard, the desktop gets a pin, and a window that steals focus mid-dictation is named in the log and handed the focus straight back — [about](__about/focus_guard.md) · [flow](__flow/focus_guard.md) |
+| `focus_guard.py` | Algorithmic | WHERE typed input lands — the layout is a fence for the phone's keyboard, the desktop gets a pin, the fence stands even INSIDE one dictated sentence (chunk by chunk), and a window that steals focus is named in the log and handed the focus straight back — [about](__about/focus_guard.md) · [flow](__flow/focus_guard.md) |
+| `focus_hook.py` | Standard | Windows SAYS the foreground moved — one thread, one `SetWinEventHook`, one message loop, so the guard reacts in 2–5 ms instead of waiting up to a poll; it dies on every exit path — [about](__about/focus_hook.md) |
 | `agents.py` | Algorithmic | which agent tools are LIVE on this PC and in which project — the process table answers what UI Automation could not, so the Claude set appears by itself instead of being ticked by hand — [about](__about/agents.md) · [flow](__flow/agents.md) |
 | `layout_api.py` | Algorithmic | the phone's layout protocol — pick, list, create, focus, aspect, state — [about](__about/layout_api.md) · [flow](__flow/layout_api.md) |
 | `traffic.py` | Standard | every byte to and from the phone, sampled per second and recorded — the owner's instrument for "does it run while the screen is off" — [about](__about/traffic.md) |
+| `traffic_history.py` | Algorithmic | reads months of `traffic.csv` off the UI thread and folds it into a bounded number of chart points — [about](__about/traffic_history.md) · [flow](__flow/traffic_history.md) |
 | `grids.py` | Algorithmic | the GEOMETRY of a layout: the region the phone frames and the cells each grid cuts it into — the owner's catalogue of 2026-08-07 (2 / 3×4 arrangements / 4), pure arithmetic — [about](__about/grids.md) · [flow](__flow/grids.md) |
 | `window_manager.py` | Standard | window layouts (Phase F+ step 1) — enumerate/hit-test/arrange/raise windows, app icons, the session-scoped `LayoutRegistry` — [about](__about/window_manager.md) |
 | `uia.py` | Algorithmic | tab layer (Phase F+ step 2) — UIA tab hit-test + extraction to a window (app command / Explorer path / SendInput drag) — [about](__about/uia.md) · [flow](__flow/uia.md) |
@@ -28,9 +30,11 @@ The PC side of Remote User: captures the screen, streams it over WebSocket as H.
 | `monitors.py` | Standard | physical monitor rects in virtual-desktop coordinates — [about](__about/monitors.md) |
 | `clipboard.py` | Standard | screenshot frames into the Windows clipboard as CF_DIB — [about](__about/clipboard.md) |
 | `updates.py` | Standard | desktop update discovery via GitHub Releases — [about](__about/updates.md) |
+| `autostart.py` | Standard | "Start with Windows" as a switch over WINDOWS — the real Task Scheduler logon task read and written, never a preference that only pretends — [about](__about/autostart.md) |
+| `foreground_lock.py` | Algorithmic | Windows' own "no program may steal the foreground" setting, borrowed for this session only and given the topmost ledger's discipline so it can never be left behind — [about](__about/foreground_lock.md) · [flow](__flow/foreground_lock.md) |
 
 ### `gui_main.py` / `gui/` — Desktop App
-PySide6 window (status, in-window QR, settings) + tray around the server core; `--minimized` starts in the tray. See [GUI (subfolder)](gui/___gui.md).
+PySide6 window (status, in-window QR) + tray around the server core, with three windows behind icon buttons — Controls, Traffic and (since round R2) Settings; `--minimized` starts in the tray. See [GUI (subfolder)](gui/___gui.md).
 
 Action sets for the radial wheels are defined in [actions.json](../ACTIONS.md) at the project root (hand-edited by the owner) and served by [Web Layer](__about/web.md).
 

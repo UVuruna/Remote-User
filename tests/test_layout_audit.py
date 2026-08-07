@@ -26,6 +26,39 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "server"))
 
 SIZES = [("portrait 412x915", 412, 915), ("landscape 915x412", 915, 412)]
 
+# EVERY LOOK THE PRODUCT SHIPS (build round R3, 2026-08-07). The desktop
+# chooses one of three themes and one of two fills, so there are six real
+# renderings of every panel — and the CONTRAST check below is the only thing
+# standing between `colored` and a set whose own name is unreadable on its own
+# colour. A theme audited in one combination is not audited.
+#
+# The full panel sweep runs in every combination at PORTRAIT (where the cards
+# are narrowest and a row starves first); landscape keeps the default look,
+# because what landscape tests is GEOMETRY and geometry does not change with
+# a colour. Both sizes get the contrast check in every combination.
+LOOKS = [("dark", "transparent"), ("dark", "full"),
+         ("light", "transparent"), ("light", "full"),
+         ("colored", "transparent"), ("colored", "full")]
+DEFAULT_LOOK = LOOKS[0]
+
+# The panels SHOT in a non-default look. Shooting all eleven in all six would
+# be sixty-six pictures nobody will open, and a picture nobody opened is not
+# proof (rules/GUI.md). These three are the ones that carry colour: the sets
+# list with its live badge, the quality panel's segmented rows, and the
+# dictation card's status column.
+COLOUR_SHOTS = {"Sets picker", "Quality panel", "Dictation card"}
+
+# The panels SHOT IN LANDSCAPE (2026-08-07). Every phone panel is MEASURED in
+# both orientations and always was; these two are also photographed there,
+# because they are the ones whose content is orientation-dependent: the
+# creation panel draws the grid catalogue on a LANDSCAPE outer box, and the
+# arrangement row draws the four landscape three-window variants that no
+# picture had ever shown. The controls and the wheel are shot in landscape in
+# every look, separately, below.
+LANDSCAPE_SHOTS = {"Creation panel + Name field", "Grid arrangement choice",
+                   "Sets picker", "Quality panel", "Dictation card",
+                   "Layout list with rename"}
+
 
 def _grid_audit() -> bool:
     """Every grid of the owner's sheet tiles its region EXACTLY: no gap, no
@@ -71,10 +104,238 @@ def _shot_name(name: str) -> str:
     return "".join(c if c.isalnum() else "_" for c in name).strip("_") + ".png"
 
 
+def _shot_label(name: str, look, portrait: bool = True) -> str:
+    """A panel's name, plus the look it was shot in and the orientation — but
+    ONLY when either is not the default, so every shot the existing proof lines
+    already point at keeps its filename.
+
+    LANDSCAPE IS NOT A DEFAULT (independent grader, 2026-08-07): every phone
+    screenshot on disk was 824x1830 portrait, so nothing about the other
+    orientation had ever been LOOKED at, only measured. The app runs in both."""
+    if look != DEFAULT_LOOK:
+        name = f"{name} {look[0]} {look[1]}"
+    return name if portrait else f"{name} landscape"
+
+
+# CONTRAST - the check that was missing (owner screenshot 2026-08-06: six
+# white bars with near-white labels on them, and every geometric check green).
+# Text that cannot be read is not a style opinion, it is unreadable content,
+# and the law's whole subject is content the user must read. A <button> with
+# no background of its own inherits the WebView's light default while the
+# theme keeps its light text - which is exactly how it happened.
+#
+# ALPHA IS COMPOSITED, never ignored: this project's own selected states are
+# translucent accent over a card, and reading that as solid accent under
+# accent text reports 1.00:1 on a button that is perfectly readable. A guard
+# that cries wolf gets switched off, so it measures what the eye gets: every
+# layer painted over the one below it.
+#
+# THE FLOOR IS READ, NOT ASSUMED (build round R3). It was the literal
+# [15, 23, 42] - the dark theme's --surface-0 - which would have quietly
+# scored every LIGHT-theme panel against a dark page that is not there, and
+# passed unreadable combinations. It now comes from the live variable, so the
+# same check is honest in all six looks.
+#
+# Installed ONCE per page as `window.__contrast(root)` so the panels, the
+# D-pad and the wheel are all judged by the same function instead of by three
+# copies of it (rules/CODE.md - No Duplicate Code).
+#
+# WHAT IS PAINTED *OVER* IT COUNTS TOO (independent grader, 2026-08-07 — the
+# hole that let a 2.66:1 label through this check green). The walk below only
+# ever looked DOWNWARD, through the element's own ancestors, so a full-screen
+# overlay lying ON TOP of the element was invisible to it: the category wheel
+# used to paint `--scrim-soft` (0.55 navy) across the whole viewport at z-index
+# 35, above the D-pad at 20, and the tooth kept scoring those labels against
+# the un-veiled surface — 8.05:1 where a person reading the screenshot measures
+# 2.66:1. The same class of miss would hit any future overlay. So every visible
+# fixed full-viewport layer with a higher z-index than the element is now
+# composited over BOTH the ink and its background, exactly as a camera sees it.
+#
+# ANCESTOR OPACITY COUNTS TOO: `.ctl.cat` is drawn at 0.85, which the old check
+# ignored because it read `opacity` only on the text leaf itself.
+CONTRAST_JS = """
+window.__contrast = (root) => {
+  const parse = (c) => {
+    const m = (c || '').match(/[\\d.]+/g);
+    if (!m || m.length < 3) return null;
+    return [+m[0], +m[1], +m[2], m.length > 3 ? +m[3] : 1];
+  };
+  const over = (top, bottom) =>
+    [0, 1, 2].map((i) => top[i] * top[3] + bottom[i] * (1 - top[3]));
+  const PAGE = parse(getComputedStyle(document.body).backgroundColor) ||
+               [15, 23, 42];
+  // Every layer this page paints across the WHOLE viewport, with the z-index
+  // it paints at. Real elements and body's ::before pseudo alike — the veil
+  // this round moved under the controls is a pseudo, and a check that could
+  // not see it would prove nothing about the fix.
+  const veils = [];
+  const addVeil = (el, pseudo) => {
+    const s = getComputedStyle(el, pseudo || null);
+    if (s.display === 'none' || s.visibility === 'hidden') return;
+    if (pseudo && (s.content === 'none' || s.content === 'normal')) return;
+    if (s.position !== 'fixed') return;
+    if (['top', 'left', 'right', 'bottom'].some((k) => s[k] !== '0px')) return;
+    const c = parse(s.backgroundColor);
+    if (!c || c[3] === 0) return;
+    const z = parseInt(s.zIndex, 10);
+    if (!isFinite(z)) return;
+    veils.push({ z: z, c: c });
+  };
+  for (const el of document.body.children) addVeil(el);
+  addVeil(document.body, '::before');
+  addVeil(document.body, '::after');
+  // Where the element itself sits in that stack, and how much of it survives
+  // its ancestors' opacity.
+  const stackOf = (el) => {
+    for (let n = el; n && n !== document.body; n = n.parentElement) {
+      const z = parseInt(getComputedStyle(n).zIndex, 10);
+      if (isFinite(z)) return z;
+    }
+    return 0;
+  };
+  const alphaOf = (el) => {
+    let a = 1;
+    for (let n = el; n && n !== document.body; n = n.parentElement) {
+      const o = parseFloat(getComputedStyle(n).opacity);
+      if (isFinite(o)) a *= o;
+    }
+    return a;
+  };
+  const bgOf = (el) => {
+    const layers = [];
+    for (let n = el; n; n = n.parentElement) {
+      const c = parse(getComputedStyle(n).backgroundColor);
+      if (!c || c[3] === 0) continue;
+      layers.push(c);
+      if (c[3] === 1) break;
+    }
+    let base = PAGE.slice(0, 3);
+    for (let i = layers.length - 1; i >= 0; i--) base = over(layers[i], base);
+    return base;
+  };
+  const veiled = (rgb, z) => {
+    let base = rgb;
+    for (const v of veils.slice().sort((a, b) => a.z - b.z)) {
+      if (v.z > z) base = over(v.c, base);
+    }
+    return base;
+  };
+  const lumOf = (rgb) => {
+    const [r, g, b] = rgb.map((v) => {
+      const s = v / 255;
+      return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+    });
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+  const bad = [];
+  for (const el of root.querySelectorAll('*')) {
+    const text = (el.textContent || '').trim();
+    if (!text || el.children.length) continue;   // leaf text only
+    const style = getComputedStyle(el);
+    if (style.visibility === 'hidden' || style.display === 'none') continue;
+    const alpha = alphaOf(el);
+    if (alpha < 0.5) continue;  // deliberately inert
+    const ink = parse(style.color);
+    if (!ink || ink[3] === 0) continue;
+    const z = stackOf(el);
+    const bgRgb = bgOf(el);
+    // ink -> its own background -> the element's inherited opacity -> every
+    // veil painted above it. The order a compositor uses, and the order a
+    // photograph of the phone records.
+    let fgRgb = over(ink, bgRgb);
+    if (alpha < 1) fgRgb = over([...fgRgb, alpha], bgRgb);
+    const fg = lumOf(veiled(fgRgb, z));
+    const bg = lumOf(veiled(bgRgb, z));
+    const ratio = (Math.max(fg, bg) + 0.05) / (Math.min(fg, bg) + 0.05);
+    // THE FLOOR IS PER-ELEMENT, NOT ONE NUMBER FOR EVERYTHING (independent
+    // grader, 2026-08-07 — measured 2.66:1 on a 13 px D-pad label and named
+    // this check itself as the reason it shipped: "widen that check to
+    // measure what these numbers measure, or it will come back"). WCAG's 3:1
+    // floor is for LARGE text ONLY — 24px normal weight, or 18.66px (14pt) at
+    // bold (>=700) — and every label this project draws is smaller than
+    // that (D-pad .lbl is 9px, wheel-item text 12px, panel body 13-16px).
+    // Everything else is held to 4.5:1, the number the grader actually cited.
+    const px = parseFloat(style.fontSize) || 0;
+    const weight = parseInt(style.fontWeight, 10) || 400;
+    const isLarge = px >= 24 || (px >= 18.66 && weight >= 700);
+    const floor = isLarge ? 3.0 : 4.5;
+    if (ratio < floor) {
+      bad.push(text.slice(0, 20) + ' [' + el.tagName.toLowerCase() + '.' +
+               (el.className || '-') + '] ' + style.color + ' on ' +
+               ratio.toFixed(2) + ':1 (needs ' + floor.toFixed(1) + ':1)');
+    }
+  }
+  return bad;
+};
+
+// EVERY COLOUR IN THE TABLE, not merely the three the fixture happens to show
+// (independent grader, 2026-08-07: "that tooth is the only safety net for
+// `colored` when the owner retunes his palette"). tests/fixtures/actions.json
+// ships Mouse / Input / Edit, so ten of the desktop's thirteen SET_COLORS had
+// never been measured on any surface at all — a set whose colour the owner
+// darkens tomorrow would reach his phone unreadable with every check green.
+// `paintSet` is the product's own entry point and takes a NAME, so the real
+// D-pad and the real wheel items are repainted with each colour in turn and
+// measured through the same `__contrast` as everything else.
+window.__sweepSetColours = (names) => {
+  const bad = [];
+  const group = document.getElementById('group-left');
+  for (const name of names) {
+    paintSet(group, name, '--glass-fill');
+    for (const t of __contrast(group)) bad.push(name + ' D-pad: ' + t);
+  }
+  openWheel('left');
+  const items = [...document.querySelectorAll('#wheel .wheel-item')];
+  for (const name of names) {
+    items.forEach((it) => paintSet(it, name, '--glass-strong'));
+    for (const t of __contrast(document.getElementById('wheel')))
+      bad.push(name + ' wheel: ' + t);
+  }
+  closeWheel();
+  renderGroup('left');   // the real set's own colour goes back
+  return bad;
+};
+"""
+
+
+def _apply_look(page, theme, fill, colors):
+    """Put the page into one of the six looks the desktop can choose.
+
+    Through `applyUi`, the app's OWN entry point — the same function the
+    `config` frame calls — so the audit can never be measuring a state the
+    product cannot actually reach."""
+    page.evaluate("([t, f, c]) => applyUi({ theme: t, fill: f, colors: c })",
+                  [theme, fill, colors])
+
+
+_GROUPS_JS = ("__contrast(document.getElementById('group-left'))"
+              ".concat(__contrast(document.getElementById('group-right')))")
+
+
+def _check_controls(page):
+    """The D-pad groups and the category wheel — the surfaces the `colored`
+    theme actually paints, and the ones no panel check has ever looked at.
+
+    A set's colour is its BUTTON's ink in the outlined fill and its BACKGROUND
+    in the filled one, so this is where an unreadable colour would land first.
+
+    BOTH STATES (2026-08-07). The D-pad is measured with the wheel SHUT — the
+    state the owner's thumb actually lives in — and again with it OPEN, which
+    is the state the graded screenshot shows and the state whose veil used to
+    hide a 2.66:1 label from this very check. The wheel itself is measured
+    while open for its own sake: it is the one place every set's colour is on
+    screen at once. It is left open on purpose — the caller shoots it."""
+    bad = page.evaluate("() => " + _GROUPS_JS)
+    page.evaluate("openWheel('left')")
+    page.wait_for_selector("#wheel.open .wheel-item", state="visible", timeout=4000)
+    return bad + page.evaluate(
+        "() => __contrast(document.getElementById('wheel')).concat(" + _GROUPS_JS + ")")
+
+
 def _check_panel(page, name, open_js, close_js, card_sel, shot=False):
     """Opens one overlay panel and verifies: the card sits fully inside the
-    viewport, the page gained no horizontal overflow, and no element inside
-    the card is clipped horizontally."""
+    viewport, the page gained no horizontal overflow, no element inside the
+    card is clipped horizontally, and every leaf of text in it can be read."""
     page.evaluate(open_js)
     page.wait_for_selector(card_sel, state="visible", timeout=4000)
     ok = page.evaluate(
@@ -89,68 +350,19 @@ def _check_panel(page, name, open_js, close_js, card_sel, shot=False):
           for (const el of card.querySelectorAll('button, .q-row, .sets-row, input')) {
             if (el.scrollWidth > el.clientWidth + 2) noClip = false;
           }
-
-          // CONTRAST - the check that was missing (owner screenshot
-          // 2026-08-06: six white bars with near-white labels on them, and
-          // every geometric check green). Text that cannot be read is not a
-          // style opinion, it is unreadable content, and the law's whole
-          // subject is content the user must read. A <button> with no
-          // background of its own inherits the WebView's light default while
-          // the theme keeps its light text - which is exactly how it happened.
-          // ALPHA IS COMPOSITED, never ignored: this project's own selected
-          // states are translucent accent over a card (rgb(56 189 248 /
-          // 0.08)), and reading that as solid accent under accent text
-          // reports 1.00:1 on a button that is perfectly readable. A guard
-          // that cries wolf gets switched off, so it measures what the eye
-          // gets: every layer painted over the one below it.
-          const parse = (c) => {
-            const m = (c || '').match(/[\\d.]+/g);
-            if (!m || m.length < 3) return null;
-            return [+m[0], +m[1], +m[2], m.length > 3 ? +m[3] : 1];
-          };
-          const over = (top, bottom) =>
-            [0, 1, 2].map((i) => top[i] * top[3] + bottom[i] * (1 - top[3]));
-          const PAGE = [15, 23, 42];            // --surface-0, the floor
-          const bgOf = (el) => {
-            const layers = [];
-            for (let n = el; n; n = n.parentElement) {
-              const c = parse(getComputedStyle(n).backgroundColor);
-              if (!c || c[3] === 0) continue;
-              layers.push(c);
-              if (c[3] === 1) break;
-            }
-            let base = PAGE;
-            for (let i = layers.length - 1; i >= 0; i--) base = over(layers[i], base);
-            return base;
-          };
-          const lumOf = (rgb) => {
-            const [r, g, b] = rgb.map((v) => {
-              const s = v / 255;
-              return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
-            });
-            return 0.2126 * r + 0.7152 * g + 0.0722 * b;
-          };
-          let contrast = [];
-          for (const el of card.querySelectorAll('*')) {
-            const text = (el.textContent || '').trim();
-            if (!text || el.children.length) continue;   // leaf text only
-            const style = getComputedStyle(el);
-            if (style.visibility === 'hidden' || style.display === 'none') continue;
-            if (parseFloat(style.opacity) < 0.5) continue;  // deliberately inert
-            const ink = parse(style.color);
-            if (!ink || ink[3] === 0) continue;
-            const bgRgb = bgOf(el);
-            const fg = lumOf(over(ink, bgRgb));
-            const bg = lumOf(bgRgb);
-            const ratio = (Math.max(fg, bg) + 0.05) / (Math.min(fg, bg) + 0.05);
-            if (ratio < 3.0) {   // WCAG AA for large/bold UI text; below this
-                                 // the owner cannot read his own buttons
-              contrast.push(text.slice(0, 20) + ' [' + el.tagName.toLowerCase() +
-                            '.' + (el.className || '-') + '] ' +
-                            style.color + ' on ' + ratio.toFixed(2) + ':1');
-            }
-          }
-          return { inView, noPageScroll, noClip, contrast };
+          // BUG A of THE SPACE & LEGIBILITY LAW, measured (2026-08-07): "a
+          // visible scrollbar with unused space in the same window is a bug,
+          // not a style choice". Not "the card never scrolls" — rung 4 is
+          // legal once the screen is genuinely full — but "it never scrolls
+          // while there is width standing idle beside it". That is exactly
+          // what landscape did to seven of these ten panels: 420 px of card
+          // in a 915 px screen, scrolling by up to 256 px.
+          const hidden = card.scrollHeight - card.clientHeight;
+          const freeW = innerWidth - r.width;
+          const noScrollWithSlack = !(hidden > 1 && freeW > 24);
+          return { inView, noPageScroll, noClip, noScrollWithSlack,
+                   hiddenPx: hidden, freeWidthPx: Math.round(freeW),
+                   contrast: __contrast(card) };
         }""",
         card_sel,
     )
@@ -164,12 +376,125 @@ def _check_panel(page, name, open_js, close_js, card_sel, shot=False):
         page.screenshot(path=str(SHOT_DIR / _shot_name(name)))
     page.evaluate(close_js)
     passed = (ok["inView"] and ok["noPageScroll"] and ok["noClip"]
-              and not ok["contrast"])
+              and ok["noScrollWithSlack"] and not ok["contrast"])
     return passed, ok
+
+
+# Every overlay panel the phone shows, each opened in its FULLEST real
+# state. Hoisted out of `main()` in build round R3 so the same list can be
+# swept once per LOOK (three themes x two fills) instead of once per run.
+PANELS = (
+    # FULLEST state (owner 2026-08-05): the panel states the PC's
+    # own settings and strikes out the fps steps that PC puts out
+    # of reach. A base must therefore be set before opening —
+    # without it the header is the short "Waiting for the PC's own
+    # settings…" and the audit would measure the empty case. 4K +
+    # a 10 fps PC is the longest header AND the most struck-out
+    # steps this panel can show.
+    ("Quality panel",
+     "setStreamBase({fps:10, width:3840, height:2160,"
+     " bitrate:'6M', bitrate_mid:'2400k', bitrate_low:'600k'});"
+     "openQualityPanel()",
+     "closeQualityPanel()", "#quality-panel .sets-card"),
+    # FULLEST state (owner 2026-08-06): every app set listed AND
+    # two of them wearing the live badge, which is the widest a
+    # row in this card can get — checkbox + icon + the longest set
+    # name + "ON THE WHEEL NOW". The badge exists because he asked
+    # to SEE which app set is actually riding, so it is exactly
+    # the thing that must not be cut off.
+    ("Sets picker",
+     "appSets = APP_SETS;"
+     "layouts = [{name:'Claude', process:'code.exe',"
+     " title:'Ispravka UI dizajna meni…', orient:'portrait',"
+     " icon:null, app_sets:['VSCode','Claude'], ratio:null, pos:0.5}];"
+     "layoutActive = 0; openSetsPanel()",
+     "layoutActive = null; layouts = []; closeSetsPanel()",
+     "#sets-panel .sets-card"),
+    ("Dictation card",
+     "window.Android = {"
+     " voiceLangs: () => JSON.stringify(["
+     "  {tag:'sr-RS', name:'Srpski (Srbija)', status:'download'},"
+     "  {tag:'en-US', name:'English (United States)', status:'ready'},"
+     "  {tag:'de-DE', name:'Deutsch (Deutschland)', status:'online'},"
+     "  {tag:'pt-BR', name:'Português (Brasil)', status:'download', extra:true},"
+     "  {tag:'ja-JP', name:'日本語 (日本)', status:'online', extra:true}]),"
+     " voiceMuteBeeps: () => true, voiceSetMuteBeeps: () => {},"
+     " voiceChosen: () => 'sr-RS', voiceSetLang: () => {},"
+     " voiceState: () => '' };"
+     "renderDictationCard()",
+     "closeDictationPanel()", "#dictation-panel .sets-card"),
+    # The Region grab (owner 2026-08-05). Its bar is the part that
+    # can starve: hint + Send + ✕ on one line above the keyboard
+    # inset, on a 412 px phone. Opened with the frame pushed into
+    # the corner, which is where a bar overlap would show first.
+    ("Region grab",
+     "openRegionPanel();"
+     "rgBox.x = 4; rgBox.y = 4; rgBox.w = 60; rgBox.h = 60; rgApply()",
+     "closeRegionPanel()", "#region-panel .rg-bar"),
+    # The command chooser (owner idea 2026-08-05): the longest
+    # real case is the Claude Thinking button's six levels.
+    ("Command chooser",
+     "openChoicePanel({label:'Thinking', text:'/effort',"
+     " options:['low','medium','high','xhigh','max','auto']})",
+     "closeChoicePanel()", "#choice-panel .sets-card"),
+    ("Aspect panel + Move handle",
+     "layouts = [{name:'Audit', process:'x', orient:'portrait',"
+     " icon:null, ratio:[600,1000], pos:0.5}]; openAspectPanel(0)",
+     "closeLayoutPanel()", "#layout-panel .lay-card"),
+    # The layout list carries a rename button per row (owner
+    # 2026-08-05) — a long window title must not push the row's
+    # buttons off the card.
+    ("Layout list with rename",
+     "layouts = [{name:'Claude Code - Remote User - Visual Studio "
+     "Code [Administrator]', process:'x', orient:'portrait',"
+     " icon:null, ratio:[600,1000], pos:0.5}]; openLayoutPicker()",
+     "closeLayoutPanel()", "#layout-panel .lay-card"),
+    # The rename card also carries the per-layout app-shortcut
+    # ticks (owner 2026-08-06) — the long title AND four chips.
+    ("Rename card",
+     "appSets = APP_SETS;"
+     "layouts = [{name:'Claude Code - Remote User - Visual Studio "
+     "Code [Administrator]', process:'code.exe', orient:'portrait',"
+     " icon:null, app_sets:['VSCode','Claude'], ratio:null, pos:0.5}];"
+     "openRenamePanel(0)",
+     "closeLayoutPanel()", "#layout-panel .lay-card"),
+    # Creation panel: the Name field is prefilled with the chosen
+    # window's (long) title and must fit the card.
+    # The grid catalogue he drew (owner 2026-08-07) — the THREE
+    # state, where four arrangement SKETCHES sit under the count
+    # chips. Its own case because it is the tallest the creation
+    # panel ever gets, and because a drawing nobody looked at is
+    # not a proof.
+    ("Grid arrangement choice",
+     "creating = newCreation('list');"
+     "creating.slots = [{hwnd:1, title:'Chrome', process:'chrome.exe',"
+     " icon:null, tab:null, x:0.5, y:0.5},"
+     " {hwnd:2, title:'Explorer', process:'explorer.exe',"
+     " icon:null, tab:null, x:0.5, y:0.5},"
+     " {hwnd:3, title:'Claude Code - Remote User - Visual Studio"
+     " Code [Administrator]', process:'code.exe', icon:null,"
+     " tab:null, x:0.5, y:0.5}];"
+     "creating.mode = 'grid'; creating.grid = '3-left';"
+     "renderCreationPanel()",
+     "cancelCreation(true)", "#layout-panel .lay-card"),
+    ("Creation panel + Name field",
+     "appSets = APP_SETS;"
+     "creating = newCreation('tap');"
+     "creating.slots = [{hwnd:1, title:'Claude Code - Remote User"
+     " - Visual Studio Code [Administrator]', process:'code.exe',"
+     " icon:null, tab:null, x:0.5, y:0.5}];"
+     "renderCreationPanel()",
+     "creating = null; closeLayoutPanel()",
+     "#layout-panel .lay-card"),
+)
 
 
 def main() -> int:
     import test_input_pipeline as gate
+    # The shipped set colours, from the ONE table that defines them
+    # (server/config.py) — the audit must colour the page exactly as the
+    # server would, never with a copy that can drift.
+    from config import SET_COLORS
 
     threading.Thread(target=gate.run_server, daemon=True).start()
     gate.server_ready.wait(15)
@@ -218,115 +543,63 @@ def main() -> int:
                           json.loads((PROJECT / "actions.json")
                                      .read_text(encoding="utf-8"))["app_sets"])
 
-            for name, open_js, close_js, sel in (
-                # FULLEST state (owner 2026-08-05): the panel states the PC's
-                # own settings and strikes out the fps steps that PC puts out
-                # of reach. A base must therefore be set before opening —
-                # without it the header is the short "Waiting for the PC's own
-                # settings…" and the audit would measure the empty case. 4K +
-                # a 10 fps PC is the longest header AND the most struck-out
-                # steps this panel can show.
-                ("Quality panel",
-                 "setStreamBase({fps:10, width:3840, height:2160,"
-                 " bitrate:'6M', bitrate_mid:'2400k', bitrate_low:'600k'});"
-                 "openQualityPanel()",
-                 "closeQualityPanel()", "#quality-panel .sets-card"),
-                # FULLEST state (owner 2026-08-06): every app set listed AND
-                # two of them wearing the live badge, which is the widest a
-                # row in this card can get — checkbox + icon + the longest set
-                # name + "ON THE WHEEL NOW". The badge exists because he asked
-                # to SEE which app set is actually riding, so it is exactly
-                # the thing that must not be cut off.
-                ("Sets picker",
-                 "appSets = APP_SETS;"
-                 "layouts = [{name:'Claude', process:'code.exe',"
-                 " title:'Ispravka UI dizajna meni…', orient:'portrait',"
-                 " icon:null, app_sets:['VSCode','Claude'], ratio:null, pos:0.5}];"
-                 "layoutActive = 0; openSetsPanel()",
-                 "layoutActive = null; layouts = []; closeSetsPanel()",
-                 "#sets-panel .sets-card"),
-                ("Dictation card",
-                 "window.Android = {"
-                 " voiceLangs: () => JSON.stringify(["
-                 "  {tag:'sr-RS', name:'Srpski (Srbija)', status:'download'},"
-                 "  {tag:'en-US', name:'English (United States)', status:'ready'},"
-                 "  {tag:'de-DE', name:'Deutsch (Deutschland)', status:'online'},"
-                 "  {tag:'pt-BR', name:'Português (Brasil)', status:'download', extra:true},"
-                 "  {tag:'ja-JP', name:'日本語 (日本)', status:'online', extra:true}]),"
-                 " voiceMuteBeeps: () => true, voiceSetMuteBeeps: () => {},"
-                 " voiceChosen: () => 'sr-RS', voiceSetLang: () => {},"
-                 " voiceState: () => '' };"
-                 "renderDictationCard()",
-                 "closeDictationPanel()", "#dictation-panel .sets-card"),
-                # The Region grab (owner 2026-08-05). Its bar is the part that
-                # can starve: hint + Send + ✕ on one line above the keyboard
-                # inset, on a 412 px phone. Opened with the frame pushed into
-                # the corner, which is where a bar overlap would show first.
-                ("Region grab",
-                 "openRegionPanel();"
-                 "rgBox.x = 4; rgBox.y = 4; rgBox.w = 60; rgBox.h = 60; rgApply()",
-                 "closeRegionPanel()", "#region-panel .rg-bar"),
-                # The command chooser (owner idea 2026-08-05): the longest
-                # real case is the Claude Thinking button's six levels.
-                ("Command chooser",
-                 "openChoicePanel({label:'Thinking', text:'/effort',"
-                 " options:['low','medium','high','xhigh','max','auto']})",
-                 "closeChoicePanel()", "#choice-panel .sets-card"),
-                ("Aspect panel + Move handle",
-                 "layouts = [{name:'Audit', process:'x', orient:'portrait',"
-                 " icon:null, ratio:[600,1000], pos:0.5}]; openAspectPanel(0)",
-                 "closeLayoutPanel()", "#layout-panel .lay-card"),
-                # The layout list carries a rename button per row (owner
-                # 2026-08-05) — a long window title must not push the row's
-                # buttons off the card.
-                ("Layout list with rename",
-                 "layouts = [{name:'Claude Code - Remote User - Visual Studio "
-                 "Code [Administrator]', process:'x', orient:'portrait',"
-                 " icon:null, ratio:[600,1000], pos:0.5}]; openLayoutPicker()",
-                 "closeLayoutPanel()", "#layout-panel .lay-card"),
-                # The rename card also carries the per-layout app-shortcut
-                # ticks (owner 2026-08-06) — the long title AND four chips.
-                ("Rename card",
-                 "appSets = APP_SETS;"
-                 "layouts = [{name:'Claude Code - Remote User - Visual Studio "
-                 "Code [Administrator]', process:'code.exe', orient:'portrait',"
-                 " icon:null, app_sets:['VSCode','Claude'], ratio:null, pos:0.5}];"
-                 "openRenamePanel(0)",
-                 "closeLayoutPanel()", "#layout-panel .lay-card"),
-                # Creation panel: the Name field is prefilled with the chosen
-                # window's (long) title and must fit the card.
-                # The grid catalogue he drew (owner 2026-08-07) — the THREE
-                # state, where four arrangement SKETCHES sit under the count
-                # chips. Its own case because it is the tallest the creation
-                # panel ever gets, and because a drawing nobody looked at is
-                # not a proof.
-                ("Grid arrangement choice",
-                 "creating = newCreation('list');"
-                 "creating.slots = [{hwnd:1, title:'Chrome', process:'chrome.exe',"
-                 " icon:null, tab:null, x:0.5, y:0.5},"
-                 " {hwnd:2, title:'Explorer', process:'explorer.exe',"
-                 " icon:null, tab:null, x:0.5, y:0.5},"
-                 " {hwnd:3, title:'Claude Code - Remote User - Visual Studio"
-                 " Code [Administrator]', process:'code.exe', icon:null,"
-                 " tab:null, x:0.5, y:0.5}];"
-                 "creating.mode = 'grid'; creating.grid = '3-left';"
-                 "renderCreationPanel()",
-                 "cancelCreation(true)", "#layout-panel .lay-card"),
-                ("Creation panel + Name field",
-                 "appSets = APP_SETS;"
-                 "creating = newCreation('tap');"
-                 "creating.slots = [{hwnd:1, title:'Claude Code - Remote User"
-                 " - Visual Studio Code [Administrator]', process:'code.exe',"
-                 " icon:null, tab:null, x:0.5, y:0.5}];"
-                 "renderCreationPanel()",
-                 "creating = null; closeLayoutPanel()",
-                 "#layout-panel .lay-card"),
-            ):
-                passed, detail = _check_panel(page, name, open_js, close_js, sel,
-                                              shot=(label == "portrait 412x915"))
-                results[f"{name} @ {label}"] = passed
-                if not passed:
-                    print(f"  DETAIL {name} @ {label}: {detail}")
+            # Wrapped in a no-argument function: Playwright treats any string
+            # that LOOKS like a function as one to call, and the bare
+            # assignment below contains an arrow — it was being invoked with
+            # no root instead of installed.
+            page.evaluate("() => {" + CONTRAST_JS + "}")
+            portrait = label.startswith("portrait")
+
+            for look in LOOKS:
+                theme, fill = look
+                look_name = f"{theme}/{fill}"
+                _apply_look(page, theme, fill, SET_COLORS)
+
+                # The D-pad and the wheel FIRST — they are the surfaces the
+                # `colored` theme actually paints, and no panel check has ever
+                # looked at them. Both sizes, every look.
+                bad = _check_controls(page)
+                results[f"controls contrast @ {label} @ {look_name}"] = not bad
+                if bad:
+                    print(f"  DETAIL controls @ {label} @ {look_name}: {bad}")
+                SHOT_DIR.mkdir(parents=True, exist_ok=True)
+                page.screenshot(path=str(SHOT_DIR / _shot_name(
+                    _shot_label("Controls and wheel", look, portrait))))
+                page.evaluate("closeWheel()")
+                # …and the working screen WITHOUT the wheel. Both orientations,
+                # every look: a phone that runs in landscape and has never been
+                # photographed there has been measured, not looked at.
+                page.screenshot(path=str(SHOT_DIR / _shot_name(
+                    _shot_label("Controls", look, portrait))))
+
+                # EVERY colour of the desktop's table, on both surfaces — not
+                # only the three the pinned fixture puts on screen.
+                bad = page.evaluate("(names) => __sweepSetColours(names)",
+                                    list(SET_COLORS))
+                results[f"every set colour @ {label} @ {look_name}"] = not bad
+                if bad:
+                    print(f"  DETAIL set colours @ {label} @ {look_name}: {bad}")
+
+                # The panels: every look at portrait (narrowest cards, where a
+                # row starves first); at landscape only the default, because
+                # what landscape tests is GEOMETRY and geometry does not
+                # change with a colour.
+                if not portrait and look != DEFAULT_LOOK:
+                    continue
+                for name, open_js, close_js, sel in PANELS:
+                    shot = ((look == DEFAULT_LOOK or name in COLOUR_SHOTS)
+                            if portrait else
+                            (look == DEFAULT_LOOK and name in LANDSCAPE_SHOTS))
+                    passed, detail = _check_panel(
+                        page, _shot_label(name, look, portrait),
+                        open_js, close_js, sel, shot=shot)
+                    results[f"{name} @ {label} @ {look_name}"] = passed
+                    if not passed:
+                        print(f"  DETAIL {name} @ {label} @ {look_name}: {detail}")
+
+            # Everything below is geometry, and it is measured in the look the
+            # product ships by default.
+            _apply_look(page, *DEFAULT_LOOK, SET_COLORS)
 
             # D-pad labels: a set's POOL may hold reserve commands with longer
             # names than the shipped four ("Copy path", "Go to file"), and the

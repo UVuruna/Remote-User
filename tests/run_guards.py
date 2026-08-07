@@ -43,6 +43,17 @@ def _control_sets() -> None:
         check()
 
 
+def _actions_migration() -> None:
+    """That a NEW VERSION'S FIELDS reach the owner's own actions.json — his
+    copy is seeded once and never replaced, so this merge is the only path.
+    The Claude set's `agent` switch never arrived through four releases while
+    every guard was green, because every guard built its "user file" out of
+    the SHIPPED file. This one starts from an older shape."""
+    import test_actions_migration
+    for _, check in test_actions_migration.CHECKS:
+        check()
+
+
 def _app_set_wheel() -> None:
     """The owner's two app-set rules of 2026-08-06: only the Claude
     conversation wears the Claude set (never a document that merely carries
@@ -53,6 +64,17 @@ def _app_set_wheel() -> None:
         return
     for _, check in test_app_set_wheel.TESTS:
         check()
+
+
+def _focus_gate() -> None:
+    """WHERE typed input lands, and the machinery that gets it there (owner
+    2026-08-06 + build round R1). Imported lazily like the others: they pull
+    in the real web layer. Fast, no browser — and nothing on this machine is
+    touched: no hook is installed, no window raised, no key injected."""
+    import test_focus_guard
+    import test_focus_hook
+    assert test_focus_guard.main() == 0, "the focus gate failed (see its output)"
+    assert test_focus_hook.main() == 0, "the focus HOOK gate failed (see its output)"
 
 
 def _layout_audit_qt() -> None:
@@ -69,12 +91,27 @@ FULL_ONLY_CHECKS = [
     ("docs coverage (folder docs)", docs_coverage.test_every_code_folder_has_a_folder_doc),
     ("doc links (no broken links)", doc_links.test_every_relative_link_resolves_to_a_real_file),
     ("doc links (reachable from README)", doc_links.test_every_doc_reachable_from_readme),
-    # The runtime half: opens every Qt window offscreen and measures it.
-    # Full run only — it builds a QApplication (~1 s), too slow for the
-    # PostToolUse budget.
-    ("control sets (never silently rewritten)", _control_sets),
-    ("app sets (right window, and they pay for their seat)", _app_set_wheel),
+    # The runtime half: opens every Qt window and measures it. Full run only
+    # — it builds a QApplication (~1 s), too slow for the PostToolUse budget.
+    #
+    # AND IT GOES FIRST OF THE QT GUARDS (build round R3). `test_controls_sets`
+    # sets `QT_QPA_PLATFORM=offscreen` at import time and builds a
+    # QApplication with it; every Qt guard after that inherits a platform with
+    # NO SYSTEM FONTS. The audit still measured — but every SCREENSHOT it
+    # wrote came out as rows of tofu boxes, and those screenshots are the
+    # DESIGN REVIEW's whole evidence (rules/GUI.md: the agent opens the image
+    # and grades what it sees). A run of the full guards therefore overwrote
+    # good proof with unreadable pictures, which is also where the "the same
+    # windows measure roughly twice as wide inside run_guards" note in
+    # .claude/layout-proof.md came from. Ordering is the whole fix: the audit
+    # builds the QApplication first, on the real platform, and the offscreen
+    # default that comes later is a no-op because an application already
+    # exists.
     ("layout audit (Qt windows)", _layout_audit_qt),
+    ("control sets (never silently rewritten)", _control_sets),
+    ("actions migration (a new version's fields reach HIS file)", _actions_migration),
+    ("app sets (right window, and they pay for their seat)", _app_set_wheel),
+    ("focus gate (typed input lands where he is looking)", _focus_gate),
 ]
 
 
