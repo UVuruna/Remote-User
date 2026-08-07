@@ -1,0 +1,193 @@
+/* Every colour the phone client uses, in one file — build round R3
+   (owner-approved 2026-08-07).
+
+   WHY IT IS ITS OWN FILE. style.css was already the biggest thing in client/
+   and three themes times two fills would have burst it (THE STRUCTURE LAW).
+   The seam is a real responsibility, not a size trick: this file answers
+   "what colour is anything", style.css and layouts.css answer "what shape and
+   where". Nothing here positions anything; nothing there names a colour.
+
+   THE THEME IS CHOSEN ON THE DESKTOP AND NOWHERE ELSE (owner answer P4). The
+   page receives `config.ui = {theme, fill, colors}`, client/theme.js writes
+   `data-theme` / `data-fill` onto <body>, and every rule below hangs off those
+   two attributes. There is no menu on the phone, nothing is auto-detected,
+   and the device's own dark/light preference is deliberately ignored — one
+   source of truth.
+
+   THE AXES ARE INDEPENDENT:
+     data-theme = dark | light | colored     — surfaces, ink, shadows
+     data-fill  = transparent | full         — outlined buttons, or filled
+
+   `colored` keeps the dark surfaces on purpose: what sits behind the controls
+   is the PC's own screen, and a colour per SET is a statement about the
+   buttons, not about the page. Its set colour arrives per element as
+   `--set-color` (and `--set-ink`, computed from that colour's luminance by
+   theme.js) so a button's own text can never land unreadable on its own
+   colour — the phone audit's contrast check runs in every combination
+   (tests/test_layout_audit.py). */
+
+:root {
+  /* --- DARK (the default, and the base every other theme overrides) ------ */
+  --surface-0: #0f172a;      /* the page floor — what the audit measures against */
+  --card: #1e293b;           /* panel cards (sets, quality, layouts, wizard) */
+  --glass-fill: rgb(30 41 59 / 0.20);   /* an outlined control's own tint */
+  --glass-strong: rgb(30 41 59 / 0.85); /* wheel items — over the stream */
+  --chip: rgb(51 65 85 / 0.60);         /* chips, inputs, list rows */
+  --chip-2: rgb(51 65 85 / 0.50);
+  --bar: rgb(15 23 42 / 0.90);          /* floating bars and banners */
+  --scrim: rgb(15 23 42 / 0.72);        /* a modal panel's backdrop */
+  --scrim-soft: rgb(15 23 42 / 0.55);   /* the wheel's backdrop */
+  --dim-out: rgb(15 23 42 / 0.35);      /* everything outside the region grab */
+  --opaque: #0f172a;                    /* the loading overlay — nothing shows through */
+  --border: rgb(255 255 255 / 0.20);
+  /* The wheel item's own edge (build round R3 fix, 2026-08-07): on dark the
+     circle's OWN fill (--glass-strong, 0.85) already reads as a shape, so the
+     border only has to finish the edge. On light that fill is far more
+     transparent (see below) and an unselected item would read as nothing
+     without a stronger ring of its own — this is that ring. */
+  --wheel-border: var(--border);
+  --text-primary: #f5f5f5;
+  --text-secondary: #a8b3c5;
+  --accent: #38bdf8;
+  --accent-2: #8b5cf6;
+  --accent-glow: rgb(56 189 248 / 0.25);
+  --accent-wash: rgb(56 189 248 / 0.10);
+  --on-accent: #06212e;      /* ink ON the accent — never a surface token */
+  --success: #22c55e;
+  --success-dim: rgb(34 197 94 / 0.18);
+  --success-edge: rgb(34 197 94 / 0.50);
+  --warning: #f59e0b;
+  --warning-2: #d97706;      /* the status pill's gradient second stop */
+  --error: #ef4444;
+  --error-2: #b91c1c;
+  /* Controls float over the PC's screen, which can be ANY colour, so their
+     icon and label carry a shadow. On dark ink that shadow is black; on light
+     ink it has to become white, or a dark icon over a dark window vanishes. */
+  --ink-shadow: rgb(0 0 0 / 0.70);
+  --lbl-shadow: rgb(0 0 0 / 0.85);
+  --card-shadow: rgb(0 0 0 / 0.45);
+  /* What a FILLED button is filled with when the theme is not `colored`. */
+  --fill-solid: #1e293b;
+}
+
+/* --- LIGHT ---------------------------------------------------------------
+   Elevation INVERTS (DESIGN.md): the raised card is the whitest thing and the
+   page sits a step below it. The accent is DEEPENED — the dark theme's
+   #38bdf8 sits at 2.2:1 on white and is unreadable there. */
+body[data-theme="light"] {
+  --surface-0: #eceef6;
+  --card: #ffffff;
+  /* THE FILL AXIS MUST DO SOMETHING HERE (owner grader, 2026-08-07 — 7/10:
+     "Controls_light_transparent.png and Controls_light_full.png are not
+     perceptibly different: both show white FILLED buttons"). The dark theme's
+     transparent glass is a mere 0.20 alpha of its own card colour, so a
+     transparent .ctl reads as almost nothing over the stream while a full one
+     is a solid #1e293b box — an obvious pair. The old light values (0.55 /
+     0.90 / 0.75) were already most of the way to opaque white, so "full"
+     (solid white) barely changed anything. These now sit as low as dark's do,
+     so OUTLINED genuinely drops its fill and shows only the border — full is
+     the only state that looks like a filled card. */
+  --glass-fill: rgb(255 255 255 / 0.14);
+  --glass-strong: rgb(255 255 255 / 0.55);
+  --chip: rgb(223 226 238 / 0.55);
+  --chip-2: rgb(223 226 238 / 0.40);
+  --bar: rgb(255 255 255 / 0.93);
+  --scrim: rgb(22 22 31 / 0.42);
+  --scrim-soft: rgb(22 22 31 / 0.32);
+  --dim-out: rgb(22 22 31 / 0.28);
+  --opaque: #eceef6;
+  --border: rgb(22 22 31 / 0.22);
+  /* An unselected wheel item is now a mostly-see-through circle (glass-strong
+     dropped above), so its own border has to carry more of the shape than
+     the plain --border ever needed to. */
+  --wheel-border: rgb(22 22 31 / 0.38);
+  --text-primary: #16161f;
+  --text-secondary: #4c5162;
+  --accent: #0369a1;
+  --accent-2: #6d28d9;
+  --accent-glow: rgb(3 105 161 / 0.25);
+  --accent-wash: rgb(3 105 161 / 0.10);
+  --on-accent: #ffffff;
+  --success: #15803d;
+  --success-dim: rgb(21 128 61 / 0.14);
+  --success-edge: rgb(21 128 61 / 0.45);
+  --warning: #b45309;
+  --warning-2: #92400e;
+  --error: #b91c1c;
+  --error-2: #7f1d1d;
+  --ink-shadow: rgb(255 255 255 / 0.85);
+  --lbl-shadow: rgb(255 255 255 / 0.90);
+  --card-shadow: rgb(22 22 31 / 0.20);
+  --fill-solid: #ffffff;
+}
+
+/* --- COLORED -------------------------------------------------------------
+   The dark surfaces, and every SET wearing its own colour. Only the buttons
+   change: panels, cards and the stream stay exactly as they are in dark,
+   because the colour is a statement about which set your finger is on. */
+
+/* --- FILL: full ----------------------------------------------------------
+   Outlined controls become filled ones. `--glass-fill` is what every button,
+   chip and wheel item already paints itself with, so ONE token carries the
+   whole fill axis — no rule anywhere needs to know which fill is active. */
+body[data-fill="full"] {
+  --glass-fill: var(--fill-solid);
+  --glass-strong: var(--fill-solid);
+  --chip: var(--fill-solid);
+  --chip-2: var(--fill-solid);
+}
+
+/* --- The per-set colour -------------------------------------------------
+   theme.js sets `--set-color` and `--set-ink` on the element that OWNS a set
+   (a D-pad group, a wheel item), so both the group's own buttons and its
+   category button inherit them. Outside `colored` the variables are simply
+   never read.
+
+   OUTLINED: the colour is the outline AND the ink — it is drawn over the
+   stream, and a filled patch would hide the very screen the user is aiming
+   at. But the BORDER and the INK are not the same job and no longer take the
+   same value (independent grader, 2026-08-07): a border is a graphic and
+   clears its bar at 3:1, while a 9 px label is text and wants 4.5:1 on the
+   surface it lands on — and the surface an outlined button's label lands on is
+   `--glass-fill` over the page, never the solid set colour. So the border
+   keeps `--set-color` exactly as the desktop tuned it, and the ink is
+   `--set-line`: the SAME colour lifted along the line toward white (or black
+   on a light page) until it measures readable THERE. Most sets are returned
+   untouched; the darker half of the palette is not. (The wheel's veil — what
+   the grader actually measured through — was never an ink problem and is
+   fixed where it belongs: client/style.css → `body.wheel-open::before`.)
+   FILLED: the fill is `--set-fill` — `--set-color` itself, unless
+   black-or-white ink cannot clear AA on the raw hue at all (a colour sitting
+   near the crossover fails both almost equally, so no ink choice alone can
+   save it — VSCode's #3B82F6 is the one shipped colour that needs this), in
+   which case it is nudged the shortest distance toward whichever extreme
+   gets it there — and `--set-ink` is chosen against THAT surface, so a pale
+   yellow set gets black text and a deep orange one gets white. */
+body[data-theme="colored"] .ctl,
+body[data-theme="colored"] .wheel-item {
+  border-color: var(--set-color, var(--border));
+  color: var(--set-line, var(--set-color, var(--text-primary)));
+}
+body[data-theme="colored"] .ctl .lbl {
+  color: var(--set-line, var(--set-color, var(--text-primary)));
+}
+body[data-theme="colored"][data-fill="full"] .ctl,
+body[data-theme="colored"][data-fill="full"] .wheel-item {
+  /* --set-fill is --set-color nudged the shortest distance toward black or
+     white ONLY when neither ink clears AA on the raw hue (theme.js →
+     fillOn) — a border still wears the untouched --set-color, so the set's
+     identity colour is never lost, only the odd near-crossover fill (today
+     just VSCode) gets a small, principled push. */
+  background: var(--set-fill, var(--set-color, var(--glass-fill)));
+  color: var(--set-ink, var(--text-primary));
+}
+body[data-theme="colored"][data-fill="full"] .ctl .lbl {
+  color: var(--set-ink, var(--text-primary));
+}
+/* An ACTIVE toggle (Keys on, Scroll on) keeps meaning "switched on", so it
+   still glows — in the set's own colour rather than the one accent. */
+body[data-theme="colored"] .ctl.active,
+body[data-theme="colored"] .ctl.held {
+  box-shadow: 0 0 0 3px var(--set-glow, var(--accent-glow)),
+              0 0 22px var(--set-glow, var(--accent-glow));
+}

@@ -1,0 +1,23 @@
+<!-- The combo box's caret, DARK palette (gui/theme.py QSS, token `caretAsset`).
+
+     It was a CSS border triangle — `border-left/right: 4px solid transparent`
+     over a `border-top: 5px solid` — which is a browser trick that Qt's
+     subcontrol renderer does not perform: it painted a solid 10x10 BLOCK in
+     every combo of every window, measured off the screenshots on 2026-08-07
+     (100 identical ink pixels, no antialiased edge anywhere — a rectangle
+     cannot be mistaken for a triangle at that count). Same family of defect as
+     the ✥ the owner rejected on his phone: a mark that came out a blunt shape.
+
+     A mark is DRAWN. Stroke-based chevron on the 24x24 grid, 2 px stroke,
+     round caps — the same family as assets/icon-*.svg and the client's own
+     icon set.
+
+     The ink mirrors this palette's `text2` token, exactly as check.svg mirrors
+     `onAccent`: QSS `image:` loads a path and cannot re-tint what it loads
+     (`theme.icon()` can, and does — but a subcontrol is drawn by the
+     stylesheet, not by us), so each palette carries its own file. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="12" height="12">
+  <polyline points="5 9 12 16 19 9"
+            fill="none" stroke="#A8B3C5" stroke-width="2.4"
+            stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

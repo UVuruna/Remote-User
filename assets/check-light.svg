@@ -1,0 +1,16 @@
+<!-- The tick inside a CHECKED checkbox on the LIGHT palette (gui/theme.py QSS,
+     token `checkAsset`).
+
+     Same drawing as check.svg, opposite ink. The light theme's accent is the
+     DEEPENED #0369A1, so the dark #06212E tick of the sibling file measures
+     ~2.2:1 on it — read off ControlsEditor__light.png on 2026-08-07. White is
+     the `onAccent` token of this palette, the same ink the primary button
+     already uses. Two files rather than one tinted at runtime because QSS
+     `image:` loads a path and cannot re-colour what it loads (`theme.icon()`
+     can, and does — but a checkbox indicator is drawn by the stylesheet, not
+     by us). Drawn, never a font glyph: see check.svg. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16">
+  <path d="M3.5 8.5 L6.6 11.6 L12.5 4.9"
+        fill="none" stroke="#FFFFFF" stroke-width="2.2"
+        stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
