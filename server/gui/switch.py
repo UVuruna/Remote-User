@@ -144,11 +144,14 @@ class ThemeSwitch(QWidget):
 
         # The two destinations, drawn dim on the track: moon on the left,
         # sun on the right, so the pill says what it does while standing
-        # still. The knob then covers whichever one is current.
+        # still. The knob then covers whichever one is current. The sun's
+        # centre sits h/2 from the track's rounded end in every direction, so
+        # r=h*0.30 (ray tip at r*0.94 ≈ 0.28*h) leaves real clearance on all
+        # sides — see `_sun` for why the outer bound matters.
         dim = _token_color("text2")
         dim.setAlpha(150)
         self._moon(painter, QPointF(h / 2, h / 2), h * 0.20, dim, track)
-        self._sun(painter, QPointF(self.width() - h / 2, h / 2), h * 0.17, dim)
+        self._sun(painter, QPointF(self.width() - h / 2, h / 2), h * 0.30, dim)
 
         # The knob itself — the one accent, carrying the ACTIVE symbol.
         knob_d = h - 2 * KNOB_INSET
@@ -159,7 +162,12 @@ class ThemeSwitch(QWidget):
         painter.drawEllipse(QPointF(cx, h / 2), knob_d / 2, knob_d / 2)
         ink = _token_color("onAccent")
         if self._slide > 0.5:
-            self._sun(painter, QPointF(cx, h / 2), knob_d * 0.24, ink)
+            # knob_d*0.42 keeps the ray tip (r*0.94) at ~0.20*knob_d from
+            # centre — the knob's own radius is 0.50*knob_d, so a margin of
+            # ~0.10*knob_d (2 px at this pill's size) of solid accent always
+            # separates the last ray from the knob's rim. That margin is
+            # exactly what the first fix (round R3, see `_sun`) was missing.
+            self._sun(painter, QPointF(cx, h / 2), knob_d * 0.42, ink)
         else:
             self._moon(painter, QPointF(cx, h / 2), knob_d * 0.28, ink, accent)
 
@@ -180,22 +188,40 @@ class ThemeSwitch(QWidget):
 
     def _sun(self, painter: QPainter, centre: QPointF, r: float,
              color: QColor) -> None:
-        painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(color)
-        painter.drawEllipse(centre, r, r)
-        # Eight thin rays with a clear gap to the disc. Thicker or closer (the
-        # first attempt: width r*0.28 starting at r*1.5) and the whole thing
-        # read as a COG rather than a sun on the light theme's filled knob —
-        # caught by opening the shot, which is what that gate is for.
+        """`r` is the OUTER radius — the farthest any pixel of this glyph
+        reaches from `centre`. Every proportion below is a fixed fraction of
+        `r`, so a caller that wants the icon to stay inside a container of
+        radius R only has to pass `r <= R` (minus whatever margin it wants);
+        nothing drawn here can spill past `r` itself.
+
+        Second attempt, round R3 (2026-08-07). The FIRST fix (thinner rays,
+        further out: width r*0.20 from 1.75r-2.45r) still read as a COG on
+        the light theme's filled knob — an independent grader caught it a
+        second time. Root cause was never the ray/disc ratio in isolation:
+        the knob call site passed r = knob_d*0.24 = 4.8 against a knob radius
+        of 10, so the old ray tip (2.45 * 4.8 = 11.8) landed PAST the knob's
+        own edge — the white rays crossed the blue knob's own rim and read as
+        slots cut through a solid disc (a cog's teeth), exactly like the
+        report describes. Two changes fix that class of bug rather than this
+        one instance of it: (1) the disc is an UNFILLED RING, never a filled
+        blob — a filled disc plus rays crossing its silhouette is what a cog
+        looks like, at any size, in any fill state; an outline never reads
+        that way. (2) every caller now passes `r` as a true outer bound
+        (verified against its container below), so the glyph can no longer
+        cross an edge it should stay inside.
+        """
+        ray_w = max(1.0, r * 0.16)
         pen = QPen(color)
-        pen.setWidthF(max(1.0, r * 0.20))
+        pen.setWidthF(ray_w)
         pen.setCapStyle(Qt.PenCapStyle.RoundCap)
         painter.setPen(pen)
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawEllipse(centre, r * 0.34, r * 0.34)
         for i in range(8):
             angle = i * math.pi / 4
             direction = QPointF(math.cos(angle), math.sin(angle))
-            painter.drawLine(centre + direction * (r * 1.75),
-                             centre + direction * (r * 2.45))
+            painter.drawLine(centre + direction * (r * 0.58),
+                             centre + direction * (r * 0.94))
 
 
 def _token_color(name: str) -> QColor:

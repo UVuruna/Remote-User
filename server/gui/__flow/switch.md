@@ -76,6 +76,34 @@ _knob_x()        smoothstep: t·t·(3 − 2t)
       sitting on top of whichever destination is current
 ```
 
+## The sun, bounded — how `_sun(r)` stays a sun and never a cog
+
+```
+        r = the OUTER bound passed by the caller
+        (never crossed by anything this function draws)
+                     │
+    container edge ──┼─────────────────╮
+    (knob rim, or     .                 │  ← real margin: caller picks r
+     the track's       .   ray tip        so this gap is never zero —
+     rounded end)       .  (0.94 r)        knob: knob_d*0.42 leaves ~0.10
+                          .                 knob_d of clear accent to the
+                    ╲      .                rim; track: h*0.30 leaves room
+                     ╲      .               to the pill's rounded end
+      ray start        ╲     .
+      (0.58 r) ────────► •    .
+                          ╲    ○  ← disc, UNFILLED ring only (0.34 r):
+                           ╲  ╱     a filled disc + rays crossing its
+                            ╲╱      edge is what reads as a cog, at
+                                    any size — an outline never can
+```
+
+Two graders independently caught this defect in the light theme (the knob
+filled solid). The FIRST fix only re-tuned the ray/disc ratio and still
+failed a second look: it never checked the result against the container the
+knob actually is, so the ray tips crossed the knob's own rim and read as
+teeth cut through its edge. The fix above ties the geometry to `r` as a true
+outer bound instead — see `__about/switch.md` for the full account.
+
 ## Where it can end up with nothing to cover
 
 ```

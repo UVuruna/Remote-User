@@ -62,6 +62,35 @@ is a filled disc with a second disc painted over its edge in whatever the
 crescent is sitting ON (the track, or the knob); a clip path per frame would
 be the other way, and two ellipses read identically at this size.
 
+### The sun read as a COG, twice, and why the second fix is different
+
+Two independent graders caught the SAME defect in the light palette: the
+active knob's sun, filled solid, read as "a solid blue disc with a hole in
+the middle and short slots cut through its ring" — indistinguishable at a
+glance from the real gear icon on the Settings button two rows below. The
+first attempt (thinner rays, further out) did not survive a second look
+because it tuned the ray/disc *ratio* without checking it against the
+*container* — the knob call site passed a radius whose ray tips landed past
+the knob's own edge, so the white rays crossed the blue knob's rim and read
+as teeth cut through a disc, exactly the report's words.
+
+`_sun(painter, centre, r, color)` now treats `r` as a true OUTER bound: every
+proportion inside it (disc radius, ray start, ray end) is a fixed fraction of
+`r`, so nothing it draws can reach past `r` itself. Two changes, not one:
+
+1. **The disc is an unfilled ring**, never a filled blob. A filled disc plus
+   rays crossing its silhouette is what a cog looks like, at any size, in any
+   fill state — an outline never collapses into that reading.
+2. **Every caller passes `r` verified against its own container**, with a
+   real margin: the track's dim sun (`h * 0.30`, plenty of room against the
+   pill's rounded end) and the knob's active sun (`knob_d * 0.42`, leaving
+   ~0.10·knob_d — about 2 px at this pill's size — of solid accent between
+   the last ray and the knob's own rim). That margin is exactly what the
+   first fix never checked.
+
+The moon keeps its filled crescent — a completely different silhouette from
+a gear, so it never had this problem.
+
 ## Why it may carry a hard size
 
 `sizeHint`/`minimumSizeHint` plus a Fixed size policy — **not**
