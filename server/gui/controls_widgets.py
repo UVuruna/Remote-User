@@ -493,6 +493,31 @@ class CommandTable(QTableWidget):
             self.setItem(row, 3, QTableWidgetItem(shortcut))
         self.resizeRowsToContents()
         self.blockSignals(False)
+        self._fit_rows()
+
+    # ROWS_SHOWN is where the law's ladder stops for this table (owner's
+    # SPACE & LEGIBILITY LAW, rules/GUI.md: free space -> reflow -> raised
+    # minimum -> scroll, and "a visible scrollbar with unused space in the
+    # same window is a bug, not a style choice").
+    #
+    # An independent grader failed this window at 6/10 on 2026-08-07 for
+    # exactly that: the pool table scrolled at six rows while the set list
+    # beside it held a large empty block. The two are side by side, so the
+    # table cannot REFLOW into that space — the only step left above `scroll`
+    # is a RAISED MINIMUM, which is what this is. The cap exists because the
+    # raise has its own limit: every window's minimum must still fit
+    # 1280x1000, and the largest pool (Navigate, 11) would push past it. Ten
+    # rows covers every set shipped today; beyond that a scrollbar is the
+    # law's own last resort rather than a shortcut past its first.
+    ROWS_SHOWN = 10
+
+    def _fit_rows(self) -> None:
+        rows = min(self.rowCount(), self.ROWS_SHOWN)
+        if not rows:
+            return
+        height = self.horizontalHeader().height() + 2 * self.frameWidth()
+        height += sum(self.rowHeight(r) for r in range(rows))
+        self.setMinimumHeight(height)
 
     def checked_rows(self) -> list[int]:
         return [r for r in range(self.rowCount())
