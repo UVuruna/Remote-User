@@ -284,11 +284,11 @@ function openRenamePanel(index) {
     oRow.className = "lay-row";
     const draw = () => {
       oRow.innerHTML = "";
-      ["portrait", "landscape"].forEach((o) => oRow.appendChild(
-        layChip(o === "portrait" ? "Portrait" : "Landscape", orient === o, () => {
-          orient = o;
-          draw();
-        })));
+      // A picture, not a word (owner round 2, 2026-08-07): the layout's own
+      // grid drawn once per orientation, side by side — the same rule as the
+      // creation panel's shape row and his sheet's own two columns.
+      orientChips((o) => gridSketch(shape, o), orient, (o) => { orient = o; draw(); })
+        .forEach((chip) => oRow.appendChild(chip));
       if (GRID_CELLS[grid] === 3) {
         GRID_THREE.forEach((g) => oRow.appendChild(
           gridChip(g, orient, shape === g, () => { shape = g; draw(); })));
@@ -805,19 +805,26 @@ function renderCreationPanel() {
   nameIn.addEventListener("input", () => { c.name = nameIn.value; });
   card.append(nameLbl, nameIn);
 
+  // The mode row is a picture, not a word (owner round 2, 2026-08-07: "budu
+  // skice ... a ne tekstovi tipa 'GRID 2x1'"). Each chip draws the count's
+  // own shape in the CURRENTLY chosen orientation — the same drawing his
+  // sheet uses, with its own numeral as a caption underneath.
   const modeRow = document.createElement("div");
   modeRow.className = "lay-row";
-  modeRow.appendChild(layChip("Only one", c.mode === "solo", () => {
+  modeRow.appendChild(shapeChip(soloSketch(c.orient), "1", c.mode === "solo", () => {
     c.mode = "solo";
     c.grid = null;
     c.slots = c.slots.slice(0, 1);
     renderCreationPanel();
   }));
   // The COUNT is the choice (owner 2026-08-07); the shape follows from it and
-  // from the orientation, and only a THREE has anything left to decide.
-  [["2", "Two"], ["3-top", "Three"], ["4", "Four"]].forEach(([g, label]) =>
-    modeRow.appendChild(
-      layChip(label, c.mode === "grid" && GRID_CELLS[c.grid] === GRID_CELLS[g], () => {
+  // from the orientation, and only a THREE has anything left to decide. A
+  // three's chip shows its currently chosen arrangement once one is picked
+  // below, "3-top" by default until then.
+  [["2", "2"], ["3-top", "3"], ["4", "4"]].forEach(([g, label]) =>
+    modeRow.appendChild(shapeChip(
+      gridSketch(c.mode === "grid" && GRID_CELLS[c.grid] === GRID_CELLS[g] ? c.grid : g, c.orient),
+      label, c.mode === "grid" && GRID_CELLS[c.grid] === GRID_CELLS[g], () => {
         c.mode = "grid";
         c.grid = g;
         c.slots = c.slots.slice(0, GRID_CELLS[g]);
@@ -871,17 +878,19 @@ function renderCreationPanel() {
   // state frame. Making the layout carry a written-once copy of that answer
   // is what froze his Claude layout on VS Code. Nothing is asked now.
 
+  // Orientation is exactly the COLUMN of his sheet — a picture too (owner
+  // round 2, 2026-08-07): the chosen count's own shape drawn once per
+  // orientation, side by side, so the pick is "which of these looks right"
+  // rather than reading "Portrait"/"Landscape".
+  const orientLbl = document.createElement("p");
+  orientLbl.className = "lay-sub";
+  orientLbl.textContent = "Shape:";
   const orientRow = document.createElement("div");
   orientRow.className = "lay-row";
-  orientRow.appendChild(layChip("Portrait", c.orient === "portrait", () => {
-    c.orient = "portrait";
-    renderCreationPanel();
-  }));
-  orientRow.appendChild(layChip("Landscape", c.orient === "landscape", () => {
-    c.orient = "landscape";
-    renderCreationPanel();
-  }));
-  card.appendChild(orientRow);
+  const sketchFor = (o) => c.mode === "grid" ? gridSketch(c.grid, o) : soloSketch(o);
+  orientChips(sketchFor, c.orient, (o) => { c.orient = o; renderCreationPanel(); })
+    .forEach((chip) => orientRow.appendChild(chip));
+  card.append(orientLbl, orientRow);
 
   const actions = document.createElement("div");
   actions.className = "lay-actions";
