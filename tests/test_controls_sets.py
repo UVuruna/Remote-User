@@ -149,6 +149,86 @@ def test_switching_sets_never_writes_into_the_other_pool():
         + " — one set's command must never land in another's row")
 
 
+def test_typed_command_shows_as_typed_not_chord():
+    """C. The independent grader's screenshot (2026-08-07): the pool table
+    said "types · /usage" for the Claude set's Usage row while the detail
+    panel below it — for the SAME selected row — asked to RECORD a keystroke
+    for a command that has no shortcut at all. `CommandTable.fill` already
+    read a `{"text": …}` command correctly; `CommandDetail.show_button` had
+    no branch for it and fell into the chord `else`, showing an empty
+    "Shortcut (chord)" field with a live Record button under a table cell
+    that already said "types". One window, two contradicting stories about
+    one button.
+
+    Guards, in order: the panel must resolve to the TEXT kind, must show the
+    real text (never an empty field), and the two value rows (Shortcut vs
+    Text) must never both be visible at once — showing both would just move
+    the contradiction from "wrong label" to "two live answers"."""
+    from PySide6.QtWidgets import QApplication
+    from gui.controls_editor import ControlsEditor
+    from gui.controls_widgets import KIND_TEXT
+
+    app = QApplication.instance() or QApplication([])
+    editor = ControlsEditor()
+    entries = editor._entries()
+    claude = next((i for i, (_, _, s) in enumerate(entries)
+                   if s.get("name") == "Claude"), None)
+    assert claude is not None, "this guard assumes the shipped file still ships Claude"
+    editor.set_list.setCurrentRow(editor._row_of(claude))
+    app.processEvents()
+    usage_row = next(r for r in range(editor.table.rowCount())
+                      if editor.table.item(r, 1).text() == "Usage")
+    editor.table.setCurrentCell(usage_row, 1)
+    app.processEvents()
+
+    detail = editor.detail
+    assert detail.kind.currentData() == KIND_TEXT, (
+        f"the Usage row shows as kind {detail.kind.currentData()!r}, "
+        "not a typed command — the table and the detail panel disagree again")
+    assert detail.text.text() == "/usage", (
+        f"the Text field must carry the real command, got {detail.text.text()!r}")
+    assert detail.enter_check.isChecked(), "Usage carries \"enter\": true in actions.json"
+    assert detail.chord.isHidden(), (
+        "the Shortcut field must not show for a typed command — a user who "
+        "selects a typed command must never be told to record a keystroke")
+    assert detail.record.isHidden(), "the Record button must not show either"
+    assert not detail.text.isHidden(), "the Text field must show for a typed command"
+    assert not detail.enter_check.isHidden(), "the Enter checkbox must show too"
+
+
+def test_a_custom_typed_command_round_trips():
+    """A typed command must be CREATABLE and EDITABLE in a custom set, not
+    merely displayable (owner brief, 2026-08-07): add a command, switch its
+    Does combo to "Types (paste text)", fill in the text, and confirm
+    `dump()` writes back exactly the `paste_text` shape the phone/server
+    expect (ACTIONS.md → Typed text; `server/web.py`'s `paste_text` handler)."""
+    from PySide6.QtWidgets import QApplication
+    from gui.controls_editor import ControlsEditor
+    from gui.controls_widgets import KIND_TEXT
+
+    app = QApplication.instance() or QApplication([])
+    editor = ControlsEditor()
+    entries = editor._entries()
+    custom = next((i for i, (kind, _, _) in enumerate(entries)
+                   if kind == "custom_sets"), None)
+    if custom is None:
+        editor._add_set()   # the shipped file ships no custom set to reuse
+        custom = len(editor._entries()) - 1
+    editor.set_list.setCurrentRow(editor._row_of(custom))
+    app.processEvents()
+    editor._add_command()
+    app.processEvents()
+
+    detail = editor.detail
+    detail.kind.setCurrentIndex(detail.kind.findData(KIND_TEXT))
+    detail._kind_changed()
+    detail.text.setText("/model")
+    detail.enter_check.setChecked(False)
+    detail.label.setText("Model")
+    dumped = detail.dump()
+    assert dumped == {"label": "Model", "text": "/model", "enter": False}, dumped
+
+
 CHECKS = [
     ("two sets of one process both survive a merge",
      test_two_sets_of_one_process_both_survive_a_merge),
@@ -159,6 +239,10 @@ CHECKS = [
      test_merge_preserves_the_owners_wheel_order),
     ("switching sets never writes into another pool",
      test_switching_sets_never_writes_into_the_other_pool),
+    ("a typed command shows as typed, not chord",
+     test_typed_command_shows_as_typed_not_chord),
+    ("a custom typed command round-trips",
+     test_a_custom_typed_command_round_trips),
 ]
 
 

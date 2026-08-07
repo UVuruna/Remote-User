@@ -26,15 +26,24 @@ controls_data.py    (data)            controls_order.py    (ORDER widgets)
 
 ```
 show_button(btn, editable)
- ├─ btn.action  → kind = that action, name+icon from the client's BUILTINS
- ├─ btn.key     → kind = Special key,  shortcut = key
- ├─ btn.chord   → kind = Shortcut,     shortcut = chord
+ ├─ btn.action        → kind = that action, name+icon from the client's BUILTINS
+ ├─ btn.key           → kind = Special key,  shortcut = key
+ ├─ btn.text present  → kind = Types (paste text), text = btn.text, enter = btn.enter
+ ├─ btn.chord (else)  → kind = Shortcut,     shortcut = chord
  └─ _kind_changed()
+      ├─ shows _shortcut_row  (Shortcut field + Record)   when kind is chord/key
+      ├─ shows _text_row      (Text field + Press Enter)  when kind is Types
+      │    — exactly ONE of the two rows is ever visible (build round R6,
+      │      2026-08-07 — this exclusivity IS the fix: before it, a typed
+      │      command showed an empty Shortcut row under a table that already
+      │      said "types · /usage")
       ├─ built-in row  → every field disabled, real values shown (greyed)
       └─ custom set    → all fields live; Record… → ChordRecorder
 
-dump()  → {"action": …} | {"label": …, "chord"|"key": …, "icon"?: …} | None
-          (None = an unusable row — an empty shortcut is never written)
+dump()  → {"action": …}
+        | {"label": …, "text": …, "enter": bool, "icon"?: …}   (Types)
+        | {"label": …, "chord"|"key": …, "icon"?: …}
+        | None   (None = an unusable row — an empty shortcut/text is never written)
 ```
 
 ## Build round R3 (2026-08-07) — themes

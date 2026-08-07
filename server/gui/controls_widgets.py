@@ -29,10 +29,10 @@ from PySide6.QtGui import (
 )
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import (
-    QAbstractItemView, QApplication, QComboBox, QDialog, QGridLayout,
-    QHeaderView, QLabel, QLineEdit, QPushButton, QSizePolicy, QStyle,
-    QStyledItemDelegate, QStyleOptionViewItem, QTableWidget, QTableWidgetItem,
-    QVBoxLayout, QWidget,
+    QAbstractItemView, QApplication, QCheckBox, QComboBox, QDialog,
+    QGridLayout, QHeaderView, QLabel, QLineEdit, QPushButton, QSizePolicy,
+    QStyle, QStyledItemDelegate, QStyleOptionViewItem, QTableWidget,
+    QTableWidgetItem, QVBoxLayout, QWidget,
 )
 
 from gui.controls_data import button_id
@@ -61,6 +61,7 @@ def icon_stroke() -> str:
 
 KIND_CHORD = "__chord"
 KIND_KEY = "__key"
+KIND_TEXT = "__text"
 
 # Qt key → our chord token for the recorder (letters/digits/F-keys are
 # handled generically; this table covers the named keys the injector knows).
@@ -337,6 +338,19 @@ class CommandDetail(QWidget):
     Six fields crammed into one row was BUG B on the owner's screenshot
     ("shift+tab" rendered "ift+tab"). A row per field cannot squeeze: the
     field column takes all the width the caption and the button do not need.
+
+    Three KINDS of command exist, and each shows only the field it actually
+    carries: a chord/special key shows the Shortcut row (+ Record); a TYPED
+    command (`{"text": …, "enter": …}` — `paste_text` on the wire, the
+    mechanism the Claude set is built from, see CLAUDE.md) shows the Text
+    row instead. Before this round the third kind had no row of its own at
+    all: `_kind_changed` fell through the chord branch, so a typed command
+    landed on an EMPTY "Shortcut (chord)" field with a live Record button —
+    while `CommandTable`, three centimetres above, already said "types ·
+    /usage" for the same row (independent grader, 2026-08-07 — one window,
+    two contradicting descriptions of one button). The two rows are drawn
+    mutually exclusive on purpose: showing both at once would just move the
+    contradiction from "wrong label" to "two live answers".
     """
 
     def __init__(self, icons: dict[str, str], builtins: dict[str, tuple[str, str]]):
@@ -352,6 +366,10 @@ class CommandDetail(QWidget):
         self.kind = QComboBox()
         self.kind.addItem("Shortcut (chord)", KIND_CHORD)
         self.kind.addItem("Special key", KIND_KEY)
+        # Same word the pool table already uses for this kind ("types · …",
+        # CommandTable.fill) — the owner reads one vocabulary for one command,
+        # not "types" in one place and "chord" in the other.
+        self.kind.addItem("Types (paste text)", KIND_TEXT)
         for action in sorted(builtins or {b: (b, "") for b in BUILTIN_ACTIONS}):
             label = builtins.get(action, (action, ""))[0]
             self.kind.addItem(f"Built-in: {label}  ({action})", action)
@@ -365,6 +383,12 @@ class CommandDetail(QWidget):
         self.record = QPushButton("Record")
         self.record.clicked.connect(self._record)
 
+        self.text = QLineEdit()
+        self.text.setPlaceholderText("e.g. /usage — pasted into the focused "
+                                     "box on the PC, then Enter (paste_text)")
+        self.enter_check = QCheckBox("Press Enter afterwards")
+        self.enter_check.setChecked(True)
+
         self.label = QLineEdit()
         self.label.setPlaceholderText("Name on the button")
 
@@ -373,16 +397,44 @@ class CommandDetail(QWidget):
         for name, body in icons.items():
             self.icon.addItem(icon_for(body), name, name)
 
-        for row, (caption, widget) in enumerate((
-                ("Does", self.kind), ("Shortcut", self.chord),
-                ("Name", self.label), ("Icon", self.icon))):
-            grid.addWidget(QLabel(caption), row, 0)
-            grid.addWidget(widget, row, 1)
+        self._does_caption = QLabel("Does")
+        self._shortcut_caption = QLabel("Shortcut")
+        self._text_caption = QLabel("Text")
+        self._name_caption = QLabel("Name")
+        self._icon_caption = QLabel("Icon")
+
+        grid.addWidget(self._does_caption, 0, 0)
+        grid.addWidget(self.kind, 0, 1)
+        grid.addWidget(self._shortcut_caption, 1, 0)
+        grid.addWidget(self.chord, 1, 1)
         grid.addWidget(self.record, 1, 2)
+        grid.addWidget(self._text_caption, 2, 0)
+        grid.addWidget(self.text, 2, 1)
+        # "Press Enter afterwards" gets its OWN row, spanning col 1+2, rather
+        # than sharing column 2 with the Record button (build round R6,
+        # 2026-08-07 — a real clip the runtime audit caught): column 2 is
+        # meant to stay narrow (it only ever held one word, "Record"), and
+        # the ladder's own rule — "the field column must never starve" —
+        # applies to the KIND combo too. Sharing column 2 with a checkbox
+        # long enough to need ~150 px squeezed the combo (which needs 218 px
+        # for its widest "Built-in: …" entry) down to 162, a real clip caught
+        # only once the audit ran with a typed command as the DEFAULT
+        # selection (Claude's Usage — the first button in its pool). Its own
+        # row costs nothing on the width axis and this window has height to
+        # spare (THE SPACE & LEGIBILITY LAW's ladder step 2: reflow before
+        # raising a minimum that would only paper over a starved neighbour).
+        grid.addWidget(self.enter_check, 3, 1, 1, 2)
+        grid.addWidget(self._name_caption, 4, 0)
+        grid.addWidget(self.label, 4, 1)
+        grid.addWidget(self._icon_caption, 5, 0)
+        grid.addWidget(self.icon, 5, 1)
         # The field column is the one that must never starve — ladder step 1.
         grid.setColumnStretch(0, 0)
         grid.setColumnStretch(1, 1)
         grid.setColumnStretch(2, 0)
+
+        self._shortcut_row = (self._shortcut_caption, self.chord, self.record)
+        self._text_row = (self._text_caption, self.text, self.enter_check)
 
     # -- state ---------------------------------------------------------------
 
@@ -393,15 +445,20 @@ class CommandDetail(QWidget):
         value, greyed, never an empty placeholder."""
         self._btn = btn
         self._editable = editable
-        for w in (self.kind, self.chord, self.record, self.label, self.icon):
+        widgets = (self.kind, self.chord, self.record, self.text,
+                  self.enter_check, self.label, self.icon)
+        for w in widgets:
             w.blockSignals(True)
         if btn is None:
             self.kind.setCurrentIndex(0)
             self.chord.clear()
+            self.text.clear()
+            self.enter_check.setChecked(True)
             self.label.clear()
             self.icon.setCurrentIndex(0)
         else:
             action = btn.get("action")
+            text_val, enter_val = "", True
             if action:
                 kind = action
                 shortcut = ""
@@ -412,19 +469,34 @@ class CommandDetail(QWidget):
             elif btn.get("key"):
                 kind, shortcut = KIND_KEY, btn.get("key", "")
                 label, icon = btn.get("label", ""), btn.get("icon", "")
+            elif btn.get("text") is not None:
+                # The `paste_text` mechanism (owner 2026-08-05, ACTIONS.md
+                # "Typed text") — the Claude set's /usage, /model, /effort.
+                # This is the branch that was MISSING: without it every typed
+                # command fell into the chord `else` below and showed an
+                # empty "Shortcut (chord)" row for a button that has no chord.
+                kind, shortcut = KIND_TEXT, ""
+                text_val = btn.get("text", "")
+                enter_val = bool(btn.get("enter", True))
+                label, icon = btn.get("label", ""), btn.get("icon", "")
             else:
                 kind, shortcut = KIND_CHORD, btn.get("chord", "")
                 label, icon = btn.get("label", ""), btn.get("icon", "")
             self.kind.setCurrentIndex(max(0, self.kind.findData(kind)))
             self.chord.setText(shortcut)
+            self.text.setText(text_val)
+            self.enter_check.setChecked(enter_val)
             self.label.setText(label)
             self.icon.setCurrentIndex(max(0, self.icon.findData(icon)))
-        for w in (self.kind, self.chord, self.record, self.label, self.icon):
+        for w in widgets:
             w.blockSignals(False)
         self._kind_changed()
 
     def _kind_changed(self) -> None:
-        is_builtin = self.kind.currentData() not in (KIND_CHORD, KIND_KEY)
+        kind = self.kind.currentData()
+        is_text = kind == KIND_TEXT
+        is_chord_like = kind in (KIND_CHORD, KIND_KEY)
+        is_builtin = not is_text and not is_chord_like
         self.kind.setEnabled(self._editable)
         # A built-in action's icon and shortcut come from the phone (BUILTINS)
         # — shown, not typed. Its NAME is the one thing anybody may change,
@@ -432,19 +504,30 @@ class CommandDetail(QWidget):
         # buttons Btn 4 / Btn 5 do whatever the user's mouse driver assigned,
         # so the face has to be allowed to say "Back" or "Undo".
         self.label.setEnabled(True)
-        for w in (self.chord, self.record, self.icon):
-            w.setEnabled(self._editable and not is_builtin)
+        # ONE of Shortcut / Text is ever shown — never both, never neither
+        # (see the class docstring: this exclusivity is the fix itself).
+        self._set_row_visible(self._shortcut_row, not is_text)
+        self._set_row_visible(self._text_row, is_text)
+        self.chord.setEnabled(self._editable and is_chord_like)
+        self.record.setEnabled(self._editable and is_chord_like)
+        self.text.setEnabled(self._editable and is_text)
+        self.enter_check.setEnabled(self._editable and is_text)
+        self.icon.setEnabled(self._editable and not is_builtin)
         if is_builtin:
-            label, icon = self.builtins.get(self.kind.currentData(),
-                                            (self.kind.currentData(), ""))
+            label, icon = self.builtins.get(kind, (kind, ""))
             self.label.setPlaceholderText(label)   # the phone's own name
             self.icon.setCurrentIndex(max(0, self.icon.findData(icon)))
             self.chord.clear()
         else:
-            # Back on a chord/key row the placeholder must stop advertising
-            # the built-in's name, or dump() would read a leftover as "this
-            # equals the default" and drop a real name.
+            # Back on a chord/key/text row the placeholder must stop
+            # advertising the built-in's name, or dump() would read a
+            # leftover as "this equals the default" and drop a real name.
             self.label.setPlaceholderText("Name on the button")
+
+    @staticmethod
+    def _set_row_visible(widgets, visible: bool) -> None:
+        for w in widgets:
+            w.setVisible(visible)
 
     def _record(self) -> None:
         rec = ChordRecorder(self.window())
@@ -468,10 +551,19 @@ class CommandDetail(QWidget):
                 out.pop("label", None)
             return out
         kind = self.kind.currentData()
-        if kind not in (KIND_CHORD, KIND_KEY):
+        if kind not in (KIND_CHORD, KIND_KEY, KIND_TEXT):
             out = {"action": kind}
             if name and name != self.label.placeholderText():
                 out["label"] = name
+            return out
+        if kind == KIND_TEXT:
+            text = self.text.text().strip()
+            if not text:
+                return None
+            out = {"label": name or text, "text": text,
+                   "enter": self.enter_check.isChecked()}
+            if self.icon.currentData():
+                out["icon"] = self.icon.currentData()
             return out
         shortcut = self.chord.text().strip()
         if not shortcut:

@@ -15,8 +15,11 @@ files. What it does:
   Save…) — and `active` names the chosen four by ID (owner 2026-08-05). The
   pool of a built-in or app set is OURS: the owner picks from it, he does not
   rewrite it (owner decision 2026-08-05).
-- Creates/deletes/renames CUSTOM sets, whose commands are fully editable (a
-  built-in action or a RECORDED chord/special key, with an optional icon).
+- Creates/deletes/renames CUSTOM sets, whose commands are fully editable — a
+  built-in action, a RECORDED chord/special key, or TYPED TEXT (the
+  `paste_text` mechanism the Claude set is built from — a string pasted into
+  the focused PC box, with an optional "press Enter afterwards"), each with
+  an optional icon.
 - **Renames the BUTTONS of any set, shipped ones included** (owner
   2026-08-05). What a button does stays ours; what it is called is his — the
   side buttons `Btn 4` / `Btn 5` carry whatever the user's mouse driver put on
@@ -136,13 +139,16 @@ svi imaju ikonu?"): a built-in action's name and icon live in the client's
 
 `_computed_minimum()` measures, it never guesses: width = the set list's
 widest real entry (`sizeHintForColumn`) + the detail form (caption + the
-longest command name / chord / "Built-in: …" entry + the Record button);
-height = the TALLER COLUMN — left is the set list's rows plus its button row
-plus the arrangement box, right is the pool rows plus the detail form plus the
-actions row — with the fixed furniture on top. It is a FLOOR: since 2026-08-07
-both columns state their own need (`_fit_set_list`, `CommandTable._fit_rows`),
-so `settle_minimum` has the truth to grow from. `ChordRecorder` measures its
-own two lines.
+longest command name / chord / TYPED TEXT / "Built-in: …" entry + the wider of
+the Record button and the "Press Enter afterwards" checkbox — build round R6,
+2026-08-07, once the Text row existed); height = the TALLER COLUMN — left is
+the set list's rows plus its button row plus the arrangement box, right is the
+pool rows plus the detail form's four VISIBLE rows (Shortcut and Text never
+show together, so the row count stays four) plus the actions row — with the
+fixed furniture on top. It is a FLOOR: since 2026-08-07 both columns state
+their own need (`_fit_set_list`, `CommandTable._fit_rows`), so
+`settle_minimum` has the truth to grow from. `ChordRecorder` measures its own
+two lines.
 
 ### THE REFLOW — what two independent graders bought (2026-08-07)
 
@@ -234,6 +240,21 @@ arrangement/order widgets (`SlotList`, `OrderList`, `WheelRing`,
 actions.json path/parse/merge FUNCTION lives in
 [Controls Data](controls_data.md) — this module (since build round R5,
 2026-08-07) owns only the WINDOW that assembles them.
+
+## The third command kind (build round R6, 2026-08-07)
+
+The pool table (`CommandTable.fill`) already read a typed command correctly
+("types · /usage"); the detail panel below it did not — `CommandDetail` had
+no branch for `{"text": …}` at all, so the SAME selected row showed "Shortcut
+(chord)" with an empty field and a live Record button. One window told two
+contradicting stories about one button — an independent grader's screenshot
+of the ControlsEditor found it directly, three centimetres under the fixed
+half of the same bug. Full detail: [Controls Widgets](controls_widgets.md).
+The fix touches only the detail form (a third `Does` option, a Text row that
+shows exactly when the Shortcut row does not); nothing about SAVING,
+MERGING or the wheel changed, so this window's minimum barely moved
+(723×956 unchanged in practice — the two rows are mutually exclusive, so the
+detail form still shows exactly four rows at a time).
 
 ## App sets charge the wheel here too (owner 2026-08-06)
 

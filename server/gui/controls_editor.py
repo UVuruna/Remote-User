@@ -7,10 +7,12 @@ it can do:
   reserves (VSCode's Markdown preview, Explorer's tab hops, Edit's Save…) —
   and `active` names the chosen four by ID (owner 2026-08-05);
 - create/delete/rename any number of CUSTOM sets, whose commands are fully
-  editable (a built-in action or a recorded chord, with an optional icon from
-  the shipped set). Built-in and app sets are read-only in their commands —
-  the owner picks from their pool, he does not rewrite them (owner decision
-  2026-08-05);
+  editable — a built-in action, a recorded chord/special key, or TYPED TEXT
+  (the `paste_text` mechanism the Claude set is built from: a string pasted
+  into the focused PC box, with an optional "press Enter afterwards" and an
+  icon from the shipped set). Built-in and app sets are read-only in their
+  commands — the owner picks from their pool, he does not rewrite them
+  (owner decision 2026-08-05);
 - choose which sets are shown in the phone's wheel by default
   (Mouse/Input/Settings are `required` and always shown; every other shipped
   or custom set toggles, at most WHEEL_MAX in the wheel);
@@ -402,18 +404,28 @@ class ControlsEditor(QDialog):
 
         Width = the widest real row this dialog can show: the set list's
         longest entry, plus the detail form (caption + the longest command
-        name / chord / "Built-in: …" entry + the Record button). Height = the
-        taller column: LEFT is the set list's rows plus its button row and the
-        arrangement box (caption + four slots + the ↑↓ row + the Default row);
-        RIGHT is the pool rows, the detail form's four rows and the actions
-        row. Both carry the fixed furniture — headers, group titles, margins.
+        name / chord / TYPED TEXT / "Built-in: …" entry + the Record button).
+        The "Press Enter afterwards" checkbox does NOT compete for this width
+        — it rides its own row spanning the field+button columns (build round
+        R6, 2026-08-07), specifically so it cannot starve the `kind` combo the
+        way it did when it shared the Record button's narrow column: the
+        runtime audit caught the combo clipped to 162 px against a 218 px
+        need the moment a TYPED command (Claude's Usage, the first button in
+        its pool) became the default selection. Height = the taller column:
+        LEFT is the set list's rows plus its button row and the arrangement
+        box (caption + four slots + the ↑↓ row + the Default row); RIGHT is
+        the pool rows, the detail form's VISIBLE rows in its FULLEST state
+        (Does, Text, Enter — its own row, Name, Icon = 5; the chord state is
+        one row SHORTER, Shortcut+Record sharing a row Text+Enter does not)
+        and the actions row. Both carry the fixed furniture — headers, group
+        titles, margins.
         """
         metrics = QFontMetrics(self.font())
 
         def widest(strings) -> int:
             return max((metrics.horizontalAdvance(s) for s in strings), default=0)
 
-        names, shortcuts, kinds = [""], [""], ["Shortcut (chord)"]
+        names, shortcuts, kinds = [""], [""], ["Shortcut (chord)", "Types (paste text)"]
         for _, _, s in self._entries():
             for b in s.get("buttons") or []:
                 action = b.get("action")
@@ -422,13 +434,20 @@ class ControlsEditor(QDialog):
                     names.append(shown)
                     kinds.append(f"Built-in: {shown}  ({action})")
                 names.append(str(b.get("label", "")))
-                shortcuts.append(str(b.get("chord") or b.get("key") or ""))
+                # A typed command's value lives in "text" (paste_text), never
+                # in "chord"/"key" — it rides the SAME field column as those,
+                # so it has to be measured the same way (build round R6).
+                shortcuts.append(str(b.get("chord") or b.get("key")
+                                     or b.get("text") or ""))
 
         # The set list measures itself (icons, suffixes and all) in
         # _reload_list — reuse that number instead of re-guessing it here.
         side = self.set_list.minimumWidth() or (widest(names) + 90)
         field = max(widest(shortcuts), widest(names), widest(kinds)) + 60
-        caption = widest(("Shortcut", "Name", "Icon", "Does")) + 16
+        caption = widest(("Shortcut", "Text", "Name", "Icon", "Does")) + 16
+        # Column 2 holds ONLY the Record button now — "Press Enter afterwards"
+        # moved to its own row (build round R6) precisely so it never has to
+        # be weighed here against the field column's own, much bigger, need.
         record = metrics.horizontalAdvance("Record") + 44
         checkbox = metrics.horizontalAdvance(self.enabled_check.text()) + 60
         width = max(side + caption + field + record, side + checkbox) + 72
@@ -441,7 +460,10 @@ class ControlsEditor(QDialog):
                                               # + the ↑↓ row + the Default row
                 + rows * 2)                   # the caption and the button row
         right = (rows * 6                     # six pool rows before the settle
-                 + rows * 4                   # the detail form's four rows
+                 + rows * 5                   # the detail form's FULLEST state
+                                              # (Text kind: Does, Text, Enter,
+                                              # Name, Icon — one row more than
+                                              # the chord state, build round R6)
                  + rows * 4)                  # header, group titles, actions
         return QSize(width, max(left, right) + 190)  # frames, margins, buttons
 

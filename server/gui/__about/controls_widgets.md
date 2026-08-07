@@ -23,7 +23,7 @@ the threshold — the arrangement/order widgets (`SlotList`, `SlotDelegate`,
 | `RowDelegate` | takes a selected row's painting away from the native style — see below |
 | `CheckDelegate` | the pool table's "On" column, drawn with `paint_check` |
 | `ChordRecorder` | a modal that RECORDS a key combination from the PC keyboard (chords are pressed, never typed) |
-| `CommandDetail` | the selected pool command — one field per full-width row; on a built-in row every field is read-only EXCEPT the name (owner 2026-08-05) |
+| `CommandDetail` | the selected pool command — one field per full-width row; on a built-in row every field is read-only EXCEPT the name (owner 2026-08-05); three KINDS, each with its own row (Shortcut, Text) — see below |
 | `CommandTable` | the set's whole POOL with a tick on the four that ride the D-pad |
 
 Defined here because they describe how a command is DRAWN: `icon_for()`
@@ -100,3 +100,27 @@ view, because an item is not a widget.
 a pale slate that reads correctly on the dark list and all but disappears on a
 white one. It is `icon_stroke()` now, returning `TOKENS["text2"]`, read at
 draw time for the same reason `theme.qss()` is a function.
+
+## The third kind, and why the two rows never coexist (build round R6, 2026-08-07)
+
+`CommandTable.fill` already told the truth about a typed command ("types ·
+/usage") since the previous round; `CommandDetail` did not — its `show_button`
+went action / key / else-chord, with no branch at all for `{"text": …}`, so
+selecting the SAME row landed on an empty "Shortcut (chord)" field and a live
+Record button. One window, two contradicting descriptions of one button — an
+independent grader's screenshot caught it directly under the fixed table.
+
+`KIND_TEXT = "__text"` is the third entry in the `Does` combo ("Types (paste
+text)" — the same word the table uses). `CommandDetail` now carries a SECOND
+value row, `_text_row` (Text field + "Press Enter afterwards" checkbox),
+built beside `_shortcut_row` (Shortcut field + Record) in the same grid, and
+`_kind_changed` shows exactly one of the two — never both, never neither —
+by `setVisible`. `dump()` grew the matching branch: a custom set's typed
+command dumps `{"label", "text", "enter", "icon"?}`; a built-in/app set's
+(read-only) still dumps the ORIGINAL dict with only the name possibly
+overridden, exactly like every other kind.
+
+`CommandTable.ROWS_SHOWN` — see above — is why the reported row (Claude's
+Usage) was always the FIRST row selected by the audit's fullest-pool case: it
+is the first button in the Claude pool, so the bug and the fix are both
+photographed automatically, with no extra staging.
