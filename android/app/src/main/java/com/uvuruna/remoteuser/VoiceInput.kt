@@ -14,7 +14,14 @@ import org.json.JSONObject
 /** Dictation subsystem — split from MainActivity 2026-08-05 (THE STRUCTURE
  *  LAW). The page cannot listen itself (WebView has no Speech API), so this
  *  class runs the SpeechRecognizer and talks back through `js` callbacks:
- *  `__voiceResult(text)` per utterance, `__voiceEnd(reason)` per round,
+ *  `__voiceHeard(text, isFinal)` per round — the PREFERRED callback since
+ *  2026-08-08 (owner design, REPEAT of task 75: round-boundary duplication
+ *  survived the 0.0.293 fix because the trim lived here, untestable — this
+ *  repo has no JVM test runner. The de-duplication rule now lives on the
+ *  page, `client/controls.js` `voiceDedup`, proven by a fail-closed gate;
+ *  see `deliver()` below) — `__voiceResult(text)` as the LEGACY fallback for
+ *  a page that predates `__voiceHeard` (CLAUDE.md constraint 12: neither
+ *  side may assume the other's version), `__voiceEnd(reason)` per round,
  *  `__voiceState(state)` for the Mic button's look, `__voiceInfo(text)` for
  *  SILENT diagnostics the page forwards to the PC's server log (owner round
  *  2, angrily: diagnostics are evidence for the developer, never a panel
@@ -58,22 +65,17 @@ class VoiceInput(private val activity: Activity, private val js: (String) -> Uni
      *  deleted. Cleared by a final result, which always wins over it. */
     private var partial = ""
 
-    /** The last text this utterance actually SENT to the PC, and the reason
-     *  it exists (owner 2026-08-07 — his own message to us arrived shredded,
-     *  one sentence repeated about forty times, each copy one word longer):
-     *
-     *      "Da li · Da li · Da li pravimo · Da li pravimo ·
-     *       Da li pravimo klaude · Da li pravimo klaude vs · …"
-     *
-     *  His server log dates it to the second — 11:30:05 → 11:30:12, forty
-     *  lines of `Voice error 5 (online)`, ERROR_CLIENT. The page restarts a
-     *  dead round every 250 ms, `onError` delivered the rescue copy EVERY
-     *  time, and Google's partials are CUMULATIVE, so each restart re-typed
-     *  the whole sentence so far. The rescue copy was built to make sure
-     *  nothing spoken is lost; without this field it made sure everything
-     *  spoken is typed over and over. A rescue may only ever add what has not
-     *  been said yet. Cleared when an utterance genuinely ends (a final
-     *  result) or when the mic goes off. */
+    /** FALLBACK-ONLY since 2026-08-08 (see the class doc). This is the OLD
+     *  trim from the 0.0.293 fix — it only catches a PREFIX continuation of
+     *  the SAME round's cumulative partial, never an overlap between two
+     *  INDEPENDENT rounds' transcripts, which is exactly the shape task 75
+     *  came back as (his morning message: "Da li mogu Da li mogu da ih" — a
+     *  1-4 word fragment repeated once, at a round boundary). It is kept only
+     *  for a page that predates `__voiceHeard` and never receives the real
+     *  fix; `deliver()` no longer relies on it for a page that does. Cleared
+     *  when an utterance genuinely ends (a final result) or when the mic goes
+     *  off — the same lifecycle `voiceLastOut` on the page now owns for
+     *  real. */
     private var lastOut = ""
 
     /** True while the beep-carrying streams are muted for a listening
@@ -246,33 +248,47 @@ class VoiceInput(private val activity: Activity, private val js: (String) -> Uni
             rec.setRecognitionListener(listener)
             recognizer = rec
         }
+        partial = ""
+        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(
+                RecognizerIntent.EXTRA_LANGUAGE_MODEL,
+                RecognizerIntent.LANGUAGE_MODEL_FREE_FORM
+            )
+            // ON since 2026-08-06, and not to type as he speaks: the
+            // partial is the RESCUE COPY of a round that may never reach
+            // its final result (see `partial`). Nothing is sent from it
+            // while the round is alive.
+            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+            // ONE language everywhere — the chosen one. (The on-device
+            // language-switch extras exist, but a wanted-but-missing
+            // language riding along silently heard NOTHING — the round-1
+            // gap; one explicit language has no silent failure mode.)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, chosen)
+        }
         // The previous session is STOPPED before a new one starts (owner
         // 2026-08-07). Without this, `startListening` on a recognizer that is
         // still running is refused with ERROR_CLIENT, the page restarts 250 ms
-        // later, and it is refused again — his log holds forty of those in
-        // seven seconds, each one typing the still-live old session's growing
-        // partial into his PC. Cancelling first is what makes the restart a
-        // restart instead of a collision.
+        // later, and it is refused again.
+        //
+        // UNPROVEN, investigated 2026-08-08 (task 75 REPEAT — his log shows
+        // 177 ERROR_CLIENTs across one dictation session, roughly every 3 s,
+        // continuously, with exactly this cancel-then-start pattern in
+        // place): `cancel()` and `startListening()` both post to THIS
+        // thread's message queue, so they run in order on OUR side — but the
+        // recognizer SERVICE they talk to lives in a separate process, and
+        // our ordering does not guarantee its unbind finished before the
+        // rebind request lands. Posting the start as a SEPARATE message
+        // instead of calling it synchronously right after cancel gives the
+        // service one full run of the message loop to settle the cancel
+        // first. This is the best evidence-shaped fix available from the
+        // code alone; it can only be confirmed or refuted against the next
+        // server.log with this build installed, not from this machine.
         r.cancel()
-        partial = ""
-        r.startListening(
-            Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                putExtra(
-                    RecognizerIntent.EXTRA_LANGUAGE_MODEL,
-                    RecognizerIntent.LANGUAGE_MODEL_FREE_FORM
-                )
-                // ON since 2026-08-06, and not to type as he speaks: the
-                // partial is the RESCUE COPY of a round that may never reach
-                // its final result (see `partial`). Nothing is sent from it
-                // while the round is alive.
-                putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
-                // ONE language everywhere — the chosen one. (The on-device
-                // language-switch extras exist, but a wanted-but-missing
-                // language riding along silently heard NOTHING — the round-1
-                // gap; one explicit language has no silent failure mode.)
-                putExtra(RecognizerIntent.EXTRA_LANGUAGE, chosen)
-            }
-        )
+        android.os.Handler(android.os.Looper.getMainLooper()).post {
+            // The round may have been superseded (locked, a newer listen()
+            // call) while this was queued — never fire a stale start.
+            if (!background && recognizer === r) r.startListening(intent)
+        }
     }
 
     fun cancel() {
@@ -396,36 +412,45 @@ class VoiceInput(private val activity: Activity, private val js: (String) -> Uni
             })
     }
 
-    /** Type what this round produced. The final result wins; if there is none,
-     *  the kept partial is used, because losing what he already said is the
-     *  one outcome this whole subsystem may not have.
+    /** Hand over what this round produced. The final result wins; if there is
+     *  none, the kept partial is used, because losing what he already said is
+     *  the one outcome this whole subsystem may not have.
      *
-     *  A RESCUE COPY MAY ONLY ADD (owner 2026-08-07 — see `lastOut` for the
-     *  message of his this shredded). The recognizer's partials are
-     *  cumulative, so a rescue is always the whole sentence so far, and a
-     *  round that dies four times a second used to type that whole sentence
-     *  four times a second. So a rescue is trimmed against what this
-     *  utterance has already sent, and if it adds nothing it sends nothing.
-     *  A FINAL result is not trimmed — it is the engine's own last word, it
-     *  ends the utterance, and it is allowed to correct what the partials
-     *  guessed. */
+     *  THE DE-DUPLICATION RULE LIVES ON THE PAGE since 2026-08-08 (owner
+     *  design, REPEAT of task 75 — see the class doc). `__voiceHeard` gets
+     *  the RAW text plus `isFinal` and does its own round-boundary overlap
+     *  trim (`client/controls.js` `voiceDedup`), proven by
+     *  `tests/test_voice_dedup.py`. `fallback` below is computed ONLY for a
+     *  page too old to define `__voiceHeard` — the OLD prefix-only trim from
+     *  the 0.0.293 fix, kept with its OLD known gap (misses a non-prefix
+     *  overlap between two rounds, does not trim a final) because it is a
+     *  compatibility path, not the fix. */
     private fun deliver(text: String?) {
         val isFinal = !text.isNullOrBlank()
-        var out = if (isFinal) text!! else partial
+        val raw = if (isFinal) text!! else partial
         partial = ""
-        if (out.isBlank()) return
+        if (raw.isBlank()) return
+
+        var fallback = raw
         if (isFinal) {
             lastOut = ""            // the utterance is over; the next one is new
         } else {
-            if (lastOut.isNotEmpty() && out.startsWith(lastOut)) {
-                out = out.substring(lastOut.length).trimStart()
-            } else if (lastOut.isNotEmpty() && lastOut.startsWith(out)) {
-                return              // nothing new was heard — say nothing
+            if (lastOut.isNotEmpty() && raw.startsWith(lastOut)) {
+                fallback = raw.substring(lastOut.length).trimStart()
+            } else if (lastOut.isNotEmpty() && lastOut.startsWith(raw)) {
+                fallback = ""        // nothing new was heard — say nothing
             }
-            if (out.isBlank()) return
-            lastOut = if (lastOut.isEmpty()) out else "$lastOut $out"
+            if (fallback.isNotBlank()) {
+                lastOut = if (lastOut.isEmpty()) fallback else "$lastOut $fallback"
+            }
         }
-        js("window.__voiceResult && __voiceResult(${JSONObject.quote(out)})")
+
+        val rawJs = JSONObject.quote(raw)
+        val fallbackJs = JSONObject.quote(fallback)
+        js(
+            "if (window.__voiceHeard) { window.__voiceHeard($rawJs, $isFinal); } " +
+                "else if (window.__voiceResult && $fallbackJs) { window.__voiceResult($fallbackJs); }"
+        )
     }
 
     private val listener = object : RecognitionListener {
@@ -448,6 +473,17 @@ class VoiceInput(private val activity: Activity, private val js: (String) -> Uni
                 error != SpeechRecognizer.ERROR_SPEECH_TIMEOUT
             ) {
                 info("Voice error $error (" + (if (onDevice) "on-device" else "online") + ")")
+            }
+            if (error == SpeechRecognizer.ERROR_CLIENT) {
+                // Investigated 2026-08-08 (task 75 REPEAT, Path C(b)):
+                // Android's own guidance for ERROR_CLIENT is that the
+                // instance may be left unusable. Reusing a possibly wedged
+                // recognizer is a second plausible source of his 177-in-one-
+                // session refusal storm. Destroying costs nothing — `listen()`
+                // lazily rebuilds — and can only help; unproven from this
+                // machine, confirmable only against his next server.log.
+                recognizer?.destroy()
+                recognizer = null
             }
             end(
                 if (error == SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS) "denied"

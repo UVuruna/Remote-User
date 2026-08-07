@@ -64,11 +64,30 @@ for the split's general load-order reasoning.
   pointerup/pointercancel — a tap clicks, a held finger holds the PC button
   (what the old Drag toggle did); cancel always releases so no PC button can
   stay stuck.
-- Mic switcher (`micStart/micStop/toggleMic`, `__voiceResult`, `__voiceEnd`)
-  — direct voice input via the shell's `Android.startVoice()` bridge
-  (SpeechRecognizer); recognized text goes out as `key_text`. Only one of
-  mic/keyboard is ever ON; `inputOff()` (Enter/Esc buttons, a tap on the
+- Mic switcher (`micStart/micStop/toggleMic`, `__voiceHeard`, `__voiceResult`,
+  `__voiceEnd`) — direct voice input via the shell's `Android.startVoice()`
+  bridge (SpeechRecognizer); recognized text goes out as `key_text`. Only one
+  of mic/keyboard is ever ON; `inputOff()` (Enter/Esc buttons, a tap on the
   stream) switches both OFF.
+- **`voiceDedup(raw, isFinal)` — round-boundary dictation dedup** (owner
+  design 2026-08-08, REPEAT of task 75/0.0.293): the shell now calls
+  `__voiceHeard(text, isFinal)` per listening ROUND (a `__voiceResult`
+  fallback stays for a page too old to define it — CLAUDE.md constraint 12).
+  0.0.293 trimmed a round's own CUMULATIVE partial on retry, but never
+  trimmed the overlap BETWEEN two independent rounds — a dying round's
+  rescue and the next round's fresh transcript both cover the tail of the
+  same live audio, and his server.log showed 177 `ERROR_CLIENT`s producing
+  exactly that shape (a short fragment repeated once). `voiceDedup` finds the
+  longest suffix of `voiceLastOut` (what already went out) that equals the
+  prefix of the new round's text — word-boundary, case- and
+  punctuation-insensitive — and sends only what is new; a FINAL is trimmed
+  the same way and then clears `voiceLastOut` (the utterance is over);
+  `micStop()` also clears it (the mic went off — a new sentence). ONE call
+  per ROUND (never per partial) is what keeps a phrase genuinely repeated in
+  one breath untouched — nothing inside a single call is ever trimmed, only
+  the boundary between two calls. Lives on the page rather than in
+  `VoiceInput.kt` so a fail-closed gate can prove it
+  (`tests/test_voice_dedup.py` — this repo has no JVM test runner).
 - `shotRegion()` — the monitor-normalized rect the phone is LOOKING at
   (zoom/layout aware) — sent with `screenshot {paste:true}` by the Shot
   button; the server crops, fills the clipboard and injects Ctrl+V itself.

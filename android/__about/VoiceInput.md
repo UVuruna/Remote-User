@@ -2,11 +2,14 @@
 
 Split from `MainActivity` on 2026-08-05 (THE STRUCTURE LAW). Runs the
 `SpeechRecognizer` for the page's Mic switcher and talks back through
-`evaluateJavascript` callbacks: `__voiceResult(text)` per utterance,
-`__voiceEnd(reason)` per round (`"denied"` / `"unavailable"` / `"nolang"` /
-`""`), `__voiceState(state)` for the Mic button's downloading look, and
-`__voiceInfo(text)` — SILENT diagnostics the page forwards to the PC's
-server log (owner round 2, angrily: never a panel flashed at the user).
+`evaluateJavascript` callbacks: `__voiceHeard(text, isFinal)` per round — the
+PREFERRED callback since 2026-08-08, with `__voiceResult(text)` as the
+LEGACY fallback for a page that predates it (see "Round-boundary dedup moved
+to the page" below) — `__voiceEnd(reason)` per round (`"denied"` /
+`"unavailable"` / `"nolang"` / `""`), `__voiceState(state)` for the Mic
+button's downloading look, and `__voiceInfo(text)` — SILENT diagnostics the
+page forwards to the PC's server log (owner round 2, angrily: never a panel
+flashed at the user).
 
 ## The language is a USER CHOICE (owner round 2, 2026-08-05)
 
@@ -75,3 +78,43 @@ This is the phone's half of the same failure the PC's
 [Focus Guard](../../server/__about/focus_guard.md) answers: there, a program
 that steals focus mid-dictation takes the window the words were meant for;
 here, the same interruption used to take the words themselves.
+
+## Round-boundary dedup moved to the page (task 75 REPEAT, 2026-08-08)
+
+0.0.293 (above) fixed a round re-typing its OWN growing cumulative partial on
+every retry. His server.log then showed **177** `Voice error 5 (online)`
+(`ERROR_CLIENT`) lines in one dictation session, and his own dictated message
+to us that morning showed a NEW, smaller shape — a 1-4 word fragment repeated
+ONCE, at short intervals ("Da li mogu Da li mogu da ih zatvaram"). That is a
+DIFFERENT bug: a round that dies types a rescue of what it heard; 250 ms
+later the next round starts on the SAME live microphone and re-transcribes
+the tail of the same audio as an INDEPENDENT transcript, not a continuation —
+the OLD `lastOut.startsWith()` prefix trim only ever caught a continuation of
+the SAME round, never an overlap between two DIFFERENT rounds.
+
+The rule now lives in **`client/controls.js` `voiceDedup`** (owner design),
+not here — this repo has no JVM test runner, so a Kotlin-only trim cannot be
+proven by a fail-closed gate, which is exactly how the 0.0.293 fix shipped
+provable for the case it was written for and unprovable for every other. See
+[Controls](../../client/__about/controls.md) for the algorithm and
+`tests/test_voice_dedup.py` for the proof. `deliver()` now hands
+`__voiceHeard` the RAW per-round text plus `isFinal` and does no trimming of
+its own on that path; the field `lastOut` and its old prefix trim survive
+ONLY as a fallback for a page too old to define `__voiceHeard`.
+
+**Investigated but NOT provable from this machine** — the 177 ERROR_CLIENTs
+themselves, i.e. why rounds keep dying in the first place:
+
+- `listen()` no longer calls `startListening()` synchronously right after
+  `cancel()` on the same recognizer instance. Both calls post to this
+  thread's message queue and run in order on OUR side, but the recognizer
+  SERVICE they talk to lives in a separate process — our ordering does not
+  guarantee its unbind finished before the rebind request lands. The start
+  is now posted as a separate `Handler` message instead, giving the service
+  one full run of the loop to settle the cancel first.
+- `onError` now destroys and nulls `recognizer` specifically on
+  `ERROR_CLIENT` — Android's own guidance is that the instance may be left
+  unusable by it, and `listen()` lazily rebuilds.
+
+Both are evidence-shaped, not proven; only his next server.log with this
+build installed can confirm or refute the ERROR_CLIENT rate actually fell.

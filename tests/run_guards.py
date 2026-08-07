@@ -66,6 +66,19 @@ def _app_set_wheel() -> None:
         check()
 
 
+def _voice_dedup() -> None:
+    """Dictation never retypes across a ROUND BOUNDARY (task 75 REPEAT,
+    2026-08-08 — 0.0.293 fixed a round re-typing its own growing partial on
+    retry; his log then showed 177 ERROR_CLIENTs and a smaller shred at the
+    boundary between two independent rounds). Runs the real page function in
+    node — skipped when node is absent, like the app-set wheel guard above."""
+    import test_voice_dedup
+    if not test_voice_dedup.shutil.which("node"):
+        return
+    for _, check in test_voice_dedup.CHECKS:
+        check()
+
+
 def _focus_gate() -> None:
     """WHERE typed input lands, and the machinery that gets it there (owner
     2026-08-06 + build round R1). Imported lazily like the others: they pull
@@ -111,6 +124,7 @@ FULL_ONLY_CHECKS = [
     ("control sets (never silently rewritten)", _control_sets),
     ("actions migration (a new version's fields reach HIS file)", _actions_migration),
     ("app sets (right window, and they pay for their seat)", _app_set_wheel),
+    ("voice dedup (dictation never retypes across a round boundary)", _voice_dedup),
     ("focus gate (typed input lands where he is looking)", _focus_gate),
 ]
 

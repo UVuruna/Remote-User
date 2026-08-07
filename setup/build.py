@@ -292,6 +292,17 @@ def input_gate() -> None:
     step("0j/6  LINK RECOVERY GATE — a lost route recovers without killing "
          "the app (tests/test_link_recovery.py)")
     run([sys.executable, str(PROJECT_DIR / "tests" / "test_link_recovery.py")])
+    # And that dictation never retypes across a ROUND BOUNDARY (task 75
+    # REPEAT, 2026-08-08). 0.0.293 fixed a round re-typing its OWN growing
+    # partial on retry; his log then showed 177 ERROR_CLIENTs in one session
+    # and a NEW, smaller shred at the boundary BETWEEN two independent
+    # rounds — a shape the old fix's own tests never asked about. The rule
+    # now lives on the page (this repo has no JVM test runner, so a
+    # Kotlin-only fix cannot be proven), and this gate drives the REAL
+    # client/controls.js function in node.
+    step("0k/6  VOICE DEDUP GATE — dictation never retypes across a round "
+         "boundary (tests/test_voice_dedup.py)")
+    run([sys.executable, str(PROJECT_DIR / "tests" / "test_voice_dedup.py")])
 
 
 def generate_icons() -> None:
