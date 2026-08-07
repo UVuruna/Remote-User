@@ -186,7 +186,16 @@
   font: 600 14px system-ui, sans-serif;
   text-align: left;
 }
-.lay-item-main img { width: 20px; height: 20px; flex: none; }
+/* An app row carries a real app icon as an <img>; the Desktop row carries a
+   DRAWN one (`svg("desktop")`). Both are the row's little badge and both must
+   be sized here — the rule used to name `img` alone, so the inline SVG had no
+   size at all, took the whole flex line, and squeezed the word "Desktop" into
+   a two-line "Deskt/op" beside a monitor the height of the card. Found by
+   OPENING the audit's own screenshot (2026-08-07): every geometric check was
+   green, because nothing was technically clipped — it was merely unreadable,
+   which is the very thing THE SPACE & LEGIBILITY LAW is about. */
+.lay-item-main img,
+.lay-item-main svg { width: 20px; height: 20px; flex: none; }
 /* The list is where a layout's FULL name must be readable — the top-bar chip
    may clamp its two rows precisely because one tap opens this list (SPACE &
    LEGIBILITY LAW, owner 2026-08-05). A long window title wraps here; the row

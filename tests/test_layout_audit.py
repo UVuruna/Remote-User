@@ -173,6 +173,12 @@ def main() -> int:
         for label, w, h in SIZES:
             ctx = browser.new_context(
                 viewport={"width": w, "height": h}, has_touch=True, is_mobile=True,
+                # 2x, so the written shots are a real phone's pixels (824x1830,
+                # not 412x915). The proof is GRADED BY EYE against DESIGN.md —
+                # THE VISUAL PROOF (rules/GUI.md) will not accept an image
+                # under 700 px on its short side, and it is right not to: a
+                # 412 px thumbnail cannot show whether text is crowded.
+                device_scale_factor=2,
                 user_agent=("Mozilla/5.0 (Linux; Android 15; Pixel 8) "
                             "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 "
                             "Mobile Safari/537.36 RemoteUserApp"),
@@ -331,6 +337,28 @@ def main() -> int:
             # dead AND the region had just been put back in the middle: his
             # exact words. A double tap is two SHORT taps; this drives the
             # real handlers and asserts the region actually moved.
+            # A ROW'S BADGE IS A BADGE (owner's law, found 2026-08-07 by
+            # OPENING this panel's own screenshot). `.lay-item-main img` sized
+            # the app icon; the Desktop row draws an inline <svg>, which the
+            # rule never named — so it had no size, took the whole flex line,
+            # and squeezed "Desktop" into "Deskt/op" beside a monitor the
+            # height of the card. Every geometric check stayed green: nothing
+            # was clipped, it was merely unreadable. So the icon is measured.
+            page.evaluate(
+                "layouts = [{name:'Audit', process:'x', orient:'portrait',"
+                " icon:null, ratio:null, pos:0.5}]; openLayoutPicker()")
+            page.wait_for_selector("#layout-panel .lay-card", state="visible", timeout=4000)
+            results[f"a layout row's icon stays a badge @ {label}"] = page.evaluate(
+                """() => [...document.querySelectorAll('.lay-item-main img, .lay-item-main svg')]
+                     .every((el) => {
+                       const r = el.getBoundingClientRect();
+                       return r.width <= 40 && r.height <= 40;
+                     })""")
+            page.evaluate("closeLayoutPanel()")
+            page.evaluate(
+                "layouts = [{name:'Audit', process:'x', orient:'portrait',"
+                " icon:null, ratio:[600,1000], pos:0.5}]; openAspectPanel(0)")
+            page.wait_for_selector(".asp-move", state="visible", timeout=4000)
             results[f"a press after a tap is not a re-centre @ {label}"] = page.evaluate(
                 """() => {
                   const h = document.querySelector('.asp-move');

@@ -49,6 +49,7 @@ from types import SimpleNamespace
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "server"))
 
 from PySide6.QtCore import QSize, Qt  # noqa: E402
+from PySide6.QtGui import QPixmap  # noqa: E402
 from PySide6.QtWidgets import (  # noqa: E402
     QAbstractScrollArea, QApplication, QCheckBox, QHeaderView, QLabel, QLayout,
     QLineEdit, QListWidget, QPushButton, QSpacerItem, QTableWidget, QWidget,
@@ -481,7 +482,17 @@ def audit_window(app: QApplication, name: str, factory) -> list[str]:
             # to be a designed surface (the chord recorder is 219x66 of "press
             # a key now") gets no shot rather than a strip nobody can grade.
             SHOT_DIR.mkdir(parents=True, exist_ok=True)
-            window.grab().save(str(SHOT_DIR / shot_name(name)))
+            # Rendered at 2x device pixels. The grade is given BY EYE against
+            # DESIGN.md, and THE VISUAL PROOF (rules/GUI.md) refuses an image
+            # under 700 px on its short side — rightly: a 629 px thumbnail of
+            # a full app window cannot show whether a label is crowded or a
+            # tick is the wrong grey. This is real resolution, not an upscale:
+            # QWidget.render draws the widget again into the larger pixmap.
+            shot = QPixmap(window.size() * 2)
+            shot.setDevicePixelRatio(2)
+            shot.fill(Qt.transparent)
+            window.render(shot)
+            shot.save(str(SHOT_DIR / shot_name(name)))
 
     window.close()
     return problems
