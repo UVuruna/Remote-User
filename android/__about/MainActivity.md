@@ -93,10 +93,50 @@ mapping itself is not here and not in the APK at all — it is the page's
 
 ### netCallback (`ConnectivityManager.NetworkCallback`, anonymous, field)
 Registered via `registerDefaultNetworkCallback` in `onCreate`, unregistered
-in `onDestroy`. `onAvailable` kicks a silent `resolveAndLoad` when the error
-card is showing; `onCapabilitiesChanged` tracks whether the default network
+in `onDestroy`. `onAvailable` kicks a silent `resolveAndLoad` — **always**,
+since 2026-08-07; `onCapabilitiesChanged` tracks whether the default network
 carries a Wi-Fi transport (`onWifi`) and re-arms the foreign-Wi-Fi toast the
 next time Wi-Fi drops.
+
+### Losing the route mid-session (owner report 2026-08-07)
+
+*"kada nismo na wi-fi mreži … dešava nam se prekid veze, i ovo 'Try again'
+dugme retko kad pomogne … nekad čak i da zatvorimo celu aplikaciju."*
+
+`onAvailable` used to re-resolve only `if (errorView.visibility == VISIBLE)`,
+and that condition is the bug. The error card is a **cold-start** state: it
+means no address answered before a page ever loaded. The state he is actually
+in is the opposite one — a page that loaded perfectly on the home Wi-Fi and is
+now retrying a `192.168.*` host from a mobile network. There, nothing here ran;
+and nothing in the page could stand in for it either, because the page's socket
+can only ever reach `location.host`, the address the **document** was loaded
+from. The only code path in the whole app that re-probes both addresses was a
+fresh process. So he killed the app, and it worked, every single time — which is
+precisely what made "Try again" look broken.
+
+Two things changed, and a third had to change with them:
+
+- `onAvailable` re-resolves whatever is on screen;
+- `pageLostTheServer()` (reached from `Bridge.linkLost`) lets the PAGE ask for
+  the same thing, after a run of connections that were never served — the page
+  notices a dead route long before the OS reports a network change, and often
+  no network change ever comes (a Tailscale relay moving, the PC's tunnel
+  flapping). Throttled by `LINK_LOST_THROTTLE_MS` = 5 s, deliberately shorter
+  than the page's own escalation so a real network change is never swallowed;
+- `sessionHealthy` now compares **origins**, not whole URL strings. `web.url`
+  is what the document reports — the server's path, a fragment the page added,
+  a token re-issued since pairing — while the candidates are the addresses as
+  pairing stored them. With the callback firing on live pages, a text mismatch
+  there would reload a working session on every blip. `origin()` reduces both
+  to `scheme://host:port`, which is the only part that says *which address we
+  are on*.
+
+Resolving on a live page is safe by construction: `sessionHealthy` keeps a
+document whose own address still answers, because the page's own JS reconnects
+in milliseconds while a `loadUrl` tears the whole session down (the 2026-07-29
+unlock race).
+
+Gated by `tests/test_link_recovery.py`.
 
 ### The JS bridge — MOVED OUT on 2026-08-07
 

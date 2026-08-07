@@ -6,6 +6,43 @@
 
 // --- Connection -----------------------------------------------------------
 
+// --- Proof of life --------------------------------------------------------
+// How many connections in a row ended without ever being SERVED. Reset by the
+// first `config` — the one message that proves the server on the other end is
+// really serving US (see LINK_LOST_TRIES in state.js).
+let deadTries = 0;
+
+/** One connection is over and it was never served. Three of these in a row
+ *  mean the address itself is wrong for where this phone now is — which the
+ *  page cannot fix, because the page owns only the address it was loaded from
+ *  (`location.host`). The shell owns both stored addresses, so the shell is
+ *  asked. That is the whole difference between recovering and needing to be
+ *  killed (owner report 2026-08-07).
+ *
+ *  Asking costs nothing when the address is fine: the shell re-probes, finds
+ *  the current one still alive, and leaves this document exactly where it is
+ *  (MainActivity.resolveAndLoad's `sessionHealthy`). */
+function noteDeadConnection() {
+  deadTries += 1;
+  if (deadTries < LINK_LOST_TRIES) return;
+  deadTries = 0;
+  if (IN_APP && window.Android.linkLost) {
+    try { window.Android.linkLost(); } catch (e) { /* older shell */ }
+  }
+}
+
+/** Abandon a connection that is going nowhere and try again at once.
+ *  `why` reaches the status pill, because a phone that quietly gives up while
+ *  showing "Connected" is half the complaint. */
+function abandon(sock, why) {
+  if (sock !== ws) return;          // already replaced — nothing to abandon
+  ws = null;                        // so ensureConnected does not skip it
+  try { sock.close(); } catch (e) { /* already gone */ }
+  setStatus("connecting", why);
+  noteDeadConnection();
+  ensureConnected();
+}
+
 function connect() {
   setStatus("connecting", `Connecting to ${location.host}…`);
   // Every handler guards on `sock === ws`: instant reconnect can replace the
@@ -14,9 +51,24 @@ function connect() {
   const sock = new WebSocket(`ws://${location.host}/ws`);
   ws = sock;
   sock.binaryType = "arraybuffer";
+  // Two deadlines, because a socket can die in two silent ways (state.js).
+  // Cleared the moment each one is answered.
+  let openTimer = setTimeout(
+    () => abandon(sock, "No route to the PC — retrying…"), CONNECT_TIMEOUT_MS);
+  let servedTimer = null;
+  // Was this connection ever answered? A link that flaps — opening and
+  // dropping every couple of seconds on a weak mobile signal — never reaches
+  // either deadline, so the count has to be kept here as well or the shell is
+  // never asked and the page retries the dead address all evening.
+  let served = false;
 
   sock.onopen = () => {
+    clearTimeout(openTimer);
     if (sock !== ws) return;
+    // Opened, but not yet SERVED. Everything below is a message into a socket
+    // whose other end we have not heard from once.
+    servedTimer = setTimeout(
+      () => abandon(sock, "The PC is not answering — retrying…"), SERVED_TIMEOUT_MS);
     // `screen` feeds layout placement: the server sizes layout windows to
     // this device's aspect (tablet vs phone — owner 2026-08-02).
     sock.send(JSON.stringify({
@@ -49,6 +101,19 @@ function connect() {
 
   sock.onmessage = (e) => {
     if (sock !== ws) return;
+    // PROOF OF LIFE, and it is the FIRST message of any kind — not `config`
+    // specifically. Anything at all arriving here proves this address reaches
+    // a PC that is serving US, which is the only question `deadTries` asks.
+    // Waiting for `config` would have been wrong twice over: in H.264 mode it
+    // comes only after ffmpeg has started (measured 1.3 s on his own machine,
+    // and a cold DERP relay is slower), so a working session could be
+    // abandoned for being slow — while the failure this defends against sends
+    // nothing whatsoever, `actions` included.
+    if (!served) {
+      served = true;
+      clearTimeout(servedTimer);
+      deadTries = 0;
+    }
     if (typeof e.data === "string") {
       const msg = JSON.parse(e.data);
       if (msg.type === "config") {
@@ -166,6 +231,8 @@ function connect() {
   };
 
   sock.onclose = (e) => {
+    clearTimeout(openTimer);
+    clearTimeout(servedTimer);
     if (sock !== ws) return; // an abandoned socket must not touch the live one
     teardownMse(); // free the decoder; reconnect starts a fresh stream
     if (e.code === 4401) {
@@ -204,6 +271,12 @@ function connect() {
       "disconnected",
       document.hidden ? "Paused — screen away" : `Disconnected (code ${e.code}) — retrying…`
     );
+    // A connection that never carried a `config` was never a connection. On a
+    // flapping link these arrive in a run, and the run is the signal that this
+    // address no longer reaches the PC. 4401/4409 returned above: those are
+    // answers from a server we CAN hear, and they must never be read as a lost
+    // route — the shell would re-probe an address that is working perfectly.
+    if (!served && !document.hidden) noteDeadConnection();
   };
 }
 

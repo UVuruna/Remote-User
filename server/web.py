@@ -301,10 +301,10 @@ def create_app(stream, hub: FrameHub | None, injector: InputInjector, token: str
         prev = active_client["ws"]
         active_client["ws"] = ws
         if prev is not None:
-            try:
-                await prev.close(code=4409)  # taken over by this device
-            except RuntimeError:
-                pass  # already closing
+            # Bounded, and never inline-blocking: the previous socket is very
+            # often THIS SAME PHONE on a route that has died, so its 4409 may
+            # have nowhere to go (presence.hand_over).
+            await presence.hand_over(prev)
         # A hold armed by an EARLIER connection must not fire into this one:
         # its only test was "no client connected", which is equally true in
         # every ordinary reconnect gap, so a stale one would minimize the

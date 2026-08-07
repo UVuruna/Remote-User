@@ -55,6 +55,52 @@ every other script must already be loaded by this point (and is, since
 - `ensureConnected()` — reconnects unless the page is hidden or the token was
   rejected; called on `visibilitychange`(→visible), `pageshow`, and a
   `RECONNECT_MS` watchdog.
+- `abandon(sock, why)` / `noteDeadConnection()` — the proof-of-life machinery
+  below.
+
+## Proof of life: losing the route (owner report 2026-08-07)
+
+*"kada nismo na wi-fi mreži … dešava nam se prekid veze, i ovo 'Try again'
+dugme retko kad pomogne, već moramo više puta, nekad čak i da zatvorimo celu
+aplikaciju."*
+
+A WebSocket only ever reports that it CLOSED. It never reports that it is
+alive, and on a phone that changes networks those are two very different
+silences — both of which used to be dead ends with no exit:
+
+| Silence | What `ensureConnected` did |
+|---------|----------------------------|
+| CONNECTING forever (no route) | skipped it — a socket that is CONNECTING counts as "already trying". Android's own TCP timeout is up to **two minutes**, so a page that looked like it retried every 2 s retried nothing at all. |
+| OPEN but never served | skipped it too. The pill said "Connected" over a frozen frame for as long as the server took to reach us — and if the server was stuck handing the session over to this phone's own corpse (see `server/__about/presence.md`), that was until the app died. |
+
+So `connect()` now arms two deadlines — `CONNECT_TIMEOUT_MS` and
+`SERVED_TIMEOUT_MS` (`state.js`) — and `abandon()` closes the socket, clears
+`ws` so `ensureConnected` will act, **says what is wrong on the pill**, and
+retries at once.
+
+The proof of life is the server's **first message of any kind** — not `config`
+specifically. Anything arriving proves this address reaches a PC that is
+serving us, which is the only question being asked; waiting for `config` would
+be wrong twice, since in H.264 mode it comes only after ffmpeg has started
+(measured 1.3 s on the owner's machine, slower on a cold DERP relay) while the
+failure being defended against sends nothing at all, `actions` included. It
+clears the served deadline and forgets every failure before it.
+
+A connection that ends without one — including a flapping link that
+opens and drops in under a second, never reaching either deadline — counts
+against `LINK_LOST_TRIES`, and a full run calls `window.Android.linkLost()`.
+
+That call is the point of the whole mechanism. **The page owns one address**:
+`location.host`, the one the document was loaded from. It can never move
+itself, which is why a restart was the only cure. The shell owns both stored
+addresses, so the shell is asked, and the shell's resolver decides — a current
+address that still answers leaves this document exactly where it is.
+
+Never counted as a lost route: 4401, 4409, and any close while
+`document.hidden`. The first two are answers from a server we can hear
+perfectly; the third is us closing the socket on purpose.
+
+Gated by `tests/test_link_recovery.py`, which runs this file for real.
 
 ## Design Decisions
 

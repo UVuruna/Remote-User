@@ -19,6 +19,29 @@ const SCROLL_FLING_DECAY = 0.004;
 const VIEWPORT_MARGIN = 0.15;
 const VIEWPORT_THROTTLE_MS = 150;
 const RECONNECT_MS = 2000;
+// --- Losing the route (owner report 2026-08-07) ----------------------------
+// *"kada nismo na wi-fi mreži ... dešava nam se prekid veze, i ovo 'Try again'
+// dugme retko kad pomogne ... nekad čak i da zatvorimo celu aplikaciju."*
+//
+// A WebSocket only ever tells us it CLOSED. It never tells us it is alive, and
+// on a phone that changes networks those are two very different silences:
+//
+//   - CONNECTING forever. `new WebSocket()` to an address with no route sits
+//     in CONNECTING until Android's own TCP timeout — up to two minutes — and
+//     `ensureConnected` skips a socket that is CONNECTING. So the page that
+//     looks like it is "retrying every 2 s" is in fact retrying nothing.
+//   - OPEN but never served. The handshake completes and then nothing arrives:
+//     no `config`, no stream, no cursor. `ensureConnected` skips an OPEN
+//     socket too, so this one never retries either — the pill says "Connected"
+//     over a frozen frame for as long as it lasts.
+//
+// Both are dead ends with no exit, which is exactly why killing the app was
+// the only cure: a fresh process re-probes both addresses from scratch. So the
+// page now watches its own connection and, when it has failed this way often
+// enough, says so to the shell — which owns the addresses and can move us.
+const CONNECT_TIMEOUT_MS = 6000;   // CONNECTING longer than this is no route
+const SERVED_TIMEOUT_MS = 8000;    // OPEN but no `config` is a server we cannot hear
+const LINK_LOST_TRIES = 3;         // failures in a row before the shell re-probes
 // Presence (owner 2026-08-05): the server holds layout windows always-on-top
 // while we are watching, so it must learn the instant we stop. A locked phone
 // often cannot even close the socket (its Wi-Fi sleeps), so PRESENCE IS THE

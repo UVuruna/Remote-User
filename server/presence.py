@@ -56,6 +56,12 @@ WATCHDOG_POLL_S = 2.0
 # are injecting nothing. This grace covers the last event we ourselves sent
 # just before the phone went quiet.
 DESK_INPUT_GRACE_MS = 1500
+# How long a NEW connection waits for the PREVIOUS device's socket to take its
+# 4409 before being served regardless (owner report 2026-08-07 — see
+# `hand_over`). One second is generous for a peer that is really there and
+# irrelevant for one that is not, and "one that is not" is the entire reason
+# this number exists.
+HANDOVER_TIMEOUT_S = 1.0
 
 
 # ═══════════════════════════ THE DESK ═══════════════════════════
@@ -72,6 +78,57 @@ def owner_at_the_desk(baseline: int) -> bool:
     2026-08-05)."""
     tick = last_input_tick()
     return bool(tick) and tick > baseline
+
+
+# ═══════════════════════════ HANDING THE SESSION OVER ═══════════════════════════
+# Every task started here is held so the event loop is not its only reference:
+# a bare create_task may be collected mid-await, which would silently skip the
+# very close it exists for (same reason as web.py's excursion `holds`).
+_handovers: set = set()
+
+
+async def hand_over(prev) -> None:
+    """Close the PREVIOUS device's socket with 4409 — without letting it hold
+    up the device that is on the line NOW.
+
+    One device at a time (owner 2026-08-02) means every new connection first
+    evicts the old one, and this used to be a plain `await prev.close(4409)`
+    ahead of everything the new client is sent: `actions`, the held notices,
+    `layout_state`, the resumed layout, `config`, the stream, and every task
+    that watches the connection — including the presence watchdog.
+
+    That order is safe only while "the previous device" means ANOTHER device.
+    In practice it is nearly always THE SAME PHONE on a route that has just
+    died: home Wi-Fi dropped, a mobile-data handover, a Tailscale relay
+    changing. Its socket is then a black hole — no RST, no FIN, an OS send
+    buffer with a paused H.264 stream in it — and a close on such a socket does
+    not fail, it WAITS. The phone meanwhile has already reconnected on its new
+    route: the page's `onopen` fired, its status pill says "Connected", and
+    `ensureConnected` will not retry a socket that is OPEN. So a page that is
+    perfectly healthy sits in front of a server that has sent it nothing, for
+    as long as the corpse takes to answer — which is the owner's report of
+    2026-08-07: *"'Try again' retko kad pomogne... nekad čak i da zatvorimo
+    celu aplikaciju"*. Killing the app was the only move because killing the
+    app is what finally made the old socket fail.
+
+    So: bounded wait, and the close runs on regardless afterwards. Nothing the
+    dead device does can cost the live one its session."""
+    async def _close() -> None:
+        try:
+            await prev.close(code=4409)  # taken over by this device
+        except Exception:
+            pass  # already closing, already gone, or never was — all fine
+
+    task = asyncio.ensure_future(_close())
+    _handovers.add(task)
+    task.add_done_callback(_handovers.discard)
+    try:
+        await asyncio.wait_for(asyncio.shield(task), HANDOVER_TIMEOUT_S)
+    except asyncio.TimeoutError:
+        # It keeps trying in the background; this connection stops waiting.
+        # `shield` is what makes that true — wait_for cancels the shield, never
+        # the close underneath it.
+        pass
 
 
 # ═══════════════════════════ LEAVING ═══════════════════════════
@@ -128,7 +185,18 @@ async def watchdog(ws, layouts, conn: dict, active_client: dict | None = None) -
     own connection's teardown, but that teardown cannot run until the receive
     loop unblocks — so after a 4409 takeover the OLD watchdog can still be
     polling with the NEW device already working, and it would minimize a live
-    layout out from under it (audit 2026-08-05)."""
+    layout out from under it (audit 2026-08-05).
+
+    And when it DOES end a session it must also vacate the one-device slot
+    (owner report 2026-08-07: "moramo... da zatvorimo celu aplikaciju"). That
+    teardown is the only other place the slot is released, and it cannot run
+    until the receive loop unblocks — which, on a link that simply went silent
+    (mobile data handover, Wi-Fi dropped), waits out the OS TCP timeout, minutes
+    away. Until then the returning phone is not a reconnect at all: it is a
+    SECOND DEVICE arriving against its own corpse, and the first thing its
+    connection does is `await prev.close(4409)` on a socket with nowhere to
+    send. A session this watchdog has declared dead has no claim left on the
+    slot; saying so here is what makes the next connection an ordinary one."""
     baseline = desk_baseline()
     while True:
         await asyncio.sleep(WATCHDOG_POLL_S)
@@ -150,6 +218,11 @@ async def watchdog(ws, layouts, conn: dict, active_client: dict | None = None) -
                 baseline = desk_baseline()
             continue
         await leave_session(layouts, conn)
+        # Vacate the slot BEFORE the close: `ws.close()` on a socket whose peer
+        # is unreachable can sit in the closing handshake, and the phone may
+        # already be knocking on a new route while it does.
+        if active_client is not None and active_client.get("ws") is ws:
+            active_client["ws"] = None
         try:
             await ws.close(code=4408)  # gone quiet — the phone reconnects fresh
         except RuntimeError:
