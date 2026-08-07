@@ -27,9 +27,31 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "server"))
 SIZES = [("portrait 412x915", 412, 915), ("landscape 915x412", 915, 412)]
 
 
+def _grid_audit() -> bool:
+    """Every grid of the owner's sheet tiles its region EXACTLY: no gap, no
+    overlap, no sliver. Pure numbers, so it is checked here rather than by
+    looking at a screenshot of two windows."""
+    from grids import GRID_CELLS, _cells
+    region = (0, 0, 1200, 800)
+    for grid, count in GRID_CELLS.items():
+        for orient in ("landscape", "portrait"):
+            cells = _cells(region, grid, orient)
+            if len(cells) != count:
+                return False
+            area = sum(w * h for _, _, w, h in cells)
+            if area != region[2] * region[3]:
+                return False          # a gap or an overlap
+            for x, y, w, h in cells:
+                if w < 100 or h < 100:
+                    return False      # a sliver nobody could use
+                if x < 0 or y < 0 or x + w > region[2] or y + h > region[3]:
+                    return False      # outside the region
+    return True
+
+
 def _fit_rect_audit() -> bool:
     """Pure-math check: the region never leaves its box, at any pos/aspect."""
-    from window_manager import _fit_rect
+    from grids import _fit_rect   # the geometry moved out of window_manager (2026-08-07)
     box = (100, 50, 1000, 600)
     for aspect in (0.4, 1.0, 16 / 9, 3.2):
         for pos in (0.0, 0.25, 0.5, 0.75, 1.0):
@@ -167,7 +189,8 @@ def main() -> int:
     from playwright.sync_api import sync_playwright
 
     results = {"region math: _fit_rect stays inside its box for every pos":
-               _fit_rect_audit()}
+               _fit_rect_audit(),
+               "grid math: every shape tiles its region exactly": _grid_audit()}
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         for label, w, h in SIZES:

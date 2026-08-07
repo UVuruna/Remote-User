@@ -24,6 +24,9 @@ import time
 
 import agents
 from config import SETTINGS
+from grids import (  # the layout GEOMETRY lives there (THE STRUCTURE LAW)
+    GRID_CELLS, GRID_TEMPLATES, _cells, _normalize, layout_region, normalize_grid,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -54,11 +57,6 @@ VK_MENU = 0x12
 KEYEVENTF_KEYUP = 0x0002
 PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
 
-GRID_TEMPLATES = {
-    "2x1": (2, 1),  # two columns
-    "1x2": (1, 2),  # two rows
-    "2x2": (2, 2),
-}
 
 # Window classes that are shell chrome, never layout material.
 _SHELL_CLASSES = {"Progman", "WorkerW", "Shell_TrayWnd", "Shell_SecondaryTrayWnd"}
@@ -301,42 +299,6 @@ def _work_area(mon_rect: tuple[int, int, int, int]) -> tuple[int, int, int, int]
     return (w.left, w.top, w.right - w.left, w.bottom - w.top)
 
 
-def _fit_rect(box, aspect: float, pos: float = 0.5) -> tuple[int, int, int, int]:
-    """Largest rect of the given aspect (w/h) inside `box`, placed at
-    fraction `pos` of the slack along the free axis (0 = top/left edge,
-    0.5 = centered, 1 = bottom/right edge — owner 2026-08-05: a shrunken
-    region no longer has to sit in the middle). Only one axis ever has
-    slack, so a single fraction covers both orientations."""
-    bl, bt, bw, bh = box
-    w = min(bw, int(bh * aspect))
-    h = int(w / aspect)
-    if h > bh:
-        h = bh
-        w = int(h * aspect)
-    return (bl + int((bw - w) * pos), bt + int((bh - h) * pos), w, h)
-
-
-def _region_rect(mon_rect, aspect: float) -> tuple[int, int, int, int]:
-    """Largest rect of the given aspect (w/h) centered in the work area — the
-    area the phone will frame; solo windows fill it, grids subdivide it."""
-    return _fit_rect(_work_area(mon_rect), aspect)
-
-
-def layout_region(mon_rect, aspect: float,
-                  ratio: tuple[int, int] | None = None,
-                  pos: float = 0.5) -> tuple[int, int, int, int]:
-    """The rect the phone frames. The DEVICE shape (`aspect`) gives the outer
-    box; a per-layout ratio override may only make the region SMALLER inside
-    it (owner decision 2026-08-03: portrait keeps the phone's width and the
-    region may only get shorter, landscape keeps its height and the region may
-    only get narrower — the unused strip stays black on the phone). Anything
-    that would grow past the phone's own shape is clamped by the same fit.
-    `pos` places the shrunken region along the free axis (owner 2026-08-05 —
-    the Move handle in the phone's resize panel; 0.5 = centered)."""
-    box = _region_rect(mon_rect, aspect)
-    if ratio and ratio[0] > 0 and ratio[1] > 0:
-        return _fit_rect(box, ratio[0] / ratio[1], pos)
-    return box
 
 
 # --- Making the move INVISIBLE (owner rule, hardened 2026-08-03) ------------
@@ -634,25 +596,6 @@ def repair_stranded() -> None:
         pass
 
 
-def _cells(region, template: str) -> list[tuple[int, int, int, int]]:
-    cols, rows = GRID_TEMPLATES[template]
-    x, y, w, h = region
-    cw, ch = w // cols, h // rows
-    return [(x + c * cw, y + r * ch, cw, ch)
-            for r in range(rows) for c in range(cols)]
-
-
-def _normalize(rect, mon_rect) -> dict:
-    ml, mt, mw, mh = mon_rect
-    x, y, w, h = rect
-    return {
-        "x": max(0.0, min(1.0, (x - ml) / mw)),
-        "y": max(0.0, min(1.0, (y - mt) / mh)),
-        "w": max(0.0, min(1.0, w / mw)),
-        "h": max(0.0, min(1.0, h / mh)),
-    }
-
-
 class Layout:
     """One phone screen: member windows + the orientation/aspect it was built
     for. Members are ordered — grid cell order for grids, [window] for solo."""
@@ -683,7 +626,8 @@ class Layout:
         # socket, and the target must outlive it. See focus_guard.
         self.last_member: int = members[0] if members else 0
         self.template = template  # None = solo
-        self.orient = orient      # "portrait" | "wide"
+        self.orient = orient      # "portrait" | "landscape" (owner 2026-08-07:
+                                  # never "wide" again — one name per thing)
         self.aspect = aspect      # w/h the layout was last arranged for
         self.icon = icon          # target app's icon (PNG data URI) for the bar
         # Owner-chosen W:H for THIS layout (None = the phone's own shape) and
@@ -753,15 +697,16 @@ class LayoutRegistry:
         aspect = device_ratio if orient == "portrait" else 1.0 / device_ratio
         members = [target] + [h for h in fill if is_alive(h) and h != target]
         placed = True
-        if mode == "grid" and template in GRID_TEMPLATES:
-            cells = _cells(layout_region(mon_rect, aspect), template)
+        template = normalize_grid(template) if mode == "grid" else None
+        if template:
+            cells = _cells(layout_region(_work_area(mon_rect), aspect), template, orient)
             members = members[:len(cells)]
             for hwnd, cell in zip(members, cells):
                 placed = place_window(hwnd, cell) and placed
         else:
             template = None
             members = members[:1]
-            placed = place_window(target, layout_region(mon_rect, aspect))
+            placed = place_window(target, layout_region(_work_area(mon_rect), aspect))
         # The window's OWN title is kept beside the (possibly owner-chosen)
         # name: it is what names the PROJECT an agent tool may be live in, and
         # a rename must never change which shortcuts appear.
@@ -802,9 +747,9 @@ class LayoutRegistry:
             lay.aspect = aspect
             lay.arranged_ratio = lay.ratio
             lay.arranged_pos = lay.pos
-            region = layout_region(mon_rect, aspect, lay.ratio, lay.pos)
+            region = layout_region(_work_area(mon_rect), aspect, lay.ratio, lay.pos)
             if lay.template:
-                for hwnd, cell in zip(lay.members, _cells(region, lay.template)):
+                for hwnd, cell in zip(lay.members, _cells(region, lay.template, lay.orient)):
                     placed = place_window(hwnd, cell) and placed
             else:
                 placed = place_window(lay.members[0], region)
@@ -820,8 +765,9 @@ class LayoutRegistry:
             raise_window(hwnd)
         self.last_focus = (index, lay.name)  # where the next session resumes
         if lay.template:
-            cells = _cells(layout_region(mon_rect, lay.aspect, lay.ratio, lay.pos),
-                           lay.template)
+            cells = _cells(layout_region(_work_area(mon_rect), lay.aspect,
+                                         lay.ratio, lay.pos),
+                           lay.template, lay.orient)
             region = cells[0]
             x2 = max(c[0] + c[2] for c in cells[:len(lay.members)])
             y2 = max(c[1] + c[3] for c in cells[:len(lay.members)])
@@ -891,6 +837,75 @@ class LayoutRegistry:
         self.layouts[index].pos = max(0.0, min(1.0, pos))
         return True
 
+    def set_grid(self, index: int, grid: str, orient: str | None = None) -> bool:
+        """This layout's grid ARRANGEMENT and/or orientation (owner 2026-08-07).
+
+        His rule, exactly: a two- or four-window grid may change nothing but
+        portrait/landscape, because there is only one sane way to cut a region
+        into two or four. A THREE has four arrangements — the single window
+        takes the top, bottom, left or right edge — and that choice belongs in
+        the same panel as the name and the aspect. Only stored; the focus that
+        follows re-places the windows."""
+        if not 0 <= index < len(self.layouts):
+            return False
+        lay = self.layouts[index]
+        wanted = normalize_grid(grid)
+        # A grid may only be re-arranged INTO A SHAPE OF THE SAME SIZE. Asking
+        # a three-window layout to become a "4" would leave a cell with no
+        # window in it, and asking a four to become a "2" would orphan two.
+        if wanted and lay.template and GRID_CELLS[wanted] == len(lay.members):
+            lay.template = wanted
+        if orient in ("portrait", "landscape"):
+            lay.orient = orient
+        lay.arranged_pos = -1.0   # force the next focus to re-place, always
+        return True
+
+    def merge(self, source: int, target: int, grid: str | None = None) -> bool:
+        """Drag one layout's window onto another and they become a GRID (owner
+        2026-08-07, "like holding a file in Explorer and dragging it into a
+        folder"). The source layout DISAPPEARS — his answer to the first
+        question, and the only one consistent with the standing rule that a
+        window belongs to exactly one layout.
+
+        Sizes: 1+1 -> 2, 1+2 -> 3 (he picks which of the four arrangements),
+        1+3 -> 4 (no choice exists, so none is offered). A full four refuses,
+        which is why the phone greys it while a drag is in flight."""
+        if not (0 <= source < len(self.layouts) and 0 <= target < len(self.layouts)):
+            return False
+        if source == target:
+            return False
+        src, dst = self.layouts[source], self.layouts[target]
+        members = dst.members + [h for h in src.members if h not in dst.members]
+        if len(members) > 4 or len(members) < 2:
+            return False
+        wanted = normalize_grid(grid)
+        if not wanted or GRID_CELLS[wanted] != len(members):
+            # The phone did not name a shape, or named one of the wrong size:
+            # take the only sane default for this count. Three defaults to a
+            # bar along the top, which is the first drawing on his sheet.
+            wanted = {2: "2", 3: "3-top", 4: "4"}[len(members)]
+        dst.members = members
+        dst.template = wanted
+        dst.arranged_pos = -1.0     # the shape changed — re-place on focus
+        self.layouts.pop(source)
+        if self.last_focus and self.last_focus[0] == source:
+            self.last_focus = None
+        return True
+
+    def reorder(self, source: int, before: int) -> bool:
+        """Move a layout to another position in the list (owner 2026-08-07:
+        dropping BETWEEN two rows reorders, dropping ON a row makes a grid —
+        "kao kada u eksploreru držiš fajl"). Nothing on the PC moves."""
+        if not 0 <= source < len(self.layouts):
+            return False
+        before = max(0, min(len(self.layouts), before))
+        lay = self.layouts.pop(source)
+        if before > source:
+            before -= 1
+        self.layouts.insert(before, lay)
+        self.last_focus = None      # the indices it pointed at just moved
+        return True
+
     def member_hwnds(self) -> set[int]:
         """Every window that already belongs to SOME layout — the creation
         list hides them (owner 2026-08-03: one window cannot be shown twice)."""
@@ -956,6 +971,11 @@ class LayoutRegistry:
                          # conversation he opens after making the layout still
                          # brings its shortcuts with it.
                          "agents": agents.agents_for(lay.title, live),
+                         # WHICH grid, so the phone can draw its shape and
+                         # offer the arrangement choice for a three
+                         # (owner 2026-08-07). None = a solo layout.
+                         "grid": lay.template,
+                         "members": len(lay.members),
                          "orient": lay.orient, "icon": lay.icon,
                          "ratio": list(lay.ratio) if lay.ratio else None,
                          "pos": round(lay.pos, 3)}
