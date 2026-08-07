@@ -121,7 +121,10 @@ soft keyboard (the shell runs `adjustResize`) shortened the canvas and the
 whole picture was re-fitted into it — the layout visibly deformed. The canvas
 now keeps the FULL height of the current orientation (`fullView`, remembered
 across keyboard openings — the width is the tell: it changes only on rotation)
-and is simply lifted by `kbShift` with a CSS transform, so its bottom edge —
-the row being typed into — sits right above the keyboard while the top runs
-off screen. Touch coordinates add the same shift back in `toCanvasPx`
-([State](state.md)).
+and is NOT lifted (owner 2026-08-07, withdrawing his own 2026-08-03 request
+after living with it): the keyboard simply covers what it covers. A
+keyboard-sized lift carried the very line he was typing off the TOP of the
+screen, because the row he types into is almost never at the bottom of the
+PC's picture — "izbaci tekst koji se kuca iz vidokruga". `kbShift` stays 0,
+so `toCanvasPx` ([State](state.md)) is a straight mapping again. `--kb` is
+unchanged: the phone's own controls still lift clear of the keys.

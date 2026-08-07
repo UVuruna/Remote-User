@@ -147,6 +147,31 @@ everything here composes and frames WINDOWS on it.
   `layout_aspect`; the server places the region with the same fraction — see
   [Window Manager](../../server/__about/window_manager.md).
 
+  **A DOUBLE TAP IS TWO TAPS, NOT TWO TOUCHES** (owner 2026-08-07: he shrank a
+  layout, dragged it down, "ali on je i dalje na sredini"). Every piece above
+  was correct and every test of it passed; the two defects lived in the gesture
+  and nothing had ever delivered a touch to it.
+  1. The re-centre fired from `pointerdown` on ANY contact within 350 ms of the
+     previous one, so the very common tap-then-drag was read as a double tap:
+     it put the region back in the MIDDLE *and* returned without capturing the
+     pointer, so the drag died too. Both halves of his sentence, from one line.
+     A tap is now judged at its END — short, and without travel past
+     `MOVE_TAP_SLOP`; a press is always a press, and `pointercancel` counts as
+     an end (the rule the control buttons already live by).
+  2. `moveTapAt` started at **0**, which is a real `performance.now()` reading
+     meaning "a tap at page load" — so any tap in the page's first 350 ms
+     re-centred. It is `-Infinity` now. The audit found this in landscape while
+     portrait passed at 623 ms, which is exactly how a timing bug survives a
+     green suite.
+
+- **Nothing here asks which app shortcuts a layout carries** (owner 2026-08-07).
+  The creation panel and the rename panel both held a row of ticks between
+  2026-08-06 and 2026-08-07; they are gone, with `autoAppSets`, the `apps` field
+  of a creation session, and the `layout_apps` message. `appSetMatches` reads
+  the server's live `agents` instead — see
+  [Window Manager](../../server/__about/window_manager.md) for what the stored
+  copy cost.
+
 ## App shortcuts are chosen here (owner 2026-08-06)
 
 The creation panel and the rename card both carry the row **"App shortcuts on

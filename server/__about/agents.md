@@ -46,8 +46,10 @@ Verified on the owner's machine the day it was written: three live projects
 - **Per PROJECT, not per window.** Every VS Code window belongs to the same
   Electron process, so a window handle cannot be tied to one extension host.
   Two windows open on the same folder both count as having the conversation
-  when only one may show it. The owner's own per-layout ticks still win over
-  detection (`lay.app_sets` in client/sets.js), so he can always correct it.
+  when only one may show it. That is the one case this gets wrong, and it is
+  a far better trade than asking the user to declare what his own screen
+  already shows — the per-layout tick list that used to override this was
+  removed on 2026-08-07 for exactly that reason (see window_manager.md).
 - **The folder name comes from the transcript's `cwd`, never from the slug.**
   The slug flattens both path separators and spaces into dashes, so
   `u--Coding-UVuruna-Applications-Remote-User` cannot be split back into
@@ -83,5 +85,10 @@ Verified on the owner's machine the day it was written: three live projects
 - `live_agents()` — the cached scan, `{agent: {folder names}}`. `CACHE_S` = 2 s:
   short enough that opening a conversation is noticed before the owner reaches
   his phone, long enough that a layout switch never pays for it twice
-- `title_folder(title)` / `agents_for(title)` — the window-title side of the
-  bridge
+- `title_folder(title)` / `agents_for(title, live=None)` — the window-title
+  side of the bridge. **Pass a `live` snapshot whenever you ask about more
+  than one window.** Without it every call may reach the 1.85 s PowerShell
+  probe the moment the cache lapses, and the callers that ask in a loop are
+  async handlers — that time is the whole event loop stopped: no stream, no
+  heartbeats. `layout_list` took one snapshot in a thread from 2026-08-07,
+  and tests/test_layout_protocol.py counts the probes and fails at two.
