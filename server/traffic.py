@@ -271,3 +271,9 @@ class MeteredSocket:
 # must keep its history across that, or an overnight measurement is lost to
 # one settings change.
 METER = TrafficMeter()
+
+# When THIS PROCESS started — distinct from `METER.since`, which the Reset
+# button rewinds. The Traffic window's "Od starta" span names the process's
+# own lifetime (BUILD ROUND R4, owner-approved 2026-08-07), and a stray click
+# on Reset must never touch that answer.
+PROCESS_START = time.time()

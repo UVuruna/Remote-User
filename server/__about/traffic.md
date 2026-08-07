@@ -50,6 +50,14 @@ overnight measurement must not be lost to one settings change. Sampling starts
 with the first server start and never stops, so a stopped server reads as a
 line of ZEROS rather than a hole in the graph.
 
+**`PROCESS_START`** (BUILD ROUND R4, 2026-08-07) is a module-level constant —
+when THIS PROCESS started, set once at import. Deliberately separate from
+`METER.since`, which the window's Reset button rewinds: the Traffic window's
+**"Od starta"** span names the process's real lifetime, and a stray click on
+Reset must never touch that answer. Long-span reads of the recording
+(`traffic.csv`) — both "Od starta" and "Sve (iz fajla)" — live in
+[Traffic History](traffic_history.md), which this module does not import.
+
 ## Connections
 ### Uses
 - [Config](config.md) — sample interval, history length, CSV path and rotation
