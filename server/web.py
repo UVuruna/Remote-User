@@ -52,6 +52,7 @@ import monitors
 import notify
 import pairing
 import presence
+import agents
 import content
 import traffic
 import uia
@@ -305,7 +306,17 @@ def create_app(stream, hub: FrameHub | None, injector: InputInjector, token: str
         # always-on-top band, and it used to sit OUTSIDE, so one exception
         # anywhere in the setup left them there with no finally to lower them.
         try:
-            await ws.send_text(json.dumps({"type": "actions", **_load_actions()}))
+            # What Claude Code is SAVED as, so the Model and Thinking
+            # choosers can mark the option he already picked (owner
+            # 2026-08-08). Deliberately named `saved` and not `active`: the
+            # file is outranked by a project/local settings file, by
+            # CLAUDE_CODE_EFFORT_LEVEL / ANTHROPIC_MODEL, by a session-only
+            # switch, and by a resumed transcript — see agents.claude_settings.
+            # Calling it active would be a small lie of exactly the kind that
+            # has cost this project whole rounds.
+            await ws.send_text(json.dumps({
+                "type": "actions", **_load_actions(),
+                "saved": agents.claude_settings()}))
             # Whatever finished while the phone was away (owner 2026-08-06):
             # two agents finished while he was on a call with the app closed
             # and both notices were thrown away. They wait now, briefly, and

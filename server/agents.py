@@ -382,3 +382,39 @@ def agents_for(title: str, live: dict[str, set[str]] | None = None) -> list[str]
     that looks frozen (owner: "treba mu jako dugo da učita").
     """
     return agents_in(title_folder(title), live)
+
+
+# ═══════════════════════════ WHAT CLAUDE CODE IS SET TO ═══════════════════════════
+# For the phone's Model / Thinking choosers, so a list of nine options can say
+# which one is already chosen (owner 2026-08-08: "treba da bude stiklirano ono
+# koje je trenutno aktivno").
+#
+# AND IT IS THE SAVED SETTING, NOT THE LIVE ONE — the distinction is the whole
+# honesty of this function and the phone must say it that way. Claude Code's own
+# docs are explicit that several things outrank this file: a project or local
+# `.claude/settings.json`, the CLAUDE_CODE_EFFORT_LEVEL / ANTHROPIC_MODEL
+# environment variables, a session-only switch made with `s` in the picker, and
+# a session RESUMED from a transcript, which keeps the model it was saved with
+# whatever the settings say. `max` and `ultracode` cannot be written here at
+# all — they are session-only by design.
+#
+# So this answers "what will the next session start as", and marking it as
+# ACTIVE would be a small lie of exactly the kind this project keeps paying for.
+# The picker marks it as SAVED.
+CLAUDE_SETTINGS = CLAUDE_HOME / "settings.json"
+
+
+def claude_settings() -> dict:
+    """`{"model": ..., "effort": ...}` from Claude Code's user settings — the
+    keys it writes itself (`model`, `effortLevel`). Missing keys mean he has
+    never chosen, which is a real answer: nothing is marked."""
+    try:
+        raw = json.loads(CLAUDE_SETTINGS.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError, ValueError):
+        return {}
+    out = {}
+    if isinstance(raw.get("model"), str):
+        out["model"] = raw["model"]
+    if isinstance(raw.get("effortLevel"), str):
+        out["effort"] = raw["effortLevel"]
+    return out

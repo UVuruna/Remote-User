@@ -185,6 +185,7 @@ let kbShift = 0;
 // (his answer P4), so it will arrive in `config.ui`; until that field exists
 // the default stands, and the default is to cover.
 let caretUnknownMode = "cover";
+let claudeSaved = {};
 let pcCaret = null;
 let caretRise = 0;
 

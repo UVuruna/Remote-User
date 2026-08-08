@@ -171,6 +171,11 @@ function connect() {
         // client/sets.js sorts by it; missing/empty = today's order,
         // unchanged (a user who never opens the new list sees no change).
         wheelOrder = msg.wheel_order || [];
+        // What Claude Code is SAVED as — the chooser marks it, and says
+        // "saved" rather than "active" because it can be outranked by a
+        // project settings file, an env var, a session-only switch or a
+        // resumed transcript (server/agents.py -> claude_settings).
+        claudeSaved = msg.saved || {};
         // HIS CHOICE FIRST, the desktop default only when there is none
         // (owner 2026-08-08 — every excursion used to put the wheel back to
         // Mouse/Input). Resolved against the list that will actually ride,

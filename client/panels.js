@@ -364,6 +364,20 @@ function openChoicePanel(btn) {
     row.type = "button";
     row.className = "sets-row choice";
     row.textContent = option.label;
+    // The one he already chose is marked — and marked as SAVED, never as
+    // "active" (owner 2026-08-08 asked for a tick; honesty asks for the right
+    // word). A `/model` button reads `saved.model`, `/effort` reads
+    // `saved.effort`; a command we know nothing about marks nothing.
+    const key = btn.text === "/model" ? "model"
+      : btn.text === "/effort" ? "effort" : null;
+    if (key && claudeSaved[key] === option.value) {
+      row.classList.add("chosen");
+      row.setAttribute("aria-current", "true");
+      const tag = document.createElement("span");
+      tag.className = "sets-hint";
+      tag.textContent = "saved";
+      row.appendChild(tag);
+    }
     keepFocus(row, () => {
       send({
         type: "paste_text",

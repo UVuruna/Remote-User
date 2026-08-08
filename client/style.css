@@ -430,6 +430,27 @@ body.hidden-controls #update-banner { display: none; }
 }
 .sets-row.choice:active { background: var(--accent-glow); border-color: var(--accent); }
 
+/* The option Claude Code is already SAVED as (owner 2026-08-08 — "treba da
+   bude stiklirano ono koje je trenutno aktivno"). Marked by the ACCENT EDGE
+   plus a word, never by colour alone: the eight looks include a plain one
+   where a tint carries no meaning at all, and a mark that disappears in one
+   look is not a mark. The word says "saved" rather than "active" on purpose —
+   a project settings file, an env var, a session-only switch or a resumed
+   transcript can all outrank it, and claiming more than we know is the habit
+   this project keeps paying for. */
+.sets-row.choice.chosen {
+  border-color: var(--accent);
+  box-shadow: inset 3px 0 0 0 var(--accent);
+}
+.sets-row.choice.chosen .sets-hint {
+  margin-left: auto;
+  padding-left: var(--space-s);
+  color: var(--accent);
+  font-size: 0.78em;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
 /* Dictation setup card rows (owner round 2, 2026-08-05).
 
    TWO ROWS, NOT TWO COLUMNS (independent grader, 2026-08-07 — 7/10 in both
