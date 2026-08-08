@@ -211,6 +211,8 @@ async def layout_aspect(ws, layouts, stream, conn: dict, msg: dict) -> None:
     index = int(msg["index"])
     w, h = int(msg.get("w") or 0), int(msg.get("h") or 0)
     pos = int(msg.get("pos") if msg.get("pos") is not None else 500) / 1000
+    logger.info("Aspect from the phone: layout %d w=%d h=%d pos=%.3f",
+                index, w, h, pos)
     if not await asyncio.to_thread(layouts.set_ratio, index, w, h, pos):
         await toast(ws, "That layout is gone")
         await send_layout_state(ws, layouts, conn)
@@ -234,6 +236,21 @@ async def layout_focus(ws, layouts, stream, conn: dict, index: int) -> None:
             await toast(ws, "That layout's window is gone")
         else:
             region, placed = focused
+            # THE APP MUST SAY ITS OWN GEOMETRY, EVERY TIME (owner's FOURTH
+            # Move-handle report, 2026-08-08). His log holds not one line about
+            # placement — the only one that existed fired on REFUSAL, nothing
+            # had refused, and so four rounds argued about whether a window
+            # moved while the app, which knew, said nothing. A feature he
+            # judges by geometry has to log geometry: the stored position, the
+            # region it produced, and whether the members really took it.
+            # Logged here rather than inside `focus()` for a plain reason worth
+            # recording: window_manager.py stands exactly ON the 1,000-line
+            # limit, so the guard refuses to let it grow at all — and this
+            # layer already has both halves of the answer.
+            lay = layouts.layouts[index] if index < len(layouts.layouts) else None
+            logger.info("Layout %d focused: pos=%s ratio=%s -> region=%s landed=%s",
+                        index, getattr(lay, "pos", "?"), getattr(lay, "ratio", "?"),
+                        region, placed)
             conn["active"], conn["region"] = index, region
             if not placed:
                 await toast(ws, "A window would not take its exact spot")
