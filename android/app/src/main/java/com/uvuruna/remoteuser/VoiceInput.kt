@@ -14,6 +14,10 @@ import org.json.JSONObject
 /** Dictation subsystem — split from MainActivity 2026-08-05 (THE STRUCTURE
  *  LAW). The page cannot listen itself (WebView has no Speech API), so this
  *  class runs the SpeechRecognizer and talks back through `js` callbacks:
+ *  `__voicePartial(text)` on every LIVE partial — the STREAM, added
+ *  2026-08-08 (owner: *"ne dopuštamo da on čeka dok ja stanem sa govorom"*),
+ *  so the page can type what has settled while he is still speaking and an
+ *  interruption costs a second of speech instead of a ten-minute monologue —
  *  `__voiceHeard(text, isFinal)` per round — the PREFERRED callback since
  *  2026-08-08 (owner design, REPEAT of task 75: round-boundary duplication
  *  survived the 0.0.293 fix because the trim lived here, untestable — this
@@ -62,8 +66,20 @@ class VoiceInput(private val activity: Activity, private val js: (String) -> Uni
      *  something else takes over, a network drop, a service restart — used to
      *  take every spoken word with it. The partial hypothesis is kept here and
      *  typed out when a round dies without a final, so speech is never simply
-     *  deleted. Cleared by a final result, which always wins over it. */
+     *  deleted. Cleared by a final result, which always wins over it.
+     *
+     *  Since 2026-08-08 it is no longer ONLY a rescue copy: every update is
+     *  also handed to the page live (`__voicePartial`), which types the part
+     *  of it that has SETTLED. This stays as the rescue copy for the round's
+     *  end, and the page trims off whatever streaming already delivered. */
     private var partial = ""
+
+    /** True between a round's start and its end. Partials are only forwarded
+     *  while it holds: the recognizer lives in ANOTHER PROCESS, so an update
+     *  already in flight can land after we cancelled or after the round's
+     *  final result — and a stale partial arriving after the page reset its
+     *  round state would be typed as if it were new speech. */
+    private var streaming = false
 
     /** FALLBACK-ONLY since 2026-08-08 (see the class doc). This is the OLD
      *  trim from the 0.0.293 fix — it only catches a PREFIX continuation of
@@ -217,8 +233,17 @@ class VoiceInput(private val activity: Activity, private val js: (String) -> Uni
 
     // ── Screen state (owner round 4: LOCK stops everything) ──────────────
 
+    /** The LOCK button stops EVERYTHING (owner round 4, 2026-08-05) — and
+     *  the tail the settle rule still holds is NOT flushed on the way out.
+     *  It would be typed into a dead socket: the page closes the WebSocket
+     *  the moment it hides (CLAUDE.md constraint 8), `send()` drops the
+     *  message with a "Reconnecting…" pill, and the page would have recorded
+     *  those words as already sent — losing them for good instead of at
+     *  worst re-hearing them. Streaming is what makes this cheap: everything
+     *  before the held tail is already ON the PC. */
     fun onBackground() {
         background = true
+        streaming = false
         recognizer?.cancel()
         partial = ""
         lastOut = ""
@@ -254,10 +279,12 @@ class VoiceInput(private val activity: Activity, private val js: (String) -> Uni
                 RecognizerIntent.EXTRA_LANGUAGE_MODEL,
                 RecognizerIntent.LANGUAGE_MODEL_FREE_FORM
             )
-            // ON since 2026-08-06, and not to type as he speaks: the
-            // partial is the RESCUE COPY of a round that may never reach
-            // its final result (see `partial`). Nothing is sent from it
-            // while the round is alive.
+            // ON since 2026-08-06 as the RESCUE COPY of a round that may
+            // never reach its final result — and since 2026-08-08 also as
+            // the LIVE STREAM: every update is forwarded to the page, which
+            // types the settled part of it while he is still speaking. A
+            // round can now last ten minutes without holding ten minutes of
+            // speech hostage.
             putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
             // ONE language everywhere — the chosen one. (The on-device
             // language-switch extras exist, but a wanted-but-missing
@@ -287,11 +314,15 @@ class VoiceInput(private val activity: Activity, private val js: (String) -> Uni
         android.os.Handler(android.os.Looper.getMainLooper()).post {
             // The round may have been superseded (locked, a newer listen()
             // call) while this was queued — never fire a stale start.
-            if (!background && recognizer === r) r.startListening(intent)
+            if (!background && recognizer === r) {
+                streaming = true
+                r.startListening(intent)
+            }
         }
     }
 
     fun cancel() {
+        streaming = false
         recognizer?.cancel()
         partial = ""
         lastOut = ""   // the mic went off: whatever comes next is a new sentence
@@ -416,6 +447,12 @@ class VoiceInput(private val activity: Activity, private val js: (String) -> Uni
      *  none, the kept partial is used, because losing what he already said is
      *  the one outcome this whole subsystem may not have.
      *
+     *  Since streaming (2026-08-08) most of a long round has ALREADY been
+     *  typed by the time this runs, and this call is the FLUSH: the page
+     *  trims off what it already sent and types only the tail the settle rule
+     *  was still holding. That is why an interruption now costs a second of
+     *  speech instead of the whole monologue.
+     *
      *  THE DE-DUPLICATION RULE LIVES ON THE PAGE since 2026-08-08 (owner
      *  design, REPEAT of task 75 — see the class doc). `__voiceHeard` gets
      *  the RAW text plus `isFinal` and does its own round-boundary overlap
@@ -425,6 +462,19 @@ class VoiceInput(private val activity: Activity, private val js: (String) -> Uni
      *  the 0.0.293 fix, kept with its OLD known gap (misses a non-prefix
      *  overlap between two rounds, does not trim a final) because it is a
      *  compatibility path, not the fix. */
+    /** A LIVE partial, handed straight to the page (owner 2026-08-08: *"ne
+     *  dopuštamo da on čeka dok ja stanem sa govorom"*). NOTHING is decided
+     *  here — which of these words may be typed is `client/voice.js`
+     *  `voiceStream`, for the same reason the round-boundary trim moved
+     *  there: a rule on the page ships without a new APK and can be proven by
+     *  a fail-closed gate, and this repo has no JVM test runner.
+     *
+     *  A page too old to define `__voicePartial` simply never runs anything —
+     *  it keeps the round-end delivery it always had, which is what CLAUDE.md
+     *  constraint 12 asks of a bridge whose two sides version separately. */
+    private fun stream(text: String) =
+        js("window.__voicePartial && __voicePartial(${JSONObject.quote(text)})")
+
     private fun deliver(text: String?) {
         val isFinal = !text.isNullOrBlank()
         val raw = if (isFinal) text!! else partial
@@ -500,12 +550,17 @@ class VoiceInput(private val activity: Activity, private val js: (String) -> Uni
             val text = partialResults
                 ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                 ?.firstOrNull()
-            if (!text.isNullOrBlank()) partial = text   // the rescue copy, nothing sent
+            if (text.isNullOrBlank() || !streaming) return
+            partial = text   // the rescue copy for the end of the round
+            stream(text)     // ...and the live stream: the page types what settled
         }
         override fun onEvent(eventType: Int, params: Bundle?) {}
     }
 
-    private fun end(reason: String) = js("window.__voiceEnd && __voiceEnd('$reason')")
+    private fun end(reason: String) {
+        streaming = false   // no partial of this round may be forwarded again
+        js("window.__voiceEnd && __voiceEnd('$reason')")
+    }
 
     private fun info(text: String) =
         js("window.__voiceInfo && __voiceInfo(${JSONObject.quote(text)})")

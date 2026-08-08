@@ -46,10 +46,11 @@ file picker, and the "access from anywhere" banner + guided wizard overlay.
 ### Uses
 
 - [Style](style.md) — stylesheet, `/static/style.css`
-- Six classic `<script>` tags, loaded in this exact order (one shared global
-  scope, no build step — see [Client (folder)](../___client.md) Design
-  Decisions): [State](state.md), [Render](render.md),
-  [Input Geometry](input-geometry.md), [Controls](controls.md),
+- Classic `<script>` tags, loaded in the exact order
+  [Client (folder)](../___client.md) lists (one shared global scope, no build
+  step — see its Design Decisions): [State](state.md), [Render](render.md),
+  [Input Geometry](input-geometry.md), [Voice](voice.md) — before
+  [Controls](controls.md), whose mic callbacks call it —
   [Gestures](gestures.md), [Connection](connection.md)
 
 ### Used by

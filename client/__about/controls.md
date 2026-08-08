@@ -69,25 +69,28 @@ for the split's general load-order reasoning.
   bridge (SpeechRecognizer); recognized text goes out as `key_text`. Only one
   of mic/keyboard is ever ON; `inputOff()` (Enter/Esc buttons, a tap on the
   stream) switches both OFF.
-- **`voiceDedup(raw, isFinal)` — round-boundary dictation dedup** (owner
-  design 2026-08-08, REPEAT of task 75/0.0.293): the shell now calls
-  `__voiceHeard(text, isFinal)` per listening ROUND (a `__voiceResult`
-  fallback stays for a page too old to define it — CLAUDE.md constraint 12).
-  0.0.293 trimmed a round's own CUMULATIVE partial on retry, but never
-  trimmed the overlap BETWEEN two independent rounds — a dying round's
-  rescue and the next round's fresh transcript both cover the tail of the
-  same live audio, and his server.log showed 177 `ERROR_CLIENT`s producing
-  exactly that shape (a short fragment repeated once). `voiceDedup` finds the
-  longest suffix of `voiceLastOut` (what already went out) that equals the
-  prefix of the new round's text — word-boundary, case- and
-  punctuation-insensitive — and sends only what is new; a FINAL is trimmed
-  the same way and then clears `voiceLastOut` (the utterance is over);
-  `micStop()` also clears it (the mic went off — a new sentence). ONE call
-  per ROUND (never per partial) is what keeps a phrase genuinely repeated in
-  one breath untouched — nothing inside a single call is ever trimmed, only
-  the boundary between two calls. Lives on the page rather than in
-  `VoiceInput.kt` so a fail-closed gate can prove it
-  (`tests/test_voice_dedup.py` — this repo has no JVM test runner).
+- **The dictation TEXT rules moved to [Voice](voice.md)** on 2026-08-08 (THE
+  STRUCTURE LAW — this file stood at 974 of its 1,000 lines and dictation had
+  just grown a second rule). What stays here is the mic SWITCHER and the
+  typing; the three bridge callbacks are the seam:
+  - `window.__voicePartial(text)` — every LIVE partial (owner 2026-08-08: the
+    text must appear WHILE he speaks). Runs `voiceStream`, which returns only
+    the words that have SETTLED, and types them. A shell too old to call it
+    simply never does, and the page behaves exactly as before.
+  - `window.__voiceHeard(text, isFinal)` — a ROUND ended (a final result, or
+    the rescue copy of a round that died). Runs `voiceDedup`, which flushes
+    whatever the settle rule still held and trims off what streaming already
+    sent. `window.__voiceResult` stays as the legacy path for a shell too old
+    to call `__voiceHeard` (CLAUDE.md constraint 12).
+  - `micStop()` clears BOTH memories — `voiceLastOut = ""` (a new sentence is
+    starting) and `voiceStreamReset()` (the round in flight is abandoned).
+    Leaving the second behind would make the next session swallow its own
+    first words as "already typed".
+
+  Gate: `tests/test_voice_dedup.py`, fail-closed in `build.py` — it runs
+  `client/voice.js` whole in node over realistic partial SEQUENCES, and
+  checks both ends of the new bridge exist (a rule nobody calls is a feature
+  that does not exist — the lesson of 2026-08-07).
 - `shotRegion()` — the monitor-normalized rect the phone is LOOKING at
   (zoom/layout aware) — sent with `screenshot {paste:true}` by the Shot
   button; the server crops, fills the clipboard and injects Ctrl+V itself.

@@ -80,6 +80,7 @@ const FILES = [
   "input-geometry.js",
   "icons.js",
   "sets.js",
+  "voice.js",
   "controls.js",
   "theme.js",
   "panels.js",

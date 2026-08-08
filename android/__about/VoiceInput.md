@@ -2,14 +2,15 @@
 
 Split from `MainActivity` on 2026-08-05 (THE STRUCTURE LAW). Runs the
 `SpeechRecognizer` for the page's Mic switcher and talks back through
-`evaluateJavascript` callbacks: `__voiceHeard(text, isFinal)` per round — the
-PREFERRED callback since 2026-08-08, with `__voiceResult(text)` as the
-LEGACY fallback for a page that predates it (see "Round-boundary dedup moved
-to the page" below) — `__voiceEnd(reason)` per round (`"denied"` /
-`"unavailable"` / `"nolang"` / `""`), `__voiceState(state)` for the Mic
-button's downloading look, and `__voiceInfo(text)` — SILENT diagnostics the
-page forwards to the PC's server log (owner round 2, angrily: never a panel
-flashed at the user).
+`evaluateJavascript` callbacks: `__voicePartial(text)` on every LIVE partial
+— the STREAM, added 2026-08-08 (see "Typing while he speaks" below) —
+`__voiceHeard(text, isFinal)` per round, the PREFERRED round-end callback
+since 2026-08-08, with `__voiceResult(text)` as the LEGACY fallback for a page
+that predates it (see "Round-boundary dedup moved to the page" below),
+`__voiceEnd(reason)` per round (`"denied"` / `"unavailable"` / `"nolang"` /
+`""`), `__voiceState(state)` for the Mic button's downloading look, and
+`__voiceInfo(text)` — SILENT diagnostics the page forwards to the PC's server
+log (owner round 2, angrily: never a panel flashed at the user).
 
 ## The language is a USER CHOICE (owner round 2, 2026-08-05)
 
@@ -68,16 +69,54 @@ every word of that round with it, and the server log is full of exactly those
 lines (`Voice error 5 (online)`, over and over).
 
 So `EXTRA_PARTIAL_RESULTS` is ON, and `onPartialResults` keeps the running
-hypothesis in `partial` as a **rescue copy**. Nothing is sent from it while the
-round is alive — typing as he speaks would re-type the same sentence on every
-update. `deliver()` is the only exit: a final result wins and clears the copy;
-a round that dies without one types the copy instead. Either way the copy is
-dropped, so no sentence can be typed twice.
+hypothesis in `partial` as a **rescue copy**. `deliver()` is the only exit: a
+final result wins and clears the copy; a round that dies without one types the
+copy instead. Either way the copy is dropped, so no sentence can be typed
+twice.
 
 This is the phone's half of the same failure the PC's
 [Focus Guard](../../server/__about/focus_guard.md) answers: there, a program
 that steals focus mid-dictation takes the window the words were meant for;
 here, the same interruption used to take the words themselves.
+
+## Typing while he speaks (owner 2026-08-08)
+
+His words: *"ne dopuštamo da on čeka dok ja stanem sa govorom, već da namjerno
+izvlačimo iz njega tekst"* — and the reason: *"mogu da pričam 10 minuta bez
+prestanka a onda ne upiše ni 1 reč... usred toga dođe do prekida... nestane
+sve što sam do sada pričao"*.
+
+The rescue copy above saved a round that DIED. It could not save a round that
+was merely still alive: an Android round lasts as long as he keeps talking, so
+a ten-minute instruction was still one delivery at the end, and locking the
+phone or taking a call in the middle discarded it (`cancel()` delivers
+nothing, by design — the LOCK rule).
+
+`onPartialResults` therefore now does two things: it keeps the rescue copy AND
+forwards the update to the page (`stream()` → `__voicePartial`). **Nothing is
+decided here** — WHICH of those words may be typed is
+[Voice](../../client/__about/voice.md)'s settle rule, on the page, for the same
+two reasons the round-boundary trim moved there (it ships without a new APK,
+and it can be proven by a fail-closed gate).
+
+Three details that are load-bearing:
+
+- **`streaming`** gates the forwarding. The recognizer lives in ANOTHER
+  PROCESS, so an update already in flight can land after a cancel or after the
+  round's own final result; forwarded then, it would be typed as fresh speech
+  against a page that had already reset its round state. Set when the round's
+  `startListening` actually fires, cleared by `end()`, `cancel()` and
+  `onBackground()`.
+- **`onBackground()` does NOT flush the held tail.** It would be typed into a
+  dead socket — the page closes the WebSocket the moment it hides (CLAUDE.md
+  constraint 8), `send()` drops the message behind a "Reconnecting…" pill, and
+  the page would have recorded those words as sent. Losing them for good is
+  worse than at worst re-hearing them. Streaming is what makes this cheap:
+  everything before the held tail is already on the PC.
+- **`deliver()` is now the FLUSH.** Most of a long round has already been
+  typed by the time it runs; the page trims off what it sent and types only
+  the tail. That is the whole of his second requirement — an interruption
+  costs ~1.2 s of speech instead of ten minutes.
 
 ## Round-boundary dedup moved to the page (task 75 REPEAT, 2026-08-08)
 
