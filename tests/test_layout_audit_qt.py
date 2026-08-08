@@ -67,7 +67,16 @@ TEXT_PADDING = 8
 
 # Where the screenshots the layout gate demands are written (one per window,
 # taken at its DECLARED minimum - the size the grade has to hold at).
-SHOT_DIR = Path(__file__).resolve().parent.parent / ".claude" / "shots"
+# WHERE THE PICTURES GO (rules/GUI.md -> Zubi v2, GATE of 2026-08-08).
+# Every screenshot lives in a TOPIC subfolder named after what was being worked
+# on, so the owner opens ONE folder and sees ONE story instead of a dump of a
+# hundred and eighty cryptic names in a single directory. The topic is the
+# ROUND's subject and it is set on this one line; `RU_SHOT_TOPIC` overrides it
+# for a one-off sweep that is not the round's own proof (the colour VARIANTS of
+# 2026-08-08 were rendered into their own folder that way, because alternatives
+# offered for a decision are not candidate designs of ours to pass or fail).
+SHOT_TOPIC = os.environ.get("RU_SHOT_TOPIC", "round17-caret-claude-set-colours")
+SHOT_DIR = Path(__file__).resolve().parent.parent / ".claude" / "shots" / SHOT_TOPIC
 
 
 def make_app() -> QApplication:
