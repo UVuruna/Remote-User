@@ -297,6 +297,86 @@ _GROUPS_JS = ("__contrast(document.getElementById('group-left'))"
               ".concat(__contrast(document.getElementById('group-right')))")
 
 
+def _check_auto_hide(page) -> dict:
+    """THE CONTROLS GET OUT OF THE WAY, AND ONLY WHERE HE SAID THEY MAY
+    (owner 2026-08-08, task 120).
+
+    Driven by moving `lastWake` back rather than by sleeping three real
+    seconds per case: the RULE is what is under test, and the tick re-decides
+    it every 250 ms. Sleeping would add half a minute to every audit run and
+    prove nothing extra.
+    """
+    out = {}
+
+    def idle_one_tick():
+        page.evaluate("lastWake = performance.now() - AUTO_HIDE_MS - 500")
+        page.wait_for_timeout(400)          # one tick, comfortably
+
+    def hidden():
+        return page.evaluate(
+            "document.body.classList.contains('hidden-controls')")
+
+    page.evaluate("closeWheel(); closeLayoutPanel(); creating = null;"
+                  " layoutArm = false; setControlsHidden(false)")
+    idle_one_tick()
+    out["the controls hide themselves on the bare working screen"] = hidden()
+
+    # …and ANY contact brings them straight back.
+    page.evaluate("wakeControls()")
+    out["any contact brings the controls back"] = not hidden()
+
+    # THE FENCE. Each of these is something he is looking at, and none of them
+    # may take the controls away under his thumb.
+    for label, open_js, shut_js in (
+        ("the category wheel", "openWheel('left')", "closeWheel()"),
+        ("a panel he is reading", "openSetsPanel()", "closeSetsPanel()"),
+        ("a layout being built", "creating = newCreation('list')",
+         "creating = null"),
+        ("an armed window pick", "layoutArm = true", "layoutArm = false"),
+    ):
+        page.evaluate(open_js)
+        idle_one_tick()
+        out[f"nothing hides while {label} is open"] = not hidden()
+        page.evaluate(shut_js)
+
+    # A BLOCKER THAT OPENS WITH NO TOUCH BRINGS THEM BACK. The notices card
+    # offers itself on connect and the dictation card opens itself on the
+    # first Mic tap — neither is a pointerdown, and a one-shot timer armed at
+    # load had already hidden the controls by then. This case is why the rule
+    # is a tick.
+    page.evaluate("setControlsHidden(false)")
+    idle_one_tick()
+    page.evaluate("openSetsPanel()")
+    page.wait_for_timeout(400)
+    out["a panel opening with no touch brings the controls back"] = not hidden()
+    page.evaluate("closeSetsPanel(); setControlsHidden(false); wakeControls()")
+
+    # The Hide button must still work IN BOTH DIRECTIONS. Its own press must
+    # not wake the controls, or the one button that always worked would become
+    # the one that never unhides.
+    # Driven through the WINDOW's own capture listener and then the button's
+    # own activator, in that order, because that IS the race: `wakeControls`
+    # runs on pointerdown and the toggle runs on pointerup, so a toggle
+    # reading "current state" instead of the state the finger LANDED on would
+    # unhide and immediately re-hide. Playwright's `.tap()` proved too soft to
+    # show it — it never reached the capture listener — and a check that
+    # cannot fail is not a check (this one was rewritten after its own planted
+    # defect walked straight through it).
+    press = ("const btn = document.getElementById('btn-hide');"
+             " wakeControls({target: btn});"
+             " buttonPress(btn, true); buttonPress(btn, false);")
+
+    page.evaluate("setControlsHidden(true)")
+    page.evaluate(press)
+    page.wait_for_timeout(60)
+    out["a tap on Hide while hidden UNhides"] = not hidden()
+    page.evaluate(press)
+    page.wait_for_timeout(60)
+    out["a tap on Hide while showing hides at once"] = hidden()
+    page.evaluate("setControlsHidden(false); wakeControls()")
+    return out
+
+
 def _check_controls(page):
     """The D-pad groups and the category wheel — the surfaces the `colored`
     theme actually paints, and the ones no panel check has ever looked at.
@@ -579,6 +659,12 @@ def main() -> int:
             # no root instead of installed.
             page.evaluate("() => {" + CONTRAST_JS + "}")
             portrait = label.startswith("portrait")
+
+            # AUTO-HIDE — once per SIZE, not per look: it is a behaviour, and
+            # a colour cannot change it. Run before the look sweep so the
+            # controls are in a known state for everything that follows.
+            for name, ok in _check_auto_hide(page).items():
+                results[f"{name} @ {label}"] = ok
 
             for look in LOOKS:
                 theme, colored, fill = look

@@ -195,6 +195,11 @@ ALGORITHMIC = {
     "client/render.js",
     "client/input-geometry.js",
     "client/controls.js",
+    # New 2026-08-08: our own FURNITURE — the Hide button, the auto-hide rule
+    # and the toast — split off controls.js when auto-hide crossed 1,000 lines.
+    # Algorithmic: the auto-hide fence is a real rule with a list of states
+    # that must never let it fire, and that list is the feature.
+    "client/chrome.js",
     "client/layouts.js",
     # New 2026-08-08: the creation WIZARD, split off layouts.js when the ✕
     # chooser (task 116) pushed it past 1,000 lines. Algorithmic — it owns a

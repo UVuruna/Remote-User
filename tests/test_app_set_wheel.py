@@ -336,7 +336,7 @@ def test_the_window_title_names_the_project():
     cases = {
         "Ispravka UI dizajna meni… - Remote User - Visual Studio Code [Administrator]": "remote user",
         "Kreiraj GUI smernice i p… - UVuruna - Visual Studio Code [Administrator]": "uvuruna",
-        "ubacio sam 3 nove letter… - DOMY Watch - Visual Studio Code": "domy watch",
+        "ubacio sam 3 nove letter… - Watch Academy - Visual Studio Code": "watch academy",
         "Some Folder - Notepad": "",
         "": "",
     }

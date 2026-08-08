@@ -1,14 +1,17 @@
 // On-screen interactive chrome: built-in action registry, touch-mode
 // toggles, invisible keyboard capture, the "access from anywhere" wizard, the
-// in-app update banner, phone->PC image upload, the two D-pad control groups,
-// the category wheel, corner buttons and the toast pill. The whole LAYOUT
+// in-app update banner, phone->PC image upload, the two D-pad control groups
+// and the category wheel. EVERYTHING HERE DRIVES THE PC — a press becomes a
+// click, a wheel choice becomes a different set of commands. Our own furniture
+// (the Hide button, the auto-hide rule, the toast) drives nothing and moved to
+// [Chrome](chrome.js) on 2026-08-08. The whole LAYOUT
 // feature (bar, list, aspect panel, creation flow, loading animation) lived
 // here until 2026-08-03 and now has its own file — see
 // [Layouts](layouts.js), which loads right after this one and uses
-// `keepFocus`/`svg`/`showToast` from here. What is left may NOT be split
-// further: `keepFocus` is called at the top level by the wizard section
-// before its own definition further down, relying on function hoisting within
-// THIS SAME script — a script boundary there would break it. Part of the
+// `keepFocus`/`svg`/`showToast` from here. One thing here may NOT move:
+// `keepFocus` is called at the top level by the wizard section before its own
+// definition further down, relying on function hoisting within THIS SAME
+// script — a script boundary between those two would break it. Part of the
 // app.js split — loads after input-geometry.js.
 // See client/__about/controls.md.
 "use strict";
@@ -898,32 +901,3 @@ matchMedia("(orientation: portrait)").addEventListener("change", () => {
   renderGroup("left");
   renderGroup("right");
 });
-
-// --- Corner buttons -------------------------------------------------------
-
-const hideBtn = document.getElementById("btn-hide");
-keepFocus(hideBtn, () => {
-  const hidden = document.body.classList.toggle("hidden-controls");
-  hideBtn.classList.toggle("active", hidden);
-});
-
-// --- Toast ----------------------------------------------------------------
-
-// A toast borrows the status pill. When it expires the pill must simply FADE
-// OUT — going straight back to the "connected" state flashed a blue
-// "Connected" pill after every toast (owner 2026-08-04), because that state's
-// opacity:0 is reached through a 0.4 s transition while its blue background
-// applies instantly. So the amber pill fades in place first, and only the
-// invisible pill is switched back to the connected state.
-let toastTimer = null;
-let toastFadeTimer = null;
-function showToast(text) {
-  setStatus("connecting", text);   // clears .fade — a new toast always shows
-  clearTimeout(toastTimer);
-  clearTimeout(toastFadeTimer);
-  toastTimer = setTimeout(() => {
-    if (!ws || ws.readyState !== WebSocket.OPEN) return;  // not connected: the real state must stay visible
-    statusEl.classList.add("fade");
-    toastFadeTimer = setTimeout(() => setStatus("connected", "Connected"), 450);
-  }, 2500);
-}
