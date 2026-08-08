@@ -124,6 +124,10 @@ ALGORITHMIC = {
     # against popups that steal focus, and the rule that an unknown caret is
     # reported as unknown and never as a position.
     "server/caret.py",
+    # Split out of web.py 2026-08-08 (THE STRUCTURE LAW). Algorithmic without
+    # argument: an image decode with an ordered fallback chain, and a paste
+    # whose ORDER and whose withheld Enter are the whole feature.
+    "server/content.py",
     "server/notify.py",
     # New 2026-08-07 (owner report — installing killed the session he was
     # installing FROM). Algorithmic without argument: a sequence that spans a

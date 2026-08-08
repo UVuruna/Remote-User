@@ -311,7 +311,10 @@ def main():
     # sends an empty prompt, which is exactly the kind of silent wrong that
     # only shows up on the owner's screen.
     import clipboard as clip
-    import web as web_mod
+    # `paste_text` moved out of web.py into content.py on 2026-08-08 (THE
+    # STRUCTURE LAW): turning what the phone sent into keystrokes the PC
+    # receives never belonged to the transport layer.
+    import content as content_mod
     steps: list[tuple] = []
     real_copy = clip.copy_text
     clip.copy_text = lambda t: (steps.append(("clipboard", t)), True)[1]
@@ -319,10 +322,10 @@ def main():
     typed.press_chord = lambda c: steps.append(("chord", c))
     typed.press_key = lambda k: steps.append(("key", k))
     typed.type_text = lambda t, guard=None: steps.append(("typed", t))
-    web_mod._paste_text(typed, "/usage", True)
-    web_mod._paste_text(typed, "/", False)          # the Menu button: no Enter
+    content_mod.paste_text(typed, "/usage", True)
+    content_mod.paste_text(typed, "/", False)          # the Menu button: no Enter
     clip.copy_text = lambda t: False                # clipboard held by another app
-    web_mod._paste_text(typed, "/model", True)
+    content_mod.paste_text(typed, "/model", True)
     clip.copy_text = real_copy
     results["typed command: clipboard -> ctrl+v -> enter, in that order"] = steps == [
         ("clipboard", "/usage"), ("chord", "ctrl+v"), ("key", "enter"),

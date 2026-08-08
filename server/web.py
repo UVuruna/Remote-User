@@ -30,7 +30,6 @@ the H.264 side new_owner()/open_session()/close_session().
 """
 
 import asyncio
-import io
 import json
 import logging
 import shutil
@@ -40,13 +39,9 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
-import cv2
-import numpy as np
-import pillow_heif
 from fastapi import FastAPI, File, Request, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
-from PIL import Image, ImageOps
 
 import caret
 import clipboard
@@ -57,6 +52,7 @@ import monitors
 import notify
 import pairing
 import presence
+import content
 import traffic
 import uia
 import window_manager
@@ -66,38 +62,11 @@ from layout_api import toast as _toast
 
 logger = logging.getLogger(__name__)
 
-# Phones (Samsung/Pixel defaults) shoot HEIC/HEIF, which neither OpenCV nor
-# plain Pillow read — this registers the HEIF codec into Pillow.
-pillow_heif.register_heif_opener()
-
-
-def decode_upload(data: bytes):
-    """Uploaded image → BGR ndarray, or None (caller logs the failure).
-
-    Pillow first: it covers JPEG/PNG/WEBP + HEIC (opener above) AND applies
-    the EXIF orientation — phone photos carry it, and cv2.imdecode ignores it
-    (the image would paste rotated). OpenCV remains as a fallback for formats
-    Pillow does not know."""
-    try:
-        pil = Image.open(io.BytesIO(data))
-        pil = ImageOps.exif_transpose(pil).convert("RGB")
-        return cv2.cvtColor(np.asarray(pil), cv2.COLOR_RGB2BGR)
-    except Exception as e:
-        logger.warning("Pillow could not decode upload (%s) — trying OpenCV", e)
-    return cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_COLOR)
-
-
 # Presence — the phone's heartbeat, its parting word, and the rule that the
 # owner's own desk outranks both — lives in `presence.py` (split 2026-08-05,
 # THE STRUCTURE LAW: one responsibility, its own failure history, its own
 # gate in tests/test_presence.py). Its timings live there too.
 
-# --- Typed commands (owner 2026-08-05) --------------------------------------
-# A `paste_text` button pastes and then presses Enter. The pause between them
-# is not cosmetic: the target app (Claude's prompt, a search box) reacts to
-# the paste — filtering a command menu, resizing its input — and an Enter
-# delivered inside that reaction lands in the old state.
-PASTE_ENTER_DELAY = 0.12
 
 
 @dataclass
@@ -215,7 +184,7 @@ def create_app(stream, hub: FrameHub | None, injector: InputInjector, token: str
             return JSONResponse({"ok": False, "error": "unauthorized"}, status_code=401)
         data = await file.read()
         traffic.METER.add_in(len(data))  # phone -> PC counts wherever it enters
-        img = await asyncio.to_thread(decode_upload, data)
+        img = await asyncio.to_thread(content.decode_upload, data)
         if img is None:
             # magic bytes identify the format we failed on (e.g. b'ftypheic')
             logger.error("Upload not decodable: %d bytes, name=%r, type=%r, magic=%r",
@@ -706,39 +675,6 @@ async def _screenshot(ws: WebSocket, stream, injector: InputInjector, msg: dict)
                      else "Clipboard busy — try again")
 
 
-def _paste_text(injector: InputInjector, text: str, enter: bool, guard=None) -> str:
-    """Writes `text` into the focused box on the PC through the clipboard.
-
-    Blocking on purpose (the caller runs it in a thread): the clipboard write,
-    the paste and the Enter have to happen in that order, and Windows needs
-    the paste to land before the next key. Falls back to typing the text
-    character by character when the clipboard is busy — an owner watching his
-    phone would otherwise see a button that silently did nothing.
-
-    Returns what did NOT reach the PC ("" = all of it landed) for the toast.
-    """
-    if not text:
-        return ""
-    if clipboard.copy_text(text):
-        injector.press_chord("ctrl+v")
-    else:
-        logger.warning("Clipboard busy — typing %r instead of pasting it", text[:40])
-        # Typed character by character now, so it needs the same mid-sentence
-        # fence as dictation does (focus_guard.typist).
-        lost = injector.type_text(text, guard)
-        if lost:
-            # Half a command must never be SUBMITTED: Enter is what makes a
-            # slash command run, and running the fragment that happened to
-            # arrive is worse than running nothing.
-            logger.error("Enter withheld — %d characters of %r never reached "
-                         "the PC", len(lost), text[:40])
-            return lost
-    if enter:
-        time.sleep(PASTE_ENTER_DELAY)
-        injector.press_key("enter")
-    return ""
-
-
 # Which messages TYPE (their effect lands in whatever window holds the
 # keyboard) and which ones legitimately CHOOSE a window. The focus guard needs
 # both lists: it fences the first and re-arms on the second (owner 2026-08-06
@@ -864,7 +800,7 @@ async def _receive_input(ws: WebSocket, injector: InputInjector, stream, token: 
             # press so `enter: false` can leave the menu standing for the
             # finger to pick from.
             lost = await asyncio.to_thread(
-                _paste_text, injector, str(msg.get("text", "")),
+                content.paste_text, injector, str(msg.get("text", "")),
                 bool(msg.get("enter", True)), focus_guard.typist(layouts, conn))
             if lost:
                 await _toast(ws, focus_guard.loss_notice(lost))
