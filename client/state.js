@@ -161,6 +161,33 @@ window.addEventListener("unhandledrejection", (e) =>
 // and as the one place every gesture already passes through.
 let kbShift = 0;
 
+// WHERE THE PC SAYS THE TYPING CARET IS, and how far the picture rose for it
+// (owner 2026-08-07; server half server/caret.py, the rule client/caret.js).
+// `pcCaret` is the last `caret` frame — `null` while the PC cannot see one,
+// which is a real answer and not a zero: some apps expose nothing, and the
+// page must be able to tell "the row is here" from "I could not find the row".
+//
+// `caretRise` is what caret.js decided, in CANVAS pixels, and it is almost
+// always 0. It moves the PICTURE only: render.js subtracts it from the drawn
+// rect, so the canvas and the colour behind it do not move and the navy
+// letterbox stays where it is — his screenshot of the 2026-08-03 attempt was
+// exactly that filler travelling with the image.
+//
+// It rides `kbShift` for the INVERSE mapping because that is what kbShift was
+// left in place for: the one point every gesture passes through. A finger that
+// touches a risen picture must still land on the PC pixel under it.
+// HIS SWITCH for the apps that expose no caret at all (owner 2026-08-07 —
+// "alternativna verzija bi bila da korisnik ima neki svicer"): "cover" does
+// nothing, which is what he chose to live with when there was no caret to be
+// had, and "lift" is the old whole-keyboard rise for a window he knows sits at
+// the bottom. It applies ONLY when the PC says it cannot see the caret — a
+// known caret is always obeyed. Desktop-owned like every other look decision
+// (his answer P4), so it will arrive in `config.ui`; until that field exists
+// the default stands, and the default is to cover.
+let caretUnknownMode = "cover";
+let pcCaret = null;
+let caretRise = 0;
+
 function toCanvasPx(e) {
   return {
     x: e.clientX * devicePixelRatio,

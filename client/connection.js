@@ -188,6 +188,12 @@ function connect() {
           showToast(`The wheel holds ${WHEEL_MAX} sets — switched off ${dropped.join(", ")}`);
         }
         refreshCategories();
+      } else if (msg.type === "caret") {
+        // The PC found the typing caret, or said honestly that it could not.
+        // `known:false` becomes null so the rule can tell that apart from a
+        // caret at the top-left corner (server/caret.py -> unknown()).
+        pcCaret = msg.known ? { x: msg.x, y: msg.y, w: msg.w, h: msg.h } : null;
+        updateViewport();
       } else if (msg.type === "toast") {
         showToast(msg.text);
       } else if (msg.type === "notify") {

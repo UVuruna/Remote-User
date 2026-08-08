@@ -101,6 +101,10 @@ function redraw() {
   ctx.fillStyle = canvasBg;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   const D = drawnRect();
+  D.y -= caretRise;  // the picture rises, the canvas does not
+
+  D.y -= caretRise;  // the picture rises, the canvas does not
+
   ctx.save();
   if (viewLocked()) {
     // In layout focus the phone shows ONLY the framed region. Once a layout
@@ -185,7 +189,18 @@ function updateViewport() {
   // exactly where his eyes left it, and he can pan if he needs what is under
   // it. `kbShift` stays 0, so `toCanvasPx` is a straight mapping again.
   const h = fullView.h;
-  kbShift = 0;
+  // ONLY THE PICTURE, ONLY IF NEEDED, ONLY BY THE SHORTFALL — the rule lives
+  // in client/caret.js and is almost always answered with 0. The canvas is
+  // never transformed: that is what carried the navy filler with it in the
+  // 2026-08-03 attempt he rejected.
+  caretRise = caretLift({
+    caret: pcCaret,
+    view,
+    canvasHeight: canvas.height,
+    keyboardHeight: kb * devicePixelRatio,
+    unknownMode: caretUnknownMode,
+  });
+  kbShift = caretRise / devicePixelRatio;
   canvas.style.transform = "";
   // NOTE: do NOT blur the keyboard field on a keyboard-height drop. Switching
   // to the IME's voice/mic input transiently shrinks the keyboard, and a blur
