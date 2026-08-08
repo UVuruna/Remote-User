@@ -53,6 +53,33 @@ device — the owner's own PC — which is precisely what that type describes.
 - `specialUse` is the escape hatch for things with no honest type. This one
   has one.
 
+### The type has a price: a companion permission (live failure 2026-08-08)
+
+Since Android 14 the `connectedDevice` type is only granted to a process that
+ALSO holds one of `BLUETOOTH_CONNECT` / `BLUETOOTH_ADVERTISE` /
+`BLUETOOTH_SCAN` / `CHANGE_NETWORK_STATE` / `CHANGE_WIFI_STATE` /
+`CHANGE_WIFI_MULTICAST_STATE` / `NFC` / `TRANSMIT_IR` / `UWB_RANGING` / a USB
+grant. v0.0.093 declared the type and none of those, so `startForeground`
+threw `SecurityException` — **inside the service's own `onCreate`, which is
+not on the caller's stack**: the `try/catch` around `startForegroundService`
+in `NoticeService.start` never saw it, and the process died a second after
+launch, every launch. The owner's report was the whole app: *"ne može više da
+se pokrene aplikacija na telefonu, uopšte ne podigne ništa."*
+
+The manifest now declares **`CHANGE_NETWORK_STATE`** — the honest one of that
+list for a service whose entire job is a network connection to one paired
+device, and a NORMAL permission, so it is granted at install and the user is
+never asked.
+
+And the second tooth, because the first only covers the reason we already
+know: `startForeground` is wrapped in `try/catch` in `onCreate`, and a refusal
+is logged, sets `running = false` and calls `stopSelf()` (`onStartCommand`
+refuses to start the link when `running` is false). **The channel may fail;
+the app may never die with it** — the page's notice card then honestly says
+the channel is off while everything the owner actually opened the app for
+still works. Both teeth are pinned by `tests/test_notice_channel.py`
+(`the notice channel can never kill the app`), fail-closed in `build.py`.
+
 ## The three obstacles Android puts in the way, all handled in the app
 
 | Obstacle | How it is met |

@@ -31,6 +31,22 @@
          `specialUse` is the escape hatch for things with no honest type. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
+    <!-- The companion permission the `connectedDevice` TYPE requires (live
+         failure 2026-08-08 — the app would not start at all on v0.0.093).
+         Since Android 14 that type is only allowed to a process that also
+         holds one of BLUETOOTH_CONNECT / BLUETOOTH_ADVERTISE / BLUETOOTH_SCAN
+         / CHANGE_NETWORK_STATE / CHANGE_WIFI_STATE /
+         CHANGE_WIFI_MULTICAST_STATE / NFC / TRANSMIT_IR / UWB_RANGING / a USB
+         grant; holding NONE makes startForeground throw SecurityException in
+         the SERVICE's onCreate — which is not on the caller's stack, so the
+         try/catch around startForegroundService never sees it and the whole
+         process dies one second after launch, every launch.
+         CHANGE_NETWORK_STATE is the honest one of that list for a service
+         whose entire job is a network connection to one paired device, and it
+         is a NORMAL permission: granted at install, the user is never asked.
+         Never remove it while NoticeService declares `connectedDevice`
+         (gate: tests/test_notice_channel.py). -->
+    <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
     <!-- Doze can defer an unexempted app's network traffic while the device
          is idle, which for us means a notice sitting on the wire until the
          phone next wakes — the exact complaint the service exists to fix.
