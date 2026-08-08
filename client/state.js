@@ -70,6 +70,10 @@ const EXCURSION_GRACE_MS = 12000;
 const KEEP_AWAKE_MS = 180000;
 const LIVE_MAX_BEHIND_S = 0.5;   // jump to the live edge when this far behind
 const LIVE_TARGET_BEHIND_S = 0.1;
+// How often the live-drift measurement reaches the server log (task 83). Long
+// enough that a session's log stays readable, short enough that one minute of
+// him moving the mouse produces several lines to compare across fps settings.
+const LIVE_REPORT_S = 15;
 const BUFFER_KEEP_S = 8;         // decoded history kept in MSE before trimming
 
 // The PC cursor sits exactly under the finger (owner decision 2026-08-02,

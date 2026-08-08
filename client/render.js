@@ -331,11 +331,47 @@ function pumpMse() {
   }
 }
 
+// WHY 10 fps FEELS SMOOTHER THAN 60 (owner 2026-08-07, task 83 — and it is
+// the right question: "koja je svrha slati toliko velik bitrate i mnogo
+// frejmova ako to dovodi do suprotnog efekta").
+//
+// The hypothesis, read out of the six lines below rather than guessed: the
+// catch-up is a SEEK. An MSE live stream plays at 1x from wherever it started,
+// so every hiccup adds latency permanently; when the drift passes half a
+// second, `currentTime` is thrown forward — which flushes the decoder and
+// costs a visible stutter. More fps at native 4K means more bytes than the
+// link drains, means the drift reaches the threshold sooner, means that
+// stutter repeats. Lower fps never reaches it at all.
+//
+// This counts what actually happens instead of arguing about it: how far
+// behind the picture runs, and how often it is thrown forward. Reported to the
+// SERVER log every LIVE_REPORT_S while streaming, so his own log answers the
+// question on the next session he runs — no panel, nothing for him to do.
+let liveSeeks = 0;
+let liveDriftMax = 0;
+let liveReportAt = 0;
+
+function reportLiveDrift(behind) {
+  liveDriftMax = Math.max(liveDriftMax, behind);
+  const now = performance.now();
+  if (!liveReportAt) { liveReportAt = now; return; }
+  if (now - liveReportAt < LIVE_REPORT_S * 1000) return;
+  send({ type: "client_log", text:
+    `[live] behind=${behind.toFixed(2)}s peak=${liveDriftMax.toFixed(2)}s ` +
+    `jumps=${liveSeeks} in ${Math.round((now - liveReportAt) / 1000)}s` });
+  liveReportAt = now;
+  liveSeeks = 0;
+  liveDriftMax = 0;
+}
+
 function onMseUpdateEnd() {
   const b = video.buffered;
   if (b.length) {
     const end = b.end(b.length - 1);
-    if (end - video.currentTime > LIVE_MAX_BEHIND_S) {
+    const behind = end - video.currentTime;
+    reportLiveDrift(behind);
+    if (behind > LIVE_MAX_BEHIND_S) {
+      liveSeeks++;
       video.currentTime = end - LIVE_TARGET_BEHIND_S; // fell behind (jank, slow link) — jump
     }
     if (end - b.start(0) > BUFFER_KEEP_S * 2 && sourceBuffer && !sourceBuffer.updating) {
