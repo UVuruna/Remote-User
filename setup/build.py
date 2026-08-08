@@ -304,6 +304,17 @@ def input_gate() -> None:
          "boundary (tests/test_voice_dedup.py)")
     run([sys.executable, str(PROJECT_DIR / "tests" / "test_voice_dedup.py")])
 
+    # A SETTING WE RETIRED IS OURS TO REMOVE (owner evidence, 2026-08-08: his
+    # server.log warned about `hand` on every start, months after the offset
+    # system was deleted — a key HE never typed). Same class as the
+    # actions.json failure: we change ours, his copy keeps the dead field
+    # forever because nothing rewrites a file he does not open. The gate
+    # starts from the LITERAL text of his own settings.json, for the same
+    # reason 0j does.
+    step("0l/6  USER SETTINGS GATE — a retired key leaves his file quietly, a "
+         "mistyped one is still reported (tests/test_user_settings.py)")
+    run([sys.executable, str(PROJECT_DIR / "tests" / "test_user_settings.py")])
+
 
 def generate_icons() -> None:
     step("1/6  Generating ICOs from assets/logo.svg")

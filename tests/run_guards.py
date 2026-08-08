@@ -79,6 +79,16 @@ def _voice_dedup() -> None:
         check()
 
 
+def _user_settings() -> None:
+    """A setting WE retired leaves his file quietly; a setting HE mistyped is
+    still reported (owner evidence 2026-08-08 — `hand` warned on every start,
+    months after the offset system was deleted). Pure Python over a temp file:
+    it never reads or writes the real %LOCALAPPDATA% settings."""
+    import test_user_settings
+    for _, check in test_user_settings.CHECKS:
+        check()
+
+
 def _focus_gate() -> None:
     """WHERE typed input lands, and the machinery that gets it there (owner
     2026-08-06 + build round R1). Imported lazily like the others: they pull
@@ -125,6 +135,7 @@ FULL_ONLY_CHECKS = [
     ("actions migration (a new version's fields reach HIS file)", _actions_migration),
     ("app sets (right window, and they pay for their seat)", _app_set_wheel),
     ("voice dedup (dictation never retypes across a round boundary)", _voice_dedup),
+    ("user settings (a key we retired leaves his file quietly)", _user_settings),
     ("focus gate (typed input lands where he is looking)", _focus_gate),
 ]
 

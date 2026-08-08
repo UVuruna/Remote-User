@@ -47,9 +47,24 @@ is now GONE too: the owner ordered every remaining offset-era remnant
 deleted, not kept as a compatibility shim ("sve ono što smo računali offset —
 uopšte, to se neće koristiti više"), so `Settings.hand` no longer exists and
 `config` no longer sends it. Frame rate gained a "10 fps — light" choice. An
-old settings.json that still carries `"hand"` is unaffected — it was never in
-`USER_ADJUSTABLE`, so `load_user_settings()` logs a warning and skips the
-key, exactly like any other unrecognized key.
+old settings.json that still carries `"hand"` is now CLEANED (2026-08-08),
+and the sentence that used to stand here — "unaffected … logs a warning and
+skips the key, exactly like any other unrecognized key" — was the reason
+nobody looked. It is not like any other unrecognized key: the owner never
+typed `hand`, WE wrote it, and treating our own retired setting as his mistake
+printed `settings.json: 'hand' is not a user-adjustable key — ignored` in his
+log at every start, thirteen times in one day, months after the feature was
+deleted. A log that scolds him for our leftovers is a log he stops reading,
+and his log is where the evidence for every bug in this project has come from.
+
+`RETIRED_KEYS` now names what we removed. Those keys are dropped SILENTLY and
+the file is rewritten on the spot — not on the next save, because he may never
+open the Settings window again. A key nobody ever shipped still warns: that
+one is a typo of his, and it means a setting he believes is in effect is not.
+Same rule, same reason as `OWNER_SET_KEYS` in the actions.json migration: OURS
+is deleted if we retired it, HIS is kept. Gate: `tests/test_user_settings.py`,
+fail-closed in `build.py` (0l/6) and in `run_guards.py`, and it starts from the
+LITERAL text of his own file rather than one we compose.
 
 ## apk_version (owner bug 2026-08-02)
 `apk_version()` reads the `RemoteUser.apk.version` sidecar (written by

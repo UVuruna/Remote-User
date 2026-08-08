@@ -518,6 +518,37 @@ _LEGACY_PHONE_THEME = {
 }
 
 
+# Keys THIS PROJECT retired. They are not the owner's mistakes — they were our
+# settings, we removed the feature behind them, and his file kept them because
+# nothing ever rewrites a file he does not open.
+#
+# `hand` is the one that showed it (his server.log, 2026-08-08, thirteen times
+# in one day): "settings.json: 'hand' is not a user-adjustable key — ignored",
+# on every single start, months after the left/right-hand offset system was
+# deleted (2026-08-02, removed from the code and the docs 2026-08-07). Warning
+# a man about a key HE never typed is not information, it is noise that teaches
+# him to stop reading his own log — and the log is where the evidence for every
+# bug in this project has come from.
+#
+# It is also the SAME CLASS as the actions.json failure recorded in CLAUDE.md:
+# we change ours, his copy keeps the dead field forever. The rule adopted there
+# says OURS is deleted if we retired it. This is that rule, one file over.
+RETIRED_KEYS = {
+    # 2026-08-02 the offset system went, 2026-08-07 the last of it.
+    "hand",
+}
+
+
+def _drop_retired(raw: dict) -> tuple[dict, list[str]]:
+    """Strips keys we retired. Returns the cleaned dict (a copy — callers must
+    not have their own handed dict mutated) and what was dropped, so the caller
+    can decide whether the file on disk is now worth rewriting."""
+    dead = [k for k in raw if k in RETIRED_KEYS]
+    if not dead:
+        return raw, []
+    return {k: v for k, v in raw.items() if k not in RETIRED_KEYS}, dead
+
+
 def _migrate_legacy_ui(raw: dict) -> dict:
     """Translates a pre-2026-08-08 `phone_theme` value into the current
     three-axis shape, in place of the dict it is handed (a copy — callers must
@@ -577,9 +608,26 @@ def load_user_settings() -> None:
         logger.error("settings.json unreadable (%s) — using defaults", e)
         return
     raw = _migrate_legacy_ui(raw)
+    # A key WE retired is dropped without a word, and the file is healed on the
+    # spot rather than at some future save — he may never open Settings again,
+    # and until he does the warning would print at every start forever (see
+    # RETIRED_KEYS). A failure to rewrite is not worth a line either: the key
+    # is already ignored in memory, so the only cost is repeating this next
+    # time.
+    raw, dead = _drop_retired(raw)
+    if dead:
+        logger.info("Dropped setting(s) this version no longer has: %s",
+                    ", ".join(sorted(dead)))
+        try:
+            SETTINGS_PATH.write_text(json.dumps(raw, indent=2), encoding="utf-8")
+        except OSError:
+            pass
     accepted = {}
     for key, value in raw.items():
         if key not in USER_ADJUSTABLE:
+            # Still worth saying for a key nobody has ever shipped: that one is
+            # a typo of his, and silence there would hide a setting he believes
+            # is in effect.
             logger.warning("settings.json: %r is not a user-adjustable key — ignored", key)
             continue
         coerced = _coerced(key, value)
@@ -604,6 +652,7 @@ def save_user_settings(changes: dict) -> None:
     # `phone_theme` value would be an unrecognised string the next load has
     # to migrate all over again — harmless, but worth not repeating forever.
     current = _migrate_legacy_ui(current)
+    current, _ = _drop_retired(current)
     unknown = set(changes) - USER_ADJUSTABLE
     if unknown:
         raise ValueError(f"Not user-adjustable: {sorted(unknown)}")
