@@ -369,9 +369,22 @@ document.addEventListener("visibilitychange", () => {
     }
     if (ws) ws.close();
   } else {
-    // Reconnect the moment the user comes back (app switch, image picker,
-    // screen unlock) — waiting out the retry interval swallowed the first
-    // taps and read as "input randomly dies".
+    // COVER THE SEAM (owner 2026-08-08, task 119). His question was whether
+    // the flicker out of the layout and back is necessary when he attaches a
+    // file — and it is: an Android picker is another app, the page hides, and
+    // a hidden page closes the socket by rule (constraint 8). That is the
+    // excursion path, not a bug.
+    //
+    // What was owed is his second sentence: cover it with the same loading
+    // animation used everywhere else. The return is not instant — the socket
+    // reconnects, `layout_state` arrives, the page re-focuses the layout it
+    // was in, and the PC re-places real windows. He watched all of that bare.
+    //
+    // Only when a layout was actually being shown: coming back to the plain
+    // desktop has no seam to cover, and a cube over nothing is worse than
+    // nothing. `settleLayLoading` drops it when the streamed screen really
+    // stands still, exactly as it does for every other layout switch.
+    if (layoutRestore) showLayLoading("Back to your layout…");
     ensureConnected();
   }
 });

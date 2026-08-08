@@ -238,9 +238,17 @@ html, body {
 .group.left  { left: var(--space-m); }
 .group.right { right: var(--space-m); }
 
-/* Portrait: the four buttons stack in a column, category in the middle */
+/* Portrait: the four buttons stack in a column, category in the middle.
+   …UNLESS he chose the cross (owner 2026-08-08, task 121): "i u portret modu
+   moze korisnik da bira da mu se prikazuje onako kao dpad — tableti koji imaju
+   dovoljno sirok prostor da moze lepo da stane D-pad" (lang-ok: his own words,
+   quoted). A 10" tablet held upright is 800 CSS px wide, which fits two
+   crosses with the picture between them; a 412 px phone does not, which is why
+   the column stays the default and this is a CHOICE rather than a width rule.
+   `body.pad-cross` simply declines the portrait override, so the base rule
+   above — the cross — applies in both orientations. */
 @media (orientation: portrait) {
-  .group {
+  body:not(.pad-cross) .group {
     grid-template-columns: auto;
     grid-template-areas:
       "up"

@@ -171,6 +171,22 @@ function openSetsPanel() {
     card.appendChild(appList);
   }
 
+  // THE SHAPE OF THE TWO GROUPS, IN PORTRAIT (owner 2026-08-08, task 121).
+  // Landscape has always drawn the D-pad cross; upright it stacks into a
+  // column, because a 412 px phone has no room for two crosses with the
+  // picture between them. A 10" tablet held upright has ~800 px and plenty of
+  // room, and he wants the cross there — so it is a CHOICE, per device, and
+  // not a width rule that would guess wrong on the next screen size.
+  const shape = document.createElement("label");
+  shape.className = "sets-row apps";
+  const shapeCb = document.createElement("input");
+  shapeCb.type = "checkbox";
+  shapeCb.checked = padCross();
+  shapeCb.addEventListener("change", () => setPadCross(shapeCb.checked));
+  shape.append(shapeCb, document.createTextNode(
+    "Keep the D-pad cross when the screen is upright — for a wide screen"));
+  card.appendChild(shape);
+
   const done = document.createElement("button");
   done.type = "button";
   done.className = "sets-done";

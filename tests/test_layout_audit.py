@@ -165,6 +165,7 @@ SHOT_SUBJECTS = (
     ("Region_grab", "region-grab"),
     ("Command_chooser", "command-chooser"),
     ("Notices_card", "notices-card"),
+    ("Pad_cross_upright", "controls"),
     ("Layout_close_chooser", "layouts"),
     ("Layout_list", "layouts"),
     ("Rename_card", "layouts"),
@@ -658,13 +659,66 @@ def main() -> int:
             # assignment below contains an arrow — it was being invoked with
             # no root instead of installed.
             page.evaluate("() => {" + CONTRAST_JS + "}")
-            portrait = label.startswith("portrait")
+            # MEASURED, not read off the label. It was `label.startswith
+            # ("portrait")` until 2026-08-08, which was true while every size
+            # in this file was a phone — and became a silent lie the moment
+            # "tablet portrait 800x1280" joined them: an upright tablet was
+            # treated as landscape, so its shots would have been written with
+            # a `_landscape` suffix. A picture whose NAME lies is exactly what
+            # the look-assertion tooth exists to stop, and this is the same
+            # class of defect one layer up.
+            portrait = h > w
 
             # AUTO-HIDE — once per SIZE, not per look: it is a behaviour, and
             # a colour cannot change it. Run before the look sweep so the
             # controls are in a known state for everything that follows.
             for name, ok in _check_auto_hide(page).items():
                 results[f"{name} @ {label}"] = ok
+
+            # THE D-PAD SHAPE IS A CHOICE IN PORTRAIT TOO (owner 2026-08-08,
+            # task 121). On a TABLET held upright this is the whole point of
+            # the feature, and the tablet sizes had never been measured at all
+            # until this round — so the cross is checked for fit exactly where
+            # he asked for it, not only where it already lived.
+            page.evaluate("setPadCross(true)")
+            page.wait_for_timeout(150)
+            fit = page.evaluate("""() => {
+              const bad = [];
+              for (const id of ['group-left', 'group-right']) {
+                const g = document.getElementById(id);
+                const r = g.getBoundingClientRect();
+                if (r.left < 0 || r.top < 0 ||
+                    r.right > innerWidth + 1 || r.bottom > innerHeight + 1) {
+                  bad.push(id + ' leaves the screen: ' + JSON.stringify(
+                    {l: Math.round(r.left), t: Math.round(r.top),
+                     r: Math.round(r.right), b: Math.round(r.bottom),
+                     w: innerWidth, h: innerHeight}));
+                }
+              }
+              // …and the two crosses must not meet in the middle, which is
+              // the whole reason the column exists on a narrow phone.
+              const a = document.getElementById('group-left').getBoundingClientRect();
+              const b = document.getElementById('group-right').getBoundingClientRect();
+              if (a.right > b.left - 8) bad.push('the two crosses overlap');
+              if (document.scrollingElement.scrollWidth > innerWidth + 1) {
+                bad.push('the page gained horizontal scroll');
+              }
+              return bad;
+            }""")
+            wide = w >= 700
+            # A NARROW phone genuinely cannot hold two crosses — that is why
+            # the column is the default. What must hold is that the choice is
+            # SAFE where he asked for it: a tablet held upright.
+            if wide or not portrait:
+                results[f"the D-pad cross fits upright @ {label}"] = not fit
+                if fit:
+                    print(f"  DETAIL pad cross @ {label}: {fit}")
+                # …and he SEES it, because a choice offered without a
+                # picture is a choice he has to install to evaluate.
+                if portrait:
+                    page.screenshot(path=str(shot_path("Pad_cross_upright")))
+            page.evaluate("setPadCross(false)")
+            page.wait_for_timeout(120)
 
             for look in LOOKS:
                 theme, colored, fill = look

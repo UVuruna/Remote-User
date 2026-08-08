@@ -820,7 +820,12 @@ function renderGroup(side) {
   // may carry order_land (slots T·L·R·B) and order_port (top→bottom column)
   // from the desktop editor; ours is the default and always restorable there.
   const btns = activeButtons(cat);
-  const raw = matchMedia("(orientation: portrait)").matches ? cat.order_port : cat.order_land;
+  // Keyed off the SHAPE, not the orientation (owner 2026-08-08, task 121).
+  // `order_port` is his top-to-bottom COLUMN order and `order_land` his
+  // T·L·R·B CROSS order — two different questions. A portrait tablet showing
+  // the cross must take the cross's order, or his arrangement would arrive
+  // scrambled into the four arms.
+  const raw = padColumn() ? cat.order_port : cat.order_land;
   const order = Array.isArray(raw) && raw.length === btns.length &&
     [...raw].sort().join() === btns.map((_, i) => i).join()
     ? raw : btns.map((_, i) => i);
@@ -896,8 +901,42 @@ function closeWheel() {
 // 2026-08-05, THE STRUCTURE LAW) — openSetsPanel/openQualityPanel are called
 // only at runtime, after every script has loaded.
 
-// Rotation may carry a different button order per set (order_port).
+// Rotation may carry a different button order per set (order_port) — and,
+// since 2026-08-08, a different SHAPE (the cross is a choice in portrait too).
 matchMedia("(orientation: portrait)").addEventListener("change", () => {
+  applyPadShape();
   renderGroup("left");
   renderGroup("right");
 });
+
+// ── THE D-PAD SHAPE IS HIS CHOICE, IN BOTH ORIENTATIONS (task 121) ────────
+// A 10" tablet held upright is ~800 CSS px wide, which fits two crosses with
+// the picture between them; a 412 px phone does not. So the column stays the
+// default and the cross is a per-device preference, exactly like every other
+// phone-side switch (through the shell's SharedPreferences bridge, never bare
+// localStorage — that is per-ORIGIN and split his state between the LAN and
+// Tailscale addresses once already).
+//
+// `padColumn()` is the ONE question the rest of the page asks: the CSS shape
+// and the per-set arrangement must never disagree about which of the two is
+// on screen.
+function padCross() {
+  return prefGet("padCross") === "1";
+}
+
+function padColumn() {
+  return matchMedia("(orientation: portrait)").matches && !padCross();
+}
+
+function applyPadShape() {
+  document.body.classList.toggle("pad-cross", padCross());
+}
+
+function setPadCross(on) {
+  prefSet("padCross", on ? "1" : "0");
+  applyPadShape();
+  renderGroup("left");
+  renderGroup("right");
+}
+
+applyPadShape();
