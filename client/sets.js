@@ -252,3 +252,46 @@ function allCats() {
   }
   return list;
 }
+
+
+// --- WHICH CATEGORY EACH GROUP SHOWS, ACROSS A RECONNECT --------------------
+// Owner report 2026-08-08: "kad god ucitam neku sliku ili nesto, kada uradi
+// onaj blagi reset, aplikacija uvek mi vrati na ovaj default — levo Mouse set
+// a desno Input set."
+//
+// He is describing an EXCURSION. Picking an image, taking a photo, answering a
+// permission dialog all hide the page, and a hidden page closes the socket by
+// rule (CLAUDE.md constraint 8 — nothing of ours may hover over his desk while
+// he is not looking). The page then reconnects and the server's `actions`
+// frame sets `groups.left/right` from the DESKTOP defaults, which is right for
+// a first connection and wrong for every one after it.
+//
+// Layout focus already survives this (`layoutRestore`, 2026-08-04). The
+// category never got the same treatment, so a five-second trip to the gallery
+// undid whatever he had opened the wheel to choose.
+//
+// REMEMBERED BY NAME, NEVER BY INDEX. The list is not stable: app-aware sets
+// join it in layout focus and leave with it, `wheel_order` reorders it, and the
+// cap of 8 can drop one. An index would silently point at a different set the
+// moment any of that happened — the same lesson `active` learned when it
+// started naming buttons by id instead of position.
+//
+// Stored through the SharedPreferences bridge, not bare localStorage: that is
+// per-ORIGIN and split his state between the LAN and Tailscale addresses once
+// already (the "picker rotates" bug of 2026-08-05).
+const GROUP_PREF = { left: "groupLeft", right: "groupRight" };
+
+function rememberGroup(side, name) {
+  if (name) prefSet(GROUP_PREF[side], name);
+}
+
+// The index this side should show: his remembered set if it is still on the
+// wheel, otherwise whatever the desktop sent. A remembered set that has left
+// the wheel is NOT an error and must not be logged as one — an app set going
+// away with its layout is the normal case.
+function restoredGroup(side, fallback, list) {
+  const name = prefGet(GROUP_PREF[side]);
+  const at = name ? list.findIndex((c) => c.name === name) : -1;
+  if (at >= 0) return at;
+  return Math.min(Math.max(fallback | 0, 0), Math.max(list.length - 1, 0));
+}

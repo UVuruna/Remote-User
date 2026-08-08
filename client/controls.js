@@ -854,6 +854,8 @@ function openWheel(side) {
     item.style.top = `${cy + WHEEL_RADIUS * Math.sin(angle)}px`;
     keepFocus(item, () => {
       groups[side] = i;
+      // His choice outlives the next excursion (sets.js -> rememberGroup).
+      rememberGroup(side, cat.name);
       renderGroup(side);
       closeWheel();
     });

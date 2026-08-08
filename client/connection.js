@@ -171,8 +171,13 @@ function connect() {
         // client/sets.js sorts by it; missing/empty = today's order,
         // unchanged (a user who never opens the new list sees no change).
         wheelOrder = msg.wheel_order || [];
-        groups.left = Math.min(msg.left ?? 0, categories.length - 1);
-        groups.right = Math.min(msg.right ?? 0, categories.length - 1);
+        // HIS CHOICE FIRST, the desktop default only when there is none
+        // (owner 2026-08-08 — every excursion used to put the wheel back to
+        // Mouse/Input). Resolved against the list that will actually ride,
+        // by NAME: see sets.js -> restoredGroup.
+        const riding = allCats();
+        groups.left = restoredGroup("left", msg.left ?? 0, riding);
+        groups.right = restoredGroup("right", msg.right ?? 0, riding);
         // The cap of 8 is a LAW over the STORED state too (owner 2026-08-06):
         // prefs saved before app sets started charging, and desktop defaults
         // that never asked, both used to sail past a check that only ran on a

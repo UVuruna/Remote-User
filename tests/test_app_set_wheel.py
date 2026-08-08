@@ -606,6 +606,84 @@ def test_the_source_window_may_die_and_the_project_survives():
     assert got == ["VSCode"], f"a remembered FOLDER became a remembered ANSWER: {got}"
 
 
+
+# -- E. the wheel remembers which category he had ---------------------------
+# Owner report 2026-08-08: "kad god ucitam neku sliku ili nesto, kada uradi
+# onaj blagi reset, aplikacija uvek mi vrati na ovaj default — levo Mouse set
+# a desno Input set." An excursion hides the page, a hidden page closes the
+# socket by rule, and the reconnect used to take the DESKTOP defaults every
+# time. These checks pin the fix, and the third one is the reason it is stored
+# by NAME: the list is not stable.
+
+BASIC = [
+    {"name": "Mouse", "required": True},
+    {"name": "Input", "required": True},
+    {"name": "Settings", "required": True},
+    {"name": "Edit"},
+    {"name": "Attach"},
+]
+
+
+def _groups(prefs, left_default, right_default, categories, **kw):
+    # Seeded through prefSet rather than handed to run_js: its `prefs`
+    # argument is the SETS PICKER's own blob (one key, `setsPrefs`), and the
+    # remembered category is a separate key on the same bridge. Writing it the
+    # way the page writes it is also the more honest fixture — the first
+    # version of this helper passed the dict straight in, nothing was ever
+    # read, and two checks passed for the wrong reason.
+    seed = "\n".join(f'prefSet({k!r}, {v!r});' for k, v in prefs.items())
+    return run_js(
+        f"""
+{seed}
+const riding = allCats();
+console.log(JSON.stringify({{
+  left: riding[restoredGroup("left", {left_default}, riding)].name,
+  right: riding[restoredGroup("right", {right_default}, riding)].name,
+}}));
+""", [], {}, categories=categories, **kw)
+
+
+def test_his_choice_survives_the_excursion():
+    """The report itself: he opened Edit on the left, went to the gallery, and
+    came back to Mouse."""
+    got = _groups({"groupLeft": "Edit", "groupRight": "Attach"}, 0, 1, BASIC)
+    assert got == {"left": "Edit", "right": "Attach"}, got
+
+
+def test_the_desktop_default_still_decides_a_first_connection():
+    """Nothing remembered — a phone that has never chosen must land on what
+    the desktop set, exactly as before."""
+    got = _groups({}, 0, 1, BASIC)
+    assert got == {"left": "Mouse", "right": "Input"}, got
+
+
+def test_a_reorder_cannot_move_his_choice():
+    """THE REASON IT IS A NAME. `wheel_order` reorders the ring, so the index
+    that meant Edit yesterday means something else today. Same prefs, same
+    sets, different order — the answer must not move."""
+    order = ["Attach", "Edit", "Settings", "Input", "Mouse"]
+    got = _groups({"groupLeft": "Edit", "groupRight": "Attach"}, 0, 1, BASIC,
+                  wheel_order=order)
+    assert got == {"left": "Edit", "right": "Attach"}, got
+
+
+def test_a_set_that_left_the_wheel_falls_back_quietly():
+    """An app-aware set rides only while its layout is focused, so a
+    remembered set that is GONE is the normal case, not an error: fall back to
+    the desktop default without complaint."""
+    # BOTH remembered names must be absent, or the check tests nothing: the
+    # first version named "Edit", which IS in BASIC, so the right group stayed
+    # on it correctly and the assertion was simply wrong. Caught by running it.
+    got = _groups({"groupLeft": "Claude", "groupRight": "Media"}, 2, 0, BASIC)
+    assert got == {"left": "Settings", "right": "Mouse"}, got
+
+
+def test_a_default_past_the_end_is_clamped():
+    """A desktop default can outlive the set it pointed at (the owner unticks
+    one in the picker). It may never index past the ring."""
+    got = _groups({}, 99, 99, BASIC)
+    assert got == {"left": "Attach", "right": "Attach"}, got
+
 TESTS = [
     ("only the Claude conversation wears the Claude set",
      test_only_the_claude_conversation_matches_the_claude_set),
@@ -636,6 +714,16 @@ TESTS = [
      test_no_live_conversation_there_means_no_claude_set),
     ("the source window may die and the project survives",
      test_the_source_window_may_die_and_the_project_survives),
+    ("his chosen category survives an excursion",
+     test_his_choice_survives_the_excursion),
+    ("a first connection still takes the desktop default",
+     test_the_desktop_default_still_decides_a_first_connection),
+    ("a wheel reorder cannot move his choice (stored by NAME)",
+     test_a_reorder_cannot_move_his_choice),
+    ("a set that left the wheel falls back quietly",
+     test_a_set_that_left_the_wheel_falls_back_quietly),
+    ("a default past the end of the ring is clamped",
+     test_a_default_past_the_end_is_clamped),
 ]
 
 

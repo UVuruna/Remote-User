@@ -2,8 +2,19 @@
   "left": 0,
   "right": 1,
   "wheel_order": [
-    "Mouse", "Input", "Attach", "Edit", "Navigate", "Cursor", "Media",
-    "Windows", "Settings", "VSCode", "Claude", "Chrome", "Explorer"
+    "Mouse",
+    "Input",
+    "Attach",
+    "Edit",
+    "Navigate",
+    "Cursor",
+    "Media",
+    "Windows",
+    "Settings",
+    "VSCode",
+    "Claude",
+    "Chrome",
+    "Explorer"
   ],
   "categories": [
     {
@@ -458,19 +469,75 @@
           "label": "Model",
           "icon": "model",
           "text": "/model",
-          "enter": true
+          "enter": true,
+          "options": [
+            {
+              "label": "opus",
+              "value": "opus"
+            },
+            {
+              "label": "sonnet",
+              "value": "sonnet"
+            },
+            {
+              "label": "haiku",
+              "value": "haiku"
+            },
+            {
+              "label": "fable",
+              "value": "fable"
+            },
+            {
+              "label": "best — Fable where available, else Opus",
+              "value": "best"
+            },
+            {
+              "label": "opusplan — Opus plans, Sonnet runs",
+              "value": "opusplan"
+            },
+            {
+              "label": "opus[1m] — Opus, 1M context",
+              "value": "opus[1m]"
+            },
+            {
+              "label": "sonnet[1m] — Sonnet, 1M context",
+              "value": "sonnet[1m]"
+            },
+            {
+              "label": "default — your account's own",
+              "value": "default"
+            }
+          ]
         },
         {
           "label": "Thinking",
           "icon": "thinking",
           "text": "/effort",
           "options": [
-            "low",
-            "medium",
-            "high",
-            "xhigh",
-            "max",
-            "auto"
+            {
+              "label": "low — least",
+              "value": "low"
+            },
+            {
+              "label": "medium",
+              "value": "medium"
+            },
+            {
+              "label": "high — the usual default",
+              "value": "high"
+            },
+            {
+              "label": "xhigh — deeper",
+              "value": "xhigh"
+            },
+            {
+              "label": "max — strongest",
+              "value": "max"
+            },
+            {
+              "label": "auto — back to the model's own default",
+              "value": "auto"
+            }
           ]
         },
         {
