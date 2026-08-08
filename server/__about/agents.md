@@ -133,8 +133,17 @@ Verified on the owner's machine, 2026-08-07: tier 1 alone answered
 - `live_agents()` — the cached scan, `{agent: {folder names}}`. `CACHE_S` = 2 s:
   short enough that opening a conversation is noticed before the owner reaches
   his phone, long enough that a layout switch never pays for it twice
+- `first_folder(titles)` — the first of several titles that NAMES a project
+  (owner report 2026-08-08). A window can have more than one title worth
+  asking: a VS Code tab torn into its own window may be titled bare `Visual
+  Studio Code`, while the window it came out of still carries the folder. The
+  caller offers them in order of authority; see
+  [Window Manager](window_manager.md) → `Layout.project`
+- `agents_in(folder, live=None)` — the answer itself, for a caller that
+  already knows the folder. A folder may be remembered; **this may not**
 - `title_folder(title)` / `agents_for(title, live=None)` — the window-title
-  side of the bridge. **Pass a `live` snapshot whenever you ask about more
+  side of the bridge (`agents_for` = `agents_in(title_folder(title))`).
+  **Pass a `live` snapshot whenever you ask about more
   than one window.** Without it every call may reach the 1.85 s PowerShell
   probe the moment the cache lapses, and the callers that ask in a loop are
   async handlers — that time is the whole event loop stopped: no stream, no

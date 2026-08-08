@@ -27,7 +27,7 @@ total — including for windows no layout can still name.
 | `send_layout_state(ws, layouts, conn)` | the `layout_state` payload; the connection ADOPTS the focus it returns, because a prune may have SHIFTED it, not only cleared it |
 | `layout_pick(ws, layouts, stream, msg)` | one armed tap → the window (and tab) under it, plus the grid templates |
 | `layout_list(ws, layouts, stream)` | every window PLUS each window's content tabs; windows already in a layout are left out |
-| `resolve_slot(ws, stream, slot)` | one creation slot → a concrete hwnd; a slot naming a TAB is extracted into its own window first, and every failure falls back to the whole window |
+| `resolve_slot(ws, stream, slot)` | one creation slot → `(hwnd, tab name, SOURCE hwnd)`; a slot naming a TAB is extracted into its own window first, and every failure falls back to the whole window. The third value is the window the tab was torn OUT of (`0` = nothing was extracted) — a torn-off VS Code tab can be born titled bare `Visual Studio Code`, and that source window is then the only one that can still name the project (owner 2026-08-08; the layout keeps its HANDLE, never its answer — see [Window Manager](window_manager.md) → `Layout.project`) |
 | `layout_create(ws, layouts, stream, conn, msg)` | resolve every slot (one cube turn per slot), register, then focus |
 | `layout_aspect(ws, layouts, stream, conn, msg)` | store this layout's W:H and free-axis position, then re-focus (the focus is what re-places the windows) |
 | `layout_focus(ws, layouts, stream, conn, index)` | `-1` = the full desktop, which also minimizes every member |

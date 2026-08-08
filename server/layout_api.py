@@ -125,14 +125,21 @@ async def layout_list(ws, layouts, stream) -> None:
     }))
 
 
-async def resolve_slot(ws, stream, slot: dict) -> tuple[int, str | None] | None:
-    """One creation slot → a concrete hwnd. A slot naming a TAB is extracted
-    into its own window first (app command → Explorer path → drag); every
-    failure falls back to the slot's whole window."""
+async def resolve_slot(ws, stream, slot: dict) -> tuple[int, str | None, int] | None:
+    """One creation slot → `(hwnd, tab name, SOURCE hwnd)`. A slot naming a
+    TAB is extracted into its own window first (app command → Explorer path →
+    drag); every failure falls back to the slot's whole window.
+
+    The third value is the whole point of the triple (owner report
+    2026-08-08): a torn-off tab's own window may be titled `Visual Studio
+    Code` and nothing else, so the window it came OUT of is the only one that
+    can still name the project — and the layout keeps its HANDLE, to be read
+    live, never its answer. 0 = nothing was extracted, the window speaks for
+    itself. See `window_manager.Layout.project`."""
     hwnd = int(slot["hwnd"])
     tab = slot.get("tab")
     if not tab:
-        return (hwnd, None)
+        return (hwnd, None, 0)
     info = await asyncio.to_thread(window_manager.window_at_hwnd, hwnd)
     if info is None:
         return None
@@ -142,8 +149,8 @@ async def resolve_slot(ws, stream, slot: dict) -> tuple[int, str | None] | None:
         info, tab.get("name"))
     if extracted is None:
         await toast(ws, f"Could not separate “{tab.get('name', 'tab')}” — using the whole window")
-        return (hwnd, None)
-    return (extracted, tab.get("name"))
+        return (hwnd, None, 0)
+    return (extracted, tab.get("name"), hwnd)
 
 
 async def layout_create(ws, layouts, stream, conn: dict, msg: dict) -> None:
@@ -157,7 +164,7 @@ async def layout_create(ws, layouts, stream, conn: dict, msg: dict) -> None:
         await toast(ws, "Nothing selected — layout not created")
         await send_layout_state(ws, layouts, conn)
         return
-    resolved: list[tuple[int, str | None]] = []
+    resolved: list[tuple[int, str | None, int]] = []
     for i, slot in enumerate(slots):
         r = await resolve_slot(ws, stream, slot)
         if r is not None:
@@ -169,7 +176,7 @@ async def layout_create(ws, layouts, stream, conn: dict, msg: dict) -> None:
         await toast(ws, "Those windows are gone — layout not created")
         await send_layout_state(ws, layouts, conn)
         return
-    target, name = resolved[0]
+    target, name, source = resolved[0]
     # The phone may carry the owner's own name (owner 2026-08-05); the tab /
     # window title stays the default the panel prefilled it with.
     typed = str(msg.get("name", "")).strip()[:80]
@@ -181,8 +188,8 @@ async def layout_create(ws, layouts, stream, conn: dict, msg: dict) -> None:
     # nothing.
     created = await asyncio.to_thread(
         layouts.create, target, str(msg.get("mode", "solo")),
-        msg.get("grid"), [h for h, _ in resolved[1:]],
-        orient, conn["ratio"], mon_rect(stream), name)
+        msg.get("grid"), [h for h, _, _ in resolved[1:]],
+        orient, conn["ratio"], mon_rect(stream), name, source)
     if created is None:
         await toast(ws, "That window is gone — layout not created")
     else:

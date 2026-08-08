@@ -102,11 +102,14 @@ function appSetMatches(s, lay) {
   // An AGENT set asks the PC, not the window text (owner 2026-08-06, after
   // the manual ticking he called what it was). The server reads the process
   // table — a running claude.exe carries its session id, the session id names
-  // its project, and this window's title names the same project — and sends
-  // the answer as `agents`. A title guess could never have done this: Claude
-  // Code names its tab after the CONVERSATION and VS Code hides webview
-  // content from accessibility. `title` stays underneath as the fallback for
-  // a server too old to send `agents`.
+  // its project — and matches it against the project THIS layout's windows
+  // name (server/window_manager.py `Layout.project`: the member's own title,
+  // else the window an extracted tab was torn out of, both read live). It
+  // arrives as `agents`. A title guess could never have done this: Claude
+  // Code names its tab after the CONVERSATION, VS Code hides webview content
+  // from accessibility, and a torn-off tab can be titled `Visual Studio Code`
+  // and nothing else. `title` stays underneath as the fallback for a server
+  // too old to send `agents`.
   if (s.agent) {
     if (Array.isArray(lay.agents)) return lay.agents.includes(s.agent);
     return s.title ? titleMatches(s.title, lay.title) : false;

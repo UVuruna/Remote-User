@@ -38,6 +38,7 @@ Run:  .venv\\Scripts\\python tests/test_app_set_wheel.py
 Requires: node on PATH.
 """
 
+import asyncio
 import json
 
 import shutil
@@ -47,6 +48,12 @@ import tempfile
 from pathlib import Path
 
 PROJECT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(PROJECT / "server"))
+
+import agents  # noqa: E402
+import layout_api  # noqa: E402
+import uia  # noqa: E402
+import window_manager  # noqa: E402
 # The composition rules moved out of controls.js on 2026-08-06 (THE STRUCTURE
 # LAW — controls.js hit 1000 lines). sets.js is the whole module under test
 # now, and the guard runs it WHOLE rather than lifting a block out of it:
@@ -422,6 +429,183 @@ console.log(JSON.stringify(allCats().map((c) => c.name)));
         f"always worked: {got}")
 
 
+# -- F. a layout made from an EXTRACTED TAB still names its project ---------
+# Owner report 2026-08-08: he builds a layout out of the Claude Code TAB and
+# the wheel offers VS Code alone.
+#
+# WHY NO GUARD SAW IT. Every check above — and every check in
+# test_layout_protocol.py — hand-typed one half of the join and asserted on the
+# other. The server gate faked `agents_for` outright and answered `_title` with
+# ONE author-written string for every hwnd, so a parent window and a torn-off
+# tab were indistinguishable by construction; the phone gate was handed
+# `agents: ["claude"]` as an input. The only title the code was ever asked
+# about was one WE wrote. So this section writes nothing the join can read: it
+# hands `layout_create` a window, fakes only Windows and the PowerShell probe,
+# and asks the real client/sets.js which set names come out.
+#
+# THE FIXTURES ARE CAPTURED, NOT INVENTED (measurement 2026-08-08, read-only
+# EnumWindows on his PC + the VS Code 1.107.0 sources he actually runs). VS
+# Code creates every "Move into New Window" BrowserWindow with
+# `title: productService.nameLong` on about:blank and the workbench overwrites
+# document.title only later, so a torn-off tab is BORN carrying a title no
+# regex can match. Which of the family his machine hands us at the instant we
+# read is not proven — so the guard covers the whole family, and every one of
+# them must still find the project.
+TAB_NAME = "Ispravka UI dizajna meni…, Window 2: Editor Group 1"
+SOURCE_TITLE = "Provera ROOT pravila i G… - UVuruna - Visual Studio Code [Administrator]"
+EXTRACTED_TITLES = {
+    "born bare — the product name, before the workbench paints": "Visual Studio Code",
+    "the tab's own name, no folder anywhere in it": TAB_NAME,
+    "not titled yet at all": "",
+    "settled, folder present": SOURCE_TITLE,
+}
+# The project both titles name is `uvuruna`, and a conversation is live there.
+LIVE_HERE = {"claude": {"uvuruna"}}
+# A live conversation, but in another project of his — the same PC, the same
+# claude.exe, and the answer must be NO.
+LIVE_ELSEWHERE = {"claude": {"loading cube"}}
+
+# His own handles, from the server log of 2026-08-08 (0x40c0e was the
+# short-lived fourth Code.exe window — the extracted one).
+SOURCE_HWND, EXTRACTED_HWND = 0x10B3A, 0x40C0E
+MON = (0, 0, 3840, 2160)
+
+
+class FakeUser32:
+    """Only what `prune()` asks: does this window still exist."""
+
+    def __init__(self, alive):
+        self.alive = alive
+
+    def IsWindow(self, hwnd):  # noqa: N802 — mirrors the Win32 name
+        return 1 if hwnd in self.alive else 0
+
+    def __getattr__(self, name):
+        return lambda *a, **k: 0
+
+
+class FakeWs:
+    def __init__(self):
+        self.sent = []
+
+    async def send_text(self, text):
+        self.sent.append(json.loads(text))
+
+
+class FakeStream:
+    width, height, monitor_index = 3840, 2160, 0
+
+
+def install_windows(titles: dict, alive: set, extracted) -> None:
+    """Fake WINDOWS, and nothing above it. `_title` answers PER HWND — the
+    distinction between a parent window and the tab torn out of it is the
+    whole subject, and a guard that returns one string for every handle
+    cannot see it."""
+    wm = window_manager
+    wm._title = lambda hwnd: titles.get(hwnd, "")
+    wm.is_alive = lambda hwnd: hwnd in alive
+    wm._process_name = lambda hwnd: "Code.exe"
+    wm._process_path = lambda hwnd: "C:/Code.exe"
+    wm.icon_data_uri = lambda path: None
+    wm.place_window = lambda hwnd, rect: True
+    wm.raise_window = lambda hwnd, topmost=True: None
+    wm.drop_topmost = lambda hwnd: True
+    wm.freeze_transitions = lambda hwnd, disabled=True: None
+    wm.wait_minimized = lambda hwnds, timeout_s=0: None
+    wm._frame_rect = lambda hwnd: (0, 0, 1000, 1000)
+    wm._work_area = lambda rect: rect
+    wm._ledger_save = lambda: None
+    wm.user32 = FakeUser32(alive)
+    wm.window_at_hwnd = lambda hwnd: (
+        {"hwnd": hwnd, "title": titles.get(hwnd, ""), "process": "Code.exe",
+         "icon": None} if hwnd in alive else None)
+    layout_api.rect_for_size = lambda w, h, i: MON
+    # The extraction itself is Windows' job (SendInput drag / a menu click) and
+    # is refused on this machine by the safety rules — `extracted` is the hwnd
+    # it would have produced, or None for the failure that falls back to the
+    # whole window.
+    uia.extract_tab = lambda rect, x, y, info, name=None: extracted
+
+
+def layout_entry(extracted_title: str, live: dict, tab: bool = True,
+                 extraction_works: bool = True, close_source: bool = False) -> dict:
+    """Drive the REAL creation path for one slot and return the layout as the
+    phone receives it. Only Windows and the PowerShell probe are faked;
+    `resolve_slot`, `LayoutRegistry.create`, `Layout.project`,
+    `agents.title_folder` and `agents.agents_in` all run for real."""
+    titles = {SOURCE_HWND: SOURCE_TITLE, EXTRACTED_HWND: extracted_title}
+    alive = {SOURCE_HWND, EXTRACTED_HWND}
+    install_windows(titles, alive, EXTRACTED_HWND if extraction_works else None)
+    agents.live_agents = lambda: live       # the 1.85 s subprocess, and ONLY it
+    layouts = window_manager.LayoutRegistry()
+    ws, conn = FakeWs(), {"ratio": 9 / 16, "active": None, "region": None}
+    asyncio.run(layout_api.layout_create(ws, layouts, FakeStream(), conn, {
+        "mode": "solo", "orient": "portrait",
+        "slots": [{"hwnd": SOURCE_HWND, "x": 0.3, "y": 0.02,
+                   "tab": {"name": TAB_NAME} if tab else None}]}))
+    if close_source:
+        alive.discard(SOURCE_HWND)          # he closed the parent VS Code window
+        return layouts.state(0, None)["layouts"][0]
+    frames = [m for m in ws.sent if m.get("type") == "layout_state"]
+    assert frames, f"creation never answered with a layout_state: {ws.sent}"
+    return frames[0]["layouts"][0]
+
+
+def wheel_of(entry: dict) -> list:
+    """The set names that ride the phone's wheel for this layout — the real
+    client/sets.js, over the payload the server really sent."""
+    body = (f"layoutActive = 0;\nlayouts = [{json.dumps(entry)}];\n"
+            "console.log(JSON.stringify(allCats().map((c) => c.name)));")
+    return run_js(body, shipped_app_sets(),
+                  {"apps": True, "appState": {}, "state": {}})
+
+
+def test_an_extracted_tab_keeps_the_claude_set():
+    """His report, end to end. Whatever title the torn-off window carries at
+    the moment we look, the layout must still find the project — because the
+    window it was torn OUT of is alive and says so, and it is READ, not
+    remembered."""
+    for why, title in EXTRACTED_TITLES.items():
+        got = wheel_of(layout_entry(title, LIVE_HERE))
+        assert got == ["VSCode", "Claude"], (
+            f"extracted window titled {title!r} ({why}) → wheel {got}. A live "
+            "Claude conversation in this window's project must put the Claude "
+            "set on the wheel beside VSCode (owner 2026-08-08).")
+
+
+def test_a_whole_window_and_a_FAILED_extraction_keep_it_too():
+    """The two paths that were never broken must not break now: a plain
+    window slot, and a tab whose extraction failed and fell back to the whole
+    window (that fallback is why his OTHER layouts kept working)."""
+    assert wheel_of(layout_entry("", LIVE_HERE, tab=False)) == ["VSCode", "Claude"]
+    got = wheel_of(layout_entry("", LIVE_HERE, extraction_works=False))
+    assert got == ["VSCode", "Claude"], f"the whole-window fallback lost it: {got}"
+
+
+def test_no_live_conversation_there_means_no_claude_set():
+    """The other half, or the guard proves nothing: `claude.exe` running in
+    ANOTHER of his projects must leave this window plain VSCode — including
+    for the extracted title that DOES carry a folder."""
+    for title in ("Visual Studio Code", SOURCE_TITLE):
+        got = wheel_of(layout_entry(title, LIVE_ELSEWHERE))
+        assert got == ["VSCode"], (
+            f"{title!r} with the conversation live elsewhere → {got}; the "
+            "Claude commands must not be carried into a plain editor")
+
+
+def test_the_source_window_may_die_and_the_project_survives():
+    """He tears the tab off and then closes the VS Code window it came from.
+    The folder read at creation is the last resort — and it is a FOLDER, not
+    an answer: whether a conversation is live in it is still read from the
+    process table, so the same layout goes plain the moment nothing runs
+    there."""
+    got = wheel_of(layout_entry("Visual Studio Code", LIVE_HERE, close_source=True))
+    assert got == ["VSCode", "Claude"], f"the project was lost with the window: {got}"
+    got = wheel_of(layout_entry("Visual Studio Code", LIVE_ELSEWHERE,
+                                close_source=True))
+    assert got == ["VSCode"], f"a remembered FOLDER became a remembered ANSWER: {got}"
+
+
 TESTS = [
     ("only the Claude conversation wears the Claude set",
      test_only_the_claude_conversation_matches_the_claude_set),
@@ -444,6 +628,14 @@ TESTS = [
     ("an unknown set lands at the end", test_an_unknown_set_lands_at_the_end),
     ("the cap of 8 still holds with a wheel order and app sets charging it",
      test_cap_still_holds_with_a_wheel_order_and_app_sets_charging_it),
+    ("an EXTRACTED tab keeps the Claude set",
+     test_an_extracted_tab_keeps_the_claude_set),
+    ("a whole window and a FAILED extraction keep it too",
+     test_a_whole_window_and_a_FAILED_extraction_keep_it_too),
+    ("no live conversation there means no Claude set",
+     test_no_live_conversation_there_means_no_claude_set),
+    ("the source window may die and the project survives",
+     test_the_source_window_may_die_and_the_project_survives),
 ]
 
 

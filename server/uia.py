@@ -1,6 +1,13 @@
-"""Tab layer of the layout feature: UIA detection + extraction to a window.
+"""The UI Automation layer: tab detection + extraction, focus cycling, caret.
 
-Phase F+ step 2 (spec: ROADMAP → Layouts & Tab Control; feasibility probe
+Everything here speaks to Windows through UI Automation, and that is what
+makes it one module: `uiautomation` (COM) must be initialized in whichever
+thread makes the call, and `_uia()` is the single place that does it. Three
+features ride on it — tab extraction (below), `next_input`'s walk through the
+text fields, and the read the [Caret](caret.py) watch needs. The POLICY of
+each of those lives with its own subject; only the UIA call lives here.
+
+TAB EXTRACTION — Phase F+ step 2 (spec: ROADMAP → Layouts & Tab Control; probe
 2026-08-02 verified all three strategies on the owner's machine). The unit of
 selection is the TAB — a VSCode editor tab, Chrome tab or Explorer tab is
 turned into its OWN OS window, which the layout machinery then arranges like
@@ -252,6 +259,114 @@ def focus_next_input(scope_hwnds: list[int] | None) -> str | None:
             return nxt.Name or window_manager.window_at_hwnd(hwnd)["title"]
         except Exception as e:  # noqa: BLE001 — must fail soft
             logger.warning("next_input failed: %s", e)
+            return None
+
+
+# ---------------------------------------------------------------------------
+# The caret — WHERE the typing lands on screen (policy: caret.py)
+
+CARET_HOPS = 8        # element → … → a node that owns a real window handle
+_caret_warned: set[str] = set()
+
+
+def _warn_once(message: str) -> None:
+    """A caret failure is logged ONCE per distinct message. This read runs
+    several times a second for the life of a connection, so an app that always
+    fails the same way would otherwise write the server log by itself — and
+    that log is where the owner looks to find out why a feature did nothing."""
+    if message in _caret_warned:
+        logger.debug("caret: %s", message)
+        return
+    _caret_warned.add(message)
+    logger.warning("Caret unreadable: %s", message)
+
+
+def _element_window(auto, control) -> int:
+    """The top-level window an element belongs to, or 0 for "cannot tell".
+
+    The walk is not defensive padding: MEASURED on the owner's Chrome and
+    VSCode 2026-08-08, the focused element itself reports
+    `NativeWindowHandle == 0` and the handle appears two parents up.
+
+    0 is a real answer and NOT a mismatch — see `caret_rect`. Measured the
+    same day on his VSCode: while he types, the suggestion list holds UIA
+    focus and the whole chain above those items carries no window handle at
+    all, so treating 0 as "some other window" threw away every caret in the
+    app that matters most to him."""
+    node = control
+    for _ in range(CARET_HOPS):
+        if node is None:
+            return 0
+        handle = int(node.NativeWindowHandle or 0)
+        if handle:
+            return int(user32.GetAncestor(handle, window_manager.GA_ROOT) or handle)
+        node = node.GetParentControl()
+    return 0
+
+
+def _range_rect(text_range) -> tuple[int, int, int, int] | None:
+    """The first bounding rectangle of a text range, in screen pixels."""
+    rects = text_range.GetBoundingRectangles()
+    if not rects:
+        return None
+    r = rects[0]
+    if r.height() <= 0:
+        return None
+    return (r.left, r.top, max(r.width(), 1), r.height())
+
+
+def _text_caret(auto, control) -> tuple[int, int, int, int] | None:
+    """The caret rect of a focused TEXT control, or None when the app exposes
+    none — a real, measured answer for many apps, not an error.
+
+    Two steps, and the second is load-bearing: a caret is a COLLAPSED range,
+    and a provider is free to give a zero-length range no rectangle at all.
+    Measured 2026-08-08 — the Claude Code chat box inside VSCode returns an
+    empty rect list for its selection and the range expanded to one CHARACTER
+    returns (1203, 936, 21, 21). VSCode's editor, by contrast, answers the
+    plain selection with the caret's whole LINE — which is what the phone's
+    keyboard actually has to clear."""
+    if not hasattr(control, "GetTextPattern"):
+        return None      # not a text control — how `uiautomation` says so
+    pattern = control.GetTextPattern()
+    if pattern is None:
+        return None
+    ranges = pattern.GetSelection()
+    if not ranges:
+        return None
+    rect = _range_rect(ranges[0])
+    if rect is not None:
+        return rect
+    expanded = ranges[0].Clone()
+    expanded.ExpandToEnclosingUnit(auto.TextUnit.Character)
+    return _range_rect(expanded)
+
+
+def caret_rect(hwnd: int) -> tuple[int, int, int, int] | None:
+    """Screen-pixel rect of the text caret inside `hwnd`, from whatever holds
+    KEYBOARD focus. None when there is no caret to be had — the caller must
+    report that as unknown and never as a position. Blocking (COM, ~4 ms
+    measured) — call via to_thread.
+
+    The focused element is asked for its owning window before its rect is
+    used: keyboard focus is global, and a caret belonging to some OTHER window
+    is not the caret of the window the phone is typing into. A window that
+    cannot be named (0) is accepted, deliberately — keyboard focus lives in
+    the foreground window, and refusing every element whose chain carries no
+    handle refuses VSCode outright (measured 2026-08-08)."""
+    with _uia() as auto:
+        if auto is None:
+            return None
+        try:
+            control = auto.GetFocusedControl()
+            if control is None:
+                return None
+            owner = _element_window(auto, control)
+            if hwnd and owner and owner != hwnd:
+                return None
+            return _text_caret(auto, control)
+        except Exception as e:  # noqa: BLE001 — a UIA hiccup is "no caret", never a crash
+            _warn_once(f"{type(e).__name__}: {e}")
             return None
 
 

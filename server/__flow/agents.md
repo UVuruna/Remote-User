@@ -26,8 +26,13 @@ Get-CimInstance Win32_Process -Filter claude.exe
 
 live_agents()  ->  {"claude": {"remote user", "uvuruna"}}
                                   │
-window title "… - Remote User - Visual Studio Code [Administrator]"
+Layout.project()   ← MEASURED every frame, never stored
+  1. the member's OWN title    "Visual Studio Code"      -> no folder
+  2. the SOURCE window's title  (the tab was torn out of it, still alive)
+       "… - Remote User - Visual Studio Code [Administrator]"
                   └── title_folder() -> "remote user"  ──┘  match
+  3. the folder read at creation  ← last resort, source closed
+                                    (a FOLDER, never an answer)
 
 layout_state.layouts[i].agents = ["claude"]  ───────────>  appSetMatches(s, lay)
 layout_offer.entries[i].agents = ["claude"]  ───────────>  autoAppSets(slots)

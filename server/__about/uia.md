@@ -4,7 +4,15 @@
 **Flow:** [diagram](../__flow/uia.md)
 
 ## Purpose
-Phase F+ step 2 (spec: ROADMAP → Layouts & Tab Control): the unit of layout
+Everything in this project that speaks to Windows through **UI Automation**
+lives here, and that is what makes it one module: `uiautomation` (COM) must be
+initialized in whichever thread makes the call, and `_uia()` is the single
+place that does it. Three features ride on that — tab extraction (below),
+`next_input`'s walk through the text fields, and the caret read that
+[Caret](caret.md) turns into a message for the phone. The POLICY of each lives
+with its own subject; only the UIA call lives here.
+
+### Tab extraction — Phase F+ step 2 (spec: ROADMAP → Layouts & Tab Control): the unit of layout
 selection is the TAB — a VSCode editor tab, Chrome tab or Explorer tab is
 turned into its OWN OS window before the layout machinery arranges it.
 `tab_at` names the tab under the phone's pick tap (UI Automation hit-test,
@@ -38,12 +46,39 @@ from the phone-driven, self-verifying injector.
 ### Used by
 - [Web Layer](web.md) — `layout_pick` names the tab in `layout_offer`;
   `layout_create` extracts it before arranging
+- [Caret](caret.md) — `caret_rect(hwnd)`, several times a second while a
+  phone is connected
 
 ## Functions
 - `tab_at(mon_rect, nx, ny)`: `{"name"}` of the tab under a
   monitor-normalized point, or None
 - `extract_tab(mon_rect, nx, ny, target)`: run the strategy chain; returns
   the new window's hwnd or None (fall back to the whole window)
+- `caret_rect(hwnd)`: the screen-pixel rect of the text caret inside `hwnd`,
+  or None (see below)
+
+## The caret read (2026-08-08)
+`caret_rect(hwnd)` answers "where is the text caret in this window", in screen
+pixels, for the [Caret](caret.md) watch — which owns the policy (which window
+to ask about, the hold, the normalization, the honest unknown) and holds the
+measurements. Three things about the read itself are load-bearing, and all
+three were MEASURED on the owner's desktop, read-only, on 2026-08-08:
+
+1. **Keyboard focus is global, the question is not.** The focused element is
+   walked up to the window that owns it and discarded when that is not the
+   window asked about — a caret in some other window is not this window's.
+   The walk is not padding: the focused element in both Chrome and VSCode
+   reports `NativeWindowHandle == 0`, and the handle appears two parents up.
+2. **A caret is a COLLAPSED range, and a provider may give it no rectangle at
+   all.** The Claude Code chat box inside VSCode returns an empty rect list
+   for its selection; only `ExpandToEnclosingUnit(Character)` yields
+   `(1203, 936, 21, 21)`. VSCode's editor, by contrast, answers the plain
+   selection with the caret's whole LINE — which is what the phone's keyboard
+   actually has to clear.
+3. **A failure is not a crash and not a log flood.** No caret is a normal,
+   frequent answer; the read runs several times a second, so a failure is
+   logged ONCE per distinct message (`_warn_once`) and the caller is told
+   "none".
 
 ## Refinements (owner feedback 2026-08-02, same day)
 `list_tabs` enumerates a window's REAL content tabs for the list-based

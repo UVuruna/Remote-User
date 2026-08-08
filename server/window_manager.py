@@ -10,9 +10,6 @@ Everything here is blocking ctypes/Win32 — the web layer calls it via
 asyncio.to_thread. Members are LIVE window references (hwnds): a member the
 user moved or resized at the desk is re-read (and re-placed if its aspect
 drifted) at every focus; a closed member silently drops out of its layout.
-
-Whole windows only in step 1 — tab extraction (context menu / Explorer path /
-SendInput drag, probe-verified 2026-08-02) is step 2.
 """
 
 import ctypes
@@ -298,8 +295,6 @@ def _work_area(mon_rect: tuple[int, int, int, int]) -> tuple[int, int, int, int]
         return mon_rect
     w = info.rcWork
     return (w.left, w.top, w.right - w.left, w.bottom - w.top)
-
-
 
 
 # --- Making the move INVISIBLE (owner rule, hardened 2026-08-03) ------------
@@ -602,21 +597,16 @@ class Layout:
 
     def __init__(self, name: str, process: str, members: list[int],
                  template: str | None, orient: str, aspect: float,
-                 icon: str | None = None, title: str = ""):
+                 icon: str | None = None, source: int = 0, folder: str = ""):
         self.name = name
         self.process = process
-        # The target window's OWN title, never renamed. `name` is what the
-        # owner calls this layout; `title` is what the app calls itself, and
-        # it is what `agents.agents_for` reads to find which agent tools are
-        # live in this window's project.
-        #
-        # A layout used to carry `app_sets` here — the owner's ticks from the
-        # creation panel. It is GONE (owner 2026-08-07). It was a copy of an
-        # answer, written once at creation, and it outranked the live answer
-        # forever after; his Claude layout was stuck offering VS Code with a
-        # running claude.exe two lines away in the same state frame. What can
-        # be read is read, every time. See client/sets.js appSetMatches.
-        self.title = title or name
+        # WHERE this layout's project is READ FROM — never the answer itself.
+        # `source` is the window an extracted tab was torn out of (0 = none);
+        # `folder` is the project its title named at creation, the last resort
+        # for when that window is gone. This used to be the window's TITLE,
+        # frozen — see `project()` and __about/window_manager.md.
+        self.source = source
+        self.folder = folder
         self.members = members
         # WHICH member holds the keyboard (owner 2026-08-06). The phone types
         # into one window of a grid, and every re-focus used to hand the
@@ -639,6 +629,16 @@ class Layout:
         self.pos: float = 0.5
         self.arranged_ratio: tuple[int, int] | None = None
         self.arranged_pos: float = 0.5
+
+    def project(self) -> str:
+        """The project folder this layout's window belongs to, MEASURED every
+        call — an extracted tab's own window can be titled bare `Visual Studio
+        Code`, so the window it was torn OUT of is asked next, live. `folder`
+        is the last resort (that source closed): a FOLDER is not an answer —
+        what is LIVE in it comes from the process table, every frame."""
+        seen = [h for h in (self.members[0] if self.members else 0, self.source)
+                if h and is_alive(h)]
+        return agents.first_folder(_title(h) for h in seen) or self.folder
 
 
 class LayoutRegistry:
@@ -685,8 +685,8 @@ class LayoutRegistry:
 
     def create(self, target: int, mode: str, template: str | None,
                fill: list[int], orient: str, device_ratio: float,
-               mon_rect: tuple[int, int, int, int],
-               name: str | None = None) -> tuple[int, bool] | None:
+               mon_rect: tuple[int, int, int, int], name: str | None = None,
+               source: int = 0) -> tuple[int, bool] | None:
         """Arrange the windows and register the layout. Returns (index, all
         members verified on their rects), or None when the target window died
         between pick and create. device_ratio = the phone's short/long side
@@ -707,14 +707,17 @@ class LayoutRegistry:
             template = None
             members = members[:1]
             placed = place_window(target, layout_region(_work_area(mon_rect), aspect))
-        # The window's OWN title is kept beside the (possibly owner-chosen)
-        # name: it is what names the PROJECT an agent tool may be live in, and
-        # a rename must never change which shortcuts appear.
+        # `source` = the window a tab was torn out of (0 = whole window); the
+        # project is LOGGED, so HIS log says what the wheel will offer.
         title = _title(target) or ""
         name = name or title or "Window"
+        folder = agents.first_folder([title, _title(source) if source else ""])
+        logger.info("Layout %r from %#x (tab source %#x): title %r, project %r",
+                    name, target, source, title, folder)
         self.layouts.append(Layout(name, _process_name(target), members,
                                    template, orient, aspect,
-                                   icon_data_uri(_process_path(target)), title))
+                                   icon_data_uri(_process_path(target)),
+                                   source, folder))
         return len(self.layouts) - 1, placed
 
     def focus(self, index: int, device_ratio: float,
@@ -964,7 +967,7 @@ class LayoutRegistry:
         exactly the map the focus needs."""
         kept = self.prune()
         # One process-table snapshot for every layout in the frame, not one
-        # per layout (owner 2026-08-07 — see agents.agents_for).
+        # per layout (owner 2026-08-07 — see agents.agents_in).
         live = agents.live_agents()
         if active is not None:
             active = kept.index(active) if active in kept else None
@@ -975,15 +978,13 @@ class LayoutRegistry:
         return {
             "type": "layout_state",
             "layouts": [{"name": lay.name, "process": lay.process,
-                         "title": lay.title,
-                         # Which agent tools are LIVE in this window's project
-                         # right now (server/agents.py). This is the ONLY
-                         # answer to "does the Claude wheel belong here" since
-                         # 2026-08-07 — the owner's tick list is gone, and
-                         # this is read fresh on every frame, so a
-                         # conversation he opens after making the layout still
-                         # brings its shortcuts with it.
-                         "agents": agents.agents_for(lay.title, live),
+                         # Both READ, never remembered: prune just ran, so the
+                         # member is alive and can be asked. `agents` is the
+                         # ONLY answer to "does the Claude wheel belong here"
+                         # (server/agents.py; `project()` is what lets an
+                         # EXTRACTED tab be asked at all).
+                         "title": _title(lay.members[0]),
+                         "agents": agents.agents_in(lay.project(), live),
                          # WHICH grid, so the phone can draw its shape and
                          # offer the arrangement choice for a three
                          # (owner 2026-08-07). None = a solo layout.

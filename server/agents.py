@@ -77,6 +77,7 @@ import re
 import subprocess
 import threading
 import time
+from collections.abc import Iterable
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -328,6 +329,41 @@ def title_folder(title: str) -> str:
     return match.group(1).strip().lower() if match else ""
 
 
+def first_folder(titles: Iterable[str]) -> str:
+    """The first of these titles that NAMES a project, lowercased, or "".
+
+    A window can have more than one title worth asking (owner report
+    2026-08-08): a VS Code tab torn into its own window may be titled bare
+    `Visual Studio Code` — the product name, no folder, nothing any regex can
+    match — while the window it was torn OUT of still carries the folder. So
+    the caller offers the titles in order of authority and takes the first
+    that answers, instead of freezing whichever string happened to exist at
+    creation time. See `window_manager.Layout.project`.
+    """
+    for title in titles:
+        folder = title_folder(title)
+        if folder:
+            return folder
+    return ""
+
+
+def agents_in(folder: str, live: dict[str, set[str]] | None = None) -> list[str]:
+    """Which agents are live in THIS project folder — the answer itself.
+
+    Split from `agents_for` on 2026-08-08 so a caller that already knows the
+    folder (a layout: see `window_manager.Layout.project`) does not have to
+    own a title to ask the question. The folder may be remembered; this
+    answer may not — a conversation the owner opens after the layout was made
+    must still bring its shortcuts with it, so it is read on every frame.
+    """
+    if not folder:
+        return []
+    if live is None:
+        live = live_agents()
+    return sorted(agent for agent, folders in live.items()
+                  if folder in folders)
+
+
 def agents_for(title: str, live: dict[str, set[str]] | None = None) -> list[str]:
     """Which agents are live in the project this window title names.
 
@@ -345,10 +381,4 @@ def agents_for(title: str, live: dict[str, set[str]] | None = None) -> list[str]
     in a thread, is the difference between a list that arrives and a phone
     that looks frozen (owner: "treba mu jako dugo da učita").
     """
-    folder = title_folder(title)
-    if not folder:
-        return []
-    if live is None:
-        live = live_agents()
-    return sorted(agent for agent, folders in live.items()
-                  if folder in folders)
+    return agents_in(title_folder(title), live)

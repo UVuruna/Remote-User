@@ -52,14 +52,27 @@ slot. VSCode + Claude cost two, because a Claude window shows both. The charge
 is therefore the **largest group of ticked sets that can appear together**,
 which is the group per process.
 
-## How an app set knows it belongs (owner 2026-08-06)
+## How an app set knows it belongs (owner 2026-08-06, corrected 2026-08-07/08)
 
-`appSetMatches()` answers from `lay.app_sets` — **the ticks the owner made
-when he created the layout** — whenever that list exists. The process/title
-guess below it survives only for layouts made before this version.
+`appSetMatches()` asks **the PC**, and nobody ticks anything. A set carrying
+`agent` is answered by `lay.agents` — the agent tools the server found RUNNING
+in this layout's project, sent fresh on every `layout_state`. An empty array is
+a definitive NO; the `titleMatches()` guess below it survives only for a server
+too old to send the field at all.
 
-The tick exists because the guess was **proven impossible**. Probing the
-owner's own PC while a Claude Code conversation was open found:
+A tick list (`lay.app_sets`, written at creation) existed for one day and was
+deleted on 2026-08-07: it outranked the live answer forever, so one miss froze
+his Claude layout on the VS Code wheel while `agents` said `claude` two lines
+away in the same frame. **Never store an answer the PC can read** — and on
+2026-08-08 the same rule had to be applied one layer deeper, to the window
+TITLE the server derives `agents` from (see
+[Window Manager](../../server/__about/window_manager.md) → the section on
+`Layout.project`): an extracted VS Code tab can be born titled bare `Visual
+Studio Code`, so the layout keeps the source window's HANDLE and re-reads it,
+instead of freezing whatever string existed at creation.
+
+The detection exists because the title guess was **proven impossible**.
+Probing the owner's own PC while a Claude Code conversation was open found:
 
 ```
 WIN 'Ispravka UI dizajna meni… - Remote User - Visual Studio Code [Administrator]'
@@ -72,7 +85,8 @@ nowhere in it; the UIA `ClassName` is identical to the file tab's beside it;
 `AutomationId` and `HelpText` are empty; and a full walk of the extracted
 window's tree (20 elements) finds no occurrence of "claude" or "anthropic",
 because VSCode does not expose webview content to accessibility. No string
-test can ever identify it — so the owner marks it, once, with one tap.
+test can ever identify it — the **process table** can, and that is what
+`server/agents.py` reads.
 
 The older `titleMatches()` still guards the fallback: the test is a **word**,
 never a substring, and a title that looks like a document (`CLAUDE.md`,

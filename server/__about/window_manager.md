@@ -42,16 +42,16 @@ drag, probe-verified 2026-08-02) is step 2 and does not live here yet.
 
 ### Layout
 One phone screen: `name` (target's title at creation, or the owner's own),
-`title` (the target window's OWN title, never renamed), `process`, ordered
-`members` (grid cell order; `[window]` for solo), `template` (None = solo),
-`orient` ("portrait" | "wide"), `aspect` (w/h last arranged for).
+`process`, ordered `members` (grid cell order; `[window]` for solo),
+`template` (None = solo), `orient` ("portrait" | "landscape"), `aspect` (w/h
+last arranged for), plus `source` and `folder` — WHERE the layout's project is
+read from, never the answer.
 
-`title` exists because a process is not always enough to say WHICH app the
-phone is looking at (owner 2026-08-05): Claude Code runs inside VSCode, same
-`Code.exe`, and only the title tells them apart — so an app-aware set may add
-a `title` match on top of `process`, and the Claude and VSCode sets ride
-together. It is kept separate from `name` so that renaming a layout never
-changes which set appears. It travels to the client inside `layout_state`.
+`project()` is the read: the member's own title first, then `source` (the
+window an extracted tab was torn OUT of, alive, asked fresh), then `folder`
+(the project named at creation) as the last resort. `state()` hands the result
+to `agents.agents_in`, which is what puts the Claude set on the wheel. The
+title itself is NOT stored any more — see the section below.
 
 ### LayoutRegistry
 The session-scoped list. `create(...) -> index|None` arranges and registers;
@@ -250,7 +250,40 @@ that was saying `claude` on every `layout_state`, forever, and his Claude
 layout offered the VS Code wheel and nothing else.
 
 **The rule that came out of it: never store an answer the PC can read.**
-`state()` calls `agents.agents_for(lay.title, live)` on every frame, with one
-snapshot for the whole frame. `Layout.title` stays — it is the window's own
-title, never the owner's rename, and it is what names the PROJECT a live agent
-session can be matched to.
+`state()` asks `agents.agents_in(lay.project(), live)` on every frame, with one
+process-table snapshot for the whole frame.
+
+### …and it did not stop at `app_sets` (owner report 2026-08-08)
+
+The very next round he built a layout out of the Claude Code TAB, and the wheel
+offered VS Code alone. `Layout.title` was the reason, and it was the SAME
+mistake one layer up: a one-shot snapshot of a window taken 0.15–1.5 s after it
+was born, handed to `agents_for` on every frame forever. VS Code creates every
+"Move into New Window" window with `title: productService.nameLong` on
+`about:blank` and the workbench overwrites `document.title` only afterwards, so
+a torn-off tab is BORN titled `Visual Studio Code` — no folder, nothing any
+regex can match, and `agents_for` correctly answering "no agent" to a string
+that names no project. Freezing it made that answer permanent.
+
+So `Layout.title` is gone. What the layout keeps is WHERE to look:
+
+| Kept | What it is | Why it is not an answer |
+|------|-----------|-------------------------|
+| `members[0]` | the window itself | its title is read live, every frame |
+| `source` | the window an extracted tab was torn out of, `0` = none | a HANDLE; its title is read live too, and it is checked alive first |
+| `folder` | the project its title named at creation | last resort, for a source that has since closed. A folder is not an answer — whether a conversation is LIVE in it still comes from the process table on every frame |
+
+`layout_state.title` is likewise read at send time (`prune()` has just run, so
+the member is alive and can simply be asked). Creation logs the whole reading —
+`Layout %r from %#x (tab source %#x): title %r, project %r` — because THE
+REPEAT LAW asks for a claim checkable in HIS log, not in ours.
+
+Gate: `tests/test_app_set_wheel.py` → section F. It drives the real
+`layout_create` with a TAB slot and asks the real `client/sets.js` which set
+names come out, over the whole family of titles a torn-off window can carry
+(bare product name, the tab's own name, empty, settled-with-folder). Both
+earlier guards were green throughout the bug because each hand-typed one half
+of the join — the server gate faked `agents_for` and answered `_title` with one
+string for every hwnd, the phone gate was handed `agents: ["claude"]` as an
+input. **When a value the phone reads is DERIVED from another, the gate feeds
+the derivation's INPUT, never its output.**
