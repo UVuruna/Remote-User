@@ -58,8 +58,16 @@ One line each; the full call sequence is in [flow](../__flow/build.md).
   `.venv\Scripts\python.exe` if not already running there
 - `generate_version_info()` — writes `version_info.txt` (a Windows
   VERSIONINFO resource source) from `app_info.json` + `company.json`
-- `input_gate()` — runs `tests/test_input_pipeline.py`; a non-zero exit
-  stops the build (Step 0b, fail-closed)
+- `input_gate()` — the fail-closed gate run (Steps 0b–0i); a non-zero exit
+  from any of them stops the build before anything is packaged:
+  `test_input_pipeline` (0b), `test_presence` (0c), `test_notify` +
+  `test_notice_channel` (0d), `test_focus_guard` + `test_focus_hook` (0e),
+  `test_layout_protocol` (0f), `test_stream_lifecycle` (0g),
+  `test_actions_migration` (0h), and **`test_update_handover` (0i)** — added
+  2026-08-07 because everything the other eight prove only matters if the
+  release can be INSTALLED, and until then it could not be from away: entering
+  the install killed the remote session driving it (see
+  [Update Handover](../../server/__about/update_handover.md))
 - `generate_icons()` — runs `svg_to_ico.py` as a subprocess (Step 1)
 - `fetch_vendor()` — downloads and caches `ffmpeg.exe` (pinned gyan.dev
   7.1.1) and `tailscale-setup.exe` into gitignored `setup/vendor/`

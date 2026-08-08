@@ -19,7 +19,7 @@ chain-installs Tailscale itself.
 | `svg_to_ico.py` | Algorithmic | SVG → multi-resolution ICO, supersampled Lanczos downscale — [about](__about/svg_to_ico.md) · [flow](__flow/svg_to_ico.md) |
 | `agent_hook.py` | Standard | the Claude Code `Stop` hook: names the agent that finished and POSTs it to the running server, which notifies the phone (ROADMAP Phase H) — [about](__about/agent_hook.md) |
 | `create_cert.py` | Standard | one-time self-signed code-signing certificate generator — [about](__about/create_cert.md) |
-| `installer.nsi` | *(not in this doc pass)* | NSIS installer script — sections Main / Tailscale / Desktop shortcut / Autostart; see Design Decisions below |
+| `installer.nsi` | *(not in this doc pass)* | NSIS installer script — sections Main / Tailscale / Desktop shortcut / Autostart, plus the **unattended `/S` path** the running app drives itself ([Update Handover](../server/__about/update_handover.md)); see Design Decisions below |
 | `app_info.json` | *(data, not code)* | project metadata (version, names, exe/installer filenames) read by every script above |
 
 `installer.nsi` and `app_info.json` are outside this session's per-file
@@ -76,6 +76,21 @@ Config-Section-Law candidate worth a future look.
   guaranteed to have the complete dependency set; any other interpreter
   silently ships an incomplete bundle (root cause of the v0.0.045 crash that
   shipped without `qrcode`).
+- **The installer must be able to run with NOBODY at the PC** (owner report
+  2026-08-07). He installs from his phone, through the session the install
+  replaces — so `installer.nsi` honours NSIS's `/S` end to end. Three things
+  make that real, all decided in `.onInit` (which sits BELOW the sections, so
+  the section ids exist): the Tailscale chain-install is unselected (its setup
+  opens a VISIBLE wizard and our `ExecWait` would hang the whole update on a
+  Next button nobody is there to press — and a silent run is by definition an
+  upgrade of an app already reaching a phone over Tailscale); the desktop
+  shortcut and the autostart task are read OFF THE MACHINE and the sections set
+  to match, because a silent run must change nothing he did not ask to change
+  (silent mode otherwise takes the DEFAULT selection and would re-arm both);
+  and the `taskkill` in `SecMain` — the line that used to end his session — is
+  kept only as the backstop for a hand-run install, because the handover script
+  waits for the app's own pid to disappear first. See
+  [Update Handover](../server/__about/update_handover.md).
 - **`build_apk.py` runs BEFORE `build.py`, never the reverse** — the desktop
   installer only bundles the phone APK when it already exists on disk
   (`build.py` prints a note and ships without it otherwise); there is no

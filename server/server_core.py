@@ -24,6 +24,7 @@ import foreground_lock
 import monitors
 import pairing
 import traffic
+import update_handover
 import window_manager
 from config import SETTINGS
 from input_injector import InputInjector
@@ -58,6 +59,11 @@ class ServerController:
         self._console_pairing = console_pairing
         self._thread: threading.Thread | None = None
         self._uvicorn: uvicorn.Server | None = None
+        # The server's own event loop, published so code on OTHER threads can
+        # reach a connected phone. Exactly one caller today: the update
+        # handover's last message before this process exits (the Qt thread has
+        # no other way to speak to a WebSocket).
+        self.loop: asyncio.AbstractEventLoop | None = None
         self.state = "stopped"
         self.error: str | None = None
         self.info: ServerInfo | None = None
@@ -71,6 +77,13 @@ class ServerController:
         # applied to a machine-wide setting.
         window_manager.repair_stranded()
         foreground_lock.repair_stranded()
+        # …and the same discipline for the one thing a previous run may have
+        # ended ON PURPOSE: an update handover. If this process is the app the
+        # installer put here, the phone is told so on its next connection —
+        # and if the install did NOT take, it is told that instead, because a
+        # man testing a build he never installed is the most expensive silence
+        # this project has had (owner 2026-08-07).
+        update_handover.announce()
         # …and only THEN take it, if the owner's switch says so. Applied here
         # rather than in the window, because both entry points build a
         # controller and the headless CLI is entitled to the same setting.
@@ -167,6 +180,7 @@ class ServerController:
 
     async def _serve(self) -> None:
         loop = asyncio.get_running_loop()
+        self.loop = loop
 
         # Stream mode is decided per start: H.264 when a verified encoder
         # exists (capture then runs on demand, per client), JPEG otherwise.
@@ -233,6 +247,7 @@ class ServerController:
             await self._uvicorn.serve()
         finally:
             self._uvicorn = None
+            self.loop = None
             # FIRST, ahead of the encoder teardown: a hanging ffmpeg terminate
             # must not be able to eat the one thing the owner notices.
             self.release_windows()

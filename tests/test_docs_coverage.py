@@ -93,6 +93,12 @@ ALGORITHMIC = {
     # ride the wheel is a rule set of its own — the cap of 8, the per-process
     # reserve, and the owner's per-layout app ticks.
     "client/sets.js",
+    # Split out of controls.js on 2026-08-08 (THE STRUCTURE LAW, the same
+    # 1,000-line wall sets.js was split off at): WHICH dictated words reach
+    # the PC and WHEN. Algorithmic without argument — a settle rule over a
+    # revising hypothesis plus the round-boundary overlap trim, and it is
+    # kept pure so its gate can run it whole.
+    "client/voice.js",
     "client/grids.js",
     # New 2026-08-07 (build rounds G1/G2 — the game controller): the whole
     # mapping lives here, and it is real algorithm — a deadzone-and-power stick
@@ -109,6 +115,11 @@ ALGORITHMIC = {
     # pin, dialogs, what re-arms it) and its own gate — algorithmic.
     "server/focus_guard.py",
     "server/notify.py",
+    # New 2026-08-07 (owner report — installing killed the session he was
+    # installing FROM). Algorithmic without argument: a sequence that spans a
+    # process boundary, with an ordering that is the whole design, a rollback,
+    # and a record that has to outlive the process being replaced.
+    "server/update_handover.py",
     # Split out of traffic.py / gui/traffic_window.py on 2026-08-07 (BUILD
     # ROUND R4, THE STRUCTURE LAW): reading months of traffic.csv into a
     # bounded number of chart points is a real streaming algorithm (a

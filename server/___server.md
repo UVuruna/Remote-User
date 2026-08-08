@@ -30,6 +30,7 @@ The PC side of Remote User: captures the screen, streams it over WebSocket as H.
 | `monitors.py` | Standard | physical monitor rects in virtual-desktop coordinates — [about](__about/monitors.md) |
 | `clipboard.py` | Standard | screenshot frames into the Windows clipboard as CF_DIB — [about](__about/clipboard.md) |
 | `updates.py` | Standard | desktop update discovery via GitHub Releases — [about](__about/updates.md) |
+| `update_handover.py` | Algorithmic | installing a new version WITHOUT losing the session you are installing FROM — verify, tell the phone, hand this PC to a detached script that installs silently and starts an app again whatever happened — [about](__about/update_handover.md) · [flow](__flow/update_handover.md) |
 | `autostart.py` | Standard | "Start with Windows" as a switch over WINDOWS — the real Task Scheduler logon task read and written, never a preference that only pretends — [about](__about/autostart.md) |
 | `foreground_lock.py` | Algorithmic | Windows' own "no program may steal the foreground" setting, borrowed for this session only and given the topmost ledger's discipline so it can never be left behind — [about](__about/foreground_lock.md) · [flow](__flow/foreground_lock.md) |
 

@@ -28,10 +28,22 @@ class Update:
     version: str            # e.g. "0.0.037"
     installer_url: str | None  # direct Setup.exe asset, if the release has one
     page_url: str           # the release page — fallback when there is no asset
+    # What GitHub says the asset weighs. The handover compares it with what
+    # actually landed on disk before it hands the PC over to that file: a
+    # download cut short by a Wi-Fi drop is a perfectly ordinary event, and
+    # running a truncated installer is the one failure that could leave the
+    # owner with no way back in (server/update_handover.py -> verify).
+    size: int | None = None
 
 
-def _numbers(version: str) -> tuple[int, ...]:
-    """'v0.0.37' / '0.0.037' → (0, 0, 37); () when nothing numeric (dev)."""
+def numbers(version: str) -> tuple[int, ...]:
+    """'v0.0.37' / '0.0.037' → (0, 0, 37); () when nothing numeric (dev).
+
+    Public because the handover has to answer a question of its own after the
+    installer ran — "is the version now running the one we installed?" — and
+    the two spellings never match as strings: a tag renders back as '0.0.93'
+    while `app_info.json` says '0.0.093'.
+    """
     return tuple(int(p) for p in re.findall(r"\d+", version)[:3])
 
 
@@ -39,7 +51,7 @@ def check() -> Update | None:
     """None = up to date, disabled, dev run, no releases yet, or unreachable."""
     if not SETTINGS.update_check:
         return None
-    current = _numbers(app_version())
+    current = numbers(app_version())
     if not current:
         return None  # dev checkout — nothing meaningful to compare
     url = f"https://api.github.com/repos/{SETTINGS.update_repo}/releases/latest"
@@ -49,15 +61,17 @@ def check() -> Update | None:
     except Exception as e:  # offline / rate-limited / no releases yet (404)
         logger.info("Update check skipped: %s", e)
         return None
-    latest = _numbers(data.get("tag_name") or "")
+    latest = numbers(data.get("tag_name") or "")
     if not latest or latest <= current:
         return None
-    installer = next(
-        (a.get("browser_download_url") for a in data.get("assets", [])
-         if a.get("name", "").endswith(".exe")),
+    asset = next(
+        (a for a in data.get("assets", []) if a.get("name", "").endswith(".exe")),
         None,
     )
     version = ".".join(str(n) for n in latest)
     logger.info("Update available: v%s (running v%s)", version, app_version())
-    return Update(version, installer, data.get("html_url") or
-                  f"https://github.com/{SETTINGS.update_repo}/releases")
+    return Update(version,
+                  asset.get("browser_download_url") if asset else None,
+                  data.get("html_url") or
+                  f"https://github.com/{SETTINGS.update_repo}/releases",
+                  asset.get("size") if asset else None)

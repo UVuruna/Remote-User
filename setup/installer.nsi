@@ -14,6 +14,7 @@
 
 !include "MUI2.nsh"
 !include "FileFunc.nsh"
+!include "Sections.nsh"   ; SelectSection / UnselectSection -- the silent path
 
 ; -- App Info -----------------------------------------------------
 !define APP_NAME "RemoteUser"
@@ -68,16 +69,6 @@ VIAddVersionKey "LegalCopyright" "Copyright (C) ${APP_PUBLISHER}"
 
 !insertmacro MUI_LANGUAGE "English"
 
-; =================================================================
-; INITIALIZATION -- force the 64-bit registry view (64-bit-only app;
-; without this a 32-bit NSIS stub writes under WOW6432Node and
-; Add/Remove Programs never sees the uninstall entry)
-; =================================================================
-
-Function .onInit
-    SetRegView 64
-FunctionEnd
-
 Function un.onInit
     SetRegView 64
 FunctionEnd
@@ -89,7 +80,13 @@ FunctionEnd
 Section "!${APP_DISPLAY} (required)" SecMain
     SectionIn RO
 
-    ; Close a running instance so locked files can be replaced on upgrade
+    ; Close a running instance so locked files can be replaced on upgrade.
+    ; THIS LINE USED TO BE THE THING THAT KILLED HIS SESSION -- and it is
+    ; kept, deliberately, as a last resort for a hand-run install. In the
+    ; unattended path it finds nothing: server/update_handover.py's script
+    ; WAITS for the old app's own pid to disappear before starting us, so
+    ; the app closes itself, in order, with its always-on-top windows
+    ; released -- instead of being shot mid-write.
     nsExec::ExecToLog 'taskkill /im "${APP_EXE}" /f'
     Sleep 500
 
@@ -133,6 +130,11 @@ Section "!${APP_DISPLAY} (required)" SecMain
 SectionEnd
 
 Section "Tailscale — access from anywhere" SecTailscale
+    ; Never in a silent (unattended update) run -- .onInit unselects this
+    ; section there, and this line is the second lock on the same door: the
+    ; Tailscale wizard is VISIBLE and ExecWait would hang the whole update
+    ; on a Next button nobody is there to press.
+    IfSilent TailscaleDone
     ; Chain-install (hard owner requirement: the app drives ALL dependencies).
     ; Skipped when Tailscale is already on the machine. The Tailscale setup
     ; runs its own visible wizard; the one-time login is guided afterwards by
@@ -165,6 +167,67 @@ Section "Start with Windows" SecAutostart
     ; silently, shipping an installer that created no task at all.
     nsExec::ExecToLog 'schtasks /Create /F /TN "${APP_NAME}" /SC ONLOGON /RL HIGHEST /TR "\$\"$INSTDIR\${APP_EXE}\$\" --minimized"'
 SectionEnd
+
+; =================================================================
+; INITIALIZATION
+;
+; Two jobs. First, force the 64-bit registry view (64-bit-only app;
+; without this a 32-bit NSIS stub writes under WOW6432Node and
+; Add/Remove Programs never sees the uninstall entry).
+;
+; Second -- and this is the reason this function sits BELOW the
+; sections, where ${SecTailscale} & co. are already defined -- the
+; UNATTENDED path (owner report 2026-08-07). He installs updates from
+; his phone, through the very session the install replaces:
+;
+;   "cim udjem u instalaciju on ce meni ugasiti Remote User i vise
+;    necu moci da komandujem odavde"
+;
+; So the running app hands this installer over with NSIS's own /S and
+; there is nobody at the PC to click anything. Three things have to be
+; true for that to work, and all three are decided here:
+;
+;   1. The Tailscale chain-install must NOT run. Its setup opens a
+;      VISIBLE wizard and our ExecWait would block forever with nobody
+;      to press Next. A silent run is by definition an UPGRADE of an
+;      app that is already reaching a phone -- over Tailscale -- so the
+;      dependency is already on the machine.
+;   2. A silent run must change NOTHING he did not ask to change. In
+;      silent mode NSIS takes the DEFAULT section selection, which
+;      would re-create a desktop shortcut he deleted and re-arm an
+;      autostart he switched off. So both are read off the machine
+;      first and the sections are set to match what is already there.
+;   3. Nothing may prompt. Every remaining section is registry, files
+;      and nsExec -- all silent.
+; =================================================================
+
+Function .onInit
+    SetRegView 64
+    IfSilent 0 InitDone
+
+    !insertmacro UnselectSection ${SecTailscale}
+
+    IfFileExists "$DESKTOP\${APP_DISPLAY}.lnk" KeepDesktop 0
+    !insertmacro UnselectSection ${SecDesktop}
+    Goto CheckAutostart
+KeepDesktop:
+    !insertmacro SelectSection ${SecDesktop}
+
+CheckAutostart:
+    ; SecMain deletes the logon task unconditionally and SecAutostart
+    ; re-creates it only when selected -- so this query has to happen
+    ; here, before any section runs, or the answer is always "no".
+    nsExec::ExecToStack 'schtasks /Query /TN "${APP_NAME}"'
+    Pop $0      ; exit code: 0 = the task exists
+    Pop $1      ; output (discarded -- the stack must be left clean)
+    StrCmp $0 "0" KeepAutostart 0
+    !insertmacro UnselectSection ${SecAutostart}
+    Goto InitDone
+KeepAutostart:
+    !insertmacro SelectSection ${SecAutostart}
+
+InitDone:
+FunctionEnd
 
 ; -- Section Descriptions -----------------------------------------
 !insertmacro MUI_FUNCTION_DESCRIPTION_BEGIN

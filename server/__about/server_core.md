@@ -19,6 +19,7 @@ The whole server stack as one start/stoppable component, shared by both entry po
 - [Web Layer](web.md) — `FrameHub`, `ServerStats`, `create_app()`
 - [Pairing](pairing.md) — `generate_token()`, `pairing_urls()`, `show_pairing()`
 - [Monitors](monitors.md) — `rect_for_size()` for the injector's initial rect
+- [Update Handover](update_handover.md) — `announce()` in `__init__`, beside the two `repair_stranded()` calls: the same discipline, applied to something a previous run ended ON PURPOSE
 
 ### Used by
 - `main.py` (script) — CLI entry, `run_blocking()`
@@ -31,6 +32,8 @@ Snapshot the GUI reads: `mode`, `encoder`, `monitor_width`/`height`, `port`, `to
 
 ### ServerController
 One instance per process; states `"stopped" → "starting" → "running" → "stopped"`, or `"failed"` with `.error` set — the GUI polls this, never silent.
+
+`self.loop` is the server's own asyncio loop, published while it runs (`None` otherwise) so code on OTHER threads can reach a connected phone. Exactly one caller today: [Update Handover](update_handover.md)'s last message before the process exits — the Qt thread has no other way to speak to a WebSocket.
 
 - `start()` — non-blocking, spawns a daemon thread running `asyncio.run(_serve())`; no-op while already alive
 - `stop(timeout=10.0)` — force-exits uvicorn (`force_exit` + `should_exit`, NOT graceful shutdown — see the flow doc for why) and joins the thread; waits briefly for the uvicorn instance to exist first when stopping mid-startup, so the exit flags always have something to land on

@@ -33,6 +33,7 @@ from PySide6.QtWidgets import (
 )
 
 import pairing
+import update_handover
 import updates
 from config import BUNDLE_DIR, FROZEN, PROJECT_ROOT, SETTINGS, app_version
 from gui.controls_editor import ControlsEditor
@@ -62,6 +63,12 @@ UPDATE_CHECK_MS = 15 * 60 * 1000
 ICON_PX = 17   # icon height on the three window buttons, next to 13px text
 # THEME_SWITCH_W is imported from the widget that DRAWS the pill, so the
 # measured minimum below can never drift from what is actually on the row.
+
+# The Update button's failure caption when nothing more specific is known —
+# i.e. the download itself never finished. Named because the window's computed
+# minimum has to MEASURE it (THE SPACE & LEGIBILITY LAW), alongside the three
+# the handover can hand back.
+UPDATE_FAILED_TEXT = "Update download failed — retry"
 
 PILL_TEXT = {"running": "RUNNING", "starting": "STARTING…",
              "stopped": "STOPPED", "failed": "FAILED"}
@@ -98,10 +105,11 @@ class MainWindow(QMainWindow):
         self._tick = 0               # refresh counter (pairing re-checks are throttled)
         # Update flow — workers only SET these; the refresh timer (UI thread)
         # reads them and touches Qt. States: None → found → downloading →
-        # ready (launch installer + quit) / failed (retry).
+        # ready (hand over to the installer + quit) / failed (retry).
         self._update = None
         self._update_state = None
         self._update_path = None
+        self._update_error = None    # the SPECIFIC reason a failed state shows
         self._traffic = None         # the Traffic window, built on first open
         self._settings = None        # the Settings window, built on first open
         self._settled_for = None     # content the declared minimum was measured against
@@ -228,7 +236,16 @@ class MainWindow(QMainWindow):
                       + widest(("Settings",))
                       + 3 * (button_pad + ICON_PX + 6)   # icon + its 6px gap
                       + 2 * spacing)
-        update_row = widest((f"Update to v{app_version()} — download && install",)) + button_pad
+        # EVERY caption this one button can wear, not just the happy one (THE
+        # SPACE & LEGIBILITY LAW — the minimum comes from the fullest real
+        # content). The handover's refusals are longer than the offer, and a
+        # sentence that says WHY an update did not install is exactly the
+        # sentence that must not be cut off.
+        update_row = widest((f"Update to v{app_version()} — download && install",
+                             UPDATE_FAILED_TEXT,
+                             update_handover.DAMAGED_TEXT,
+                             update_handover.NOT_ELEVATED_TEXT,
+                             update_handover.HANDOVER_FAILED_TEXT)) + button_pad
         # The header row grew a theme pill in round R3, and it sits OUTSIDE
         # the card — so it competes with the card's own width and has to be
         # measured, or the widest state (logo + subtitle + STARTING… pill +
@@ -407,9 +424,11 @@ class MainWindow(QMainWindow):
         window.activateWindow()
 
     def _build_update_button(self) -> QPushButton:
-        """Hidden until the startup check finds a newer release; one click
-        downloads the installer, launches it and quits this app (files must
-        not be in use while the installer replaces them)."""
+        """Hidden until the check finds a newer release. ONE tap is the whole
+        update — download, verify, tell the phone, install silently, restart —
+        and nothing else is ever asked of anybody, because the person tapping
+        it is usually a hundred kilometres away looking at this window through
+        the app that is about to be replaced (`_begin_handover`)."""
         self.update_btn = QPushButton("")
         self.update_btn.setObjectName("primary")
         self.update_btn.clicked.connect(self._install_update)
@@ -567,6 +586,7 @@ class MainWindow(QMainWindow):
             webbrowser.open(upd.page_url)  # release without an exe asset
             return
         self._update_state = "downloading"
+        self._update_error = None    # a retry re-downloads; last time's reason goes
         self._refresh_update_button()
         threading.Thread(target=self._download_update, args=(upd,), daemon=True).start()
 
@@ -588,26 +608,53 @@ class MainWindow(QMainWindow):
         self._update_path = path
         self._update_state = "ready"
 
+    def _begin_handover(self) -> None:
+        """The downloaded installer is on disk — hand this PC over to it.
+
+        THE WHOLE POINT (owner report 2026-08-07): he installs from the PHONE,
+        through the very session the install is about to end. *"čim uđem u
+        instalaciju on će meni ugasiti Remote User i više neću moći da
+        komandujem odavde."* So from the tap on this button there is nothing
+        left for anyone to click — [update_handover] verifies the file, tells
+        the phone, arms the script that will install and restart us, and only
+        then do we go. This window keeps its manual path exactly as it was
+        for the case the handover cannot run unattended (a dev checkout with
+        no elevation): the installer is launched visibly instead.
+        """
+        action, text = update_handover.begin(
+            self.controller, self._update_path, self._update.version,
+            self._update.size)
+        if action == "stop":
+            # The REASON goes on the button, and it survives the next refresh
+            # tick — `_update_error`, not a setText the 1 s timer overwrites
+            # one second later with "Update download failed" (which would be a
+            # lie: the download finished, it was the FILE that was wrong).
+            self._update_error = text
+            self._update_state = "failed"
+            self._refresh_update_button()
+            return
+        if action == "manual":
+            # os.startfile = ShellExecute, which raises the UAC prompt the
+            # installer's admin manifest requires — Popen/CreateProcess from
+            # an unelevated app fails with WinError 740 and would wedge the
+            # whole flow. "launched" only after the call succeeds.
+            try:
+                os.startfile(str(self._update_path))
+            except OSError as e:
+                logger.error("Installer launch failed: %s", e)
+                self._update_error = "Update launch failed — retry"
+                self._update_state = "failed"
+                self._refresh_update_button()
+                return
+        self._update_state = "launched"
+        self._quit()  # free our files; the handover takes over from here
+
     def _refresh_update_button(self) -> None:
         state = self._update_state
         if state in (None, "launched") or self._update is None:
             return
         if state == "ready":
-            # os.startfile = ShellExecute, which raises the UAC prompt the
-            # installer's admin manifest requires — Popen/CreateProcess from
-            # this unelevated app fails with WinError 740 and would wedge
-            # the whole flow. "launched" only after the call succeeds.
-            try:
-                os.startfile(str(self._update_path))
-            except OSError as e:
-                logger.error("Installer launch failed: %s", e)
-                self._update_state = "failed"
-                self.update_btn.setText("Update launch failed — retry")
-                self.update_btn.setEnabled(True)
-                self.update_btn.show()
-                return
-            self._update_state = "launched"
-            self._quit()  # free our files; the installer takes over
+            self._begin_handover()
             return
         if state == "found":
             self.update_btn.setText(f"Update to v{self._update.version} — download && install")
@@ -616,7 +663,7 @@ class MainWindow(QMainWindow):
             self.update_btn.setText("Downloading update…")
             self.update_btn.setEnabled(False)
         elif state == "failed":
-            self.update_btn.setText("Update download failed — retry")
+            self.update_btn.setText(self._update_error or UPDATE_FAILED_TEXT)
             self.update_btn.setEnabled(True)
         self.update_btn.show()
 

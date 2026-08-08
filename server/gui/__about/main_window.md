@@ -95,8 +95,10 @@ away.
 - [Settings Window](settings_window.md) — built on first open and handed
   `restart_server`, so a stream Apply restarts the server on THIS window's
   worker thread
-- [Updates](../../__about/updates.md) — `check()`, the startup GitHub-release lookup
-  behind the Update button
+- [Updates](../../__about/updates.md) — `check()`, the GitHub-release lookup
+  behind the Update button (at start and every 15 min)
+- [Update Handover](../../__about/update_handover.md) — `begin()`, everything
+  from "the installer is on disk" to "the phone is talking to the new version"
 - [Traffic Window](traffic_window.md) — built on first open, modeless
 
 ### Used by
@@ -116,10 +118,13 @@ away.
   re-encoding an unchanged QR every tick
 - `_tick` — refresh-timer counter; throttles the Tailscale-address recheck to
   every `PAIRING_RECHECK_TICKS` ticks instead of every second
-- `_update` / `_update_state` / `_update_path` — self-update state machine
-  (`None → found → downloading → ready → launched`, or `failed`); background
-  workers only SET these attributes, the UI-thread refresh timer is the only
-  code that touches Qt with them
+- `_update` / `_update_state` / `_update_path` / `_update_error` — self-update
+  state machine (`None → found → downloading → ready → launched`, or `failed`);
+  background workers only SET these attributes, the UI-thread refresh timer is
+  the only code that touches Qt with them. `_update_error` carries the SPECIFIC
+  reason a `failed` state shows: the 1 s tick redraws the caption, so a
+  `setText` alone would be replaced a second later by "Update download failed",
+  which is a lie when the download finished and it was the FILE that was wrong
 
 #### Key methods
 - `_build_header/_build_qr_card/_build_power_row/_build_window_row/
@@ -142,10 +147,20 @@ away.
 - `_refresh_pairing()` — re-checks LAN/Tailscale addresses while running, so
   signing in to Tailscale mid-session flips the QR to the works-anywhere URL
   with no restart
-- `_check_updates()` / `_install_update()` / `_download_update()` /
-  `_refresh_update_button()` — the self-update flow; download runs chunked
-  with a socket timeout (`urlretrieve` has none) so a stalled CDN can't leave
-  the button stuck on "Downloading…" forever
+- `_check_updates()` / `_recheck_updates()` / `_install_update()` /
+  `_download_update()` / `_refresh_update_button()` — the self-update flow;
+  download runs chunked with a socket timeout (`urlretrieve` has none) so a
+  stalled CDN can't leave the button stuck on "Downloading…" forever
+- `_begin_handover()` — what "ready" does, and this window's whole share of the
+  2026-08-07 fix. It calls
+  [`update_handover.begin()`](../../__about/update_handover.md), which verifies
+  the download, tells the phone, and arms the detached script that installs
+  silently and starts an app again; the window then quits. **The person tapping
+  this button is usually a hundred kilometres away, looking at this window
+  through the app that is about to be replaced** — so from the tap on there is
+  nothing left for anyone to click. `("manual", …)` keeps the old visible-
+  installer path for a dev checkout with no elevation; `("stop", text)` puts
+  the reason on the button and leaves the app running
 - `_settle_minimum()` / `_content_signature()` / `_resettle()` — the law's
   ladder step 3 kept LIVE (see Sizing above): measure, declare, grow — on every
   change to content that can arrive after the window was built
@@ -154,12 +169,14 @@ away.
 - `closeEvent()` — overridden to `event.ignore()` + `hide()` instead of
   closing; shows a one-time tray balloon explaining the app is still running
 
-## Settings trim (owner 2026-08-02)
-"Phone hand" is gone (the cursor-offset system it fed was removed — the
-pointer sits under the finger); `config.hand` stays a legacy field the server
-still sends and nobody reads, and it has no UI anywhere. An old settings.json
-carrying "hand" is ignored on load with a warning (documented non-fatal path).
-The stream form itself now lives in the [Settings window](settings_window.md).
+## Settings trim (owner 2026-08-02); `hand` removed for good (owner 2026-08-07)
+"Phone hand" left this window on 2026-08-02 (the cursor-offset system it fed
+was removed — the pointer sits under the finger). `config.hand` and
+`Settings.hand` are gone from the server entirely as of 2026-08-07 — no UI,
+no field, no wire message. An old settings.json carrying `"hand"` is
+unaffected: it was never in `USER_ADJUSTABLE`, so it is logged and skipped
+like any other unrecognized key. The stream form itself now lives in the
+[Settings window](settings_window.md).
 
 ## Round 6 (owner 2026-08-05)
 
