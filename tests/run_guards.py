@@ -89,6 +89,17 @@ def _user_settings() -> None:
         check()
 
 
+def _caret_lift() -> None:
+    """The soft keyboard raises the PICTURE only when the caret would be
+    covered, and only by the shortfall (owner 2026-08-07). Runs the real page
+    rule in node — skipped when node is absent, like the guards above."""
+    import test_caret_lift
+    if not test_caret_lift.shutil.which("node"):
+        return
+    for _, check in test_caret_lift.CHECKS:
+        check()
+
+
 def _focus_gate() -> None:
     """WHERE typed input lands, and the machinery that gets it there (owner
     2026-08-06 + build round R1). Imported lazily like the others: they pull
@@ -136,6 +147,7 @@ FULL_ONLY_CHECKS = [
     ("app sets (right window, and they pay for their seat)", _app_set_wheel),
     ("voice dedup (dictation never retypes across a round boundary)", _voice_dedup),
     ("user settings (a key we retired leaves his file quietly)", _user_settings),
+    ("caret lift (only if needed, only by the shortfall)", _caret_lift),
     ("focus gate (typed input lands where he is looking)", _focus_gate),
 ]
 

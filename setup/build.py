@@ -315,6 +315,15 @@ def input_gate() -> None:
          "mistyped one is still reported (tests/test_user_settings.py)")
     run([sys.executable, str(PROJECT_DIR / "tests" / "test_user_settings.py")])
 
+    # THE KEYBOARD LIFTS ONLY IF NEEDED, ONLY BY THE SHORTFALL (owner
+    # 2026-08-07, after asking for the opposite thing twice and being right
+    # both times — a box at the bottom is covered unless the picture rises, a
+    # box at the top leaves the screen if it does). No constant can settle it,
+    # so the rule reads where the caret really is; this gate runs it whole.
+    step("0m/6  CARET LIFT GATE — the picture rises only when the caret would "
+         "be covered (tests/test_caret_lift.py)")
+    run([sys.executable, str(PROJECT_DIR / "tests" / "test_caret_lift.py")])
+
 
 def generate_icons() -> None:
     step("1/6  Generating ICOs from assets/logo.svg")

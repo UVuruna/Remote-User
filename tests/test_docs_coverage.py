@@ -99,6 +99,10 @@ ALGORITHMIC = {
     # revising hypothesis plus the round-boundary overlap trim, and it is
     # kept pure so its gate can run it whole.
     "client/voice.js",
+    # New 2026-08-08 (owner: the keyboard must follow the caret, not a rule).
+    # Algorithmic without argument — geometry that decides whether he can read
+    # the row he is typing in, kept pure so its gate runs it whole.
+    "client/caret.js",
     "client/grids.js",
     # New 2026-08-07 (build rounds G1/G2 — the game controller): the whole
     # mapping lives here, and it is real algorithm — a deadzone-and-power stick
@@ -114,6 +118,12 @@ ALGORITHMIC = {
     # lands is a decision with its own rules (the layout fence, the desktop
     # pin, dialogs, what re-arms it) and its own gate — algorithmic.
     "server/focus_guard.py",
+    # New 2026-08-08 (owner report 2026-08-07, screenshots again the next day
+    # — the phone's keyboard covers the row he is typing into). Algorithmic:
+    # a fallback chain across two Windows APIs, a duty-cycled throttle, a hold
+    # against popups that steal focus, and the rule that an unknown caret is
+    # reported as unknown and never as a position.
+    "server/caret.py",
     "server/notify.py",
     # New 2026-08-07 (owner report — installing killed the session he was
     # installing FROM). Algorithmic without argument: a sequence that spans a
