@@ -353,6 +353,66 @@ def check_the_queue_is_the_last_resort() -> bool:
         chan.close()
 
 
+# The companion permissions Android 14+ accepts for a `connectedDevice`
+# foreground service. Holding NONE of them makes startForeground throw in the
+# SERVICE's onCreate — off the caller's stack, so nothing catches it and the
+# process dies at launch. That is exactly what v0.0.093 shipped: the app did
+# not start at all on the owner's phone.
+CONNECTED_DEVICE_COMPANIONS = (
+    "android.permission.CHANGE_NETWORK_STATE",
+    "android.permission.CHANGE_WIFI_STATE",
+    "android.permission.CHANGE_WIFI_MULTICAST_STATE",
+    "android.permission.BLUETOOTH_CONNECT",
+    "android.permission.BLUETOOTH_ADVERTISE",
+    "android.permission.BLUETOOTH_SCAN",
+    "android.permission.NFC",
+    "android.permission.TRANSMIT_IR",
+    "android.permission.UWB_RANGING",
+)
+
+
+def check_the_service_can_never_kill_the_app() -> bool:
+    """The shell half: the channel may fail, the app may not die with it.
+
+    Two independent teeth, because each alone was not enough on the phone:
+      1. the manifest declares the companion permission its service TYPE
+         requires — without it startForeground is refused outright;
+      2. the refusal is CAUGHT in the service's own onCreate, so any future
+         reason Android invents (a background start, a new policy) costs the
+         notice channel and nothing else.
+    """
+    manifest = (PROJECT / "android/app/src/main/AndroidManifest.xml").read_text(
+        encoding="utf-8")
+    service = (PROJECT / "android/app/src/main/java/com/uvuruna/remoteuser"
+               / "NoticeService.kt").read_text(encoding="utf-8")
+    ok = True
+
+    if 'android:foregroundServiceType="connectedDevice"' in manifest:
+        if not any(p in manifest for p in CONNECTED_DEVICE_COMPANIONS):
+            print("    the `connectedDevice` service type is declared with NO "
+                  "companion permission — startForeground throws and the app "
+                  "dies at launch", file=sys.stderr)
+            ok = False
+
+    # The catch must WRAP startForeground, not sit somewhere else in the file.
+    body = service.split("override fun onCreate()", 1)
+    if len(body) < 2:
+        print("    NoticeService has no onCreate to guard", file=sys.stderr)
+        return False
+    guarded = body[1].split("override fun onStartCommand", 1)[0]
+    start = guarded.find("startForeground")
+    catch = guarded.find("catch")
+    if start < 0 or catch < 0 or catch < start or "try" not in guarded[:start]:
+        print("    startForeground is not inside a try/catch in onCreate — a "
+              "refusal takes the whole app down with it", file=sys.stderr)
+        ok = False
+    elif "stopSelf" not in guarded[catch:]:
+        print("    the refusal is caught but the service does not stop itself",
+              file=sys.stderr)
+        ok = False
+    return ok
+
+
 def main() -> int:
     notify.BEAT_S = TEST_BEAT_S
     threading.Thread(target=run_server, daemon=True).start()
@@ -368,6 +428,8 @@ def main() -> int:
             time.sleep(0.1)
 
     results: dict[str, bool] = {}
+    results["the notice channel can never kill the app"] = (
+        check_the_service_can_never_kill_the_app())
     results["/notices refuses a bad token"] = check_notices_refuses_a_bad_token()
 
     chan = Waiting().open()

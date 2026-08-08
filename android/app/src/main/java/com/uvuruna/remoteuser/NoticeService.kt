@@ -130,14 +130,33 @@ class NoticeService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
+    /** The notice channel may FAIL, but it may never take the app with it
+     *  (live failure 2026-08-08: on v0.0.093 the app did not start at all).
+     *  `startForeground` refuses for reasons that belong to the phone and not
+     *  to us — a missing companion permission for the service type, a
+     *  background start Android 12+ forbids, a future policy nobody has
+     *  written yet — and it throws HERE, inside the service's own onCreate,
+     *  where the caller's try/catch cannot reach: an uncaught throw kills the
+     *  process, so the whole remote control died for the sake of a channel
+     *  that only carries an agent's "needs you". So: it is caught, named in
+     *  the log, and the service takes itself down. The page's notice card
+     *  reads `running` and will say the channel is off — the honest state —
+     *  while everything the owner actually opened the app for still works. */
     override fun onCreate() {
         super.onCreate()
         createChannel()
-        ServiceCompat.startForeground(
-            this, ONGOING_ID, ongoing(),
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE else 0,
-        )
+        try {
+            ServiceCompat.startForeground(
+                this, ONGOING_ID, ongoing(),
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE else 0,
+            )
+        } catch (e: Throwable) {
+            Log.e(TAG, "The notice channel could not go foreground", e)
+            running = false
+            stopSelf()
+            return
+        }
         running = true
         link.start()
         Log.i(TAG, "Waiting for the PC to call")
@@ -148,6 +167,11 @@ class NoticeService : Service() {
         // it brings the service back by itself, and the link reconnects. A
         // notice channel that quietly stayed dead until the next app launch
         // would be the same failure in a new place.
+        //
+        // `running` is false only when onCreate's startForeground was refused
+        // and the service is already stopping itself; starting the link there
+        // would hold a socket on a service Android is about to reap.
+        if (!running) return START_NOT_STICKY
         link.start()
         return START_STICKY
     }
