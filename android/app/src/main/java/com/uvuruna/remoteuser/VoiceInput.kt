@@ -291,6 +291,23 @@ class VoiceInput(private val activity: Activity, private val js: (String) -> Uni
             // language riding along silently heard NOTHING — the round-1
             // gap; one explicit language has no silent failure mode.)
             putExtra(RecognizerIntent.EXTRA_LANGUAGE, chosen)
+            // DO NOT STAR OUT HIS WORDS (owner 2026-08-08). He dictated
+            // "Karaburma" — a Belgrade neighbourhood — and it came back
+            // masked, because the recognizer read the first syllables as the
+            // start of something rude. The keyboard's own dictation has a
+            // switch for this and he had already turned it off there; our mic
+            // bypasses the keyboard entirely, so it never saw that choice.
+            //
+            // Android's own SDK states the default plainly: "Optional boolean
+            // indicating whether the recognizer should mask the offensive
+            // words in recognition results. The Default is true." So this was
+            // never a decision of ours — it was a default we never touched.
+            // A profanity filter belongs to a device shared with children,
+            // not to a man dictating instructions to his own PC.
+            //
+            // API 33+; on anything older the extra is simply ignored, which is
+            // the same behaviour as today.
+            putExtra(RecognizerIntent.EXTRA_MASK_OFFENSIVE_WORDS, false)
         }
         // The previous session is STOPPED before a new one starts (owner
         // 2026-08-07). Without this, `startListening` on a recognizer that is
