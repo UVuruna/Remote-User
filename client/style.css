@@ -641,6 +641,29 @@ body.hidden-controls #update-banner { display: none; }
   border-radius: 10px;
   font-size: 15px;
 }
+/* A `.sets-row` THAT IS A BUTTON MUST SAY WHAT IT IS MADE OF (owner
+   screenshot, tablet, 2026-08-08 — a stark white "Not now" pill on the dark
+   notices card).
+   `.sets-row` above declares no background, which is harmless on a <label>
+   and a disaster on a <button>: the WebView paints its own light default
+   chrome underneath, and the near-white page ink lands on it. This is the
+   SAME bug as the six unreadable white bars of 2026-08-06 — and it came back
+   because that round fixed it on `.sets-row.choice`, the one class that
+   happened to be a button THAT DAY. Every card written since could reopen it
+   by writing `<button class="sets-row">`, and one did.
+   So the rule is on the ELEMENT, not on a variant: any button wearing this
+   class states its own surface, and a future card cannot reintroduce it. */
+button.sets-row {
+  background: var(--glass-fill);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  justify-content: center;
+  font: 600 15px system-ui, sans-serif;
+  width: 100%;
+  padding: 12px var(--space-m);
+  margin-top: var(--space-s);
+}
+button.sets-row:active { background: var(--accent-glow); border-color: var(--accent); }
 .sets-row input { width: 20px; height: 20px; accent-color: var(--accent); }
 /* An UNCHECKED box is drawn, not the WebView's own native chrome (owner
    grader, 2026-08-07: on light/filled, the unchecked "Save data on mobile

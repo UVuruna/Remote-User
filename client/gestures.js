@@ -66,7 +66,34 @@ function beginPinch() {
   };
 }
 
+// ONE LINE, ONCE PER CONNECTION, INTO THE SERVER LOG (owner report
+// lang-ok: his own words, quoted — 2026-08-08, "naisao sam na taj bag da
+// Touch ne radi preko tableta": touch works on his phone and not on his
+// tablet, and this project has never had a single measurement from a tablet.)
+//
+// Everything a tablet could plausibly differ by is here — the pointer's own
+// kind, whether the browser calls it primary, the device pixel ratio, the
+// canvas backing size and the rect the picture is really drawn into. It goes
+// to the SERVER log, never to a panel on the phone (owner rule, 2026-08-05):
+// a diagnostic he has to read on the device is one more thing in his way.
+//
+// A guess costs a whole round here; one line answers it.
+let firstTouchLogged = false;
+function logFirstTouch(e) {
+  if (firstTouchLogged) return;
+  firstTouchLogged = true;
+  const D = drawnRect();
+  send({ type: "client_log", text:
+    `[touch] type=${e.pointerType} primary=${e.isPrimary} ` +
+    `dpr=${devicePixelRatio} canvas=${canvas.width}x${canvas.height} ` +
+    `css=${Math.round(canvas.clientWidth)}x${Math.round(canvas.clientHeight)} ` +
+    `screen=${screen.width}x${screen.height} ` +
+    `drawn=${Math.round(D.x)},${Math.round(D.y)} ${Math.round(D.w)}x${Math.round(D.h)} ` +
+    `mode=${touchMode} region=${viewLocked() ? "layout" : "desktop"}` });
+}
+
 canvas.addEventListener("pointerdown", (e) => {
+  logFirstTouch(e);
   // A tap on the stream switches the input switchers OFF by itself (owner
   // 2026-08-04, reversing the old keep-focus rule): clicking outside the
   // textarea is the natural "done typing" — no manual toggle-off needed.

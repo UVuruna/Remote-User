@@ -31,7 +31,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "server"))
 # stays here. See tests/_audit_js.py.
 from _audit_js import CONTRAST_JS  # noqa: E402
 
-SIZES = [("portrait 412x915", 412, 915), ("landscape 915x412", 915, 412)]
+# THE TABLET WAS NEVER MEASURED (owner report 2026-08-08: "do sad nikad nisam
+# probao preko tableta, sad sam probao … naišao sam na taj bag da Touch ne radi
+# preko tableta"). Every size in this list was a PHONE, so every geometry
+# claim this audit has ever made was a claim about a phone — and he uses both.
+# 800x1280 / 1280x800 is a common 10" Android tablet in CSS pixels.
+SIZES = [("portrait 412x915", 412, 915), ("landscape 915x412", 915, 412),
+         ("tablet portrait 800x1280", 800, 1280),
+         ("tablet landscape 1280x800", 1280, 800)]
 
 # EVERY LOOK THE PRODUCT SHIPS — THREE INDEPENDENT AXES (build round R3,
 # 2026-08-07; CORRECTED 2026-08-08 to match the owner's own model: "teme
@@ -157,6 +164,7 @@ SHOT_SUBJECTS = (
     ("Dictation_card", "dictation-card"),
     ("Region_grab", "region-grab"),
     ("Command_chooser", "command-chooser"),
+    ("Notices_card", "notices-card"),
     ("Layout_close_chooser", "layouts"),
     ("Layout_list", "layouts"),
     ("Rename_card", "layouts"),
@@ -431,6 +439,16 @@ PANELS = (
      "layouts = [{name:'Audit', process:'x', orient:'portrait',"
      " icon:null, ratio:[600,1000], pos:0.5}]; openAspectPanel(0)",
      "closeLayoutPanel()", "#layout-panel .lay-card"),
+    # THE NOTICES CARD — and the reason it is here is the finding, not the
+    # card. The owner photographed a stark WHITE "Not now" pill on it from his
+    # tablet (2026-08-08) and asked whether such things are being caught. They
+    # were not: this card was written on 2026-08-07 and registered in NO sweep,
+    # so it had never been measured, never been photographed and never been
+    # asked about its contrast in any of the eight looks. A panel outside the
+    # registry is a panel with no law over it.
+    ("Notices card",
+     "renderNoticeCard({battery: false, notifications: false})",
+     "closeNoticeCard()", "#notice-panel .sets-card"),
     # The ✕ chooser (owner 2026-08-08, task 116). Staged at its
     # WORST: a 4-cell grid, so both chips carry a count, under a
     # layout name as long as one really gets. The second line is
