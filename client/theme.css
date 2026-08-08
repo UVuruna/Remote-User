@@ -85,8 +85,16 @@
   --ink-shadow: rgb(0 0 0 / 0.70);
   --lbl-shadow: rgb(0 0 0 / 0.85);
   --card-shadow: rgb(0 0 0 / 0.45);
-  /* What a FILLED button is filled with when `data-colored="false"`. */
-  --fill-solid: #1e293b;
+  /* What a FILLED button is filled with when `data-colored="false"`.
+     RAISED 2026-08-08 (#1e293b -> #334155) on the owner's own choice between
+     three rendered variants. #1e293b sits so close to the #0f172a page that
+     the coordinator, holding dark-plain-FULL and dark-plain-TRANSPARENT side
+     by side, could not tell them apart — the audit proved the axis was real
+     in the DOM while the eye could not see it, and a switch a person cannot
+     see is worth no more than a broken one. On the LIGHT theme the same axis
+     already read clearly (white cards against thin outlines), which is why
+     only this one moved. */
+  --fill-solid: #334155;
 }
 
 /* --- LIGHT ---------------------------------------------------------------

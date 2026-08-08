@@ -296,13 +296,17 @@ class Settings:
     #   phone_theme   — the phone PAGE: "dark" or "light". Same two values as
     #                   ui_theme now that colour is its own axis.
     #   phone_colored — whether the D-pad groups and the radial wheel wear
-    #                   each set's own colour. True picks a palette by
-    #                   `phone_theme` (SET_COLORS_DARK / SET_COLORS_LIGHT,
-    #                   below) — dark shades on a dark page, strong inks on a
-    #                   light one, per his own words. False leaves them the
-    #                   theme's plain foreground colour ("samo belo" on dark).
-    #   phone_fill    — "transparent" (outlined) or "full" (filled) — the
-    #                   SAME two controls, independent of theme AND colour.
+    #                   each set's own colour. The palette is `SET_COLORS`
+    #                   below and it does NOT depend on the theme (owner
+    #                   2026-08-08) — a set's colour is its identity, and an
+    #                   identity that changes with the sun/moon switch is not
+    #                   one. False leaves the controls the theme's plain
+    #                   foreground colour ("samo belo" on dark).
+    #   phone_fill    — "transparent" (outlined) or "full" (filled). It reaches
+    #                   the SAME surfaces `phone_colored` does and no others
+    #                   (owner 2026-08-08: "vazi isto samo za controls, sets i
+    #                   te buttone na ekranu sto su stalno vidljivi — layout,
+    #                   hide..."), independent of theme AND colour.
     # 2 x 2 x 2 = 8 combinations, all real. The phone gets these in `config.ui`
     # and applies them; it has no menu of its own (owner answer P4). An
     # unknown value is treated as the default by the surface that reads it,
@@ -319,66 +323,46 @@ class Settings:
 # the surface the text really lands on (client/theme.js), so a set's label can
 # never land unreadable on its own colour whatever is tuned here later.
 #
-# TWO TABLES, ONE PER SURFACE (owner correction 2026-08-07, replacing the
-# single table he adopted the same day with "tune later"). His words:
+# ONE TABLE, BOTH THEMES (owner decision 2026-08-08, on seeing the variants).
+# This replaces the two-table split of 2026-08-07, and the correction is his:
 #
-#   "kada je DARK tema treba da budu jako tamne nijanse, dakle mali
-#    lightness/brightness; a ovaj mod LIGHT treba da ima jako svetla slova,
-#    velikim, u boji, dakle ona klasična jaka. Sto saturacija ne treba ni u
-#    jednom modu."
+#   "nema dve verzije za obojene setove. Oni ce uvijek imati ove jake
+#    upecatljive boje. Ono sto se menja su ostali elementi, light ili dark
+#    temi, ali kontrole i setovi ce biti obojeni."
 #
-# One table cannot answer both halves of that, because the colour does a
-# DIFFERENT JOB on each page. On a dark page the colour is the BODY of the
-# button and the white label carries the reading — so the colour must be dark,
-# or the button glows (the first palette's #38BDF8 filled a 58 px button with
-# near-neon cyan on a near-black page). On a light page the colour is the INK
-# — strong, vivid, classic — on a calm surface it must stay legible against.
-# A dark navy that reads beautifully as a fill is invisible as ink on white,
-# and a vivid ink is a searchlight as a fill; the same hex cannot be both.
+# The 2026-08-07 reasoning was that the colour does a different job on each
+# page — the BODY of the button on dark, the INK on light — so no single hex
+# could be both. That analysis was not wrong about the JOBS; it was wrong
+# about what he wanted. He does not want the set colours to follow the page at
+# all. A set's colour is its IDENTITY, and an identity that changes when he
+# flips a switch is not one — Mouse is that teal on both pages, and the theme
+# moves everything else around it.
 #
-# THE RULE BOTH TABLES OBEY, and the reason each hex is the one it is:
-#   * HSL saturation is CAPPED — 66% on dark, 72% on light. "Sto saturacija ne
-#     treba ni u jednom modu": nothing here is a pure hue. The two ceilings
-#     differ because the jobs differ — 72% is what the classic strong inks
-#     (a #B92 red, a #204DB6 blue) actually measure, and on dark a shade that
-#     saturated turns muddy as it darkens.
-#   * DARK: lightness 22–40%. The floor is not taste — a fill darker than that
-#     stops reading as a button against the #0f172a page; the ceiling is where
-#     white label text stops clearing AA on it. Both are measured, not guessed.
-#   * LIGHT: lightness 26–54%, the band where a colour is vivid enough to be
-#     "ona klasična jaka" and still dark enough to be read on #eceef6.
-#   * HUE **and** LIGHTNESS separate the sets that share the wheel — the one
-#     property of the first palette worth keeping. The four blues (Mouse 196,
-#     Settings 215, VSCode 222, Windows 232) and the four warms (Claude 13,
-#     Explorer 24, Attach 36, Chrome 50) are pulled apart in lightness as well
-#     as hue, so a colour-blind eye still has a second signal.
+# It also removes a whole class of the bug this project keeps meeting: two
+# tables are two things to keep in step, and the second one goes stale.
+#
+# THE RULE THIS TABLE OBEYS, and why each hex is what it is:
+#   * HSL saturation is CAPPED at 72%. "Sto saturacija ne treba ni u jednom
+#     modu": nothing here is a pure hue.
+#   * Lightness 26-54% — vivid enough to be "ona klasična jaka", dark enough
+#     that a WHITE label clears AA on it as a fill, which is what makes the
+#     same hex work on both pages: the label reads against the COLOUR, not
+#     against the page behind it.
+#   * HUE **and** LIGHTNESS separate the sets that share the wheel. The four
+#     blues (Mouse 196, Settings 215, VSCode 222, Windows 232) and the four
+#     warms (Claude 13, Explorer 24, Attach 36, Chrome 50) are pulled apart in
+#     lightness as well as hue, so a colour-blind eye still has a second
+#     signal.
 #
 # Every combination is swept by tests/test_layout_audit.py — all 13 colours,
-# both surfaces, both fills, D-pad and wheel — and no entry here needs the
-# client's own fill correction (`fillOn`): what the desktop shows is what the
-# phone paints.
+# BOTH themes, both fills, D-pad and wheel — and the ink is computed from the
+# surface the text really lands on (client/theme.js), never tabled, so the
+# contrast tooth stays green whatever he retunes here later.
 #
-# CUSTOM sets are not listed and never will be: the owner names them himself
-# in the Controls editor, so the phone hands each one the next colour of the
-# palette in force that no shipped set already holds (client/theme.js →
-# `setColors`). One table per surface, no third list to keep in step.
-SET_COLORS_DARK = {
-    "Mouse": "#1D6A86",
-    "Input": "#1C693C",
-    "Settings": "#4B5B71",
-    "Edit": "#572B82",
-    "Attach": "#7D561C",
-    "Navigate": "#175E57",
-    "Media": "#86282E",
-    "Windows": "#354297",
-    "VSCode": "#1C3878",
-    "Chrome": "#5D5113",
-    "Explorer": "#944D1E",
-    "Claude": "#8D4834",
-    "Cursor": "#7E2A57",
-}
-
-SET_COLORS_LIGHT = {
+# CUSTOM sets are not listed and never will be: he names them himself in the
+# Controls editor, so the phone hands each one the next colour of this palette
+# that no shipped set already holds (client/theme.js -> `setColors`).
+SET_COLORS = {
     "Mouse": "#186B89",
     "Input": "#14713B",
     "Settings": "#476185",
@@ -394,17 +378,32 @@ SET_COLORS_LIGHT = {
     "Cursor": "#B02971",
 }
 
+# The two names the 2026-08-07 split introduced, kept pointing at the ONE
+# table so an import that outlived the split cannot quietly resurrect a
+# second palette. New code uses SET_COLORS.
+SET_COLORS_DARK = SET_COLORS
+SET_COLORS_LIGHT = SET_COLORS
+
 
 def set_colors(theme: str | None = None) -> dict:
-    """The palette a given PHONE THEME wears — the SURFACE decides, nothing
-    else (owner correction 2026-08-08: chosen by `theme` alone, never by a
-    fourth theme name that used to fold the colour axis in). A monochrome
-    look never reads this map at all (client/theme.css only wires the
-    `--set-*` tokens under `data-colored="true"`), so resolving it here
+    """The set palette — THE SAME ON BOTH THEMES (owner decision 2026-08-08:
+    "nema dve verzije za obojene setove, oni ce uvijek imati ove jake
+    upecatljive boje"). A set's colour is its identity, and an identity that
+    changes when he flips the sun/moon switch is not one.
+
+    `theme` is still accepted and still ignored, deliberately: every caller
+    passes it (the phone config, the desktop preview, the audit sweep), and
+    removing the parameter would break them all for a change that has nothing
+    to do with them. It stays as the record that the question was ASKED and
+    answered with "it does not matter" — not as an argument nobody thought
+    about.
+
+    A monochrome look never reads this map at all (client/theme.css wires the
+    `--set-*` tokens only under `data-colored="true"`), so answering
     regardless of `phone_colored` costs nothing and keeps this function
     answering exactly one question."""
-    name = SETTINGS.phone_theme if theme is None else theme
-    return dict(SET_COLORS_LIGHT if name == "light" else SET_COLORS_DARK)
+    del theme  # the palette does not depend on it — see above
+    return dict(SET_COLORS)
 
 
 def ui_config() -> dict:

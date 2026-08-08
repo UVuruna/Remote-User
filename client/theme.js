@@ -21,11 +21,13 @@
 // carry the extra switch. `theme` is now `"dark"` / `"light"` only; `colored`
 // is its own boolean, independent of both.
 //
-// `colors` is ONE flat map, already chosen for the THEME axis alone (dark
-// shades on a dark page, vivid inks on a light one — server/config.py →
-// `set_colors`), and it rides on every `config` frame whether or not
-// `colored` is on; the palette is resolved once, on the desktop, and this
-// file never holds a table.
+// `colors` is ONE flat map, THE SAME ON BOTH THEMES (owner decision
+// 2026-08-08: "nema dve verzije za obojene setove — oni ce uvijek imati ove
+// jake upecatljive boje"). A set's colour is its identity; the theme moves
+// everything AROUND the controls and never the controls' own colours. It
+// rides on every `config` frame whether or not `colored` is on; the palette
+// is resolved once, on the desktop (server/config.py → `set_colors`), and
+// this file never holds a table.
 //
 // The choice is CACHED per device so the page does not paint the previous
 // look for the third of a second it takes the socket to open and the server
