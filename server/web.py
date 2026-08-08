@@ -13,8 +13,8 @@ Protocol (see project CLAUDE.md):
 - server → client, JSON text: `config` after auth and after every stream
   (re)start — monitor size plus `stream` ("h264" | "jpeg") and, in H.264 mode,
   the MSE `codec` string parsed from the live init segment; `actions` (radial
-  sets); `toast` notices; `cursor` positions for the client-drawn virtual
-  cursor (DXGI frames never contain the mouse pointer).
+  sets); `toast` notices; `cursor` (the pointer no DXGI frame contains) and
+  `caret` (the row being typed into, or unknown) — both only on change.
 - server → client, binary:
   - H.264 mode: the raw fMP4 byte stream — the client appends it into MSE.
   - JPEG mode: 16-byte header (4 × float32 LE — monitor-normalized x, y, w, h
@@ -48,6 +48,7 @@ from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from PIL import Image, ImageOps
 
+import caret
 import clipboard
 import config
 import focus_guard
@@ -351,8 +352,8 @@ def create_app(stream, hub: FrameHub | None, injector: InputInjector, token: str
             if resume is not None:
                 await layout_api.layout_focus(ws, layouts, stream, conn, resume)
             tasks.append(asyncio.create_task(_send_cursor(ws, injector)))
-            tasks.append(asyncio.create_task(
-                presence.watchdog(ws, layouts, conn, active_client)))
+            tasks.append(asyncio.create_task(caret.watch(ws, layouts, conn, injector)))
+            tasks.append(asyncio.create_task(presence.watchdog(ws, layouts, conn, active_client)))
             # Nothing may take the keyboard out of the layout the phone is
             # showing (owner decree 2026-08-06) — defended continuously, not
             # only when a key arrives: dictation delivers at the END of a

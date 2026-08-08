@@ -324,6 +324,15 @@ def input_gate() -> None:
          "be covered (tests/test_caret_lift.py)")
     run([sys.executable, str(PROJECT_DIR / "tests" / "test_caret_lift.py")])
 
+    # THE PC MUST SAY WHERE THE TYPING LANDS, OR SAY IT CANNOT (owner
+    # 2026-08-07). The server half of the caret keyboard: a UIA read that is
+    # throttled rather than run per poll, a caret refused when it names another
+    # window, and an honest "unknown" for the apps that expose nothing. Without
+    # this the phone half above has no input at all.
+    step("0n/6  CARET GATE — the PC says where the typing lands, or says it "
+         "cannot (tests/test_caret.py)")
+    run([sys.executable, str(PROJECT_DIR / "tests" / "test_caret.py")])
+
 
 def generate_icons() -> None:
     step("1/6  Generating ICOs from assets/logo.svg")

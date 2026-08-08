@@ -183,6 +183,26 @@ def _active_layout(layouts, conn: dict):
     return lay if lay.members else None
 
 
+def _layout_target(lay, conn: dict) -> int:
+    """Which member of `lay` the phone's keyboard belongs to when the
+    foreground is NOT one of them. One implementation, two callers: the guard
+    below (which then puts focus there) and `current_target` (which only
+    looks) — two copies of this rule would be two answers to one question."""
+    pin = conn.get("pin")
+    if pin in lay.members:
+        return pin
+    return lay.last_member if lay.last_member in lay.members else lay.members[0]
+
+
+def _armed_pin(conn: dict) -> int:
+    """The desktop pin when it is actually armed and its window still exists —
+    0 otherwise, meaning "the next key re-reads the foreground"."""
+    pin = conn.get("pin")
+    if conn.get("pin_stale", True) or not pin or not window_manager.user32.IsWindow(pin):
+        return 0
+    return pin
+
+
 def _accept(conn: dict, lay, hwnd: int) -> int:
     conn["pin"], conn["pin_stale"] = hwnd, False
     if lay is not None:
@@ -239,15 +259,13 @@ def _decide(layouts, conn: dict, typing: bool) -> int:
             # purpose. Accepted, and the MEMBER stays the remembered target.
             _accept(conn, lay, root)
             return fg
-        pin = conn.get("pin")
-        target = pin if pin in members else (
-            lay.last_member if lay.last_member in members else members[0])
+        target = _layout_target(lay, conn)
         _log_steal(conn, fg, target, "the layout the phone is showing")
         _refocus(target)
         return _accept(conn, lay, target)
 
-    pin = conn.get("pin")
-    if conn.get("pin_stale", True) or not pin or not window_manager.user32.IsWindow(pin):
+    pin = _armed_pin(conn)
+    if not pin:
         return _accept(conn, None, fg)        # first key of this burst — arm here
     if fg == pin:
         return _accept(conn, None, pin)
@@ -259,6 +277,34 @@ def _decide(layouts, conn: dict, typing: bool) -> int:
     # (window_manager.raise_window, owner decree 2026-08-05).
     window_manager.raise_window(pin, topmost=False)
     return _accept(conn, None, pin)
+
+
+def current_target(layouts, conn: dict) -> int:
+    """WHERE the phone's keys would land right now — READ ONLY.
+
+    Same rules as `guard`, none of its actions: it raises nothing, arms
+    nothing, takes no lock and writes nothing into `conn`. That separation is
+    the point. [Caret](caret.py) has to ask this question several times a
+    second so the phone knows which row on the PC it must not cover, and a
+    passive watcher that could raise a window would be a second, uninvited
+    focus policy running beside the real one.
+
+    It answers from this module because the answer belongs to this module: a
+    caret read that decided for itself which window is being typed into would
+    be a second opinion, and two opinions about one window are exactly what
+    the layout fence exists to prevent."""
+    fg = _foreground()
+    lay = _active_layout(layouts, conn)
+    if lay is not None:
+        if fg in lay.members or _owner_root(fg) in lay.members:
+            return fg
+        return _layout_target(lay, conn)
+    pin = _armed_pin(conn)
+    if not pin:
+        return fg                         # nothing armed — typing would land here
+    if fg == pin or _owner_root(fg) == pin:
+        return fg                         # the target, or a dialog it owns
+    return pin                            # a thief holds it; `guard` hands it back
 
 
 # ═══════════════════════════ INSIDE ONE SENTENCE ═══════════════════════════

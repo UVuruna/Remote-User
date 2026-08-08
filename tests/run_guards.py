@@ -100,6 +100,16 @@ def _caret_lift() -> None:
         check()
 
 
+def _caret_server() -> None:
+    """The PC's half of the caret keyboard: WHERE the typing caret is, in
+    monitor-normalized coordinates, or an honest "cannot say". Nothing on this
+    machine is touched — no window is raised, read, or moved; the Win32/UIA
+    layer is faked."""
+    import test_caret
+    for _, check in test_caret.CHECKS:
+        check()
+
+
 def _focus_gate() -> None:
     """WHERE typed input lands, and the machinery that gets it there (owner
     2026-08-06 + build round R1). Imported lazily like the others: they pull
@@ -148,6 +158,7 @@ FULL_ONLY_CHECKS = [
     ("voice dedup (dictation never retypes across a round boundary)", _voice_dedup),
     ("user settings (a key we retired leaves his file quietly)", _user_settings),
     ("caret lift (only if needed, only by the shortfall)", _caret_lift),
+    ("caret (the PC says where the typing lands)", _caret_server),
     ("focus gate (typed input lands where he is looking)", _focus_gate),
 ]
 

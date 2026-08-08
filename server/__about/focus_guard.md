@@ -167,6 +167,22 @@ bug. Raising members in plain list order handed the keyboard to whichever
 window sat last in the grid, so one excursion was enough to move his dictation
 into the other pane.
 
+## Looking without acting (2026-08-08)
+`current_target(layouts, conn)` answers the same question as `guard()` — where
+the phone's keys would land right now — and does **none** of its actions: it
+raises nothing, arms nothing, writes nothing into `conn` and takes no lock.
+
+It exists because [Caret](caret.md) has to ask that question several times a
+second (so the phone knows which row on the PC its keyboard must not cover),
+and a passive watcher that could raise a window would be a second focus policy
+running beside the real one — on a machine whose owner has twice paid for
+windows that were left where he did not put them.
+
+The two answers cannot drift apart, because the rules they share are single
+functions: `_layout_target()` (which member the keyboard belongs to when the
+foreground is not one) and `_armed_pin()` (whether the desktop pin is live).
+`guard()` then acts on that answer; `current_target()` only reports it.
+
 ## Connections
 
 ### Uses
@@ -181,6 +197,8 @@ into the other pane.
   `type_text` / `_paste_text`, and `watch()` as one task per connection
 - [Input Injector](input_injector.md) — indirectly: it calls the `typist`
   callable it is given, and imports nothing from here
+- [Caret](caret.md) — `current_target()`, to read the caret of the window the
+  phone is actually typing into rather than whatever holds the foreground
 
 ## Cost
 One `GetForegroundWindow` (plus at most eight `GetWindow` owner hops) per
