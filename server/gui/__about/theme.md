@@ -5,7 +5,7 @@
 
 ## Purpose
 
-Every visual token of the desktop app in one file (root Rule #4 — no color or
+Every visual token of the desktop app in one file (No Hardcoded Values (rules/CODE.md) — no color or
 radius literal in component code), now in **TWO palettes**: the slate/cyan
 dark one the app was born with, and a light one (build round R3, owner-approved
 2026-08-07). The QSS stylesheet is GENERATED from whichever is active, and

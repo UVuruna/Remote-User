@@ -1,4 +1,4 @@
-"""Guard: THE STRUCTURE LAW (root CLAUDE.md Rule #20, Priority S / rules/CODE.md
+"""Guard: THE STRUCTURE LAW (root CLAUDE.md -> The Laws, Priority S / rules/CODE.md
 -> Enforcement). No source file may exceed ~1,000 lines unless it is in the
 RATCHET allowlist below. Each allowlist entry documents WHY the file stays
 whole and which session owes the split. The allowlist may only SHRINK —

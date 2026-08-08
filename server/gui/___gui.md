@@ -109,7 +109,7 @@ client (see [Theme](__about/theme.md) for the verified overlap).
   without a Tailscale address the state is re-checked every few seconds, so
   the hints flip to "connected" the moment the sign-in completes — no restart
   (the server already listens on all interfaces).
-- **All colors/radii live in `theme.py` only** (root Rule #4) — no component
+- **All colors/radii live in `theme.py` only** (No Hardcoded Values, rules/CODE.md) — no component
   code hardcodes a literal; see [Theme](__about/theme.md) for the token tree
   and its verified (and one honestly-noted un-verified) overlap with the web
   client's palette.

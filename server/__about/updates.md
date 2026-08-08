@@ -5,7 +5,7 @@
 ## Purpose
 Update discovery for the DESKTOP app via GitHub Releases (`SETTINGS.update_repo`, a public repo, unauthenticated API). `check()` compares the latest release tag against the running version (`config.app_version()`) and returns an `Update(version, installer_url, page_url)` when a newer release exists, else `None`.
 
-The phone is deliberately NOT served from here: its update source is the PC itself — `config.app_version` over the WebSocket plus `/app.apk` on the same server (see [Web Layer](web.md)). One internet check per ecosystem; everything downstream updates from the PC (root Rule #23).
+The phone is deliberately NOT served from here: its update source is the PC itself — `config.app_version` over the WebSocket plus `/app.apk` on the same server (see [Web Layer](web.md)). One internet check per ecosystem; everything downstream updates from the PC (the Self-Update rule, rules/SHIP.md).
 
 `None` is the documented result for: up to date, `update_check` disabled, a dev checkout (version `"dev"`, no digits to compare), a repo with no releases yet, or any network failure — all of those log at info and never raise, so the desktop app must start fine offline.
 

@@ -1,4 +1,4 @@
-"""Guard: THE CONFIG SECTION LAW (root CLAUDE.md Rule #20 addendum /
+"""Guard: THE CONFIG SECTION LAW (root CLAUDE.md -> The Laws /
 rules/CODE.md -> Enforcement). Every file listed in CONFIG_FILES must have
 every top-level definition sitting under a `# ══...══` section banner, must
 never post-definition-patch an earlier module-level table

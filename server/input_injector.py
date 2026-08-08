@@ -218,7 +218,7 @@ def tick_now() -> int:
 
 
 class InjectionMonitor:
-    """Detects silently-eaten injection by its EFFECT (Rule #1: no silent
+    """Detects silently-eaten injection by its EFFECT (No Error Masking, rules/CODE.md: no silent
     failures — a dead mouse must scream, never mystify).
 
     A commanded cursor jump of at least `min_jump` px must land within

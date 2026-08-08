@@ -93,7 +93,7 @@ class BaseCapture:
             # fast reconnect ("Capture is already running. Call stop()
             # first.") — the NEW session died instead of the stale capture
             # (live 2026-07-29 02:30:45). Reset once and retry; a second
-            # failure raises loudly (Rule #1).
+            # failure raises loudly (No Error Masking, rules/CODE.md).
             logger.warning("dxcam start refused (%s) — resetting capture and retrying", e)
             try:
                 self._camera.stop()

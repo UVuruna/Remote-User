@@ -4,7 +4,7 @@
 **Flow:** [diagram](../__flow/config.md)
 
 ## Purpose
-Single source of truth for every tunable value in the server (root Rule #4 — no hardcoded values elsewhere): network binding, streaming/H.264 parameters, injection self-check thresholds, pairing, remote access, logging, and update-check settings.
+Single source of truth for every tunable value in the server (No Hardcoded Values (rules/CODE.md) — no hardcoded values elsewhere): network binding, streaming/H.264 parameters, injection self-check thresholds, pairing, remote access, logging, and update-check settings.
 
 **Two layers, one instance.** Code defaults (the `Settings` dataclass) plus a user settings JSON (`settings.json`, written only by the desktop GUI) validated against a `USER_ADJUSTABLE` allowlist — unknown keys or bad values are logged and skipped, never fatal. The module-level `SETTINGS` is the ONLY instance; runtime changes go through `apply()` (controlled mutation of the shared frozen dataclass via `object.__setattr__`), so every module that imported `SETTINGS` sees updates without rebinding.
 
