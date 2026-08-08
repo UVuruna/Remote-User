@@ -25,6 +25,7 @@ Run:  .venv\\Scripts\\python tests/test_layout_protocol.py
 
 import asyncio
 import json
+import pathlib
 import sys
 from pathlib import Path
 
@@ -534,6 +535,78 @@ def check_the_members_leave_the_topmost_band_before_closing() -> bool:
     return True
 
 
+# ═══════════════ a Store app's icon is in its PACKAGE ═══════════════
+# Owner report 2026-08-08, with his screenshot of a generic glyph on a Photos
+# layout. MEASURED before it was answered: SHGetFileInfoW on the packaged exe
+# returns a 516-byte generic document icon (1,188 for Code.exe, 2,080 for
+# chrome.exe), and the manifest names assets that DO NOT EXIST under the name
+# it gives — 55 files on his PC, none of them `PhotosAppList.png`. So the
+# choice among the siblings is the whole algorithm, and it is what these check.
+
+
+def check_a_packaged_app_uses_its_manifest_icon() -> bool:
+    """The stem in the manifest is not a file. The right sibling is."""
+    import shutil
+    import tempfile
+
+    from PIL import Image
+
+    import window_icons
+    ok = True
+    root = pathlib.Path(tempfile.mkdtemp())
+    try:
+        pkg = root / "WindowsApps" / "Contoso.Viewer_1.0_x64__abc"
+        assets = pkg / "Assets"
+        assets.mkdir(parents=True)
+        (pkg / "AppxManifest.xml").write_text(
+            '<Package><Applications><Application><uap:VisualElements '
+            'Square44x44Logo="Assets\\Logo.png" /></Application>'
+            '</Applications></Package>', encoding="utf-8")
+        # Every scale EXCEPT the bare name, exactly as a real package ships,
+        # plus the altform variants that must never be preferred.
+        for name in ("Logo.scale-200.png", "Logo.scale-100.png",
+                     "Logo.targetsize-32.png",
+                     "Logo.targetsize-32_altform-unplated.png"):
+            Image.new("RGBA", (44, 44), (10, 20, 30, 255)).save(assets / name)
+        exe = pkg / "Viewer.exe"
+        chosen = window_icons._appx_asset(str(exe))
+        if chosen is None or chosen.name != "Logo.targetsize-32.png":
+            print(f"  DETAIL picked {chosen and chosen.name!r}, "
+                  f"expected 'Logo.targetsize-32.png'")
+            ok = False
+        uri = window_icons._packaged_icon(str(exe))
+        if not (uri or "").startswith("data:image/png;base64,"):
+            print("  DETAIL the packaged icon did not become a data URI")
+            ok = False
+        # A window that is NOT packaged must not pay for any of this, and must
+        # never be answered from a manifest that does not exist.
+        if window_icons._appx_asset(r"C:\Program Files\App\app.exe") is not None:
+            print("  DETAIL an ordinary exe was treated as a package")
+            ok = False
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+    return ok
+
+
+def check_a_package_with_no_assets_falls_through() -> bool:
+    """A manifest naming assets nobody shipped must return None, so the shell
+    route still runs — a generic icon beats no layout."""
+    import shutil
+    import tempfile
+
+    import window_icons
+    root = pathlib.Path(tempfile.mkdtemp())
+    try:
+        pkg = root / "WindowsApps" / "Broken_1.0_x64__abc"
+        (pkg / "Assets").mkdir(parents=True)
+        (pkg / "AppxManifest.xml").write_text(
+            '<Package Square44x44Logo="Assets\\Gone.png" />', encoding="utf-8")
+        return (window_icons._appx_asset(str(pkg / "App.exe")) is None
+                and window_icons._packaged_icon(str(pkg / "App.exe")) is None)
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
 CHECKS = [
     ("create from a LIST answers the phone", check_create_from_a_list_answers),
     ("the list probes the process table ONCE, not per entry",
@@ -554,6 +627,10 @@ CHECKS = [
      check_a_window_that_refuses_is_reported),
     ("members leave the topmost band BEFORE they are closed",
      check_the_members_leave_the_topmost_band_before_closing),
+    ("a Store app's icon comes from its PACKAGE, not its exe",
+     check_a_packaged_app_uses_its_manifest_icon),
+    ("a package with no assets falls through to the shell route",
+     check_a_package_with_no_assets_falls_through),
 ]
 
 
