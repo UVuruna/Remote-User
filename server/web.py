@@ -936,12 +936,24 @@ async def _receive_input(ws: WebSocket, injector: InputInjector, stream, token: 
             await layout_api.send_layout_state(ws, layouts, conn)
         elif kind == "layout_remove":
             index = int(msg["index"])
-            await asyncio.to_thread(layouts.remove, index)
+            # `close` is the owner's second act (2026-08-08, task 116): the
+            # layout leaves AND its windows are asked to close. Read with an
+            # explicit `is True` — the destructive half may only ever be
+            # reached by a page that MEANT it, never by a truthy accident.
+            close = msg.get("close") is True
+            standing = await asyncio.to_thread(layouts.remove, index, close)
             if conn["active"] is not None:
                 if conn["active"] == index:
                     conn["active"], conn["region"] = None, None
                 elif conn["active"] > index:
                     conn["active"] -= 1
             await layout_api.send_layout_state(ws, layouts, conn)
+            if standing:
+                # An app with unsaved work put up its own dialog and is still
+                # there. The phone SAYS so — the alternative is the layout
+                # vanishing off the bar while a window he expected to close
+                # sits waiting for an answer he never saw asked.
+                await _toast(ws, f"{len(standing)} window(s) still open — "
+                                 f"answer the app on the PC")
         else:
             logger.warning("Unknown message type %r from client", kind)

@@ -33,7 +33,7 @@ everything here composes and frames WINDOWS on it.
 - [Window Manager](../../server/__about/window_manager.md) /
   [Web Layer](../../server/__about/web.md) — the other end of
   `layout_list` / `layout_create` / `layout_focus` / `layout_aspect` /
-  `layout_remove`
+  `layout_remove {index, close?}`
 
 ## Key Functions & Data
 
@@ -43,6 +43,15 @@ everything here composes and frames WINDOWS on it.
   `layout_state` only arms the settle watcher (`settleStill` samples a 64×36
   thumbnail of the live frame), and the animation drops when the picture
   actually stops moving. Every showing opens on the next cube face.
+- **The ✕ chooser** — `openCloseChooser(index)`, `chooserBtn(icon, label,
+  sub, onTap)`. The bar's ✕ used to send `layout_remove` outright, which is
+  one of the two things the owner means by it (2026-08-08): *"brisanje layouta
+  ga samo obrise iz nase liste ali ostavlja prozor na desktopu. Nekad hocemo
+  to, a nekad hocemo bas da zatvorimo sve tu."* It now opens the same
+  side-by-side card the creation flow uses — **Remove the layout** (what it
+  always did) and **Close the window(s)** (`close: true`; the PC posts
+  `WM_CLOSE`). Each chip carries a second line naming its consequence and the
+  real member COUNT, so the irreversible one is never picked by elimination.
 - **Layout bar** — `updateLayoutBar`, `layoutStep(dir)`, `focusLayout(index)`
   (index −1 = full desktop), `applyOrientationLock` (drives the shell's
   `Android.lockOrientation`: layout focus = locked, desktop = free).

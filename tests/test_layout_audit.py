@@ -78,9 +78,13 @@ COLOUR_SHOTS = {"Sets picker", "Quality panel", "Dictation card"}
 # The Region grab joined them on 2026-08-07: its bar is the panel whose
 # layout depends most on the width it is given, and landscape is where it
 # gets three times as much of it.
+# The ✕ chooser joined on 2026-08-08: it is two big side-by-side chips, which
+# is exactly the shape landscape squeezes — 46% of a wide card each, with a
+# consequence line that must still wrap rather than clip.
 LANDSCAPE_SHOTS = {"Creation panel + Name field", "Grid arrangement choice",
                    "Sets picker", "Quality panel", "Dictation card",
-                   "Layout list with rename", "Region grab"}
+                   "Layout list with rename", "Region grab",
+                   "Layout close chooser"}
 
 
 def _grid_audit() -> bool:
@@ -147,6 +151,7 @@ SHOT_SUBJECTS = (
     ("Dictation_card", "dictation-card"),
     ("Region_grab", "region-grab"),
     ("Command_chooser", "command-chooser"),
+    ("Layout_close_chooser", "layouts"),
     ("Layout_list", "layouts"),
     ("Rename_card", "layouts"),
     ("Aspect_panel", "layouts"),
@@ -657,6 +662,19 @@ PANELS = (
      "layouts = [{name:'Audit', process:'x', orient:'portrait',"
      " icon:null, ratio:[600,1000], pos:0.5}]; openAspectPanel(0)",
      "closeLayoutPanel()", "#layout-panel .lay-card"),
+    # The ✕ chooser (owner 2026-08-08, task 116). Staged at its
+    # WORST: a 4-cell grid, so both chips carry a count, under a
+    # layout name as long as one really gets. The second line is
+    # the whole point of the card — it is the difference between
+    # "the windows stay" and "the windows close" — so this shot
+    # exists to prove that line is never the thing that gets cut.
+    ("Layout close chooser",
+     "layouts = [{name:'Claude Code - Remote User - Visual Studio "
+     "Code [Administrator]', process:'code.exe', orient:'portrait',"
+     " icon:null, members:4, ratio:null, pos:0.5}];"
+     "layoutActive = 0; openCloseChooser(0)",
+     "layoutActive = null; layouts = []; closeLayoutPanel()",
+     "#layout-panel .lay-card"),
     # The layout list carries a rename button per row (owner
     # 2026-08-05) — a long window title must not push the row's
     # buttons off the card.

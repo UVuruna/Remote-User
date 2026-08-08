@@ -390,6 +390,150 @@ def check_the_same_position_applied_again_still_moves_the_windows() -> bool:
     return ok
 
 
+# ═══════════════ the ✕ means two things, and only one is fatal ═══════════════
+# Owner 2026-08-08, task 116: "brisanje layouta ga samo obrise iz nase liste
+# ali ostavlja prozor na desktopu. Nekad hocemo to, a nekad hocemo bas da
+# zatvorimo sve tu."
+#
+# The first check below is the one that matters. Everything else here proves a
+# feature works; that one proves the feature CANNOT reach his windows unless
+# he said so — and it is the only half of this that cannot be undone from the
+# phone. It is written against the real `close_windows`, not a fake, because
+# a fake would prove nothing about which branch the dispatcher takes.
+
+CLOSED: list[int] = []
+
+
+def install_close_model(refuses: set[int] | None = None) -> None:
+    """A DESK where windows really close. `PostMessageW(WM_CLOSE)` marks the
+    window dead unless it is one of `refuses` — an app with unsaved work that
+    put up its own dialog and is waiting for the owner, which is a normal
+    outcome and must reach the phone as words, not as a silent success."""
+    refuses = refuses or set()
+    CLOSED.clear()
+    real = window_manager.user32
+
+    class Desk:
+        def PostMessageW(self, hwnd, msg, w, l):  # noqa: N802, E741
+            if msg == window_manager.WM_CLOSE:
+                CLOSED.append(hwnd)
+                if hwnd not in refuses:
+                    real.alive.discard(hwnd)
+            return 1
+
+        def __getattr__(self, name):
+            return getattr(real, name)
+
+    window_manager.user32 = Desk()
+    window_manager.is_alive = lambda hwnd: hwnd in real.alive
+    window_manager.CLOSE_TIMEOUT_S = 0.2   # the refusal path must not stall
+
+
+def remove_run(message: dict, refuses: set[int] | None = None):
+    """One 2x1 layout, then one `layout_remove`. Returns (ws, layouts)."""
+    install_fakes()
+    install_close_model(refuses)
+    ws, conn, layouts = drive([
+        {"type": "layout_create", "mode": "grid", "grid": "2x1",
+         "orient": "landscape",
+         "slots": [{"hwnd": WIN_A, "tab": None, "x": 0.25, "y": 0.5},
+                   {"hwnd": WIN_B, "tab": None, "x": 0.75, "y": 0.5}]},
+    ])
+    ws, conn, layouts = drive([message], conn, layouts)
+    return ws, layouts
+
+
+def check_a_plain_remove_closes_nothing() -> bool:
+    """THE SAFETY PROPERTY. The button that has always only removed the layout
+    must still only remove the layout — including for a page from before this
+    round, which sends no `close` field at all."""
+    ok = True
+    for label, msg in (
+        ("no field at all", {"type": "layout_remove", "index": 0}),
+        ("close: false", {"type": "layout_remove", "index": 0, "close": False}),
+        # `is True`, not truthiness: a stray "0"/"no"/1 must not be a licence
+        # to close his windows.
+        ("close: 1 (truthy, not True)",
+         {"type": "layout_remove", "index": 0, "close": 1}),
+        ("close: 'yes' (a string)",
+         {"type": "layout_remove", "index": 0, "close": "yes"}),
+    ):
+        ws, layouts = remove_run(msg)
+        if CLOSED:
+            print(f"  DETAIL {label}: WM_CLOSE went to {CLOSED} — his windows")
+            ok = False
+        if layouts.layouts:
+            print(f"  DETAIL {label}: the layout survived the removal")
+            ok = False
+    return ok
+
+
+def check_close_reaches_every_member() -> bool:
+    """The new act: both windows of the grid are asked to close, and the phone
+    is not told anything went wrong."""
+    ws, layouts = remove_run({"type": "layout_remove", "index": 0, "close": True})
+    if sorted(CLOSED) != sorted([WIN_A, WIN_B]):
+        print(f"  DETAIL WM_CLOSE reached {CLOSED}, expected both members")
+        return False
+    if layouts.layouts:
+        print("  DETAIL the layout survived a close")
+        return False
+    toasts = sent_of(ws, "toast")
+    if toasts:
+        print(f"  DETAIL a clean close still toasted: {toasts}")
+        return False
+    return bool(sent_of(ws, "layout_state"))
+
+
+def check_a_window_that_refuses_is_reported() -> bool:
+    """An app with unsaved work puts up its own dialog and stays. The layout
+    is gone either way — he chose that — but the phone must SAY the window is
+    still there, or the close silently half-happened."""
+    ws, layouts = remove_run({"type": "layout_remove", "index": 0, "close": True},
+                             refuses={WIN_B})
+    if layouts.layouts:
+        print("  DETAIL the layout survived a partly refused close")
+        return False
+    toasts = sent_of(ws, "toast")
+    if not toasts:
+        print("  DETAIL a window refused to close and the phone was told nothing")
+        return False
+    return "1 window" in toasts[0].get("text", "")
+
+
+def check_the_members_leave_the_topmost_band_before_closing() -> bool:
+    """A member is always-on-top while the phone shows it. Its save dialog is a
+    SEPARATE window, so the parent must come down first — otherwise the thing
+    asking him a question sits underneath the thing that asked it."""
+    install_fakes()
+    install_close_model(refuses={WIN_A, WIN_B})
+    order: list[tuple[str, int]] = []
+    window_manager.drop_topmost = lambda hwnd: order.append(("drop", hwnd)) or True
+    real_post = window_manager.user32.PostMessageW
+    win = window_manager.user32
+
+    class Watch:
+        def PostMessageW(self, hwnd, msg, w, l):  # noqa: N802, E741
+            if msg == window_manager.WM_CLOSE:
+                order.append(("close", hwnd))
+            return real_post(hwnd, msg, w, l)
+
+        def __getattr__(self, name):
+            return getattr(win, name)
+
+    window_manager.user32 = Watch()
+    ws, conn, layouts = drive([
+        {"type": "layout_create", "mode": "solo", "orient": "portrait",
+         "slots": [{"hwnd": WIN_A, "tab": None, "x": 0.5, "y": 0.5}]},
+    ])
+    drive([{"type": "layout_remove", "index": 0, "close": True}], conn, layouts)
+    steps = [k for k, h in order if h == WIN_A]
+    if steps[:2] != ["drop", "close"]:
+        print(f"  DETAIL the order was {steps}, expected drop then close")
+        return False
+    return True
+
+
 CHECKS = [
     ("create from a LIST answers the phone", check_create_from_a_list_answers),
     ("the list probes the process table ONCE, not per entry",
@@ -403,6 +547,13 @@ CHECKS = [
      check_the_move_handle_reaches_the_windows),
     ("the same position applied again still moves the windows",
      check_the_same_position_applied_again_still_moves_the_windows),
+    ("a plain ✕ closes NOTHING, whatever the field looks like",
+     check_a_plain_remove_closes_nothing),
+    ("close: true reaches every member", check_close_reaches_every_member),
+    ("a window that refuses to close is REPORTED, not shrugged off",
+     check_a_window_that_refuses_is_reported),
+    ("members leave the topmost band BEFORE they are closed",
+     check_the_members_leave_the_topmost_band_before_closing),
 ]
 
 

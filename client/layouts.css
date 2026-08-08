@@ -175,6 +175,19 @@
   font-size: 14px;
 }
 .lay-source svg { width: 62px; height: 62px; }
+/* The consequence line under a big choice (owner 2026-08-08, task 116 — the
+   ✕ chooser). Wraps, never truncates: it is the whole difference between
+   "the window stays open" and "the window closes", and a choice whose
+   consequence is cut off is not a choice (THE SPACE & LEGIBILITY LAW). */
+.lay-source small {
+  margin-top: -6px;
+  font-size: 12px;
+  line-height: 1.35;
+  opacity: 0.78;
+  text-align: center;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
 .lay-list {
   max-height: 38vh;
   overflow-y: auto;

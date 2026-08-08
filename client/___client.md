@@ -27,7 +27,8 @@ The phone side of Remote User — a plain web page served by the PC server, load
 | `quality.js` | Standard | stream quality: this device's overrides of the PC's settings — prefs + panel, hierarchy-aware (split 2026-08-05) — loads 10th — [about](__about/quality.md) |
 | `region.js` | Standard | the Region grab: a free frame the finger sizes, captured and pasted on the PC — loads 11th — [about](__about/region.md) |
 | `notify.js` | Standard | the PC's notices: Android notification + speech + toast, named per agent — loads 12th — [about](__about/notify.md) |
-| `layouts.js` | Algorithmic | layout bar, layout list, aspect-ratio panel (+ Move handle), creation flow, loading cube — loads 13th — [about](__about/layouts.md) · [flow](__flow/layouts.md) |
+| `layouts.js` | Algorithmic | LIVING with the layouts that exist — bar, list, rename, aspect-ratio panel (+ Move handle), the ✕ chooser — loads 13th — [about](__about/layouts.md) · [flow](__flow/layouts.md) |
+| `layout-create.js` | Algorithmic | MAKING one — source chooser, armed tap, slot panel; split off `layouts.js` 2026-08-08 (task 116 crossed 1,000 lines) — loads 14th — [about](__about/layout-create.md) · [flow](__flow/layout-create.md) |
 | `gamepad.js` | Algorithmic | the Bluetooth game controller mapped onto the controls that already exist — every pad press goes through the FINGER's activator (`buttonPress`), plus the stick curve and the held-and-pointed wheel — loads 14th — [about](__about/gamepad.md) · [flow](__flow/gamepad.md) |
 | `gestures.js` | Algorithmic | canvas pointer-event dispatch: pinch-zoom + font-zoom staircase + the single-finger touchMode gestures — loads 15th — [about](__about/gestures.md) · [flow](__flow/gestures.md) |
 | `connection.js` | Algorithmic | WebSocket lifecycle, protocol message handlers, visibility-gated session — loads 16th (starts the page) — [about](__about/connection.md) · [flow](__flow/connection.md) |

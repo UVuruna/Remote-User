@@ -37,6 +37,11 @@ STANDARD = {
     "server/pairing.py",
     "server/monitors.py",
     "server/window_manager.py",
+    # New 2026-08-08 (task 116 forced the split — window_manager.py sat at
+    # exactly 1,000 lines). One function, one job: an exe path to a PNG data
+    # URI. Standard, not Algorithmic — it carries no decision, only shell+GDI
+    # plumbing, and its whole policy is "an icon is never a failure".
+    "server/window_icons.py",
     "server/clipboard.py",
     "server/updates.py",
     "server/traffic.py",
@@ -191,6 +196,11 @@ ALGORITHMIC = {
     "client/input-geometry.js",
     "client/controls.js",
     "client/layouts.js",
+    # New 2026-08-08: the creation WIZARD, split off layouts.js when the ✕
+    # chooser (task 116) pushed it past 1,000 lines. Algorithmic — it owns a
+    # session across several taps, two sources reduce to one slot shape, and
+    # every way it can end has to be written down.
+    "client/layout-create.js",
     "client/gestures.js",
     "client/connection.js",
     "setup/svg_to_ico.py",

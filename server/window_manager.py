@@ -25,6 +25,10 @@ from grids import (  # the layout GEOMETRY lives there (THE STRUCTURE LAW)
     GRID_CELLS, GRID_TEMPLATES, _cells, _normalize, at_rect, layout_region,
     normalize_grid,
 )
+# Imported BY NAME on purpose: the tests that fake a windowless PC patch
+# `window_manager.icon_data_uri`, and a name bound here is exactly what the
+# four call sites below read at call time (THE STRUCTURE LAW split 2026-08-08).
+from window_icons import icon_data_uri
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +44,7 @@ DWMWA_EXTENDED_FRAME_BOUNDS = 9
 DWMWA_TRANSITIONS_FORCEDISABLED = 3
 SW_RESTORE = 9
 SW_MINIMIZE = 6
+WM_CLOSE = 0x0010        # what the window's OWN ✕ sends — the app decides
 SWP_NOSIZE = 0x0001
 SWP_NOMOVE = 0x0002
 SWP_NOZORDER = 0x0004
@@ -77,93 +82,6 @@ def _process_path(hwnd: int) -> str:
 
 def _process_name(hwnd: int) -> str:
     return os.path.basename(_process_path(hwnd))
-
-
-# --- App icons (the phone shows the real app icon next to tab/window names,
-# owner request 2026-08-02) ---------------------------------------------------
-
-_ICON_SIZE = 32
-_icon_cache: dict[str, str | None] = {}
-
-
-class _SHFILEINFO(ctypes.Structure):
-    _fields_ = [("hIcon", wintypes.HICON), ("iIcon", ctypes.c_int),
-                ("dwAttributes", wintypes.DWORD),
-                ("szDisplayName", ctypes.c_wchar * 260),
-                ("szTypeName", ctypes.c_wchar * 80)]
-
-
-class _BITMAPINFOHEADER(ctypes.Structure):
-    _fields_ = [("biSize", wintypes.DWORD), ("biWidth", ctypes.c_long),
-                ("biHeight", ctypes.c_long), ("biPlanes", wintypes.WORD),
-                ("biBitCount", wintypes.WORD), ("biCompression", wintypes.DWORD),
-                ("biSizeImage", wintypes.DWORD), ("biXPelsPerMeter", ctypes.c_long),
-                ("biYPelsPerMeter", ctypes.c_long), ("biClrUsed", wintypes.DWORD),
-                ("biClrImportant", wintypes.DWORD)]
-
-
-def icon_data_uri(exe_path: str) -> str | None:
-    """The exe's icon as a PNG data URI (cached per path; None on any
-    failure — the phone falls back to text-only chips)."""
-    if not exe_path:
-        return None
-    if exe_path in _icon_cache:
-        return _icon_cache[exe_path]
-    uri = None
-    try:
-        import base64
-        import io
-
-        from PIL import Image
-
-        gdi32 = ctypes.windll.gdi32
-        # 64-bit handles: without explicit types ctypes truncates HDC/HBITMAP
-        # to c_int and DrawIconEx/SelectObject overflow (hit live 2026-08-02).
-        gdi32.CreateCompatibleDC.restype = ctypes.c_void_p
-        gdi32.CreateCompatibleDC.argtypes = [ctypes.c_void_p]
-        gdi32.CreateDIBSection.restype = ctypes.c_void_p
-        gdi32.CreateDIBSection.argtypes = [ctypes.c_void_p, ctypes.c_void_p,
-                                           ctypes.c_uint, ctypes.c_void_p,
-                                           ctypes.c_void_p, ctypes.c_uint]
-        gdi32.SelectObject.restype = ctypes.c_void_p
-        gdi32.SelectObject.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
-        gdi32.DeleteObject.argtypes = [ctypes.c_void_p]
-        gdi32.DeleteDC.argtypes = [ctypes.c_void_p]
-        user32.GetDC.restype = ctypes.c_void_p
-        user32.ReleaseDC.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
-        user32.DrawIconEx.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int,
-                                      ctypes.c_void_p, ctypes.c_int, ctypes.c_int,
-                                      ctypes.c_uint, ctypes.c_void_p, ctypes.c_uint]
-        info = _SHFILEINFO()
-        SHGFI_ICON = 0x100
-        if ctypes.windll.shell32.SHGetFileInfoW(exe_path, 0, ctypes.byref(info),
-                                                ctypes.sizeof(info), SHGFI_ICON):
-            hdc = user32.GetDC(0)
-            memdc = gdi32.CreateCompatibleDC(hdc)
-            bmi = _BITMAPINFOHEADER(ctypes.sizeof(_BITMAPINFOHEADER),
-                                    _ICON_SIZE, -_ICON_SIZE, 1, 32, 0,
-                                    0, 0, 0, 0, 0)
-            bits = ctypes.c_void_p()
-            hbmp = gdi32.CreateDIBSection(memdc, ctypes.byref(bmi), 0,
-                                          ctypes.byref(bits), None, 0)
-            old = gdi32.SelectObject(memdc, hbmp)
-            user32.DrawIconEx(memdc, 0, 0, info.hIcon, _ICON_SIZE, _ICON_SIZE,
-                              0, None, 3)  # DI_NORMAL
-            raw = ctypes.string_at(bits, _ICON_SIZE * _ICON_SIZE * 4)
-            gdi32.SelectObject(memdc, old)
-            gdi32.DeleteObject(hbmp)
-            gdi32.DeleteDC(memdc)
-            user32.ReleaseDC(0, hdc)
-            user32.DestroyIcon(info.hIcon)
-            img = Image.frombuffer("RGBA", (_ICON_SIZE, _ICON_SIZE), raw,
-                                   "raw", "BGRA", 0, 1)
-            buf = io.BytesIO()
-            img.save(buf, "PNG")
-            uri = "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
-    except Exception as e:  # noqa: BLE001 — icons are decoration, never a failure
-        logger.warning("Icon extraction failed for %s: %s", exe_path, e)
-    _icon_cache[exe_path] = uri
-    return uri
 
 
 def _title(hwnd: int) -> str:
@@ -321,6 +239,11 @@ SETTLE_TIMEOUT_S = 1.5
 SETTLE_POLL_S = 0.03
 SETTLE_STABLE_READS = 4
 PLACE_RETRIES = 1        # one extra SetWindowPos when the first shot missed
+# How long a closing window is given to actually go. Longer than a placement:
+# an app saving a file or tearing down a render process legitimately takes a
+# moment, and the phone would rather wait than be told a lie. Anything still
+# standing after this is REPORTED, not fought (`close_windows`).
+CLOSE_TIMEOUT_S = 2.5
 
 
 def freeze_transitions(hwnd: int, disabled: bool = True) -> None:
@@ -397,6 +320,47 @@ def wait_minimized(hwnds: list[int], timeout_s: float = SETTLE_TIMEOUT_S) -> Non
             return
         time.sleep(SETTLE_POLL_S)
     logger.warning("Some layout members never minimized within %.1fs", timeout_s)
+
+
+def close_windows(hwnds: list[int],
+                  timeout_s: float = CLOSE_TIMEOUT_S) -> list[int]:
+    """Ask each window to close, POLITELY, and report which ones are still
+    standing (owner 2026-08-08, task 116 — the layout's ✕ now offers this as
+    one of two acts).
+
+    `WM_CLOSE` is the same thing the window's own ✕ does: the app decides. A
+    document with unsaved work puts up its "save changes?" dialog and the
+    window lives until the owner answers it — which is exactly right, and the
+    reason nothing here ever reaches for TerminateProcess. We are the phone
+    pressing a button on his behalf; we are not a task manager.
+
+    Posted, never sent: `SendMessageW` blocks this thread until the target's
+    message loop answers, and a target that puts up a MODAL dialog does not
+    answer until the owner does — one hung app would hold the whole layout
+    thread for as long as he takes to read it.
+
+    The survivors are the point of the return value. The phone must be able to
+    say "one window is asking about unsaved work" instead of claiming the
+    close happened; a claim we did not verify is the habit this project keeps
+    paying for."""
+    for hwnd in hwnds:
+        if is_alive(hwnd):
+            # Out of the always-on-top band FIRST: a save dialog is a separate
+            # window, and its parent must not be hovering over it.
+            drop_topmost(hwnd)
+            freeze_transitions(hwnd, False)
+            user32.PostMessageW(hwnd, WM_CLOSE, 0, 0)
+    deadline = time.monotonic() + timeout_s
+    while time.monotonic() < deadline:
+        alive = [h for h in hwnds if is_alive(h)]
+        if not alive:
+            return []
+        time.sleep(SETTLE_POLL_S)
+    alive = [h for h in hwnds if is_alive(h)]
+    if alive:
+        logger.info("Close refused (or still asking) by %d window(s): %s",
+                    len(alive), ", ".join(repr(_title(h)) for h in alive))
+    return alive
 
 
 def place_window(hwnd: int, rect: tuple[int, int, int, int]) -> bool:
@@ -928,15 +892,36 @@ class LayoutRegistry:
         self.prune()
         return {h for lay in self.layouts for h in lay.members}
 
-    def remove(self, index: int) -> None:
+    def remove(self, index: int, close: bool = False) -> list[int]:
         """Deleting a layout leaves the desktop exactly as it is (owner rule —
         no auto-return of windows). Its windows get their normal Windows
         minimize/restore animation back — we only froze it while they were
-        layout material — and leave the topmost band."""
+        layout material — and leave the topmost band.
+
+        `close=True` is the owner's SECOND act (2026-08-08, task 116): the
+        same removal, plus every member window is asked to close for real.
+        "Brisanje layouta ga samo obrise iz nase liste ali ostavlja prozor na
+        desktopu. Nekad hocemo to, a nekad hocemo bas da zatvorimo sve tu."
+
+        The flag DEFAULTS to the harmless act on purpose. Two different things
+        wore one button until today, and of the two only one cannot be undone;
+        a page from before this round — or a message that lost the field on
+        the way — must land on the one that leaves his windows alone.
+
+        Returns the members that are still standing, which is empty for a
+        plain removal and, after a close, the ones asking about unsaved work.
+        The caller tells the phone; see `close_windows`."""
+        alive: list[int] = []
         if 0 <= index < len(self.layouts):
-            for hwnd in self.layouts[index].members:
-                freeze_transitions(hwnd, False)
-                drop_topmost(hwnd)
+            members = list(self.layouts[index].members)
+            if close:
+                # close_windows drops topmost and unfreezes each window itself
+                # — it must do that BEFORE posting, so it owns both halves.
+                alive = close_windows(members)
+            else:
+                for hwnd in members:
+                    freeze_transitions(hwnd, False)
+                    drop_topmost(hwnd)
             del self.layouts[index]
             # The resume pointer rides on INDICES — the removed one is gone,
             # every higher one shifted down by one.
@@ -945,6 +930,7 @@ class LayoutRegistry:
                 self.last_focus = (None if last == index
                                    else (last - 1, name) if last > index
                                    else (last, name))
+        return alive
 
     def clear_topmost(self) -> None:
         """Every window back to the normal z-band — the phone hung up, nothing

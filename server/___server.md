@@ -26,7 +26,8 @@ The PC side of Remote User: captures the screen, streams it over WebSocket as H.
 | `traffic.py` | Standard | every byte to and from the phone, sampled per second and recorded — the owner's instrument for "does it run while the screen is off" — [about](__about/traffic.md) |
 | `traffic_history.py` | Algorithmic | reads months of `traffic.csv` off the UI thread and folds it into a bounded number of chart points — [about](__about/traffic_history.md) · [flow](__flow/traffic_history.md) |
 | `grids.py` | Algorithmic | the GEOMETRY of a layout: the region the phone frames and the cells each grid cuts it into — the owner's catalogue of 2026-08-07 (2 / 3×4 arrangements / 4), pure arithmetic — [about](__about/grids.md) · [flow](__flow/grids.md) |
-| `window_manager.py` | Standard | window layouts (Phase F+ step 1) — enumerate/hit-test/arrange/raise windows, app icons, the session-scoped `LayoutRegistry` — [about](__about/window_manager.md) |
+| `window_manager.py` | Standard | window layouts (Phase F+ step 1) — enumerate/hit-test/arrange/raise/CLOSE windows, the topmost ledger, the session-scoped `LayoutRegistry` — [about](__about/window_manager.md) |
+| `window_icons.py` | Standard | an exe path to the real app icon as a PNG data URI, cached per path; split off `window_manager.py` 2026-08-08 — [about](__about/window_icons.md) |
 | `uia.py` | Algorithmic | the UI Automation layer — tab hit-test + extraction to a window (app command / Explorer path / SendInput drag), `next_input`'s walk through text fields, and the caret read [Caret](__about/caret.md) needs — [about](__about/uia.md) · [flow](__flow/uia.md) |
 | `pairing.py` | Standard | token generation, LAN/Tailscale IP discovery, QR code — [about](__about/pairing.md) |
 | `monitors.py` | Standard | physical monitor rects in virtual-desktop coordinates — [about](__about/monitors.md) |

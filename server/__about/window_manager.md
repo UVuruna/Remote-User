@@ -32,11 +32,36 @@ drag, probe-verified 2026-08-02) is step 2 and does not live here yet.
 
 ## Connections
 ### Uses
-- none (pure Win32 via ctypes — no project imports)
+- [Window Icons](window_icons.md) — `icon_data_uri`, imported BY NAME so a
+  test that fakes a windowless PC can still patch it here (split 2026-08-08,
+  THE STRUCTURE LAW)
+- [Grids](grids.md) — the layout GEOMETRY
+- otherwise pure Win32 via ctypes
 
 ### Used by
 - [Web Layer](web.md) — `layout_pick`/`layout_create`/`layout_focus`/
   `layout_remove` handlers and the `layout_state` payload
+
+## Closing a window (owner 2026-08-08, task 116)
+
+`close_windows(hwnds)` is the phone pressing a window's own ✕ on his behalf:
+`WM_CLOSE`, **posted**, never sent — `SendMessageW` blocks until the target's
+message loop answers, and a target showing a MODAL dialog does not answer
+until the owner does, which would hold this thread for as long as he takes to
+read it. Nothing here ever reaches for `TerminateProcess`: an app with unsaved
+work is *supposed* to put up its dialog and survive.
+
+Each window leaves the always-on-top band FIRST (`drop_topmost`) — a save
+dialog is a separate window, and its parent must not be hovering over it.
+
+The return value is the point: the windows still standing after
+`CLOSE_TIMEOUT_S` (2.5 s). `LayoutRegistry.remove(index, close=True)` passes
+them up so the phone can say *"1 window still open — answer the app on the
+PC"*. A claim we did not verify is the habit this project keeps paying for.
+
+`remove`'s flag defaults to `False`, and [Web Layer](web.md) reads the wire
+field as `is True` rather than truthiness. Two different acts wore one button
+until this round and only one of them can be undone from the phone.
 
 ## Classes
 
