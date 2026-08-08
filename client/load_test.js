@@ -76,11 +76,11 @@ global.WebSocket = class WebSocket {
 // Must match index.html's <script> order exactly.
 const FILES = [
   "state.js",
+  "caret.js",
   "render.js",
   "input-geometry.js",
   "icons.js",
   "sets.js",
-  "caret.js",
   "voice.js",
   "controls.js",
   "theme.js",

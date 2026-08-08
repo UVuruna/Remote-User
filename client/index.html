@@ -194,13 +194,13 @@
        sharing one global scope — LOAD ORDER MATTERS, keep it in sync with
        client/load_test.js's FILES list. See client/___client.md. -->
   <script src="/static/state.js"></script>
+  <script src="/static/caret.js"></script>
   <script src="/static/render.js"></script>
   <script src="/static/input-geometry.js"></script>
   <script src="/static/icons.js"></script>
   <script src="/static/sets.js"></script>
   <!-- Before controls.js: it owns the dictation rules that file's mic
        callbacks call (split out of it 2026-08-08, THE STRUCTURE LAW). -->
-  <script src="/static/caret.js"></script>
   <script src="/static/voice.js"></script>
   <script src="/static/controls.js"></script>
   <!-- Right after controls.js: it uses prefGet/prefSet and IN_APP from there,

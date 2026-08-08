@@ -131,6 +131,48 @@ def _fit_rect_audit() -> bool:
 SHOT_TOPIC = os.environ.get("RU_SHOT_TOPIC", "round17-caret-claude-set-colours")
 SHOT_DIR = PROJECT / ".claude" / "shots" / SHOT_TOPIC
 
+# ONE FOLDER, ONE SUBJECT (owner 2026-08-08, his second word on this): a topic
+# folder per ROUND was still a dump — "necu da folderi budu ovako siroki, da
+# otvorim folder koji ima 161 sliku; hocu da ih grupises u sub-foldere". So the
+# round's folder now holds SUBJECT folders, and a subject is what the picture
+# is OF, read from its own name. Anything unrecognised lands in `other`, which
+# is a signal rather than a hiding place: an `other` that grows means a new
+# screen exists and nobody named it.
+SHOT_SUBJECTS = (
+    ("Controls_and_wheel", "controls-and-wheel"),
+    ("Controls", "controls"),
+    ("ControlsEditor", "desktop-controls-editor"),
+    ("Sets_picker", "sets-picker"),
+    ("Quality_panel", "quality-panel"),
+    ("Dictation_card", "dictation-card"),
+    ("Region_grab", "region-grab"),
+    ("Command_chooser", "command-chooser"),
+    ("Layout_list", "layouts"),
+    ("Rename_card", "layouts"),
+    ("Aspect_panel", "layouts"),
+    ("Creation_panel", "layouts"),
+    ("Grid_arrangement", "layouts"),
+    ("MainWindow", "desktop-windows"),
+    ("SettingsWindow", "desktop-windows"),
+    ("TrafficWindow", "desktop-traffic"),
+    ("WheelOrderDialog", "desktop-windows"),
+)
+
+
+def shot_path(name: str):
+    """`<round topic>/<subject>/<name>.png`, with the subject folder made on
+    demand. The longest matching prefix wins, so `Controls_and_wheel` never
+    falls into `controls`."""
+    subject = "other"
+    best = 0
+    for prefix, folder in SHOT_SUBJECTS:
+        if name.startswith(prefix) and len(prefix) > best:
+            subject, best = folder, len(prefix)
+    out = SHOT_DIR / subject
+    out.mkdir(parents=True, exist_ok=True)
+    return out / f"{name}.png"
+
+
 
 def _shot_name(name: str) -> str:
     return "".join(c if c.isalnum() else "_" for c in name).strip("_") + ".png"
@@ -466,7 +508,7 @@ def _shoot(page, label, look, results):
               f"{theme}/{_look_word(colored)}/{fill}, the page was showing "
               f"{got[0]}/{_look_word(got[1] == 'true')}/{got[2]} at the shutter")
     SHOT_DIR.mkdir(parents=True, exist_ok=True)
-    page.screenshot(path=str(SHOT_DIR / _shot_name(label)))
+    page.screenshot(path=str(shot_path(_shot_name(label)[:-4])))
 
 
 _GROUPS_JS = ("__contrast(document.getElementById('group-left'))"
