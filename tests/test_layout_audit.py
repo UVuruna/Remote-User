@@ -38,10 +38,11 @@ SIZES = [("portrait 412x915", 412, 915), ("landscape 915x412", 915, 412)]
 #
 # `colored` is not a fourth THEME (the 2026-08-07 model this replaces): it is
 # its own axis, orthogonal to `theme`. A coloured look on `light` is a
-# DIFFERENT page under a DIFFERENT palette from a coloured look on `dark`
-# (server/config.py ships two tables, chosen by `theme` alone), and the whole
-# reason the sweep exists is that a colour which reads on one surface can be
-# invisible on the other — restructuring the axes changes NOTHING about that
+# DIFFERENT page wearing the SAME palette as a coloured look on `dark`
+# (server/config.py ships ONE table since 2026-08-08), which makes this sweep
+# MORE necessary rather than less: one set of hexes now has to hold up on both
+# surfaces, and the whole reason the sweep exists is that a colour which reads
+# on one surface can be invisible on the other — restructuring the axes changes NOTHING about that
 # fact, only how it is spelled.
 #
 # The full panel sweep runs in every combination at PORTRAIT (where the cards

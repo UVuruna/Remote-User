@@ -73,11 +73,13 @@ serves at /app.apk. The phone's update banner compares against THIS, not
 `app_version()`: the APK does not change with desktop-only releases, and the
 old comparison offered a phantom update forever.
 
-## Build round R3 (2026-08-07) — themes; CORRECTED to three axes (2026-08-08)
+## Build round R3 (2026-08-07) — themes; CORRECTED to three axes, THEN to one set palette (both 2026-08-08)
 
 ### APPEARANCE (build round R3, owner-approved 2026-08-07; owner correction 2026-08-08)
 
-Four settings and two tables, all in `USER_ADJUSTABLE` or their own section:
+Four settings and one set-colour table (`SET_COLORS` — `SET_COLORS_DARK` and
+`SET_COLORS_LIGHT` remain only as aliases pointing at it), all in
+`USER_ADJUSTABLE` or their own section:
 
 | Key | Values | What it is |
 |---|---|---|
@@ -110,50 +112,60 @@ own cached `ui` (`prefGet("uiLook")`), written by an older page — and is
 translated there too, in `client/theme.js` → `legacyTheme()`; see
 [theme.md](../../client/__about/theme.md).
 
-### The two set palettes (owner correction 2026-08-07)
+### The set palette — two tables became one (owner correction 2026-08-08)
 
-He adopted the first palette with "tune later" and tuned it the next day:
+He adopted the first, single palette with "tune later", split it into two the
+next day, then collapsed the two back into one on the SAME day as the axis
+correction above. His words on the final shape:
 
-> "kada je DARK tema treba da budu jako tamne nijanse, dakle mali
-> lightness/brightness; a ovaj mod LIGHT treba da ima jako svetla slova,
-> velikim, u boji, dakle ona klasična jaka. Sto saturacija ne treba ni u
-> jednom modu."
+> "nema dve verzije za obojene setove. Oni ce uvijek imati ove jake upecatljive boje. ono sto se menja su ostali elementi light ili dark temi ali kontrole i setovi ce biti obojeni."
 
-One table cannot answer both halves, because the colour does a different job
-on each page: on a dark page it is the BODY of the button and the white label
-does the reading; on a light page it is the INK. A navy that is an excellent
-fill is invisible as ink on white, and a vivid ink is a searchlight as a fill.
-So there are two, and the coloured theme gained a second surface to wear the
-second one:
+That reverses the two-table reasoning he had approved a day earlier — kept
+here because the record of why the split happened, and why it was undone, is
+the useful part:
 
-| Table | Used by | Lightness | Saturation ceiling |
-|---|---|---|---|
-| `SET_COLORS_DARK` | `colored` (dark page) | 22–40% | 66% |
-| `SET_COLORS_LIGHT` | `colored-light` (light page) | 26–54% | 72% |
+> "kada je DARK tema treba da budu jako tamne nijanse, dakle mali lightness/brightness; a ovaj mod LIGHT treba da ima jako svetla slova, velikim, u boji, dakle ona klasična jaka. Sto saturacija ne treba ni u jednom modu." — lang-ok: owner's verbatim decision quote, kept for the record of why the two-table split happened and why it was undone
 
-Neither reaches full saturation, in either mode — the third of his three
-sentences. The lightness bands are measured, not taste: below the dark floor a
-fill stops reading as a button against `#0f172a`, above its ceiling a white
-label stops clearing AA on it; the light band is where a colour is vivid
-enough to be "ona klasična jaka" and still dark enough to be read on
-`#eceef6`. Hue AND lightness separate the sets that share the wheel — the four
-blues and the four warms are pulled apart on both axes, so an eye that cannot
-tell two hues apart still has a second signal. The exact thirteen hexes of
-each table are listed in [theme.md](../../client/__about/theme.md).
+That sentence is a true statement about CONTRAST — on a dark page the colour
+is the BODY of the button and a white label does the reading; on a light page
+the colour is the INK — and the two-table split was not wrong about those two
+jobs. It was wrong about what he actually wanted: a set's colour is its
+IDENTITY, and an identity that changes when he flips the sun/moon switch is
+not one. Mouse is the same teal on both pages; the theme moves everything
+else around it, never the set colours. Losing the second table also removes a
+class of bug this project keeps meeting on its own: two tables are two things
+to keep in step, and the second one is always the one that goes stale.
+
+`SET_COLORS` is now the one surviving table, tuned to the values that used to
+be `SET_COLORS_LIGHT` — HSL lightness 26–54%, saturation capped at 72% (still
+never full saturation, the third of his original three sentences, unaffected
+by this correction): dark enough that a white label clears AA on it as a
+FILL, vivid enough to still read as itself as an OUTLINE. That is what lets
+one hex answer both jobs — the label reads against the COLOUR, never against
+whatever page sits behind it. `SET_COLORS_DARK` and `SET_COLORS_LIGHT` still
+exist as names in `server/config.py`, both pointing at the exact same dict,
+so an import written before this correction cannot quietly resurrect a second
+table; new code reads `SET_COLORS`. Hue AND lightness still separate the sets
+that share the wheel, unchanged by the correction — the four blues and the
+four warms are pulled apart on both axes, so an eye that cannot tell two hues
+apart still has a second signal. The exact thirteen hexes are not restated
+here or anywhere else — they live only in `server/config.py` → `SET_COLORS`,
+see [theme.md](../../client/__about/theme.md).
 
 Custom sets are deliberately NOT listed — the owner names his own sets, so the
-phone hands each unnamed one the next colour of the palette IN FORCE that
-nothing already wears (`client/theme.js`). One table per surface, no third
-list to keep in step.
+phone hands each unnamed one the next colour of the palette that nothing
+already wears (`client/theme.js`). One table, no second one to keep in step.
 
-`set_colors(theme=None)` answers "which palette does this theme wear" —
-chosen by `phone_theme` alone (`"light"` → `SET_COLORS_LIGHT`, else
-`SET_COLORS_DARK`), never by whether `phone_colored` is even on — and it is
-the ONLY place that decides. `ui_config()` is the whole APPEARANCE half of a
-`config` frame, `{theme, colored, fill, colors}`, with the palette already
+`set_colors(theme=None)` is still the ONLY place that decides "which palette
+does a set wear" — but it now returns the same dict regardless of `theme`.
+The parameter is kept and DELIBERATELY IGNORED: every caller (the phone
+config, the desktop preview, the audit sweep) already passes one, and
+dropping it would break every call site for a change that has nothing to do
+with them — it stays as the record that the question was asked and answered
+with "it does not matter". `ui_config()` is still the whole APPEARANCE half of
+a `config` frame, `{theme, colored, fill, colors}`, with the palette already
 resolved — so the wire shape for `colors` never changed and the phone still
-receives one flat `{set: hex}` map. Both live here rather than in `web.py` on
-purpose: the desktop owns this decision, this file owns the desktop's
-settings, and the web layer's job is only to put it on the wire. Sending both
-tables and letting the page choose would have put one decision in two places,
-and the page's copy is the one that drifts.
+receives one flat `{set: hex}` map, with no idea a second table ever existed.
+Both live here rather than in `web.py` on purpose: the desktop owns this
+decision, this file owns the desktop's settings, and the web layer's job is
+only to put it on the wire.

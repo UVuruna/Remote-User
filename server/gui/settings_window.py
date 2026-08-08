@@ -37,9 +37,11 @@ look of the product, both halves of it:
     carries. Neither switch owns the setting; both call `switch.choose_theme`.
   - **The phone** — THREE combos, not two: theme (dark / light), whether the
     D-pad + wheel are coloured (coloured / plain) and their fill (outlined /
-    filled), chosen HERE and only here. A coloured look picks its palette by
-    the THEME combo alone (config.SET_COLORS_DARK / SET_COLORS_LIGHT — owner
-    correction 2026-08-07), never by a fourth theme name — the 2026-08-07
+    filled), chosen HERE and only here. A coloured look wears the SAME palette
+    whichever theme is picked (config.SET_COLORS — owner decision 2026-08-08,
+    replacing the two tables of 2026-08-07: a set's colour is its IDENTITY and
+    does not follow the page). Never a fourth theme name either — the
+    2026-08-07
     shape folded colour into `phone_theme` itself ("colored" / "colored-light")
     and produced the same eight looks by accident, but said the page has four
     themes when the owner's own model is two themes plus two switches that
@@ -99,9 +101,10 @@ SPEECH_RATES = [("0.8× — slower", 0.8), ("1× — normal", 1.0),
 # SEPARATE switches that belong to the controls, not the page: "teme postoje
 # samo dve, svetla i tamna … a ove komande … on može da bude obojen,
 # neobojen, i može da bude transparentan ili pun." PHONE_THEMES therefore
-# drops back to two entries — the palette a coloured look wears is picked by
-# THIS combo alone (config.SET_COLORS_DARK / SET_COLORS_LIGHT), never by a
-# separate coloured theme name — and PHONE_COLORED is new.
+# drops back to two entries — and the palette a coloured look wears is the
+# SAME under both (config.SET_COLORS, owner 2026-08-08: "oni ce uvijek imati
+# ove jake upecatljive boje"). This combo therefore moves everything AROUND
+# the controls and never the controls' own colours. PHONE_COLORED is new.
 PHONE_THEMES = [("Dark", "dark"), ("Light", "light")]
 PHONE_COLORED = [("Coloured", True), ("Plain", False)]
 PHONE_FILLS = [("Outlined", "transparent"), ("Filled", "full")]

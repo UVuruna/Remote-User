@@ -418,10 +418,12 @@ def ui_config() -> dict:
     without ever knowing colour used to be folded into the theme name.
 
     The PALETTE IS RESOLVED HERE, so the wire shape never changed on that
-    front either: the phone still receives one flat `{set: hex}` map and has
-    no idea two tables exist. Sending both and letting the page choose would
-    have put the same decision in two places, and the page's copy would be
-    the one that drifts.
+    front either: the phone receives one flat `{set: hex}` map and holds no
+    table of its own. Resolving on the desktop is what kept this cheap when
+    the two tables of 2026-08-07 became ONE on 2026-08-08 — the wire, the
+    page and the cache all carried on unchanged, because none of them ever
+    knew how many tables there were. A page that chose for itself would have
+    been the copy that drifted.
     """
     return {"theme": SETTINGS.phone_theme,
             "colored": SETTINGS.phone_colored,

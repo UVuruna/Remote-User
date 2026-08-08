@@ -315,9 +315,9 @@ function glowFor(rgb) {
 }
 
 // The full name → colour map, shipped colours first and the owner's own sets
-// filled in from the SAME palette (the values of whichever table the desktop
-// sent for the theme in force are the pool — one table to tune per surface, no
-// third list to keep in step). A custom set
+// filled in from the SAME palette (the values the desktop sent are the pool —
+// ONE table for both themes since 2026-08-08, so there is nothing to keep in
+// step and no third list). A custom set
 // takes the next colour nothing already wears; if he ever makes more sets
 // than there are colours the pool simply cycles, which is a repeat, not a
 // crash. Deterministic: the order is the order the sets arrive in, so a set's

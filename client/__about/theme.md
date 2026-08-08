@@ -26,7 +26,8 @@ colours: on a dark page the colour is the BODY of the button and the white
 label does the reading, so it must be dark; on a light page the colour is the
 INK, so it must be strong. So the coloured look kept two palettes, one per
 theme, and the lift that makes a colour readable stopped bleeding it white.
-See [The set colours](#the-set-colours).
+**This lasted one day** — see [The set colours](#the-set-colours) for the
+2026-08-08 correction that replaced the two tables with one.
 
 **Then he corrected the SHAPE itself, a day later** (owner, 2026-08-08):
 
@@ -44,6 +45,17 @@ has four themes when the owner's own model is two themes plus two switches
 that belong to the CONTROLS — the D-pad groups and the radial wheel — not the
 page. `data-colored` is now its own axis, independent of `data-theme` and
 `data-fill` alike.
+
+**And the SAME DAY, a second correction — the two set-colour tables became
+one:**
+
+> "nema dve verzije za obojene setove. Oni ce uvijek imati ove jake
+> upecatljive boje. ono sto se menja su ostali elementi light ili dark temi
+> ali kontrole i setovi ce biti obojeni."
+
+This is a different correction from the axis one above — that fixed HOW the
+look is spelled (three fields, not four theme names); this one fixes WHAT the
+`colored` look actually shows. See [The set colours](#the-set-colours).
 
 ## The one rule everything else follows
 
@@ -185,49 +197,58 @@ both now fixed in `theme.js`:
 
 ## The set colours
 
-**Two tables, one per surface** (`server/config.py` — owner correction
-2026-08-07, replacing the single table he had adopted the day before). The
-DESKTOP resolves which one a theme wears (`config.set_colors`), so the wire
-shape never changed: `ui.colors` is still one flat `{set: hex}` map and this
-page has no idea two tables exist. Sending both and letting the phone choose
-would have put the same decision in two places, and the phone's copy is the
-one that drifts.
+**ONE table, worn on BOTH themes** (`server/config.py` → `SET_COLORS` —
+owner correction 2026-08-08, replacing the two-table split of the day
+before). His words, verbatim:
 
-**`SET_COLORS_DARK`** — dark shades, HSL lightness **22–40%**, saturation
-capped at **66%**. The floor is measured, not taste: darker than that and the
-fill stops reading as a button against the `#0f172a` page. The ceiling is
-where a white label stops clearing AA on it.
+> "nema dve verzije za obojene setove. Oni ce uvijek imati ove jake
+> upecatljive boje. ono sto se menja su ostali elementi light ili dark temi
+> ali kontrole i setovi ce biti obojeni."
 
-Mouse `#1D6A86` · Input `#1C693C` · Settings `#4B5B71` · Edit `#572B82` ·
-Attach `#7D561C` · Navigate `#175E57` · Media `#86282E` · Windows `#354297` ·
-VSCode `#1C3878` · Chrome `#5D5113` · Explorer `#944D1E` · Claude `#8D4834` ·
-Cursor `#7E2A57`
+The 2026-08-07 reasoning above (dark page → colour is the BODY, light page →
+colour is the INK) was not wrong about the JOBS a colour does on each
+surface — it was wrong about what he actually wanted. A set's colour is its
+IDENTITY: Mouse is that one teal whichever theme is on, and the theme moves
+everything ELSE around it, never the set colours themselves. Two tables were
+also a second thing to keep in step, and the second one is always the one
+that goes stale — this project has met that exact class of bug before
+(`OWNER_SET_KEYS`, `RETIRED_KEYS`; see CLAUDE.md).
 
-**`SET_COLORS_LIGHT`** — the classic strong inks, lightness **26–54%**,
-saturation capped at **72%**: vivid enough to be "ona klasična jaka" and dark
-enough to be read on `#eceef6`.
+`config.set_colors(theme=None)` is the ONLY place that answers "which
+palette does a set wear", and it now answers the same dict regardless of
+`theme` — the parameter is still accepted and DELIBERATELY IGNORED: every
+caller (the phone config, the desktop preview, the audit sweep) already
+passes one, and dropping the parameter would break every call site for a
+change that has nothing to do with them. It stays as the record that the
+question was asked and answered with "it does not matter". `SET_COLORS_DARK`
+and `SET_COLORS_LIGHT` still exist in `server/config.py`, both pointing at
+the exact same table — so an import written before the correction cannot
+quietly resurrect a second one; new code reads `SET_COLORS`. `ui.colors` on
+the wire never changed shape through any of this: it was always one flat
+`{set: hex}` map and stays one — this page never learns there used to be two
+tables to choose from.
 
-Mouse `#186B89` · Input `#14713B` · Settings `#476185` · Edit `#702BB6` ·
-Attach `#C38322` · Navigate `#146F65` · Media `#BA2630` · Windows `#4356D0` ·
-VSCode `#204DB6` · Chrome `#A58E1D` · Explorer `#DC7028` · Claude `#A3472E` ·
-Cursor `#B02971`
+The surviving table is the one the owner had tuned as the classic strong
+ink — HSL lightness **26–54%**, saturation capped at **72%**: dark enough
+that a WHITE label clears AA on it as a fill, vivid enough to read as itself
+on either page, because the label reads against the COLOUR, never against
+whatever page sits behind it. Nothing reaches 100% saturation — the third of
+his three original sentences, unaffected by this correction. The exact
+thirteen hexes live only in `server/config.py` → `SET_COLORS` — not
+duplicated here, since a second copy is exactly what goes stale.
 
-Neither reaches 100% saturation, in either mode — that was the third of his
-three sentences. The two ceilings differ because the jobs differ: 72% is what
-the classic strong inks actually measure, and on a dark page a shade that
-saturated turns muddy as it darkens.
+**Hue AND lightness separate the sets that share the wheel** — unchanged by
+the correction, and still the one property worth keeping from having had two
+palettes at all. The four blues (Mouse, Settings, VSCode, Windows) and the
+four warms (Claude, Explorer, Attach, Chrome) are pulled apart in lightness
+as well as hue, so an eye that cannot tell two hues apart still has a second
+signal.
 
-**Hue AND lightness separate the sets that share the wheel** — the one
-property of the first palette worth keeping. The four blues (Mouse 196,
-Settings 215, VSCode 222, Windows 232) and the four warms (Claude 13,
-Explorer 24, Attach 36, Chrome 50) are pulled apart in lightness as well as
-hue, so an eye that cannot tell two hues apart still has a second signal.
-
-A **custom** set is not in either table and never will be — the owner names his
+A **custom** set is not in the table and never will be — the owner names his
 own sets in the Controls editor. `setColors()` therefore hands each unnamed
-set the next colour of the palette IN FORCE that nothing already wears, in the
-order the sets arrive, cycling if he ever makes more sets than there are
-colours. One table per surface, no third list to keep in step.
+set the next colour of the palette that nothing already wears, in the order
+the sets arrive, cycling if he ever makes more sets than there are colours.
+One table, no second one to keep in step.
 
 **The ACTIVE halo rides the LIFTED colour too** (same correction). `--set-glow`
 used to be the raw hex at 0.30 alpha, which was fine while the palette was
@@ -350,6 +371,7 @@ server.
 - [connection.js](connection.md) — where `config.ui` arrives.
 - [controls.js](controls.md) — calls `paintSet` per group and per wheel item.
 - [sets.js](sets.md) — what the set list is in the first place.
-- `server/gui/theme.py` — the desktop's own two palettes, same family.
-- [config.py](../../server/__about/config.md) — where the two set palettes
-  live and which theme wears which.
+- `server/gui/theme.py` — the desktop's own two palettes, same family (its
+  own dark/light UI theme — unrelated to the phone's set colours).
+- [config.py](../../server/__about/config.md) — where the one set palette
+  lives.

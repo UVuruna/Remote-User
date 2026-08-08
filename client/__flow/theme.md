@@ -48,6 +48,34 @@ da bude obojen, neobojen, i može da bude transparentan ili pun."* Same eight
 renderings, correct model: two themes (the sun/moon switcher) and two
 switches that belong to the D-pad groups and the radial wheel.
 
+## The palette correction, the SAME DAY — two tables became one
+
+```
+BEFORE (owner-approved 2026-08-07)           AFTER (owner correction 2026-08-08)
+
+  set_colors(theme):                           set_colors(theme):
+    theme == "light" → SET_COLORS_LIGHT           `theme` accepted, IGNORED
+    else              → SET_COLORS_DARK           → always SET_COLORS
+                                                    (SET_COLORS_DARK/_LIGHT
+                                                     kept as aliases of the
+                                                     SAME dict — an old
+                                                     import cannot resurrect
+                                                     a second table)
+
+  Mouse on the dark page:  #1D6A86             Mouse on the dark page:  #186B89
+  Mouse on the light page: #186B89             Mouse on the light page: #186B89
+```
+
+His words: *"nema dve verzije za obojene setove. Oni ce uvijek imati ove
+jake upecatljive boje. ono sto se menja su ostali elementi light ili dark
+temi ali kontrole i setovi ce biti obojeni."* A set's colour is its
+IDENTITY — it does not move when the sun/moon switch does; the theme moves
+everything ELSE around it. This is a DIFFERENT correction from the axis one
+above (that fixed how the look is SPELLED; this fixes what the coloured look
+SHOWS), made the same day. The surviving table is the one he had tuned as
+the classic strong ink (HSL lightness 26–54%, saturation capped at 72%) —
+the `paintSet` walkthrough below uses its real values.
+
 ## Where a look comes from, end to end
 
 ```
@@ -60,12 +88,14 @@ Settings → APPEARANCE
         ▼
   config.SETTINGS  ──►  config.ui_config()
                           {theme, colored, fill, colors: set_colors()}
-                              │   ↑ the DESKTOP picks the palette:
-                              │     phone_theme == "light" → SET_COLORS_LIGHT
-                              │     anything else           → SET_COLORS_DARK
-                              │     (chosen by THEME alone, never gated on
-                              │      `colored` — one flat map on the wire,
-                              │      the phone never learns two tables exist)
+                              │   ↑ ONE table, always (owner correction
+                              │     2026-08-08 — the two-table split of a day
+                              │     earlier is gone): set_colors(theme) takes
+                              │     `theme` and IGNORES it, returning the same
+                              │     SET_COLORS dict whichever theme, and
+                              │     whichever `colored` state, is in force —
+                              │     one flat map on the wire, the phone never
+                              │     learns there used to be two tables
                               │
                               │  web._send_config()  →  `config` frame
                               ▼
@@ -184,28 +214,35 @@ Controls_light_transparent_landscape.png   (a file named "light")
 ```
 renderGroup("left")
   cat = allCats()[groups.left]                e.g. {name: "Mouse", …}
-  paintSet(host, "Mouse", "--glass-fill")
+  paintSet(host, "Mouse", "--glass-fill")      (worked here for the DARK page
+                                                — the light page starts the
+                                                lineOn walk from ITS OWN
+                                                --glass-fill surface, but from
+                                                the exact same raw #186B89:
+                                                one table, not two)
         │
-        ├─ setColors()["Mouse"]  →  "#1D6A86"   (the DARK palette — chosen by
-        │                                         phone_theme alone; painted
-        │                                         onto the element whether or
-        │                                         not data-colored is true —
-        │                                         theme.css only READS it
-        │                                         under data-colored="true")
-        ├─ fillOn(rgb over page) →  clears AA as it is  →  unnudged
-        ├─ inkOn(that fill)      →  luminance 0.12 < 0.179 → "#ffffff"
+        ├─ setColors()["Mouse"]  →  "#186B89"   (the ONE table, same on both
+        │                                         themes since 2026-08-08;
+        │                                         painted onto the element
+        │                                         whether or not data-colored
+        │                                         is true — theme.css only
+        │                                         READS it under
+        │                                         data-colored="true")
+        ├─ fillOn(rgb over page) →  the diluted (.cat, 85:15) ink already
+        │                            clears AA at 4.83:1  →  unnudged
+        ├─ inkOn(that fill)      →  luminance 0.13 < 0.179 → "#ffffff"
         ├─ lineOn(rgb, tokenSurface("--glass-fill"))
-        │       →  a #1D6A86 label on the 20% tint is far under 7:1, so its
-        │          HSL LIGHTNESS is walked up (hue 196, saturation 64% held)
-        │       →  rgb(77 179 216) — the same teal, lighter. Never a mix
-        │          toward white: that would drain the saturation the owner
-        │          asked to keep.
+        │       →  a #186B89 label on the dark page's 20% tint
+        │          (rgb(18 27 45)) sits under 7:1, so its HSL LIGHTNESS is
+        │          walked up (hue 196, saturation held) 14 steps
+        │       →  rgb(62 179 221), 7.14:1. Never a mix toward white: that
+        │          would drain the saturation the owner asked to keep.
         └─ host.style:
-              --set-color: #1D6A86         (untouched — border, everywhere)
-              --set-fill:  rgb(29 106 134) (fill — FULL background)
+              --set-color: #186B89         (untouched — border, everywhere)
+              --set-fill:  rgb(24 107 137) (fill — FULL background, unnudged)
               --set-ink:   #ffffff         (ink ON --set-fill — FULL label)
-              --set-line:  rgb(77 179 216) (ink ON the outlined tint — OUTLINED label)
-              --set-glow:  rgb(77 179 216 / 0.30)  (the LIFTED colour — an
+              --set-line:  rgb(62 179 221) (ink ON the outlined tint — OUTLINED label)
+              --set-glow:  rgb(62 179 221 / 0.30)  (the LIFTED colour — an
                             ON halo must be seen against the page)
                     │
                     ▼  inherited by every .ctl inside the group

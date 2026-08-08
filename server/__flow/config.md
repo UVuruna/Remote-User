@@ -76,7 +76,7 @@ Pseudocode:
         merge changes over the existing settings.json, write it
         apply(**changes)           # running SETTINGS updates immediately
 
-## Build round R3 (2026-08-07) — themes; CORRECTED to three axes (2026-08-08)
+## Build round R3 (2026-08-07) — themes; CORRECTED to three axes, THEN to one palette (both 2026-08-08)
 
 ```
 Settings (dataclass)
@@ -85,13 +85,18 @@ Settings (dataclass)
                           phone_colored  False           <- the CONTROLS
                           phone_fill     "transparent"   <- the CONTROLS
 
-SET_COLORS_DARK   (own banner section — 13 shipped sets, dark shades)
-SET_COLORS_LIGHT  (the same 13, as strong inks for a light page)
+SET_COLORS         (own banner section — 13 shipped sets, ONE table, worn on
+                     BOTH themes since 2026-08-08 — "nema dve verzije za
+                     obojene setove")
+SET_COLORS_DARK     = SET_COLORS   (alias only — an old import cannot
+SET_COLORS_LIGHT    = SET_COLORS     quietly resurrect a second table)
 
-set_colors(theme)  ->  phone_theme == "light" ? LIGHT : DARK   (never gated
-                        on phone_colored — resolved regardless, cheap either
-                        way, and it keeps this function answering ONE
-                        question)
+set_colors(theme)  ->  SET_COLORS, always   (`theme` accepted and IGNORED —
+                        the parameter stays as the record the question was
+                        asked and answered with "it does not matter"; never
+                        gated on phone_colored either — resolved regardless,
+                        cheap either way, and it keeps this function
+                        answering ONE question)
                         |
 ui_config()  ->  {"theme":   phone_theme,
                   "colored": phone_colored,

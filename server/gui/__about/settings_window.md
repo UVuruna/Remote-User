@@ -58,7 +58,7 @@ The grader's finding, verbatim in substance: under "Tell my phone when an agent 
 
 `tests/test_layout_audit_qt.py`'s `make_settings_window()` fixture used to poke `window.notify_caption.setText(NOTIFY_WORST)` directly, bypassing all of the above — the audit's own "fullest state" screenshot was never proof of the fix. It now calls `window._set_caption(window.notify_caption, NOTIFY_WORST, error=True)`, the exact method the real toggle handler uses, so the standing screenshot IS the evidence.
 
-## Build round R3 (2026-08-07) — themes; CORRECTED to three axes (2026-08-08)
+## Build round R3 (2026-08-07) — themes; CORRECTED to three axes, THEN to one set palette (both 2026-08-08)
 
 ### APPEARANCE — the card the R2 seam was left for
 
@@ -77,12 +77,18 @@ whole look of the product, both halves:
   2026-08-07 shape that folded colour into a fourth `phone_theme` value:
   `"colored"` / `"colored-light"`). His own words: *"teme postoje samo dve,
   svetla i tamna … a ove komande … on može da bude obojen, neobojen, i može
-  da bude transparentan ili pun."* A coloured look still picks its palette by
-  the THEME combo alone (`config.SET_COLORS_DARK` / `SET_COLORS_LIGHT`) —
-  dark shades that carry a button on a dark page, strong inks that carry a
-  letter on a light one — but which table it wears is no longer spelled with
-  a fourth theme name; `PHONE_COLORED` is its own dropdown, independent of
-  both `PHONE_THEMES` and `PHONE_FILLS`.
+  da bude transparentan ili pun."* A coloured look wears the SAME palette
+  whichever theme combo is picked (`config.SET_COLORS` — a SECOND owner
+  correction, the same day, kept below with a `lang-ok` note since it quotes
+  him verbatim — a set's colour is its identity, and an identity that changes
+  with the sun/moon switch is not one). `SET_COLORS_DARK` / `SET_COLORS_LIGHT`
+  still exist in `server/config.py`, both names pointing at that one table,
+  so an import written before this correction cannot quietly resurrect a
+  second one. `PHONE_COLORED` is its own dropdown, independent of both
+  `PHONE_THEMES` and `PHONE_FILLS` — it only switches the identity colours on
+  or off, never which colours they are.
+
+  > "nema dve verzije za obojene setove. Oni ce uvijek imati ove jake upecatljive boje." — lang-ok: owner's verbatim decision quote, 2026-08-08
 
 All three phone combos save immediately (`save_user_settings`), like every
 card in this window except STREAM. The caption says the honest thing — the

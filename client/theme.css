@@ -35,9 +35,10 @@
    the lettering — on a light one). `data-colored="true"` therefore adds
    nothing to the page's own surfaces, cards or shadows; it only reaches the
    `.ctl` / `.wheel-item` rules at the bottom of this file, and the PALETTE
-   those rules draw from is chosen by the THEME axis alone
-   (server/config.py → `set_colors`) and arrives already resolved. This page
-   never holds two tables.
+   those rules draw from does NOT depend on the theme at all (owner decision
+   2026-08-08 — one table, `server/config.py` → `SET_COLORS`: a set's colour
+   is its identity, and an identity that changes with the sun/moon switch is
+   not one). It arrives already resolved, and this page never holds a table.
 
    The set colour arrives per element as `--set-color` (plus `--set-fill`,
    `--set-ink` and `--set-line`, all computed by theme.js from the surface
