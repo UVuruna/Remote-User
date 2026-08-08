@@ -664,6 +664,86 @@ def audit(window: QWidget, label: str) -> list[str]:
 PALETTES = ("dark", "light")
 
 
+# THE DESKTOP HAD NO CONTRAST CHECK AT ALL until 2026-08-08, and that absence
+# is the whole reason the Settings window's error line shipped at 3.89:1
+# through three rounds of being named by a grader. The phone has had one since
+# 2026-08-07; this is its twin, and the split is deliberate: the phone's runs
+# in the live DOM because the page composites overlays and inherited opacity,
+# while a Qt palette is a flat table, so here the honest form is arithmetic on
+# the tokens themselves.
+#
+# Each entry is (ink token, background it is really painted on, what it is).
+# The backgrounds are not guesses — they are read out of the QSS in theme.py:
+# `QLabel#caption[tone=...]` and `#card` sit on `surface1`, and the pill and
+# danger button paint their own wash OVER that same card.
+SEMANTIC_INK = [
+    ("error", "surface1", "errorDim", "the error caption / failed pill"),
+    ("warning", "surface1", "warningDim", "the warning caption"),
+    ("success", "surface1", "successDim", "the running pill"),
+    ("accent", "surface1", "accentDim", "an accent caption"),
+    ("text2", "surface1", None, "secondary text on a card"),
+]
+SEMANTIC_FLOOR = 4.5   # DESIGN.md, for text this size — no large-text case here
+
+
+def _rgb(value: str) -> tuple[int, int, int] | None:
+    value = value.strip()
+    if value.startswith("#") and len(value) == 7:
+        return tuple(int(value[i:i + 2], 16) for i in (1, 3, 5))
+    if value.startswith("rgba"):
+        parts = [float(p) for p in value[value.index("(") + 1:value.index(")")].split(",")]
+        return tuple(round(p) for p in parts[:3]) + (parts[3],) if len(parts) == 4 else None
+    return None
+
+
+def _luminance(rgb) -> float:
+    out = []
+    for channel in rgb[:3]:
+        c = channel / 255
+        out.append(c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4)
+    return 0.2126 * out[0] + 0.7152 * out[1] + 0.0722 * out[2]
+
+
+def _ratio(a, b) -> float:
+    la, lb = _luminance(a), _luminance(b)
+    hi, lo = max(la, lb), min(la, lb)
+    return (hi + 0.05) / (lo + 0.05)
+
+
+def _live_tokens() -> dict:
+    """The palette that is IN FORCE right now. Read from theme.TOKENS — the
+    dict `qss()` itself builds the stylesheet from — so this check can never
+    be measuring a table the app no longer paints with."""
+    from gui import theme
+    return dict(theme.TOKENS)
+
+
+def check_semantic_contrast(tokens: dict) -> list[str]:
+    """Every semantic ink against the surface it is really painted on — and
+    against its own wash, which is DARKER work than the bare card and is where
+    the failed pill and the danger button actually live."""
+    problems = []
+    for ink_key, surface_key, wash_key, what in SEMANTIC_INK:
+        ink = _rgb(tokens.get(ink_key, ""))
+        card = _rgb(tokens.get(surface_key, ""))
+        if not ink or not card:
+            problems.append(f"{ink_key}/{surface_key} is not a colour this check can read")
+            continue
+        surfaces = [(surface_key, card)]
+        wash = _rgb(tokens.get(wash_key, "")) if wash_key else None
+        if wash and len(wash) == 4:
+            alpha = wash[3]
+            surfaces.append((wash_key, tuple(
+                round(w * alpha + c * (1 - alpha)) for w, c in zip(wash[:3], card))))
+        for name, background in surfaces:
+            ratio = _ratio(ink, background)
+            if ratio < SEMANTIC_FLOOR:
+                problems.append(
+                    f"{what}: {ink_key} on {name} = {ratio:.2f}:1 "
+                    f"(needs {SEMANTIC_FLOOR}:1)")
+    return problems
+
+
 def use_palette(app: QApplication, palette: str) -> None:
     """Make `palette` the one every window built after this call is born in.
 
@@ -731,6 +811,8 @@ def test_layout_audit() -> None:
     problems: list[str] = []
     for palette in PALETTES:
         use_palette(app, palette)
+        problems += [f"[{palette} contrast] {p}"
+                     for p in check_semantic_contrast(_live_tokens())]
         for name, factory in WINDOWS:
             problems += [f"[{palette}] {p}"
                          for p in audit_window(app, name, factory, palette)]
@@ -749,6 +831,15 @@ def main() -> int:
     for palette in PALETTES:
         use_palette(app, palette)
         print(f"--- {palette} palette ---")
+        bad = check_semantic_contrast(_live_tokens())
+        if bad:
+            failed = True
+            print(f"{palette}/semantic contrast: FAIL", file=sys.stderr)
+            for p in bad:
+                print("  " + p, file=sys.stderr)
+        else:
+            print(f"{palette}/semantic contrast: PASS "
+                  f"({len(SEMANTIC_INK)} inks, card + own wash)")
         for name, factory in WINDOWS:
             problems = audit_window(app, name, factory, palette)
             if problems:

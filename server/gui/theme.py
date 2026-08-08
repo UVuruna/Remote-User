@@ -2,7 +2,7 @@
 
 Follows root DESIGN.md (tokens, soft depth, one accent) with the same
 slate/cyan family as the web client (client/theme.css) — one product, one
-look. All values live HERE (root Rule #4); component code never hardcodes a
+look. All values live HERE (No Hardcoded Values, rules/CODE.md); component code never hardcodes a
 color or radius.
 
 WHY THE PALETTE IS READ LATE (build round R3, 2026-08-07). Until this round
@@ -77,7 +77,15 @@ PALETTES = {
         # Semantic
         "success": "#22C55E",
         "warning": "#F59E0B",
-        "error": "#EF4444",
+        # #F87171, NOT #EF4444 (2026-08-08, found by the fourth visual grader
+        # and named for three rounds before that). This ink is painted on
+        # `surface1` cards — the Settings window's error line, the failed
+        # status pill, the danger button — where #EF4444 measured 3.89 / 3.38 /
+        # 3.43 : 1, all under DESIGN.md's 4.5:1 floor for semantic colour. The
+        # lighter red measures 5.29 / 4.60 / 4.67. It survived because the Qt
+        # audit had no contrast check at all; it has one now
+        # (tests/test_layout_audit_qt.py), so this cannot silently return.
+        "error": "#F87171",
         # Semantic wash + edge, for the status pill and the danger button.
         # These were rgba() literals inside the QSS until round R3 — the exact
         # kind of hardcoded colour that is right in one palette and wrong in
@@ -147,9 +155,21 @@ PALETTES = {
         "accentDark": "#075985",
         "accentDim": "rgba(3, 105, 161, 0.14)",
         "onAccent": "#FFFFFF",
-        "success": "#15803D",
-        "warning": "#B45309",
-        "error": "#DC2626",
+        # BOTH DARKENED 2026-08-08, by the same first run of the new contrast
+        # check, for the same reason as `error` below: each reads a comfortable
+        # 5.02:1 on a white card and only 4.27 / 4.25 : 1 on ITS OWN 12 % wash,
+        # which is where the running pill and the warning caption really live.
+        # #166534 and #92400E measure 6.08:1 and 6.00:1 there.
+        "success": "#166534",
+        "warning": "#92400E",
+        # #B91C1C, NOT #DC2626 (2026-08-08). Found by the contrast check added
+        # in the same commit, on its FIRST run, and nobody had ever named it:
+        # #DC2626 reads 4.83:1 on a white card but only 4.13:1 on its OWN
+        # wash, which is where the failed pill and the danger button actually
+        # paint it. The darker red measures 6.47:1 / 5.54:1. The lesson is the
+        # tooth's, not the colour's — an ink is not checked until it is
+        # checked against the surface it is really on.
+        "error": "#B91C1C",
         "successDim": "rgba(21, 128, 61, 0.12)",
         "successEdge": "rgba(21, 128, 61, 0.38)",
         "warningDim": "rgba(180, 83, 9, 0.12)",

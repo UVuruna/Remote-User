@@ -48,14 +48,22 @@ html, body {
   padding: var(--space-s) 20px;
   border-radius: var(--radius-pill);
   font: 600 14px system-ui, sans-serif;
-  color: var(--text-primary);
   z-index: 40;
   transition: opacity 0.4s;
 }
 
-#status.connecting { background: linear-gradient(90deg, var(--warning), var(--warning-2)); }
-#status.connected  { background: linear-gradient(90deg, var(--accent), var(--accent-2)); opacity: 0; pointer-events: none; }
-#status.disconnected { background: linear-gradient(90deg, var(--error), var(--error-2)); }
+/* THE INK COMES WITH THE FILL, not with the theme (2026-08-08). This pill is
+   every toast this app shows — showToast() paints `.connecting` — and it used
+   to pin `color: var(--text-primary)`, the ink meant for a page SURFACE, over
+   a saturated semantic gradient. On dark that was #f5f5f5 on #f59e0b: 1.97:1.
+   `--on-warning`/`--on-error` are defined per theme in theme.css beside the
+   fills they belong to. */
+#status.connecting { background: linear-gradient(90deg, var(--warning), var(--warning-2)); color: var(--on-warning); }
+/* Connected is INVISIBLE (opacity 0) — it is the pill's resting state, never a
+   surface anyone reads, which is why the accent gradient's own ink is not a
+   contrast question. */
+#status.connected  { background: linear-gradient(90deg, var(--accent), var(--accent-2)); color: var(--on-accent); opacity: 0; pointer-events: none; }
+#status.disconnected { background: linear-gradient(90deg, var(--error), var(--error-2)); color: var(--on-error); }
 /* An expiring toast fades out KEEPING its own colour (see showToast) — the
    pill only returns to the connected state once it is already invisible. */
 #status.fade { opacity: 0; pointer-events: none; }
