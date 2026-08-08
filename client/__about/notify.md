@@ -40,6 +40,33 @@ Android version. A dev browser has no bridge and simply sends nothing.
 sends `false`, and the banner is raised regardless — muting one carrier never
 loses a notice.
 
+## A tap on the notice goes THERE (owner 2026-08-08, task 110)
+
+The PC already worked out WHICH layout the notice belongs to and put it on the
+frame as `layout {index, name}` ([Notify](../../server/__about/notify.md)).
+This file carries it the last two steps.
+
+**Out:** `Android.notifyAt(title, body, tag, jump)` — a NEW bridge method
+beside `notify`, never a fourth argument on it. The page is served by the PC
+while the shell is installed separately, so a changed arity would simply stop
+resolving on an older shell and take the notice down with it. Same reasoning
+as `speakAs`, same round's lesson.
+
+**Back:** `takeNoticeJump()` PULLS the answer from the shell, and
+`applyNoticeJump()` acts on it from the first `layout_state` of a connection.
+A pull, because the tap may have COLD-STARTED the app — at that instant there
+is no page and no layout list, so a push would land in nothing.
+
+`noticeTarget()` VERIFIES before moving: the NAME decides, the index is only a
+hint. Right where it points, else the one layout carrying that name, else
+nothing at all plus a toast saying so. Landing him in a stranger's window is
+worse than not moving, and a silent no-op after a deliberate tap reads as a
+broken button.
+
+A tap OUTRANKS the excursion auto-restore (`layoutRestore`): both want to
+choose a layout on a fresh connection, and only one of them is something he
+just did with his thumb.
+
 ## Per-device switches
 
 `notifyPrefs()` / `saveNotifyPrefs()` in the shell's SharedPreferences (via

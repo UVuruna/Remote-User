@@ -105,6 +105,33 @@ beside the feature that uses it. It is never persisted: a list read from a
 phone that is no longer connected would offer the owner voices he cannot hear.
 The stored CHOICE is a plain name, never an index, for the same reason.
 
+## Where the tap leads (owner 2026-08-08, task 110)
+
+*"da klikom na notifikaciju nas odvede do tog layouta … gde je zavrsio taj
+sabagent ili glavni agent."* A notice that names an agent but leaves him to
+find the window is half the job — he has to step the layout bar looking for
+it.
+
+Nothing here is inferred. The finishing agent reports its own `cwd`
+(`setup/agent_hook.py` → `agent_project`), and every layout can be asked which
+project its windows really belong to (`window_manager.Layout.project`).
+`layout_of(project)` matches the two and returns `{index, name}`, which rides
+the notice as `layout`.
+
+Three details, each of which would be a bug without it:
+
+- It **prunes first**, because the index it returns is the one the PHONE is
+  holding, and `layout_state` numbers its list after the same prune. One dead
+  layout still in the list and the tap lands one window off.
+- It sends the **name beside the index**, so the phone can check the index
+  still points at what we meant. A layout removed between the notice and the
+  thumb slides every higher index down.
+- The field is **absent** whenever that project is on no layout. A tap that
+  cannot land must not be offered.
+
+Resolved at SEND time, not at tap time: this is the one moment the agent told
+us its project, and it costs one cheap Win32 read per layout, off the loop.
+
 ## Why a push, not a watcher
 
 The alternative was reading the screen (UIA on the Claude panel, or watching

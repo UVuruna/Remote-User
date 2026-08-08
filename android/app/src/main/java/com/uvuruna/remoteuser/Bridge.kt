@@ -238,6 +238,32 @@ class Bridge(private val host: MainActivity) {
         host.runOnUiThread { host.postNotice(title, text, tag) }
     }
 
+    /** The same notice, plus WHERE it happened — `jump` is the PC's
+     *  `{index, name}` for the layout that agent's project is showing (owner
+     *  2026-08-08, task 110). A tap then lands in that window instead of on
+     *  whatever the app was last looking at.
+     *
+     *  A new method rather than a fourth argument on `notify`, for the reason
+     *  written over `speakAs`: the page comes from the PC and the shell is
+     *  installed separately, so a bridge method that changed arity would stop
+     *  resolving for a page that has not been re-served yet — and the notice
+     *  it was carrying would be lost, which is the one thing this feature
+     *  exists to prevent. */
+    @JavascriptInterface
+    fun notifyAt(title: String, text: String, tag: String, jump: String) {
+        host.runOnUiThread { host.postNotice(title, text, tag, jump) }
+    }
+
+    /** The layout the owner tapped a notification to reach, read ONCE.
+     *
+     *  A PULL, not a push, because the tap may have COLD-STARTED the app: at
+     *  that moment there is no page, no socket and no layout list, so a
+     *  pushed call would land in nothing. The shell holds the answer until
+     *  the page knows enough to act on it, and clears it on the way out so a
+     *  later reconnect cannot replay a jump the owner already took. */
+    @JavascriptInterface
+    fun noticeJump(): String = host.takeNoticeJump()
+
     /** Says the notice out loud (owner: "izgovori neku reč"). */
     @JavascriptInterface
     fun speak(text: String) {

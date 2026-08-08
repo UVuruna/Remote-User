@@ -50,6 +50,8 @@ class Notifier(private val ctx: Context) {
     companion object {
         private const val TAG = "Notifier"
         private const val CHANNEL_ID = "agents"
+        /** Where the tapped notice happened — `{index, name}` as JSON. */
+        const val EXTRA_JUMP = "com.uvuruna.remoteuser.JUMP"
         // One id per agent name, so notifications REPLACE per agent instead of
         // stacking one line per finished turn. Hashing keeps that stable
         // across app restarts without keeping a table.
@@ -87,12 +89,25 @@ class Notifier(private val ctx: Context) {
         ensureEngine()
     }
 
-    /** Raises (or replaces) one agent's notification. */
-    fun post(title: String, text: String, tag: String) {
+    /** Raises (or replaces) one agent's notification.
+     *
+     *  `jump` is the PC's answer to "where did this happen" — a JSON
+     *  `{index, name}` naming the layout that agent's project is showing
+     *  (owner 2026-08-08, task 110: *"da klikom na notifikaciju nas odvede do
+     *  tog layouta"*). It travels as an intent extra and is read out by
+     *  MainActivity; empty means the PC could not say, and the tap then does
+     *  exactly what it always did — open the app. */
+    fun post(title: String, text: String, tag: String, jump: String = "") {
+        val intent = Intent(ctx, MainActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+        if (jump.isNotBlank()) intent.putExtra(EXTRA_JUMP, jump)
         val open = PendingIntent.getActivity(
-            ctx, 0,
-            Intent(ctx, MainActivity::class.java)
-                .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP),
+            // The request code is PER AGENT, not 0 for everyone. With one
+            // shared code, FLAG_UPDATE_CURRENT rewrites the SAME PendingIntent
+            // every time, so four agents' notifications would all carry the
+            // extras of whichever finished last — and the tap would open the
+            // wrong window while looking perfectly right.
+            ctx, idFor(tag), intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         val builder = NotificationCompat.Builder(ctx, CHANNEL_ID)

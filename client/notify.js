@@ -103,7 +103,17 @@ function handleNotify(msg) {
       // The TAG is the agent's name on purpose: a second notice from the same
       // agent REPLACES its own line instead of stacking, while four agents
       // keep four separate lines — which is the whole point of naming them.
-      Android.notify(title, body, String(msg.agent || "agent"));
+      const tag = String(msg.agent || "agent");
+      // WHERE it happened rides along when the PC could say so (owner
+      // 2026-08-08, task 110). `notifyAt` is a NEWER bridge method, not a
+      // fourth argument on `notify`: this page is served by the PC while the
+      // shell is installed separately, so a changed arity would simply stop
+      // resolving on an older shell and take the notice down with it.
+      if (msg.layout && Android.notifyAt) {
+        Android.notifyAt(title, body, tag, JSON.stringify(msg.layout));
+      } else {
+        Android.notify(title, body, tag);
+      }
     } catch (err) {
       send({ type: "client_log", text: `[notify] banner failed: ${err.message}` });
     }
@@ -125,6 +135,73 @@ function handleNotify(msg) {
   if (prefs.tone) notifyTone();
   if (!document.hidden) showToast(body ? `${title} — ${body}` : title);
 }
+
+// --- A tap on the notice goes THERE (owner 2026-08-08, task 110) ----------
+// *"da klikom na notifikaciju nas odvede do tog layouta … gde je zavrsio taj
+// sabagent ili glavni agent."*
+//
+// The PC resolved the layout when it SENT the notice (server/notify.py ->
+// layout_of, matched against the agent's own cwd — nothing is guessed). The
+// shell parked it through the tap. This is the last step: act on it, once,
+// and only when it still means what it meant.
+//
+// PULLED from the shell rather than pushed at us, because the tap may have
+// cold-started the app: at that moment there is no page and no layout list,
+// so a push would land in nothing. `applyNoticeJump` is called from the first
+// `layout_state` of a connection, which is the earliest instant the answer
+// can be checked against reality.
+
+let noticeJump = null;   // {index, name} the shell handed over, not yet used
+
+function takeNoticeJump() {
+  if (!IN_APP || !window.Android.noticeJump) return null;
+  try {
+    const raw = window.Android.noticeJump();   // reads AND clears
+    return raw ? JSON.parse(raw) : null;
+  } catch (err) {
+    send({ type: "client_log", text: `[notify] noticeJump failed: ${err.message}` });
+    return null;
+  }
+}
+
+// VERIFIED, not trusted. Between the notice going out and his thumb landing,
+// a layout may have been removed — which slides every higher index down — or
+// the whole list may have been rebuilt. So the NAME decides and the index is
+// only a hint: right where it points, else the one layout carrying that name,
+// else nothing at all. Jumping into the wrong window is worse than not
+// jumping: he would be typing into a stranger.
+function noticeTarget(jump) {
+  if (!jump || !Array.isArray(layouts) || !layouts.length) return -1;
+  const at = Number(jump.index);
+  if (layouts[at] && layouts[at].name === jump.name) return at;
+  const named = layouts.filter((l) => l.name === jump.name);
+  return named.length === 1 ? layouts.indexOf(named[0]) : -1;
+}
+
+// Returns whether a tap was CONSUMED — connection.js lets that outrank the
+// auto-restore, because only one of the two is something he just did.
+function applyNoticeJump() {
+  const jump = noticeJump || takeNoticeJump();
+  if (!jump) return false;
+  noticeJump = null;
+  const at = noticeTarget(jump);
+  if (at < 0) {
+    // Say so rather than silently doing nothing: he tapped expecting to move.
+    showToast(`${jump.name} is not on the phone any more`);
+    return false;
+  }
+  if (at === layoutActive) return true;   // already looking at it
+  focusLayout(at);
+  return true;
+}
+
+// The shell's nudge for a tap that arrived while a page was already up. It
+// only says LOOK — the answer still comes through the pull above, so there is
+// one path into this and not two.
+window.__noticeJump = () => {
+  noticeJump = takeNoticeJump();
+  if (noticeJump && Array.isArray(layouts) && layouts.length) applyNoticeJump();
+};
 
 // --- "Notices while the app is closed" (owner decree 2026-08-07) -----------
 // His report: *"notifikacije mi stižu tek kada podignem aplikaciju iako je sve

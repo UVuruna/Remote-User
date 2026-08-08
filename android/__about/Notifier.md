@@ -26,6 +26,18 @@ Two carriers, each covering what the other cannot:
 - the same agent finishing twice **replaces** its own line — always current;
 - four agents keep four separate lines — which is the point of naming them.
 
+## The tap carries a destination (owner 2026-08-08, task 110)
+
+`post(..., jump)` puts the PC's `{index, name}` on the intent behind the
+notification, and MainActivity reads it out when the tap arrives. Empty means
+the PC could not say where, and the tap does what it always did — open the app.
+
+The request code became **per agent** in the same change, and that is a fix,
+not a detail: with one shared code, `FLAG_UPDATE_CURRENT` rewrites the SAME
+PendingIntent every time, so four agents' notifications would all carry the
+extras of whichever finished last — and the tap would open the wrong window
+while looking perfectly right.
+
 ## Speech is queued, never dropped
 
 The engine takes a moment to initialise, and the first `speak()` after a cold

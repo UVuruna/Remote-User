@@ -88,6 +88,44 @@ _pending: list[dict] = []
 NO_CLIENT = {"ok": False, "reason": "phone unreachable — held for its return"}
 WAITING = {"ok": True, "reason": "handed to the phone's waiting channel"}
 
+# WHERE THE NOTICE HAPPENED (owner 2026-08-08, task 110): "da klikom na
+# notifikaciju nas odvede do tog layouta … gde je zavrsio taj sabagent ili
+# glavni agent." A notice that names an agent but leaves him to find the
+# window is half the job — he has to step the layout bar looking for it.
+#
+# Nothing is INFERRED here. The finishing agent sends its own `cwd`
+# (setup/agent_hook.py -> agent_project), and every layout can be asked which
+# project its windows really belong to, live (Layout.project). Matching those
+# two is the whole feature; there is no name-guessing, no title heuristic, and
+# no stored answer that could go stale between the notice and the tap.
+_layouts = None      # the live LayoutRegistry, handed over by register()
+
+
+def layout_of(project: str) -> dict | None:
+    """`{index, name}` of the layout showing this project, or None.
+
+    Blocking Win32 (each layout is asked for its members' titles), so callers
+    reach it through `asyncio.to_thread`.
+
+    The INDEX is what the phone acts on, and it only means anything after a
+    prune — the same prune `layout_state` runs before numbering the list the
+    phone is holding. The NAME rides along so the phone can check the index
+    still points at what we meant: a layout removed between the notice and the
+    tap slides every higher index down, and a jump into the wrong window is
+    worse than no jump at all.
+    """
+    folder = pathlib.Path(str(project or "").strip()).name.lower()
+    if not folder or _layouts is None:
+        return None
+    try:
+        _layouts.prune()
+        for index, layout in enumerate(_layouts.layouts):
+            if layout.project() == folder:
+                return {"index": index, "name": layout.name}
+    except Exception as e:  # noqa: BLE001 — a notice must never fail on this
+        logger.warning("Could not match %r to a layout: %s", folder, e)
+    return None
+
 # --- The phone's own voices (round R2, owner 2026-08-07) ---------------------
 # The desktop Settings window offers a "Voice" dropdown, and the only machine
 # that knows which voices exist is the PHONE: TextToSpeech engines differ per
@@ -271,15 +309,21 @@ async def _wait_for_news():
         logger.info("Notice channel gone — notices wait in the queue again")
 
 
-def register(app, token: str, active_client: dict) -> None:
+def register(app, token: str, active_client: dict, layouts=None) -> None:
     """Adds `POST /notify` and `GET /notices` to the running server.
 
     `active_client` is the web layer's own one-device-at-a-time slot — this
     module deliberately keeps no second registry, so a phone that took the
     session over (code 4409) is the one that gets the notices.
+
+    `layouts` is the live registry, used for one thing only: answering "which
+    layout is this agent's project showing" at the moment a notice goes out
+    (`layout_of`). None — a server built without layouts — simply means every
+    notice carries no jump, and the feature is absent rather than wrong.
     """
-    global _page
+    global _page, _layouts
     _page = active_client
+    _layouts = layouts
 
     @app.get("/notices")
     async def notices(request: Request):  # noqa: ANN202 — FastAPI route
@@ -327,6 +371,16 @@ def register(app, token: str, active_client: dict) -> None:
             "rate": SETTINGS.notify_rate,
             "at": time.time(),
         }
+        # WHERE it happened, when we can say so honestly (task 110). Resolved
+        # at SEND time, not at tap time: this is the moment the agent told us
+        # its project, and the layout list is a live thing. Absent whenever
+        # the agent's project is not on screen anywhere — a jump we cannot
+        # make must not be offered.
+        where = await asyncio.to_thread(layout_of, data.get("project"))
+        if where:
+            notice["layout"] = where
+            logger.info("Notify: %s → layout %d (%s)", agent,
+                        where["index"], where["name"])
         # ONE carrier, chosen here and nowhere else (see deliver()). Nothing
         # about the notice itself changes with the carrier — same agent, same
         # line, same speak/voice/rate — so the owner cannot tell which one

@@ -214,7 +214,12 @@ function connect() {
         layouts = msg.layouts || [];
         layoutActive = msg.active ?? null;
         layoutRegion = msg.region || null;
-        if (layoutActive === null && layoutRestore &&
+        // A NOTIFICATION TAP OUTRANKS THE AUTO-RESTORE (task 110). Both want
+        // to choose a layout on a fresh connection, and only one of them is
+        // something the owner just did with his thumb.
+        if (applyNoticeJump()) {
+          layoutRestore = null;
+        } else if (layoutActive === null && layoutRestore &&
             layouts[layoutRestore.index] &&
             layouts[layoutRestore.index].name === layoutRestore.name) {
           // The server says desktop but nobody CHOSE the desktop — this is a

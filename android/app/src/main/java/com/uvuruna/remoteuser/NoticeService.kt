@@ -213,7 +213,13 @@ class NoticeService : Service() {
         val body = listOf(msg.optString("text"), whenWord(msg.optLong("at")))
             .filter { it.isNotBlank() }
             .joinToString(" · ")
-        if (banner) notifier().post(title, body, agent)
+        // WHERE it happened, when the PC could say (owner 2026-08-08, task
+        // 110). This carrier matters MORE than the page's, not less: a notice
+        // arriving down the waiting channel is one he is not looking at, so
+        // the tap is the whole interaction — it has to land him in the right
+        // window, from a cold start, with nothing else to go on.
+        val jump = msg.optJSONObject("layout")?.toString().orEmpty()
+        if (banner) notifier().post(title, body, agent, jump)
         if (speak && msg.optBoolean("speak", true)) {
             notifier().speak(
                 if (body.isBlank()) title else "$title. $body",

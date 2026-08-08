@@ -82,13 +82,29 @@ def agent_name(payload: dict) -> str:
     return f"{project} · {session}".strip(" ·")[:60]
 
 
-def send(agent: str, event: str, text: str) -> bool:
+def agent_project(payload: dict) -> str:
+    """WHERE this agent was working — the hook's own `cwd`.
+
+    Owner 2026-08-08, task 110: a tap on the notification should take him to
+    the layout that agent finished in. The PC could try to work that out by
+    matching names, but it never has to: the finishing agent KNOWS its project,
+    and this is the one moment it is asked. A guess we can replace with a fact
+    is the pattern this project keeps paying for.
+
+    Sent as the whole path; the server takes its last component. A server from
+    before this round simply ignores the field.
+    """
+    return str(payload.get("cwd") or os.getcwd())[:260]
+
+
+def send(agent: str, event: str, text: str, project: str = "") -> bool:
     token = read_token()
     if not token:
         print("agent_hook: no token file — is Remote User installed?", file=sys.stderr)
         return False
     url = f"http://127.0.0.1:{read_port()}/notify?token={token}"
-    body = json.dumps({"agent": agent, "event": event, "text": text}).encode()
+    body = json.dumps({"agent": agent, "event": event, "text": text,
+                       "project": project}).encode()
     request = urllib.request.Request(
         url, data=body, headers={"Content-Type": "application/json"})
     try:
@@ -157,8 +173,9 @@ def main() -> int:
     if "--uninstall" in sys.argv:
         return install(remove=True)
     if "--test" in sys.argv:
-        ok = send(agent_name({"cwd": os.getcwd(), "session_id": "test00"}),
-                  "finished", "Test notice from agent_hook.py")
+        probe = {"cwd": os.getcwd(), "session_id": "test00"}
+        ok = send(agent_name(probe), "finished",
+                  "Test notice from agent_hook.py", agent_project(probe))
         return 0 if ok else 1
 
     try:
@@ -171,7 +188,7 @@ def main() -> int:
     # stops to ask something. What is always true at that moment is that it is
     # no longer working and the next move is his, and that is what the phone
     # now says: "<agent> needs you".
-    send(agent_name(payload), "waiting", "")
+    send(agent_name(payload), "waiting", "", agent_project(payload))
     return 0   # a hook must never fail the turn it reports on
 
 

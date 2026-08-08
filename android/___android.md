@@ -171,8 +171,8 @@ not just what:
   underlying transports).
 - **External links open as real apps**: the in-page "anywhere" wizard's
   Google Play button opens the actual Play Store — the same guided Tailscale
-  flow works identically in browser and app (no duplicated wizard, Rule #5
-  at product level).
+  flow works identically in browser and app (no duplicated wizard, Priority C —
+  Inheritance over duplication, root CLAUDE.md — at product level).
 - **File chooser**: the page's phone→PC image upload gets the native
   gallery/camera picker.
 - **Native "Connecting…" screen** while the address is probed and the page

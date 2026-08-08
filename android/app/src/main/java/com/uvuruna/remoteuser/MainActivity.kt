@@ -242,14 +242,19 @@ class MainActivity : AppCompatActivity() {
      *  feature on is never asked, and the ask arrives with its reason
      *  visible on screen (owner principle — nothing unexplained). */
     // A notice that arrived before the permission did (see `notify` below).
-    internal var pendingNotice: Triple<String, String, String>? = null
+    // A named record rather than a Triple since 2026-08-08: it grew a fourth
+    // field (where the tap leads), and `it.fourth` does not exist.
+    internal data class Notice(val title: String, val text: String,
+                               val tag: String, val jump: String = "")
+
+    internal var pendingNotice: Notice? = null
 
     internal val notifyPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
             val held = pendingNotice
             pendingNotice = null
             if (granted) {
-                held?.let { notifier.post(it.first, it.second, it.third) }
+                held?.let { notifier.post(it.title, it.text, it.tag, it.jump) }
             } else {
                 web.evaluateJavascript(
                     "window.__notifyDenied && __notifyDenied()", null)
@@ -322,6 +327,10 @@ class MainActivity : AppCompatActivity() {
         connectivity = (getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager)
             .also { it.registerDefaultNetworkCallback(netCallback) }
 
+        // A COLD start begun by tapping a notification: the layout to jump to
+        // is on the intent that launched us, and it is parked here until the
+        // page has a layout list to act on (task 110).
+        readNoticeJump(intent)
         resolveAndLoad()
     }
 
@@ -791,7 +800,8 @@ class MainActivity : AppCompatActivity() {
 
     /** One notice, arriving while the owner IS looking at the app. Same
      *  reason as above: the permission launcher lives here. */
-    internal fun postNotice(title: String, text: String, tag: String) {
+    internal fun postNotice(title: String, text: String, tag: String,
+                            jump: String = "") {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) !=
             PackageManager.PERMISSION_GRANTED) {
@@ -800,11 +810,46 @@ class MainActivity : AppCompatActivity() {
             // the owner's first agent finish arrived as a toast and never
             // reached his notification tray (2026-08-06). It is posted the
             // moment he grants it.
-            pendingNotice = Triple(title, text, tag)
+            pendingNotice = Notice(title, text, tag, jump)
             notifyPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
             return
         }
-        notifier.post(title, text, tag)
+        notifier.post(title, text, tag, jump)
+    }
+
+    // ── Where a tapped notice leads (owner 2026-08-08, task 110) ──────────
+    // "da klikom na notifikaciju nas odvede do tog layouta … gde je zavrsio
+    // taj sabagent ili glavni agent."
+    //
+    // The tap may COLD-START this app, so the answer cannot be pushed at a
+    // page that does not exist yet. It is parked here and PULLED by the page
+    // (Bridge.noticeJump) once it knows its layout list — and taken exactly
+    // once, so a later reconnect cannot replay a jump he already made.
+    private var noticeJump = ""
+
+    internal fun takeNoticeJump(): String {
+        val held = noticeJump
+        noticeJump = ""
+        return held
+    }
+
+    /** A tap arrived. Park it, and nudge the page in case one is already up —
+     *  the nudge only tells it to LOOK; the answer still comes from the pull
+     *  above, so there is one path and not two. */
+    private fun readNoticeJump(intent: Intent?) {
+        val jump = intent?.getStringExtra(Notifier.EXTRA_JUMP).orEmpty()
+        if (jump.isBlank()) return
+        noticeJump = jump
+        intent?.removeExtra(Notifier.EXTRA_JUMP)   // never re-read on rotation
+        if (::web.isInitialized) {
+            web.evaluateJavascript("window.__noticeJump && __noticeJump()", null)
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        readNoticeJump(intent)
     }
 
     /** Ask Android to stop deferring this app (owner decree 2026-08-07). The

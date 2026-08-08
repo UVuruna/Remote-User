@@ -248,7 +248,10 @@ def create_app(stream, hub: FrameHub | None, injector: InputInjector, token: str
     # machine that finishes a job POSTs /notify, and the phone raises a real
     # notification naming the AGENT. It rides the same one-device slot above,
     # so a device that took the session over is the one that hears about it.
-    notify.register(app, token, active_client)
+    # `layouts` rides along for ONE question (task 110): which layout is
+    # showing the project the finishing agent named, so a tap on the phone's
+    # notification lands in that window instead of on the desktop.
+    notify.register(app, token, active_client, layouts)
 
     # An excursion hold outlives the socket that announced it, so its task
     # needs an owner here — a bare create_task is only referenced by the event

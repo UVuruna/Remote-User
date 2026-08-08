@@ -77,6 +77,49 @@ def main() -> int:
         {"cwd": r"U:\Coding\UVuruna\Applications\Remote User",
          "session_id": "3f9c1a77-dead-beef"}) == "Remote User · 3f9c1a"
 
+    # --- WHERE it happened (owner 2026-08-08, task 110) --------------------
+    # "da klikom na notifikaciju nas odvede do tog layouta." The PC answers
+    # that at SEND time by matching the agent's OWN cwd — reported by the hook,
+    # never guessed — against what each layout's windows really belong to.
+    class _Lay:
+        def __init__(self, name, project):
+            self.name, self._p = name, project
+
+        def project(self):
+            return self._p
+
+    class _Reg:
+        def __init__(self, *lays):
+            self.layouts = list(lays)
+            self.pruned = 0
+
+        def prune(self):
+            self.pruned += 1
+            return list(range(len(self.layouts)))
+
+    reg = _Reg(_Lay("Chrome", "notes"), _Lay("Claude", "remote user"))
+    notify._layouts = reg
+    # The hook sends a PATH; the registry speaks folder names, lowercased.
+    results["the notice finds the layout by the agent's own cwd"] = (
+        notify.layout_of(r"U:\Coding\UVuruna\Applications\Remote User")
+        == {"index": 1, "name": "Claude"})
+    results["a bare folder name works too"] = (
+        notify.layout_of("Notes") == {"index": 0, "name": "Chrome"})
+    # It PRUNES first, because the index it returns is the one the phone is
+    # holding, and layout_state numbers its list after the same prune. Without
+    # this the tap would land one layout off whenever a dead one was still in
+    # the list.
+    results["the index is taken after a prune, like the phone's own"] = reg.pruned >= 2
+    # A project nobody is showing offers NO jump. A tap that cannot land is
+    # worse than a tap that only opens the app.
+    results["a project on no layout offers no jump"] = (
+        notify.layout_of(r"C:\somewhere\else") is None
+        and notify.layout_of("") is None and notify.layout_of(None) is None)
+    notify._layouts = None
+    results["with no registry at all the feature is absent, not wrong"] = (
+        notify.layout_of("Remote User") is None)
+    notify._layouts = reg
+
     # --- 2 + 3 + 4: the live path ------------------------------------------
     threading.Thread(target=gate.run_server, daemon=True).start()
     gate.server_ready.wait(15)
@@ -151,6 +194,7 @@ def main() -> int:
           window.__calls = [];
           window.Android = Object.assign(window.Android || {}, {
             notify: (t, x, tag) => window.__calls.push(['notify', t, x, tag]),
+            notifyAt: (t, x, tag, j) => window.__calls.push(['notifyAt', t, x, tag, j]),
             speak: (t) => window.__calls.push(['speak', t]),
             prefGet: () => null, prefSet: () => {},
           });
@@ -162,8 +206,15 @@ def main() -> int:
              gate.TOKEN)
         page.wait_for_function("window.__calls.length >= 3", timeout=5000)
         calls = page.evaluate("window.__calls")
-        notifs = [c for c in calls if c[0] == "notify"]
+        notifs = [c for c in calls if c[0] in ("notify", "notifyAt")]
         speaks = [c for c in calls if c[0] == "speak"]
+        # NO layout was matched for either notice above (the fake server owns
+        # no registry), so the page must take the OLD bridge method. This is
+        # the compatibility half of task 110: `notifyAt` exists for the case
+        # where there IS somewhere to go, and a shell that predates it must
+        # keep working.
+        results["with nowhere to go the page uses the plain bridge call"] = (
+            all(c[0] == "notify" for c in notifs))
         results["the phone raises a banner per agent"] = (
             len(notifs) == 2
             and notifs[0][1] == "Remote User · 3f9c1a finished"
@@ -195,6 +246,40 @@ def main() -> int:
             and sent[0]["enter"] is True)
         results["the chooser closes on the pick"] = page.evaluate(
             "document.getElementById('choice-panel').hidden") is True
+
+        # --- the TAP, on the page (task 110) ------------------------------
+        # A notice that names a layout must reach the newer bridge method
+        # WITH the layout on it — that string is the whole journey through
+        # the Android intent and back.
+        page.evaluate("""() => {
+          window.__calls = [];
+          handleNotify({agent: 'Claude', title: 'Claude needs you', text: '',
+                        speak: false, layout: {index: 1, name: 'Claude'}});
+        }""")
+        at = [c for c in page.evaluate("window.__calls") if c[0] == "notifyAt"]
+        results["a notice that knows WHERE carries it to the shell"] = (
+            len(at) == 1 and json.loads(at[0][4]) == {"index": 1, "name": "Claude"})
+
+        # And the tap is VERIFIED against the list that exists NOW. A layout
+        # removed between the notice and the thumb slides every higher index
+        # down; following the index blindly would drop him into a stranger's
+        # window, which is worse than not moving at all.
+        results["the tap follows the NAME, not the stale index"] = page.evaluate("""() => {
+          layouts = [{name: 'Notes'}, {name: 'Chrome'}, {name: 'Claude'}];
+          return noticeTarget({index: 1, name: 'Claude'}) === 2
+              && noticeTarget({index: 2, name: 'Claude'}) === 2
+              && noticeTarget({index: 0, name: 'Gone'}) === -1
+              && noticeTarget({index: 9, name: 'Notes'}) === 0;
+        }""")
+        results["two layouts of one name are ambiguous, so nothing moves"] = page.evaluate(
+            """() => {
+          layouts = [{name: 'Claude'}, {name: 'Claude'}];
+          return noticeTarget({index: 5, name: 'Claude'}) === -1;
+        }""")
+        results["no layouts at all cannot be jumped into"] = page.evaluate("""() => {
+          layouts = [];
+          return noticeTarget({index: 0, name: 'Claude'}) === -1;
+        }""")
 
         errors = page.evaluate("window.__pageErrors || []")
         results["no page errors"] = not errors
