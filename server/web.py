@@ -946,12 +946,18 @@ async def _receive_input(ws: WebSocket, injector: InputInjector, stream, token: 
                 # The target's index slides down when the source sat above it.
                 await layout_api.layout_focus(ws, layouts, stream, conn,
                                               dst - 1 if src < dst else dst)
+        elif kind == "layout_member_remove":
+            # ONE window out of a grid (owner request 2026-08-09, task 165) —
+            # a four becomes a three, a three a two, a two a single. The whole
+            # handler lives in layout_api with the rest of the layout
+            # protocol; web.py stands at the 1,000-line wall.
+            await layout_api.layout_member_remove(ws, layouts, stream, conn, msg)
         elif kind == "layout_reorder":
             # Dropping BETWEEN two rows — the list's own order, nothing moves
-            # on the PC (owner 2026-08-07).
-            await asyncio.to_thread(layouts.reorder, int(msg["source"]),
-                                    int(msg["before"]))
-            await layout_api.send_layout_state(ws, layouts, conn)
+            # on the PC (owner 2026-08-07). In layout_api because it must also
+            # correct `conn["active"]`: the focus rides on an INDEX and a
+            # reorder moves indices (see there), and web.py is at the wall.
+            await layout_api.layout_reorder(ws, layouts, conn, msg)
         elif kind == "layout_remove":
             index = int(msg["index"])
             # `close` is the owner's second act (2026-08-08, task 116): the

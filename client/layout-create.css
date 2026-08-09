@@ -1,0 +1,93 @@
+/* The CREATION panel's own rows — the two lists a layout is chosen from.
+
+   One feature, two files, one doc: the `layouts.css`/`layouts.js` precedent,
+   applied to the wizard that split off them on 2026-08-08. Everything here
+   belongs to `client/layout-create.js` and to nothing else, and it is
+   documented with it in client/__about/layout-create.md.
+
+   WHY IT EXISTS AT ALL (owner 2026-08-09, task 168, in translation): "the
+   indentation stays — a column. It does not have to be the same row as its
+   parent, because a sub-tab of a window does NOT belong to the same kin group
+   as its parent; that is exactly why a minimal indent is allowed, to show that
+   those tabs are children of the one above that is not indented. Right now
+   there are arrows, but that is less noticeable and less intuitive."
+
+   Both lists — "Chosen" and "Windows and tabs on the PC" — were a WRAPPING
+   FLOW of pills (`.lay-row`), which has no per-row box to indent: a tab was
+   marked by a literal "↳ " glued to its title. Rows are what make his drawing
+   possible, and his own kin ruling is what makes them legal under task 163
+   (equal size WITHIN a group; a child is not in its parent's group, so the
+   indent may make it narrower).
+
+   Loads AFTER layouts.css, deliberately: the rows reuse `.lay-item` /
+   `.lay-item-main` from there — the ellipsis, the icon sizing and the `sel`
+   state are written once, in the file that owns them — and this file only
+   states what is DIFFERENT here. Equal-weight selectors therefore land the
+   right way round. */
+
+/* A column of rows, not a flow of pills. `gap` rather than the rows' own
+   margins, so an indented child sits exactly as far from its parent as any
+   two siblings do. */
+.lc-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 10px 0;
+}
+
+/* The list of everything on the PC can be long; the chosen list is at most
+   four rows and must never scroll. Ladder step 4, and only where it is
+   earned (THE SPACE & LEGIBILITY LAW). */
+.lc-rows.lc-scroll {
+  max-height: 38vh;
+  overflow-y: auto;
+}
+
+.lc-row {
+  margin: 0;
+  /* A ROW HERE IS NEVER CARRIED. `.lay-item` declares `touch-action: none`
+     because a row of the LAYOUT LIST is a drag surface — hold it, drop it on
+     another, and the two become a grid (owner 2026-08-07). Nothing in the
+     creation panel is dragged, while this list is a scroll container of its
+     own: inheriting that rule would take the list's own scrolling away and
+     leave everything below the fold unreachable, which is the exact trade
+     `dragMoveTo`'s edge auto-scroll exists to avoid next door. */
+  touch-action: auto;
+}
+
+/* A row's own button is a touch target in a list that may hold thirty of
+   them, so it is a little tighter than a layout-list row — the same shape,
+   sized for a list rather than for a menu of three. Every row here takes the
+   same padding, so the kin rule is untouched. */
+.lc-row .lay-item-main {
+  padding: 10px 13px;
+}
+
+/* THE INDENT — his whole request, and the number is not arbitrary: 30px is
+   exactly the icon column a window row carries (a 20px icon plus the 10px
+   flex gap), so a tab's TITLE lands precisely under its parent's title while
+   the row's own box sits visibly further in. The box says "child", the text
+   stays in the parent's column, and nothing is drawn in front of the name. */
+.lc-kid {
+  margin-left: 30px;
+}
+
+/* Unavailable, and it LOOKS it (owner 2026-08-09, task 166): the Create
+   button before its cells are filled, and a row that cannot be chosen while
+   its own window (or its own tab) already is. Both still answer a tap — with
+   words — because a control that goes dead and silent is the complaint this
+   round exists to close. The dimming is the layout list's own drag/refusal
+   vocabulary (`.lay-item.lay-drag`), not a second one invented here. */
+.lc-off {
+  opacity: 0.45;
+}
+
+/* A short fact about the row, kept ON the row: "minimized", which is why that
+   window shows no tabs. `flex: none` + no wrapping, so the row stays exactly
+   one line and it is the TITLE that gives way — the rule of task 163. */
+.lc-note {
+  flex: none;
+  white-space: nowrap;
+  color: var(--text-secondary);
+  font: 600 11px system-ui, sans-serif;
+}

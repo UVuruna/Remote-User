@@ -402,10 +402,23 @@ def _real_tabs(auto, hwnd: int) -> list:
     return out
 
 
+def is_minimized(hwnd: int) -> bool:
+    """Is this window minimized? A Win32 fact, not a UIA one — but it lives
+    beside the tab reader because that reader is the one thing whose ANSWER
+    depends on it (owner request 2026-08-09, task 167): Win32 reports the
+    classic (-32000, -32000) rect for a minimized window and UI Automation
+    reports a bounding height of ZERO, so `_real_tabs` bails on
+    `wr.height() <= 0` and returns an empty list. Asking first turns a silent
+    empty answer into a stated one, and skips a UIA walk that could never have
+    found anything."""
+    return bool(user32.IsIconic(hwnd))
+
+
 def list_tabs(mon_rect: tuple[int, int, int, int], hwnd: int) -> list[dict]:
     """Content tabs of one window as list entries: {"name", "x", "y"} with
     the tab centre monitor-normalized (the pick point extraction re-hits).
-    Blocking — call via to_thread."""
+    Blocking — call via to_thread. `offerable_tabs` below is what the creation
+    list asks; this is the raw read underneath it."""
     left, top, width, height = mon_rect
     with _uia() as auto:
         if auto is None:
@@ -423,6 +436,42 @@ def list_tabs(mon_rect: tuple[int, int, int, int], hwnd: int) -> list[dict]:
         except Exception as e:  # noqa: BLE001 — a UIA hiccup yields an empty list
             logger.warning("list_tabs failed for %#x: %s", hwnd, e)
             return []
+
+
+def offerable_tabs(mon_rect: tuple[int, int, int, int], hwnd: int,
+                   process: str) -> list[dict]:
+    """The tabs of ONE window that can honestly become windows of their own —
+    the list the creation panel is allowed to show. Blocking — call via
+    to_thread.
+
+    Three rules, in the order they cost something:
+
+    1. Only a tab-capable app is asked at all (`has_tabs`, owner 2026-08-03).
+    2. A MINIMIZED window is not asked (`is_minimized`, above). It would answer
+       "no tabs" whatever it holds, so the creation list silently depended on
+       window state: the same VS Code appeared without its tabs while it sat in
+       the taskbar and with them once restored. The caller SAYS so on the entry
+       instead (`tabs_hidden`) — a list that quietly changes shape is the thing
+       being fixed here, and papering over it with an empty list would be the
+       same defect wearing a different mask.
+    3. A window with ONE tab offers NONE (owner 2026-08-09, task 167): "a tab
+       can be extracted into its own window only when the window has more than
+       one tab." A lone tab and its window are the same picture on screen, so
+       offering both counted one window twice — a VS Code with three tabs was
+       offered as FOUR entries and a grid of four was built out of three. The
+       lone tab vanishes entirely and the window stands for it, which is the
+       only reading of his rule that leaves the panel able to name the thing at
+       all.
+
+    The count was always available and always thrown away: `list_tabs` returns
+    a materialised list and the caller iterated the temporary without ever
+    binding `len()`."""
+    if not has_tabs(process):
+        return []          # its TabItems are internal sections, not real tabs
+    if is_minimized(hwnd):
+        return []
+    tabs = list_tabs(mon_rect, hwnd)
+    return tabs if len(tabs) > 1 else []
 
 
 def _same_process_windows(process: str) -> set[int]:

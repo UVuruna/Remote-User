@@ -105,12 +105,30 @@ async def layout_list(ws, layouts, stream) -> None:
         # `agents` is what puts the Claude wheel on a Claude window with no
         # tap from anyone (owner 2026-08-06): the PC reads its own process
         # table, the phone cannot.
-        entries.append({"kind": "window", "hwnd": w["hwnd"], "title": w["title"],
-                        "process": w["process"], "icon": w["icon"],
-                        "agents": agents.agents_for(w["title"], live)})
+        entry = {"kind": "window", "hwnd": w["hwnd"], "title": w["title"],
+                 "process": w["process"], "icon": w["icon"],
+                 "agents": agents.agents_for(w["title"], live)}
+        entries.append(entry)
+        # A WINDOW AND ITS ONLY TAB ARE ONE THING, NOT TWO (owner 2026-08-09,
+        # task 167). The rule lives in `uia.offerable_tabs`, whole: a lone tab
+        # is never offered, so this loop can no longer emit an entry that
+        # cannot become a member of anything. It used to append one entry per
+        # tab INCLUDING the first, with `has_tabs` — a test of the process
+        # NAME — as the only filter, so a VS Code holding one tab was offered
+        # twice and the phone counted two windows where the desk had one.
         if not uia.has_tabs(w["process"]):
-            continue  # its TabItems are internal sections, not real tabs
-        for tab in await asyncio.to_thread(uia.list_tabs, rect, w["hwnd"]):
+            continue          # its TabItems are internal sections, not tabs
+        if uia.is_minimized(w["hwnd"]):
+            # SAY IT, never let the list quietly change shape. A minimized
+            # window answers "no tabs" whatever it holds (UIA reports height
+            # 0), so the same window used to appear WITHOUT its tabs from the
+            # taskbar and WITH them once restored, with nothing on screen to
+            # explain the difference. One non-blocking Win32 read, unlike
+            # every other call here — hence no thread.
+            entry["tabs_hidden"] = True
+            continue
+        for tab in await asyncio.to_thread(
+                uia.offerable_tabs, rect, w["hwnd"], w["process"]):
             entries.append({"kind": "tab", "hwnd": w["hwnd"],
                             "tab": {"name": tab["name"]},
                             "x": tab["x"], "y": tab["y"],
@@ -153,6 +171,45 @@ async def resolve_slot(ws, stream, slot: dict) -> tuple[int, str | None, int] | 
     return (extracted, tab.get("name"), hwnd)
 
 
+def grid_for(layouts, count: int, wanted: str | None) -> tuple[str | None, str | None]:
+    """The shape `count` windows can REALLY wear, plus what to tell the phone
+    when that is not the shape it asked for. `(template, notice)`; a template
+    of None means a single-window layout.
+
+    Owner report 2026-08-09 (task 166): the panel offered a grid of four while
+    the desktop held three, and the server built it in silence. `create()`
+    truncates its members to the template's cells, `zip` stops at the shorter
+    side, `placed` stays True because every window it DID place landed — and
+    the region is the union of the cells, so a 2x2 filled by three windows
+    frames four quadrants with the fourth showing bare desktop. Nothing in
+    that chain is wrong on its own; what was missing is anybody deciding that
+    a four cannot be built out of three, and saying so.
+
+    The decision is NOT re-invented here. `LayoutRegistry._template_for` is the
+    one definition of "what shape does a layout of N windows take", written for
+    `merge` (growing one) and `drop_member` (shrinking one) — it honours the
+    phone's own choice whenever it FITS and falls back to the only sane shape
+    for that size otherwise. This path is the third way a layout's size is
+    decided, so it asks the same function rather than growing a second opinion
+    that can drift from it. Reaching for a private name is deliberate and is
+    the cheaper of the two evils; the alternative was a copy."""
+    template = layouts._template_for(count, wanted)
+    cells = window_manager.GRID_CELLS[template] if template else 1
+    asked = window_manager.GRID_CELLS.get(
+        window_manager.normalize_grid(wanted) or "")
+    if count > cells:
+        # More windows arrived than any shape holds — `create` would drop the
+        # extras without a word.
+        return template, (f"A layout holds at most {cells} windows — "
+                          f"{count - cells} were left out")
+    if not asked or asked == cells:
+        return template, None
+    if cells == 1:
+        return template, "Only one window was ready — made a single window"
+    return template, (f"Only {cells} windows were ready — made a "
+                      f"{cells}-window layout instead of a {asked}")
+
+
 async def layout_create(ws, layouts, stream, conn: dict, msg: dict) -> None:
     # ONE NAME PER THING (owner 2026-08-07): the shape is "landscape" or
     # "portrait" everywhere — in the protocol, the UI and the docs. "wide" was
@@ -186,9 +243,22 @@ async def layout_create(ws, layouts, stream, conn: dict, msg: dict) -> None:
     # of that answer frozen at creation time is what kept his Claude layout on
     # the VS Code wheel. An old client may still send the key; it changes
     # nothing.
+    #
+    # THE SHAPE FOLLOWS THE WINDOWS THAT ARRIVED, and a downgrade is SPOKEN
+    # (owner 2026-08-09, task 166). The phone's `grid` is a request, never the
+    # answer: slots die between the pick and the create, a tab refuses to be
+    # extracted, and until today a four built from three simply framed an
+    # empty quadrant.
+    # A SOLO layout stays solo whatever arrived — `grid_for` derives a shape
+    # from the count, and a count is only a shape when a grid was asked for.
+    template, notice = (
+        grid_for(layouts, len(resolved), msg.get("grid"))
+        if str(msg.get("mode", "solo")) == "grid" else (None, None))
+    if notice:
+        await toast(ws, notice)
     created = await asyncio.to_thread(
-        layouts.create, target, str(msg.get("mode", "solo")),
-        msg.get("grid"), [h for h, _, _ in resolved[1:]],
+        layouts.create, target, "grid" if template else "solo",
+        template, [h for h, _, _ in resolved[1:]],
         orient, conn["ratio"], mon_rect(stream), name, source)
     if created is None:
         await toast(ws, "That window is gone — layout not created")
@@ -222,6 +292,79 @@ async def layout_aspect(ws, layouts, stream, conn: dict, msg: dict) -> None:
         await send_layout_state(ws, layouts, conn)
         return
     await layout_focus(ws, layouts, stream, conn, index)
+
+
+async def layout_member_remove(ws, layouts, stream, conn: dict,
+                               msg: dict) -> None:
+    """Throw ONE window out of a grid (owner request 2026-08-09, task 165):
+    a four becomes a three, a three a two, a two a single. Until today a grid
+    could only be BUILT (`layout_merge`) or removed WHOLE, so losing one
+    window of four meant deleting the layout and making it again.
+
+    It is NOT a close. The window leaves the layout, leaves the topmost band
+    and goes on standing exactly where it stands — only the ✕ chooser closes
+    windows, and only when he asked for that act (2026-08-08, task 116).
+    `member` is the ordinal of the cell he tapped; `grid` is optional and is
+    the arrangement a four landing on a three should take (the four
+    three-shapes are the only real choice in his catalogue, owner
+    2026-08-07 — see `LayoutRegistry._template_for`).
+
+    Lives here rather than in web.py's dispatcher for the reason the whole
+    module exists: this is the phone's layout protocol, and web.py stands at
+    the 1,000-line wall (the guard refuses to let it grow at all)."""
+    index = int(msg["index"])
+    outcome = await asyncio.to_thread(
+        layouts.drop_member, index, int(msg.get("member", -1)),
+        msg.get("grid"))
+    if outcome == "gone":
+        await toast(ws, "That window is no longer in the layout")
+        await send_layout_state(ws, layouts, conn)
+    elif outcome == "removed":
+        # The last member left, so the layout did too. The same index
+        # bookkeeping `layout_remove` does — because it IS that path.
+        if conn["active"] is not None:
+            if conn["active"] == index:
+                conn["active"], conn["region"] = None, None
+            elif conn["active"] > index:
+                conn["active"] -= 1
+        await send_layout_state(ws, layouts, conn)
+        await toast(ws, "That was the last window — the layout is gone")
+    else:
+        # The survivors must be RE-ARRANGED, not merely re-listed: three
+        # windows still standing in a 2x2 is not a three.
+        await layout_focus(ws, layouts, stream, conn, index)
+
+
+async def layout_reorder(ws, layouts, conn: dict, msg: dict) -> None:
+    """A row dropped BETWEEN two others — the list's own order, and nothing on
+    the PC moves (owner 2026-08-07).
+
+    THE FOCUS RIDES ON AN INDEX, AND A REORDER MOVES INDICES (found 2026-08-09
+    while wiring the phone's member chooser). `conn["active"]` is a plain
+    position in `layouts.layouts`, so re-ordering the list while a layout was
+    focused left it pointing at a DIFFERENT layout: the phone framed one
+    layout while the server believed another was active — and the bar's ✕
+    would then have offered to close the wrong windows.
+
+    `layout_merge` corrects its own shift arithmetically at the call site
+    (`dst - 1 if src < dst else dst`); this one corrects it by IDENTITY,
+    because `reorder` never drops a layout — the object that must stay focused
+    is right there to be found again, and an index recomputed a second way is
+    a second thing to keep in step with the first.
+
+    Nothing is placed and nothing is raised: a reorder is a fact about the
+    LIST, so the phone simply gets the corrected state back."""
+    active = conn["active"]
+    focused = (layouts.layouts[active]
+               if active is not None and 0 <= active < len(layouts.layouts)
+               else None)
+    await asyncio.to_thread(layouts.reorder, int(msg["source"]),
+                            int(msg["before"]))
+    if focused is not None:
+        conn["active"] = next(
+            (i for i, lay in enumerate(layouts.layouts) if lay is focused),
+            conn["active"])
+    await send_layout_state(ws, layouts, conn)
 
 
 async def layout_focus(ws, layouts, stream, conn: dict, index: int) -> None:

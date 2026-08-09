@@ -26,11 +26,42 @@ total — including for windows no layout can still name.
 | `mon_rect(stream)` | the displayed monitor's rect, for every normalized coordinate |
 | `send_layout_state(ws, layouts, conn)` | the `layout_state` payload; the connection ADOPTS the focus it returns, because a prune may have SHIFTED it, not only cleared it |
 | `layout_pick(ws, layouts, stream, msg)` | one armed tap → the window (and tab) under it, plus the grid templates |
-| `layout_list(ws, layouts, stream)` | every window PLUS each window's content tabs; windows already in a layout are left out |
+| `layout_list(ws, layouts, stream)` | every window PLUS each window's content tabs; windows already in a layout are left out. A tab rides only when its window has MORE THAN ONE ([UIA](uia.md) → `offerable_tabs`, owner 2026-08-09), and a minimized window carries `tabs_hidden` instead of quietly showing fewer rows than it will after a restore |
+| `grid_for(layouts, count, wanted)` | the shape `count` windows can REALLY wear, plus what to tell the phone when that is not the shape it asked for (see below) |
 | `resolve_slot(ws, stream, slot)` | one creation slot → `(hwnd, tab name, SOURCE hwnd)`; a slot naming a TAB is extracted into its own window first, and every failure falls back to the whole window. The third value is the window the tab was torn OUT of (`0` = nothing was extracted) — a torn-off VS Code tab can be born titled bare `Visual Studio Code`, and that source window is then the only one that can still name the project (owner 2026-08-08; the layout keeps its HANDLE, never its answer — see [Window Manager](window_manager.md) → `Layout.project`) |
-| `layout_create(ws, layouts, stream, conn, msg)` | resolve every slot (one cube turn per slot), register, then focus |
+| `layout_create(ws, layouts, stream, conn, msg)` | resolve every slot (one cube turn per slot), derive the shape from what ARRIVED (`grid_for`), register, then focus |
 | `layout_aspect(ws, layouts, stream, conn, msg)` | store this layout's W:H and free-axis anchor `pos`, then re-focus — the focus re-places windows for a RATIO change (always centred since 2026-08-09) and sends the `layout_state` whose `pos` anchors the picture on the phone |
+| `layout_member_remove(ws, layouts, stream, conn, msg)` | throw ONE window out of a grid (owner request 2026-08-09, task 165): a four becomes a three, a three a two, a two a single, and the survivors are RE-ARRANGED by the focus that follows — three windows still standing in a 2×2 is not a three. It is **not** a close (only the ✕ chooser closes windows, and only when he asked); the window leaves the layout, leaves the topmost band and stays standing where it is. Removing the LAST member removes the layout, through `remove()` and not a second teardown — with the same `conn["active"]` bookkeeping `layout_remove` does. A `member` that names nothing is refused IN WORDS: a silent no-op reads as the button being broken |
 | `layout_focus(ws, layouts, stream, conn, index)` | `-1` = the full desktop, which also minimizes every member |
+
+## A grid is built from the windows that ARRIVED (owner 2026-08-09, task 166)
+The phone's `grid` is a **request**, never the answer. Slots die between the
+pick and the create, a tab refuses to be extracted, and — until this round —
+the panel itself offered a grid of four while the desktop held three. The
+server then built it in silence, because every link behaved: `create`
+truncates its members to the template's cells, `zip` stops at the shorter
+side, `placed` stays `True` since every window it *did* place landed, and the
+framed region is the UNION of the cells — so a 2×2 filled by three windows
+frames four quadrants and streams bare desktop in the fourth. Nothing was
+wrong; nobody had **decided** that a four cannot be built out of three.
+
+`grid_for(layouts, count, wanted)` is that decision, and it does not invent
+it: it asks `LayoutRegistry._template_for`, the one definition of "what shape
+does a layout of N windows wear", written for `merge` (growing one) and
+`drop_member` (shrinking one). Creation is the third way a layout's size is
+decided, so it asks the same function rather than growing a second opinion
+that can drift. Reaching for a private name is deliberate — the alternative
+was a copy.
+
+Every downgrade is **spoken** on the phone's status pill: fewer windows than
+the grid needs (*"Only 3 windows were ready — made a 3-window layout instead
+of a 4"*), one window left (*"…made a single window"*), or more windows than
+any shape holds. A grid that fits toasts nothing — a notice on every create is
+noise, and noise is how a real one gets ignored.
+
+Gated by `tests/test_layout_protocol.py`, which measures the **coverage** of
+the framed region, not the stored template: under the old behaviour three
+windows covered 75 % of the picture his phone was showing.
 
 ## Connections
 ### Uses

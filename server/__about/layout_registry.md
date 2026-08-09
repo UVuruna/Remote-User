@@ -7,7 +7,7 @@
 The session's layout LIST and the policy over it: `Layout` (one phone screen —
 members, orientation, ratio, the `pos` anchor, the keyboard member) and
 `LayoutRegistry` (create / focus / prune / rename / set_ratio / set_grid /
-merge / reorder / remove / minimize / `state()`). The registry lives for the
+merge / reorder / drop_member / remove / minimize / `state()`). The registry lives for the
 server's lifetime — the phone may disconnect and return, the list survives
 (owner decision 2026-08-02).
 
@@ -52,6 +52,30 @@ directly, first, finds a half-initialized `window_manager` and fails loudly.
 - **The ✕ wears two acts** (owner 2026-08-08, task 116): `remove(close=False)`
   only forgets; `close=True` also asks every member to close via
   `wm.close_windows` (WM_CLOSE — the app's own dialog decides).
+- **A grid can lose ONE window** (owner request 2026-08-09, task 165):
+  `drop_member(index, member, grid=None)` — a four becomes a three, a three a
+  two, a two a single. `member` is the ORDINAL of the cell the phone tapped,
+  never a handle (the phone is never told a handle; cell *k* of the drawing is
+  member *k* — `client/grid-icons.js`). Returns `"gone"` / `"dropped"` /
+  `"removed"`.
+  - **The window that leaves is NEVER closed.** Only the ✕ chooser closes
+    windows, and only when he asked. It stops being layout material — out of
+    the topmost band (constraint 10: a window we raised must never be
+    stranded above everything, which is exactly what the LEDGER exists for),
+    normal minimize/restore animation given back — and stays standing where
+    it stands, the same "no auto-return of windows" rule `remove` follows.
+  - **Removing the LAST member removes the layout**, through `remove()` and
+    not a second teardown of its own.
+  - The survivors are re-placed by the focus that follows; `place_pending` is
+    the explicit order, for the case where every member happens to satisfy
+    `_standing` already.
+- **One catalogue for growing and shrinking** (owner's sheet, 2026-08-07):
+  `_template_for(count, wanted)` is the single answer to "what shape does a
+  layout of N windows wear", used by `merge` and `drop_member` alike, so the
+  two directions can never disagree about what a three is. `wanted` is
+  honoured only when it FITS — a name of the wrong size would leave a cell
+  with no window in it. A THREE is the one size with a real choice (four
+  arrangements); a two and a four have one each.
 
 ## Used by
 
@@ -62,3 +86,6 @@ directly, first, finds a half-initialized `window_manager` and fails loudly.
 - [Notify](notify.md) — `layout_of` matches a finishing agent's project to
   `Layout.project()`
 - `tests/test_layout_protocol.py` — the gate, fail-closed in `setup/build.py`
+- `tests/test_layout_member.py` — `drop_member`'s own gate (0t/6)
+- `tests/test_grid_icons.py` — pins `state()` still carrying `grid` /
+  `members` / `orient`, the three fields the phone draws each row's shape from

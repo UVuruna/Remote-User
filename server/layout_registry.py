@@ -338,6 +338,86 @@ class LayoutRegistry:
         lay.place_pending = True   # force the next focus to re-place, always
         return True
 
+    @staticmethod
+    def _template_for(count: int, wanted: str | None = None) -> str | None:
+        """The shape a layout of `count` windows must wear. `wanted` is the
+        phone's own choice and is honoured whenever it FITS; anything else
+        falls back to the only sane shape for that size.
+
+        The catalogue is the owner's sheet (2026-08-07, UV/grid_variations.png)
+        and its asymmetry is the reason this is one function: a TWO and a FOUR
+        have exactly one arrangement each, so there is nothing to ask about,
+        and a THREE has four — which is why `wanted` exists at all. A three
+        with no answer defaults to a bar along the top, the first drawing on
+        his sheet.
+
+        One definition, used by every path that changes a layout's size —
+        `merge` growing one and `drop_member` shrinking one — so the two can
+        never disagree about what a three is."""
+        if count <= 1:
+            return None                       # solo: no grid at all
+        wanted = wm.normalize_grid(wanted)
+        if wanted and wm.GRID_CELLS[wanted] == count:
+            return wanted
+        return {2: "2", 3: "3-top", 4: "4"}[min(count, 4)]
+
+    def drop_member(self, index: int, member: int,
+                    grid: str | None = None) -> str:
+        """Throw ONE window out of a grid — a four becomes a three, a three a
+        two, a two a single (owner request 2026-08-09, task 164/165: "there
+        must be a button by which I can throw one member out of the grid").
+        Until today a grid could only be BUILT (`merge`) or removed WHOLE, so
+        the only way to lose one window of four was to delete the layout and
+        make it again.
+
+        `member` is the ORDINAL of the window inside `members`, never a
+        handle: the phone is never told a handle, and it picks by pointing at
+        a CELL of the drawing — cell k is member k (see client/grid-icons.js).
+
+        THE WINDOW IS NEVER CLOSED. Only the ✕ chooser closes windows, and
+        only when he explicitly asked for that act (2026-08-08, task 116).
+        The one that leaves simply stops being layout material: out of the
+        topmost band, because a window we raised must never be stranded above
+        everything (constraint 10 — the LEDGER exists for exactly this), and
+        with its normal minimize/restore animation given back. Where it sits
+        on screen is left alone, the same rule `remove` follows — no window is
+        ever moved by us without being asked to be.
+
+        Removing the LAST member is removing the layout, and it goes through
+        `remove()` rather than a second teardown of its own.
+
+        Returns "gone" (nothing matched — say so), "removed" (the layout is
+        no more) or "dropped" (it survives, one window smaller). The survivors
+        are re-placed by the focus that follows: `place_pending` makes it
+        unconditional, because the shape changed even where every window
+        still happens to stand on a rect of the old one."""
+        if not 0 <= index < len(self.layouts):
+            return "gone"
+        lay = self.layouts[index]
+        if not 0 <= member < len(lay.members):
+            return "gone"
+        if len(lay.members) <= 1:
+            self.remove(index)
+            return "removed"
+        hwnd = lay.members.pop(member)
+        # Back to being an ordinary desktop window, in this order: the
+        # animation first, then out of the topmost band (drop_topmost is what
+        # takes it off the ledger, so nothing can strand it up there).
+        wm.freeze_transitions(hwnd, False)
+        wm.drop_topmost(hwnd)
+        if lay.last_member == hwnd:
+            # The phone was typing into the window that just left. The
+            # keyboard goes to the first survivor rather than to nothing —
+            # `focus` raises `last_member` LAST, and a handle no longer in
+            # the list would leave the raise order pointing at a stranger.
+            lay.last_member = lay.members[0]
+        lay.template = self._template_for(len(lay.members), grid)
+        lay.place_pending = True
+        logger.info("Layout %r dropped member %d (%#x): now %d window(s), %s",
+                    lay.name, member, hwnd, len(lay.members),
+                    lay.template or "solo")
+        return "dropped"
+
     def merge(self, source: int, target: int, grid: str | None = None) -> bool:
         """Drag one layout's window onto another and they become a GRID (owner
         2026-08-07, "like holding a file in Explorer and dragging it into a
@@ -357,14 +437,12 @@ class LayoutRegistry:
         members = dst.members + [h for h in src.members if h not in dst.members]
         if len(members) > 4 or len(members) < 2:
             return False
-        wanted = wm.normalize_grid(grid)
-        if not wanted or wm.GRID_CELLS[wanted] != len(members):
-            # The phone did not name a shape, or named one of the wrong size:
-            # take the only sane default for this count. Three defaults to a
-            # bar along the top, which is the first drawing on his sheet.
-            wanted = {2: "2", 3: "3-top", 4: "4"}[len(members)]
+        # The phone may name a shape; one of the wrong size (or none at all)
+        # falls back to the only sane default for this count — see
+        # `_template_for`, which `drop_member` shrinks a layout by too, so
+        # growing and shrinking can never disagree about what a three is.
         dst.members = members
-        dst.template = wanted
+        dst.template = self._template_for(len(members), grid)
         dst.place_pending = True    # the shape changed — re-place on focus
         self.layouts.pop(source)
         if self.last_focus and self.last_focus[0] == source:
@@ -462,6 +540,21 @@ class LayoutRegistry:
                 region = None
         if active is not None and not 0 <= active < len(self.layouts):
             active, region = None, None
+        # WHO IS THE TRUNK (owner decision 2026-08-09, task 169 — the ⭐ on the
+        # layout selector's rows). A layout is a PARENT when one of its member
+        # windows is the window ANOTHER layout's content was torn out of:
+        # closing it would take that other layout's tab with it, which is
+        # exactly the thing worth a mark before he taps ✕.
+        #
+        # Read off `Layout.source`, which `resolve_slot` already records at
+        # creation — no new probe, no guess from a title, and no new field on
+        # any window. Paired with the layout it belongs to so a layout can
+        # never be its own parent: the window a tab came out of may itself be
+        # a member of the SAME layout, and closing that pair together
+        # surprises nobody. The honest limit is recorded in __about/web.md —
+        # only the FIRST slot's source is stored per layout, so this can
+        # under-report, never over-report.
+        sources = [(id(lay), lay.source) for lay in self.layouts if lay.source]
         return {
             "type": "layout_state",
             "layouts": [{"name": lay.name, "process": lay.process,
@@ -475,8 +568,30 @@ class LayoutRegistry:
                          # WHICH grid, so the phone can draw its shape and
                          # offer the arrangement choice for a three
                          # (owner 2026-08-07). None = a solo layout.
+                         # These three — grid, members, orient — are also what
+                         # the LIST draws each row's little diagram from
+                         # (owner 2026-08-09, task 164; client/grid-icons.js).
+                         # The "only a three may re-arrange" asymmetry is read
+                         # off them and is deliberately NOT a field of its own:
+                         # a second statement of a rule is a second thing to
+                         # keep in step.
                          "grid": lay.template,
                          "members": len(lay.members),
+                         # WHO is in each cell, in cell order (owner request
+                         # 2026-08-09, task 165). Throwing one window out of a
+                         # grid means naming which one, and the phone knows
+                         # only what this frame tells it. Titles only, never
+                         # icons: `layout_state` rides every focus and every
+                         # change, and an icon per member would multiply the
+                         # frame for a panel that opens rarely — the CELL is
+                         # the picture (client/grid-icons.js), the title is
+                         # the word. Read live, like `title` beside it.
+                         "member_titles": [wm._title(h) for h in lay.members],
+                         # The ⭐ (owner 2026-08-09, task 169) — see `sources`
+                         # above. True only when ANOTHER layout's content came
+                         # out of a window this one holds.
+                         "parent": any(src in lay.members for who, src in sources
+                                       if who != id(lay)),
                          "orient": lay.orient, "icon": lay.icon,
                          "ratio": list(lay.ratio) if lay.ratio else None,
                          # The free-axis anchor of the letterboxed picture on

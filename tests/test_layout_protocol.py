@@ -37,8 +37,21 @@ import uia  # noqa: E402
 import web  # noqa: E402
 import window_manager  # noqa: E402
 
-WIN_A, WIN_B = 0x10, 0x20
+WIN_A, WIN_B, WIN_C = 0x10, 0x20, 0x30
 MON = (0, 0, 3840, 2160)
+
+# THE DESK THE CREATION LIST IS READ OFF (owner 2026-08-09, task 167). Three
+# windows, chosen so that every branch of the tab rule is exercised by the
+# SAME fixture: WIN_A holds three tabs (tabs are legitimately offered and can
+# fill a grid of three), WIN_C holds exactly one (its lone tab must NOT be
+# offered — a window and its only tab are one thing on screen), and WIN_B is
+# not tab-capable at all. Until this fixture existed the whole file faked one
+# VS Code with ONE tab and asserted three entries — a check that REQUIRED the
+# bug, and that turned red the moment his rule was enforced.
+FAKE_TABS: dict[int, list[str]] = {
+    WIN_A: ["prompt.txt", "layout_api.py", "CLAUDE.md"],
+    WIN_C: ["Inbox"],
+}
 
 
 class FakeWs:
@@ -83,12 +96,15 @@ class FakeWin32:
 
 
 def fake_windows():
-    """Two open windows, one of them tab-capable."""
+    """Three open windows: a tab-capable one holding THREE tabs, a plain one,
+    and a tab-capable one holding exactly ONE (see FAKE_TABS)."""
     return [
         {"hwnd": WIN_A, "title": "Remote User - Visual Studio Code",
          "process": "code.exe", "icon": None},
         {"hwnd": WIN_B, "title": "Downloads", "process": "explorer.exe",
          "icon": None},
+        {"hwnd": WIN_C, "title": "Mail - Google Chrome",
+         "process": "chrome.exe", "icon": None},
     ]
 
 
@@ -102,7 +118,7 @@ def install_fakes(track_placement: bool = False) -> None:
     so `_frame_rect` afterwards answers where the window actually stands. That
     is what lets a check assert on the RECT instead of on a stored number —
     see `check_the_move_handle_reaches_the_windows`."""
-    fake = FakeWin32([WIN_A, WIN_B])
+    fake = FakeWin32([WIN_A, WIN_B, WIN_C])
     window_manager.user32 = fake
     window_manager.dwmapi = fake
     window_manager._topmost.clear()
@@ -133,8 +149,14 @@ def install_fakes(track_placement: bool = False) -> None:
     window_manager._process_path = lambda hwnd: "C:/code.exe"
     window_manager.icon_data_uri = lambda path: None
     layout_api.rect_for_size = lambda w, h, i: MON
-    uia.has_tabs = lambda process: process == "code.exe"
-    uia.list_tabs = lambda rect, hwnd: [{"name": "prompt.txt", "x": 0.1, "y": 0.02}]
+    uia.has_tabs = lambda process: process in ("code.exe", "chrome.exe")
+    # `list_tabs` is the RAW read and is faked; `uia.offerable_tabs` — the rule
+    # under test (a lone tab is never offered, a minimized window is never
+    # asked) — runs for real on top of it.
+    uia.list_tabs = lambda rect, hwnd: [
+        {"name": name, "x": 0.1 + 0.1 * i, "y": 0.02}
+        for i, name in enumerate(FAKE_TABS.get(hwnd, []))]
+    uia.is_minimized = lambda hwnd: False
     uia.tab_at = lambda rect, x, y: None
     # The snapshot argument is the fix of 2026-08-07: the real function is a
     # 1.85 s PowerShell probe, and the handlers used to reach it once per
@@ -172,19 +194,109 @@ def sent_of(ws, kind):
 
 
 # ═══════════════════ the failure that got here ═══════════════════
+def list_entries():
+    """One `layout_list` through the real dispatcher → its entries."""
+    ws, _, _ = drive([{"type": "layout_list"}])
+    offers = sent_of(ws, "layout_offer")
+    return offers[0]["entries"] if len(offers) == 1 else None
+
+
 def check_create_from_a_list_answers() -> bool:
     """THE bug: `layout_list` raised UnboundLocalError, so the phone's cube
     spun forever. The list must come back, with the windows AND the tabs of
     the tab-capable ones."""
     install_fakes()
-    ws, _, _ = drive([{"type": "layout_list"}])
-    offers = sent_of(ws, "layout_offer")
-    if len(offers) != 1:
+    entries = list_entries()
+    if entries is None:
         return False
-    entries = offers[0]["entries"]
     kinds = [e["kind"] for e in entries]
-    return ("window" in kinds and "tab" in kinds and len(entries) == 3
-            and offers[0]["grids"])
+    return "window" in kinds and "tab" in kinds
+
+
+def check_a_lone_tab_is_not_offered_beside_its_own_window() -> bool:
+    """HIS RULE (owner 2026-08-09, task 167): a tab can be pulled out into its
+    own window only when the window has MORE THAN ONE tab. A window holding a
+    single tab and that tab are the same picture on screen, so offering both
+    counted one window twice — his VS Code with three tabs was offered as FOUR
+    members, and the panel then let him build a grid of four out of three.
+
+    THE CHECK THAT STOOD HERE REQUIRED THE DEFECT, which is the finding worth
+    more than the fix: it faked ONE VS Code window with exactly ONE tab and
+    asserted `len(entries) == 3` — window, its lone tab, and the plain window.
+    Enforcing his rule turned it red. A gate written around a fixture that
+    cannot tell the two behaviours apart proves whichever one it was written
+    against, so the fixture is the fix: three tabs on one window, one tab on
+    another, and both answers asserted in the same run."""
+    install_fakes()
+    entries = list_entries()
+    if entries is None:
+        print("  DETAIL the list never answered")
+        return False
+    ok = True
+    windows = [e["hwnd"] for e in entries if e["kind"] == "window"]
+    if sorted(windows) != sorted([WIN_A, WIN_B, WIN_C]):
+        print(f"  DETAIL the windows offered were {windows}, expected all three")
+        ok = False
+    tabs = [(e["hwnd"], e["title"]) for e in entries if e["kind"] == "tab"]
+    if [h for h, _ in tabs] != [WIN_A] * 3:
+        print(f"  DETAIL the tabs offered were {tabs}, expected WIN_A's three")
+        ok = False
+    if any(h == WIN_C for h, _ in tabs):
+        print("  DETAIL the ONE-tab window's lone tab was offered — the "
+              "defect: it is the window, counted a second time")
+        ok = False
+    # …and the emission order is window-then-ITS-tabs, which is the whole
+    # basis of the phone's indented list (owner 2026-08-09, task 168): the
+    # panel indents a tab under the row above it and never re-groups.
+    order = [(e["kind"], e["hwnd"]) for e in entries]
+    if order != [("window", WIN_A), ("tab", WIN_A), ("tab", WIN_A),
+                 ("tab", WIN_A), ("window", WIN_B), ("window", WIN_C)]:
+        print(f"  DETAIL the emission order was {order} — the phone indents "
+              "by it")
+        ok = False
+    return ok
+
+
+def check_a_minimized_window_says_so_instead_of_hiding_its_tabs() -> bool:
+    """MEASURED on the owner's own PC, 2026-08-09: a minimized window
+    enumerates ZERO tabs — Win32 reports the classic (-32000, -32000) rect and
+    UIA reports a bounding height of 0, so `uia._real_tabs` returns []. The
+    creation list therefore offered the SAME window without its tabs from the
+    taskbar and with them once restored, with nothing on screen to explain the
+    difference: a list that silently depends on window state.
+
+    The honest behaviour, and the one implemented: a minimized window is not
+    asked at all, and its entry carries `tabs_hidden` so the phone can say
+    why. Restoring it brings the tabs back — proven in the same check, because
+    a flag nobody ever clears would be a second way to be wrong."""
+    install_fakes()
+    uia.is_minimized = lambda hwnd: hwnd == WIN_A
+    entries = list_entries()
+    if entries is None:
+        return False
+    ok = True
+    if any(e["kind"] == "tab" for e in entries):
+        print("  DETAIL a minimized window still offered tabs")
+        ok = False
+    by_hwnd = {e["hwnd"]: e for e in entries if e["kind"] == "window"}
+    if not by_hwnd[WIN_A].get("tabs_hidden"):
+        print("  DETAIL the minimized window did not say WHY it shows no tabs")
+        ok = False
+    for hwnd in (WIN_B, WIN_C):
+        if by_hwnd[hwnd].get("tabs_hidden"):
+            print(f"  DETAIL {hwnd:#x} claims hidden tabs while it is not "
+                  "minimized")
+            ok = False
+    # Restored: the three tabs are back and nothing still claims otherwise.
+    uia.is_minimized = lambda hwnd: False
+    entries = list_entries()
+    if len([e for e in entries if e["kind"] == "tab"]) != 3:
+        print("  DETAIL restoring the window did not bring its tabs back")
+        ok = False
+    if any(e.get("tabs_hidden") for e in entries):
+        print("  DETAIL `tabs_hidden` outlived the minimize that caused it")
+        ok = False
+    return ok
 
 
 def check_the_list_probes_the_process_table_once() -> bool:
@@ -268,6 +380,100 @@ def check_rename_apps_aspect_remove_all_answer() -> bool:
             return False
     ws, conn, layouts = drive([{"type": "layout_remove", "index": 0}], conn, layouts)
     return bool(sent_of(ws, "layout_state")) and not layouts.layouts
+
+
+# ═══════════ a grid is built from the windows that ARRIVED ═══════════
+# Owner report 2026-08-09, task 166: the panel offered a grid of FOUR while
+# the desktop held three, and the server built it without a word. Every link
+# in that chain behaved: `create` truncates its members to the template's
+# cells, `zip` stops at the shorter side, `placed` stays True because every
+# window it did place landed, and the region is the union of the cells — so a
+# 2x2 filled by three windows frames four quadrants and streams bare desktop
+# in the fourth. What was missing is anyone DECIDING that a four cannot be
+# built out of three, and saying so to the phone.
+
+
+def create_run(grid: str | None, hwnds: list[int], mode: str = "grid",
+               track: bool = False):
+    """One `layout_create` of `hwnds` asking for `grid`. Returns (ws, layouts)."""
+    install_fakes(track_placement=track)
+    ws, conn, layouts = drive([
+        {"type": "layout_create", "mode": mode, "grid": grid,
+         "orient": "landscape", "name": "Work",
+         "slots": [{"hwnd": h, "tab": None, "x": 0.5, "y": 0.5}
+                   for h in hwnds]}])
+    return ws, layouts
+
+
+def check_a_grid_is_built_from_the_windows_that_arrived() -> bool:
+    """A four asked for with three windows becomes a THREE — and the phone is
+    TOLD, because a layout that silently came out a different shape is exactly
+    what he reported. The shape is not decided here either: this path asks
+    `LayoutRegistry._template_for`, the same function `merge` and
+    `drop_member` ask, so the three ways a layout's size can change cannot
+    disagree about what a three is."""
+    ok = True
+    for grid, hwnds, want_cells in (
+        ("4", [WIN_A, WIN_B, WIN_C], 3),   # the reported case
+        ("4", [WIN_A, WIN_B], 2),
+        ("3-left", [WIN_A, WIN_B], 2),
+        ("2", [WIN_A], 1),                 # one window: not a grid at all
+    ):
+        ws, layouts = create_run(grid, hwnds)
+        if len(layouts.layouts) != 1:
+            print(f"  DETAIL {grid} from {len(hwnds)}: no layout was made")
+            ok = False
+            continue
+        lay = layouts.layouts[0]
+        cells = window_manager.GRID_CELLS.get(lay.template or "", 1)
+        if cells != want_cells or len(lay.members) != want_cells:
+            print(f"  DETAIL {grid} from {len(hwnds)} windows became "
+                  f"{lay.template!r} with {len(lay.members)} member(s), "
+                  f"expected a {want_cells}")
+            ok = False
+        if not sent_of(ws, "toast"):
+            print(f"  DETAIL {grid} from {len(hwnds)} windows was downgraded "
+                  "in SILENCE — the phone was told nothing")
+            ok = False
+    # …and a grid that DOES fit is left alone, toast and all: a notice on
+    # every create would be noise, and noise is how a real one gets ignored.
+    ws, layouts = create_run("3-left", [WIN_A, WIN_B, WIN_C])
+    if layouts.layouts[0].template != "3-left":
+        print(f"  DETAIL a fitting grid was changed to "
+              f"{layouts.layouts[0].template!r}")
+        ok = False
+    if sent_of(ws, "toast"):
+        print(f"  DETAIL a grid that fitted still toasted: {sent_of(ws, 'toast')}")
+        ok = False
+    return ok
+
+
+def check_the_framed_region_has_no_empty_cell() -> bool:
+    """THE GEOMETRY HE JUDGES, not the number we stored. The phone frames the
+    UNION of the member rects, so under the old behaviour three windows in a
+    2x2 covered three quarters of the picture and the fourth quadrant streamed
+    his bare desktop — while the union rect, the member list and `placed` all
+    looked perfectly correct. Coverage is what tells the two apart: the placed
+    cells must fill the region they are framed in."""
+    ok = True
+    for grid, hwnds in (("4", [WIN_A, WIN_B, WIN_C]), ("4", [WIN_A, WIN_B]),
+                        ("3-top", [WIN_A, WIN_B, WIN_C])):
+        create_run(grid, hwnds, track=True)
+        rects = [r for _, r in PLACED]
+        if len(rects) != len(hwnds):
+            print(f"  DETAIL {grid} from {len(hwnds)}: placed {len(rects)} "
+                  f"window(s) of {len(hwnds)} — one was dropped")
+            ok = False
+            continue
+        frame = union(rects)
+        covered = sum(w * h for _, _, w, h in rects)
+        framed = frame[2] * frame[3]
+        if covered < framed * 0.99:
+            print(f"  DETAIL {grid} from {len(hwnds)} windows covers "
+                  f"{covered * 100 // framed}% of the region it frames — the "
+                  "rest is bare desktop on his phone")
+            ok = False
+    return ok
 
 
 def check_a_grid_from_the_list_answers() -> bool:
@@ -653,6 +859,14 @@ def check_a_package_with_no_assets_falls_through() -> bool:
 
 CHECKS = [
     ("create from a LIST answers the phone", check_create_from_a_list_answers),
+    ("a window's lone tab is NOT offered beside it",
+     check_a_lone_tab_is_not_offered_beside_its_own_window),
+    ("a minimized window SAYS why it shows no tabs",
+     check_a_minimized_window_says_so_instead_of_hiding_its_tabs),
+    ("a grid is built from the windows that ARRIVED, and a downgrade is said",
+     check_a_grid_is_built_from_the_windows_that_arrived),
+    ("the framed region is FULLY covered by its members",
+     check_the_framed_region_has_no_empty_cell),
     ("the list probes the process table ONCE, not per entry",
      check_the_list_probes_the_process_table_once),
     ("create by TAPPING a window answers the phone", check_tap_a_window_answers),

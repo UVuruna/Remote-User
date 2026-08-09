@@ -52,6 +52,12 @@ from the phone-driven, self-verifying injector.
 ## Functions
 - `tab_at(mon_rect, nx, ny)`: `{"name"}` of the tab under a
   monitor-normalized point, or None
+- `list_tabs(mon_rect, hwnd)`: the RAW read — every real content tab of one
+  window
+- `is_minimized(hwnd)`: a Win32 fact kept beside the tab reader, because that
+  reader is the one thing whose answer depends on it
+- `offerable_tabs(mon_rect, hwnd, process)`: the tabs the creation panel is
+  allowed to show (see below)
 - `extract_tab(mon_rect, nx, ny, target)`: run the strategy chain; returns
   the new window's hwnd or None (fall back to the whole window)
 - `caret_rect(hwnd)`: the screen-pixel rect of the text caret inside `hwnd`,
@@ -108,6 +114,33 @@ the set of apps the three strategies actually cover; everything else is
 offered as a whole window only, and its UIA tree is never walked (which also
 makes the creation list visibly faster). [Web Layer](web.md) applies the gate
 before calling `list_tabs` / `tab_at`.
+
+## A tab is offered only when it can really leave (owner 2026-08-09, task 167)
+`offerable_tabs(mon_rect, hwnd, process)` is the ONE place the creation list's
+tab rule lives, and it holds three answers that were previously spread across
+a caller, a process-name test and nothing at all:
+
+1. **Not tab-capable → none.** `has_tabs`, above.
+2. **Minimized → none, and the caller SAYS so.** Measured 2026-08-09: a
+   minimized window reports the classic `(-32000, -32000)` rect to Win32 and a
+   bounding height of **0** to UI Automation, so `_real_tabs` bails on
+   `wr.height() <= 0` and answers "no tabs" whatever the window holds. The
+   creation list therefore showed the SAME window without its tabs from the
+   taskbar and with them once restored, with nothing on screen to explain the
+   difference. It is now refused deliberately and the entry carries
+   `tabs_hidden`, which the phone draws as a `minimized` note on the row plus
+   one line under the list — an empty answer that looks like a fact is worse
+   than a stated limit.
+3. **One tab → none.** His rule: *a tab can be extracted into its own window
+   only when the window has more than one tab.* A lone tab and its window are
+   the same picture on screen, so offering both counted one window twice — a
+   VS Code with three tabs was offered as **four** entries, and the phone then
+   let him ask for a grid of four that only three windows could fill. The lone
+   tab **vanishes entirely** and the window stands for it.
+
+The count was always available and always thrown away: `list_tabs` returns a
+materialised list and the caller used to iterate the temporary without ever
+binding `len()`.
 
 ## Transient raises are never TOPMOST (audit 2026-08-05)
 
