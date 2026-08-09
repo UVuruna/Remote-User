@@ -220,6 +220,32 @@ def _late_content(window) -> None:
     window._refresh()             # the refresh tick that shows it
 
 
+def make_main_window_stopped() -> QWidget:
+    """The main window with the server STOPPED — and the reason it is here is
+    the finding, not the state.
+
+    Every factory in this file builds a RUNNING server, so the stopped window
+    had never been photographed once. That is how a postcard-sized WHITE
+    rectangle with unreadable grey text in the middle of a dark window reached
+    the owner (his screenshot, 2026-08-09): `QLabel#qr` paints white PAPER
+    because a camera scans a QR, and with no QR on it the same rule painted a
+    blank sheet under the words "Server stopped".
+
+    A state outside the sweep has no law over it — the same sentence the
+    notices card earned the day before.
+    """
+    import updates
+    from gui.main_window import MainWindow
+    updates.check = lambda force=False: None
+    stopped = SimpleNamespace(state="stopped", info=None, error=None,
+                              start=lambda: None, stop=lambda: None)
+    window = MainWindow(stopped)
+    window.setAttribute(Qt.WidgetAttribute.WA_DontShowOnScreen, True)
+    window.show()
+    window._refresh()
+    return window
+
+
 def make_main_window_from_tray() -> QWidget:
     """The same window, reached the way the owner actually reaches it.
 
@@ -355,6 +381,7 @@ NO_SHOT = {"MainWindow (reopened from the tray)"}
 
 WINDOWS: list[tuple[str, object]] = [
     ("MainWindow", make_main_window),
+    ("MainWindow (server stopped)", make_main_window_stopped),
     ("MainWindow (reopened from the tray)", make_main_window_from_tray),
     ("ControlsEditor", make_controls_editor),
     ("ChordRecorder", make_chord_recorder),

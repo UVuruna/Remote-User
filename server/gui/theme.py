@@ -294,7 +294,20 @@ QLabel#caption[tone="error"] {{ color: {error}; }}
    with the controls inside it. */
 QLabel#section {{ color: {text2}; font-size: 11px; font-weight: 700; }}
 QLabel#url {{ color: {text2}; font-size: 12px; }}
+/* A QR is white PAPER because a camera scans it — but only while there IS a
+   QR. With the server stopped the same label holds nothing but the words
+   "Server stopped", and white paper under them made a blank sheet the size of
+   a postcard with unreadable grey text on it, in the middle of a dark window
+   (owner screenshot 2026-08-09). The `empty` property is set by the window
+   whenever the pixmap is cleared, so the placeholder is an ordinary recessed
+   panel with ordinary readable ink. */
 QLabel#qr {{ background: {qrPaper}; border-radius: 10px; }}
+QLabel#qr[empty="true"] {{
+    background: {surface0};
+    color: {text2};
+    border: 1px solid {border};
+    font-size: 13px;
+}}
 
 /* Status pill — colored by the `state` dynamic property */
 QLabel#pill {{

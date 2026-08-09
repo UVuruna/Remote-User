@@ -28,7 +28,7 @@ from pathlib import Path
 from PySide6.QtCore import QSize, Qt, QTimer
 from PySide6.QtGui import QAction, QFontMetrics, QGuiApplication, QIcon, QPixmap
 from PySide6.QtWidgets import (
-    QFrame, QHBoxLayout, QLabel, QMainWindow, QMenu, QPushButton,
+    QApplication, QFrame, QHBoxLayout, QLabel, QMainWindow, QMenu, QPushButton,
     QSystemTrayIcon, QVBoxLayout, QWidget,
 )
 
@@ -317,6 +317,8 @@ class MainWindow(QMainWindow):
 
         self.qr_label = QLabel("Server stopped")
         self.qr_label.setObjectName("qr")
+        # White paper only while a QR is really on it (theme.py QLabel#qr).
+        self.qr_label.setProperty("empty", "true")
         self.qr_label.setFixedSize(QR_SIZE, QR_SIZE)  # layout-law: exempt - a QR is an IMAGE that must stay square at its scan size; it carries no text to reflow
         self.qr_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         box.addWidget(self.qr_label, alignment=Qt.AlignmentFlag.AlignHCenter)
@@ -578,6 +580,12 @@ class MainWindow(QMainWindow):
             return
         threading.Thread(target=self._check_updates, daemon=True).start()
 
+    # What the button says in the one second between "downloaded" and gone.
+    # Plain and complete: what is happening, that we are closing, and that we
+    # come back — a window that disappears without those three is a crash to
+    # whoever is watching it.
+    UPDATE_HANDOVER_TEXT = "Installing — Remote User closes and comes back"
+
     def _install_update(self) -> None:
         upd = self._update
         if not upd or self._update_state not in ("found", "failed"):
@@ -646,6 +654,26 @@ class MainWindow(QMainWindow):
                 self._update_state = "failed"
                 self._refresh_update_button()
                 return
+        # SAY IT BEFORE WE GO (owner 2026-08-09: "aplikacija je pukla kad sam
+        # stisnuo download — krenuo je da radi downloading a onda je izašao i
+        # podigao ponovo aplikaciju; je l' to zamisao?"). It IS the intention,
+        # and that is exactly why it must be announced: from his side a window
+        # that vanishes mid-action is a crash, and being right about the design
+        # does not make the experience honest.
+        #
+        # Painted with processEvents BEFORE the quit — a setText alone would
+        # never reach the screen, because the very next line ends the app.
+        self.update_btn.setText(UPDATE_HANDOVER_TEXT)
+        self.update_btn.setEnabled(False)
+        # === LOADING ANIMATION GOES HERE (owner 2026-08-09) ===
+        # He asked for a marker rather than a guess: "ubaci tu loading
+        # animaciju što imamo — samo kao tekst, jer ću ti objasniti naknadno
+        # odakle ćemo uzimati loading animaciju."
+        # So this is the spot, deliberately left as words: the app is about to
+        # close and come back, and this is the only moment a person is looking
+        # at it. Whatever animation he names goes on this line, over the whole
+        # card, and must survive until the process actually exits.
+        QApplication.processEvents()
         self._update_state = "launched"
         self._quit()  # free our files; the handover takes over from here
 
@@ -709,6 +737,8 @@ class MainWindow(QMainWindow):
                 self._shown_qr_url = info.qr_url
                 pix = QPixmap()
                 pix.loadFromData(pairing.qr_png(info.qr_url))
+                self.qr_label.setProperty("empty", None)
+                repolish(self.qr_label)
                 self.qr_label.setPixmap(pix.scaled(
                     QR_SIZE - 16, QR_SIZE - 16,
                     Qt.AspectRatioMode.KeepAspectRatio,
@@ -734,6 +764,8 @@ class MainWindow(QMainWindow):
         else:
             self._shown_qr_url = None
             self.qr_label.setPixmap(QPixmap())
+            self.qr_label.setProperty("empty", "true")
+            repolish(self.qr_label)
             self.qr_label.setText("Server stopped" if state != "failed" else "Server failed")
             # The reason a stopped server gives goes where the guidance goes —
             # one place under the QR that speaks, instead of two.
