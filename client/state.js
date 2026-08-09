@@ -201,6 +201,9 @@ let kbShift = 0;
 // the default stands, and the default is to cover.
 let caretUnknownMode = "cover";
 let claudeSaved = {};
+// What the SHELL measured the keyboard to be, in CSS px (0 = closed, or a
+// dev browser that never told us). See render.js `updateViewport`.
+let imeHeight = 0;
 let pcCaret = null;
 let caretRise = 0;
 

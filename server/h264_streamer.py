@@ -108,7 +108,12 @@ class H264Session:
         bitrate = config.bitrate_for_level(self._quality.get("bitrate"))
         return [
             SETTINGS.ffmpeg_path, "-hide_banner", "-loglevel", "error",
-            "-f", "rawvideo", "-pix_fmt", "bgr24",
+            # yuv420p in, not bgr24: capture.py hands us I420 since
+            # 2026-08-09 (half the bytes through this pipe, and it removes the
+            # swscale conversion ffmpeg used to do on the CPU for every frame).
+            # These two lines are ONE decision — a mismatch here does not fail,
+            # it produces a picture in the wrong colours.
+            "-f", "rawvideo", "-pix_fmt", "yuv420p",
             "-s", f"{self.width}x{self.height}", "-r", str(SETTINGS.target_fps),
             "-i", "pipe:0", "-an",
             *filters,

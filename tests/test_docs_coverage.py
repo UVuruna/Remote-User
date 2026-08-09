@@ -71,6 +71,11 @@ STANDARD = {
     # bridge is the PAGE's protocol surface, a different job from being the
     # window. Standard, not Algorithmic — it carries no decision of its own,
     # only the adapter between two sides that version independently.
+    # New 2026-08-09 (THE STRUCTURE LAW): what the window's EDGES do — the
+    # system bars we hide and the keyboard inset only the shell can measure.
+    # Standard: one dependency (WindowInsets), no decision of its own; the
+    # rule that USES the keyboard height lives on the page (client/caret.js).
+    "android/app/src/main/java/com/uvuruna/remoteuser/Insets.kt",
     "android/app/src/main/java/com/uvuruna/remoteuser/Bridge.kt",
     # New 2026-08-07 (build round G1 — the game controller): an ADAPTER, the
     # same reading as Bridge. Platform events in, three page callbacks out; the

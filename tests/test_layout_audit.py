@@ -669,6 +669,37 @@ def main() -> int:
             # class of defect one layer up.
             portrait = h > w
 
+            # ON MUST BE VISIBLE IN THIS LOOK (owner 2026-08-09, screenshot
+            # of the Mic switched on in the coloured look: "uopšte ti nije
+            # jasno, meni kao korisniku, da li i šta je uključeno").
+            # Colour alone is not enough — a saturated set fill swallows an
+            # accent halo. So the check is that an ACTIVE button differs from
+            # its own inactive sibling by something a camera would see, and by
+            # something that is NOT only a hue.
+            on = page.evaluate('''() => {
+              const g = document.getElementById('group-left');
+              const btns = [...g.querySelectorAll('button.ctl:not(.cat)')];
+              if (btns.length < 2) return ['fewer than two buttons to compare'];
+              btns[0].classList.add('active');
+              const a = getComputedStyle(btns[0]);
+              const b = getComputedStyle(btns[1]);
+              const bad = [];
+              if (a.borderTopWidth === b.borderTopWidth) {
+                bad.push('the active button has the same border width');
+              }
+              if (a.borderTopStyle !== 'solid') {
+                bad.push('the active ring is ' + a.borderTopStyle + ', not solid');
+              }
+              if (a.backgroundImage === b.backgroundImage) {
+                bad.push('the active button carries no extra fill');
+              }
+              btns[0].classList.remove('active');
+              return bad;
+            }''')
+            results[f"an ON button is unmistakable @ {label}"] = not on
+            if on:
+                print(f"  DETAIL active state @ {label}: {on}")
+
             # THE FROZEN PICTURE (owner report 2026-08-09, live, from his own
             # log: behind went NEGATIVE and pinned at -11.10 s for two solid
             # minutes while dictation still reached the PC). `behind` is

@@ -180,7 +180,22 @@ function updateViewport() {
   const vv = window.visualViewport;
   const w = vv ? vv.width : window.innerWidth;
   const visibleH = vv ? vv.height : window.innerHeight;
-  const kb = vv ? Math.max(0, window.innerHeight - vv.height - vv.offsetTop) : 0;
+  // HOW TALL THE KEYBOARD IS, asked of whoever can actually answer.
+  //
+  // `innerHeight - visualViewport.height` is the browser's own answer and it
+  // is RIGHT only while the window is resized by the IME. Under edge-to-edge
+  // on targetSdk 35 Android stops doing that — `adjustResize` is declared in
+  // our manifest and quietly does nothing — so this subtraction returns 0 with
+  // the keyboard wide open. That zero is why the caret rule, rebuilt across
+  // five rounds, never lifted anything: it was never given a keyboard to lift
+  // over (owner, 2026-08-09, for the sixth time and rightly furious).
+  //
+  // The shell reads the real `WindowInsets.ime()` and pushes it here in CSS
+  // px. The browser's own number stays as the fallback for a dev browser and
+  // for any device where the window really is resized; the LARGER of the two
+  // wins, because a zero from either must never win over a real measurement.
+  const kbSelf = vv ? Math.max(0, window.innerHeight - vv.height - vv.offsetTop) : 0;
+  const kb = Math.max(kbSelf, imeHeight);
   if (Math.abs(w - fullView.w) > 1) fullView = { w, h: visibleH }; // rotation
   else fullView.h = Math.max(fullView.h, visibleH);
   // THE KEYBOARD COVERS, IT NEVER MOVES ANYTHING (owner decree 2026-08-07,
@@ -456,6 +471,25 @@ function unfreezeIfStarved() {
   video.currentTime = Math.max(b.start(b.length - 1), end - LIVE_TARGET_BEHIND_S);
   if (video.paused) video.play().catch(() => {});
 }
+
+// The shell's push. It arrives whenever the IME opens, closes or resizes —
+// and it is the ONLY honest source under edge-to-edge (see `updateViewport`).
+// One line to the SERVER log the first time it is ever non-zero, because the
+// whole history of this bug is a number nobody could see.
+let imeLogged = false;
+window.__imeHeight = (px) => {
+  imeHeight = Math.max(0, Number(px) || 0);
+  if (imeHeight > 0 && !imeLogged) {
+    imeLogged = true;
+    send({ type: "client_log", text:
+      `[keyboard] ime=${imeHeight}px browser=` +
+      `${window.visualViewport ? Math.round(innerHeight - visualViewport.height) : "n/a"}px ` +
+      `caret=${pcCaret ? `${pcCaret.y.toFixed(3)}` : "unknown"} ` +
+      `rise=${Math.round(caretRise)}px dpr=${devicePixelRatio}` });
+  }
+  updateViewport();
+  redraw();
+};
 
 video.addEventListener("waiting", unfreezeIfStarved);
 video.addEventListener("stalled", unfreezeIfStarved);

@@ -35,6 +35,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.FileProvider
 import androidx.core.view.WindowCompat
+import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import java.io.File
@@ -71,7 +72,9 @@ import java.util.concurrent.TimeUnit
  */
 class MainActivity : AppCompatActivity() {
 
-    private lateinit var web: WebView
+    // `internal`, not private: Insets.kt attaches the window-inset listener
+    // to this view (split 2026-08-09).
+    internal lateinit var web: WebView
     private lateinit var errorView: View
     private lateinit var errorTitle: TextView
     private lateinit var errorBody: TextView
@@ -330,6 +333,7 @@ class MainActivity : AppCompatActivity() {
         // A COLD start begun by tapping a notification: the layout to jump to
         // is on the intent that launched us, and it is parked here until the
         // page has a layout list to act on (task 110).
+        watchImeInsets()
         readNoticeJump(intent)
         resolveAndLoad()
     }
@@ -657,20 +661,6 @@ class MainActivity : AppCompatActivity() {
         }
     } catch (e: Exception) {
         false
-    }
-
-    /** Immersive: the status and navigation bars are HIDDEN while controlling
-     *  the PC. targetSdk 35 draws the WebView edge-to-edge, so a visible nav
-     *  bar sat ON TOP of the page's bottom controls and the system stole the
-     *  touches aimed at them (owner report 2026-07-26 — "no button works").
-     *  A swipe from the edge shows the bars transiently; they hide again by
-     *  themselves. Re-applied on every focus gain — the system restores bars
-     *  after dialogs, app switches and the keyboard. */
-    private fun hideSystemBars() {
-        val controller = WindowCompat.getInsetsController(window, window.decorView)
-        controller.systemBarsBehavior =
-            WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-        controller.hide(WindowInsetsCompat.Type.systemBars())
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {

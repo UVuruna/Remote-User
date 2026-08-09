@@ -173,8 +173,26 @@ html, body {
 /* Chord buttons carry no icon — the label is the whole face */
 .ctl.text .lbl { font-size: 13px; }
 
+/* ON MUST BE UNMISTAKABLE IN ALL EIGHT LOOKS (owner 2026-08-09, with a
+   screenshot of the Mic switched on in the COLOURED look): "onaj button koji
+   je svičovan, oni koji su on/off u svakom modu — bilo da je kolor, dark,
+   light — mora da bude jasno upečatljivo vidljiv, kao što je to jasno vidljivo
+   u modu transparent light: plavi okvir umesto belog. Ovde uopšte ti nije
+   jasno, meni kao korisniku, da li i šta je uključeno." (lang-ok: his own
+   words, quoted.)
+   The old rule said ON with COLOUR ALONE — accent ink and an accent GLOW. On
+   a plain outlined button that reads instantly, because the ring is the only
+   colour on it. On a set wearing its own strong colour it does not: the glow
+   is a soft halo against a saturated fill and the ink change is one hue among
+   others. So ON is now carried by three things at once, and only one of them
+   is a hue: a SOLID RING three times the normal border width, a filled accent
+   wash on top of whatever the button already wears, and the scale. Any one of
+   them survives a look the other two get lost in. */
 .ctl.active {
   color: var(--accent);
+  border-color: var(--accent);
+  border-width: 3px;
+  background-image: linear-gradient(var(--accent-wash), var(--accent-wash));
   box-shadow: 0 0 0 3px var(--accent-glow), 0 0 22px var(--accent-glow);
   transform: scale(1.06);
 }
@@ -826,10 +844,19 @@ button.sets-row:active { background: var(--accent-glow); border-color: var(--acc
 .wiz-step.done #wiz-status { color: var(--success); }
 
 /* --- Hide-all mode ------------------------------------------------------- */
+/* HIDDEN MEANS HIDDEN (owner correction 2026-08-09): "ako imamo opciju da sam
+   radi hide, onda ne treba gore da bude vidljivo — kad sakrije, sakrije sve.
+   Dugme u tom modu postaje nama opcija da mi pre vremena sakrijemo ako
+   želimo." (lang-ok: his own words, quoted.)
+   The Hide button used to stay on screen as the only way back — it is not
+   needed for that any more, because ANY touch brings everything back. So it
+   goes with the rest, and its job changes: it is now how you hide EARLY
+   instead of waiting out the timer. */
 body.hidden-controls .group,
 body.hidden-controls #wheel,
 body.hidden-controls #anywhere-banner,
 body.hidden-controls #layout-bar,
+body.hidden-controls .corner-tr,
 body.hidden-controls .corner-tl { display: none; }
 
 /* --- Region grab (Attach, owner 2026-08-05) -------------------------------
