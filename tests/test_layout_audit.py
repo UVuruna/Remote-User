@@ -700,6 +700,39 @@ def main() -> int:
             if on:
                 print(f"  DETAIL active state @ {label}: {on}")
 
+            # A PICTURE THAT STOPPED BEATS NO PICTURE (owner, live, 2026-08-09:
+            # at every setting on maximum "nestane mi ekran, pojavi se ona
+            # generic plava slika"). That blue was `redraw` clearing the canvas
+            # to the page colour and then drawing nothing, because the decoder
+            # had no frame — which at 4K60 is not rare at all.
+            blank = page.evaluate('''() => {
+              const bad = [];
+              const realBg = canvasBg;
+              streamMode = 'h264';
+              // Nothing has ever been drawn: clearing IS correct here.
+              everDrew = false;
+              canvasBg = '#010203';
+              redraw();
+              const c = ctx.getImageData(1, 1, 1, 1).data;
+              if (!(c[0] === 1 && c[1] === 2 && c[2] === 3)) {
+                bad.push('a session with no frame yet did not paint the page colour');
+              }
+              // …but once a frame HAS been shown, a gap must leave it alone.
+              everDrew = true;
+              canvasBg = '#0a0b0c';
+              redraw();
+              const d = ctx.getImageData(1, 1, 1, 1).data;
+              if (d[0] === 10 && d[1] === 11 && d[2] === 12) {
+                bad.push('a gap in the stream wiped the last picture');
+              }
+              canvasBg = realBg;
+              everDrew = false;
+              return bad;
+            }''')
+            results[f"a gap in the stream never blanks the screen @ {label}"] = not blank
+            if blank:
+                print(f"  DETAIL blank @ {label}: {blank}")
+
             # THE FROZEN PICTURE (owner report 2026-08-09, live, from his own
             # log: behind went NEGATIVE and pinned at -11.10 s for two solid
             # minutes while dictation still reached the PC). `behind` is

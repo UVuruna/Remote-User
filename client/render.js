@@ -97,7 +97,29 @@ function setCanvasBackdrop(color) {
   if (color) canvasBg = color;
 }
 
+// Whether a real frame has ever reached the canvas in THIS session — the
+// difference between "nothing yet" (clear to the page colour, correct) and
+// "nothing new" (keep the last picture, see `redraw`).
+let everDrew = false;
+
 function redraw() {
+  // A PICTURE THAT STOPPED BEATS NO PICTURE (owner report 2026-08-09, live and
+  // urgent: at resolution + bitrate + fps all at maximum "nestane mi ekran, to
+  // jest pojavi se ona generic plava slika").
+  //
+  // That blue IS this function. The canvas is cleared to the theme's page
+  // colour on every frame and then nothing is drawn, because
+  // `video.readyState < 2` — the decoder has no frame to give. At 4K60 the
+  // pipeline genuinely cannot keep up (task 130: ~3 GB/s of raw pixels), so
+  // that state is not rare, and clearing first turned every shortfall into an
+  // empty screen. The stream was never gone; there was simply nothing new, and
+  // we wiped what was there.
+  //
+  // So when there is nothing to draw, we draw NOTHING — including the clear.
+  // The last good frame stays on the canvas until a real one replaces it. The
+  // status pill still says what is happening; the picture just stops instead
+  // of vanishing.
+  if (streamMode === "h264" && video.readyState < 2 && everDrew) return;
   ctx.fillStyle = canvasBg;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   const D = drawnRect();
@@ -124,7 +146,10 @@ function redraw() {
     ctx.clip();
   }
   if (streamMode === "h264") {
-    if (video.readyState >= 2) ctx.drawImage(video, D.x, D.y, D.w, D.h);
+    if (video.readyState >= 2) {
+      ctx.drawImage(video, D.x, D.y, D.w, D.h);
+      everDrew = true;
+    }
   } else {
     if (baseBitmap) ctx.drawImage(baseBitmap, D.x, D.y, D.w, D.h);
     if (view.scale > 1 && detailBitmap) {
@@ -309,6 +334,7 @@ let rafId = null;
 
 function initMse(codec) {
   teardownMse();
+  everDrew = false;   // a new session starts from a clean canvas
   const ms = new MediaSource();
   mediaSource = ms;
   video.src = URL.createObjectURL(ms);
@@ -462,11 +488,21 @@ function onMseUpdateEnd() {
 // recovery. The video element's own `waiting`/`stalled` events say "I have run
 // out" without needing one, and a slow tick is the backstop for the case where
 // even those do not fire.
+let lastStarveFix = 0;
+
 function unfreezeIfStarved() {
   if (!sourceBuffer || !video.buffered.length) return;
   const b = video.buffered;
   const end = b.end(b.length - 1);
   if (end - video.currentTime >= LIVE_STARVED_S) return;
+  // RATE-LIMITED, and it is not a detail. A seek FLUSHES the decoder, so a
+  // pipeline that is genuinely starving — 4K60, his own case — would be sent
+  // back to the start of a keyframe every single second, and the picture that
+  // was merely late would never be shown at all. Recovering from a freeze is
+  // worth one flush; repeating it is how a freeze becomes a blank screen.
+  const now = performance.now();
+  if (now - lastStarveFix < LIVE_UNFREEZE_MIN_GAP_MS) return;
+  lastStarveFix = now;
   liveStarves++;
   video.currentTime = Math.max(b.start(b.length - 1), end - LIVE_TARGET_BEHIND_S);
   if (video.paused) video.play().catch(() => {});

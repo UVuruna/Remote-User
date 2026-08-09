@@ -81,6 +81,10 @@ const LIVE_STARVED_S = -0.2;
 // The starve check also runs on a slow tick, because `updateend` only fires
 // when a chunk ARRIVES — and the whole failure is chunks not arriving.
 const LIVE_UNFREEZE_TICK_MS = 1000;
+// …and no more often than this, however often it is asked. A seek flushes the
+// decoder; on a link that genuinely cannot keep up, seeking every second means
+// never showing a frame at all (owner report 2026-08-09 — the blue screen).
+const LIVE_UNFREEZE_MIN_GAP_MS = 4000;
 // How often the live-drift measurement reaches the server log (task 83). Long
 // enough that a session's log stays readable, short enough that one minute of
 // him moving the mouse produces several lines to compare across fps settings.
