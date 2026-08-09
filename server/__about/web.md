@@ -93,17 +93,26 @@ optional `name` (the phone's creation panel prefills the window title, the
 owner may type anything). A deliberate `layout_focus -1` also calls
 `forget_focus()` — the desktop is then the state to resume into.
 
-`layout_state` carries **`parent`** per layout since 2026-08-09 (owner decision,
-task 169 — the ⭐ on the layout selector's rows): true when one of this layout's
-member windows is the window **another** layout's content was torn out of, so
-closing it would take that other layout's tab with it. Computed in
-`LayoutRegistry.state` off `Layout.source`, which `resolve_slot` already records
-at creation — no new probe, no guess from a title. A layout is never its own
+`layout_state` carries **`dependents`** and **`parent`** per layout since
+2026-08-09 (owner decision, task 169 — the ⭐ on the layout selector's rows;
+owner request, task 171 — the ✕ chooser must NAME what closing these windows
+would destroy). `dependents` is the NAMES of every other layout whose content
+was torn out of a window this one holds, in list order; `parent` is simply
+whether that list is empty, so the star and the warning are ONE computation and
+can never disagree about which row is a trunk. Computed in
+`LayoutRegistry.state` off `Layout.sources`, which `resolve_slot` records at
+creation — no new probe, no guess from a title. A layout is never its own
 parent: the source window may itself be a member of the SAME layout, and closing
-that pair together surprises nobody. **The honest limit:** `create` stores only
-the FIRST slot's source, so a tab extracted into cell 2+ of a grid leaves no
-record — the mark can under-report, never over-report, which is the safe side
-of a signal about what closing something would destroy.
+that pair together surprises nobody.
+
+**The honest limit of task 169 is CLOSED** (task 173, the same day): `create`
+used to store a single `source`, taken from the FIRST slot, so a tab extracted
+into cell 2, 3 or 4 of a grid left no record at all and BOTH readers
+under-reported — on exactly the grids the mark exists for. Every slot is
+recorded now (`Layout.sources`, keyed by the extracted member window), and the
+record leaves with its member on `drop_member`, on `prune` and through `merge`.
+Gates: `tests/test_layout_drag.py` (both cells, and the names by relation),
+`tests/test_layout_member.py` (the record leaves with the window).
 
 Proven by `tests/test_presence.py` — a fail-closed step in `build.py`.
 

@@ -23,7 +23,9 @@ pushed `layouts.js` past THE STRUCTURE LAW's 1,000 lines. The boundary is a
 responsibility, not an arithmetic cut: this file is a WIZARD. It owns one piece
 of state (`creating`), gathers slots across several taps, and is finished the
 moment the layout exists. `layouts.js` is everything you do once layouts DO
-exist — the bar, the list, rename, the aspect panel, the ✕.
+exist — the bar, the list, the ✕, the member chooser — and
+[Layout Settings](layout-settings.md) is what a layout can be ASKED once it
+does (2026-08-09).
 
 Both halves render into the same overlay (`#layout-panel`) and share its
 vocabulary, so the phone never has two competing card styles.
@@ -155,3 +157,53 @@ vocabulary, so the phone never has two competing card styles.
   takes visible seconds on the PC; `showLayLoading` opens before the message
   goes out and closes when the streamed screen actually stops moving
   ([Loading](loading.md)).
+
+## A scrolling list may not live inside a columned card (2026-08-09)
+
+Found by PHOTOGRAPHING this panel at 915×412 — this round's own verification,
+not a report. The landscape reflow of task 172 gave the card `column-count: 2`,
+which makes it a **fragmentainer**, while the window list inside it is a
+**scroll container**. The two do not compose, and the picture says it plainly:
+the fourth of six rows came out sliced through the middle, ten pixels above the
+"Shape:" block in the same column, with rows five and six nowhere and no
+scrollbar to say they existed. Measured in the real Chromium this app runs in —
+a scroller inside a multicol is not clipped by its own box at all (`overflow:
+hidden` does not clip it either, and `column-span: all` does not fix it), and
+the same list with twenty windows put fourteen rows off the bottom of the
+screen while the card reported no scroll of its own to make.
+
+The columns are still right for this panel (one column does not fit it in
+either landscape size — 630 px of content in a 377 px card at 915×412, 749 px
+in 734 px on a tablet, which is BUG A with 155 px and 520 px of width standing
+idle). So the card keeps two columns and **stops being a fragmentainer**: an
+explicit FLEX split (`.lc-split` → `.lc-cols` → `.lc-side` + `.lc-main`), whose
+children are ordinary boxes a scroller works inside.
+
+What that buys, beyond the fix: the list gets a whole column of its own height
+instead of an arbitrary 38vh, its own header finally stands above it (the
+multicol left the caption in the LEFT column introducing a list on the right),
+and the actions row sits under both columns so **Create can never fall below a
+fold**. Each half scrolls on its own when it must — rung 4, and genuinely
+earned on a 412 px-tall screen holding a name field, four shape chips, two
+orientation chips, a window list and two buttons.
+
+Three details are deliberate and measured:
+
+- **Only the LIST source splits.** A "Tap a window" session has nothing that
+  scrolls, so it keeps the `card-columns` behaviour that was measured for it;
+  a split there would leave one column empty.
+- **The halves are `flex: 1 1 0`, equal.** The rows of BOTH halves are one kin
+  group under task 163 (`__kinRows` groups by indent, not by column), so halves
+  of different widths would make the chosen rows and the list rows different
+  sizes — the very defect that rule exists to stop.
+- **The halves are `display: block`, not flex columns.** A flex column makes
+  every child shrinkable, and the first thing that shrank was the Name textarea
+  — `panels.css` gives it a 64 px height in landscape and it came out ~40 px,
+  cutting the placeholder through the middle (seen in this round's own
+  screenshot, one fix after the other).
+
+Portrait is untouched by construction: `.lc-split` and `.lc-cols` are plain
+blocks outside the landscape query, so the halves stack in build order. Gate:
+`__scrollInColumns` in `tests/_audit_js.py`, run on the creation-list staging
+at all four audited viewports — a structural rule with no number to tune, which
+catches any future panel that puts a scroller in a columned card.

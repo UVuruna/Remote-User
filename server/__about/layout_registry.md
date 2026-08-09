@@ -47,6 +47,29 @@ directly, first, finds a half-initialized `window_manager` and fails loudly.
   `tests/test_view_anchor.py` (phone half).
 - **Prune on CLOSED, never on hidden** (audit 2026-08-05): a cloaked window
   (another virtual desktop, a minimized Store app) stays a member.
+- **A layout can be TURNED and RE-ARRANGED after it exists** (`set_grid`, owner
+  2026-08-07 for a three's arrangement, extended by task 175 on 2026-08-09 to
+  the thing he could not do at all: a layout built portrait had to be DELETED
+  and made again to become landscape). It stores only — a shape of the WRONG
+  SIZE is refused rather than obeyed into a cell nobody is in — and sets
+  `place_pending`, so the focus that follows re-places the windows. Gate:
+  `tests/test_layout_shape.py`, which asserts the RECTS (a shape change the
+  phone shows and the PC ignores is the Move handle's bug in a new place) and
+  the re-place order at the method's own boundary, because `focus` re-places on
+  `_standing` anyway and would mask its absence.
+- **Every SLOT's source is recorded, not just the first** (task 173,
+  2026-08-09). `Layout.sources` maps an extracted member window to the window
+  its TAB was torn out of. It used to be one `source` int written from the
+  first slot alone, so a tab extracted into cell 2, 3 or 4 of a grid left no
+  record — and both readers under-reported: the ⭐ (`state()` → `parent`) and
+  the ✕ chooser's warning (`state()` → `dependents`, the NAMES a close would
+  destroy). A dict keyed by the MEMBER rather than a positional list, because
+  members are filtered on the way in and re-ordered on the way out; the record
+  leaves with its member in `drop_member`, in `prune` and through `merge`.
+  `Layout.source` survives as a read-only property — `project()` asks about
+  `members[0]` and about nothing else, so the answer follows that member
+  instead of going stale. Gates: `tests/test_layout_drag.py` (both cells, and
+  the names asserted by relation), `tests/test_layout_member.py`.
 - **The keyboard member is raised LAST** (owner 2026-08-06): `last_member`
   survives excursions, so dictation resumes in the window he was typing into.
 - **The ✕ wears two acts** (owner 2026-08-08, task 116): `remove(close=False)`

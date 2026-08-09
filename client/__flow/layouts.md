@@ -13,10 +13,12 @@
   │                 32px  └──────────────┘                     │
   │                        tap → layout list                   │
   └───────────────────────────────────────────────────────────┘
-  🗂 #layout-panel   — the ONE overlay card, three contents:
+  🗂 #layout-panel   — the ONE overlay card, several contents:
         · source chooser / creation panel   (creating ≠ null)
-        · layout list (Desktop + every layout + its ratio button)
-        · aspect panel (W : H + preview)    (aspecting ≠ null)
+        · layout list (Desktop + every layout: icon ⭐ name shape ⚙)
+        · the ⚙ SHEET, and the panels it opens — rename, aspect
+          (W : H + preview, aspecting ≠ null), the member chooser
+        · the ✕ chooser (remove / close, + what a close destroys)
   🧊 #lay-loading    — opaque full-screen cube overlay (class `open`)
 ```
 
@@ -35,10 +37,10 @@ creation panel                        layout list                 layout bar
 │ │ 🗔 Claude Code - Remote Us…  │ │  │ 🗔 Reading           │   │ Remote…  │
 │ └──────────────────────────────┘ │  └──────────────────────┘   └──────────┘
 │ Name:  ┌───────────────────────┐ │  one line each, cut by      2 rows, then
-│        │ Claude Code - Remote  │ │  CSS — the pencil opens     clamped — the
-│        │ User - Visual Studio  │ │  the rename card, whose     list is one
-│        │ Code [Administrator]  │ │  field wraps the whole      tap away
-│        └───────────────────────┘ │  name
+│        │ Claude Code - Remote  │ │  CSS — the ⚙ opens the      clamped — the
+│        │ User - Visual Studio  │ │  sheet, whose Rename card   list is one
+│        │ Code [Administrator]  │ │  wraps the whole name       tap away
+│        └───────────────────────┘ │
 └──────────────────────────────────┘
   ▲ the WRAPPING field is the durable copy, prefilled with the window's
     own title (owner 2026-08-06 — the full name must be readable
@@ -87,6 +89,40 @@ Pseudocode:
             hits = still ? hits + 1 : 0
             IF past the settle deadline OR (hits >= SETTLE_STABLE_HITS AND up > LOADING_MIN_MS):
                 hideLayLoading()
+
+## Algorithm — where a tap on a row goes (owner 2026-08-09, task 175)
+
+Every act on a layout that ALREADY EXISTS is behind one ⚙, and Cancel is
+always ONE step back — the chain is the same in both directions. The row's
+shape badge is a SHORTCUT into it (task 165), so backing out of the member
+chooser lands on that layout's sheet, not on the list.
+
+```mermaid
+flowchart TB
+    BAR[layout bar: tap the framed name] --> LIST[layout list
+icon ⭐ name shape ⚙]
+    LIST -- tap the row --> FOCUS[layout_focus index]
+    LIST -- hold + drag --> MERGE[layout_merge / layout_reorder]
+    LIST -- tap the SHAPE --> MEM[member chooser
+layout_member_remove]
+    LIST -- tap the ⚙ --> SHEET[⚙ settings sheet]
+    SHEET -- Rename --> REN[rename card → layout_rename]
+    SHEET -- Aspect ratio --> ASP[aspect panel → layout_aspect]
+    SHEET -- Take one window out --> MEM
+    SHEET -- Orientation chip --> GRID[layout_grid index, grid, orient
+the tap IS the command]
+    SHEET -- Arrangement chip --> GRID
+    REN -- Cancel --> SHEET
+    ASP -- Cancel --> SHEET
+    MEM -- Cancel --> SHEET
+    SHEET -- Back --> LIST
+```
+
+`layout_grid` re-places real windows on the PC, so the loading cube covers it
+and the phone's rotation lock follows the `layout_state` that comes back
+(`applyOrientationLock`). The server needed nothing new for it: the message has
+existed since 2026-08-07 for a three's arrangement — what it did not have was a
+gate, and `tests/test_layout_shape.py` is it.
 
 ## Algorithm — the aspect ratio panel
 

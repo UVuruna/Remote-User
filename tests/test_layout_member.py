@@ -43,7 +43,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "server"))
 import window_manager  # noqa: E402
 
 from test_layout_drag import (  # noqa: E402
-    WIN_C, WIN_D, build_layouts, names_of,
+    WIN_C, WIN_D, build_layouts, build_with_a_torn_off_tab, names_of,
 )
 from test_layout_protocol import (  # noqa: E402
     CLOSED, MON, PLACED, WIN_A, WIN_B, drive, install_close_model, sent_of,
@@ -326,6 +326,61 @@ def check_layout_state_names_every_member() -> bool:
     return True
 
 
+def check_the_leaving_window_takes_its_source_record_with_it() -> bool:
+    """TASK 173 + 171 (2026-08-09). A member that was EXTRACTED from another
+    window carries a record of where it came from, and that record is what
+    makes the other layout wear the ⭐ and what the ✕ chooser's warning is
+    built out of ("Also destroys …"). When the extracted window LEAVES this
+    layout, the record has to leave with it — otherwise the trunk goes on
+    being marked as the parent of a branch that no longer holds its content,
+    and the phone warns him about destroying something a close cannot touch.
+
+    Driven through the REAL creation path, because the record is only ever
+    written there: the pair is built by test_layout_drag's own fixture, so
+    there is one definition of "a torn-off tab" in this chain."""
+    ok = True
+    ws, conn, layouts = build_with_a_torn_off_tab(1)
+    branch = next((l for l in layouts.layouts if l.name == "Branch"), None)
+    if branch is None or len(branch.sources) != 1:
+        print(f"  DETAIL nothing was recorded to lose: "
+              f"{getattr(branch, 'sources', None)}")
+        return False
+    extracted = next(iter(branch.sources))
+    index = names_of(layouts).index("Branch")
+    member = branch.members.index(extracted)
+    ws, conn, layouts = drive(
+        [{"type": "layout_member_remove", "index": index, "member": member}],
+        conn, layouts)
+    if branch.sources:
+        print(f"  DETAIL the branch still remembers {branch.sources} after the "
+              "window it was extracted into left the layout")
+        ok = False
+    # …AND AT THE METHOD'S OWN BOUNDARY, because planting the defect proved the
+    # end-to-end case cannot see it: `focus` starts with `prune`, and `prune`
+    # drops every source record whose member has left the list — so
+    # `drop_member` could stop keeping its word and every frame above would
+    # still be correct. The same masking the re-place order is checked around,
+    # ten lines up, and the same answer.
+    ws2, conn2, layouts2 = build_with_a_torn_off_tab(1)
+    fresh = next(l for l in layouts2.layouts if l.name == "Branch")
+    who = next(iter(fresh.sources))
+    fresh.drop = layouts2.drop_member(
+        names_of(layouts2).index("Branch"), fresh.members.index(who))
+    if fresh.sources:
+        print(f"  DETAIL drop_member left {fresh.sources} behind — only the "
+              "prune that happens to follow it cleans up")
+        ok = False
+    # …and the phone is told: the trunk stops being a parent in the very frame
+    # that answers the removal, not on some later refresh.
+    states = sent_of(ws, "layout_state")
+    trunk = next((e for e in (states[-1]["layouts"] if states else [])
+                  if e["name"] == "Trunk"), None)
+    if trunk is None or trunk.get("parent") or trunk.get("dependents"):
+        print(f"  DETAIL the trunk is still marked: {trunk}")
+        ok = False
+    return ok
+
+
 CHECKS = [
     ("a grid shrinks one window at a time (4→3, 3→2, 2→single)",
      check_a_grid_shrinks_one_window_at_a_time),
@@ -347,6 +402,8 @@ CHECKS = [
      check_drop_member_leaves_the_orders_it_promises),
     ("layout_state NAMES every member, in cell order",
      check_layout_state_names_every_member),
+    ("the leaving window takes its SOURCE record with it",
+     check_the_leaving_window_takes_its_source_record_with_it),
 ]
 
 

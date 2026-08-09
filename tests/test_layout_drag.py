@@ -272,14 +272,21 @@ def check_a_reorder_keeps_the_focus_on_the_same_layout() -> bool:
 
 
 # ═══════════════════ THE ⭐: WHICH ROW IS THE TRUNK ═══════════════════
-def build_with_a_torn_off_tab():
+def build_with_a_torn_off_tab(cell: int = 0):
     """Three layouts, the REAL way: the window a tab was torn OUT of, an
-    unrelated one, and the tab itself — now its own window, with
-    `Layout.source` remembering where it came from. Only Windows is faked;
-    `resolve_slot`, `LayoutRegistry.create` and `state()` all run for real.
+    unrelated one, and the tab itself — now its own window, with the layout
+    remembering where it came from. Only Windows is faked; `resolve_slot`,
+    `LayoutRegistry.create` and `state()` all run for real.
 
     That pair is the ONLY shape in which the star can be true at all, which is
-    why it is built rather than asserted about."""
+    why it is built rather than asserted about.
+
+    `cell` is WHICH slot of the new layout the tab lands in, and it is the
+    whole of task 173 (2026-08-09): `create` stored ONE source, taken from the
+    first slot, so a tab extracted into cell 2, 3 or 4 of a grid left no record
+    at all — the ⭐ and the ✕ chooser's warning both under-reported on exactly
+    the layouts they exist for. Cell 0 is the shape that always worked; cell 1
+    is the shape that never did."""
     conn, layouts = build_layouts([("Trunk", [WIN_A]), ("Plain", [WIN_B])])
     window_manager.user32.alive.add(WIN_C)
     # The extraction itself is Windows' job (a menu command or a SendInput
@@ -288,11 +295,14 @@ def build_with_a_torn_off_tab():
         "hwnd": hwnd, "title": "Remote User - Visual Studio Code",
         "process": "code.exe", "icon": None}
     uia.extract_tab = lambda rect, x, y, info, name=None: WIN_C
+    tab_slot = {"hwnd": WIN_A, "tab": {"name": "prompt.txt"},
+                "x": 0.3, "y": 0.02}
+    plain_slot = {"hwnd": WIN_D, "tab": None, "x": 0.5, "y": 0.5}
+    slots = [tab_slot] if cell == 0 else [plain_slot, tab_slot]
     ws, conn, layouts = drive([{
-        "type": "layout_create", "mode": "solo", "orient": "landscape",
-        "name": "Branch",
-        "slots": [{"hwnd": WIN_A, "tab": {"name": "prompt.txt"},
-                   "x": 0.3, "y": 0.02}],
+        "type": "layout_create", "mode": "solo" if cell == 0 else "grid",
+        "grid": None if cell == 0 else "2", "orient": "landscape",
+        "name": "Branch", "slots": slots,
     }], conn, layouts)
     return ws, conn, layouts
 
@@ -332,6 +342,91 @@ def check_the_star_marks_the_trunk_and_nothing_else() -> bool:
     return ok
 
 
+def deps_of(ws) -> dict:
+    """{layout name: the names it would destroy} out of the last frame."""
+    states = sent_of(ws, "layout_state")
+    return {lay["name"]: lay.get("dependents")
+            for lay in (states[-1]["layouts"] if states else [])}
+
+
+def check_a_tab_in_a_LATER_cell_is_recorded_too() -> bool:
+    """TASK 173 (2026-08-09): the star under-reported, and the reason was one
+    line in `create` — `source` was a single handle taken from the FIRST slot,
+    so a tab extracted into cell 2, 3 or 4 of a grid left no record at all. The
+    layout whose window it came out of then wore no ⭐, and (task 171) the ✕
+    chooser would have offered to close it without a word about what that
+    destroys — on precisely the grids the mark exists for.
+
+    Both shapes are asserted in ONE run, because a fixture that can only build
+    the shape that already worked is a fixture that proves the old behaviour:
+    cell 0 is the tab-as-first-member layout that has always been recorded,
+    cell 1 is the one that never was. The claim is made by RELATION — which
+    layout NAME is destroyed by which — never by a handle or an index, because
+    handles are what the phone is never told and indices are what a reorder
+    moves."""
+    ok = True
+    for cell in (0, 1):
+        ws, conn, layouts = build_with_a_torn_off_tab(cell)
+        got = stars_of(ws)
+        want = {"Trunk": True, "Plain": False, "Branch": False}
+        if got != want:
+            print(f"  DETAIL a tab in cell {cell}: the stars are {got}, "
+                  f"expected {want}")
+            ok = False
+        # …and the registry really holds one record per extracted MEMBER, so
+        # `project()` still asks about the first member and nothing else.
+        branch = next((l for l in layouts.layouts if l.name == "Branch"), None)
+        if branch is None or list(branch.sources.values()) != [WIN_A]:
+            print(f"  DETAIL a tab in cell {cell}: the branch remembers "
+                  f"{getattr(branch, 'sources', None)}, expected the trunk")
+            ok = False
+    return ok
+
+
+def check_the_phone_is_told_WHICH_layouts_a_close_would_destroy() -> bool:
+    """TASK 171 (owner 2026-08-09): the ✕ chooser's close option must NAME the
+    layouts that die with these windows, before he taps. The phone cannot know
+    it — the relation lives in `Layout.sources` on the PC and no title on the
+    phone spells it — so `layout_state` carries the NAMES.
+
+    Names, not a count: "1 other layout" is a number, and what he needs before
+    an irreversible tap is WHICH. Asserted against the layout that really holds
+    the source window, so it cannot pass by counting."""
+    ok = True
+    ws, conn, layouts = build_with_a_torn_off_tab(1)
+    got = deps_of(ws)
+    want = {"Trunk": ["Branch"], "Plain": [], "Branch": []}
+    if got != want:
+        print(f"  DETAIL the dependents are {got}, expected {want}")
+        ok = False
+    # A SECOND branch out of the same trunk is a second name, not a second
+    # star: the sentence he reads has to list both or it is not the truth.
+    window_manager.user32.alive.add(WIN_E)
+    uia.extract_tab = lambda rect, x, y, info, name=None: WIN_E
+    ws, conn, layouts = drive([{
+        "type": "layout_create", "mode": "solo", "orient": "landscape",
+        "name": "Second branch",
+        "slots": [{"hwnd": WIN_A, "tab": {"name": "CLAUDE.md"},
+                   "x": 0.4, "y": 0.02}],
+    }], conn, layouts)
+    got = deps_of(ws)
+    if sorted(got.get("Trunk") or []) != ["Branch", "Second branch"]:
+        print(f"  DETAIL two branches, one trunk: {got}")
+        ok = False
+    # …and a branch that LEAVES stops being named. The record is per member,
+    # so removing the layout that holds the extracted window must clear it —
+    # otherwise the warning names a layout that no longer exists.
+    names = names_of(layouts)
+    ws, conn, layouts = drive(
+        [{"type": "layout_remove", "index": names.index("Branch")}],
+        conn, layouts)
+    got = deps_of(ws)
+    if (got.get("Trunk") or []) != ["Second branch"]:
+        print(f"  DETAIL a removed branch is still named: {got}")
+        ok = False
+    return ok
+
+
 CHECKS = [
     ("a row dropped on another makes every grid size (1+1, 1+2, 1+3)",
      check_a_drop_makes_every_grid_size),
@@ -349,6 +444,10 @@ CHECKS = [
      check_a_reorder_keeps_the_focus_on_the_same_layout),
     ("the ⭐ marks the trunk and nothing else",
      check_the_star_marks_the_trunk_and_nothing_else),
+    ("a tab extracted into a LATER cell is recorded too",
+     check_a_tab_in_a_LATER_cell_is_recorded_too),
+    ("the phone is told WHICH layouts a close would destroy",
+     check_the_phone_is_told_WHICH_layouts_a_close_would_destroy),
 ]
 
 

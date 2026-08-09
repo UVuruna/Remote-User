@@ -1,12 +1,17 @@
 // Layouts (Phase F+): LIVING with the layouts that exist — the top-center
-// bar, the layout list, rename, the aspect-ratio panel, and the ✕ chooser.
+// bar, the layout list and its drag, the ✕ chooser and the member chooser.
+// What a layout IS (its name, its aspect ratio, its orientation and its
+// arrangement) moved to layout-settings.js on 2026-08-09; what this file owns
+// is which layouts exist, which one is shown, and which windows are in them.
 // Split out of controls.js when that file crossed THE STRUCTURE LAW's 1,000
 // lines (2026-08-03) — layouts are their own responsibility: the chrome in
 // controls.js drives the PC directly, everything here composes and frames
 // WINDOWS on it. MAKING one is layout-create.js, split off the same way on
-// 2026-08-08; the panel vocabulary below (`layPanel`, `closeLayoutPanel`,
-// `layChip`, `chooserBtn`, `nameField`) and the `.lay-item` ROW markup its
-// stylesheet owns are shared with it.
+// 2026-08-08; CHANGING one is layout-settings.js, split off on 2026-08-09
+// (task 175 — every act on an existing layout moved under one ⚙). The panel
+// vocabulary below (`layPanel`, `closeLayoutPanel`, `layChip`, `chooserBtn`,
+// `nameField`, `layRow`, `ratioLabel`) and the `.lay-item` ROW markup its
+// stylesheet owns are shared with both.
 //
 // Loads AFTER controls.js and before gestures.js: it uses `keepFocus`,
 // `svg`, `showToast` and `IN_APP` from there, `send`/`layouts`/`layoutActive`
@@ -70,13 +75,12 @@ keepFocus(layCloseBtn, () => {
   if (layoutActive !== null) openCloseChooser(layoutActive);
 });
 
-// --- Layout list + aspect ratio (owner 2026-08-03) -------------------------
+// --- The layout list (owner 2026-08-03) ------------------------------------
 // Tapping the bar's name opens every layout at once — stepping ‹ › through a
-// dozen of them to reach one was the reported pain. Each row also carries its
-// ASPECT button: the region a layout is framed in may be made SMALLER than
-// the phone's own shape (portrait keeps the phone's width and only loses
-// height, landscape keeps its height and only loses width). Nothing moves on
-// the PC until "Apply" — dragging the handle re-arranges only the preview.
+// dozen of them to reach one was the reported pain. A row is
+// [icon][⭐][name][shape][⚙] since task 175 (owner 2026-08-09): the two facts
+// it can carry at a glance, and ONE door to everything else
+// (client/layout-settings.js).
 
 // `icon` is the row's LEADING BADGE and it comes in three kinds now: an app
 // icon (a PNG data URI from the server), `{draw: markup}` for a drawing we
@@ -108,14 +112,6 @@ function layRow(label, icon, selected, onTap, ...trailing) {
   row.appendChild(main);
   trailing.filter(Boolean).forEach((el) => row.appendChild(el));
   return row;
-}
-
-function ratioLabel(lay) {
-  if (!lay.ratio) return "Screen";
-  // The stored ratio is FINE-GRAINED (see the aspect panel: w is sent on a
-  // 1000-scale), so it is labelled by its closest small pair, not printed raw.
-  const [n, d] = ratioPair(lay.ratio[0] / lay.ratio[1], 40);
-  return `${n}:${d}`;
 }
 
 // A HOLD IS A CONTACT THAT STAYED PUT — NOT ONE THAT NEVER MOVED A PIXEL
@@ -268,32 +264,31 @@ function openLayoutPicker() {
       shape.setAttribute("aria-label", "Take one window out");
       keepFocus(shape, () => openMemberPanel(i));
     }
-    // Rename (owner 2026-08-05): the auto name is only the window's title —
-    // this is where a layout gets the owner's own name, any time later.
-    const ren = document.createElement("button");
-    ren.type = "button";
-    ren.className = "lay-ratio lay-rename";
-    ren.innerHTML = svg("edit");
-    keepFocus(ren, () => openRenamePanel(i));
-    // THE LABEL IS THE ICON (independent grader, 2026-08-09, task 172: "the
-    // starred row … leaves the name 'Claude Cod…' — nine characters, one word,
-    // which cannot tell two Claude layouts apart"). This chip used to carry
-    // `svg("aspect")` — a rounded rect inside a rounded rect — in FRONT of a
-    // label that already reads "3:5" or "Screen", and the pair is what set the
-    // 96 px floor below: a glyph saying "aspect ratio" beside a word saying
-    // which aspect ratio. On a 338 px row where the name had 48 px, the widest
-    // trailing chip was spending 26 px (glyph + its gap) restating its own
-    // text. Measured on the real page: dropping it is the single biggest
-    // recovery available to the name — +34 px, the name goes from 5 characters
-    // to 9 at 412 px and from 10 to 16 on the tablet — without removing one
-    // control, one word or one fact from the row. `aria-label` because the
-    // remaining text names the VALUE and not the button.
-    const asp = document.createElement("button");
-    asp.type = "button";
-    asp.className = "lay-ratio";
-    asp.innerHTML = `<span>${ratioLabel(lay)}</span>`;
-    asp.setAttribute("aria-label", `Shape of the view: ${ratioLabel(lay)}`);
-    keepFocus(asp, () => openAspectPanel(i));
+    // ONE ⚙ FOR EVERYTHING THIS LAYOUT CAN BE ASKED (owner 2026-08-09, task
+    // 175). Every act on an existing layout kept arriving as its own icon on
+    // the row — a rename pencil, an aspect chip, the shape badge — and task
+    // 165 had just added a fourth. His instruction was to put all of it under
+    // one common settings icon instead of one icon per thing:
+    // "pod neku zajedničku settings ikonicu" — lang-ok: owner quote
+    // The portrait list was honestly graded 6/10 for exactly that crowding.
+    //
+    // Renaming, the aspect ratio, the orientation, the arrangement and taking
+    // one window out all live in the SHEET now (client/layout-settings.js).
+    // The row keeps the two things it can say at a GLANCE — which app, and
+    // what shape — plus the ⚙, and the name inherits the width the pencil and
+    // the aspect chip used to spend (the task-172 finding, continued: the
+    // aspect chip's own label floor is gone with it, since `__nameRoom`
+    // measures the name against the widest button left standing).
+    //
+    // A DRAWN icon (`ICONS.settings`), never a font glyph — the ✥ move handle
+    // came out a blunt cross on his phone in 2026-08-05 and everything has
+    // been drawn geometry since.
+    const gear = document.createElement("button");
+    gear.type = "button";
+    gear.className = "lay-ratio lay-gear";
+    gear.innerHTML = svg("settings");
+    gear.setAttribute("aria-label", "Settings for this layout");
+    keepFocus(gear, () => openLayoutSettings(i));
     // WHERE AND WHEN THE FINGER LANDED. Both the hold timer and the row's own
     // tap are decided from it, so it is declared before either exists.
     let holdTimer = null;
@@ -314,7 +309,7 @@ function openLayoutPicker() {
       if (press && performance.now() - press.at >= HOLD_DRAG_MS) return;
       closeLayoutPanel();
       focusLayout(i);
-    }, shape, ren, asp);
+    }, shape, gear);
     // ⭐ = THE TRUNK, NOT A BRANCH (owner decision 2026-08-09, task 169: one
     // emoji before the first letter, and only in THIS list — the layout
     // selector, where Desktop is; the creation list marks parenthood by
@@ -422,377 +417,6 @@ function nameField(value, placeholder) {
   return el;
 }
 
-// Renaming an existing layout (owner 2026-08-05). Nothing on the PC moves —
-// only what this layout is CALLED in the bar and the list changes.
-function openRenamePanel(index) {
-  const lay = layouts[index];
-  if (!lay) return;
-  layPanel.innerHTML = "";
-  layPanel.hidden = false;
-  const card = document.createElement("div");
-  card.className = "lay-card card-columns";
-  const h = document.createElement("h2");
-  h.textContent = "Layout name";
-  const sub = document.createElement("p");
-  sub.className = "lay-sub";
-  sub.textContent = "Call it whatever you like — the window's title is only the default.";
-  const field = nameField(lay.name || "");
-  card.append(h, sub, field);
-
-  // The app-shortcut ticks used to live here too. They are GONE (owner
-  // 2026-08-07): the PC recognises what is running in a window by itself.
-  // What DOES belong here is the layout's SHAPE (owner 2026-08-07): the
-  // orientation for every grid, and for a THREE which edge its single window
-  // takes. Two and four have nothing else to decide.
-  const grid = gridOf(lay.grid);
-  let orient = lay.orient === "portrait" ? "portrait" : "landscape";
-  let shape = grid;
-  if (grid) {
-    const oLbl = document.createElement("p");
-    oLbl.className = "lay-sub";
-    oLbl.textContent = "Shape:";
-    const oRow = document.createElement("div");
-    oRow.className = "lay-row";
-    const draw = () => {
-      oRow.innerHTML = "";
-      // A picture, not a word (owner round 2, 2026-08-07): the layout's own
-      // grid drawn once per orientation, side by side — the same rule as the
-      // creation panel's shape row and his sheet's own two columns.
-      orientChips((o) => gridSketch(shape, o), orient, (o) => { orient = o; draw(); })
-        .forEach((chip) => oRow.appendChild(chip));
-      if (GRID_CELLS[grid] === 3) {
-        GRID_THREE.forEach((g) => oRow.appendChild(
-          gridChip(g, orient, shape === g, () => { shape = g; draw(); })));
-      }
-    };
-    draw();
-    card.append(oLbl, oRow);
-  }
-
-  const actions = document.createElement("div");
-  actions.className = "lay-actions";
-  actions.appendChild(layChip("Cancel", false, openLayoutPicker)); // back one step
-  actions.appendChild(layChip("Save", true, () => {
-    const name = field.value.trim();
-    if (name && name !== lay.name) send({ type: "layout_rename", index, name });
-    if (grid && (shape !== grid || orient !== lay.orient)) {
-      send({ type: "layout_grid", index, grid: shape, orient });
-      showLayLoading("Reshaping the layout…");
-    }
-    closeLayoutPanel();
-  }));
-  card.appendChild(actions);
-  layPanel.appendChild(card);
-  field.focus();
-  field.select();
-}
-
-// The phone's own side ratio as small whole numbers: raw pixels reduce to
-// unusable pairs (412x892 → 103:223), so this is the best approximation with
-// a denominator of at most 40 — 412x892 → 6:13, 1080x2400 → 9:20.
-function ratioPair(value, maxDen) {
-  let best = [1, 1];
-  let bestErr = Infinity;
-  for (let d = 1; d <= maxDen; d++) {
-    const n = Math.max(1, Math.round(value * d));
-    const err = Math.abs(value - n / d);
-    if (err < bestErr - 1e-9) {
-      bestErr = err;
-      best = [n, d];
-    }
-  }
-  return best;
-}
-
-function devicePair(orient) {
-  const s = Math.min(window.screen.width, window.screen.height);
-  const l = Math.max(window.screen.width, window.screen.height);
-  const [n, d] = ratioPair(s / l, 40); // short : long
-  return orient === "portrait" ? [n, d] : [d, n];
-}
-
-// The panel works on a CONTINUOUS ratio, not on whole units of the device pair
-// (owner 2026-08-04): the pair is a coarse approximation of the screen (a
-// tablet reduces to 7:5), so stepping it by one unit jumped in ~14% chunks and
-// 8:5 was simply unreachable. The state is the plain number W/H; the W:H
-// fields are only a readable rendering of it, and both are freely typeable.
-// The ONE rule survives: the region may only shrink INWARD from the free axis
-// — wide keeps the full height (top/bottom edges pinned), portrait keeps the
-// full width (left/right edges pinned).
-const ASP_MIN_FRAC = 0.15; // never let the region collapse to a slit
-const ASP_SCALE = 1000;    // ratios are sent as round(a * 1000) : 1000
-
-let aspecting = null; // {index, portrait, devA, a, pos, els}
-
-function openAspectPanel(index) {
-  const lay = layouts[index];
-  if (!lay) return;
-  const portrait = lay.orient === "portrait";
-  const dev = devicePair(lay.orient);
-  const devA = dev[0] / dev[1];
-  aspecting = { index, portrait, devA, a: devA,
-                pos: typeof lay.pos === "number" ? lay.pos : 0.5 };
-  if (lay.ratio && lay.ratio[1] > 0) aspecting.a = clampAspect(lay.ratio[0] / lay.ratio[1]);
-  renderAspectPanel();
-}
-
-// Fraction of the free axis the region currently uses (1 = the whole screen).
-function aspFrac(a) {
-  const s = aspecting;
-  return s.portrait ? s.devA / a : a / s.devA;
-}
-
-function clampAspect(a) {
-  const s = aspecting;
-  if (!Number.isFinite(a) || a <= 0) return s.devA;
-  const f = Math.min(1, Math.max(ASP_MIN_FRAC, aspFrac(a)));
-  return s.portrait ? s.devA / f : s.devA * f;
-}
-
-function renderAspectPanel() {
-  const a = aspecting;
-  const lay = layouts[a.index];
-  layPanel.innerHTML = "";
-  layPanel.hidden = false;
-  const card = document.createElement("div");
-  card.className = "lay-card card-columns";
-
-  const h = document.createElement("h2");
-  h.textContent = "Aspect ratio";
-  const sub = document.createElement("p");
-  sub.className = "lay-sub";
-  sub.textContent = `${lay ? lay.name : "Layout"} — ${a.portrait ? "portrait" : "landscape"}: ` +
-    (a.portrait ? "full width, free height" : "full height, free width");
-  card.append(h, sub);
-
-  // W : H — BOTH are typeable now (owner 2026-08-04: "8:5" must be reachable
-  // by typing it). Whatever pair is typed becomes the ratio, clamped by the
-  // one rule; the fields are only refreshed while they are not being edited.
-  const fields = document.createElement("div");
-  fields.className = "asp-fields";
-  const inW = document.createElement("input");
-  const inH = document.createElement("input");
-  [inW, inH].forEach((el) => {
-    el.type = "number";
-    el.inputMode = "numeric";
-    el.min = "1";
-    el.addEventListener("input", () => {
-      const w = parseFloat(inW.value);
-      const h = parseFloat(inH.value);
-      if (!(w > 0) || !(h > 0)) return;
-      a.a = clampAspect(w / h);
-      a.typing = el;
-      updateAspectPreview();
-      a.typing = null;
-    });
-    // Leaving the field snaps its text back onto the (possibly clamped) value.
-    el.addEventListener("blur", updateAspectPreview);
-  });
-  const wLbl = document.createElement("b");
-  wLbl.textContent = "W";
-  const colon = document.createElement("b");
-  colon.textContent = ":";
-  const hLbl = document.createElement("b");
-  hLbl.textContent = "H";
-  fields.append(wLbl, inW, colon, hLbl, inH);
-  card.appendChild(fields);
-
-  // Preview: dashed phone screen, solid region inside it (owner reference —
-  // the Prompt Painter aspect widget).
-  const prev = document.createElement("div");
-  prev.className = "asp-prev";
-  const screenBox = document.createElement("div");
-  screenBox.className = "asp-screen";
-  screenBox.style.aspectRatio = `${a.devA} / 1`;
-  if (a.portrait) screenBox.style.height = "100%";
-  else screenBox.style.width = "100%";
-  const region = document.createElement("div");
-  region.className = "asp-region";
-  ["t", "b", "l", "r"].forEach((side) => {
-    const dot = document.createElement("i");
-    const isFree = a.portrait ? (side === "t" || side === "b") : (side === "l" || side === "r");
-    dot.className = `asp-h ${side}${isFree ? " free" : ""}`;
-    region.appendChild(dot);
-  });
-  // The Move handle (owner 2026-08-05): dragging it slides the shrunken
-  // region along the free axis — it no longer has to sit centered; a
-  // double-tap re-centers it. Everything OUTSIDE the handle still resizes.
-  const move = document.createElement("div");
-  move.className = "asp-move";
-  move.innerHTML = svg("move");
-  dragMove(move, screenBox);
-  region.appendChild(move);
-  screenBox.appendChild(region);
-  // The WHOLE preview drags, not just the two 18px dots — on a tablet those
-  // dots were nearly unhittable, which is what read as "barely responsive".
-  dragAspect(screenBox);
-  prev.appendChild(screenBox);
-  card.appendChild(prev);
-
-  const value = document.createElement("div");
-  value.className = "asp-value";
-  card.appendChild(value);
-
-  const actions = document.createElement("div");
-  actions.className = "lay-actions";
-  actions.appendChild(layChip("Screen", false, () => {
-    a.a = a.devA;
-    updateAspectPreview();
-  }));
-  actions.appendChild(layChip("Cancel", false, () => {
-    aspecting = null;
-    openLayoutPicker(); // back one step, not out of the layouts entirely
-  }));
-  actions.appendChild(layChip("Apply", true, () => {
-    // The full screen is "no override" (0/0); anything else goes as a fine
-    // 1000-scale pair, so the server region is exactly what the preview showed.
-    // `pos` (0–1000, 500 = centered) is the Move handle's position along the
-    // free axis (owner 2026-08-05).
-    const full = aspFrac(a.a) > 0.999;
-    send({
-      type: "layout_aspect", index: a.index,
-      w: full ? 0 : Math.round(a.a * ASP_SCALE), h: full ? 0 : ASP_SCALE,
-      pos: full ? 500 : Math.round(a.pos * 1000),
-    });
-    aspecting = null;
-    closeLayoutPanel();
-    showLayLoading("Reshaping the layout…");
-  }));
-  card.appendChild(actions);
-  layPanel.appendChild(card);
-
-  a.els = { inW, inH, region, value };
-  updateAspectPreview();
-}
-
-function updateAspectPreview() {
-  const a = aspecting;
-  if (!a || !a.els) return;
-  const [n, d] = ratioPair(a.a, 40);
-  if (a.typing !== a.els.inW) a.els.inW.value = n;
-  if (a.typing !== a.els.inH) a.els.inH.value = d;
-  // The region sits at fraction `pos` of the free-axis slack (the Move
-  // handle) — positioned explicitly, replacing the old centered transform.
-  const frac = aspFrac(a.a);
-  const pct = `${frac * 100}%`;
-  const off = `${a.pos * (1 - frac) * 100}%`;
-  const st = a.els.region.style;
-  st.transform = "none";
-  st.width = a.portrait ? "100%" : pct;
-  st.height = a.portrait ? pct : "100%";
-  st.left = a.portrait ? "0" : off;
-  st.top = a.portrait ? off : "0";
-  a.els.value.textContent = `${a.a.toFixed(3)}:1   (${n}:${d})`;
-}
-
-// Dragging anywhere in the preview resizes the region symmetrically around the
-// centre — the region is always centred on the monitor, so a drag can only
-// ever pull it IN from both sides at once. The motion is continuous: the ratio
-// follows the finger pixel by pixel, with no whole-unit steps to snap to.
-function dragAspect(screenBox) {
-  const apply = (e) => {
-    const a = aspecting;
-    if (!a) return; // the panel closed under a captured pointer
-    const r = screenBox.getBoundingClientRect();
-    const raw = a.portrait
-      ? Math.abs(e.clientY - (r.top + r.height / 2)) * 2 / r.height
-      : Math.abs(e.clientX - (r.left + r.width / 2)) * 2 / r.width;
-    const frac = Math.min(1, Math.max(ASP_MIN_FRAC, raw)); // never divide by 0
-    a.a = a.portrait ? a.devA / frac : a.devA * frac;
-    updateAspectPreview();
-  };
-  screenBox.addEventListener("pointerdown", (e) => {
-    e.preventDefault();
-    screenBox.setPointerCapture(e.pointerId);
-    apply(e);
-  });
-  screenBox.addEventListener("pointermove", (e) => {
-    if (screenBox.hasPointerCapture(e.pointerId)) apply(e);
-  });
-}
-
-// The Move handle's own drag (owner 2026-08-05): slides the region along the
-// free axis; a double-tap re-centers. stopPropagation keeps the screen box's
-// resize drag out of the gesture.
-//
-// A DOUBLE TAP IS TWO TAPS, NOT TWO TOUCHES (owner 2026-08-07: "smanjio sam
-// dimenzije layout-a i pokušao da ga privučem dole ali on je i dalje na
-// sredini"). The re-centre used to fire from `pointerdown` on any contact
-// within 350 ms of the previous one — so the very common tap-then-drag was
-// read as a double tap: it put the region back in the MIDDLE and returned
-// without capturing the pointer, killing the drag that was just starting.
-// Both halves of his sentence, from one line. A tap is now only a tap once it
-// has ENDED, quickly and without travel, and a press is always a press.
-// -Infinity, never 0: `0` is a real `performance.now()` reading — it means
-// "a tap at page load" — so every tap in the page's first 350 ms counted as
-// the SECOND tap of a double tap and re-centred the region. The audit caught
-// this in landscape, where the panel opens sooner after load than the 350 ms
-// window (portrait was past it at 623 ms and passed, which is exactly how a
-// timing bug survives a green suite).
-// AND THE LESSON OF THIS BLOCK WAS AVAILABLE TO THE NEXT GESTURE WRITTEN THAT
-// AFTERNOON, AND WENT UNUSED (task 162, 2026-08-09): the layout list's hold
-// shipped the same day with NO tolerance at all, so it never armed on a real
-// finger. The slop is one number now — `HOLD_DRAG_SLOP` at the top of this
-// file, where the hold reads it — because one digitizer asking one question
-// ("did this contact stay put?") must not be answered by two constants that
-// can drift apart.
-let moveTapAt = -Infinity;
-const MOVE_TAP_MS = 350;   // two taps closer than this = re-centre
-const MOVE_TAP_SLOP = HOLD_DRAG_SLOP;  // px: past this the contact was a drag
-function dragMove(handle, screenBox) {
-  const apply = (e) => {
-    const a = aspecting;
-    if (!a) return;
-    const r = screenBox.getBoundingClientRect();
-    const frac = aspFrac(a.a);
-    const freePx = (a.portrait ? r.height : r.width) * (1 - frac);
-    if (freePx < 1) return; // full-size region — nowhere to go
-    const finger = a.portrait ? e.clientY - r.top : e.clientX - r.left;
-    const regionPx = (a.portrait ? r.height : r.width) * frac;
-    a.pos = Math.min(1, Math.max(0, (finger - regionPx / 2) / freePx));
-    updateAspectPreview();
-  };
-  let downAt = 0;
-  let downX = 0;
-  let downY = 0;
-  handle.addEventListener("pointerdown", (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    // Every press captures and may drag. Nothing is decided here — deciding
-    // at DOWN is what made a press into a re-centre.
-    downAt = performance.now();
-    downX = e.clientX;
-    downY = e.clientY;
-    handle.setPointerCapture(e.pointerId);
-  });
-  handle.addEventListener("pointermove", (e) => {
-    if (handle.hasPointerCapture(e.pointerId)) apply(e);
-  });
-  const ended = (e) => {
-    const now = performance.now();
-    const moved = Math.hypot(e.clientX - downX, e.clientY - downY);
-    // Only a contact that STAYED PUT and ended quickly was a tap; a drag
-    // ends the gesture and arms nothing.
-    if (moved > MOVE_TAP_SLOP || now - downAt > MOVE_TAP_MS) {
-      moveTapAt = 0;
-      return;
-    }
-    if (now - moveTapAt < MOVE_TAP_MS) {
-      moveTapAt = 0;
-      if (aspecting) {
-        aspecting.pos = 0.5;   // double tap = back to the middle (owner 2026-08-05)
-        updateAspectPreview();
-      }
-      return;
-    }
-    moveTapAt = now;
-  };
-  handle.addEventListener("pointerup", ended);
-  // A tap Android steals at a screen edge never reaches `pointerup` — the
-  // same rule the control buttons live by (CLAUDE.md constraint 9).
-  handle.addEventListener("pointercancel", ended);
-}
-
 // In the APK, layout focus locks the phone's rotation to the layout's chosen
 // orientation; the full desktop unlocks it (owner 2026-08-02). "" = unlock.
 function applyOrientationLock() {
@@ -806,7 +430,11 @@ function applyOrientationLock() {
 function closeLayoutPanel() {
   layPanel.hidden = true;
   layPanel.innerHTML = "";
-  aspecting = null;
+  // The overlay is ONE element with several contents, so closing it has to
+  // clear whatever state the content that was in it left behind. Only that
+  // content's own file knows what that is — hence a call rather than this
+  // file reaching into the aspect panel's variable (client/layout-settings.js).
+  forgetLayoutSettings();
 }
 
 layPanel.addEventListener("pointerdown", (e) => {
@@ -843,7 +471,7 @@ function layChip(label, selected, onTap, icon) {
 // ends (owner 2026-08-08 — "kao sto kreiranje layouta ima dve opcije"). The
 // second line is what makes it a choice and not a quiz: each act says its own
 // consequence, so the irreversible one is never picked by elimination.
-function chooserBtn(iconName, label, sub, onTap) {
+function chooserBtn(iconName, label, sub, onTap, warn) {
   const el = document.createElement("button");
   el.type = "button";
   el.className = "lay-chip lay-source";
@@ -853,8 +481,38 @@ function chooserBtn(iconName, label, sub, onTap) {
     note.textContent = sub;
     el.appendChild(note);
   }
+  // `warn` is a consequence this act has BEYOND its own subject (owner
+  // 2026-08-09, task 171 — closing these windows would also destroy another
+  // layout). It rides INSIDE the button rather than under the row on purpose:
+  // a line under the pair would read as applying to both acts, and only one
+  // of them can do this. Its own element so it can be styled — and measured —
+  // apart from the ordinary consequence line above it.
+  if (warn) {
+    const bad = document.createElement("small");
+    bad.className = "lay-warn";
+    bad.textContent = warn;
+    el.appendChild(bad);
+  }
   keepFocus(el, onTap);
   return el;
+}
+
+// WHAT ELSE DIES WITH THESE WINDOWS (owner 2026-08-09, task 171). A layout
+// whose content was TORN OUT of a window this one holds is destroyed by
+// closing it — the tab has no home to go back to. The server answers which
+// ones by name (`layout_state.dependents`, read off `Layout.sources`, one
+// record per slot since task 173); nothing here guesses from a title, and a
+// server too old to send the field simply produces no line.
+//
+// It names them rather than counting them: "1 other layout" tells him a
+// number, and what he needs before an irreversible tap is WHICH.
+function dependentWarning(lay) {
+  const deps = Array.isArray(lay.dependents) ? lay.dependents.filter(Boolean) : [];
+  if (!deps.length) return "";
+  const names = deps.map((n) => `“${n}”`).join(", ");
+  return deps.length === 1
+    ? `Also destroys ${names} — its tab was taken out of this window`
+    : `Also destroys ${names} — their tabs were taken out of these windows`;
 }
 
 // THE ✕ ON THE BAR MEANS TWO DIFFERENT THINGS AND USED TO DO ONLY ONE (owner
@@ -871,8 +529,18 @@ function openCloseChooser(index) {
   layPanel.innerHTML = "";
   layPanel.hidden = false;
   const card = document.createElement("div");
-  card.className = "lay-card card-columns";
+  // NO `card-columns` (owner 2026-08-09, task 171 — measured when the
+  // dependency warning was added). This card is not the "many short items"
+  // shape that reflow was cut for (client/panels.css): it is TWO BIG CHIPS
+  // side by side, each capped at 46% of the card, so two columns cut them
+  // from 350 px to 160 px and every line inside them wraps two or three times
+  // deeper. With the third line this task adds, that overflowed the card
+  // SIDEWAYS at 915x412 — a `column-count` card grows a third column rather
+  // than a scrollbar — which the audit caught as `noClip` the same hour.
+  // In one column the chips are wide, the card is short, and nothing spills.
+  card.className = "lay-card";
   const h = document.createElement("h2");
+  h.className = "lay-name-line";   // one line, like the row it was opened from
   h.textContent = lay.name;
   const sub = document.createElement("p");
   sub.className = "lay-sub";
@@ -890,7 +558,7 @@ function openCloseChooser(index) {
     "On the PC, like pressing its own ✕", () => {
       closeLayoutPanel();
       send({ type: "layout_remove", index, close: true });
-    }));
+    }, dependentWarning(lay)));
   const actions = document.createElement("div");
   actions.className = "lay-actions";
   actions.appendChild(layChip("Cancel", false, closeLayoutPanel));
@@ -981,7 +649,10 @@ function openMemberPanel(index) {
     }
     const actions = document.createElement("div");
     actions.className = "lay-actions";
-    actions.appendChild(layChip("Cancel", false, openLayoutPicker)); // back one step
+    // Back one step — the ⚙ sheet, which is where this panel is reached from
+    // (the row's shape badge is a SHORTCUT into the same chain, task 175, so
+    // backing out of it lands on that layout's sheet and not on the list).
+    actions.appendChild(layChip("Cancel", false, () => openLayoutSettings(index)));
     card.appendChild(actions);
     layPanel.appendChild(card);
   };

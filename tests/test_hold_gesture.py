@@ -50,6 +50,12 @@ PROJECT = Path(__file__).resolve().parent.parent
 MODULE = PROJECT / "client" / "hold-gesture.js"
 LAYOUTS_JS = PROJECT / "client" / "layouts.js"
 LAYOUTS_CSS = PROJECT / "client" / "layouts.css"
+# The Move handle moved to client/layout-settings.js on 2026-08-09 (task 175 —
+# every act on an existing layout went under one ⚙, and layouts.js crossed THE
+# STRUCTURE LAW's 1,000 lines). The DERIVATION this gate pins went with it, so
+# the check reads both files: what must stay true is that one digitizer asking
+# one question has one number, wherever the two halves happen to live.
+SETTINGS_JS = PROJECT / "client" / "layout-settings.js"
 INDEX = PROJECT / "client" / "index.html"
 
 # The product's own limits, so the sequences below are driven at the numbers
@@ -57,6 +63,7 @@ INDEX = PROJECT / "client" / "index.html"
 # gate that carries its own copy of a constant stops testing the product the
 # day somebody tunes it).
 SRC = LAYOUTS_JS.read_text(encoding="utf-8")
+SETTINGS_SRC = SETTINGS_JS.read_text(encoding="utf-8")
 
 
 def _const(name: str) -> float:
@@ -284,7 +291,13 @@ def check_the_tap_refuses_a_press_that_lasted() -> None:
     (CLAUDE.md constraint 12) and its stolen-tap rescue is constraint 9, so it
     must NOT be changed — the refusal belongs to the row, where the hold's own
     limits are known."""
-    m = re.search(r"const row = layRow\((.*?)ren, asp\);", SRC, re.S)
+    # `shape, gear` since 2026-08-09 (task 175 — the rename pencil and the
+    # aspect chip moved into the ⚙ sheet, so the row's trailing arguments
+    # changed from `ren, asp` to `shape, gear`). The ANCHOR is what the row is
+    # built with, not how many controls ride on it; matching to the end of the
+    # `layRow(` call keeps this pinned to the row itself while leaving the next
+    # round free to change what trails it.
+    m = re.search(r"const row = layRow\((.*?)\n    \}, [\w, ]+\);", SRC, re.S)
     if not m:
         raise AssertionError("the layout list's rows are no longer built by layRow")
     tap = _code(m.group(1))
@@ -351,7 +364,8 @@ def check_one_number_answers_one_question() -> None:
     tap-versus-drag tolerance, written the SAME DAY this gesture shipped with
     none — must be the same number, by derivation and not by coincidence, so
     the two cannot drift apart again."""
-    if not re.search(r"const MOVE_TAP_SLOP = HOLD_DRAG_SLOP\s*;", SRC):
+    if not re.search(r"const MOVE_TAP_SLOP = HOLD_DRAG_SLOP\s*;",
+                     SRC + SETTINGS_SRC):
         raise AssertionError(
             "MOVE_TAP_SLOP is a second, independent copy of the slop again — "
             "one digitizer asking one question must have one number")

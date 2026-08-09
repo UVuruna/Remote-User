@@ -181,6 +181,44 @@
   white-space: normal;
   overflow-wrap: anywhere;
 }
+/* WHAT ELSE DIES WITH THESE WINDOWS (owner 2026-08-09, task 171): the layouts
+   whose content was torn OUT of a window this one holds, named before he taps.
+   It is a second line INSIDE the close chip — never under the pair, where it
+   would read as applying to both acts — and it is the only text on this card
+   that must not be mistaken for the ordinary consequence line above it, so it
+   carries the warning fill and full opacity. It wraps and never truncates,
+   for the reason its neighbour does: a consequence that is cut off is not a
+   consequence he was told.
+
+   A FILLED STRIP, NOT COLOURED INK. `color: var(--warning)` was the first
+   attempt and the audit measured it at 4.37:1 on the LIGHT card — under the
+   4.5:1 floor, because the light palette's warning is a mid-brown chosen to
+   be a FILL. The token pair that exists for exactly this is
+   `--warning` / `--on-warning`, and it is guaranteed on both themes (the
+   status pill's own contrast check reads the same pair). Using the pair the
+   palette defines beats inventing a third colour, and a filled strip is also
+   the stronger reading: nothing else on this card is filled. */
+/* A PHONE HELD SIDEWAYS SPENDS LESS AIR (the fix ladder, rung 1 read the
+   other way round — the same move `panels.css` makes for the Name field).
+   These chips are tuned for a 915 px-tall portrait card; on a 412 px-tall
+   landscape one the ✕ chooser with its dependency warning ran 4 px past what
+   fits, which is a scrollbar beside 155 px of idle width — BUG A. The air
+   between the icon, the label and the two consequence lines is what pays for
+   it, and nothing readable gets smaller. A TABLET sideways keeps the roomier
+   chip: it has the height, so there is nothing to buy. */
+@media (orientation: landscape) and (max-height: 560px) {
+  .lay-source { padding: 18px 12px 14px; gap: 10px; }
+  .lay-source svg { width: 52px; height: 52px; }
+}
+.lay-source small.lay-warn {
+  margin-top: 6px;
+  opacity: 1;
+  padding: 4px 8px;
+  border-radius: 8px;
+  background: var(--warning);
+  color: var(--on-warning);
+  font-weight: 600;
+}
 .lay-list {
   max-height: 38vh;
   overflow-y: auto;
@@ -274,7 +312,10 @@
   white-space: nowrap;
 }
 .lay-ratio svg { width: 20px; height: 20px; }
-.lay-rename { padding: 0 10px; } /* icon only — the pencil needs no label */
+/* The ⚙ (owner 2026-08-09, task 175) — icon only, like the pencil and the
+   aspect chip it replaces. It is the row's ONE door to everything a layout can
+   be asked; see client/layout-settings.js. */
+.lay-gear { padding: 0 10px; }
 /* The row's SHAPE (owner request 2026-08-09, task 164) — the layout's own
    grid, drawn. Its own kin group: a fixed picture in a fixed box, so every
    row's shape button is the same width whatever the layout holds, and it is
@@ -308,30 +349,57 @@
   line-height: 20px;
   margin-right: -5px;
 }
-/* …and the aspect chips are one kin group too (owner 2026-08-09, task 163 —
-   found by OPENING the audit's own screenshot of the fixed rows). Their labels
-   are "Screen" on one row and "3:5" on the next, so a chip sized to its own
-   text made every sibling row a different shape: the main button beside a
-   narrow chip ran 32 px longer than its neighbour's. One floor, and the pair
-   is centred in it; a label wider than the floor still takes the room it
-   needs, so nothing is ever cut.
+/* THE LABEL FLOOR IS GONE WITH THE LABEL (owner 2026-08-09, task 175). A rule
+   `.lay-ratio:not(.lay-rename):not(.lay-shape) { min-width: 66px }` stood here
+   from 2026-08-05 to today: the aspect chip's text is "Screen" on one row and
+   "3:5" on the next, so a chip sized to its own text made every sibling row a
+   different shape (task 163's kin rule, arriving through the trailing half of
+   the row) and one floor held them together. That chip has left the row — the
+   aspect ratio is a line in the ⚙ sheet now — and with it the only LABEL a
+   trailing control here ever carried. Both remaining controls are icon-only
+   and drawn at a fixed size, so they agree by construction and there is
+   nothing left for a floor to hold together. It is deleted rather than kept
+   "in case": a rule that matches nothing is a rule the next round has to
+   reason about, and `__nameRoom` (tests/_audit_js.py) is what actually keeps
+   the name wider than the buttons beside it. */
 
-   THE FLOOR IS DERIVED, NOT CHOSEN (independent grader, 2026-08-09, task 172).
-   It was 96 px, which was the natural width of `svg("aspect")` + "Screen" — a
-   glyph meaning "aspect ratio" in front of a word saying which aspect ratio.
-   The glyph is gone (client/layouts.js), so the widest label this chip can
-   ever hold is "Screen" itself: 36 px of text in 24 px of padding inside a
-   1 px border = 62 px, measured on the real page, plus the same ~4 px of
-   headroom the 96 px floor carried over its own 92 px of content — a device
-   whose system font runs a little wider must not split the kin group. That is
-   30 px handed back to the NAME on every row, which is where the row's one
-   irreplaceable fact lives; the tooth that keeps it there is `__nameRoom` in
-   tests/_audit_js.py. Re-measure this number if the label ever changes; do not
-   round it up "to be safe", because every pixel of it is taken from the name. */
-.lay-ratio:not(.lay-rename):not(.lay-shape) {
-  min-width: 66px;
-  justify-content: center;
+/* A short trailing FACT on a row — "3:5" beside Aspect ratio in the ⚙ sheet,
+   "minimized" beside a window in the creation list. `flex: none` and no
+   wrapping, so the row stays exactly one line and it is the TITLE that gives
+   way (task 163). Declared here, in the file that owns `.lay-item-main`, and
+   named for both users: the creation panel had its own copy
+   (`.lc-note` in client/layout-create.css) until 2026-08-09, and two rules for
+   one idea is how the two come to disagree. */
+.lay-item-main .lay-note,
+.lay-item-main .lc-note {
+  flex: none;
+  white-space: nowrap;
+  color: var(--text-secondary);
+  font: 600 11px system-ui, sans-serif;
 }
+
+/* WHICH LAYOUT a card is about — its heading (the ✕ chooser) or its
+   sub-heading (the ⚙ sheet). The one long string on those cards, so it takes
+   the list row's own treatment (task 163): one line, cut by CSS, with the full
+   name one tap away — the same argument the row is elided under. Its own class
+   rather than a rule on `h2` or `.lay-sub`, because every other heading on
+   these cards is a SENTENCE or a fixed word that must be shown whole.
+   The ✕ chooser needs it for a second, measured reason: a 111-character window
+   title wrapped its heading to three lines and pushed that card 32 px past
+   what a 915x412 phone allows — a scrollbar beside 155 px of idle width,
+   which is BUG A of THE SPACE & LEGIBILITY LAW. */
+.lay-name-line {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis; /* layout-law: exempt - owner 2026-08-09 (task 163/175): a card's name heading is one line like a row; the full name wraps one tap away in the Rename card this heading sits above */
+}
+
+/* A MENU row (client/layout-settings.js): the list's own row, standing still.
+   `.lay-item` refuses the browser's pan because a row of the LAYOUT LIST is a
+   drag surface — hold it, drop it on another, and the two become a grid — and
+   inheriting that here would take the sheet's own scrolling away on a short
+   landscape screen. The same trade `.lc-row` makes next door. */
+.lay-item.lay-menu { touch-action: auto; }
 
 /* The layout's own name (owner 2026-08-05): typed when it is created, and
    changeable later from the list. Full width — window titles are long. */

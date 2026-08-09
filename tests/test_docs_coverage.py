@@ -95,6 +95,14 @@ STANDARD = {
     # catalogue is the owner's drawing and the WHY lives in its header and its
     # __about; grids.js keeps the flow (which panel asks what).
     "client/grid-icons.js",
+    # New 2026-08-09 (owner, task 175 — one common ⚙ instead of one icon per
+    # act): the per-layout settings sheet and the panels it opens (rename,
+    # aspect ratio, orientation, arrangement). Split out of layouts.js the day
+    # that file crossed 1,000 lines. Standard, not Algorithmic — it is a MENU
+    # and the panels behind it: the one rule it carries ("offer only what this
+    # layout can take") is a sentence in its __about, and the flow it belongs
+    # to is the layout list's, documented once in client/__flow/layouts.md.
+    "client/layout-settings.js",
     "client/load_test.js",
     "client/state.js",
     "client/panels.js",

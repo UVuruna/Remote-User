@@ -105,6 +105,11 @@ const FILES = [
   "grid-icons.js",
   "grids.js",
   "layouts.js",
+  // The per-layout ⚙ sheet and the panels it opens, split off layouts.js on
+  // 2026-08-09 (task 175). It reads `HOLD_DRAG_SLOP` from that file AT LOAD,
+  // which is exactly the class of reference this test exists to catch, so the
+  // order here is the order index.html loads them in.
+  "layout-settings.js",
   // The creation wizard, split off layouts.js on 2026-08-08. It reads that
   // file's panel vocabulary at load, so it is listed straight after it.
   "layout-create.js",

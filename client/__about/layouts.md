@@ -5,11 +5,18 @@
 
 ## Purpose
 
-The whole phone-side layout feature (Phase F+): the loading animation, the
-top-center layout bar, the layout LIST, the per-layout ASPECT RATIO panel and
-the creation flow (source chooser → slots → Create). Fifth of the seven client
-scripts to load — after [Controls](controls.md) (whose `keepFocus`, `svg`,
-`showToast` and `IN_APP` it uses), before [Gestures](gestures.md).
+LIVING with the layouts that exist: the loading animation, the top-center
+layout bar, the layout LIST and its drag, the ✕ chooser and the member chooser
+— which layouts exist, which one is shown, and which windows are in them.
+Loads after [Controls](controls.md) (whose `keepFocus`, `svg`, `showToast` and
+`IN_APP` it uses), before [Gestures](gestures.md).
+
+Two siblings carry the rest of the feature, split off under THE STRUCTURE LAW:
+[Layout Create](layout-create.md) MAKES a layout (2026-08-08), and
+[Layout Settings](layout-settings.md) CHANGES one — the per-layout ⚙ sheet,
+the rename card, the aspect-ratio panel and the orientation/arrangement
+choosers (2026-08-09, owner task 175). Both borrow this file's panel
+vocabulary and its `.lay-item` row markup; nothing is copied.
 
 Split out of [Controls](controls.md) on 2026-08-03, when that file crossed THE
 STRUCTURE LAW's 1,000 lines. The boundary is a responsibility one, not a size
@@ -57,13 +64,18 @@ everything here composes and frames WINDOWS on it.
 - **Layout bar** — `updateLayoutBar`, `layoutStep(dir)`, `focusLayout(index)`
   (index −1 = full desktop), `applyOrientationLock` (drives the shell's
   `Android.lockOrientation`: layout focus = locked, desktop = free).
-- **Layout list** — `openLayoutPicker`, `layRow`, `ratioLabel`: every layout
-  at once (Desktop first), a row taps to focus, its trailing buttons are the
-  layout's own SHAPE (task 164, below), the RENAME card (pencil) and the
-  aspect panel. `layRow`'s badge argument takes three kinds now — an app-icon
-  URL, `{draw: markup}` for a drawing we made, or `null` for the Desktop row's
-  monitor — because the member chooser's badge is a third thing and a builder
-  that could only draw two of them would have been copied instead of reused.
+- **Layout list** — `openLayoutPicker`, `layRow`: every layout at once
+  (Desktop first), a row taps to focus. Since task 175 (owner 2026-08-09) the
+  row is `[icon][⭐][name][shape][⚙]` — the two facts it can carry at a GLANCE
+  (which app, what shape) and ONE door to everything else. The rename pencil
+  and the aspect chip that used to trail it are gone into that door
+  ([Layout Settings](layout-settings.md)); his instruction was to put every act
+  under one common settings icon rather than give each its own, and the
+  portrait list had been graded 6/10 for exactly that crowding. `layRow`'s
+  badge argument takes three kinds — an app-icon URL, `{draw: markup}` for a
+  drawing we made, or `null` for the Desktop row's monitor — because the member
+  chooser's badge is a third thing and a builder that could only draw two of
+  them would have been copied instead of reused.
 - **The row says what shape the layout is** (owner request 2026-08-09, task
   164). A solo window, a two-split and a four-grid read identically while a
   row carried only a name, so the only way to tell them apart was to OPEN one.
@@ -74,9 +86,11 @@ everything here composes and frames WINDOWS on it.
   button, which is also the DOOR to the member chooser; a SOLO layout renders
   the same picture as a `<span>` instead, because it has nothing to throw out
   and a button that does nothing is a promise the panel cannot keep. It is
-  deliberately outside the aspect chip's label floor (that floor makes two
-  different LABELS agree — a drawing has no label to disagree about, and three
-  floored chips would leave a phone-width row nothing for the name).
+  the DOOR to the member chooser; a SOLO layout renders the same picture as a
+  `<span>` instead. The aspect chip's 96 px label floor that used to sit beside
+  it is GONE with the chip (task 175): both remaining controls are icon-only
+  and drawn at a fixed size, so they agree by construction and there is nothing
+  left for a floor to hold together.
 - **The name outranks the buttons beside it** (independent grader, 2026-08-09,
   task 172: *"the starred row spends its width on two leading badges plus three
   trailing buttons and leaves the name 'Claude Cod…' — nine characters, one
@@ -144,8 +158,10 @@ everything here composes and frames WINDOWS on it.
   because inline it was untestable and therefore untested for two days while
   the feature was dead on the phone. See **A hold is a contact that STAYED
   PUT** and **One row is one line** below.
-- **Naming** — `nameField(value, placeholder)`, `openRenamePanel(index)`
-  (owner 2026-08-05). A layout's auto name is the target window's title; the
+- **Naming** — `nameField(value, placeholder)` lives here (both siblings use
+  it); `openRenamePanel(index)` moved to
+  [Layout Settings](layout-settings.md) with the rest of the ⚙ sheet
+  (2026-08-09). A layout's auto name is the target window's title; the
   creation panel offers it prefilled in an editable Name field (`creating.name`
   — `null` follows the title, `""` sent means "keep it"), and the list's
   pencil renames an existing one via `layout_rename {index, name}` without
@@ -153,10 +169,12 @@ everything here composes and frames WINDOWS on it.
   input: window titles are long enough that a single line hid most of one
   behind its own horizontal scroll (caught by `tests/test_layout_audit.py`,
   THE SPACE & LEGIBILITY LAW); newlines are stripped as they are typed.
-- **Aspect panel** — `openAspectPanel`, `renderAspectPanel`,
-  `updateAspectPreview`, `aspFrac`, `clampAspect`, `dragAspect`, `ratioPair`,
-  `devicePair`: W : H fields over a dashed phone-screen preview with the region
-  inside it. The state is one continuous number (`a` = W/H); the fields render
+- **Aspect panel** — moved to [Layout Settings](layout-settings.md) on
+  2026-08-09 (`openAspectPanel`, `renderAspectPanel`, `updateAspectPreview`,
+  `aspFrac`, `clampAspect`, `dragAspect`, `ratioPair`, `devicePair`): W : H
+  fields over a dashed phone-screen preview with the region inside it. Its
+  rules are unchanged and its Design Decisions stay below, where they were
+  argued. The state is one continuous number (`a` = W/H); the fields render
   it and either one may be typed. Nothing moves on the PC until Apply, which
   sends `layout_aspect {index, w, h}` on a 1000-scale (`0/0` = Screen).
 - **Creation** — `openSourceChooser`, `armNextTap`, `handleLayoutOffer`,
@@ -346,20 +364,17 @@ everything here composes and frames WINDOWS on it.
   [Window Manager](../../server/__about/window_manager.md) for what the stored
   copy cost.
 
-## App shortcuts are chosen here (owner 2026-08-06)
+## The row's two facts, and one door (owner 2026-08-09, task 175)
 
-The creation panel and the rename card both carry the row **"App shortcuts on
-the wheel for this layout"** — the ticks that decide which app-aware sets ride
-while this layout is focused. `autoAppSets()` pre-ticks every set whose
-`process` matches the first slot and that demands no title, which is correct
-for Chrome, Explorer and plain VSCode; Claude is the single tap the owner adds
-himself, because nothing on the PC can identify a Claude Code conversation
-(the probe is in [sets](sets.md)).
+A row of the layout list shows what it can say at a GLANCE — the app's icon,
+the ⭐ if other layouts' content lives in its windows, the NAME, and the drawn
+SHAPE — plus a ⚙. Everything a layout can be ASKED lives behind that one icon:
+rename, aspect ratio, orientation, arrangement, and taking one window out. See
+[Layout Settings](layout-settings.md) for the sheet and for why orientation is
+an act rather than a door.
 
-They sit in the rename card rather than as a third button in each list row:
-the row already carries rename and ratio, and a fourth control is what THE
-SPACE & LEGIBILITY LAW keeps catching. Both panels are audited at their
-fullest — long title AND four chips — in `tests/test_layout_audit.py`.
-
-`layout_create` carries the list; `layout_apps {index, sets}` changes it
-later, and nothing on the PC moves when it does.
+The section that stood here until 2026-08-09 described a row of app-shortcut
+TICKS in the rename card. Those were removed on 2026-08-07 — the PC recognises
+what runs in a window by itself (`agents` in every state frame) — and the page
+already said so two bullets above; the section outlived the feature it
+described, which is the drift the Living Docs Rule exists to stop.

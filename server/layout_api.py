@@ -233,7 +233,16 @@ async def layout_create(ws, layouts, stream, conn: dict, msg: dict) -> None:
         await toast(ws, "Those windows are gone — layout not created")
         await send_layout_state(ws, layouts, conn)
         return
-    target, name, source = resolved[0]
+    target, name, _ = resolved[0]
+    # EVERY SLOT'S SOURCE, NOT ONLY THE FIRST (task 173, 2026-08-09). The
+    # triple's third value is the window a tab was torn OUT of, and only
+    # `resolved[0]`'s used to be kept — so a tab extracted into cell 2, 3 or 4
+    # of a grid left no record, and the ⭐ (task 169) plus the ✕ chooser's
+    # warning (task 171) both under-reported on exactly the layouts they exist
+    # for. Keyed by the extracted window, because `create` filters and
+    # truncates the member list and a positional list would have to be kept in
+    # step by hand.
+    sources = {h: s for h, _, s in resolved if s}
     # The phone may carry the owner's own name (owner 2026-08-05); the tab /
     # window title stays the default the panel prefilled it with.
     typed = str(msg.get("name", "")).strip()[:80]
@@ -259,7 +268,7 @@ async def layout_create(ws, layouts, stream, conn: dict, msg: dict) -> None:
     created = await asyncio.to_thread(
         layouts.create, target, "grid" if template else "solo",
         template, [h for h, _, _ in resolved[1:]],
-        orient, conn["ratio"], mon_rect(stream), name, source)
+        orient, conn["ratio"], mon_rect(stream), name, sources)
     if created is None:
         await toast(ws, "That window is gone — layout not created")
     else:

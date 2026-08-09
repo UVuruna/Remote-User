@@ -236,6 +236,12 @@
   <script src="/static/grid-icons.js"></script>
   <script src="/static/grids.js"></script>
   <script src="/static/layouts.js"></script>
+  <!-- After layouts.js, which it reads AT LOAD (`HOLD_DRAG_SLOP` — the Move
+       handle's tap slop is derived from the row hold's, one digitizer and one
+       number). Everything a layout that already exists can be asked: the ⚙
+       sheet, the rename card, the aspect panel, the orientation and the
+       arrangement (owner 2026-08-09, task 175). -->
+  <script src="/static/layout-settings.js"></script>
   <script src="/static/layout-create.js"></script>
   <!-- The pad maps onto everything above it (groups, wheel, layout bar). -->
   <script src="/static/gamepad.js"></script>

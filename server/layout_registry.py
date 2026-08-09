@@ -36,15 +36,29 @@ class Layout:
 
     def __init__(self, name: str, process: str, members: list[int],
                  template: str | None, orient: str, aspect: float,
-                 icon: str | None = None, source: int = 0, folder: str = ""):
+                 icon: str | None = None, sources: dict[int, int] | None = None,
+                 folder: str = ""):
         self.name = name
         self.process = process
         # WHERE this layout's project is READ FROM — never the answer itself.
-        # `source` is the window an extracted tab was torn out of (0 = none);
-        # `folder` is the project its title named at creation, the last resort
-        # for when that window is gone. This used to be the window's TITLE,
-        # frozen — see `project()` and __about/window_manager.md.
-        self.source = source
+        # `sources` maps an extracted member window to the window its TAB was
+        # torn out of; `folder` is the project the pair's titles named at
+        # creation, the last resort for when that source window is gone. This
+        # used to be the window's TITLE, frozen — see `project()` and
+        # __about/layout_registry.md.
+        #
+        # ONE ENTRY PER SLOT, NOT ONE PER LAYOUT (task 173, 2026-08-09). It was
+        # a single `source` int written from the FIRST slot alone, so a tab
+        # extracted into cell 2, 3 or 4 of a grid left no record at all — and
+        # both readers of that record under-reported: the ⭐ that says "another
+        # layout's content lives in a window of this one" (task 169) and the
+        # ✕ chooser's warning built on it (task 171). A dict keyed by the
+        # MEMBER rather than a list keyed by position, because members are
+        # filtered on the way in (a dead handle, a duplicate) and re-ordered on
+        # the way out (`drop_member`, `merge`) — a positional list would have
+        # to be kept in step by every one of those paths, which is exactly the
+        # kind of second bookkeeping this project keeps paying for.
+        self.sources = dict(sources or {})
         self.folder = folder
         self.members = members
         # WHICH member holds the keyboard (owner 2026-08-06). The phone types
@@ -76,6 +90,16 @@ class Layout:
         self.pos: float = 0.5
         self.arranged_ratio: tuple[int, int] | None = None
         self.place_pending: bool = False
+
+    @property
+    def source(self) -> int:
+        """The window THIS layout's first member was torn out of (0 = none).
+
+        A read of `sources`, never a second field: `project()` asks about
+        `members[0]` and about nothing else, so the answer has to follow that
+        member when the list changes under it (`drop_member` removing cell 0,
+        `merge` re-ordering). A stored int could only have gone stale."""
+        return self.sources.get(self.members[0], 0) if self.members else 0
 
     def project(self) -> str:
         """The project folder this layout's window belongs to, MEASURED every
@@ -124,6 +148,10 @@ class LayoutRegistry:
                 else:
                     wm.drop_topmost(hwnd)
             lay.members = alive
+            # A member that is gone takes its source record with it: the record
+            # is what makes ANOTHER layout wear the ⭐, and a layout must never
+            # be marked as the trunk of a branch it no longer holds.
+            lay.sources = {h: s for h, s in lay.sources.items() if h in alive}
             if alive and lay.last_member not in alive:
                 lay.last_member = alive[0]  # the typing target closed at the desk
         kept = [i for i, lay in enumerate(self.layouts) if lay.members]
@@ -133,7 +161,7 @@ class LayoutRegistry:
     def create(self, target: int, mode: str, template: str | None,
                fill: list[int], orient: str, device_ratio: float,
                mon_rect: tuple[int, int, int, int], name: str | None = None,
-               source: int = 0) -> tuple[int, bool] | None:
+               sources: dict[int, int] | None = None) -> tuple[int, bool] | None:
         """Arrange the windows and register the layout. Returns (index, all
         members verified on their rects), or None when the target window died
         between pick and create. device_ratio = the phone's short/long side
@@ -156,17 +184,23 @@ class LayoutRegistry:
             members = members[:1]
             placed = wm.place_window(
                 target, wm.layout_region(wm._work_area(mon_rect), aspect))
-        # `source` = the window a tab was torn out of (0 = whole window); the
-        # project is LOGGED, so HIS log says what the wheel will offer.
+        # `sources` = per member, the window whose TAB it was torn out of
+        # (absent = a whole window); the project is LOGGED, so HIS log says
+        # what the wheel will offer. Only the members that SURVIVED the
+        # truncation above keep a record — a slot that never became a member
+        # cannot make this layout anybody's trunk.
+        kept = {h: s for h, s in (sources or {}).items() if h in members and s}
         title = wm._title(target) or ""
         name = name or title or "Window"
-        folder = agents.first_folder([title, wm._title(source) if source else ""])
-        logger.info("Layout %r from %#x (tab source %#x): title %r, project %r",
-                    name, target, source, title, folder)
+        first = kept.get(target, 0)
+        folder = agents.first_folder([title, wm._title(first) if first else ""])
+        logger.info("Layout %r from %#x (tab sources %s): title %r, project %r",
+                    name, target, {f"{h:#x}": f"{s:#x}" for h, s in kept.items()},
+                    title, folder)
         self.layouts.append(Layout(name, wm._process_name(target), members,
                                    template, orient, aspect,
                                    wm.icon_data_uri(wm._process_path(target)),
-                                   source, folder))
+                                   kept, folder))
         return len(self.layouts) - 1, placed
 
     def focus(self, index: int, device_ratio: float,
@@ -400,6 +434,11 @@ class LayoutRegistry:
             self.remove(index)
             return "removed"
         hwnd = lay.members.pop(member)
+        # Its source record leaves with it: the record is what makes the window
+        # it was torn OUT of wear the ⭐ (task 169) and what the ✕ chooser's
+        # warning is built from (task 171). A layout that no longer holds the
+        # branch must stop making anybody its trunk.
+        lay.sources.pop(hwnd, None)
         # Back to being an ordinary desktop window, in this order: the
         # animation first, then out of the topmost band (drop_topmost is what
         # takes it off the ledger, so nothing can strand it up there).
@@ -442,6 +481,11 @@ class LayoutRegistry:
         # `_template_for`, which `drop_member` shrinks a layout by too, so
         # growing and shrinking can never disagree about what a three is.
         dst.members = members
+        # The dragged layout's source records travel with its windows — the
+        # source layout is about to disappear, and a branch that loses its
+        # record silently un-stars its own trunk.
+        dst.sources = {h: s for h, s in {**dst.sources, **src.sources}.items()
+                       if h in members}
         dst.template = self._template_for(len(members), grid)
         dst.place_pending = True    # the shape changed — re-place on focus
         self.layouts.pop(source)
@@ -540,21 +584,32 @@ class LayoutRegistry:
                 region = None
         if active is not None and not 0 <= active < len(self.layouts):
             active, region = None, None
-        # WHO IS THE TRUNK (owner decision 2026-08-09, task 169 — the ⭐ on the
-        # layout selector's rows). A layout is a PARENT when one of its member
-        # windows is the window ANOTHER layout's content was torn out of:
-        # closing it would take that other layout's tab with it, which is
-        # exactly the thing worth a mark before he taps ✕.
+        # WHO IS THE TRUNK, AND WHAT HANGS OFF IT (owner decision 2026-08-09,
+        # task 169 — the ⭐ on the layout selector's rows; task 171 — the ✕
+        # chooser must NAME what closing this layout's windows would destroy).
+        # A layout is a PARENT when one of its member windows is the window
+        # ANOTHER layout's content was torn out of: closing it takes that other
+        # layout's tab with it, which is exactly the thing worth saying before
+        # he taps.
         #
-        # Read off `Layout.source`, which `resolve_slot` already records at
+        # Read off `Layout.sources`, which `resolve_slot` records per SLOT at
         # creation — no new probe, no guess from a title, and no new field on
         # any window. Paired with the layout it belongs to so a layout can
         # never be its own parent: the window a tab came out of may itself be
         # a member of the SAME layout, and closing that pair together
-        # surprises nobody. The honest limit is recorded in __about/web.md —
-        # only the FIRST slot's source is stored per layout, so this can
-        # under-report, never over-report.
-        sources = [(id(lay), lay.source) for lay in self.layouts if lay.source]
+        # surprises nobody.
+        #
+        # `dependents` is the NAMES, in list order, and `parent` is simply
+        # whether there are any — one computation, so the star and the warning
+        # can never disagree about which row is a trunk. Until task 173 only
+        # the FIRST slot's source was stored, so a tab extracted into cell 2+
+        # of a grid left no record and BOTH under-reported; every slot is
+        # recorded now.
+        owners = [(lay, src) for lay in self.layouts for src in lay.sources.values()]
+        dependents = {
+            id(lay): [other.name for other, src in owners
+                      if other is not lay and src in lay.members]
+            for lay in self.layouts}
         return {
             "type": "layout_state",
             "layouts": [{"name": lay.name, "process": lay.process,
@@ -587,11 +642,13 @@ class LayoutRegistry:
                          # the picture (client/grid-icons.js), the title is
                          # the word. Read live, like `title` beside it.
                          "member_titles": [wm._title(h) for h in lay.members],
-                         # The ⭐ (owner 2026-08-09, task 169) — see `sources`
-                         # above. True only when ANOTHER layout's content came
-                         # out of a window this one holds.
-                         "parent": any(src in lay.members for who, src in sources
-                                       if who != id(lay)),
+                         # The ⭐ (owner 2026-08-09, task 169) and the ✕
+                         # chooser's warning (task 171) — see `owners` above.
+                         # The names of every OTHER layout whose content came
+                         # out of a window this one holds; the star is simply
+                         # whether that list is empty.
+                         "dependents": dependents[id(lay)],
+                         "parent": bool(dependents[id(lay)]),
                          "orient": lay.orient, "icon": lay.icon,
                          "ratio": list(lay.ratio) if lay.ratio else None,
                          # The free-axis anchor of the letterboxed picture on

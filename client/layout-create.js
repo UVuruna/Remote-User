@@ -269,28 +269,60 @@ function renderCreationPanel() {
   layPanel.innerHTML = "";
   layPanel.hidden = false;
   const card = document.createElement("div");
-  // `card-columns` — a MEASURED decision, not the inheritance it used to be
-  // (owner width question 2026-08-09, task 172). This is the tallest panel
-  // the phone has, and it is the panel the all-landscape reflow was cut for
-  // this morning; one column does not fit it in EITHER landscape size (630 px
-  // of content in a 377 px card at 915x412, 749 px in 734 px on a 1280x800
-  // tablet), so taking the columns away here trades a scrollbar for names
-  // nobody asked to lose — BUG A, with 155 px and 520 px of width standing
-  // idle beside it. Its rows carry no trailing controls, so two columns still
-  // give the name 319 px of a 347 px row: 48 of a 62-character VS Code title,
-  // against the layout list's 12. See the rule in client/panels.css.
-  card.className = "lay-card card-columns";
+  // A SCROLLING LIST MAY NOT LIVE INSIDE A COLUMNED CARD (found 2026-08-09 by
+  // photographing this panel at 915x412 — the round's own verification). The
+  // landscape reflow of task 172 made this card a `column-count: 2`
+  // FRAGMENTAINER, and the list inside it is a scroll container: the fourth of
+  // six rows came out sliced through the middle, 10 px above the "Shape:"
+  // block in the same column, with rows five and six nowhere and no scrollbar
+  // to say they existed. Measured in a real Chromium: a scroller inside a
+  // multicol is not clipped by its own box at all — `overflow: hidden` does
+  // not clip it either, and the same staging with twenty windows put fourteen
+  // rows off the bottom of the screen entirely, unreachable, while the card
+  // reported no scroll of its own to make.
+  //
+  // The columns are still RIGHT for this panel — it is the tallest the phone
+  // has, and one column does not fit it in either landscape size (630 px of
+  // content in a 377 px card at 915x412, 749 px in 734 px on a tablet), which
+  // is BUG A with 155 px and 520 px of width standing idle. So the card keeps
+  // two columns and stops being a fragmentainer: an explicit FLEX split, whose
+  // children are ordinary boxes a scroller works inside. The list gets a whole
+  // column of its own height instead of an arbitrary 38vh, its own header
+  // finally stands above it (the multicol had left the caption in the LEFT
+  // column, introducing a list on the right), and the actions row sits under
+  // both columns so Create can never fall below a fold.
+  //
+  // ONLY the list source is split. A creation session with no list (the "Tap a
+  // window" flow) is short, has nothing that scrolls, and keeps the measured
+  // `card-columns` behaviour exactly — a split there would leave one column
+  // empty, which is the opposite defect.
+  const split = c.source === "list" && !!c.entries;
+  card.className = split ? "lay-card lc-split" : "lay-card card-columns";
+  // Where the two halves go. Outside the split these are the card itself, so
+  // the order and the markup are byte-for-byte what they were.
+  const cols = document.createElement("div");
+  const side = document.createElement("div");
+  const listBox = document.createElement("div");
+  const box = split ? side : card;
+  const listInto = split ? listBox : card;
+  if (split) {
+    cols.className = "lc-cols";
+    side.className = "lc-side";
+    listBox.className = "lc-main";
+    cols.append(side, listBox);
+    card.appendChild(cols);
+  }
 
   const h = document.createElement("h2");
   h.textContent = "New layout";
-  card.appendChild(h);
+  box.appendChild(h);
 
   // chosen slots — tap one to remove it
   if (c.slots.length) {
     const sub = document.createElement("p");
     sub.className = "lay-sub";
     sub.textContent = `Chosen (${c.slots.length}/${cellsNeeded()}) — tap to remove:`;
-    card.appendChild(sub);
+    box.appendChild(sub);
     const row = document.createElement("div");
     row.className = "lc-rows";
     // THE TITLE IS THE CONTENT, AND CONTENT IS NEVER CUT (owner 2026-08-06:
@@ -321,7 +353,7 @@ function renderCreationPanel() {
       selected: true,
       onTap: () => { c.slots.splice(i, 1); renderCreationPanel(); },
     })));
-    card.appendChild(row);
+    box.appendChild(row);
   }
 
   // The layout's NAME (owner 2026-08-05): the window/tab title is only the
@@ -334,7 +366,7 @@ function renderCreationPanel() {
     c.name !== null ? c.name : (c.slots.length ? c.slots[0].title : ""),
     c.slots.length ? c.slots[0].title : "The window's own title");
   nameIn.addEventListener("input", () => { c.name = nameIn.value; });
-  card.append(nameLbl, nameIn);
+  box.append(nameLbl, nameIn);
 
   // The mode row is a picture, not a word (owner round 2, 2026-08-07: "budu
   // skice ... a ne tekstovi tipa 'GRID 2x1'"). Each chip draws the count's
@@ -368,7 +400,7 @@ function renderCreationPanel() {
           c.slots = c.slots.slice(0, GRID_CELLS[g]);
           renderCreationPanel();
         })));
-  card.appendChild(modeRow);
+  box.appendChild(modeRow);
   // …and the absence is EXPLAINED. A row that silently holds fewer chips than
   // last time reads as a bug; the number is the same one the cap is made of.
   if (avail !== null && avail < 4) {
@@ -378,7 +410,7 @@ function renderCreationPanel() {
       ? "Only one window is open on the PC — a grid needs at least two."
       : `Only ${avail} windows and tabs are open on the PC — a bigger grid ` +
         "needs more of them.";
-    card.appendChild(capLbl);
+    box.appendChild(capLbl);
   }
 
   if (c.mode === "grid" && GRID_CELLS[c.grid] === 3) {
@@ -389,7 +421,7 @@ function renderCreationPanel() {
     arrRow.className = "lay-row";
     GRID_THREE.forEach((g) => arrRow.appendChild(
       gridChip(g, c.orient, c.grid === g, () => { c.grid = g; renderCreationPanel(); })));
-    card.append(arrLbl, arrRow);
+    box.append(arrLbl, arrRow);
   }
 
   if (c.source === "list" && c.entries) {
@@ -402,7 +434,7 @@ function renderCreationPanel() {
     hint.textContent = avail === null
       ? "Windows and tabs on the PC:"
       : `Windows and tabs on the PC — ${avail} can go in a layout:`;
-    card.appendChild(hint);
+    listInto.appendChild(hint);
     // A minimized window enumerates NO tabs (Windows reports it as having no
     // size at all), so the list would silently show fewer rows for it than it
     // will after a restore. It says so on the row and here (owner 2026-08-09,
@@ -412,7 +444,7 @@ function renderCreationPanel() {
       note.className = "lay-sub";
       note.textContent = "A minimized window cannot show its tabs — restore " +
         "it on the PC to pick them.";
-      card.appendChild(note);
+      listInto.appendChild(note);
     }
     const list = document.createElement("div");
     list.className = "lc-rows lc-scroll";
@@ -444,13 +476,13 @@ function renderCreationPanel() {
         },
       }));
     });
-    card.appendChild(list);
+    listInto.appendChild(list);
   } else if (c.source === "tap" && c.slots.length < cellsNeeded()) {
     const row = document.createElement("div");
     row.className = "lay-row";
     row.appendChild(layChip(`Tap window ${c.slots.length + 1} of ${cellsNeeded()}`,
                             false, armNextTap));
-    card.appendChild(row);
+    box.appendChild(row);
   }
 
   // "Which app shortcuts does this layout carry" was a QUESTION here until
@@ -472,7 +504,7 @@ function renderCreationPanel() {
   const sketchFor = (o) => c.mode === "grid" ? gridSketch(c.grid, o) : soloSketch(o);
   orientChips(sketchFor, c.orient, (o) => { c.orient = o; renderCreationPanel(); })
     .forEach((chip) => orientRow.appendChild(chip));
-  card.append(orientLbl, orientRow);
+  box.append(orientLbl, orientRow);
 
   const actions = document.createElement("div");
   actions.className = "lay-actions";
