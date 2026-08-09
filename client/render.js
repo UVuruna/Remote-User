@@ -97,30 +97,8 @@ function setCanvasBackdrop(color) {
   if (color) canvasBg = color;
 }
 
-// Whether a real frame has ever reached the canvas in THIS session — the
-// difference between "nothing yet" (clear to the page colour, correct) and
-// "nothing new" (keep the last picture, see `redraw`).
-let everDrew = false;
-
 function redraw() {
-  // A PICTURE THAT STOPPED BEATS NO PICTURE (owner report 2026-08-09, live and
-  // urgent: at resolution + bitrate + fps all at maximum "nestane mi ekran, to
-  // jest pojavi se ona generic plava slika").
-  //
-  // That blue IS this function. The canvas is cleared to the theme's page
-  // colour on every frame and then nothing is drawn, because
-  // `video.readyState < 2` — the decoder has no frame to give. At 4K60 the
-  // pipeline genuinely cannot keep up (task 130: ~3 GB/s of raw pixels), so
-  // that state is not rare, and clearing first turned every shortfall into an
-  // empty screen. The stream was never gone; there was simply nothing new, and
-  // we wiped what was there.
-  //
-  // So when there is nothing to draw, we draw NOTHING — including the clear.
-  // The last good frame stays on the canvas until a real one replaces it. The
-  // status pill still says what is happening; the picture just stops instead
-  // of vanishing.
-  if (streamMode === "h264" && video.readyState < 2 && everDrew) return;
-  ctx.fillStyle = canvasBg;
+    ctx.fillStyle = canvasBg;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   const D = drawnRect();
   // ONCE. This line was here TWICE from 0.0.349 until 2026-08-09 — a scripted
@@ -146,10 +124,7 @@ function redraw() {
     ctx.clip();
   }
   if (streamMode === "h264") {
-    if (video.readyState >= 2) {
-      ctx.drawImage(video, D.x, D.y, D.w, D.h);
-      everDrew = true;
-    }
+    if (video.readyState >= 2) ctx.drawImage(video, D.x, D.y, D.w, D.h);
   } else {
     if (baseBitmap) ctx.drawImage(baseBitmap, D.x, D.y, D.w, D.h);
     if (view.scale > 1 && detailBitmap) {
@@ -334,7 +309,6 @@ let rafId = null;
 
 function initMse(codec) {
   teardownMse();
-  everDrew = false;   // a new session starts from a clean canvas
   const ms = new MediaSource();
   mediaSource = ms;
   video.src = URL.createObjectURL(ms);
@@ -420,59 +394,21 @@ function reportLiveDrift(behind) {
   liveDriftMin = 0;
 }
 
-// THE FROZEN PICTURE, NAMED FROM HIS OWN LOG (owner report 2026-08-09, live,
-// at 60 fps / 20 Mbps: the tablet's screen stopped while dictation still
-// reached the PC and the mouse wheel did nothing).
-//
-//   [live] behind=0.48s  0.47  0.47  0.49  0.02        ← healthy, riding the
-//   [live] behind=-1.68s -4.08 -6.10 -8.44 -10.51        0.5 s threshold
-//   [live] behind=-11.09 -11.09 -11.10 -11.10 -11.10   ← FROZEN, two minutes
-//   [live] behind=0.26s                                ← only a session reset
-//                                                        brought it back
-//
-// `behind` is `buffered.end - currentTime`. NEGATIVE means the player's clock
-// has run PAST the data — the video element has nothing to show at the time
-// it is asking for, so it stalls. Once there, nothing recovered it: the only
-// rule was `behind > LIVE_MAX_BEHIND_S`, so a NEGATIVE drift matched nothing
-// and the picture stayed dead until the whole H.264 session was rebuilt.
-//
-// And it is the catch-up itself that walks him into it. The seek landed at
-// `end - 0.1s` — SIX FRAMES at 60 fps. One late chunk after that and the
-// clock is past the buffer. His log shows exactly that: the drift sat at
-// 0.47-0.49 for a minute, crossed, and the next sample was already negative.
-//
-// THE OTHER HALF, and it corrects what task 83 assumed: this is STARVATION,
-// not bufferbloat. My hypothesis was that more fps means a growing backlog
-// and a later picture. His numbers say the opposite — at 4K60 the phone runs
-// OUT of frames. So the answer to "why does 10 fps feel smoother" is that the
-// pipeline cannot sustain 60, and the old code turned every shortfall into a
-// permanent freeze instead of a stutter.
-// The DECISION, alone and pure, so its gate can run it whole rather than
-// asserting on a video element's mood: "starved" (the clock is past the data —
-// the freeze), "behind" (drifted too far back), or "" (leave it alone).
-function liveAction(behind) {
-  if (behind < LIVE_STARVED_S) return "starved";
-  if (behind > LIVE_MAX_BEHIND_S) return "behind";
-  return "";
-}
-
+// REVERTED to the pre-2026-08-09 rule, the same night my replacement shipped.
+// The starve case is REAL — his log proved currentTime overtaking the buffer
+// and pinning at -11 s — but my fix for it seeks, a seek flushes the decoder,
+// and it went out beside two other changes of mine into a screen he could not
+// use. Nothing can be attributed while three things move at once. This comes
+// back ALONE, with him watching, after the app is usable again.
 function onMseUpdateEnd() {
   const b = video.buffered;
   if (b.length) {
     const end = b.end(b.length - 1);
     const behind = end - video.currentTime;
     reportLiveDrift(behind);
-    const act = liveAction(behind);
-    if (act === "starved") {
-      // STARVED: the clock is past the data. Come BACK to where the picture
-      // actually is. This is the freeze-breaker, and it is the one rule the
-      // old code had no case for.
-      liveStarves++;
-      video.currentTime = Math.max(b.start(b.length - 1), end - LIVE_TARGET_BEHIND_S);
-    } else if (act === "behind") {
+    if (behind > LIVE_MAX_BEHIND_S) {
       liveSeeks++;
-      // Land with real headroom, not on the edge — see above.
-      video.currentTime = end - LIVE_TARGET_BEHIND_S;
+      video.currentTime = end - LIVE_TARGET_BEHIND_S; // fell behind (jank, slow link) — jump
     }
     if (end - b.start(0) > BUFFER_KEEP_S * 2 && sourceBuffer && !sourceBuffer.updating) {
       sourceBuffer.remove(0, end - BUFFER_KEEP_S);
@@ -481,55 +417,6 @@ function onMseUpdateEnd() {
   }
   pumpMse();
 }
-
-// …AND A STALL THAT ARRIVES WITH NO APPEND MUST STILL BE CAUGHT. Everything
-// above hangs off `updateend`, which only fires when a chunk lands. His pin at
-// -11.10 s for two minutes is what that costs: no append, no check, no
-// recovery. The video element's own `waiting`/`stalled` events say "I have run
-// out" without needing one, and a slow tick is the backstop for the case where
-// even those do not fire.
-let lastStarveFix = 0;
-
-function unfreezeIfStarved() {
-  if (!sourceBuffer || !video.buffered.length) return;
-  const b = video.buffered;
-  const end = b.end(b.length - 1);
-  if (end - video.currentTime >= LIVE_STARVED_S) return;
-  // RATE-LIMITED, and it is not a detail. A seek FLUSHES the decoder, so a
-  // pipeline that is genuinely starving — 4K60, his own case — would be sent
-  // back to the start of a keyframe every single second, and the picture that
-  // was merely late would never be shown at all. Recovering from a freeze is
-  // worth one flush; repeating it is how a freeze becomes a blank screen.
-  const now = performance.now();
-  if (now - lastStarveFix < LIVE_UNFREEZE_MIN_GAP_MS) return;
-  lastStarveFix = now;
-  liveStarves++;
-  video.currentTime = Math.max(b.start(b.length - 1), end - LIVE_TARGET_BEHIND_S);
-  if (video.paused) video.play().catch(() => {});
-}
-
-// The shell's push. It arrives whenever the IME opens, closes or resizes —
-// and it is the ONLY honest source under edge-to-edge (see `updateViewport`).
-// One line to the SERVER log the first time it is ever non-zero, because the
-// whole history of this bug is a number nobody could see.
-let imeLogged = false;
-window.__imeHeight = (px) => {
-  imeHeight = Math.max(0, Number(px) || 0);
-  if (imeHeight > 0 && !imeLogged) {
-    imeLogged = true;
-    send({ type: "client_log", text:
-      `[keyboard] ime=${imeHeight}px browser=` +
-      `${window.visualViewport ? Math.round(innerHeight - visualViewport.height) : "n/a"}px ` +
-      `caret=${pcCaret ? `${pcCaret.y.toFixed(3)}` : "unknown"} ` +
-      `rise=${Math.round(caretRise)}px dpr=${devicePixelRatio}` });
-  }
-  updateViewport();
-  redraw();
-};
-
-video.addEventListener("waiting", unfreezeIfStarved);
-video.addEventListener("stalled", unfreezeIfStarved);
-setInterval(unfreezeIfStarved, LIVE_UNFREEZE_TICK_MS);
 
 function renderLoop() {
   if (rafId) return;

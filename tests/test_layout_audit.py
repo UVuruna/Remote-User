@@ -700,63 +700,6 @@ def main() -> int:
             if on:
                 print(f"  DETAIL active state @ {label}: {on}")
 
-            # A PICTURE THAT STOPPED BEATS NO PICTURE (owner, live, 2026-08-09:
-            # at every setting on maximum "nestane mi ekran, pojavi se ona
-            # generic plava slika"). That blue was `redraw` clearing the canvas
-            # to the page colour and then drawing nothing, because the decoder
-            # had no frame — which at 4K60 is not rare at all.
-            blank = page.evaluate('''() => {
-              const bad = [];
-              const realBg = canvasBg;
-              streamMode = 'h264';
-              // Nothing has ever been drawn: clearing IS correct here.
-              everDrew = false;
-              canvasBg = '#010203';
-              redraw();
-              const c = ctx.getImageData(1, 1, 1, 1).data;
-              if (!(c[0] === 1 && c[1] === 2 && c[2] === 3)) {
-                bad.push('a session with no frame yet did not paint the page colour');
-              }
-              // …but once a frame HAS been shown, a gap must leave it alone.
-              everDrew = true;
-              canvasBg = '#0a0b0c';
-              redraw();
-              const d = ctx.getImageData(1, 1, 1, 1).data;
-              if (d[0] === 10 && d[1] === 11 && d[2] === 12) {
-                bad.push('a gap in the stream wiped the last picture');
-              }
-              canvasBg = realBg;
-              everDrew = false;
-              return bad;
-            }''')
-            results[f"a gap in the stream never blanks the screen @ {label}"] = not blank
-            if blank:
-                print(f"  DETAIL blank @ {label}: {blank}")
-
-            # THE FROZEN PICTURE (owner report 2026-08-09, live, from his own
-            # log: behind went NEGATIVE and pinned at -11.10 s for two solid
-            # minutes while dictation still reached the PC). `behind` is
-            # buffered.end - currentTime, so negative means the player's clock
-            # has run PAST the data. The only rule was `behind > 0.5`, which a
-            # negative number matches never — so the freeze was permanent
-            # until the whole H.264 session was rebuilt.
-            drift = page.evaluate('''() => [
-              ['healthy 0.20s',   liveAction(0.20),  ''],
-              ['at the edge 0.49', liveAction(0.49), ''],
-              ['drifted 0.80s',   liveAction(0.80),  'behind'],
-              ['his freeze -11.1s', liveAction(-11.1), 'starved'],
-              ['just past zero -0.05s', liveAction(-0.05), ''],
-              ['starved -0.5s',   liveAction(-0.5),  'starved'],
-            ].filter(([, got, want]) => got !== want)''')
-            results[f"a starved player is caught, not only a late one @ {label}"] = not drift
-            if drift:
-                print(f"  DETAIL live drift @ {label}: {drift}")
-            # …and the landing must leave real headroom. 0.1 s is six frames at
-            # 60 fps: his drift rode 0.47-0.49 for a minute, crossed, and the
-            # next sample was already negative.
-            results[f"a catch-up lands with headroom, not on the edge @ {label}"] = (
-                page.evaluate("LIVE_TARGET_BEHIND_S") >= 0.3)
-
             # AUTO-HIDE — once per SIZE, not per look: it is a behaviour, and
             # a colour cannot change it. Run before the look sweep so the
             # controls are in a known state for everything that follows.

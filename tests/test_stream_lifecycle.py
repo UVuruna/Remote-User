@@ -430,83 +430,6 @@ def check_a_live_slow_client_still_resets() -> bool:
     return settled(manager, watch, expect_resets=True)
 
 
-# ═══════ the pipe carries I420, and BOTH ends must say so ═══════
-# Owner report 2026-08-09: RemoteUser at 320% CPU on a 5800X3D at 4K60, with
-# NVENC confirmed in his own log — so the ENCODING was on the GPU and the CPU
-# was merely carrying every pixel to it. Measured on his monitor:
-#
-#   bgr24  tobytes only          5.56 ms   24.88 MB per frame   1.49 GB/s @60
-#   BGR->I420 convert + tobytes  4.30 ms   12.44 MB per frame   0.75 GB/s @60
-#
-# Converting is FASTER than not converting, because the copy dominates — and
-# it removes the bgr24->yuv420p swscale ffmpeg was doing one process later.
-#
-# THE DANGER IS THAT A MISMATCH DOES NOT FAIL. If capture hands I420 while the
-# command still says bgr24, ffmpeg happily encodes garbage and the owner gets a
-# picture in impossible colours. So the check is that the two ENDS AGREE, read
-# from the real source both times — never against a string written here, which
-# would drift with them.
-
-
-def check_the_pipe_declares_what_capture_produces() -> bool:
-    import numpy as np
-
-    import capture
-    import h264_streamer
-
-    ok = True
-    W, H = 64, 48
-    offered: list[bytes] = []
-
-    class Sink:
-        def offer(self, data):
-            offered.append(data)
-
-    src = object.__new__(capture.RawFrameSource)
-    src.stream_w, src.stream_h = W, H
-    src._sinks = [Sink()]
-    src._sinks_lock = __import__("threading").Lock()
-    frame = np.zeros((H, W, 3), np.uint8)
-    frame[:, :W // 2] = (0, 0, 255)     # red half, in BGR
-    src._process(frame)
-
-    if len(offered) != 1:
-        print("  DETAIL the capture offered nothing")
-        return False
-    data = offered[0]
-    if len(data) != W * H * 3 // 2:
-        print(f"  DETAIL a frame is {len(data)} bytes, expected {W * H * 3 // 2}"
-              " (1.5 B/px — the whole point of the change)")
-        ok = False
-
-    # …and the colours must survive it. A wrong conversion is a picture in
-    # impossible colours, which no exception ever reports.
-    import cv2
-    back = cv2.cvtColor(
-        np.frombuffer(data, np.uint8).reshape(H * 3 // 2, W),
-        cv2.COLOR_YUV2BGR_I420)
-    b, g, r = (int(v) for v in back[H // 2, W // 4])
-    if not (r > 200 and g < 40 and b < 40):
-        print(f"  DETAIL red came back as BGR ({b}, {g}, {r})")
-        ok = False
-
-    # THE AGREEMENT. Both read live; neither compared to a literal.
-    session = object.__new__(h264_streamer.H264Session)
-    session.width, session.height = W, H
-    session._encoder = "libx264"
-    session._quality = {}
-    args = session._ffmpeg_cmd()
-    try:
-        declared = args[args.index("-pix_fmt") + 1]
-    except ValueError:
-        print("  DETAIL the ffmpeg command declares no input pix_fmt at all")
-        return False
-    if declared != "yuv420p":
-        print(f"  DETAIL the pipe is fed I420 but ffmpeg is told {declared!r} —"
-              " a mismatch here does not fail, it paints wrong colours")
-        ok = False
-    return ok
-
 
 CHECKS = [
     ("cancelled mid-open — the 2026-08-07 orphan — leaves nothing",
@@ -521,8 +444,6 @@ CHECKS = [
      check_a_dead_client_is_never_reset),
     ("a live but slow client still IS reset",
      check_a_live_slow_client_still_resets),
-    ("the pipe carries I420 and BOTH ends say so",
-     check_the_pipe_declares_what_capture_produces),
 ]
 
 

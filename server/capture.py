@@ -202,9 +202,9 @@ class JpegStreamer(BaseCapture):
 
 class FrameSink:
     """Latest-frame handoff to one encoder session. The capture thread offers
-    every frame (as raw I420 bytes since 2026-08-09 — see `_process`); the
-    consumer takes the newest and misses the rest — drops happen before
-    encoding, so the encoded stream stays intact."""
+    every frame (as raw BGR bytes); the consumer takes the newest and misses
+    the rest — drops happen before encoding, so the encoded stream stays
+    intact."""
 
     def __init__(self):
         self._lock = threading.Lock()
@@ -269,24 +269,16 @@ class RawFrameSource(BaseCapture):
             frame = cv2.resize(frame, target, interpolation=cv2.INTER_AREA)
         elif frame.shape[1] % 2 or frame.shape[0] % 2:
             frame = frame[:self.stream_h, :self.stream_w]  # odd-sized monitor — trim to even
-        # I420, NOT bgr24 — and it is FASTER, not merely smaller (measured on
-        # the owner's own 4K monitor, 2026-08-09, after he found the app
-        # spending 320% CPU at 60 fps with NVENC confirmed in his log):
-        #
-        #   bgr24  tobytes only          5.56 ms   24.88 MB per frame
-        #   BGR->I420 convert + tobytes  4.30 ms   12.44 MB per frame
-        #
-        # The copy dominates, so halving the bytes more than pays for the
-        # conversion. And it is a conversion that happened ANYWAY: ffmpeg was
-        # doing bgr24 -> yuv420p in swscale on the CPU for every frame, one
-        # process later. Doing it here removes that AND halves the pipe —
-        # 1.49 GB/s to 0.75 at 60 fps.
-        #
-        # The encoding was never the problem: NVENC is on the GPU. The problem
-        # is that every pixel is CARRIED there by the CPU, and this is the
-        # cheapest honest way to carry half as many. `_stream_size` already
-        # guarantees even dimensions, which I420 requires.
-        data = cv2.cvtColor(frame, cv2.COLOR_BGR2YUV_I420).tobytes()
+        # REVERTED to bgr24 on 2026-08-09, the same night it shipped.
+        # The I420 change is measured and correct in isolation (4.30 ms vs
+        # 5.56 ms per 4K frame, half the pipe) and a real ffmpeg accepts it at
+        # 4K with NVENC — I tested exactly that. But it went out in the same
+        # window as a screen the owner could not use, and while three of my
+        # changes are in flight at once NOTHING can be attributed. His words:
+        # "da radiš ispravke jednu po jednu da me obaveštavaš šta se dešava."
+        # So the streaming path goes back to what ran for days, and every one
+        # of these returns alone, after he confirms the app is usable again.
+        data = frame.tobytes()  # the one copy: detaches from dxcam's ring buffer
         with self._sinks_lock:
             for sink in self._sinks:
                 sink.offer(data)
