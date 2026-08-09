@@ -39,7 +39,14 @@ every other script must already be loaded by this point (and is, since
     update banner); re-inits or tears down MSE; sent after auth and after
     every stream restart.
   - `cursor` — updates `cursorPos` (server-authoritative correction of the
-    client's optimistic draw).
+    client's optimistic draw) and `cursorShapeName` from the OPTIONAL `shape`
+    field (owner request 2026-08-09, task 142 — the name of the system cursor
+    the PC is really showing, so a window edge draws a resize arrow). An older
+    server simply sends no `shape`, and `undefined` is what
+    [Cursor Shapes](cursor-shapes.md) reads as "draw the arrow". It is kept
+    beside `cursorPos`, not on it — the finger rebuilds that object on every
+    optimistic move and the shape must not flick back to an arrow while he is
+    reaching for the edge.
   - `actions` — replaces `categories`/`appSets`/`groups` and re-renders both
     D-pad groups via `refreshCategories()`; `layout_state` calls it too —
     app-aware sets appear/vanish with layout focus (owner 2026-08-04). Also

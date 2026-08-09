@@ -52,6 +52,12 @@ STANDARD = {
     "server/clipboard.py",
     "server/updates.py",
     "server/traffic.py",
+    # New 2026-08-09 (owner request, task 142 — the phone drew one fixed
+    # arrow): the live HCURSOR matched against the system cursors and turned
+    # into a name. Standard, not Algorithmic — the only decision it carries
+    # ("an unmatched handle is `custom`, never a guess") is one sentence in
+    # its __about; the drawing that name causes lives on the phone.
+    "server/cursor_shape.py",
     # New 2026-08-07 (round R2): "Start with Windows" is a real Task Scheduler
     # task, read and written — one responsibility, no flow worth a diagram.
     "server/autostart.py",
@@ -68,6 +74,12 @@ STANDARD = {
     # pattern). Standard: one formula, no flow worth a diagram — the WHY
     # lives in its header and its __about.
     "client/view-anchor.js",
+    # New 2026-08-09 (owner request, task 142 — the cursor must show what the
+    # pixel under it does): the drawn silhouette per cursor name, split into a
+    # pure module so tests/test_cursor_shape.py can run it whole (the
+    # view-anchor.js pattern). Standard: one table and one translate, no flow
+    # worth a diagram — the WHY lives in its header and its __about.
+    "client/cursor-shapes.js",
     "client/load_test.js",
     "client/state.js",
     "client/panels.js",

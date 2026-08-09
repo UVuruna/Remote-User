@@ -574,6 +574,58 @@ to the pixel — and the gate goes red.
 Run: `.venv\Scripts\python tests/test_view_anchor.py` (needs node) — also a
 fail-closed step in `build.py` (0o/6).
 
+### `test_cursor_shape.py` — Cursor Shape Gate
+
+THE CURSOR SHOWS WHAT THE PIXEL UNDER IT DOES (owner request 2026-08-09,
+task 142). The phone draws the PC pointer itself — capture never contains it
+— and drew ONE fixed arrow, so from the tablet a draggable window edge, a
+text box, a link and plain background were the same picture. Three ends have
+to hold together and each can break silently, so this gate covers all three:
+
+- *the PC names the right cursor* — the REAL `server/cursor_shape.py`
+  resolver, driven with FAKED HANDLES through its injected loader rather than
+  stubbed: every `IDC_*` to its name, an unknown handle to `custom` (never a
+  near-miss — a wrong shape promises a grabbable edge that is not there), the
+  system table loaded ONCE across 200 lookups (this runs at 30 Hz), and a
+  cursor-SCHEME change healing itself after `RELOAD_SECONDS` instead of
+  reporting every cursor on the machine as `custom` forever.
+- *the name reaches the phone the way the protocol says* — the real
+  `web._send_cursor` loop over a fake socket: an OPTIONAL field on the
+  EXISTING `cursor` message (never a new type), a shape change ALONE sent
+  even though the pointer has not moved (hovering onto an edge is exactly
+  that), nothing unchanged ever resent, and an unreadable cursor leaving the
+  field off the wire.
+- *the page draws a distinct, correctly ANCHORED shape* — `cursorPolys` run
+  WHOLE in node (`client/cursor-shapes.js` is pure, the
+  caret.js/view-anchor.js pattern): every name its own silhouette, the
+  hotspot landing on the commanded point under each shape's own rule (tip for
+  the arrow family, bounding-box centre for resize/move/wait/I-beam), the
+  point only ever translating the shape, every shape inside a readable size
+  band, and an unknown/missing/`custom` name drawing the EXACT arrow this
+  page always drew — pinned as a literal, because "unchanged" is a claim
+  about yesterday's pixels and only a literal can hold it. Wiring checks pin
+  both ends (drawCursor calls `cursorPolys` with `cursorShapeName` and keeps
+  the fill/outline/shadow legibility treatment, connection.js carries
+  `msg.shape` over, index.html loads the module before render.js, the module
+  stays pure) and the two name tables must be the SAME SET — a drawn name the
+  PC can never send is dead code that looks alive, a sent name with no shape
+  is a silent fallback nobody notices.
+
+Proven twice by planting a defect: `cursorPolys` always returning the arrow
+turns *every name draws its own shape* red (`'ibeam' draws exactly what
+'arrow' draws`) and takes the hotspot check with it; the resolver answering
+`ARROW` instead of `CUSTOM` for an unmatched handle turns *an unknown handle
+is 'custom', never a guess* and the scheme-change check red.
+
+Honest limit, stated because the gate cannot state it: the handle→name match
+is proven against FAKED handles only. That a real Windows session hands
+`GetCursorInfo` the same handle `LoadCursorW` returns for that cursor is the
+documented behaviour, not something this suite observes — it needs a live
+desk with a real window edge under the pointer.
+
+Run: `.venv\Scripts\python tests/test_cursor_shape.py` (needs node) — also a
+fail-closed step in `build.py` (0p/6).
+
 ### `test_caret_lift.py` — Caret Lift Gate
 
 THE KEYBOARD LIFTS THE PICTURE ONLY IF NEEDED, ONLY BY THE SHORTFALL (owner

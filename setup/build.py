@@ -347,6 +347,20 @@ def input_gate() -> None:
          "put it (tests/test_view_anchor.py)")
     run([sys.executable, str(PROJECT_DIR / "tests" / "test_view_anchor.py")])
 
+    # THE CURSOR SHOWS WHAT THE PIXEL UNDER IT DOES (owner request 2026-08-09,
+    # task 142). The phone draws the pointer itself and drew one fixed arrow,
+    # so a draggable window edge, a text box and plain background were the
+    # same picture from the tablet. Three ends have to hold together and each
+    # can break silently: the PC naming the live HCURSOR (driven here with
+    # faked handles through the REAL resolver), the name riding the EXISTING
+    # cursor message as an optional field on change only, and the page drawing
+    # a distinct shape whose HOTSPOT lands on the commanded pixel — with
+    # anything unknown falling back to the exact old arrow. Needs node, like
+    # 0j/0k/0o — never skip it silently.
+    step("0p/6  CURSOR SHAPE GATE — the phone draws the cursor the PC is "
+         "really showing (tests/test_cursor_shape.py)")
+    run([sys.executable, str(PROJECT_DIR / "tests" / "test_cursor_shape.py")])
+
 
 def generate_icons() -> None:
     step("1/6  Generating ICOs from assets/logo.svg")

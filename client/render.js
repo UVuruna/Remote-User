@@ -143,10 +143,24 @@ function redraw() {
 }
 
 // The PC pointer, drawn client-side (screen capture never contains it).
-// Classic arrow outline; screen-fixed size, independent of zoom.
-const CURSOR_PATH = [
-  [0, 0], [0, 16.5], [3.6, 13.3], [6, 19], [8.7, 17.9], [6.3, 12.4], [11.2, 11.9],
-];
+// Screen-fixed size, independent of zoom.
+//
+// The SHAPE is the one the PC is really showing (owner request 2026-08-09,
+// task 142): the server names the live system cursor and the name rides the
+// `cursor` message, so a resize cursor at a window edge tells him the edge is
+// grabbable — the whole reason a cursor changes at all. The geometry lives in
+// client/cursor-shapes.js, pure so its gate can run it whole; the ORIGIN of
+// every shape is its hotspot, which is why the translate below is unchanged
+// and correct for all of them. The white fill + black outline + soft shadow
+// stay exactly as they were: that treatment is what keeps the pointer legible
+// over a white document AND a dark editor, so every new shape inherits it.
+//
+// The name lives HERE and not on `cursorPos`, because the finger writes that
+// object itself while steering (gestures.js / input-geometry.js move the
+// pointer optimistically, before the PC answers) — carrying the shape on it
+// would drop back to an arrow on every touch, which is precisely when he is
+// reaching for the edge he wants to grab.
+let cursorShapeName;
 
 function drawCursor(D) {
   if (!cursorPos) return;
@@ -155,8 +169,12 @@ function drawCursor(D) {
   ctx.translate(D.x + cursorPos.x * D.w, D.y + cursorPos.y * D.h);
   ctx.scale(devicePixelRatio, devicePixelRatio);
   ctx.beginPath();
-  CURSOR_PATH.forEach(([px, py], i) => (i ? ctx.lineTo(px, py) : ctx.moveTo(px, py)));
-  ctx.closePath();
+  // Every polygon of the shape into ONE path: filled nonzero (so a
+  // reverse-wound polygon is a hole, e.g. the ring of `no`) and stroked once.
+  cursorPolys(cursorShapeName, 0, 0).forEach((poly) => {
+    poly.forEach(([px, py], i) => (i ? ctx.lineTo(px, py) : ctx.moveTo(px, py)));
+    ctx.closePath();
+  });
   ctx.shadowColor = "rgba(0, 0, 0, 0.55)";
   ctx.shadowBlur = 3;
   ctx.fillStyle = "#fff";

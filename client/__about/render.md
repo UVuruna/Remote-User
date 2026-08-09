@@ -37,8 +37,9 @@ MediaSource Extensions (MSE). Second of the six client scripts to load (after
   scale ≤ 1.
 - `redraw()` — draws the current frame (video element in H.264 mode, base +
   detail bitmaps in JPEG mode) plus the virtual cursor.
-- `drawCursor(D)` — draws a fixed-screen-size arrow at the PC cursor position
-  (server-streamed; capture never contains the real pointer).
+- `drawCursor(D)` — draws the PC cursor at its streamed position (capture
+  never contains the real pointer), fixed screen size, in the SHAPE the PC is
+  really showing — see below.
 - `updateViewport()` — sizes the canvas to `visualViewport`, publishes the
   `--kb`/`--vtop` CSS variables (keyboard-aware layout), and runs on every
   resize plus once at load.
@@ -73,6 +74,35 @@ Layout focus is client-side: the view is bound to `layoutRegion`. Streaming
 itself is
 untouched: full-frame H.264 stays cheap (ROADMAP measurement), and the JPEG
 path narrows through the existing `viewport` region mechanism.
+
+## The cursor has the shape the PC's cursor has (owner request 2026-08-09, task 142)
+
+`drawCursor` drew one fixed arrow, so from the tablet a draggable window edge,
+a text box, a link and plain background all looked the same — the one job a
+cursor has. The server now names the live system cursor
+([Cursor Shape](../../server/__about/cursor_shape.md)) as the optional `shape`
+field on the `cursor` message, and the silhouettes live in
+[Cursor Shapes](cursor-shapes.md) — pure, so its gate runs it whole.
+
+Two things here deliberately did NOT change, and both are load-bearing:
+
+- **The translate.** Every shape's own ORIGIN is its hotspot, so translating
+  to the commanded point and drawing the coordinates straight is correct for
+  all of them — an arrow still points with its tip, a resize arrow is centred
+  on the edge.
+- **The white fill + black outline + soft shadow.** That treatment is what
+  keeps the pointer legible over a white document AND a dark editor; every new
+  shape inherits it rather than re-deciding it. All polygons of a shape go
+  into ONE path, filled nonzero (so a reverse-wound polygon is a hole, e.g.
+  the ring of `no`) and stroked once.
+
+The name is held in `cursorShapeName`, beside `cursorPos` and not on it: the
+finger writes that object itself while steering
+([Gestures](gestures.md) / [Input Geometry](input-geometry.md) move the
+pointer optimistically, before the PC answers), so carrying the shape on it
+would flick back to an arrow on every touch — precisely when he is reaching
+for the edge he wants to grab. An unknown or absent name draws the exact arrow
+this page always drew.
 
 ## The cursor-offset system is gone (owner 2026-08-02, remnants finished 2026-08-07)
 The pointer sits exactly under the finger, the image aspect-fits the FULL

@@ -161,6 +161,17 @@ function connect() {
         scheduleViewport();
       } else if (msg.type === "cursor") {
         cursorPos = { x: msg.x, y: msg.y };
+        // `shape` is OPTIONAL (owner request 2026-08-09, task 142): the name
+        // of the system cursor the PC is really showing, so the page can draw
+        // a resize arrow at a window edge instead of one eternal arrow. A
+        // server that predates it, or a moment the PC cannot read the cursor
+        // at all, sends nothing here — and `undefined` is exactly what
+        // cursor-shapes.js reads as "draw the arrow", never a guessed shape.
+        // It is kept BESIDE cursorPos, not on it: the finger's own optimistic
+        // moves (gestures.js, input-geometry.js) rebuild that object without
+        // a shape, and the pointer must not flick back to an arrow every time
+        // he drags along the very edge he is trying to grab.
+        cursorShapeName = msg.shape;
         if (streamMode !== "h264") redraw(); // h264 redraws every rAF anyway
       } else if (msg.type === "actions") {
         categories = msg.categories || [];

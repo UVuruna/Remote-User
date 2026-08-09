@@ -78,6 +78,7 @@ const FILES = [
   "state.js",
   "caret.js",
   "view-anchor.js",
+  "cursor-shapes.js",
   "render.js",
   "input-geometry.js",
   "icons.js",
