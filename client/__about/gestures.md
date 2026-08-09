@@ -20,9 +20,10 @@ everything defined in the first four files).
   (autoplay unlock on first touch)
 - [Input Geometry](input-geometry.md) — `toRemoteClamped`, `sendCursor`,
   `startScrollInertia`/`cancelScrollInertia`
-- [Controls](controls.md) — `inputOff()` (a primary tap on the stream
-  switches keyboard AND mic OFF by itself — owner 2026-08-04, reversing the
-  old keep-focus rule), `scheduleViewport()`
+- [Controls](controls.md) — `keyboardOff()` (a primary tap on the stream
+  switches the KEYBOARD off by itself — owner 2026-08-04, reversing the old
+  keep-focus rule — while the mic keeps listening, owner 2026-08-09),
+  `scheduleViewport()`
 
 ### Used by
 - Nothing downstream — this is where raw touch input becomes protocol
@@ -111,11 +112,15 @@ into one slide, the state the owner wants most often — content at exactly
 100% — was nearly impossible to land on, since the same finger motion sailed
 straight through it.
 
-## Input switchers auto-OFF (owner 2026-08-04)
-The primary `pointerdown` on the canvas calls `inputOff()` — tapping the
-stream is the natural "done typing/dictating", so the keyboard and mic
-switchers turn OFF without a manual toggle. (The old rule was the opposite —
-`preventDefault` to keep the field focused; the owner reversed it.)
+## Keyboard auto-OFF on a tap (owner 2026-08-04, amended 2026-08-09)
+The primary `pointerdown` on the canvas calls `keyboardOff()` — tapping the
+stream is the natural "done typing", so the keyboard switcher turns OFF
+without a manual toggle. (The old rule was the opposite — `preventDefault`
+to keep the field focused; the owner reversed it.) The MIC is deliberately
+NOT touched (owner 2026-08-09, amending the 2026-08-04 both-off rule: he
+steers the cursor WHILE dictating, and every steer killed the mic
+mid-sentence). The mic still stops via its own Mic button, the Enter/Esc
+buttons (`inputOff()`), the keyboard going ON, or page hide (the LOCK rule).
 
 ## The cursor-offset system is gone (owner 2026-08-02, remnants finished 2026-08-07)
 The pointer sits exactly under the finger, the image aspect-fits the FULL

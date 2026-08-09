@@ -94,11 +94,14 @@ function logFirstTouch(e) {
 
 canvas.addEventListener("pointerdown", (e) => {
   logFirstTouch(e);
-  // A tap on the stream switches the input switchers OFF by itself (owner
-  // 2026-08-04, reversing the old keep-focus rule): clicking outside the
-  // textarea is the natural "done typing" — no manual toggle-off needed.
+  // A tap on the stream closes the KEYBOARD by itself (owner 2026-08-04:
+  // clicking outside the textarea is the natural "done typing") — but the
+  // MIC keeps listening (owner 2026-08-09, amending the both-off rule: he
+  // steers the cursor WHILE dictating, and every steer killed the mic
+  // mid-sentence; the mic stops only via its own button, Enter/Esc, the
+  // keyboard going ON, or page hide).
   // (Only for the primary finger — a second pinch finger must not close it.)
-  if (e.isPrimary && !layoutArm) inputOff();
+  if (e.isPrimary && !layoutArm) keyboardOff();
   if (streamMode === "h264" && video.paused) video.play().catch(() => {}); // autoplay unlock
   if (layoutArm && e.isPrimary) {
     // Armed by the Layout (+) button: this tap PICKS a window instead of

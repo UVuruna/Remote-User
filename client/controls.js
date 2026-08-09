@@ -381,10 +381,21 @@ window.__voiceEnd = (reason) => {
   }, 250);
 };
 
-// Enter/Esc and a tap on the stream switch every input switcher OFF
-// (owner 2026-08-04 — no manual toggling off before the next action).
-function inputOff() {
+// A tap on the stream closes the KEYBOARD only — the mic keeps listening
+// (owner 2026-08-09, amending the 2026-08-04 both-off rule: he steers the
+// cursor WHILE dictating, and every steer killed the mic mid-sentence).
+// The mic still stops via its own Mic button, Enter/Esc (inputOff below),
+// the keyboard going ON (the focus handler above — only one of mic/keyboard
+// is ever ON), and page hide (the LOCK rule in connection.js).
+function keyboardOff() {
   if (keyboardOpen()) kbInput.blur();
+}
+
+// Enter/Esc and a page hide switch every input switcher OFF (owner
+// 2026-08-04 — no manual toggling off before the next action; the canvas
+// tap left this list on 2026-08-09 — see keyboardOff above).
+function inputOff() {
+  keyboardOff();
   micStop();
 }
 

@@ -26,6 +26,10 @@ Scenarios (all must pass, any failure exits 1 — build.py runs this fail-closed
      to the PC screen's bottom-right edge (full-screen fit, no margins)
   7. keyboard    — Keys focuses the capture field; typed text arrives as
      key_text; Enter arrives as the shift+enter chord (new row)
+  7b. mic survives the tap — a canvas tap closes only the KEYBOARD; a
+     listening mic keeps listening (owner 2026-08-09, amending the 2026-08-04
+     both-off rule: steering the cursor while dictating killed the mic
+     mid-sentence); Esc and the keyboard going ON still switch the mic off
   8. /ping contract — the reachability probe answers EXACTLY 204: the Android
      shell counts only 204 as "the PC answered" (captive portals on foreign
      Wi-Fi answer any request with a 2xx/redirect login page — live failure
@@ -495,6 +499,49 @@ def main():
         page.keyboard.press("Enter")
         results["keyboard: Enter -> chord(shift+enter)"] = \
             wait_for(lambda c: ("press_chord", "shift+enter") in c)
+
+        # 7b. the mic SURVIVES a canvas tap while the KEYBOARD still closes
+        # (owner 2026-08-09, amending the 2026-08-04 both-off rule: he steers
+        # the cursor WHILE dictating, and every steer killed the mic
+        # mid-sentence). No Android bridge exists in this harness, so the
+        # mic's ON state is planted directly — micOn/setMicActive are the
+        # page's own top-level bindings, and micStop() (exactly what a
+        # regression would call from the tap path) runs fine without the
+        # bridge (micSupported() guards the stopVoice call).
+        # The keyboard is still focused from scenario 7 — first prove the
+        # tap closes IT...
+        page.touchscreen.tap(VIEW_W / 2, VIEW_H / 2)
+        try:
+            page.wait_for_function(
+                "document.activeElement !== document.getElementById('kb')",
+                timeout=3000)
+            kb_closed = True
+        except Exception:
+            kb_closed = False
+        results["canvas tap still closes the keyboard"] = kb_closed
+        # ...then that the SAME tap path leaves a listening mic alone.
+        page.evaluate("() => { micOn = true; setMicActive(true); }")
+        page.touchscreen.tap(VIEW_W / 2, VIEW_H / 2)
+        time.sleep(0.3)  # the tap's handler is synchronous; generous margin
+        results["canvas tap leaves the mic listening (owner 2026-08-09)"] = \
+            page.evaluate("""() => micOn === true &&
+                document.querySelector('[data-action="mic"]')
+                    .classList.contains('active')""")
+        # ...while every OTHER mic-off path is unweakened: Esc (inputOff)...
+        clear_calls()
+        tap_button(page, '#group-right [data-action="esc"]')
+        wait_for(lambda c: ("press_key", "escape") in c)
+        results["Esc still switches the mic off (inputOff unweakened)"] = \
+            not page.evaluate("() => micOn")
+        # ...and the one-of-two invariant: switching the KEYBOARD on still
+        # switches the mic off (the capture field's focus handler).
+        page.evaluate("() => { micOn = true; setMicActive(true); }")
+        tap_button(page, '#group-right [data-action="keyboard"]')
+        page.wait_for_function(
+            "document.activeElement === document.getElementById('kb')",
+            timeout=3000)
+        results["keyboard ON still switches the mic off (one-of-two rule)"] = \
+            not page.evaluate("() => micOn")
 
         # 10. GAMEPAD (build rounds G1/G2, owner spec 2026-08-07). The pad
         # pairs with the PHONE, so the Android shell captures its keys and

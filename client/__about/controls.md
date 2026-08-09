@@ -67,8 +67,12 @@ for the split's general load-order reasoning.
 - Mic switcher (`micStart/micStop/toggleMic`, `__voiceHeard`, `__voiceResult`,
   `__voiceEnd`) — direct voice input via the shell's `Android.startVoice()`
   bridge (SpeechRecognizer); recognized text goes out as `key_text`. Only one
-  of mic/keyboard is ever ON; `inputOff()` (Enter/Esc buttons, a tap on the
-  stream) switches both OFF.
+  of mic/keyboard is ever ON (the keyboard's focus handler calls `micStop()`);
+  `inputOff()` (Enter/Esc buttons, page hide) switches both OFF, while a tap
+  on the stream calls `keyboardOff()` — keyboard only, the mic KEEPS
+  LISTENING (owner 2026-08-09, amending the 2026-08-04 both-off rule: he
+  steers the cursor while dictating, and every steer killed the mic
+  mid-sentence).
 - **The dictation TEXT rules moved to [Voice](voice.md)** on 2026-08-08 (THE
   STRUCTURE LAW — this file stood at 974 of its 1,000 lines and dictation had
   just grown a second rule). What stays here is the mic SWITCHER and the
