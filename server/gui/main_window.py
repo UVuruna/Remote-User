@@ -721,6 +721,13 @@ class MainWindow(QMainWindow):
                 self._update_state = "failed"
                 self._refresh_update_button()
                 return
+        # THE LATCH CLOSES FIRST (owner 2026-08-09, the handover fork): this
+        # line used to sit BELOW processEvents(), so a pending 1 s refresh
+        # tick re-entered _refresh_update_button while the state still said
+        # "ready" and armed ANOTHER handover — the arming lock now refuses
+        # that second arm, but the late latch was the re-entrancy ROOT, and
+        # a root left standing invites the next variant.
+        self._update_state = "launched"
         # SAY IT BEFORE WE GO (owner 2026-08-09: "aplikacija je pukla kad sam
         # stisnuo download — krenuo je da radi downloading a onda je izašao i
         # podigao ponovo aplikaciju; je l' to zamisao?"). It IS the intention,
@@ -741,7 +748,6 @@ class MainWindow(QMainWindow):
         # at it. Whatever animation he names goes on this line, over the whole
         # card, and must survive until the process actually exits.
         QApplication.processEvents()
-        self._update_state = "launched"
         self._quit()  # free our files; the handover takes over from here
 
     def _refresh_update_button(self) -> None:

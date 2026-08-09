@@ -24,6 +24,8 @@ The phone is deliberately NOT served from here: its update source is the PC itse
 
 `check()` in order: bail to `None` if `update_check` is off or the running version has no digits (dev checkout); `GET` the repo's latest release (10 s timeout) and bail to `None` on any failure (offline, rate-limited, or a 404 from a repo with no releases yet); parse `tag_name` into numbers and bail to `None` if it is not strictly newer than the running version; otherwise return an `Update` built from the first release asset ending in `.exe` (or `None`) and the release page URL as fallback.
 
+The "strictly newer, compared as NUMBERS" line is a fork guard in its own right (verified 2026-08-09, the 20-install fork): every handover the fork armed was fed from here, so a compare that let a release equal to — or a string compare that let `"0.0.9"` beat — the running version would hand a freshly installed app a reason to arm the installer again. Pinned by the version-compare check in `tests/test_update_handover.py`, fail-closed in `build.py` (0i/6).
+
 ## Classes
 ### Update
 Frozen dataclass: `version`, `installer_url` (`None` when the release has no `.exe` asset), `page_url` (the release page — the fallback UX when there is no asset), `size` (the asset's byte count as GitHub reports it, `None` when there is no asset).

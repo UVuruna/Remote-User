@@ -105,6 +105,7 @@ RECORD_STATE = "handover"
 DAMAGED_TEXT = "The downloaded update was incomplete — retry"
 NOT_ELEVATED_TEXT = "Update needs a click on the PC — retry there"
 HANDOVER_FAILED_TEXT = "Could not prepare the update — retry"
+ALREADY_ARMED_TEXT = "An update is already installing — hold on"
 
 # ═══════════════════════════ THE HANDOVER SCRIPT ═══════════════════════════
 # Constant text, ASCII only, every value from the environment (see the module
@@ -364,6 +365,141 @@ def tell_phone(controller, version: str) -> bool:
     return carrier != "held"
 
 
+# ═══════════════════════════ THE ARMING LOCK ═══════════════════════════
+# Exactly ONE handover may be live at a time (owner 2026-08-09, the night the
+# updater installed his app more than twenty times over — "instalirao mi je
+# preko 20 aplikacija").  lang-ok: owner quote
+#
+# Nothing used to stop a SECOND script being armed while the first still ran:
+# every armed script survives this process ON PURPOSE, each one runs the
+# installer and starts an app, every started app asks GitHub within seconds —
+# and with six releases published in four hours, each fresh app found a newer
+# version to arm again. One script became two became four; his update.log
+# printed "--- handover finished ---" dozens of times in one second, because
+# every waiting script's "did it come up?" probe is satisfied by ANY instance
+# of the image name. The fork is cut here, at the one choke point every arm
+# must pass, with a fact on DISK — the fork's whole nature is that the
+# processes involved know nothing about each other.
+#
+# The lock lives beside the script it guards (USER_DIR — a place the installer
+# never overwrites) and holds {pid, at}: the armer's pid first, then — the
+# moment the spawn returns — the script's own cmd.exe pid, so the lock stays
+# honest exactly as long as a handover is genuinely alive. Two ways it can
+# never brick the next update (a lock that outlives a crash and refuses
+# forever would be a worse bug than the fork it prevents):
+#   - a lock whose pid is DEAD is reclaimed on the next arm;
+#   - a lock older than LOCK_STALE_S is reclaimed even when its pid looks
+#     alive, because Windows recycles pids and a stranger's process must not
+#     hold this door shut.
+
+# Far past everything a handover can honestly spend: update_wait_exit_s (30)
+# + the silent install + update_wait_up_s (40) + slack for an antivirus
+# first-touch scan. A handover still "live" after this long is a lie.
+LOCK_STALE_S = 15 * 60
+
+# Win32 process-probe constants (ctypes; no psutil in the packaged app).
+PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+STILL_ACTIVE = 259
+ERROR_ACCESS_DENIED = 5
+
+
+def _lock_path() -> Path:
+    """Derived, not a config field of its own: the lock guards the SCRIPT, so
+    wherever the script is told to live (USER_DIR in production, a temp folder
+    in the gate), the lock is already beside it."""
+    return SETTINGS.update_script_path.parent / "handover.lock"
+
+
+def _pid_alive(pid: int) -> bool:
+    """Windows-honest liveness. A pid that exists but refuses to open counts
+    as ALIVE (refusing an arm is recoverable; forking again is the bug we had),
+    and an open handle is asked for its exit code — OpenProcess also succeeds
+    on a process that has exited while somebody still holds a handle to it."""
+    try:
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel32.OpenProcess.restype = ctypes.c_void_p
+        handle = kernel32.OpenProcess(
+            PROCESS_QUERY_LIMITED_INFORMATION, False, int(pid))
+        if not handle:
+            return ctypes.get_last_error() == ERROR_ACCESS_DENIED
+        try:
+            code = ctypes.c_ulong()
+            if not kernel32.GetExitCodeProcess(ctypes.c_void_p(handle),
+                                               ctypes.byref(code)):
+                return True  # unreadable — the recoverable answer is "alive"
+            return code.value == STILL_ACTIVE
+        finally:
+            kernel32.CloseHandle(ctypes.c_void_p(handle))
+    except (AttributeError, OSError) as e:  # non-Windows dev machine
+        logger.warning("Could not probe pid %s: %s", pid, e)
+        return False
+
+
+def live_handover() -> int | None:
+    """The pid of a handover that is genuinely running right now, else None.
+    Garbage, a dead pid and old age all read as None — every one of those is
+    a lock to reclaim, never a reason to refuse an update forever."""
+    path = _lock_path()
+    if not path.exists():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        pid, at = int(data["pid"]), float(data["at"])
+    except (OSError, ValueError, KeyError, TypeError) as e:
+        logger.warning("Handover lock unreadable (%s) — treating it as stale", e)
+        return None
+    if time.time() - at > LOCK_STALE_S:
+        return None
+    return pid if _pid_alive(pid) else None
+
+
+def _acquire_lock() -> bool:
+    """Take the arming lock atomically. False = a handover is already live,
+    or a sibling arm won the race in this very instant (O_EXCL is the judge —
+    two `begin`s that both saw a free lock cannot both create the file)."""
+    path = _lock_path()
+    if live_handover() is not None:
+        return False
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        # A dead or stale lock is RECLAIMED here — the line that keeps one
+        # crash from bricking every future update.
+        if path.exists():
+            logger.info("Reclaiming a stale handover lock (%s)", path)
+            path.unlink(missing_ok=True)
+        fd = os.open(str(path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+    except FileExistsError:
+        return False  # a sibling arm slipped in between the check and here
+    except OSError as e:
+        # USER_DIR unwritable: the script write below would fail the same
+        # way, so refusing is honest, and it is logged with the real reason.
+        logger.error("Could not take the arming lock: %s", e)
+        return False
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        f.write(json.dumps({"pid": os.getpid(), "at": time.time()}))
+    return True
+
+
+def _stamp_lock(pid: int | None) -> None:
+    """Re-write the lock with the SCRIPT's own pid. The armer is about to
+    exit — its pid going dead is the design — and the script is the thing
+    whose lifetime the lock must follow: cmd.exe dies, the lock goes stale,
+    the next arm reclaims it. No release step exists on the success path."""
+    if not pid:
+        return
+    try:
+        _lock_path().write_text(
+            json.dumps({"pid": int(pid), "at": time.time()}), encoding="utf-8")
+    except OSError as e:
+        logger.warning("Could not stamp the arming lock with the script pid: %s", e)
+
+
+def _release_lock() -> None:
+    """Only for an arm that FAILED after taking the lock — a lock with no
+    script behind it must not cost him the next try."""
+    _lock_path().unlink(missing_ok=True)
+
+
 # ═══════════════════════════ THE HANDOVER ITSELF ═══════════════════════════
 def _spawn(env: dict) -> subprocess.Popen:
     """Start the handover script so that it survives our own exit."""
@@ -384,19 +520,29 @@ def hand_over(installer: Path, version: str, exe: Path | None = None) -> Path:
     script has to start again. Nothing here guesses an install directory.
     """
     exe = Path(exe or sys.executable)
-    SETTINGS.update_script_path.parent.mkdir(parents=True, exist_ok=True)
-    SETTINGS.update_script_path.write_text(SCRIPT, encoding="ascii")
-    _write_record(version, installer, exe)
-    env = {**os.environ,
-           "RU_PID": str(os.getpid()),
-           "RU_EXE": str(exe),
-           "RU_NAME": exe.name,
-           "RU_INSTALLER": str(installer),
-           "RU_LOG": str(SETTINGS.update_log_path),
-           "RU_VERSION": version,
-           "RU_EXIT_TICKS": str(SETTINGS.update_wait_exit_s),
-           "RU_UP_TICKS": str(SETTINGS.update_wait_up_s)}
-    _spawn(env)
+    # THE FORK GUARD (owner 2026-08-09): the lock is taken BEFORE anything is
+    # written or spawned, at the one point every arm must pass — a second
+    # handover armed beside a live one is how one tap became 20+ installs.
+    if not _acquire_lock():
+        raise OSError("a handover is already live — refusing to arm a second")
+    try:
+        SETTINGS.update_script_path.parent.mkdir(parents=True, exist_ok=True)
+        SETTINGS.update_script_path.write_text(SCRIPT, encoding="ascii")
+        _write_record(version, installer, exe)
+        env = {**os.environ,
+               "RU_PID": str(os.getpid()),
+               "RU_EXE": str(exe),
+               "RU_NAME": exe.name,
+               "RU_INSTALLER": str(installer),
+               "RU_LOG": str(SETTINGS.update_log_path),
+               "RU_VERSION": version,
+               "RU_EXIT_TICKS": str(SETTINGS.update_wait_exit_s),
+               "RU_UP_TICKS": str(SETTINGS.update_wait_up_s)}
+        proc = _spawn(env)
+    except OSError:
+        _release_lock()  # an arm that failed must never hold the door shut
+        raise
+    _stamp_lock(getattr(proc, "pid", None))
     logger.info("Handover armed: %s will install %s and restart %s",
                 SETTINGS.update_script_path, installer, exe)
     return SETTINGS.update_script_path
@@ -420,6 +566,17 @@ def begin(controller, installer: Path, version: str,
     if problem:
         logger.error("Refusing the update handover: %s", problem)
         return "stop", DAMAGED_TEXT
+    # THE FORK GUARD, consulted before the phone hears anything (owner
+    # 2026-08-09, the 20-install fork): a refused arm must not announce
+    # "Installing vX" for an install that will not run. The atomic take is
+    # inside hand_over(); this early look exists only to keep the refusal
+    # ahead of tell_phone, and the thief is NAMED — a silent refusal is how
+    # the same week gets spent twice.
+    holder = live_handover()
+    if holder is not None:
+        logger.warning("Refusing to arm a second handover — one is already "
+                       "live (script pid %s)", holder)
+        return "stop", ALREADY_ARMED_TEXT
     tell_phone(controller, version)
     if not elevated():
         logger.warning("Not elevated — the installer needs a UAC prompt "

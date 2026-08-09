@@ -28,6 +28,17 @@ What must hold, and what each check would let through if it were missing:
   5. It PROVES the app came back, and tries once more when it did not.
   6. When there is genuinely nothing to start, it SAYS so instead of exiting
      quietly, and the next start tells the phone the update did not take.
+  7. ONE HANDOVER AT A TIME (owner 2026-08-09 — the updater installed his app
+     20+ times in one night). A second arm while one is live is REFUSED before
+     the phone is told anything; without the lock, racing scripts multiplied
+     1 -> 2 -> 4 and his update.log printed "handover finished" dozens of
+     times in one second.
+  8. A stale lock never bricks updates: a dead pid is reclaimed, and old age
+     outranks a pid Windows may have recycled onto a stranger.
+  9. The version compare is STRICT and NUMERIC — "0.0.9" must never beat
+     "0.0.102" (string compare says it does), and a release equal to the
+     running version is no update at all: a fresh app that re-offers its own
+     version is the fork's fuel.
 
 The installer and the app are FAKED — no real install runs here, and no real
 RemoteUser.exe is touched, waited on or killed (the harness refuses to run
@@ -38,6 +49,7 @@ executed, so the batch this project ships is the batch this gate proves.
 Run:  .venv\\Scripts\\python tests/test_update_handover.py
 """
 
+import json
 import os
 import shutil
 import subprocess
@@ -233,7 +245,10 @@ def check_a_damaged_download_stops_everything() -> bool:
     return (action == "stop" and text == update_handover.DAMAGED_TEXT
             and events == []
             and not (folder / "update.json").exists()
-            and not (folder / "update_handover.cmd").exists())
+            and not (folder / "update_handover.cmd").exists()
+            # a refused verify must not consume the arming lock either — the
+            # retry he was promised has to find the door open
+            and not (folder / "handover.lock").exists())
 
 
 def check_the_phone_is_told_before_the_app_can_go() -> bool:
@@ -262,7 +277,10 @@ def check_the_phone_is_told_before_the_app_can_go() -> bool:
     record = (folder / "update.json").read_text(encoding="utf-8")
     return (action == "quit" and events == ["told", "spawned"]
             and '"to": "0.0.999"' in record and '"state": "handover"' in record
-            and (folder / "update_handover.cmd").exists())
+            and (folder / "update_handover.cmd").exists()
+            # arming TOOK the lock (owner 2026-08-09, the 20-install fork) —
+            # this is the fact the next arm is refused on
+            and (folder / "handover.lock").exists())
 
 
 def check_it_waits_for_the_old_app_to_leave() -> bool:
@@ -339,6 +357,137 @@ def check_nothing_to_start_is_SAID() -> bool:
     log = run_script(folder, exe=folder / "not-there.exe", installer=fakes["ok"],
                      pid=os.getpid() + 10**6)
     return ("FATAL: nothing to run" in log and "started " not in log)
+
+
+def check_a_second_arm_is_refused_while_one_is_live() -> bool:
+    """THE FORK (owner 2026-08-09 — the updater installed his app 20+ times
+    in one night; his log printed "handover finished" dozens of times in one
+    second). A live lock IS a running handover: the second arm must be
+    refused by name, the phone must NOT be told "Installing…" for an install
+    that will not run, and nothing may be written — not a script, not a
+    record, and not one byte of the first handover's lock."""
+    folder = WORK / "lock_live"
+    folder.mkdir(parents=True, exist_ok=True)
+    good = folder / "setup.exe"
+    good.write_bytes(GOOD_BYTES)
+    config.apply(update_record_path=folder / "update.json",
+                 update_script_path=folder / "update_handover.cmd",
+                 update_log_path=folder / "update.log")
+    # A genuinely live process stands in for the running handover script —
+    # the lock's answer must come from the machine, not from the file alone.
+    live = subprocess.Popen(["cmd", "/c", "ping -n 30 127.0.0.1 >nul"],
+                            creationflags=update_handover.CREATE_NO_WINDOW)
+    started.append(live)
+    (folder / "handover.lock").write_text(
+        json.dumps({"pid": live.pid, "at": time.time()}), encoding="utf-8")
+    events: list[str] = []
+    real_tell, real_spawn, real_elev = (update_handover.tell_phone,
+                                        update_handover._spawn,
+                                        update_handover.elevated)
+    update_handover.tell_phone = lambda *a, **k: events.append("told")
+    update_handover._spawn = lambda env: events.append("spawned")
+    update_handover.elevated = lambda: True
+    try:
+        action, text = update_handover.begin(None, good, "0.0.999", len(GOOD_BYTES))
+    finally:
+        (update_handover.tell_phone, update_handover._spawn,
+         update_handover.elevated) = real_tell, real_spawn, real_elev
+    return (action == "stop" and text == update_handover.ALREADY_ARMED_TEXT
+            and events == []                     # no notice, no spawn — nothing
+            and not (folder / "update.json").exists()
+            and not (folder / "update_handover.cmd").exists()
+            and update_handover.live_handover() == live.pid)  # the first's lock stands
+
+
+def check_a_stale_lock_of_a_dead_pid_is_reclaimed() -> bool:
+    """The other half of the same rule: the lock must never BRICK updates. A
+    crash mid-handover leaves a lock behind whose pid is dead — the next arm
+    reclaims it and proceeds, stamping its own claim. And old age outranks
+    even a live pid, because Windows recycles pids and a stranger's process
+    must not hold this door shut forever."""
+    folder = WORK / "lock_stale"
+    folder.mkdir(parents=True, exist_ok=True)
+    good = folder / "setup.exe"
+    good.write_bytes(GOOD_BYTES)
+    config.apply(update_record_path=folder / "update.json",
+                 update_script_path=folder / "update_handover.cmd",
+                 update_log_path=folder / "update.log")
+    # A pid that is REALLY dead — run a process to completion and use its pid.
+    dead = subprocess.Popen(["cmd", "/c", "exit 0"],
+                            creationflags=update_handover.CREATE_NO_WINDOW)
+    dead.wait(timeout=30)
+    (folder / "handover.lock").write_text(
+        json.dumps({"pid": dead.pid, "at": time.time()}), encoding="utf-8")
+    events: list[str] = []
+
+    class _FakeScript:  # what _spawn returns — carries the pid the lock stamps
+        pid = os.getpid()
+
+    real_tell, real_spawn, real_elev = (update_handover.tell_phone,
+                                        update_handover._spawn,
+                                        update_handover.elevated)
+    update_handover.tell_phone = lambda *a, **k: events.append("told")
+    update_handover._spawn = (
+        lambda env: (events.append("spawned"), _FakeScript())[1])
+    update_handover.elevated = lambda: True
+    try:
+        action, _ = update_handover.begin(None, good, "0.0.999", len(GOOD_BYTES))
+    finally:
+        (update_handover.tell_phone, update_handover._spawn,
+         update_handover.elevated) = real_tell, real_spawn, real_elev
+    lock = json.loads((folder / "handover.lock").read_text(encoding="utf-8"))
+    # Age outranks a live pid: our own pid is alive, but the stamp is ancient.
+    (folder / "handover.lock").write_text(
+        json.dumps({"pid": os.getpid(),
+                    "at": time.time() - update_handover.LOCK_STALE_S - 60}),
+        encoding="utf-8")
+    age_reclaimed = update_handover.live_handover() is None
+    return (action == "quit" and events == ["told", "spawned"]
+            and lock["pid"] == os.getpid()   # re-stamped with the script's pid
+            and age_reclaimed)
+
+
+def check_the_version_compare_is_strict_and_numeric() -> bool:
+    """NO SELF-RE-OFFER (owner 2026-08-09). Every handover the fork armed was
+    fed by `updates.check()`, so its compare is a fork guard in its own
+    right: "0.0.9" must never beat "0.0.102" (string compare says it does),
+    and a release EQUAL to the running version is no update at all — a fresh
+    app that re-offers its own version restarts the merry-go-round. Driven
+    through the real check() with only the network and the running version
+    faked."""
+    import urllib.request as _url
+
+    import updates
+
+    class _Resp:
+        def __init__(self, tag):
+            self._tag = tag
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def read(self):
+            return json.dumps({"tag_name": self._tag, "assets": [],
+                               "html_url": "x"}).encode()
+
+    answers: dict[str, object] = {}
+    real_urlopen, real_version = _url.urlopen, updates.app_version
+    try:
+        config.apply(update_check=True)
+        updates.app_version = lambda: "0.0.102"
+        for tag in ("v0.0.9", "0.0.102", "0.0.103"):
+            _url.urlopen = lambda url, timeout=0, _t=tag: _Resp(_t)
+            answers[tag] = updates.check()
+    finally:
+        _url.urlopen = real_urlopen
+        updates.app_version = real_version
+    got = answers["0.0.103"]
+    return (answers["v0.0.9"] is None            # numeric, never string, compare
+            and answers["0.0.102"] is None       # strictly greater, never equal
+            and got is not None and got.version == "0.0.103")
 
 
 def check_the_next_start_tells_him_how_it_went() -> bool:
@@ -422,6 +571,12 @@ def main() -> int:
             check_it_tries_once_more_when_nothing_came_up())
         results["nothing to start is SAID, never shrugged off"] = (
             check_nothing_to_start_is_SAID())
+        results["a second arm is REFUSED while one is live (the 20-install fork)"] = (
+            check_a_second_arm_is_refused_while_one_is_live())
+        results["a stale lock of a dead pid is reclaimed, never bricking updates"] = (
+            check_a_stale_lock_of_a_dead_pid_is_reclaimed())
+        results["the version compare is strict and numeric (no self-re-offer)"] = (
+            check_the_version_compare_is_strict_and_numeric())
         results["the next start tells him how it went, good or bad"] = (
             check_the_next_start_tells_him_how_it_went())
     finally:

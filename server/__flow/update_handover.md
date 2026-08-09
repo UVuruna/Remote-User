@@ -39,28 +39,39 @@ Step 5 is what the owner asked for ("ugasi tek u onoj zadnjoj fazi"). Steps
                     bad          │        good
                      │           │
                      ▼           ▼
-              return "stop"   tell_phone()  ── notify.deliver ─▶ page
-              NOTHING was          │                          └▶ waiting channel
-              written, spawned     │                          └▶ (queue: he is gone)
-              or told              ▼
-                            ┌──────────────┐
-                            │ elevated()?  │  the packaged app always is
-                            └──────┬───────┘  (--uac-admin)
-                          no       │      yes
-                           │       │
-                           ▼       ▼
-                    return      hand_over()
-                    "manual"      ├─ write SCRIPT       → USER_DIR
-                    (dev only:    ├─ write the record   → USER_DIR
-                    show the      └─ _spawn(env)  CREATE_NO_WINDOW
-                    installer)          │
-                                        ▼
-                                 return "quit"  → the window calls _quit()
+              return "stop"   ┌──────────────────┐  THE ARMING LOCK (owner
+              NOTHING was     │ live_handover()? │  2026-08-09 — the fork
+              written, spawned│                  │  that installed 20+ apps)
+              or told         └───────┬──────────┘
+                             live     │      free
+                              │       │
+                              ▼       ▼
+                       return "stop"  tell_phone() ── notify.deliver ─▶ page
+                       refused BY        │                  └▶ waiting channel
+                       NAME in the log;  │                  └▶ (queue: he is gone)
+                       the phone never   ▼
+                       heard        ┌──────────────┐
+                       "Installing" │ elevated()?  │  the packaged app always is
+                                    └──────┬───────┘  (--uac-admin)
+                                  no       │      yes
+                                   │       │
+                                   ▼       ▼
+                            return      hand_over()
+                            "manual"      ├─ _acquire_lock()  ← atomic (O_EXCL);
+                            (dev only:    │      the judge when two arms race
+                            show the      ├─ write SCRIPT       → USER_DIR
+                            installer)    ├─ write the record   → USER_DIR
+                                          ├─ _spawn(env)  CREATE_NO_WINDOW
+                                          └─ _stamp_lock(script pid)
+                                          │      any failure above releases
+                                          ▼      the lock and raises
+                                   return "quit"  → the window calls _quit()
 ```
 
-Verify before he is told anything; tell him before anything can take his
-screen away; arm the restart before giving up the ability to do anything at
-all. Reorder any two of those and one of the failure modes comes back.
+Verify before he is told anything; refuse a second handover before he can be
+told about an install that will not run; tell him before anything can take
+his screen away; arm the restart before giving up the ability to do anything
+at all. Reorder any two of those and one of the failure modes comes back.
 
 ## The script
 
@@ -164,6 +175,11 @@ measured or bounded by a constant in [Config](../__about/config.md)
 ```
 truncated / not-a-program download → nothing touched, button says
                                      "The downloaded update was incomplete — retry"
+a handover is already live         → refused BEFORE the phone is told, the live
+                                     script's pid named in the log, button says
+                                     "An update is already installing — hold on"
+a stale lock (crash, dead pid,     → reclaimed on the next arm — a lock can
+ older than LOCK_STALE_S)            refuse ONE update, never all of them
 not elevated (dev checkout)        → the installer is launched VISIBLY, as before
 script cannot be written           → nothing touched, button says so, app stays up
 the phone cannot be told           → logged; the update still goes ahead

@@ -160,7 +160,15 @@ away.
   through the app that is about to be replaced** — so from the tap on there is
   nothing left for anyone to click. `("manual", …)` keeps the old visible-
   installer path for a dev checkout with no elevation; `("stop", text)` puts
-  the reason on the button and leaves the app running
+  the reason on the button and leaves the app running. **The `"launched"`
+  latch closes FIRST, before the goodbye caption's `processEvents()`** (owner
+  2026-08-09, the handover fork): the latch used to close after the event
+  pump, so a pending 1 s refresh tick re-entered `_refresh_update_button`
+  while the state still said `"ready"` and armed ANOTHER handover — that late
+  latch was the re-entrancy ROOT of the night the updater installed the app
+  20+ times; the arming lock in
+  [Update Handover](../../__about/update_handover.md) refuses the second arm,
+  and the closed latch removes the re-entry itself
 - `_settle_minimum()` / `_content_signature()` / `_resettle()` — the law's
   ladder step 3 kept LIVE (see Sizing above): measure, declare, grow — on every
   change to content that can arrive after the window was built
