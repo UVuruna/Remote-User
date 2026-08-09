@@ -149,26 +149,64 @@ _LONG_TITLE = ("Widening the layout row so a window title fits"
                " - Claude Code - Remote User - Visual Studio Code"
                " [Administrator]")
 
+# AND `parent` IS NO LONGER A FIELD OF ITS OWN (owner 2026-08-09, task 171 +
+# 173). The server derives the ⭐ from the NAMES it would destroy —
+# `layout_state.dependents` — so a fixture that staged only the boolean would
+# render a star the product can no longer produce, and the ✕ chooser's warning
+# would have nothing to be staged from. Both fields ride here, and they agree:
+# the starred row is exactly the one whose `dependents` is non-empty.
 LAYOUT_LIST_STAGE_JS = (
     "layouts = ["
     f" {{name:'{_LONG_TITLE}',"
     f"  process:'code.exe', orient:'portrait', icon:'{_ICON_VSCODE}',"
     "  ratio:[600,1000],"
-    "  pos:0.5, grid:'2', members:2, parent:true,"
+    "  pos:0.5, grid:'2', members:2, parent:true, dependents:['Downloads'],"
     "  member_titles:['Claude Code - Remote User - Visual Studio Code"
     " [Administrator]', 'prompt.txt - Remote User']},"
     " {name:'Downloads', process:'explorer.exe', orient:'portrait',"
     f"  icon:'{_ICON_EXPLORER}',"
-    "  ratio:null, pos:0.5, grid:null, members:1, parent:false,"
+    "  ratio:null, pos:0.5, grid:null, members:1, parent:false, dependents:[],"
     "  member_titles:['Downloads']},"
     " {name:'Reading', process:'chrome.exe', orient:'landscape',"
     f"  icon:'{_ICON_CHROME}',"
-    "  ratio:null, pos:0.5, grid:'4', members:4, parent:false,"
+    "  ratio:null, pos:0.5, grid:'4', members:4, parent:false, dependents:[],"
     "  member_titles:['Claude Code - Remote User - Visual Studio Code"
     " [Administrator]', 'Inbox (12) - Gmail', 'Downloads', 'Notes']}];"
     "layoutActive = 0; openLayoutPicker()"
 )
 LAYOUT_LIST_CLOSE_JS = "layoutActive = null; layouts = []; closeLayoutPanel()"
+
+# THE ⚙ SHEET (owner 2026-08-09, task 175), staged by MEMBER COUNT because the
+# sheet's whole content is "what can this layout be asked", and that answer
+# differs: a THREE is the fullest it ever gets (three menu rows, two
+# orientation chips and the four arrangement chips that only a three has), a
+# SOLO the thinnest (no member to throw out, no arrangement to choose). Both
+# are audited — a panel measured in one state is a panel half measured, and
+# the state nobody stages is where this project's bugs keep arriving.
+#
+# A function rather than a bare statement: the audit drives it twice with
+# different arguments, and a second copy of the fixture would be a second
+# thing to keep in step with the first.
+LAYOUT_SETTINGS_STAGE_JS = (
+    "(spec) => {"
+    " layouts = [{name: spec.name, process:'code.exe', orient:'portrait',"
+    f"  icon:'{_ICON_VSCODE}', ratio:[600,1000], pos:0.5,"
+    "  grid: spec.grid, members: spec.members, parent:false, dependents:[],"
+    "  member_titles: spec.titles}];"
+    " layoutActive = 0; openLayoutSettings(0); }"
+)
+
+# THE ✕ CHOOSER WITH SOMETHING TO LOSE (owner 2026-08-09, task 171). The plain
+# chooser is staged above; this is the state that MATTERS — a four-window
+# layout one of whose windows another layout's tab was torn out of, so closing
+# it destroys that other layout too. Two dependents, because "1" and "several"
+# are different sentences and only one of them can be wrong about its grammar.
+CLOSE_WARN_STAGE_JS = (
+    f"layouts = [{{name:'{_LONG_TITLE}', process:'code.exe',"
+    " orient:'portrait', icon:null, members:4, ratio:null, pos:0.5,"
+    " parent:true, dependents:['prompt.txt', 'Notes on the release']}];"
+    "layoutActive = 0; openCloseChooser(0)"
+)
 
 # THE SAME LIST WITH A ROW PICKED UP. The classes are the ones the drag itself
 # adds (`lay-drag` on the carried row, `lay-drop` on a legal target, `lay-full`
@@ -318,10 +356,29 @@ PANELS = (
     ("Layout close chooser",
      "layouts = [{name:'Claude Code - Remote User - Visual Studio "
      "Code [Administrator]', process:'code.exe', orient:'portrait',"
-     " icon:null, members:4, ratio:null, pos:0.5}];"
+     " icon:null, members:4, ratio:null, pos:0.5, dependents:[]}];"
      "layoutActive = 0; openCloseChooser(0)",
      "layoutActive = null; layouts = []; closeLayoutPanel()",
      "#layout-panel .lay-card"),
+    # …AND THE SAME CHOOSER WITH SOMETHING TO LOSE (owner 2026-08-09, task
+    # 171). The warning is a THIRD line inside a chip that already carries a
+    # label and a consequence, on the narrowest card this app has — so it is
+    # exactly the line that would be cut, and the only way to know it is not
+    # is to measure it and to look at it. Its own entry rather than replacing
+    # the plain one above: the ordinary case must stay staged too, or nothing
+    # would catch a warning that appears when there is nothing to warn about.
+    ("Layout close chooser warned", CLOSE_WARN_STAGE_JS,
+     LAYOUT_LIST_CLOSE_JS, "#layout-panel .lay-card"),
+    # THE ⚙ SHEET (owner 2026-08-09, task 175) at its FULLEST — a three, which
+    # is the only size that adds the four arrangement chips under the two
+    # orientation ones. The thin state (a solo) is driven by the audit's own
+    # settings-sheet check, which asks both.
+    ("Layout settings sheet",
+     "(" + LAYOUT_SETTINGS_STAGE_JS + ")({name:'"
+     + _LONG_TITLE + "', grid:'3-top', members:3,"
+     " titles:['Claude Code - Remote User - Visual Studio Code"
+     " [Administrator]', 'prompt.txt - Remote User', 'Downloads']})",
+     LAYOUT_LIST_CLOSE_JS, "#layout-panel .lay-card"),
     # The layout list carries a rename button per row (owner
     # 2026-08-05) — a long window title must not push the row's
     # buttons off the card. Staged with THREE rows since 2026-08-09
@@ -418,8 +475,16 @@ PANELS = (
 # once — the accent `sel` border of a chosen row, the `.lc-off` dimming of one
 # refused by the window-or-its-own-tab rule, and the secondary ink of the
 # "minimized" note.
+# The ⚙ sheet joined on 2026-08-09 (task 175): it is the newest screen in the
+# product and the one every act on a layout now passes through, so a look in
+# which its rows or its drawn chips do not read is a look in which the layout
+# feature is unusable. The warned ✕ chooser joined with it (task 171) for the
+# one reason a picture can settle: its warning is the only text in this app
+# painted in `--warning` on a card, and whether that colour READS on a light
+# surface is not a thing geometry can answer.
 COLOUR_SHOTS = {"Sets picker", "Quality panel", "Dictation card",
-                "Layout list with rename", "Creation list with tabs"}
+                "Layout list with rename", "Creation list with tabs",
+                "Layout settings sheet", "Layout close chooser warned"}
 
 # The panels SHOT IN LANDSCAPE (2026-08-07). Every phone panel is MEASURED in
 # both orientations and always was; these two are also photographed there,
@@ -434,10 +499,16 @@ COLOUR_SHOTS = {"Sets picker", "Quality panel", "Dictation card",
 # The ✕ chooser joined on 2026-08-08: it is two big side-by-side chips, which
 # is exactly the shape landscape squeezes — 46% of a wide card each, with a
 # consequence line that must still wrap rather than clip.
+# The ⚙ sheet and the warned ✕ chooser joined on 2026-08-09 (tasks 175 / 171),
+# and the creation LIST with them: landscape is where all three are tightest —
+# the sheet's chips have half the width, the chooser's two big chips take 46%
+# of a wide card each with a third line under them, and the creation list is
+# the panel this round had to restructure to make its rows whole there at all.
 LANDSCAPE_SHOTS = {"Creation panel + Name field", "Grid arrangement choice",
                    "Sets picker", "Quality panel", "Dictation card",
                    "Layout list with rename", "Region grab",
-                   "Layout close chooser"}
+                   "Layout close chooser", "Layout close chooser warned",
+                   "Layout settings sheet", "Creation list with tabs"}
 
 # ONE FOLDER, ONE SUBJECT (owner 2026-08-08, his second word on this): a topic
 # folder per ROUND was still a dump — he asked for sub-folders rather than one
@@ -458,6 +529,7 @@ SHOT_SUBJECTS = (
     ("Pad_cross_upright", "controls"),
     ("Layout_close_chooser", "layouts"),
     ("Layout_member_chooser", "layouts"),
+    ("Layout_settings_sheet", "layouts"),
     ("Layout_list", "layouts"),
     ("Rename_card", "layouts"),
     ("Aspect_panel", "layouts"),

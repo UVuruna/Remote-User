@@ -35,9 +35,10 @@ from _audit_js import CONTRAST_JS  # noqa: E402
 # 2026-08-09 (THE STRUCTURE LAW), when the dictation card's listen control
 # pushed this file past 1,000 lines. See tests/_audit_panels.py.
 from _audit_panels import (  # noqa: E402
-    COLOUR_SHOTS, CREATION_CLOSE_JS, CREATION_LIST_STAGE_JS, DICT_STAGE_JS,
-    LANDSCAPE_SHOTS, LAYOUT_LIST_CLOSE_JS, LAYOUT_LIST_STAGE_JS, PANELS,
-    SHOT_SUBJECTS, UA_MODEL,
+    CLOSE_WARN_STAGE_JS, COLOUR_SHOTS, CREATION_CLOSE_JS,
+    CREATION_LIST_STAGE_JS, DICT_STAGE_JS, LANDSCAPE_SHOTS,
+    LAYOUT_LIST_CLOSE_JS, LAYOUT_LIST_STAGE_JS, LAYOUT_SETTINGS_STAGE_JS,
+    PANELS, SHOT_SUBJECTS, UA_MODEL,
 )
 
 # THE TABLET WAS NEVER MEASURED (owner report 2026-08-08: "do sad nikad nisam
@@ -180,8 +181,6 @@ def _shot_label(name: str, look, portrait: bool = True, always: bool = False) ->
     if always or look != DEFAULT_LOOK:
         name = f"{name}  {theme}  {_look_word(colored)}  {fill}"
     return name if portrait else f"{name} landscape"
-
-
 
 
 def _apply_look(page, theme, colored, fill):
@@ -373,21 +372,29 @@ def _check_panel(page, name, open_js, close_js, card_sel, shot=False,
                          r.right <= innerWidth + 1 && r.bottom <= innerHeight + 1;
           const noPageScroll =
             document.scrollingElement.scrollWidth <= innerWidth + 1;
-          let noClip = card.scrollWidth <= card.clientWidth + 1;
+          // WHICH element, not merely "something": "noClip: False" alone costs
+          // a whole probe run to localise (2026-08-09).
+          const clipped = [];
           for (const el of card.querySelectorAll('button, .q-row, .sets-row, input')) {
-            if (el.scrollWidth > el.clientWidth + 2) noClip = false;
+            if (el.scrollWidth > el.clientWidth + 2) {
+              clipped.push((el.className || el.tagName) + ' ' +
+                           el.scrollWidth + '>' + el.clientWidth);
+            }
           }
+          const noClip = !clipped.length &&
+                         card.scrollWidth <= card.clientWidth + 1;
           // BUG A of THE SPACE & LEGIBILITY LAW, measured (2026-08-07): "a
           // visible scrollbar with unused space in the same window is a bug,
           // not a style choice". Not "the card never scrolls" — rung 4 is
-          // legal once the screen is genuinely full — but "it never scrolls
-          // while there is width standing idle beside it". That is exactly
-          // what landscape did to seven of these ten panels: 420 px of card
-          // in a 915 px screen, scrolling by up to 256 px.
-          const hidden = card.scrollHeight - card.clientHeight;
+          // legal once the screen is full — but "it never scrolls while width
+          // stands idle beside it", which is what landscape did to seven of
+          // these ten panels: 420 px of card in a 915 px screen, by up to
+          // 256 px. Counted over the card AND whatever scrolls INSIDE it
+          // (`__hiddenPx` — a pinned footer must not hide that number).
+          const hidden = __hiddenPx(card);
           const freeW = innerWidth - r.width;
           const noScrollWithSlack = !(hidden > 1 && freeW > 24);
-          return { inView, noPageScroll, noClip, noScrollWithSlack,
+          return { inView, noPageScroll, noClip, noScrollWithSlack, clipped,
                    hiddenPx: hidden, freeWidthPx: Math.round(freeW),
                    contrast: __contrast(card),
                    // …and the cut this file could not see until 2026-08-07:
@@ -531,7 +538,13 @@ def main() -> int:
             # the feature, and the tablet sizes had never been measured at all
             # until this round — so the cross is checked for fit exactly where
             # he asked for it, not only where it already lived.
-            page.evaluate("setPadCross(true)")
+            # `setPadCross(true)` until 2026-08-09, when the D-pad shape became
+            # a per-orientation CHOICE (`setPadShape(orient, value)` in
+            # controls.js) instead of one portrait boolean. Translated rather
+            # than dropped, and asked of the orientation actually on screen —
+            # the check is "the cross fits HERE", so forcing portrait's shape
+            # while measuring a landscape page would have measured nothing.
+            page.evaluate("setPadShape(padOrientation(), 'cross')")
             page.wait_for_timeout(150)
             fit = page.evaluate("""() => {
               const bad = [];
@@ -568,7 +581,7 @@ def main() -> int:
                 # picture is a choice he has to install to evaluate.
                 if portrait:
                     page.screenshot(path=str(shot_path("Pad_cross_upright")))
-            page.evaluate("setPadCross(false)")
+            page.evaluate("setPadShape(padOrientation(), 'auto')")
             page.wait_for_timeout(120)
 
             for look in LOOKS:
@@ -766,6 +779,40 @@ def main() -> int:
             # every row really lights a DIFFERENT cell: the whole panel rests
             # on "he picks the window by its position", and four VS Code
             # windows have four nearly identical titles.
+            # THE ⚙ SHEET OFFERS EXACTLY WHAT THIS LAYOUT CAN TAKE (owner
+            # 2026-08-09, task 175). Both shapes: a THREE is the fullest the
+            # sheet gets, a SOLO has neither a member to throw out nor an
+            # arrangement to choose. Rule: `__settingsSheet` in _audit_js.py.
+            for members, grid in ((3, "3-top"), (1, None)):
+                page.evaluate(LAYOUT_SETTINGS_STAGE_JS,
+                              {"name": "Claude Code - Remote User - Visual "
+                                       "Studio Code [Administrator]",
+                               "grid": grid, "members": members,
+                               "titles": ["Claude Code", "prompt.txt", "Notes"]})
+                page.wait_for_selector("#layout-panel .lay-card",
+                                       state="visible", timeout=4000)
+                sheet = page.evaluate("(n) => __settingsSheet(n)", members)
+                results[f"the ⚙ sheet offers exactly a {members}-window "
+                        f"layout's acts @ {label}"] = not sheet
+                if sheet:
+                    print(f"  DETAIL settings sheet ({members}) @ {label}: {sheet}")
+                page.evaluate(LAYOUT_LIST_CLOSE_JS)
+
+            # WHAT ELSE DIES WITH THESE WINDOWS (owner 2026-08-09, task 171).
+            # Which OPTION carries the warning is meaning, not pixels
+            # (`__closeWarning` in _audit_js.py), and the expectation is the
+            # page's own staged list, so it cannot drift from the card.
+            page.evaluate(CLOSE_WARN_STAGE_JS)
+            page.wait_for_selector("#layout-panel .lay-source", state="visible",
+                                   timeout=4000)
+            warn = page.evaluate("(d) => __closeWarning(d)",
+                                 page.evaluate("() => layouts[0].dependents"))
+            results[f"the ✕ chooser names the layouts a close would destroy "
+                    f"@ {label}"] = not warn
+            if warn:
+                print(f"  DETAIL close warning @ {label}: {warn}")
+            page.evaluate(LAYOUT_LIST_CLOSE_JS)
+
             page.evaluate(LAYOUT_LIST_STAGE_JS + "; openMemberPanel(2)")
             page.wait_for_selector("#layout-panel .lay-card", state="visible",
                                    timeout=4000)
@@ -788,12 +835,19 @@ def main() -> int:
             page.evaluate(CREATION_LIST_STAGE_JS)
             page.wait_for_selector("#layout-panel .lay-card", state="visible",
                                    timeout=4000)
+            # …AND ITS LIST IS NOT A SCROLLER INSIDE A FRAGMENTAINER (found
+            # 2026-08-09 by photographing this panel at 915x412): the fourth of
+            # six rows came out sliced through the middle, ten pixels above the
+            # "Shape:" block in the same column, with rows five and six
+            # nowhere. `__scrollInColumns` in _audit_js.py carries the finding.
             crea = page.evaluate(
-                "() => __kinRows(document.querySelector('#layout-panel .lay-card'))")
+                "() => { const c = document.querySelector('#layout-panel"
+                " .lay-card');"
+                " return __kinRows(c).concat(__scrollInColumns(c)); }")
             results[f"the creation list's rows are one line, equal within "
-                    f"their own indent @ {label}"] = not crea
+                    f"their own indent, and reachable @ {label}"] = not crea
             if crea:
-                print(f"  DETAIL creation list kin rows @ {label}: {crea}")
+                print(f"  DETAIL creation list rows @ {label}: {crea}")
             page.evaluate(CREATION_CLOSE_JS)
 
             # D-pad labels: a set's POOL may hold reserve commands with longer

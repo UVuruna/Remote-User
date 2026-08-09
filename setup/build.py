@@ -394,6 +394,43 @@ def input_gate() -> None:
          "window keeps its life (tests/test_layout_member.py)")
     run([sys.executable, str(PROJECT_DIR / "tests" / "test_layout_member.py")])
 
+    # AND A LAYOUT CAN BE TURNED (owner 2026-08-09, task 175). Every act on an
+    # existing layout moved under one ⚙, and one of them could not be done at
+    # all before: a layout built portrait had to be DELETED and made again to
+    # become landscape. The message it rides has existed since 2026-08-07 and
+    # NOTHING IN THIS PROJECT EVER DROVE IT — no test mentioned `layout_grid`
+    # or `set_grid`, so "the server already has it" was a claim about a name.
+    # It asserts the RECTS: a shape change the phone shows and the PC ignores
+    # is the Move handle's bug in a new place, and a stored value he cannot see
+    # proves nothing about a feature he judges by geometry.
+    step("0u/6  LAYOUT SHAPE GATE — a layout can be turned and re-arranged, "
+         "and the windows really move (tests/test_layout_shape.py)")
+    run([sys.executable, str(PROJECT_DIR / "tests" / "test_layout_shape.py")])
+
+    # THE ARRANGEMENT FOLLOWS HIS CHOICE, NOT THE ORIENTATION (owner ruling
+    # 2026-08-09, task 177): portrait defaults to the column and landscape to
+    # the cross exactly as before, but an explicit per-orientation choice
+    # (padShapePort/padShapeLand, per device through the prefs bridge)
+    # outranks the default, and the old padCross key is READ as the portrait
+    # seed — a saved choice is translated, never reset. The CSS keys off the
+    # DECISION (body.pad-column), never off a media query: the media query WAS
+    # the weld this task removes.
+    step("0v/6  PAD SHAPE GATE — the arrangement follows his choice in both "
+         "orientations (tests/test_pad_shape.py)")
+    run([sys.executable, str(PROJECT_DIR / "tests" / "test_pad_shape.py")])
+
+    # ON IS A LUMINANCE EVENT (owner report 2026-08-09, task 179, round two of
+    # 135): the round-one rule signalled ON with accent HUES and the coloured
+    # looks outranked every one of them in the cascade — the net signal on his
+    # phone measured 1.05-1.58:1 against the OFF sibling. This gate PHOTOGRAPHS
+    # the real page and measures ON-vs-OFF as a contrast ratio over the face
+    # and the ring in ALL EIGHT looks, floor 3.0; the rule that shipped in
+    # v0.0.103 was planted as the defect and went RED at 1.58. A check in one
+    # look is how round one passed while his screen said otherwise.
+    step("0w/6  ON STATE GATE — a switched-on button is a luminance event in "
+         "all eight looks (tests/test_on_state.py)")
+    run([sys.executable, str(PROJECT_DIR / "tests" / "test_on_state.py")])
+
     # A HOLD IS A CONTACT THAT STAYED PUT (owner report 2026-08-09, task 162:
     # he held a layout row and the layout OPENED). The drag gesture had shipped
     # whole and was defeated at its first millisecond — the row cleared its

@@ -470,6 +470,191 @@ window.__memberCells = (card) => {
   return bad;
 };
 
+// A SCROLLING LIST MAY NOT LIVE INSIDE A COLUMNED CARD (found 2026-08-09 by
+// photographing the creation panel at 915x412 — this round's own
+// verification, and the reason this instrument exists).
+//
+// The landscape reflow of task 172 gives a card `column-count: 2`, which makes
+// it a FRAGMENTAINER; the creation panel's window list inside it is a scroll
+// container. The two do not compose, and the failure is not subtle once it is
+// looked at: the fourth of six rows came out sliced through the middle, ten
+// pixels above the "Shape:" block in the same column, with rows five and six
+// nowhere and no scrollbar to say they existed. MEASURED in the real
+// Chromium this audit runs: a scroller inside a multicol is not clipped by
+// its own box at all — `overflow: hidden` does not clip it either, `column
+// -span: all` does not fix it, and the same list with twenty windows put
+// fourteen rows off the bottom of the screen while the card reported no
+// scroll of its own to make.
+//
+// WHY A STRUCTURAL RULE AND NOT A PIXEL ONE. Every other instrument in this
+// file measures a rendered box, and each of them was green on that panel:
+// nothing overflowed the CARD, no text was cut before the DOM saw it, the
+// contrast was fine, the rows were the same height. The defect is a
+// COMPOSITION — two layout modes that are each correct alone — so what is
+// checked is the composition. It has no number to tune and it generalises:
+// any future panel that puts a scroller in a columned card is caught the day
+// it is staged, instead of the day somebody opens its screenshot.
+window.__scrollInColumns = (card) => {
+  const bad = [];
+  const cs = getComputedStyle(card);
+  const cols = parseInt(cs.columnCount, 10);
+  if (!(cols > 1)) return bad;          // not a fragmentainer — nothing to say
+  const scrolls = (s) => s === 'auto' || s === 'scroll';
+  for (const el of card.querySelectorAll('*')) {
+    const s = getComputedStyle(el);
+    if (!scrolls(s.overflowY) && !scrolls(s.overflowX)) continue;
+    if (el.scrollHeight <= el.clientHeight + 1 &&
+        el.scrollWidth <= el.clientWidth + 1) continue;   // holds nothing back
+    bad.push('"' + (el.className || el.tagName) + '" scrolls (' +
+             el.scrollHeight + ' in ' + el.clientHeight + ') inside a ' +
+             cols + '-column card — a fragmentainer does not clip it, so its ' +
+             'rows paint over whatever the next column holds');
+  }
+  return bad;
+};
+
+// HOW MUCH OF A CARD THE USER CANNOT SEE — the card's own scroll, or that of
+// anything scrolling inside it (2026-08-09).
+//
+// `noScrollWithSlack` in test_layout_audit.py read `card.scrollHeight -
+// card.clientHeight` and nothing else, which was the whole truth while every
+// panel card was one scrolling block. The Sets picker stopped being one on
+// this round: on a 915x412 phone it does not fit, so it pins its Done button
+// and scrolls a `.sets-body` between the header and it — a better card, and
+// one whose CARD reports no scroll at all. The number the rule exists to
+// judge would have walked out of its reach on the day the layout improved,
+// which is the same class of miss as measuring a JS variable instead of the
+// geometry (task 149's Move handle). What is asked is therefore what the
+// user experiences: how much of this panel is out of sight, wherever the
+// scrollbar happens to live.
+window.__hiddenPx = (card) => {
+  let hidden = card.scrollHeight - card.clientHeight;
+  for (const el of card.querySelectorAll('*')) {
+    const s = getComputedStyle(el);
+    if (s.overflowY === 'auto' || s.overflowY === 'scroll') {
+      hidden = Math.max(hidden, el.scrollHeight - el.clientHeight);
+    }
+  }
+  return hidden;
+};
+
+// WHAT ELSE DIES WITH THESE WINDOWS, SAID BEFORE HE TAPS (owner 2026-08-09,
+// task 171). Closing a layout's windows destroys any OTHER layout whose
+// content was torn out of one of them — the tab has no home to go back to —
+// and until this round the ✕ chooser said nothing about it. The server names
+// them (`layout_state.dependents`); this proves the phone puts those names on
+// the irreversible option and on nothing else.
+//
+// It needs its own instrument for the reason `__layoutStars` does: WHICH
+// option carries the warning is a fact about meaning, not about pixels, and a
+// warning printed under the harmless act — or under both — is worse than none.
+// `deps` is the page's own staged list, passed in, so what is expected can
+// never drift from what is staged.
+window.__closeWarning = (deps) => {
+  const bad = [];
+  const chips = [...document.querySelectorAll('#layout-panel .lay-source')];
+  if (chips.length !== 2) {
+    bad.push('the chooser is not two options');
+    return bad;
+  }
+  const warned = chips.filter((c) => c.querySelector('.lay-warn'));
+  if (!deps.length) {
+    if (warned.length) bad.push('a layout with no dependents was warned about');
+    return bad;
+  }
+  if (warned.length !== 1) {
+    bad.push(warned.length + ' of the two options carry the warning — only ' +
+             'the CLOSE one may');
+    return bad;
+  }
+  // The one that closes windows is the one that must carry it. Identified by
+  // what it SAYS it does, never by its position in the row.
+  const label = (warned[0].textContent || '').toLowerCase();
+  if (label.indexOf('close') < 0) {
+    bad.push('the warning sits on the option that closes nothing');
+  }
+  const text = warned[0].querySelector('.lay-warn').textContent;
+  for (const name of deps) {
+    if (text.indexOf(name) < 0) {
+      bad.push('"' + name + '" would be destroyed and is not named: "' +
+               text.slice(0, 60) + '"');
+    }
+  }
+  // …and it is READ, not merely present: it wraps, it is not cut, and it
+  // stays inside the card like every other consequence line on it.
+  const el = warned[0].querySelector('.lay-warn');
+  const cr = document.querySelector('#layout-panel .lay-card')
+    .getBoundingClientRect();
+  const wr = el.getBoundingClientRect();
+  if (el.scrollWidth > el.clientWidth + 1) bad.push('the warning is clipped');
+  if (wr.left < cr.left - 1 || wr.right > cr.right + 1 ||
+      wr.bottom > cr.bottom + 1) {
+    bad.push('the warning leaves the card');
+  }
+  return bad;
+};
+
+// THE ⚙ SHEET OFFERS EXACTLY WHAT THIS LAYOUT CAN TAKE (owner 2026-08-09,
+// task 175 — one common settings icon instead of one icon per act).
+//
+// The sheet IS its list of acts, so what has to be true of it is not a
+// geometry: a SOLO layout has no window to throw out and no arrangement to
+// choose, and offering either would be a control that cannot act — the same
+// rule that makes a solo row's shape badge a plain <span> rather than a
+// button. Nothing else in this file can see that: a row that does nothing is
+// legible, unclipped, the right height and inside the card.
+//
+// The arrangement is the asymmetry of the owner's own sheet (2026-08-07): a 2
+// and a 4 have one arrangement each and a 3 has four, so the chips are offered
+// for a three and for nothing else. `members` is passed in from the staging,
+// never read off the page, so the expectation cannot drift from what is
+// staged.
+window.__settingsSheet = (members) => {
+  const bad = [];
+  const card = document.querySelector('#layout-panel .lay-card');
+  if (!card) { bad.push('the sheet did not open'); return bad; }
+  const rows = [...card.querySelectorAll('.lay-item')];
+  const labels = rows.map(
+    (r) => (r.querySelector('.lay-item-main span') || {}).textContent || '');
+  const has = (re) => labels.some((t) => re.test(t));
+  if (!has(/rename/i)) bad.push('no Rename row');
+  if (!has(/aspect/i)) bad.push('no Aspect ratio row');
+  if (has(/window out/i) !== (members > 1)) {
+    bad.push(members > 1
+      ? 'a grid offers no way to take a window out'
+      : 'a SOLO layout offers to take a window out of nothing');
+  }
+  // The rows are kin — one line each, the same height, inside the card.
+  const h = rows.map((r) => Math.round(r.getBoundingClientRect().height));
+  if (h.length && Math.max(...h) - Math.min(...h) > 1) {
+    bad.push('the sheet rows differ in height: ' + h.join(' / '));
+  }
+  const cr = card.getBoundingClientRect();
+  for (const b of card.querySelectorAll('button')) {
+    const br = b.getBoundingClientRect();
+    if (br.left < cr.left - 1 || br.right > cr.right + 1) {
+      bad.push('a control leaves the card: "' +
+               (b.textContent || '').slice(0, 18) + '"');
+    }
+  }
+  // Orientation is always offered (his second half of the task — a layout
+  // built portrait used to need deleting to become landscape) and exactly one
+  // of the two is lit.
+  const orient = [...card.querySelectorAll('.lay-chip.lay-shape')];
+  if (orient.length !== 2) {
+    bad.push(orient.length + ' orientation chips, expected 2');
+  } else if (orient.filter((c) => c.classList.contains('sel')).length !== 1) {
+    bad.push('the current orientation is not the lit one');
+  }
+  const arr = [...card.querySelectorAll('.lay-chip.lay-grid:not(.lay-shape)')];
+  const wantArr = members === 3 ? 4 : 0;
+  if (arr.length !== wantArr) {
+    bad.push(arr.length + ' arrangement chips for ' + members +
+             ' windows, expected ' + wantArr);
+  }
+  return bad;
+};
+
 // EVERY COLOUR IN THE TABLE, not merely the three the fixture happens to show
 // (independent grader, 2026-08-07: "that tooth is the only safety net for
 // `colored` when the owner retunes his palette"). tests/fixtures/actions.json

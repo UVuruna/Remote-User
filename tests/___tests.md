@@ -270,6 +270,36 @@ instruments in `tests/_audit_js.py` measure what the sweep cannot:
   tablet — while `__kinRows` stayed green on the same staging, which is the
   whole reason it needed an instrument of its own.
 
+- `__settingsSheet(members)` (2026-08-09, task 175) — the ⚙ sheet IS its list
+  of acts, so what has to be true of it is not a geometry: a SOLO layout has no
+  window to throw out and no arrangement to choose, and offering either would
+  be a control that cannot act. Nothing else here can see that — a row that
+  does nothing is legible, unclipped, the right height and inside the card. It
+  asks both shapes (a THREE, the fullest the sheet gets, and a solo) and the
+  arrangement chips are demanded for a three and for nothing else, which is the
+  asymmetry of the owner's own sheet. Proven by planting `members > 0` for the
+  member row → *"a SOLO layout offers to take a window out of nothing"* at all
+  four viewports.
+- `__closeWarning(dependents)` (2026-08-09, task 171) — WHICH option of the ✕
+  chooser carries the "Also destroys …" line is a fact about MEANING, not about
+  pixels: a warning printed under the harmless act, or under both, is worse
+  than none. It demands exactly one warned option, that it is the one whose
+  label says *close*, that every staged dependent is NAMED in it, and that the
+  line is neither clipped nor outside the card — plus the negative case, that a
+  layout with no dependents is warned about nothing. Proven by planting the
+  removal of `dependentWarning(lay)` → *"0 of the two options carry the warning
+  — only the CLOSE one may"*, all four viewports.
+- `__scrollInColumns(card)` (2026-08-09, found by photographing the creation
+  panel at 915×412) — a scroll container inside a `column-count` card. Every
+  other instrument here measures a rendered box and each of them was GREEN on
+  that panel: nothing overflowed the card, no text was cut before the DOM saw
+  it, the contrast was fine, the rows were the same height. The defect is a
+  COMPOSITION of two layout modes that are each correct alone, so what is
+  checked is the composition — no number to tune, and it generalises to any
+  future panel. Proven by planting the card back to `card-columns` → *"lc-rows
+  lc-scroll scrolls (276 in 157) inside a 2-column card — a fragmentainer does
+  not clip it, so its rows paint over whatever the next column holds"*.
+
 **AND THE ROWS CARRY REAL APP ICONS** (task 172). `LAYOUT_LIST_STAGE_JS` staged
 `icon: null` on every layout, so `layRow` fell back to the Desktop row's monitor
 and the picture showed FOUR IDENTICAL leading badges. The server sends a real
@@ -729,13 +759,25 @@ a layout SHRINKING is a responsibility of its own — the same seam
   such check beside four that measure rects.
 - *`layout_state` NAMES every member* — `member_titles`, in CELL order, since
   the phone cannot ask for a window it was never told about.
+- ***the leaving window takes its SOURCE record with it*** (2026-08-09, tasks
+  171 + 173). A member EXTRACTED from another window carries a record of where
+  it came from, and that record is what makes the other layout wear the ⭐ and
+  what the ✕ chooser's warning is built out of. When the extracted window
+  leaves, the record must leave with it — or the trunk goes on being marked as
+  the parent of a branch that no longer holds its content, and the phone warns
+  him about destroying something a close cannot touch. Asserted end-to-end AND
+  at the method's own boundary, because planting proved the end-to-end case
+  cannot see it: `focus` begins with `prune`, and `prune` drops every record
+  whose member has left — the same masking two checks above.
 
-Proven by planting each defect in turn (nine of them: the template not
+Proven by planting each defect in turn (ten of them: the template not
 re-derived, no re-place ordered, the leaving window closed, the leaving window
 left topmost, the last member not removing the layout, a bad ordinal accepted
 in silence, `_template_for` ignoring the named shape, the keyboard pointer
-left behind, `member_titles` dropped). Each turns its own check red and the
-suite is green again on restore.
+left behind, `member_titles` dropped, the source record kept after the member
+left → *"drop_member left {48: 16} behind — only the prune that happens to
+follow it cleans up"*). Each turns its own check red and the suite is green
+again on restore.
 
 Run: `.venv\Scripts\python tests/test_layout_member.py` — also a fail-closed
 step in `build.py` (0t/6).
@@ -834,6 +876,20 @@ window it moves:
   is not, an unrelated layout is not — plus the self-contained case: after the
   two are merged into one layout, nobody is starred, because the mark is about
   OTHER layouts losing their content.
+- **A tab extracted into a LATER cell is recorded too** (task 173,
+  2026-08-09) — the ⭐'s own honest limit, closed. `create` stored ONE source,
+  taken from the first slot, so a tab extracted into cell 2, 3 or 4 of a grid
+  left no record and both readers under-reported on exactly the grids the mark
+  exists for. BOTH shapes are built in one run, because a fixture that can only
+  build the shape which already worked is a fixture that proves the old
+  behaviour.
+- **The phone is told WHICH layouts a close would destroy** (task 171,
+  2026-08-09) — `layout_state.dependents`, the NAMES and not a count: "1 other
+  layout" is a number, and what he needs before an irreversible tap is which.
+  Two branches out of one trunk are two names; a branch that is REMOVED stops
+  being named, or the warning would list a layout that no longer exists.
+  Asserted by RELATION — which layout NAME is destroyed by which — never by a
+  handle (the phone is never told one) or an index (a reorder moves them).
 
 Each check proven by planting its own defect at RUNTIME (the registry method
 replaced in memory — never on disk, because another agent was editing
@@ -847,9 +903,63 @@ The two 2026-08-09 checks likewise: the pre-fix `layout_reorder` branch put
 back in `web.py` → *"focus 0, reorder(0, 3): the server now calls 'B' active —
 the phone is showing 'A'"* (four of the five cases red); `"parent": True` for
 every layout → *"the stars are {'Trunk': True, 'Plain': True, 'Branch': True}"*.
+And the two of task 171/173: `layout_api` recording only `resolved[:1]`'s
+source — the pre-task-173 line, exactly — turns both red at once, *"a tab in
+cell 1: the stars are {'Trunk': False, …}"* and *"the dependents are
+{'Trunk': [], …}, expected {'Trunk': ['Branch'], …}"*, while the cell-0 shape
+that always worked stays green: the fixture can tell the two behaviours apart.
 
 Run: `.venv\Scripts\python tests/test_layout_drag.py` — also a fail-closed
 step in `build.py` (0f/6) and a full-run guard.
+
+### `test_layout_shape.py` — Layout Shape Gate
+
+A LAYOUT CAN BE TURNED AND RE-ARRANGED AFTER IT EXISTS (owner 2026-08-09, task
+175). Every act on an existing layout moved under one common ⚙, and one of them
+could not be done AT ALL before: a layout built portrait had to be DELETED and
+made again to become landscape.
+
+**The finding is the absence.** The message it rides — `layout_grid {index,
+grid, orient}` — has existed since 2026-08-07 for a THREE's arrangement, and no
+test in this project ever mentioned `layout_grid` or `set_grid`. So "the server
+already has it" was a claim about a NAME, not about a behaviour, and this round
+was about to build a phone panel on top of it. Same absence
+`test_layout_drag.py` was written for on the same day, and the same answer —
+except this one exists BEFORE the panel's first screenshot rather than after
+his first report.
+
+What it asserts is the RECTS. A shape change the phone shows and the PC ignores
+is the Move handle's bug arriving in a new place (owner 2026-08-07, *"uvek
+ostavi centrirano"* — lang-ok: owner quote), and a check on a stored value the
+user cannot see proves nothing about a feature he judges by geometry.
+
+- a THREE re-arranged (which edge its single window takes), a grid TURNED, and
+  a SOLO layout turned — the phone sends an empty grid for that one, so the
+  path is driven as it really arrives;
+- the survivors land on the cells of the NEW shape, read out of `grids.py`
+  rather than restated, so the check cannot agree with a wrong answer;
+- a shape of the WRONG SIZE is refused, not obeyed into a cell nobody is in —
+  and the refusal still TURNS the layout, because the orientation is a separate
+  question from the arrangement;
+- and the re-place ORDER at the method's own boundary.
+
+That last one exists because planting proved the others could not see it:
+`focus` re-places whenever `_standing` says the members are off their targets,
+which after a shape change they always are, so `place_pending` could be deleted
+with every end-to-end case still green. Two plants, both red on restore-check:
+`set_grid` ordering no re-place → *"set_grid ordered no re-place — a shape
+change every member happens to satisfy would leave the windows as they were"*;
+`set_grid` ignoring the orientation → *"2 -> '2'/portrait: became
+'2'/'landscape'"* on three cases at once.
+
+Its own file because `test_layout_protocol.py` stands at THE STRUCTURE LAW's
+ceiling (these checks put it at 1,018 lines) and the boundary is real anyway —
+the same seam `test_layout_drag.py` and `test_layout_member.py` were cut on: a
+layout CHANGING SHAPE without changing its membership. Nothing is copied; the
+Windows model and the real-dispatcher runner are imported.
+
+Run: `.venv\Scripts\python tests/test_layout_shape.py` — also a fail-closed
+step in `build.py` (0u/6).
 
 ### `test_hold_gesture.py` — Hold Gesture Gate
 
@@ -1226,6 +1336,57 @@ this project's venv nor `requirements.txt` install pytest).
 ### Used by
 - [Setup (folder)](../setup/___setup.md) — `build.py` runs this as the
   fail-closed INPUT GATE before packaging; a broken click path cannot ship
+
+### `test_pad_shape.py` — Pad Shape Gate
+
+THE ARRANGEMENT IS NOT WELDED TO THE ORIENTATION (owner request 2026-08-09,
+task 177). Landscape always drew the D-pad cross because a CSS media query
+said so, while his sideways phone leaves a finger-wide letterbox band down
+each side that holds the sets upright perfectly. Three things have to hold and
+this gate covers all three: the DECISION (`padShapeFor`/`padShapeSeed` driven
+PURE, by argument — `auto` still draws yesterday's picture in both
+orientations, an explicit choice outranks it both ways, the two orientations
+are independent, the choice is written through the shell's prefs bridge and
+never bare localStorage); task 121's SAVED CHOICE (`padCross` read as the
+upright seed — proven by a browser that ARRIVES carrying the old key at page
+load, and by the old key NOT answering for the other orientation); and the
+MIRROR IMAGE (a column really laying itself out 1×5 sideways and a cross 3×3
+upright, on phone and tablet sizes, nothing off screen, no group climbing into
+the corner buttons, no horizontal scroll, the two sides never meeting — with
+the one honest exception stated in the gate: two crosses cannot fit on a
+412 px phone, which is exactly why the column is the upright default). Each
+check was proven by planting its own defect: the media query restored, the
+preference ignored, the seed dropped, one key answering for both orientations,
+the write sent to bare localStorage, and a gap wide enough to push the column
+off the band. Writes the two pictures nobody could see before this round into
+`.claude/shots/round32-pad-shape/`.
+
+Run: `.venv\Scripts\python tests/test_pad_shape.py` (needs playwright +
+chromium; binds its own port 8896).
+
+### `test_on_state.py` — ON State Gate
+
+ON IS A LUMINANCE EVENT (owner report 2026-08-09, task 179 — round TWO of the
+same complaint, with his screenshot of the Mic switched on in the coloured
+look). Round one answered with an accent ring, an accent wash and a scale, and
+its gate asked three questions about COMPUTED STYLE in ONE of the eight looks
+— all three true there, while in the coloured looks the per-set rules
+outranked `.ctl.active` entirely and the `background:` shorthand erased the
+wash. This gate therefore measures what a CAMERA sees: it photographs the real
+page and compares the ON button against its own OFF SIBLING as a contrast
+ratio, over the face and over the ring, in ALL EIGHT looks, with a 3:1 floor
+(WCAG's bar for a graphic object). It also holds `.ctl.held` apart from the
+latched state, and asserts each shot really wears the look it is named for.
+The planted defect was the SHIPPED rule itself: 1.05–1.58:1 in all eight,
+fifteen checks red; after the redesign, 3.24–8.98:1. Two instrument failures
+found while writing it are fixed in it — the controls AUTO-HIDE during a
+long sweep (the last looks were being scored on a bare page, a perfect 1.00:1
+measurement of nothing), and a second connection to the same server earns the
+real takeover notice across the picture. Writes all eight ON pictures plus
+their held counterparts into `.claude/shots/round32-on-state/`.
+
+Run: `.venv\Scripts\python tests/test_on_state.py` (needs playwright +
+chromium + Pillow; binds its own port 8897).
 
 ## Design Decisions
 
