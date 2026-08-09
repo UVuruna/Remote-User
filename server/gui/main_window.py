@@ -25,7 +25,7 @@ import urllib.request
 import webbrowser
 from pathlib import Path
 
-from PySide6.QtCore import QSize, Qt, QTimer
+from PySide6.QtCore import QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QAction, QFontMetrics, QGuiApplication, QIcon, QPixmap
 from PySide6.QtWidgets import (
     QApplication, QFrame, QHBoxLayout, QLabel, QMainWindow, QMenu, QPushButton,
@@ -96,6 +96,10 @@ REACH_TEXT = {
 
 
 class MainWindow(QMainWindow):
+    # The manual update check answers from a worker thread; Qt widgets
+    # may only be touched on the GUI thread.
+    _manual_answer = Signal(object)
+
     def __init__(self, controller: ServerController):
         super().__init__()
         self.controller = controller
@@ -140,6 +144,7 @@ class MainWindow(QMainWindow):
 
         self._build_tray(icon)
 
+        self._manual_answer.connect(self._apply_manual_check)
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._refresh)
         self._timer.start(REFRESH_MS)
@@ -437,12 +442,74 @@ class MainWindow(QMainWindow):
         self.update_btn.hide()
         return self.update_btn
 
-    def _build_footer(self) -> QLabel:
-        footer = QLabel(f"v{app_version()}  ·  closing hides to tray — server keeps running")
-        footer.setObjectName("caption")
-        footer.setAlignment(Qt.AlignmentFlag.AlignHCenter)
-        footer.setWordWrap(True)  # ladder step 2: reflow instead of a wider window
-        return footer
+    def _build_footer(self) -> QWidget:
+        """The version line — and, beside it, the button that asks whether
+        there is a newer one.
+
+        IT BELONGS HERE (owner 2026-08-09): "mesto mu ne pripada tamo nego u
+        početnom ekranu na dnu gde piše koja je verzija trenutna." He is right
+        and the reason is plain — the question is "am I on the latest", and
+        the line that says which version he is on is where that question is
+        asked. It spent one round in the Settings window, two cards away from
+        its own answer.
+        """
+        row = QWidget()
+        box = QHBoxLayout(row)
+        box.setContentsMargins(0, 0, 0, 0)
+        box.setSpacing(10)
+        self.footer = QLabel(
+            f"v{app_version()}  ·  closing hides to tray — server keeps running")
+        self.footer.setObjectName("caption")
+        self.footer.setWordWrap(True)  # ladder step 2: reflow, never widen
+        self.check_btn = QPushButton("Check now")
+        self.check_btn.setObjectName("secondary")
+        self.check_btn.clicked.connect(self._check_updates_now)
+        box.addStretch(1)
+        box.addWidget(self.footer)
+        box.addWidget(self.check_btn)
+        box.addStretch(1)
+        return row
+
+    def _check_updates_now(self) -> None:
+        """One press, one answer — and if there IS a newer version, the button
+        that installs it APPEARS.
+
+        The first version of this only wrote a caption (0.0.367, in the wrong
+        window): it found the update and then did nothing with it, which is the
+        same defect he reported about the Model button a day earlier — a
+        control that reports instead of acting. It arms the real update state
+        now, so the offer above it lights up exactly as the automatic check
+        would have made it."""
+        self.check_btn.setEnabled(False)
+        self.check_btn.setText("Checking…")
+
+        def ask():
+            try:
+                found = updates.check(force=True)
+            except Exception as e:  # noqa: BLE001 — a failed check is a state
+                logger.warning("Manual update check failed: %s", e)
+                found = None
+            self._manual_answer.emit(found)
+
+        threading.Thread(target=ask, daemon=True).start()
+
+    def _apply_manual_check(self, found) -> None:
+        self.check_btn.setEnabled(True)
+        self.check_btn.setText("Check now")
+        if found and self._update_state in (None, "failed"):
+            # ARM it — this is the half the first version was missing.
+            self._update = found
+            self._update_state = "found"
+            self._refresh_update_button()
+            return
+        if not found:
+            self.footer.setText(
+                f"v{app_version()}  ·  this is the newest version")
+            QTimer.singleShot(6000, self._restore_footer)
+
+    def _restore_footer(self) -> None:
+        self.footer.setText(
+            f"v{app_version()}  ·  closing hides to tray — server keeps running")
 
     def _build_tray(self, icon: QIcon) -> None:
         self.tray = QSystemTrayIcon(icon, self)
