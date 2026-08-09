@@ -286,18 +286,19 @@ def check_a_grid_from_the_list_answers() -> bool:
             and layouts.layouts[0].members == [WIN_A, WIN_B])
 
 
-# ═══════════════ the Move handle, followed to the WINDOWS ═══════════════
-# Owner report 2026-08-07, the SECOND round of the same bug: he sets 10:13
-# portrait, drags the Move handle to the TOP, presses Apply — and the window
-# comes out vertically centred. "uvek ostavi centrirano."
-#
-# The round before it measured `_fit_rect(box, aspect, pos)` and `Layout.pos`,
-# found both correct, and called the feature verified. Both WERE correct. The
-# value died between them and the desk, and no check in this file could see it
-# because the one that touched `layout_aspect` asserted on a stored NUMBER
-# (`layouts[0].pos == 0.25`) while `place_window` was a fake that threw its
-# rect away. So these checks assert on the RECT — where the window is told to
-# stand — for a solo layout AND a grid, portrait AND landscape.
+# ═══════════════ the Move handle: the WINDOWS stay centred ═══════════════
+# Owner decree 2026-08-09, the FOURTH round of the same feature. Round two
+# (2026-08-07) taught this file to follow the handle to the WINDOWS — and that
+# was still the wrong screen: the server crops the layout's region and streams
+# the SAME picture wherever the windows sit inside the monitor, so three
+# rounds of moving windows moved nothing he could see and his tablet stayed
+# centred every time. The position that exists FOR HIM is where the
+# letterboxed picture lands on the phone; `pos` acts THERE now
+# (client/view-anchor.js, gated by tests/test_view_anchor.py) and the server
+# ALWAYS centres the windows. What this file still owns is the server half of
+# that contract: placement ignores `pos`, a pos-only Apply re-places nothing,
+# and `layout_state` carries `pos` to the phone on every answer — the hop the
+# picture is anchored by.
 
 RATIO_W, RATIO_H = 10, 13     # the owner's own pair
 
@@ -311,9 +312,12 @@ def union(rects) -> tuple[int, int, int, int]:
 
 def aspect_run(mode: str, orient: str, positions: list, drift: bool = False):
     """Create a layout, then apply `layout_aspect` at each position through the
-    REAL dispatcher. Returns one union rect per position (None = nothing was
-    placed). `drift` moves the window off its rect between positions — an app
-    re-laying itself out, a restore, a snap: the desk the server must re-read."""
+    REAL dispatcher. Returns one (union rect or None, pos echoed by the last
+    `layout_state`) pair per position — None = nothing was placed, which since
+    2026-08-09 is the CORRECT outcome for a pos-only change. `drift` moves the
+    window off its rect between positions — an app re-laying itself out, a
+    restore out of the taskbar, a Windows snap: the desk the server must
+    re-read."""
     install_fakes(track_placement=True)
     conn, layouts = fresh_conn(), window_manager.LayoutRegistry()
     slots = [{"hwnd": WIN_A, "tab": None, "x": 0.5, "y": 0.5}]
@@ -332,61 +336,101 @@ def aspect_run(mode: str, orient: str, positions: list, drift: bool = False):
         ws, conn, layouts = drive([
             {"type": "layout_aspect", "index": 0,
              "w": RATIO_W, "h": RATIO_H, "pos": pos}], conn, layouts)
-        out.append(union([r for _, r in PLACED]) if PLACED else None)
+        states = sent_of(ws, "layout_state")
+        echoed = (states[-1]["layouts"][0]["pos"]
+                  if states and states[-1]["layouts"] else None)
+        out.append((union([r for _, r in PLACED]) if PLACED else None, echoed))
     return out
 
 
-def check_the_move_handle_reaches_the_windows() -> bool:
-    """0 = the free axis's near edge, 1000 = its far edge, 500 = centred — read
-    off the rect the server commands, not off anything it stored."""
+def _centred_on_free_axis(rect, orient) -> tuple[bool, str]:
+    """Is the union rect centred along the axis the ratio freed — with real
+    slack, so a fixture where nothing could move cannot pass by accident?"""
     ml, mt, mw, mh = MON
+    if orient == "portrait":
+        near, size, span, origin = rect[1], rect[3], mh, mt
+    else:
+        near, size, span, origin = rect[0], rect[2], mw, ml
+    slack = span - size
+    detail = f"near={near} slack={slack} (origin {origin})"
+    return slack >= 100 and abs(near - (origin + slack // 2)) <= 2, detail
+
+
+def check_placement_is_centred_whatever_the_pos() -> bool:
+    """The server half of the 2026-08-09 decree, read off the rect the server
+    commands: a FRESH arrangement lands centred for pos 0, 500 and 1000 alike,
+    at the same size — and each answer's `layout_state` still carries the pos
+    the phone will anchor the picture by."""
     ok = True
     for mode in ("solo", "grid"):
         for orient in ("portrait", "landscape"):
-            top, mid, bottom = aspect_run(mode, orient, [0, 500, 1000])
-            if not (top and mid and bottom):
-                print(f"  DETAIL {mode}/{orient}: a position placed NOTHING")
+            rects = []
+            for pos, want in ((0, 0.0), (500, 0.5), (1000, 1.0)):
+                (rect, echoed), = aspect_run(mode, orient, [pos])
+                if rect is None:
+                    print(f"  DETAIL {mode}/{orient}: pos={pos} placed NOTHING "
+                          "on a fresh ratio change")
+                    ok = False
+                    continue
+                if echoed is None or abs(echoed - want) > 1e-6:
+                    print(f"  DETAIL {mode}/{orient}: pos={pos} echoed "
+                          f"{echoed!r} to the phone, expected {want}")
+                    ok = False
+                rects.append(rect)
+            if len(rects) == 3 and any(r != rects[0] for r in rects):
+                print(f"  DETAIL {mode}/{orient}: placement FOLLOWED pos: {rects}")
                 ok = False
-                continue
-            # Only the position may differ — the shape must not.
-            if not (top[2] == mid[2] == bottom[2] and top[3] == mid[3] == bottom[3]):
-                print(f"  DETAIL {mode}/{orient}: the region changed SIZE: "
-                      f"{top} {mid} {bottom}")
-                ok = False
-            if orient == "portrait":
-                near, far, size, span, origin = top[1], bottom[1], top[3], mh, mt
-                centre = mid[1]
-            else:
-                near, far, size, span, origin = top[0], bottom[0], top[2], mw, ml
-                centre = mid[0]
-            slack = span - size
-            good = (abs(near - origin) <= 2                     # pinned near
-                    and abs(far - (origin + slack)) <= 2        # pinned far
-                    and abs(centre - (origin + slack // 2)) <= 2)  # centred
-            if not good or slack < 100:
-                print(f"  DETAIL {mode}/{orient}: near={near} centre={centre} "
-                      f"far={far} slack={slack} (origin {origin})")
-                ok = False
+            for rect in rects:
+                centred, detail = _centred_on_free_axis(rect, orient)
+                if not centred:
+                    print(f"  DETAIL {mode}/{orient}: not centred — {detail}")
+                    ok = False
     return ok
 
 
-def check_the_same_position_applied_again_still_moves_the_windows() -> bool:
-    """THE REPEAT, gated. `Layout.arranged_pos` records what was COMMANDED, so
-    once a member left its rect (an app re-laying itself out, a restore out of
-    the taskbar, a Windows snap) the guard matched on every later Apply of the
-    SAME position and placed NOTHING — the phone's panel moved, the PC never
-    did again, "uvek ostavi centrirano". The desk is re-read now."""
-    ml, mt, mw, mh = MON
+def check_a_pos_change_moves_the_phone_and_not_the_windows() -> bool:
+    """The untangled trigger, both halves. Apply a ratio at pos 0, then the
+    SAME ratio at pos 1000 with every window still standing: the second Apply
+    must place NOTHING (a pos change re-places no PC window — three rounds
+    proved moving them changes nothing he sees) while its `layout_state` must
+    carry the new pos, because that answer is what re-anchors the picture on
+    the phone. A second Apply that still moved windows, or a pos that never
+    reached the phone, are both this feature broken."""
     ok = True
     for mode in ("solo", "grid"):
-        runs = aspect_run(mode, "portrait", [0, 0, 0], drift=True)
-        for i, rect in enumerate(runs):
+        (first, first_pos), (second, second_pos) = aspect_run(
+            mode, "portrait", [0, 1000])
+        if first is None:
+            print(f"  DETAIL {mode}: the ratio change itself placed NOTHING")
+            ok = False
+        if second is not None:
+            print(f"  DETAIL {mode}: a pos-only change re-placed windows: {second}")
+            ok = False
+        if second_pos is None or abs(second_pos - 1.0) > 1e-6:
+            print(f"  DETAIL {mode}: the new pos never reached the phone "
+                  f"(echoed {second_pos!r})")
+            ok = False
+    return ok
+
+
+def check_a_wandered_window_is_put_back_centred() -> bool:
+    """THE REPEAT of round three, still gated. The desk is re-read on every
+    Apply: a member that left its rect (an app re-laying itself out, a restore
+    out of the taskbar, a Windows snap) is put BACK — and back to the CENTRE,
+    wherever the handle sits, because the centre is the only place the server
+    puts windows now."""
+    ok = True
+    for mode in ("solo", "grid"):
+        runs = aspect_run(mode, "portrait", [0, 500, 1000], drift=True)
+        for i, (rect, _) in enumerate(runs):
             if rect is None:
-                print(f"  DETAIL {mode}: apply #{i + 1} of pos=0 placed NOTHING")
+                print(f"  DETAIL {mode}: apply #{i + 1} placed NOTHING after "
+                      "the window wandered")
                 ok = False
-            elif abs(rect[1] - mt) > 2:
-                print(f"  DETAIL {mode}: apply #{i + 1} landed at y={rect[1]}, "
-                      f"not on the top edge {mt}")
+                continue
+            centred, detail = _centred_on_free_axis(rect, "portrait")
+            if not centred:
+                print(f"  DETAIL {mode}: apply #{i + 1} not centred — {detail}")
                 ok = False
     return ok
 
@@ -616,10 +660,12 @@ CHECKS = [
     ("rename / aspect / remove all answer",
      check_rename_apps_aspect_remove_all_answer),
     ("a 2x1 grid built from the list", check_a_grid_from_the_list_answers),
-    ("the Move handle reaches the WINDOWS (solo/grid, portrait/landscape)",
-     check_the_move_handle_reaches_the_windows),
-    ("the same position applied again still moves the windows",
-     check_the_same_position_applied_again_still_moves_the_windows),
+    ("placement is CENTRED whatever the pos, and the pos reaches the phone",
+     check_placement_is_centred_whatever_the_pos),
+    ("a pos change moves the phone's picture, never the windows",
+     check_a_pos_change_moves_the_phone_and_not_the_windows),
+    ("a wandered window is put back — centred",
+     check_a_wandered_window_is_put_back_centred),
     ("a plain ✕ closes NOTHING, whatever the field looks like",
      check_a_plain_remove_closes_nothing),
     ("close: true reaches every member", check_close_reaches_every_member),

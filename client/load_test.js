@@ -77,6 +77,7 @@ global.WebSocket = class WebSocket {
 const FILES = [
   "state.js",
   "caret.js",
+  "view-anchor.js",
   "render.js",
   "input-geometry.js",
   "icons.js",

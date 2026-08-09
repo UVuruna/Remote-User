@@ -333,6 +333,20 @@ def input_gate() -> None:
          "cannot (tests/test_caret.py)")
     run([sys.executable, str(PROJECT_DIR / "tests" / "test_caret.py")])
 
+    # THE POSITION LIVES ON THE PHONE (owner decree 2026-08-09, the FOURTH
+    # round of the Move handle). Three rounds moved windows on the PC monitor
+    # and measured them there — a screen the owner never sees — while the
+    # thing he judges, where the letterboxed picture sits on his tablet, was
+    # computed by no check. The fit-and-anchor math is pure
+    # (client/view-anchor.js) and this gate drives it whole in node with the
+    # geometry HE grades: pos 0 flush to the near edge, 1 to the far, 0.5
+    # centred, no effect when nothing is letterboxed — plus the wiring on
+    # both ends, because a pure function nobody calls is a feature that does
+    # not exist. Needs node, like 0j and 0k — never skip it silently.
+    step("0o/6  VIEW ANCHOR GATE — the picture sits where the Move handle "
+         "put it (tests/test_view_anchor.py)")
+    run([sys.executable, str(PROJECT_DIR / "tests" / "test_view_anchor.py")])
+
 
 def generate_icons() -> None:
     step("1/6  Generating ICOs from assets/logo.svg")

@@ -123,17 +123,24 @@ def _grid_audit() -> bool:
 
 
 def _fit_rect_audit() -> bool:
-    """Pure-math check: the region never leaves its box, at any pos/aspect."""
+    """Pure-math check: the region never leaves its box and sits CENTRED, at
+    any aspect. `pos` left this function on 2026-08-09 (owner decree — the
+    Move handle anchors the letterboxed picture ON THE PHONE; the phone-side
+    geometry has its own gate, tests/test_view_anchor.py)."""
     from grids import _fit_rect   # the geometry moved out of window_manager (2026-08-07)
     box = (100, 50, 1000, 600)
     for aspect in (0.4, 1.0, 16 / 9, 3.2):
-        for pos in (0.0, 0.25, 0.5, 0.75, 1.0):
-            x, y, w, h = _fit_rect(box, aspect, pos)
-            if not (box[0] <= x and box[1] <= y and
-                    x + w <= box[0] + box[2] and y + h <= box[1] + box[3]):
-                return False
-            if w <= 0 or h <= 0:
-                return False
+        x, y, w, h = _fit_rect(box, aspect)
+        if not (box[0] <= x and box[1] <= y and
+                x + w <= box[0] + box[2] and y + h <= box[1] + box[3]):
+            return False
+        if w <= 0 or h <= 0:
+            return False
+        # Centred: the slack splits evenly (integer floor may differ by 1).
+        if abs((x - box[0]) - ((box[0] + box[2]) - (x + w))) > 1:
+            return False
+        if abs((y - box[1]) - ((box[1] + box[3]) - (y + h))) > 1:
+            return False
     return True
 
 
@@ -617,7 +624,7 @@ def main() -> int:
 
     from playwright.sync_api import sync_playwright
 
-    results = {"region math: _fit_rect stays inside its box for every pos":
+    results = {"region math: _fit_rect stays inside its box, centred":
                _fit_rect_audit(),
                "grid math: every shape tiles its region exactly": _grid_audit()}
     with sync_playwright() as p:

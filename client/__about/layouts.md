@@ -168,8 +168,12 @@ everything here composes and frames WINDOWS on it.
   state is `aspecting.pos` (0–1 fraction of the free-axis slack, 0.5 =
   centered, initialized from the server's `layout_state` `pos`). Everything
   OUTSIDE the handle still resizes as before. Apply sends `pos` (0–1000) in
-  `layout_aspect`; the server places the region with the same fraction — see
-  [Window Manager](../../server/__about/window_manager.md).
+  `layout_aspect`; the server stores and echoes it, and the PHONE anchors the
+  letterboxed picture with it (owner decree 2026-08-09, the handle's FOURTH
+  round — three rounds slid WINDOWS along the PC monitor, a screen he never
+  sees, and his tablet stayed centred; the server always centres the windows
+  now and the anchor acts in [View Anchor](view-anchor.md), via
+  [Render](render.md)'s `computeViewHome`).
 
   **A DOUBLE TAP IS TWO TAPS, NOT TWO TOUCHES** (owner 2026-08-07: he shrank a
   layout, dragged it down, "ali on je i dalje na sredini"). Every piece above

@@ -29,7 +29,7 @@ total — including for windows no layout can still name.
 | `layout_list(ws, layouts, stream)` | every window PLUS each window's content tabs; windows already in a layout are left out |
 | `resolve_slot(ws, stream, slot)` | one creation slot → `(hwnd, tab name, SOURCE hwnd)`; a slot naming a TAB is extracted into its own window first, and every failure falls back to the whole window. The third value is the window the tab was torn OUT of (`0` = nothing was extracted) — a torn-off VS Code tab can be born titled bare `Visual Studio Code`, and that source window is then the only one that can still name the project (owner 2026-08-08; the layout keeps its HANDLE, never its answer — see [Window Manager](window_manager.md) → `Layout.project`) |
 | `layout_create(ws, layouts, stream, conn, msg)` | resolve every slot (one cube turn per slot), register, then focus |
-| `layout_aspect(ws, layouts, stream, conn, msg)` | store this layout's W:H and free-axis position, then re-focus (the focus is what re-places the windows) |
+| `layout_aspect(ws, layouts, stream, conn, msg)` | store this layout's W:H and free-axis anchor `pos`, then re-focus — the focus re-places windows for a RATIO change (always centred since 2026-08-09) and sends the `layout_state` whose `pos` anchors the picture on the phone |
 | `layout_focus(ws, layouts, stream, conn, index)` | `-1` = the full desktop, which also minimizes every member |
 
 ## Connections

@@ -32,16 +32,18 @@ so layouts made by an older version keep their shape.
 
 ## Key functions
 
-- `layout_region(work_area, aspect, ratio, pos)` — the rect the phone frames.
+- `layout_region(work_area, aspect, ratio)` — the rect the phone frames.
   The DEVICE shape gives the outer box; a per-layout `ratio` may only make the
-  region SMALLER inside it, and `pos` slides that smaller region along the one
-  free axis (0.5 = centred — the Move handle of the phone's resize panel).
+  region SMALLER inside it, always CENTRED (owner decree 2026-08-09: the Move
+  handle's `pos` used to slide the region along the free axis HERE — windows
+  on a screen the owner never sees — and now anchors the letterboxed picture
+  on the PHONE instead, `client/view-anchor.js`).
   **The caller supplies `work_area`** (`window_manager._work_area`); this
   module never asks the operating system anything.
 - `_cells(region, grid, orient)` — the member rects, in MEMBER ORDER. Cell 1
   is the one a merge keeps as the layout's own window.
-- `_fit_rect(box, aspect, pos)` — the largest rect of an aspect inside a box,
-  placed at `pos` of the slack. Everything above is built from it.
+- `_fit_rect(box, aspect)` — the largest rect of an aspect inside a box,
+  centred. Everything above is built from it.
 - `at_rect(rect, target)` — is a window's visible frame ON the rect it was
   commanded to take? Top-left within `PLACE_TOLERANCE_PX` (8, DWM frame
   rounding), size at least the cell (a bigger minimum size is owner-accepted —

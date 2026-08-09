@@ -76,7 +76,11 @@ one-shot "next canvas tap picks a window" flag set by the Layout (+) button;
 `viewLocked()` selects the view's bounds rect (see [Render](render.md)) and
 the cursor clamp — it no longer disables gestures: since owner 2026-08-04
 pinch zoom/pan works in layout focus too, bottoming out at the layout's own
-framing.
+framing. `layoutAnchorPos()` (owner decree 2026-08-09) reads the focused
+layout's `pos` — the Move handle's free-axis anchor for the letterboxed
+picture, 0.5 when no layout is focused or an old server sent none; render.js
+feeds it to [View Anchor](view-anchor.md)'s fit, so the picture sits where
+the handle put it ON THIS SCREEN (the server always centres the PC windows).
 `send()` also refuses to auto-reconnect after a 4409 takeover (one device at a
 time — a background reconnect would steal the session back in a loop).
 `markExcursion()` / `inExcursion()` (owner 2026-08-05) mark the moments we

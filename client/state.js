@@ -143,6 +143,18 @@ function viewLocked() {
   return layoutRegion !== null;
 }
 
+// WHERE THE PICTURE SITS ALONG THE FREE AXIS (owner decree 2026-08-09, the
+// Move handle's fourth round): the focused layout's `pos` — 0 = top/left,
+// 0.5 = centred, 1 = bottom/right — anchors the letterboxed picture on THIS
+// screen. The server stores and echoes it in `layout_state` but no longer
+// moves any PC window by it: moving windows inside the monitor never changed
+// the cropped picture he sees. Centre when no layout is focused or an old
+// server sent no pos.
+function layoutAnchorPos() {
+  const lay = layoutActive !== null ? layouts[layoutActive] : null;
+  return lay && typeof lay.pos === "number" ? lay.pos : 0.5;
+}
+
 // Region-streaming state — declared before the first updateViewport() call.
 let lastSentViewport = { x: 0, y: 0, w: 1, h: 1 };
 let viewportTimer = null;

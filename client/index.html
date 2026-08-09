@@ -195,6 +195,9 @@
        client/load_test.js's FILES list. See client/___client.md. -->
   <script src="/static/state.js"></script>
   <script src="/static/caret.js"></script>
+  <!-- Before render.js: it owns the fit-and-anchor math computeViewHome runs
+       (pure so its gate can drive it — owner decree 2026-08-09). -->
+  <script src="/static/view-anchor.js"></script>
   <script src="/static/render.js"></script>
   <script src="/static/input-geometry.js"></script>
   <script src="/static/icons.js"></script>

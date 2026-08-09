@@ -37,6 +37,13 @@ STANDARD = {
     "server/pairing.py",
     "server/monitors.py",
     "server/window_manager.py",
+    # Split out of window_manager.py on 2026-08-09 (THE STRUCTURE LAW — the
+    # pos-anchor round pushed it past 1,000 lines). The registry holds the
+    # session's layout list and its policy; window_manager keeps driving the
+    # real windows. Standard: the policy it carries (verified arrangement,
+    # the pos anchor) is explained in its __about; the geometry itself lives
+    # in grids.py and client/view-anchor.js, each with its own coverage.
+    "server/layout_registry.py",
     # New 2026-08-08 (task 116 forced the split — window_manager.py sat at
     # exactly 1,000 lines). One function, one job: an exe path to a PNG data
     # URI. Standard, not Algorithmic — it carries no decision, only shell+GDI
@@ -55,6 +62,12 @@ STANDARD = {
     "server/focus_hook.py",
     "client/index.html",
     "client/install.html",
+    # New 2026-08-09 (owner decree — the position lives on the PHONE): the
+    # fit-and-anchor math for the letterboxed picture, split into a pure
+    # module so tests/test_view_anchor.py can run it whole (the caret.js
+    # pattern). Standard: one formula, no flow worth a diagram — the WHY
+    # lives in its header and its __about.
+    "client/view-anchor.js",
     "client/load_test.js",
     "client/state.js",
     "client/panels.js",

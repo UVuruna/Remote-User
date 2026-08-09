@@ -92,7 +92,7 @@ flowchart TB
     STATE --> EDIT[drag anywhere in the preview — continuous\nOR type either W / H field]
     EDIT --> CLAMP[clampAspect: shrink-only side\nportrait a ≥ devA · wide a ≤ devA\nfloor ASP_MIN_FRAC]
     CLAMP --> PREV[preview only —\nnothing moves on the PC\nfields show ratioPair a]
-    PREV --> APPLY[Apply] --> SEND[send layout_aspect index,\nround a×1000 : 1000\nfull screen → 0,0]
+    PREV --> APPLY[Apply] --> SEND[send layout_aspect index,\nround a×1000 : 1000 + pos 0–1000\nfull screen → 0,0]
     SEND --> LOAD[showLayLoading 'Reshaping the layout…']
     PREV --> RESET[Screen] --> DEFAULT[a = devA\nApply sends 0,0 = no override]
 ```
@@ -104,6 +104,12 @@ phone's own shape gives — it can only ever shrink, never grow past the screen.
 
     portrait:   width  = phone's width   (pinned)   height ≤ phone's height
     landscape:  height = phone's height  (pinned)   width  ≤ phone's width
+
+`pos` (the Move handle) travels the same message but acts on the PHONE
+(owner decree 2026-08-09): the server stores it, echoes it in `layout_state`,
+and always centres the windows on the monitor; the picture is anchored by
+[View Anchor](../__about/view-anchor.md) when the reply's `layout_state`
+triggers `resetViewHome()`.
 
 ## Algorithm — creation sources
 

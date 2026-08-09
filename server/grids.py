@@ -35,38 +35,42 @@ GRID_CELLS = {"2": 2, "3-top": 3, "3-bottom": 3, "3-left": 3, "3-right": 3, "4":
 GRID_TEMPLATES = tuple(GRID_CELLS)
 _LEGACY_GRIDS = {"2x1": "2", "1x2": "2", "2x2": "4"}
 
-def _fit_rect(box, aspect: float, pos: float = 0.5) -> tuple[int, int, int, int]:
-    """Largest rect of the given aspect (w/h) inside `box`, placed at
-    fraction `pos` of the slack along the free axis (0 = top/left edge,
-    0.5 = centered, 1 = bottom/right edge — owner 2026-08-05: a shrunken
-    region no longer has to sit in the middle). Only one axis ever has
-    slack, so a single fraction covers both orientations."""
+def _fit_rect(box, aspect: float) -> tuple[int, int, int, int]:
+    """Largest rect of the given aspect (w/h) inside `box`, CENTERED. Until
+    2026-08-09 it also took a `pos` fraction that slid the rect along the
+    free axis — the Move handle. That parameter moved WINDOWS on the PC
+    monitor, a screen the owner never sees, while the picture on his phone
+    stayed centred: the server crops the region and streams the same picture
+    wherever the windows sit inside the monitor. The anchor lives on the
+    PHONE now (client/view-anchor.js, owner decree 2026-08-09), so nothing
+    here takes a position any more — legacy is removed, never kept."""
     bl, bt, bw, bh = box
     w = min(bw, int(bh * aspect))
     h = int(w / aspect)
     if h > bh:
         h = bh
         w = int(h * aspect)
-    return (bl + int((bw - w) * pos), bt + int((bh - h) * pos), w, h)
+    return (bl + (bw - w) // 2, bt + (bh - h) // 2, w, h)
 
 
 def layout_region(work_area, aspect: float,
-                  ratio: tuple[int, int] | None = None,
-                  pos: float = 0.5) -> tuple[int, int, int, int]:
+                  ratio: tuple[int, int] | None = None
+                  ) -> tuple[int, int, int, int]:
     """The rect the phone frames. The DEVICE shape (`aspect`) gives the outer
     box; a per-layout ratio override may only make the region SMALLER inside
     it (owner decision 2026-08-03: portrait keeps the phone's width and the
     region may only get shorter, landscape keeps its height and the region may
     only get narrower — the unused strip stays black on the phone). Anything
     that would grow past the phone's own shape is clamped by the same fit.
-    `pos` places the shrunken region along the free axis (owner 2026-08-05 —
-    the Move handle in the phone's resize panel; 0.5 = centered).
+    The shrunken region is always CENTERED on the monitor (owner decree
+    2026-08-09): the Move handle's `pos` anchors the letterboxed picture ON
+    THE PHONE and no longer moves any window here — see `_fit_rect`.
 
     `work_area` is the monitor's usable rect, supplied by the caller — this
     module never asks the operating system for anything."""
     box = _fit_rect(work_area, aspect)   # the phone-shaped box, centered
     if ratio and ratio[0] > 0 and ratio[1] > 0:
-        return _fit_rect(box, ratio[0] / ratio[1], pos)
+        return _fit_rect(box, ratio[0] / ratio[1])
     return box
 
 

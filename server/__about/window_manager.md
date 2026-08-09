@@ -10,8 +10,13 @@ the layout bar. This module owns everything Win32 about that: enumerating
 candidate windows, identifying the window under a monitor-normalized tap,
 arranging windows (visible-frame accurate — DWM extended frame bounds, not
 `GetWindowRect`, which includes invisible resize borders), raising/focusing
-(with the Alt-nudge `SetForegroundWindow` unlock), and the session-scoped
-`LayoutRegistry`.
+(with the Alt-nudge `SetForegroundWindow` unlock), and the topmost ledger.
+The session-scoped registry (`Layout`/`LayoutRegistry`) moved to
+[Layout Registry](layout_registry.md) on 2026-08-09 (THE STRUCTURE LAW — the
+pos-anchor round crossed 1,000 lines); it is re-exported HERE, at the bottom,
+and that re-export is the only import path — the registry reaches back into
+this module for every desk primitive lazily, which is what lets the gates'
+fakes (patched onto `window_manager`) still land.
 
 Key rules encoded here (owner decisions 2026-08-02):
 
@@ -134,38 +139,47 @@ layer on `layout_focus -1`) means the desktop IS the state to resume into.
 ## Per-layout aspect ratio + position (owner 2026-08-03, position 2026-08-05)
 Each layout carries its own `ratio` (W:H, `None` = the phone's own shape) and
 `pos` (0–1 fraction of the free-axis slack, 0.5 = centered — the phone's Move
-handle), set from the phone's aspect panel via `set_ratio(index, w, h, pos)`
-and applied by the next `focus` (which is what re-places the windows). Both
-ride in `layout_state` entries.
+handle), set from the phone's aspect panel via `set_ratio(index, w, h, pos)`.
+Both ride in `layout_state` entries — but since 2026-08-09 they do DIFFERENT
+jobs: the ratio is applied by the next `focus` (which re-places the windows,
+always centred on the monitor), while **`pos` moves nothing on the PC** (owner
+decree, the Move handle's FOURTH round — three rounds slid windows along the
+monitor's free axis and measured them there, a screen he never sees, while
+the server crops the region and streams the same picture wherever the windows
+sit; his tablet stayed centred every time). `pos` exists only to reach the
+phone, which anchors the letterboxed picture with it
+(`client/view-anchor.js`, gated by `tests/test_view_anchor.py`).
 
 **The arrangement is VERIFIED, never merely remembered** (owner report
 2026-08-07 — the Move handle's SECOND round: he set 10:13 portrait, dragged the
 handle to the top, pressed Apply, and the window came out vertically centred,
-"uvek ostavi centrirano"). `arranged_ratio`/`arranged_pos` are a note of what
-was COMMANDED — they are written from an intention, and the old guard was that
-note alone. So the moment a member left its rect for any reason (the app
-re-laying itself out, a restore out of the taskbar, a Windows snap, a
-placement that quietly did not take), the note became a lie and every later
-Apply of the SAME position matched it and re-placed NOTHING: the phone's panel
-moved and the PC never did again. `focus` therefore computes the targets fresh
-every time and asks `_standing(members, targets)` where the windows REALLY
-are (`grids.at_rect`, the same ±8 px tolerance `wait_landed` uses, so a
-min-size app that legitimately sits larger never re-places forever); and the
-note is written only when the placement LANDED — a refusal leaves it unwritten
-(`None` / `-1.0`), logs a warning naming the layout, and the next focus tries
-again. Same law `layout_state` already lives by (owner 2026-08-04): a claim
-about windows is measured, not remembered. Gated by
-`tests/test_layout_protocol.py`, which asserts on the placement RECT.
+"uvek ostavi centrirano"). `arranged_ratio` is a note of what was COMMANDED —
+it is written from an intention, and the old guard was that note alone. So the
+moment a member left its rect for any reason (the app re-laying itself out, a
+restore out of the taskbar, a Windows snap, a placement that quietly did not
+take), the note became a lie and every later Apply matched it and re-placed
+NOTHING: the phone's panel moved and the PC never did again. `focus` therefore
+computes the targets fresh every time and asks `_standing(members, targets)`
+where the windows REALLY are (`grids.at_rect`, the same ±8 px tolerance
+`wait_landed` uses, so a min-size app that legitimately sits larger never
+re-places forever); the note is written only when the placement LANDED — a
+refusal leaves `place_pending` standing (the same flag `set_grid`/`merge`
+raise for a structural change), logs a warning naming the layout, and the
+next focus tries again. Same law `layout_state` already lives by (owner
+2026-08-04): a claim about windows is measured, not remembered. Gated by
+`tests/test_layout_protocol.py`, which asserts on the placement RECT — and
+which since 2026-08-09 also asserts the INVERSE for `pos`: a pos-only Apply
+re-places nothing, and placement is centred whatever the handle says.
 
-`layout_region(mon_rect, aspect, ratio, pos)` is the single place the rule
-lives: the DEVICE shape gives the outer box (`_region_rect`), and the override
-is the largest rect of that W:H fitted INSIDE it (`_fit_rect`), placed at
-fraction `pos` of the leftover slack (only one axis ever has slack, so a
-single fraction covers both orientations). The region can therefore only ever
-shrink — portrait keeps the phone's full width and only loses height,
-landscape keeps its height and only loses width; anything that would grow past
-the phone's shape is clamped by the same fit. The unused strip stays black on
-the phone.
+`layout_region(mon_rect, aspect, ratio)` is the single place the shape rule
+lives: the DEVICE shape gives the outer box, and the override is the largest
+rect of that W:H fitted INSIDE it (`_fit_rect`), centred. The region can
+therefore only ever shrink — portrait keeps the phone's full width and only
+loses height, landscape keeps its height and only loses width; anything that
+would grow past the phone's shape is clamped by the same fit. The unused
+strip stays black on the phone — and WHERE the picture sits inside that strip
+is the phone's own `pos` anchor, not this module's business (decree
+2026-08-09, above).
 
 `member_hwnds()` returns every window that already belongs to some layout —
 [Web Layer](web.md) leaves those out of the creation list, because one window

@@ -1,11 +1,13 @@
 # Flow — grids
 
 ```
-layout_region(work_area, aspect, ratio, pos)
+layout_region(work_area, aspect, ratio)
    │
-   ├─ box   = _fit_rect(work_area, aspect)        # phone-shaped, centred
-   └─ IF ratio: return _fit_rect(box, ratio, pos) # smaller, slid along the free axis
-      ELSE:     return box
+   ├─ box   = _fit_rect(work_area, aspect)    # phone-shaped, centred
+   └─ IF ratio: return _fit_rect(box, ratio)  # smaller, still centred —
+      ELSE:     return box                    # `pos` anchors the PICTURE on
+                                              # the phone since 2026-08-09
+                                              # (client/view-anchor.js)
 
 _cells(region, grid, orient)
    │

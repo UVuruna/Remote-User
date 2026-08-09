@@ -24,7 +24,11 @@ on-device, the 2026-07-26 live failure) and its inverse (**a system swipe
 crossing a button — real travel, then cancel — must NOT fire**), edge
 reachability with no reserved margin (the pointer sits exactly under the
 finger — the offset system is gone), keyboard capture (typed
-text + the Shift+Enter new-row rule), **the /ping contract** — the
+text + the Shift+Enter new-row rule), **the mic-survives-the-tap rule**
+(owner 2026-08-09, amending the 2026-08-04 both-off rule: he steers the
+cursor WHILE dictating, so a canvas tap closes only the KEYBOARD and a
+listening mic keeps listening — while Esc (`inputOff()`) and the keyboard
+going ON still switch the mic off), **the /ping contract** — the
 endpoint must answer EXACTLY 204: the Android shell's reachability probe
 counts only 204 as "the PC answered", because captive portals on foreign
 Wi-Fi answer any request with a 2xx/redirect login page (live failure
@@ -92,8 +96,10 @@ badge inherited near-white ink) and the command chooser's rows at 1.05:1 (a
 `<button>` with no background of its own takes the WebView's light default). Covers the Quality panel, the Sets picker, the Dictation card,
 the Aspect panel (incl. the Move handle's hit size), the layout list with
 its rename button, the Rename card and the creation panel's Name field.
-Also checks `window_manager._fit_rect` purely: the placed region never
-leaves its box, at any aspect or `pos`. Proof source for
+Also checks `grids._fit_rect` purely: the placed region never
+leaves its box and sits centred, at any aspect (`pos` left the server's
+geometry on 2026-08-09 — the phone anchors the letterboxed picture,
+`tests/test_view_anchor.py`). Proof source for
 `.claude/layout-proof.md`. The Name fields are WRAPPING textareas because
 this audit caught the one-line version hiding most of a window title behind
 its own horizontal scroll (2026-08-05). Also checks the D-PAD BUTTONS: a set's
@@ -491,33 +497,58 @@ and a 2×1 grid built from the list. A handler that raises, or that answers the
 phone with nothing, fails here. Self-tested by replanting the defect: the
 first check reports the exact `UnboundLocalError` and fails.
 
-**And two checks that follow the Move handle to the WINDOWS** (owner report
-2026-08-07, the second round of the same bug — 10:13 portrait, handle dragged
-to the TOP, the window still vertically centred). The round before had measured
-`grids._fit_rect` and `Layout.pos`, found both correct, and called the feature
-verified; both WERE correct, and the value died between them and the desk. The
-check that touched `layout_aspect` could not see it, because it asserted on a
-stored NUMBER (`layouts[0].pos == 0.25`) while `place_window` was a fake that
-threw its rect away. So `install_fakes(track_placement=True)` now MODELS the
-desk — every commanded rect is recorded and becomes the window's real frame —
-and the two checks assert on the RECT:
-- *the Move handle reaches the WINDOWS* — solo **and** grid, portrait **and**
-  landscape: `pos` 0 pins the region to the free axis's near edge, 1000 to its
-  far edge, 500 centres it, and the region's SIZE never changes between them.
-- *the same position applied again still moves the windows* — the member
-  drifts off its rect between applies (an app re-laying itself out, a restore,
-  a snap) and the SAME `pos` must put it back. This is the root cause: the old
-  guard trusted `Layout.arranged_pos`, a note of what was commanded, so one
-  drift pinned the layout forever and every later Apply placed nothing.
+**And three checks on the Move handle's SERVER half** (owner decree
+2026-08-09, the FOURTH round of the same feature). Round two taught this file
+to follow the handle to the WINDOWS with `install_fakes(track_placement=True)`
+— a model of the desk where every commanded rect becomes the window's real
+frame — and that was still the wrong screen: the server crops the region and
+streams the SAME picture wherever the windows sit, so three green rounds
+moved nothing the owner could see. The phone half (where the letterboxed
+picture actually lands) is `tests/test_view_anchor.py`; what this file owns
+now is the server's side of that contract, still asserted on the RECT:
+- *placement is CENTRED whatever the pos* — solo **and** grid, portrait
+  **and** landscape: fresh applies at 0 / 500 / 1000 land on identical,
+  centred rects, and each answer's `layout_state` carries the pos the phone
+  anchors by.
+- *a pos change moves the phone's picture, never the windows* — the SAME
+  ratio re-applied at a new pos places NOTHING (the untangled trigger:
+  `place_pending` + `arranged_ratio` + `_standing`, with pos deliberately
+  absent) while the reply still carries the new pos to the phone.
+- *a wandered window is put back — centred* — the desk is still re-read on
+  every Apply (round three's lesson, kept): a member that drifted off its
+  rect is re-placed, to the centre.
 
-Both were proven by planting the defect back: dropping `pos` in
-`layout_api.layout_aspect` turns the first red with every position landing at
-`y=290` — the owner's centred window, to the pixel — and restoring the
-remembered-only guard in `LayoutRegistry.focus` turns the second red with
-*"apply #2 of pos=0 placed NOTHING"*.
+Proven by planting the old behaviour back: sliding the region by `lay.pos` in
+`layout_registry.focus` turns the first two red — *"placement FOLLOWED pos"*
+with the union rects at y=0/290/581, and *"a pos-only change re-placed
+windows"*.
 
 Run: `.venv\Scripts\python tests/test_layout_protocol.py` — also a
 fail-closed step in `build.py` (0f/6).
+
+### `test_view_anchor.py` — View Anchor Gate
+
+THE POSITION LIVES ON THE PHONE (owner decree 2026-08-09, the Move handle's
+FOURTH round). Three rounds shipped green through gates that measured window
+rects on the PC monitor — a screen the owner never sees — while the geometry
+he grades the feature by, where the letterboxed picture sits on his tablet,
+was computed by no check. The fit-and-anchor math therefore lives in a PURE
+module (`client/view-anchor.js`, the caret.js/voice.js pattern) and this gate
+runs it WHOLE in node: pos 0 flush to the near edge of the slack axis
+(his gesture — the app at the TOP, empty space below), 1 flush far, 0.5
+centred, both orientations, matching aspects immune to pos, a missing pos
+read as centred (old servers), out-of-range clamped, and a region off the
+origin still landing on its anchor. Wiring checks pin both ends — render.js's
+`computeViewHome` must run `fitAnchorView` with `layoutAnchorPos()`, the page
+must load the module before render.js, the module must stay pure, and the
+server must keep centring windows while `layout_state` still echoes `pos` —
+because a pure function nobody calls is a feature that does not exist
+(the actions.json lesson). Proven by planting the old always-centred rule in
+`fitAnchorView`: pos 0 then draws at y=866.25 — the owner's centred picture,
+to the pixel — and the gate goes red.
+
+Run: `.venv\Scripts\python tests/test_view_anchor.py` (needs node) — also a
+fail-closed step in `build.py` (0o/6).
 
 ### `test_stream_lifecycle.py` — Stream Lifecycle Gate
 Proves that a client which is GONE takes its encoder with it. Born from the

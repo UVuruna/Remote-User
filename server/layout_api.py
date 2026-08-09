@@ -205,9 +205,13 @@ async def layout_create(ws, layouts, stream, conn: dict, msg: dict) -> None:
 
 async def layout_aspect(ws, layouts, stream, conn: dict, msg: dict) -> None:
     """The phone's Aspect panel (owner 2026-08-03): store this layout's W:H
-    (0/0 = back to the phone's own shape) and free-axis position (owner
-    2026-08-05 — the Move handle; 0–1000, 500 = centered), then focus it —
-    the focus is what re-places the windows into the new region."""
+    (0/0 = back to the phone's own shape) and free-axis anchor `pos` (owner
+    2026-08-05 — the Move handle; 0–1000, 500 = centered), then focus it.
+    The focus re-places the windows for a RATIO change — always centred on
+    the monitor since 2026-08-09 (owner decree, after three rounds moved
+    windows on a screen he never sees) — and, either way, sends the
+    `layout_state` that carries `pos` to the phone, which anchors the
+    letterboxed picture with it (client/view-anchor.js)."""
     index = int(msg["index"])
     w, h = int(msg.get("w") or 0), int(msg.get("h") or 0)
     pos = int(msg.get("pos") if msg.get("pos") is not None else 500) / 1000

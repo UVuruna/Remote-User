@@ -42,9 +42,15 @@ function viewBounds() {
 // The HOME transform = maximum zoom-out. On the desktop that is the plain
 // aspect-fitted monitor (scale 1); in layout focus it is the region fitted
 // into the FULL canvas — a matching-aspect region touches all four screen
-// edges (owner 2026-08-02). Pinch zoom works in BOTH modes and can never go
-// below home (owner 2026-08-04 — layout focus is no longer a hard lock, it
-// just starts and bottoms out at its own framing).
+// edges (owner 2026-08-02). A region NARROWER than the canvas letterboxes,
+// and where it sits between the bars is the layout's own `pos` (owner decree
+// 2026-08-09, the Move handle's fourth round — the anchor acts HERE, on the
+// screen he sees; the math is client/view-anchor.js so its gate can run it
+// whole). Pinch zoom works in BOTH modes and can never go below home (owner
+// 2026-08-04 — layout focus is no longer a hard lock, it just starts and
+// bottoms out at its own framing); the anchored home is also the fitted-view
+// wall the zoom bottoms out at, and past it the slack is gone, so the anchor
+// is moot while zoomed in.
 let viewHome = { scale: 1, tx: 0, ty: 0 };
 
 function computeViewHome() {
@@ -52,13 +58,8 @@ function computeViewHome() {
     viewHome = { scale: 1, tx: 0, ty: 0 };
     return;
   }
-  const R = viewBounds();
-  const s = Math.min(canvas.width / R.w, canvas.height / R.h);
-  viewHome = {
-    scale: s,
-    tx: (canvas.width - R.w * s) / 2 - R.x * s,
-    ty: (canvas.height - R.h * s) / 2 - R.y * s,
-  };
+  viewHome = fitAnchorView(canvas.width, canvas.height, viewBounds(),
+                           layoutAnchorPos());
 }
 
 // Snap all the way back out (layout switch, monitor switch, stream reset).

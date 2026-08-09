@@ -98,9 +98,14 @@ be missing there". Three small functions carry it:
 - `viewBounds()` — the rect the view may ever show, in unscaled base-canvas
   px: `baseRect` on the desktop, the `layoutRegion` sub-rect in layout focus.
 - `computeViewHome()` → `viewHome` — the MAXIMUM ZOOM-OUT transform:
-  `{scale: 1, tx: 0, ty: 0}` on the desktop, the bounds rect fitted (and
-  centred) into the full canvas in layout focus. Recomputed on every
-  `updateViewport()` (rotation, keyboard) so the framing survives a resize.
+  `{scale: 1, tx: 0, ty: 0}` on the desktop; in layout focus the bounds rect
+  fitted into the full canvas and ANCHORED along the free axis by the focused
+  layout's own `pos` ([View Anchor](view-anchor.md) `fitAnchorView`, fed with
+  `layoutAnchorPos()` from [State](state.md) — owner decree 2026-08-09: the
+  Move handle acts on the phone's letterbox, the server always centres the
+  windows). Recomputed on every `updateViewport()` (rotation, keyboard) so
+  the framing survives a resize, and re-anchored by the `resetViewHome()`
+  every `layout_state` triggers.
 - `resetViewHome()` — snap back out; called on a stream reset and on every
   `layout_state` (a layout switch always starts fully zoomed out).
 
