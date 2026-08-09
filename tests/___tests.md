@@ -223,11 +223,108 @@ honest-limit row, and each of the two notes named), and asserting a model this
 context never sends reports the line's real text back. A row state nobody
 stages is where this project's bugs keep arriving.
 
+**THE LAYOUT LIST'S THREE MARKS** (owner, 2026-08-09, tasks 164 / 165 / 169).
+The staged list (`LAYOUT_LIST_STAGE_JS`) is three layouts of three DIFFERENT
+shapes now — a two, a solo and a four — because a staging that cannot tell the
+new drawing from a constant proves nothing about it; the first row is
+`parent: true`, so the ⭐ lands on the hardest row there is (the 63-character
+VS Code title, its elision, and all three trailing buttons at once). Two
+instruments in `tests/_audit_js.py` measure what the sweep cannot:
+
+- `__kinRows` now compares the trailing buttons **column by column**. It used
+  to take one chip per row with `querySelector` — whichever comes FIRST in the
+  DOM — so putting a third button in front of it would have silently changed
+  what the tooth watched and left the old kin group unmeasured. Every column
+  is its own kin group: shape against shape, pencil against pencil, aspect
+  against aspect.
+- `__layoutStars(layouts)` asserts the star from the STAGED LIST rather than
+  from a row number: Desktop is never starred, a `parent` layout always is, a
+  non-parent never is, the star renders at a real size, sits before the first
+  letter on the name's own line, and the long name still elides beside it.
+  Its own instrument because both ways it can fail are invisible to everything
+  else here — landing on the wrong row is a fact about which LAYOUT, and a
+  colour emoji's own metrics lifting its row above its siblings is task 163's
+  kin defect arriving through a new door (which is why the kin measurement
+  runs on the same staging, with the star on it).
+  Both this and `__kinRows` END by demanding that the >40-character name really
+  overflowed — an elision rule nothing exercises is a rule nobody is checking —
+  and both said so out loud when task 172 gave the layout list its landscape
+  row back (718px, one column): 62 characters now FIT. The fixture grew instead
+  of the tooth shrinking. `_LONG_TITLE` in `_audit_panels.py` is 111 characters
+  — what Claude Code's VS Code window is really called, the conversation's name
+  in front of the project — which elides in the widest row this list can draw
+  as well as in the narrowest. The member titles stay at 62: their rows are the
+  two-column ones, where 62 already overflows.
+- `__nameRoom(card)` (2026-08-09, task 172) fails any row that gives its NAME
+  less width than the widest button beside it. Everything above judges the row
+  as geometry, and the shipped row passed all of it while being useless: equal
+  heights, nothing wrapped, nothing off the card, and 48 px of name beside a
+  96 px chip that said "Screen" — legal, aligned and unreadable, which is
+  exactly the gap THE SPACE & LEGIBILITY LAW exists to close. A pixel floor
+  would have closed it too, but a floor of "at least 90 px" is an opinion with
+  no argument behind it and the first row needing 92 would be a negotiation
+  instead of a defect; a RELATION in the row's own terms has nothing to tune
+  and drifts with no font. Proven by planting the shipped row back into the
+  live page (the glyph re-inserted, the floor back at 96 px): red at all four
+  viewports — 48 < 96 at 412 px, 57 < 96 in both landscapes, 88 < 96 on the
+  tablet — while `__kinRows` stayed green on the same staging, which is the
+  whole reason it needed an instrument of its own.
+
+**AND THE ROWS CARRY REAL APP ICONS** (task 172). `LAYOUT_LIST_STAGE_JS` staged
+`icon: null` on every layout, so `layRow` fell back to the Desktop row's monitor
+and the picture showed FOUR IDENTICAL leading badges. The server sends a real
+per-app icon per layout (`layout_registry` → `wm.icon_data_uri`), so the grader
+who opened that picture read a variable as a constant and proposed deleting it
+to make room for the name. A fixture that renders a variable as a constant does
+not merely fail to test the feature — it argues, in a picture, for removing it.
+Three data-URI stand-ins now ride the fixture, because the real icons come off
+EXEs on the owner's machine and this audit runs anywhere.
+
+The member chooser (task 165) is staged on the FOUR — four member rows, each
+with its own cell of the grid lit, plus the arrangement row only a 4→3 shows —
+and measured by `__kinRows` plus `__memberCells`, which reads the LAST path of
+every row's drawing and fails when two rows light the same square. The whole
+panel rests on "he picks the window by its position", and four VS Code windows
+have four nearly identical titles. The layout list also joined `COLOUR_SHOTS`:
+the ⭐ is the one mark whose ink the palette does not own, so it is
+photographed on a light card as well as a dark one.
+
+**THE CREATION LIST, PHOTOGRAPHED AT LAST** (2026-08-09, tasks 166 / 167 /
+168). The round that rewrote every row of it shipped without one picture of it:
+the only creation panel ever staged had `creating.slots` and no list at all, so
+the indent, the tab rows, the minimized note and the cap had never been drawn
+anywhere. Two entries close that. `CREATION_LIST_STAGE_JS` stages six rows — a
+62-character VS Code window with THREE tabs indented under it (worth 3 members,
+not 4 rows, which is the cap's own arithmetic), a minimized Chrome that must
+SAY why it offers no tabs, and a plain Explorer window; "Creation panel capped
+at two" stages the other half of task 166, the only state that puts the missing
+3 and 4 chips, the line explaining their absence and a dimmed not-ready Create
+on one screen.
+
+`__kinRows` runs on those rows too, and it had to learn the owner's own ruling
+first: **a child is not in its parent's kin group** (task 168 — which is what
+makes the indent legal at all). Rows are grouped by their live left inset
+(`margin-left` + `padding-left`, so `.lc-kid`'s 30 px splits the groups) and
+every relation — height, trailing-button columns, main-button width — is
+measured INSIDE a group. The key is the inset and never the row's absolute left
+edge: a short-landscape card is a two-column multicol, and the layout list's
+rows really do land in both columns while remaining one kin group. Proven by
+planting: one tab row made taller than its two tab siblings goes red, one tab
+row wrapped to two lines goes red, one window row taller than its window
+siblings goes red — and ALL tab rows taller than ALL window rows stays green,
+which is the ruling itself.
+
 **The panel catalogue moved out** on 2026-08-09 (THE STRUCTURE LAW — the
 listen control pushed this file past 1,000 lines): `tests/_audit_panels.py`
 now holds WHICH overlay is opened and in WHAT state, the boundary this file's
 own docstring already drew, while `tests/_audit_js.py` keeps HOW a truth about
-pixels is measured.
+pixels is measured. The same wall was met again the same day, by the star and
+member checks: both went into `_audit_js.py` as instruments rather than as
+inline JS strings, which is the boundary that file was cut on — and a third
+time by the creation-list entry, which took the audit to 998 of its 1,000
+lines, so `COLOUR_SHOTS`, `LANDSCAPE_SHOTS` and `SHOT_SUBJECTS` joined the
+catalogue as well: which picture a panel is worth, and which subject folder it
+lands in, is the same row of the same catalogue read one step further on.
 
 Run: `.venv\Scripts\python tests/test_layout_audit.py`
 
@@ -547,8 +644,252 @@ Proven by planting the old behaviour back: sliding the region by `lay.pos` in
 with the union rects at y=0/290/581, and *"a pos-only change re-placed
 windows"*.
 
+**And four checks on the CREATION LIST and the shape it can honestly build**
+(owner reports 2026-08-09, tasks 166 + 167). The first of them replaced a
+check that **REQUIRED THE DEFECT**, which is the finding worth more than the
+fix: the fixture faked ONE VS Code window holding exactly ONE tab and asserted
+`len(entries) == 3` — window, its lone tab, and a plain window — so enforcing
+his rule (*"a tab can be extracted into its own window only when the window
+has more than one tab"*) turned it red. A gate written around a fixture that
+cannot tell two behaviours apart proves whichever one it was written against,
+so the fixture is the fix: `fake_windows()` now offers a window with THREE
+tabs, a window with ONE, and a plain window, and both answers are asserted in
+the same run.
+- *a window's lone tab is NOT offered beside it* — the three-tab window offers
+  its three, the one-tab window offers none, and the emission order stays
+  window-then-its-tabs, which is what the phone's indented list is drawn from
+  (task 168).
+- *a minimized window SAYS why it shows no tabs* — measured on his PC: a
+  minimized window reports height 0 to UIA and enumerates zero tabs whatever
+  it holds, so the same window silently appeared with and without its tabs
+  depending on its state. It now carries `tabs_hidden`, and restoring it
+  brings the tabs back (a flag nobody clears would be a second way to be
+  wrong).
+- *a grid is built from the windows that ARRIVED, and a downgrade is said* — a
+  four asked for with three windows becomes a THREE and the phone is told; a
+  grid that FITS is left alone and toasts nothing.
+- *the framed region is FULLY covered by its members* — the geometry he
+  judges, not the number stored. Three windows in a 2×2 left the union rect,
+  the member list and `placed` all looking correct while a quarter of the
+  picture on his phone was bare desktop.
+
+Each proven by planting its own defect: restoring the old `list_tabs` loop
+reports *"the ONE-tab window's lone tab was offered"*; removing the minimized
+branch reports *"the minimized window did not say WHY"*; and passing the
+phone's grid straight through reports *"4 from 3 windows was downgraded in
+SILENCE"* and *"covers 75% of the region it frames"*.
+
 Run: `.venv\Scripts\python tests/test_layout_protocol.py` — also a
 fail-closed step in `build.py` (0f/6).
+
+### `test_layout_member.py` — Layout Member Gate
+
+ONE WINDOW OUT OF A GRID (owner request 2026-08-09, task 165): each row of the
+layout list has a rename button and an aspect button, *"but there must be a
+button by which I can throw ONE member out of the grid — to enter the grid
+state and remove any member, i.e. change it to a single or to a 2-grid."*
+Until that round a grid could only be BUILT (`layout_merge`) or removed WHOLE,
+so losing one window of four meant deleting the layout and making it again.
+
+Ten checks driving `layout_member_remove` through the REAL dispatcher. Nothing
+is copied: the Windows model, the fake socket and the runner come from
+`test_layout_protocol.py`, the multi-window fixture (`build_layouts`,
+`names_of`, WIN_C/WIN_D) from `test_layout_drag.py`, in a chain that only ever
+points one way — member → drag → protocol. Its own file because adding it to
+the layout gate put that file at 1,154 lines (THE STRUCTURE LAW), and because
+a layout SHRINKING is a responsibility of its own — the same seam
+`test_layout_drag.py` was cut on the same day:
+
+- *a grid shrinks one window at a time* — 4→3, 3→2, 2→single, with the SHAPE
+  following the size (three windows still standing in a 2×2 is not a three).
+- *the leftovers are RE-PLACED into the new shape* — asserted on the RECTS,
+  against cells read out of `grids.py` rather than restated, so the check
+  cannot agree with a wrong answer. A shape change that moves no window is the
+  Move handle's bug again: the phone's panel changes and the PC does not.
+- *the window that leaves is NEVER closed* — the safety property, written
+  against the real `close_windows` desk model. Only the ✕ chooser closes
+  windows, and only when he asked (2026-08-08, task 116).
+- *the window that leaves drops out of the topmost band* — CLAUDE.md
+  constraint 10. It is exactly the window no member list can still name a
+  moment later, so the drop has to happen on the way OUT.
+- *removing the LAST member removes the layout* — through the existing
+  `remove()` path, with the connection's focus bookkeeping.
+- *a member that is not there is refused IN WORDS* — the panel was open while
+  the desk changed; a silent no-op reads as the button being broken.
+- *a four lands on the three the phone named* — the one place in his catalogue
+  with a real choice; an unnamed or wrongly-sized one takes the sheet's first
+  drawing rather than a shape with an empty cell.
+- *the keyboard follows when its own window leaves*, and
+  ***`drop_member` leaves the orders it promises*** — the second exists
+  because planting the defects proved the first could not see it: `focus`
+  begins with `prune` (which re-homes a stray `last_member`) and re-places
+  whenever `_standing` fails (which after a shape change it always does), so
+  both lines could be deleted with every end-to-end check still green. It
+  asserts at the METHOD's own boundary, and it is deliberately the smallest
+  such check beside four that measure rects.
+- *`layout_state` NAMES every member* — `member_titles`, in CELL order, since
+  the phone cannot ask for a window it was never told about.
+
+Proven by planting each defect in turn (nine of them: the template not
+re-derived, no re-place ordered, the leaving window closed, the leaving window
+left topmost, the last member not removing the layout, a bad ordinal accepted
+in silence, `_template_for` ignoring the named shape, the keyboard pointer
+left behind, `member_titles` dropped). Each turns its own check red and the
+suite is green again on restore.
+
+Run: `.venv\Scripts\python tests/test_layout_member.py` — also a fail-closed
+step in `build.py` (0t/6).
+
+### `test_grid_icons.py` — Grid Icon Gate
+
+THE LIST SAYS WHICH SHAPE EACH LAYOUT IS (owner request 2026-08-09, task 164).
+A row carried a name and nothing about its shape, so a solo window, a
+two-split and a four-grid read identically until he opened one. The catalogue
+is not derived anywhere: it is his own sheet, `UV/grid_variations.png`
+(2026-08-07) — LANDSCAPE and PORTRAIT columns, rows of 2 / 3 / 4, with FOUR
+arrangements in the 3 row and one each in the 2 and 4 rows. **Six grid shapes
+plus solo is 7; with the orientations, 14.**
+
+Fifteen checks. The geometry is pure (`client/grid-icons.js`, the
+view-anchor.js / cursor-shapes.js pattern) and is run WHOLE in node:
+
+- *every variant draws its OWN silhouette* — the whole feature. Two shapes
+  drawing one picture tells him nothing and fails silently.
+- *portrait and landscape never draw one picture* — only `"2"` changes its
+  PARTITION with orientation; the other six lean their BOX, which is why the
+  box is part of the signature. A fixed square was the real bug once.
+- *the cells ARE `server/grids.py`'s partition, in member order* — compared
+  number for number against the arithmetic that actually places his windows.
+  `client/grids.js` had carried "if one changes, the other must" since it was
+  split off, and nothing had ever checked it.
+- *only a THREE may change its arrangement* — his sheet's asymmetry, held in
+  one pure function so no panel can offer a choice that does not exist.
+- *an unknown key falls back to a safe generic, never throws* — a name from a
+  NEWER server, a missing field, a nonsense count: one exception while
+  building the list would kill the whole panel.
+- *fewer live members than cells draws only what is there* — a window closed
+  at the desk is pruned and the template left alone, so a four holding three
+  really does show three quadrants and a gap.
+- plus the catalogue's shape, per-cell lighting, box/overlap sanity, the load
+  order, `grids.js` keeping no second copy, the module staying pure, the
+  server still sending `grid`/`members`/`orient`, and the banned second name
+  for "landscape" staying out.
+
+Proven twice by planting a defect: drawing `"3-bottom"` as `"3-top"` turns
+*every variant draws its OWN silhouette* red (*"3-bottom x3 landscape draws
+exactly what 3-top x3 landscape draws"*) and takes the server-partition check
+with it; making an unknown grid throw turns the fallback check red.
+
+**One check is RED until the layout list is wired** — *the layout LIST draws
+the shape of every row*, which requires `client/layouts.js` to call
+`gridIconSvg(lay.members, lay.grid, lay.orient)`. That is deliberate: a pure
+function nobody calls is a feature that does not exist (the actions.json
+lesson, 2026-08-07), so the tooth is the thing that makes the wiring
+mandatory, and its failure message states the exact lines to add.
+
+Run: `.venv\Scripts\python tests/test_grid_icons.py` (needs node) — also a
+fail-closed step in `build.py` (0s/6).
+
+### `test_layout_drag.py` — Layout Drag Gate
+
+A ROW DRAGGED ONTO ANOTHER IS A GRID — the server half of the list's own two
+gestures. **The finding is the absence, not the feature.** `layout_merge` and
+`layout_reorder` shipped whole on 2026-08-07 — client drag block, protocol,
+`LayoutRegistry.merge`/`.reorder` — and until 2026-08-09 not one test file in
+this project mentioned either name; the layout gate above, the fail-closed one
+for the whole protocol, had no merge, no reorder, no drag and no hold in it. So
+when the owner reported the gesture dead on his phone (task 162), nothing on
+this side could say whether the server half had ever worked at all. Its own
+file rather than another section of that gate because that file sits at THE
+STRUCTURE LAW's ceiling, and because the boundary is real: this one owns what a
+finger does to the ORDER and MEMBERSHIP of layouts that already exist. The
+fixtures are the layout gate's own (`install_fakes`, `drive`, the fake desk),
+imported rather than copied. Eight checks, each driven through the REAL
+dispatcher: every grid size a drop can make (1+1 → 2, 1+2 → 3, 1+3 → 4, with
+the source layout disappearing), the three taking the shape the phone named
+(and a sane one when it named none or named the wrong size), a FULL layout
+refusing in words, a row dropped on ITSELF, the index shift after a merge in
+both directions, and reorder's pop/insert correction over six real gaps — with
+`PLACED` empty, because "nothing moves on the PC" means rects.
+
+Two more since 2026-08-09, both about a claim the LIST makes rather than a
+window it moves:
+
+- **A reorder keeps the focus on the SAME layout, not on the same number.**
+  `conn["active"]` is a plain position, so re-ordering while a layout was
+  focused left the server calling a DIFFERENT layout active — the phone framed
+  one layout while the bar's ✕ would have offered to close another one's
+  windows. The bug shipped with `layout_reorder` itself on 2026-08-07 and was
+  found while wiring the phone's member chooser. Asserted by IDENTITY (the
+  same `Layout` object, and the same NAME at the index the phone is told in
+  that very frame), never by number — *"active is still 1"* was true all
+  through the bug. Five real drops: the focused row carried over its
+  neighbours and under them, a stranger's row jumped across it in both
+  directions, and a drop that changes nothing.
+- **The ⭐ marks the trunk and nothing else** (owner decision 2026-08-09, task
+  169). Built, never asserted about: a layout is made from a WINDOW and a
+  second one from a TAB torn out of it, through the real `resolve_slot`, so
+  `Layout.source` is written by the product and not by the check. All three
+  states in one build — the parent is starred, the branch that came out of it
+  is not, an unrelated layout is not — plus the self-contained case: after the
+  two are merged into one layout, nobody is starred, because the mark is about
+  OTHER layouts losing their content.
+
+Each check proven by planting its own defect at RUNTIME (the registry method
+replaced in memory — never on disk, because another agent was editing
+`layout_registry.py` in the same tree): never popping the source →
+*"1+1: 2 layouts left"*; ignoring the phone's grid → *"asked for '3-left' and
+got '3-top'"*; the four-window ceiling removed → *"the merge went through
+anyway"*; self-merge allowed; the handler's index correction lost →
+*"focused 0 and told the phone 0, expected 1"*; the pop/insert correction
+removed → *"reorder(0, 2) -> ['B', 'C', 'A'], expected ['B', 'A', 'C']"*.
+The two 2026-08-09 checks likewise: the pre-fix `layout_reorder` branch put
+back in `web.py` → *"focus 0, reorder(0, 3): the server now calls 'B' active —
+the phone is showing 'A'"* (four of the five cases red); `"parent": True` for
+every layout → *"the stars are {'Trunk': True, 'Plain': True, 'Branch': True}"*.
+
+Run: `.venv\Scripts\python tests/test_layout_drag.py` — also a fail-closed
+step in `build.py` (0f/6) and a full-run guard.
+
+### `test_hold_gesture.py` — Hold Gesture Gate
+
+A HOLD IS A CONTACT THAT STAYED PUT (owner report 2026-08-09, task 162). He
+held a layout row without moving it, meaning to pick it up, and the layout
+simply OPENED. Three things defeated a gesture that had shipped whole: the
+row's `pointermove` cleared the 380 ms timer on ANY movement (a resting finger
+on a capacitive digitizer wanders — the reported point is the centroid of a
+contact patch that breathes); `keepFocus` fires its tap on `pointerup` with no
+duration test and rescues any `pointercancel` under 18 px, while Chrome hands
+out that cancel at ~8 dp when it decides the touch is a scroll; and
+`.lay-item` declared no `touch-action`, so the browser owned the vertical
+gesture. **It stayed broken because the arming logic was not extractable and
+therefore never tested** — no test mentioned `holdTimer`, `dragEnd` or
+`mergeLayouts`. The rule is a pure module now (`client/hold-gesture.js`) and
+this gate runs it WHOLE in node against a modelled resting finger sampled at
+~60 Hz for 400 ms, plus a real 20 px pull: a rule about jitter cannot be
+proven by one call. Wiring checks pin the rest — the row must ASK the rule,
+its tap must refuse a press that lasted (`keepFocus` untouched: it is the
+activator the gamepad shares), the pointer must be captured BEFORE `drag` is
+armed, the row must refuse the browser's pan AND the drag must still be able
+to reach a target below the fold, `MOVE_TAP_SLOP` must be derived from
+`HOLD_DRAG_SLOP` (one digitizer, one number), and the module must stay pure.
+
+Thirteen checks, each proven by planting its own defect: zero tolerance back
+→ *"a resting finger at 16 ms (+1.0, +0.0 px) was read as 'drag'"*; the slop
+made infinite → the drag check red; a per-axis slop → *"a 12.7 px diagonal was
+read as 'tap'"*; the verdict call removed → *"the row no longer asks
+pressVerdict()"*; the duration guard deleted → *"the row's tap does not refuse
+a press that lasted"*; the capture moved after the arm → *"`drag` is armed
+BEFORE the pointer is captured"*; `touch-action` removed; the auto-scroll
+removed; `MOVE_TAP_SLOP` re-typed as `12`; the `<script>` tag removed; a
+`document` reference added. **A hole this exercise found and closed:** two
+wiring checks could NOT go red at first, because the comment explaining the
+fix names `setPointerCapture` and `touch-action: none` and a grep over the raw
+text answered from the prose instead of the code — `_code()` strips comments
+before any of them indexes anything.
+
+Run: `.venv\Scripts\python tests/test_hold_gesture.py` (needs node) — also a
+fail-closed step in `build.py` (0s/6) and a full-run guard.
 
 ### `test_view_anchor.py` — View Anchor Gate
 

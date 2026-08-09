@@ -12,8 +12,17 @@ grows by one entry every time the product grows a panel. Each entry is
 FULLEST, most crowded state it can really reach — a panel measured in its empty
 state is a panel nobody measured.
 
-Nothing here imports anything: every value is a plain string the audit hands to
-the live page.
+It also holds, since 2026-08-09, the three tables that say WHICH PICTURE each
+of those panels gets and where it lands — `COLOUR_SHOTS`, `LANDSCAPE_SHOTS`
+and `SHOT_SUBJECTS`. They are the same responsibility read one step further
+on: a row of the catalogue and the pictures that row is worth. They moved
+here when the creation-list entry above took `tests/test_layout_audit.py` to
+998 of its 1,000 allowed lines (THE STRUCTURE LAW) — two lines of headroom is
+not a margin, and the boundary this split follows was already written in both
+files' docstrings.
+
+Nothing here imports anything: every value is a plain string or a plain table
+of strings the audit hands to the live page or reads to name a file.
 """
 
 # THE DICTATION CARD, STAGED IN EVERY STATE A ROW CAN BE IN (owner 2026-08-09,
@@ -58,6 +67,173 @@ DICT_STAGE_JS = (
     " voiceState: () => '' };"
     "renderDictationCard()"
 )
+
+# THE LAYOUT LIST, STAGED WITH THREE LAYOUTS (owner 2026-08-09, tasks 162+163).
+# Its own constant because three things use it: the panel sweep below, the
+# mid-drag staging under it, and the audit's own kin-row check.
+#
+# ONE ROW WAS WHAT LET BOTH BUGS SHIP. This entry used to stage a single
+# layout, and a list of one has neither of the two things this panel is now
+# judged on: nothing to compare a row's HEIGHT against (he photographed a row
+# wrapped to four lines beside a two-line sibling — task 163) and nothing to
+# drag a row ONTO (the whole gesture of task 162). So the panel was measured
+# for years in the one state where both features are invisible.
+#
+# The three rows are the three real shapes a list holds: a 63-character VS Code
+# window title (the longest a title really gets, and the one he screenshotted),
+# an ordinary short name, and a layout that is already FULL — four windows, so
+# it is the row that greys out as a refused drop target while a drag is in
+# flight. `ratio` differs across them on purpose: the trailing chip's label is
+# "Screen" on one and "3:5" on another, and those chips are a kin group too.
+#
+# AND THEY ARE THREE DIFFERENT SHAPES since 2026-08-09 (task 164): a two, a
+# solo and a four, so the row's new drawing is a different picture on every
+# row instead of the same one three times — a staging that cannot tell the
+# feature from a constant proves nothing about it. `member_titles` rides along
+# because the member chooser (task 165) is staged from this same list, and one
+# of its four is the long VS Code title, which is what makes its rows carry
+# task 163's elision too. The FIRST row is `parent: true` — the ⭐ (owner
+# 2026-08-09, task 169) lands on the hardest row there is: the long name, the
+# elision and all three trailing buttons at once.
+#
+# AND EVERY ROW CARRIES ITS OWN APP ICON since 2026-08-09 (task 172). It staged
+# `icon: null` on all three until then, which makes `layRow` fall back to the
+# Desktop row's monitor drawing — so the picture showed FOUR IDENTICAL leading
+# badges, and the independent grader read the row's leading glyph as a constant
+# that could be deleted to make room for the name. It is not: the server sends
+# a real per-app icon per layout (`layout_registry` -> `wm.icon_data_uri`), so
+# in production those badges are VS Code, Explorer and Chrome, and they are the
+# fastest answer to "which app is this layout" on a row whose name is CUT. A
+# fixture that renders a variable as a constant does not merely fail to test
+# the feature — it argues, in a picture, for removing it.
+#
+# Data URIs rather than the real extracted PNGs: the icon comes off an EXE on
+# the owner's machine and this audit runs anywhere. What has to be true of the
+# stand-ins is what has to be true of the real ones — 20 px, one per row, and
+# visibly different from each other and from the Desktop monitor.
+_ICON_VSCODE = ("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5v"
+                "cmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHJlY3Qgd2lkdGg9Ij"
+                "I0IiBoZWlnaHQ9IjI0IiByeD0iNSIgZmlsbD0iIzIzN2NjZCIvPjxwYXRoIGQ9"
+                "Ik0xNyA1djE0bC02LTQuNUw3IDE4VjZsNCAzLjV6IiBmaWxsPSIjZmZmIi8+PC"
+                "9zdmc+")
+_ICON_EXPLORER = ("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My"
+                  "5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHJlY3Qgd2lkdG"
+                  "g9IjI0IiBoZWlnaHQ9IjI0IiByeD0iNSIgZmlsbD0iI2ZmYzEwNyIvPjxwYX"
+                  "RoIGQ9Ik00IDhoNmwyIDJoOHY4SDR6IiBmaWxsPSIjNmQ0YzAwIi8+PC9zdm"
+                  "c+")
+_ICON_CHROME = ("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5v"
+                "cmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PGNpcmNsZSBjeD0iMT"
+                "IiIGN5PSIxMiIgcj0iMTEiIGZpbGw9IiMzNGE4NTMiLz48Y2lyY2xlIGN4PSIx"
+                "MiIgY3k9IjEyIiByPSI1IiBmaWxsPSIjZmZmIi8+PC9zdmc+")
+
+# THE STAGED TITLE OUTGREW THE ROW, SO THE TITLE GREW (task 172, 2026-08-09).
+# The 62-character title below used to elide at every viewport, which is what
+# `__kinRows` and `__layoutStars` both lean on — each ends by DEMANDING that a
+# >40-character name really overflowed, because an elision rule nothing
+# exercises is a rule nobody is checking. Giving the layout list its landscape
+# row back (718 px, one column — client/panels.css) made 62 characters FIT,
+# and both instruments said so in their own words: "the long title was not
+# elided (it fits) — stage a longer one, or the rule is not being exercised".
+#
+# So the fixture is longer, not the tooth weaker. This is what Claude Code's
+# own VS Code window is really called — the CONVERSATION's name in front of
+# the project and the app (see the project CLAUDE.md on why no string can
+# identify that window) — and at 111 characters it elides in the widest row
+# this list can draw as well as in the narrowest, which is the only length
+# that exercises the rule at all four audited viewports.
+#
+# The member titles below stay at 62: their rows are the two-column ones
+# (347 px), where 62 characters already overflow, and a fixture that proves
+# something at one width proves nothing extra by being longer everywhere.
+_LONG_TITLE = ("Widening the layout row so a window title fits"
+               " - Claude Code - Remote User - Visual Studio Code"
+               " [Administrator]")
+
+LAYOUT_LIST_STAGE_JS = (
+    "layouts = ["
+    f" {{name:'{_LONG_TITLE}',"
+    f"  process:'code.exe', orient:'portrait', icon:'{_ICON_VSCODE}',"
+    "  ratio:[600,1000],"
+    "  pos:0.5, grid:'2', members:2, parent:true,"
+    "  member_titles:['Claude Code - Remote User - Visual Studio Code"
+    " [Administrator]', 'prompt.txt - Remote User']},"
+    " {name:'Downloads', process:'explorer.exe', orient:'portrait',"
+    f"  icon:'{_ICON_EXPLORER}',"
+    "  ratio:null, pos:0.5, grid:null, members:1, parent:false,"
+    "  member_titles:['Downloads']},"
+    " {name:'Reading', process:'chrome.exe', orient:'landscape',"
+    f"  icon:'{_ICON_CHROME}',"
+    "  ratio:null, pos:0.5, grid:'4', members:4, parent:false,"
+    "  member_titles:['Claude Code - Remote User - Visual Studio Code"
+    " [Administrator]', 'Inbox (12) - Gmail', 'Downloads', 'Notes']}];"
+    "layoutActive = 0; openLayoutPicker()"
+)
+LAYOUT_LIST_CLOSE_JS = "layoutActive = null; layouts = []; closeLayoutPanel()"
+
+# THE SAME LIST WITH A ROW PICKED UP. The classes are the ones the drag itself
+# adds (`lay-drag` on the carried row, `lay-drop` on a legal target, `lay-full`
+# on a layout that already holds four) — staged here rather than driven,
+# because a screenshot proves what the state LOOKS like and no synthetic
+# pointer can hold a finger still for 380 ms. What the gesture DOES is proven
+# where it can be: tests/test_hold_gesture.py drives the real arming rule and
+# tests/test_layout_protocol.py the real merge. The picture is here so the
+# affordance he was promised in words — "Hold and drag it onto another to make
+# a grid" — has finally been LOOKED at (rules/GUI.md).
+LAYOUT_DRAG_STAGE_JS = (
+    LAYOUT_LIST_STAGE_JS + ";"
+    "(() => { const r = [...document.querySelectorAll('#layout-panel .lay-item')];"
+    " r[1].classList.add('lay-drag');"
+    " r[2].classList.add('lay-drop');"
+    " r[3].classList.add('lay-full'); })()"
+)
+
+# THE CREATION LIST, STAGED WITH EVERY SHAPE A ROW CAN BE (owner 2026-08-09,
+# tasks 166 / 167 / 168). Its own constant because two things use it: the panel
+# sweep below and the audit's own kin-row check — the creation rows are
+# `.lay-item` too, and until now the ONLY creation panel ever staged was one
+# with no list at all (`creating.slots` and nothing else), so the entire row
+# list this round rewrote had never been drawn in any picture.
+#
+# ONE ROW CAN SHOW NONE OF IT, which is why the fixture is six:
+#
+#   hwnd 1  a 62-character VS Code title  -> the elision of task 163
+#   hwnd 1  three tabs under it           -> the INDENT of task 168, and the
+#                                            only place a kin group has a
+#                                            sibling group beside it
+#   hwnd 2  one Chrome window, minimized  -> `tabs_hidden`: the row SAYS why it
+#                                            offers no tabs (task 167), and the
+#                                            card says it once more above
+#   hwnd 3  a plain Explorer window       -> the ordinary case, so the three
+#                                            special ones are visibly special
+#
+# THE TAB COUNT IS ALSO THE CAP'S ARITHMETIC (task 166). Three tabs on one
+# window are worth THREE members, not four rows and not one window — so this
+# staging makes `availableMembers()` return 5 and the header say so. A fixture
+# where every window is worth exactly 1 would render the same panel whether
+# that rule existed or not.
+#
+# `kind` is what `entryRow` reads to decide the icon and the indent, and
+# `tab` is what `slotFromEntry` carries into the slot — both are the field
+# names of client/layout-create.js, not a shape invented here.
+CREATION_LIST_STAGE_JS = (
+    "creating = newCreation('list');"
+    "creating.entries = ["
+    " {kind:'window', hwnd:1, title:'Claude Code - Remote User - Visual "
+    "Studio Code [Administrator]', process:'code.exe', icon:null,"
+    "  x:0.1, y:0.5},"
+    " {kind:'tab', hwnd:1, title:'prompt.txt', process:'code.exe',"
+    "  icon:null, tab:{name:'prompt.txt'}, x:0.1, y:0.02},"
+    " {kind:'tab', hwnd:1, title:'layout_api.py', process:'code.exe',"
+    "  icon:null, tab:{name:'layout_api.py'}, x:0.2, y:0.02},"
+    " {kind:'tab', hwnd:1, title:'CLAUDE.md', process:'code.exe',"
+    "  icon:null, tab:{name:'CLAUDE.md'}, x:0.3, y:0.02},"
+    " {kind:'window', hwnd:2, title:'Mail - Google Chrome',"
+    "  process:'chrome.exe', icon:null, tabs_hidden:true, x:0.5, y:0.5},"
+    " {kind:'window', hwnd:3, title:'Downloads', process:'explorer.exe',"
+    "  icon:null, x:0.7, y:0.5}];"
+    "renderCreationPanel()"
+)
+CREATION_CLOSE_JS = "cancelCreation(true)"
 
 # The model the audit's own User-Agent carries — the card must READ it and say
 # it. A device name the page silently fails to find is exactly the failure the
@@ -148,12 +324,22 @@ PANELS = (
      "#layout-panel .lay-card"),
     # The layout list carries a rename button per row (owner
     # 2026-08-05) — a long window title must not push the row's
-    # buttons off the card.
-    ("Layout list with rename",
-     "layouts = [{name:'Claude Code - Remote User - Visual Studio "
-     "Code [Administrator]', process:'x', orient:'portrait',"
-     " icon:null, ratio:[600,1000], pos:0.5}]; openLayoutPicker()",
-     "closeLayoutPanel()", "#layout-panel .lay-card"),
+    # buttons off the card. Staged with THREE rows since 2026-08-09
+    # (see LAYOUT_LIST_STAGE_JS above): one row could never show a
+    # sibling of a different height, nor a row to drag onto.
+    ("Layout list with rename", LAYOUT_LIST_STAGE_JS,
+     LAYOUT_LIST_CLOSE_JS, "#layout-panel .lay-card"),
+    ("Layout list mid-drag", LAYOUT_DRAG_STAGE_JS,
+     LAYOUT_LIST_CLOSE_JS, "#layout-panel .lay-card"),
+    # ONE WINDOW OUT OF A GRID (owner request 2026-08-09, task 165), staged on
+    # the FOUR — the largest this panel ever gets: four member rows, each with
+    # its own cell of the grid lit, plus the arrangement row that only a 4→3
+    # ever shows (four drawn chips). One of the four member titles is the
+    # 63-character VS Code window title, so the panel is measured against task
+    # 163's one-line rule with the longest name a member really has.
+    ("Layout member chooser",
+     LAYOUT_LIST_STAGE_JS + "; openMemberPanel(2)",
+     LAYOUT_LIST_CLOSE_JS, "#layout-panel .lay-card"),
     # The rename card also carries the per-layout app-shortcut
     # ticks (owner 2026-08-06) — the long title AND four chips.
     ("Rename card",
@@ -191,4 +377,95 @@ PANELS = (
      "renderCreationPanel()",
      "creating = null; closeLayoutPanel()",
      "#layout-panel .lay-card"),
+    # THE LIST THE WINDOWS ARE PICKED FROM — never photographed until today,
+    # although this round rewrote every row in it (tasks 166 / 167 / 168). See
+    # CREATION_LIST_STAGE_JS above for what each of the six rows is evidence of.
+    ("Creation list with tabs", CREATION_LIST_STAGE_JS,
+     CREATION_CLOSE_JS, "#layout-panel .lay-card"),
+    # THE CAP, AND THE DEAD CREATE BUTTON (owner report 2026-08-09, task 166:
+    # "it offers a grid of 4 when the desktop holds 3", and the half he
+    # actually feels — "then the Create button just sits there"). Two windows
+    # on the PC, a 2-grid chosen and only one cell filled, which is the ONLY
+    # state that puts all three of this task's visible answers on one screen:
+    # the 3 and 4 shape chips ABSENT, the line that explains their absence, and
+    # a Create that is visibly unavailable instead of looking live and
+    # swallowing the tap. Nothing else in the sweep renders a dimmed Create.
+    ("Creation panel capped at two",
+     "creating = newCreation('list');"
+     "creating.entries = ["
+     " {kind:'window', hwnd:2, title:'Mail - Google Chrome',"
+     "  process:'chrome.exe', icon:null, x:0.5, y:0.5},"
+     " {kind:'window', hwnd:3, title:'Downloads', process:'explorer.exe',"
+     "  icon:null, x:0.7, y:0.5}];"
+     "creating.mode = 'grid'; creating.grid = '2';"
+     "creating.slots = [{hwnd:2, title:'Mail - Google Chrome',"
+     " process:'chrome.exe', icon:null, tab:null, x:0.5, y:0.5}];"
+     "renderCreationPanel()",
+     CREATION_CLOSE_JS, "#layout-panel .lay-card"),
+)
+
+# The panels SHOT in a non-default look. Shooting all thirteen in all eight
+# would be over a hundred pictures nobody will open, and a picture nobody
+# opened is not proof (rules/GUI.md). The first three carry colour: the sets
+# list with its live badge, the quality panel's segmented rows, and the
+# dictation card's status column.
+# The layout list joined on 2026-08-09: the ⭐ (owner decision, task 169) is a
+# COLOUR EMOJI, the one mark in this product whose ink the palette does not
+# own — the theme cannot restyle it, so the only way to know it reads on a
+# light card is to look at it on one.
+# The creation list joined the same day (tasks 166-168): the newest screen in
+# the product, and the only one whose ROWS carry three colour-bearing states at
+# once — the accent `sel` border of a chosen row, the `.lc-off` dimming of one
+# refused by the window-or-its-own-tab rule, and the secondary ink of the
+# "minimized" note.
+COLOUR_SHOTS = {"Sets picker", "Quality panel", "Dictation card",
+                "Layout list with rename", "Creation list with tabs"}
+
+# The panels SHOT IN LANDSCAPE (2026-08-07). Every phone panel is MEASURED in
+# both orientations and always was; these two are also photographed there,
+# because they are the ones whose content is orientation-dependent: the
+# creation panel draws the grid catalogue on a LANDSCAPE outer box, and the
+# arrangement row draws the four landscape three-window variants that no
+# picture had ever shown. The controls and the wheel are shot in landscape in
+# every look, separately.
+# The Region grab joined them on 2026-08-07: its bar is the panel whose
+# layout depends most on the width it is given, and landscape is where it
+# gets three times as much of it.
+# The ✕ chooser joined on 2026-08-08: it is two big side-by-side chips, which
+# is exactly the shape landscape squeezes — 46% of a wide card each, with a
+# consequence line that must still wrap rather than clip.
+LANDSCAPE_SHOTS = {"Creation panel + Name field", "Grid arrangement choice",
+                   "Sets picker", "Quality panel", "Dictation card",
+                   "Layout list with rename", "Region grab",
+                   "Layout close chooser"}
+
+# ONE FOLDER, ONE SUBJECT (owner 2026-08-08, his second word on this): a topic
+# folder per ROUND was still a dump — he asked for sub-folders rather than one
+# directory of 161 pictures. So the round's folder holds SUBJECT folders, and a
+# subject is what the picture is OF, read from its own name. Anything
+# unrecognised lands in `other`, which is a signal rather than a hiding place:
+# an `other` that grows means a new screen exists and nobody named it.
+SHOT_SUBJECTS = (
+    ("Controls_and_wheel", "controls-and-wheel"),
+    ("Controls", "controls"),
+    ("ControlsEditor", "desktop-controls-editor"),
+    ("Sets_picker", "sets-picker"),
+    ("Quality_panel", "quality-panel"),
+    ("Dictation_card", "dictation-card"),
+    ("Region_grab", "region-grab"),
+    ("Command_chooser", "command-chooser"),
+    ("Notices_card", "notices-card"),
+    ("Pad_cross_upright", "controls"),
+    ("Layout_close_chooser", "layouts"),
+    ("Layout_member_chooser", "layouts"),
+    ("Layout_list", "layouts"),
+    ("Rename_card", "layouts"),
+    ("Aspect_panel", "layouts"),
+    ("Creation_panel", "layouts"),
+    ("Creation_list", "layouts"),
+    ("Grid_arrangement", "layouts"),
+    ("MainWindow", "desktop-windows"),
+    ("SettingsWindow", "desktop-windows"),
+    ("TrafficWindow", "desktop-traffic"),
+    ("WheelOrderDialog", "desktop-windows"),
 )

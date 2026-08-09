@@ -231,7 +231,7 @@ function noticeShellState() {
 function renderNoticeCard(state) {
   noticePanel.innerHTML = "";
   const card = document.createElement("div");
-  card.className = "sets-card";
+  card.className = "sets-card card-columns";
   card.innerHTML = `<h2>Notices while the app is closed</h2>
     <p class="sets-sub">Your PC tells this phone the moment an agent finishes
     or needs you — with Remote User closed and the screen off. It is not a

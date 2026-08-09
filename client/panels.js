@@ -131,7 +131,7 @@ function refreshSetsMeta() {
 function openSetsPanel() {
   setsPanel.innerHTML = "";
   const card = document.createElement("div");
-  card.className = "sets-card";
+  card.className = "sets-card card-columns";
   const reserve = appSetReserve();
   card.innerHTML = `<h2>Wheel sets</h2>
     <p class="sets-sub">Mouse, Input and Settings are always in the wheel. Pick the rest — up to ${WHEEL_MAX} in total, app shortcuts included. New sets are made on the PC (Remote User window → Controls…).</p>
@@ -556,7 +556,7 @@ function renderDictationCard() {
   dictAskDevice(dictShowDevice);
   dictPanel.innerHTML = "";
   const card = document.createElement("div");
-  card.className = "sets-card";
+  card.className = "sets-card card-columns";
   card.innerHTML = `<h2>Dictation language</h2>
     <p class="sets-sub">Pick the language you speak — dictation understands that one. Change it any time: Settings wheel → Language.</p>`;
   // WHICH device these languages belong to (owner 2026-08-09). Built as a
@@ -677,7 +677,7 @@ function openChoicePanel(btn) {
 
   choicePanel.innerHTML = "";
   const card = document.createElement("div");
-  card.className = "sets-card";
+  card.className = "sets-card card-columns";
   const title = btn.label || btn.text;
   card.innerHTML = `<h2>${title}</h2>` +
     `<p class="sets-sub">Pick one — the PC types it and runs it.</p>`;

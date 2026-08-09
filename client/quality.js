@@ -153,7 +153,7 @@ function openQualityPanel() {
   const b = streamBase;
   qualityPanel.innerHTML = "";
   const card = document.createElement("div");
-  card.className = "sets-card";
+  card.className = "sets-card card-columns";
   // The truth first: what the PC itself is set to. Without it "Max/Full/High"
   // are three words that could mean anything.
   const pcLine = b

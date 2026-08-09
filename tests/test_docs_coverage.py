@@ -74,12 +74,27 @@ STANDARD = {
     # pattern). Standard: one formula, no flow worth a diagram — the WHY
     # lives in its header and its __about.
     "client/view-anchor.js",
+    # New 2026-08-09 (owner report, task 162 — he held a layout row and the
+    # layout opened): when a press is a hold, a drag or a tap. Split into a
+    # pure module so tests/test_hold_gesture.py can drive it with a realistic
+    # jitter sequence — the old rule lived inline in a listener, which is why
+    # it was never tested. Standard: one decision, no flow worth a diagram.
+    "client/hold-gesture.js",
     # New 2026-08-09 (owner request, task 142 — the cursor must show what the
     # pixel under it does): the drawn silhouette per cursor name, split into a
     # pure module so tests/test_cursor_shape.py can run it whole (the
     # view-anchor.js pattern). Standard: one table and one translate, no flow
     # worth a diagram — the WHY lives in its header and its __about.
     "client/cursor-shapes.js",
+    # New 2026-08-09 (owner request, task 164 — a row of the layout list said
+    # nothing about its SHAPE): the drawn silhouette per (member count,
+    # arrangement, orientation), split into a pure module so
+    # tests/test_grid_icons.py can run it whole (the cursor-shapes.js pattern)
+    # and so the partitions have ONE copy on this side. Standard, not
+    # Algorithmic: it carries no decision the sheet did not already make — the
+    # catalogue is the owner's drawing and the WHY lives in its header and its
+    # __about; grids.js keeps the flow (which panel asks what).
+    "client/grid-icons.js",
     "client/load_test.js",
     "client/state.js",
     "client/panels.js",
@@ -244,6 +259,12 @@ ALGORITHMIC = {
     # session across several taps, two sources reduce to one slot shape, and
     # every way it can end has to be written down.
     "client/layout-create.js",
+    # New 2026-08-09 (owner request, task 168 — a tab is drawn INDENTED under
+    # its window, in both of the creation panel's lists): the wizard's own
+    # rows. It shares __about/__flow/layout-create.md with the JS, exactly as
+    # layouts.css shares its doc with layouts.js and theme.css with theme.js —
+    # one feature, one doc, two files.
+    "client/layout-create.css",
     "client/gestures.js",
     "client/connection.js",
     "setup/svg_to_ico.py",

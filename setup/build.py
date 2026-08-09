@@ -246,6 +246,15 @@ def input_gate() -> None:
     # build.
     step("0f/6  LAYOUT GATE — every layout message answers the phone (tests/test_layout_protocol.py)")
     run([sys.executable, str(PROJECT_DIR / "tests" / "test_layout_protocol.py")])
+    # And the LIST's own two gestures, which had no gate at all until the owner
+    # reported the whole thing dead (2026-08-09, task 162). `layout_merge` and
+    # `layout_reorder` shipped on 2026-08-07 and no test in this project
+    # mentioned either name for two days: dropping a row on another to make a
+    # grid, dropping it in a gap to re-order. The client half — when a press
+    # becomes a HOLD — is gated separately and purely, below.
+    step("0f/6  LAYOUT DRAG GATE — a row dropped on another makes a grid "
+         "(tests/test_layout_drag.py)")
+    run([sys.executable, str(PROJECT_DIR / "tests" / "test_layout_drag.py")])
     # And that a phone which has GONE takes its encoder with it (live failure
     # 2026-08-07). Cancelling `asyncio.to_thread(open_session)` does not stop
     # the thread, so one leaked session ran four hours at native 4K with
@@ -360,6 +369,45 @@ def input_gate() -> None:
     step("0p/6  CURSOR SHAPE GATE — the phone draws the cursor the PC is "
          "really showing (tests/test_cursor_shape.py)")
     run([sys.executable, str(PROJECT_DIR / "tests" / "test_cursor_shape.py")])
+
+    # THE LIST SAYS WHICH SHAPE EACH LAYOUT IS (owner request 2026-08-09, task
+    # 164). A row carried a name and nothing about its shape, so a solo window,
+    # a two-split and a four-grid read identically until he opened one. The
+    # catalogue is his own sheet (UV/grid_variations.png, 2026-08-07): six
+    # arrangements plus solo, fourteen with the orientations. Two things can
+    # break silently and both are checked — two variants drawing ONE picture
+    # (the whole feature, gone, invisibly), and the drawing drifting from
+    # `server/grids.py`, whose arithmetic actually places his windows. The
+    # geometry is pure and is run WHOLE in node, like 0j/0k/0o/0p — never skip
+    # it silently.
+    step("0s/6  GRID ICON GATE — every row can say which shape it is "
+         "(tests/test_grid_icons.py)")
+    run([sys.executable, str(PROJECT_DIR / "tests" / "test_grid_icons.py")])
+
+    # ONE WINDOW OUT OF A GRID (owner request 2026-08-09, task 165). Until this
+    # round a grid could only be built or removed WHOLE, so losing one window
+    # of four meant deleting the layout and making it again. Fail-closed for
+    # the same reason the ✕ chooser is: the window that leaves must NOT be
+    # closed and must NOT be left stranded always-on-top — of everything in
+    # this feature those are the only parts he cannot undo from the phone.
+    step("0t/6  LAYOUT MEMBER GATE — a grid can lose one window, and the "
+         "window keeps its life (tests/test_layout_member.py)")
+    run([sys.executable, str(PROJECT_DIR / "tests" / "test_layout_member.py")])
+
+    # A HOLD IS A CONTACT THAT STAYED PUT (owner report 2026-08-09, task 162:
+    # he held a layout row and the layout OPENED). The drag gesture had shipped
+    # whole and was defeated at its first millisecond — the row cleared its
+    # 380 ms hold timer on ANY movement, and a finger resting on a capacitive
+    # digitizer never stands still. It shipped broken and STAYED broken because
+    # the arming logic was not extractable and therefore never tested: no test
+    # in this project mentioned `holdTimer`, `dragEnd`, `mergeLayouts`,
+    # `layout_merge` or `layout_reorder`. The rule is a pure module now and
+    # this gate drives it in node against a REALISTIC JITTER SEQUENCE — a rule
+    # about jitter cannot be proven by one call. Needs node, like 0j/0k/0o/0p —
+    # never skip it silently.
+    step("0q/6  HOLD GESTURE GATE — a resting finger picks the row up, a "
+         "travelling one never does (tests/test_hold_gesture.py)")
+    run([sys.executable, str(PROJECT_DIR / "tests" / "test_hold_gesture.py")])
 
 
 def generate_icons() -> None:

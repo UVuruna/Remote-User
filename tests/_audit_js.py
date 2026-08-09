@@ -221,6 +221,255 @@ window.__truncated = (root) => {
   return bad;
 };
 
+// KIN ROWS ARE THE SAME SIZE — A ROW IS ONE LINE, LIKE A BUTTON (owner
+// 2026-08-09, task 163, with his screenshot: one layout row wrapped to FOUR
+// lines beside a two-line sibling, because a VS Code window title is 63
+// characters long). His rule, in translation: elements of one kin group are
+// always the same size, and a long name is CUT — "the first two words, as many
+// as fit — and three dots" — never wrapped.
+//
+// Why no existing instrument could catch it, which is the whole reason this
+// one exists: every other measurement in this file judges a SINGLE element (is
+// it clipped, can it be read, was its text cut before the DOM saw it), and four
+// wrapped lines are none of those things — the row simply grew, legibly, and
+// the card scrolled. This defect is a RELATION BETWEEN SIBLINGS, so it needs
+// siblings; the panel was staged with ONE layout until today, which is how it
+// shipped.
+//
+// It measures three relations and one fact:
+//   - every row the same height WITHIN ITS OWN GROUP, and no row's name taller
+//     than one line;
+//   - the trailing buttons the same width COLUMN BY COLUMN (found by OPENING
+//     the screenshot of the first fix: "Screen" on one row and "3:5" on the
+//     next made the main button beside the narrow chip 32 px longer than its
+//     neighbour's);
+//   - every row's main button the same width, which is the two above seen
+//     from the other side;
+//   - and that the long title is REALLY elided — without that last one the
+//     whole check would pass on a staging whose titles all happen to fit,
+//     which is exactly how a one-row staging passed for years.
+//
+// A CHILD IS NOT IN ITS PARENT'S KIN GROUP (owner 2026-08-09, task 168 — the
+// clause that made the creation list's indent legal in the first place:
+// "pod-tab ne pripada istoj grupaciji kao njegov roditelj" / lang-ok: owner
+// quote). The creation panel now draws a window's tabs as INDENTED rows under
+// it, which are narrower than their parent BY DESIGN and may legitimately be
+// a different height — a window row carries an app icon and a tab row carries
+// none. Comparing across the indent would therefore have made his own drawing
+// illegal, and the cheap way out — dropping the height check for these rows —
+// would have left the six rows this round rewrote governed by nothing.
+//
+// So rows are grouped by their INDENT and every relation is measured inside a
+// group. The key is the row's own left inset read LIVE (`.lc-kid` in
+// client/layout-create.css is a 30 px margin; padding counts too, so a future
+// indent spelled the other way still splits the groups) — never the row's
+// absolute left edge, which a short-landscape card would split by COLUMN
+// instead: `panels.css` reflows a card into two columns under 560 px of
+// height, and the layout list's rows really do land in both of them while
+// remaining one kin group.
+window.__kinRows = (card) => {
+  const bad = [];
+  const cr = card.getBoundingClientRect();
+  const w = (el) => Math.round(el.getBoundingClientRect().width);
+  const rows = [...card.querySelectorAll('.lay-item')];
+  if (rows.length < 3) {
+    bad.push('only ' + rows.length + ' rows staged — a list of one cannot ' +
+             'show a sibling of another height');
+    return bad;
+  }
+  const indentOf = (r) => {
+    const s = getComputedStyle(r);
+    return Math.round((parseFloat(s.marginLeft) || 0) +
+                      (parseFloat(s.paddingLeft) || 0));
+  };
+  const groups = new Map();
+  for (const r of rows) {
+    const k = indentOf(r);
+    if (!groups.has(k)) groups.set(k, []);
+    groups.get(k).push(r);
+  }
+  const where = (k) => groups.size < 2 ? '' : ' indented ' + k + 'px';
+  for (const [k, kin] of groups) {
+    const h = kin.map((r) => Math.round(r.getBoundingClientRect().height));
+    if (Math.max(...h) - Math.min(...h) > 1) {
+      bad.push('sibling rows' + where(k) + ' differ in height: ' + h.join(' / '));
+    }
+    // BY COLUMN, since 2026-08-09 (task 164 put a THIRD trailing button on the
+    // row — the layout's drawn shape). This used to measure one chip per row,
+    // found by `querySelector`, which is whichever comes FIRST in the DOM: add
+    // a button in front of it and the tooth silently changes what it is
+    // watching and the old kin group stops being measured at all. Every column
+    // is its own kin group now — shape against shape, pencil against pencil,
+    // aspect against aspect — so a new trailing button joins the law instead
+    // of dodging it.
+    const chipRows = kin.map((r) => [...r.querySelectorAll('.lay-ratio')])
+                        .filter((c) => c.length);
+    const cols = chipRows.length
+      ? Math.max(...chipRows.map((c) => c.length)) : 0;
+    for (let j = 0; j < cols; j++) {
+      const col = chipRows.map((c) => c[j]).filter(Boolean).map(w);
+      if (col.length > 1 && Math.max(...col) - Math.min(...col) > 1) {
+        bad.push('sibling row buttons' + where(k) + ' in column ' + (j + 1) +
+                 ' differ in width: ' + col.join(' / '));
+      }
+    }
+    // Only rows that CARRY trailing buttons: the layout list's Desktop row has
+    // none, so its main button is legitimately the width of the whole row.
+    const mains = kin.filter((r) => r.querySelector('.lay-ratio'))
+                     .map((r) => w(r.querySelector('.lay-item-main')));
+    if (mains.length > 1 && Math.max(...mains) - Math.min(...mains) > 1) {
+      bad.push('sibling rows' + where(k) + ' end at different widths: ' +
+               mains.join(' / '));
+    }
+  }
+  for (const r of rows) {
+    const span = r.querySelector('.lay-item-main span');
+    const st = getComputedStyle(span);
+    const line = parseFloat(st.lineHeight) || parseFloat(st.fontSize) * 1.2;
+    if (span.getBoundingClientRect().height > line * 1.6) {
+      bad.push('a row wrapped: "' + span.textContent.slice(0, 24) + '…"');
+    }
+    // …and nothing on the row was pushed off the card by a long name.
+    for (const b of r.querySelectorAll('button')) {
+      const br = b.getBoundingClientRect();
+      if (br.right > cr.right + 1 || br.left < cr.left - 1) {
+        bad.push('a row button leaves the card');
+      }
+    }
+  }
+  const long = rows.map((r) => r.querySelector('.lay-item-main span'))
+                   .find((s) => s.textContent.length > 40);
+  if (!long) {
+    bad.push('no long title staged — the elision is untested');
+  } else if (long.scrollWidth <= long.clientWidth + 1) {
+    bad.push('the long title was not elided (it fits) — stage a longer one, ' +
+             'or the rule is not being exercised');
+  }
+  return bad;
+};
+
+// THE NAME IS NOT THE LAST IN LINE FOR THE ROW'S WIDTH (independent grader,
+// 2026-08-09, task 172, who opened the picture and wrote: "the starred row
+// spends its width on two leading badges plus three trailing buttons and
+// leaves the name 'Claude Cod…' — nine characters, one word, which cannot tell
+// two Claude layouts apart, and that is the one job a title has").
+//
+// WHY THIS ASSERTION AND NOT A PIXEL FLOOR. Every check above judges the row
+// as GEOMETRY — same height, nothing wrapped, nothing off the card — and the
+// shipped row passed all of them while being useless: 48 px of name beside a
+// 96 px chip that said "Screen" is perfectly legal, perfectly aligned and
+// perfectly unreadable, which is precisely the gap THE SPACE & LEGIBILITY LAW
+// exists to close. A pixel floor would close it too, but only until somebody
+// asked where the number came from — a floor of "at least 90 px" is an opinion
+// with no argument behind it, and the first row that needs 92 would be a
+// negotiation instead of a defect.
+//
+// So the rule is a RELATION, in the row's own terms: the element carrying the
+// row's one irreplaceable fact — which layout this is — may never be narrower
+// than the widest button standing beside it. Nothing to tune, nothing that
+// drifts with a font or a viewport, and it fails on exactly the row that was
+// reported: 48 < 96 at 412 px, 57 < 96 at both landscape sizes, 88 < 96 on the
+// tablet — every viewport, which is why it is the check that would have caught
+// this before the picture was ever written.
+//
+// Rows with NO trailing button are skipped (the Desktop row's main button is
+// the whole row, and the member chooser and creation list carry none at all),
+// so this measures the layout list and says nothing it cannot see.
+window.__nameRoom = (card) => {
+  const bad = [];
+  const w = (el) => Math.round(el.getBoundingClientRect().width);
+  let judged = 0;
+  for (const r of card.querySelectorAll('.lay-item')) {
+    const chips = [...r.querySelectorAll('.lay-ratio')];
+    if (!chips.length) continue;
+    judged++;
+    const span = r.querySelector('.lay-item-main span');
+    const widest = chips.reduce((a, b) => (w(a) >= w(b) ? a : b));
+    if (w(span) < w(widest)) {
+      bad.push('"' + span.textContent.slice(0, 14) + '…" has ' + w(span) +
+               'px of name beside a ' + w(widest) + 'px button — the row ' +
+               'spends more on a control than on which layout it is');
+    }
+  }
+  if (!judged) bad.push('no row with trailing buttons staged — untested');
+  return bad;
+};
+
+// ⭐ ON THE TRUNK AND ON NOTHING ELSE (owner decision 2026-08-09, task 169).
+// A layout gets a leading star when another layout's content was torn out of
+// one of its windows, so closing it would take that other layout with it.
+//
+// It needs an instrument of its own because the two things that can go wrong
+// are invisible to everything else in this file: the star lands on the WRONG
+// ROW (a fact about which layout, not about pixels — no clip, contrast or fit
+// check can see it), or a COLOUR EMOJI's own metrics lift the row it sits in
+// above its siblings, which is task 163's kin defect arriving through a new
+// door. `lays` is the page's own staged list, passed in rather than read off
+// the window, so what is expected can never drift from what is staged.
+window.__layoutStars = (lays) => {
+  const bad = [];
+  const rows = [...document.querySelectorAll('#layout-panel .lay-item')];
+  if (rows.length !== lays.length + 1) {
+    bad.push('the list is not Desktop + every layout');
+    return bad;
+  }
+  if (rows[0].querySelector('.lay-star')) {
+    bad.push('the Desktop row is starred — it is no layout');
+  }
+  let seen = 0;
+  lays.forEach((lay, i) => {
+    const star = rows[i + 1].querySelector('.lay-star');
+    if (!!star !== !!lay.parent) {
+      bad.push('"' + lay.name.slice(0, 16) + '" ' + (lay.parent
+        ? 'is a parent and carries no star'
+        : 'is starred and is not a parent'));
+      return;
+    }
+    if (!star) return;
+    seen++;
+    const sr = star.getBoundingClientRect();
+    const nm = rows[i + 1].querySelector('.lay-item-main span');
+    const nr = nm.getBoundingClientRect();
+    if (sr.width < 8 || sr.height < 8) {
+      bad.push('the star did not render (' + Math.round(sr.width) + 'x' +
+               Math.round(sr.height) + ')');
+    }
+    // Before the first letter of the name, on the name's own line.
+    if (sr.right > nr.left + 1) bad.push('the star overlaps the name');
+    if (Math.abs((sr.top + sr.bottom) / 2 - (nr.top + nr.bottom) / 2) > 4) {
+      bad.push("the star does not sit on the name line");
+    }
+    // …and it is not part of the text, so the long name still elides.
+    if (nm.scrollWidth <= nm.clientWidth + 1 && nm.textContent.length > 40) {
+      bad.push('the starred row stopped eliding its long name');
+    }
+  });
+  if (!seen) bad.push('no parent staged — the star is untested');
+  return bad;
+};
+
+// HE PICKS THE WINDOW BY ITS POSITION (owner request 2026-08-09, task 165).
+// The member chooser's whole premise is that every row draws the layout's grid
+// with ITS OWN cell lit — a grid of four VS Code windows has four nearly
+// identical titles, and only one of them is the top-left square. The lit cell
+// is the LAST path of the drawing (the faint rest is drawn first), so two rows
+// lighting the same square is a defect only the live page can report.
+// Run beside `__kinRows`, which governs the same rows as rows.
+window.__memberCells = (card) => {
+  const bad = [];
+  const lit = [...card.querySelectorAll('.lay-item')].map((r) => {
+    const p = [...r.querySelectorAll('.lay-cell-ico path')];
+    return p.length ? p[p.length - 1].getAttribute('d') : null;
+  });
+  if (!lit.length || lit.some((d) => !d)) {
+    bad.push('a member row carries no cell drawing');
+  } else if (new Set(lit).size !== lit.length) {
+    bad.push('two member rows light the SAME cell — nothing on screen tells ' +
+             'them apart');
+  }
+  return bad;
+};
+
 // EVERY COLOUR IN THE TABLE, not merely the three the fixture happens to show
 // (independent grader, 2026-08-07: "that tooth is the only safety net for
 // `colored` when the owner retunes his palette"). tests/fixtures/actions.json

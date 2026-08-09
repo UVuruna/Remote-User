@@ -34,7 +34,11 @@ from _audit_js import CONTRAST_JS  # noqa: E402
 # The panel CATALOGUE — WHICH overlay is opened and in WHAT state. Split out on
 # 2026-08-09 (THE STRUCTURE LAW), when the dictation card's listen control
 # pushed this file past 1,000 lines. See tests/_audit_panels.py.
-from _audit_panels import DICT_STAGE_JS, PANELS, UA_MODEL  # noqa: E402
+from _audit_panels import (  # noqa: E402
+    COLOUR_SHOTS, CREATION_CLOSE_JS, CREATION_LIST_STAGE_JS, DICT_STAGE_JS,
+    LANDSCAPE_SHOTS, LAYOUT_LIST_CLOSE_JS, LAYOUT_LIST_STAGE_JS, PANELS,
+    SHOT_SUBJECTS, UA_MODEL,
+)
 
 # THE TABLET WAS NEVER MEASURED (owner report 2026-08-08: "do sad nikad nisam
 # probao preko tableta, sad sam probao … naišao sam na taj bag da Touch ne radi
@@ -78,31 +82,6 @@ DEFAULT_LOOK = LOOKS[0]
 
 def _look_word(colored: bool) -> str:
     return "colored" if colored else "plain"
-
-# The panels SHOT in a non-default look. Shooting all eleven in all eight
-# would be eighty-eight pictures nobody will open, and a picture nobody opened is not
-# proof (rules/GUI.md). These three are the ones that carry colour: the sets
-# list with its live badge, the quality panel's segmented rows, and the
-# dictation card's status column.
-COLOUR_SHOTS = {"Sets picker", "Quality panel", "Dictation card"}
-
-# The panels SHOT IN LANDSCAPE (2026-08-07). Every phone panel is MEASURED in
-# both orientations and always was; these two are also photographed there,
-# because they are the ones whose content is orientation-dependent: the
-# creation panel draws the grid catalogue on a LANDSCAPE outer box, and the
-# arrangement row draws the four landscape three-window variants that no
-# picture had ever shown. The controls and the wheel are shot in landscape in
-# every look, separately, below.
-# The Region grab joined them on 2026-08-07: its bar is the panel whose
-# layout depends most on the width it is given, and landscape is where it
-# gets three times as much of it.
-# The ✕ chooser joined on 2026-08-08: it is two big side-by-side chips, which
-# is exactly the shape landscape squeezes — 46% of a wide card each, with a
-# consequence line that must still wrap rather than clip.
-LANDSCAPE_SHOTS = {"Creation panel + Name field", "Grid arrangement choice",
-                   "Sets picker", "Quality panel", "Dictation card",
-                   "Layout list with rename", "Region grab",
-                   "Layout close chooser"}
 
 
 def _grid_audit() -> bool:
@@ -159,37 +138,6 @@ def _fit_rect_audit() -> bool:
 # offered for a decision are not candidate designs of ours to pass or fail).
 SHOT_TOPIC = os.environ.get("RU_SHOT_TOPIC", "round17-caret-claude-set-colours")
 SHOT_DIR = PROJECT / ".claude" / "shots" / SHOT_TOPIC
-
-# ONE FOLDER, ONE SUBJECT (owner 2026-08-08, his second word on this): a topic
-# folder per ROUND was still a dump — "necu da folderi budu ovako siroki, da
-# otvorim folder koji ima 161 sliku; hocu da ih grupises u sub-foldere". So the
-# round's folder now holds SUBJECT folders, and a subject is what the picture
-# is OF, read from its own name. Anything unrecognised lands in `other`, which
-# is a signal rather than a hiding place: an `other` that grows means a new
-# screen exists and nobody named it.
-SHOT_SUBJECTS = (
-    ("Controls_and_wheel", "controls-and-wheel"),
-    ("Controls", "controls"),
-    ("ControlsEditor", "desktop-controls-editor"),
-    ("Sets_picker", "sets-picker"),
-    ("Quality_panel", "quality-panel"),
-    ("Dictation_card", "dictation-card"),
-    ("Region_grab", "region-grab"),
-    ("Command_chooser", "command-chooser"),
-    ("Notices_card", "notices-card"),
-    ("Pad_cross_upright", "controls"),
-    ("Layout_close_chooser", "layouts"),
-    ("Layout_list", "layouts"),
-    ("Rename_card", "layouts"),
-    ("Aspect_panel", "layouts"),
-    ("Creation_panel", "layouts"),
-    ("Grid_arrangement", "layouts"),
-    ("MainWindow", "desktop-windows"),
-    ("SettingsWindow", "desktop-windows"),
-    ("TrafficWindow", "desktop-traffic"),
-    ("WheelOrderDialog", "desktop-windows"),
-)
-
 
 def shot_path(name: str):
     """`<round topic>/<subject>/<name>.png`, with the subject folder made on
@@ -758,6 +706,95 @@ def main() -> int:
             if dictation:
                 print(f"  DETAIL dictation card @ {label}: {dictation}")
             page.evaluate("closeDictationPanel()")
+
+            # KIN ROWS ARE THE SAME SIZE — A ROW IS ONE LINE, LIKE A BUTTON
+            # (owner 2026-08-09, task 163, with his screenshot: one layout row
+            # wrapped to FOUR lines beside a two-line sibling). The panel sweep
+            # above cannot see this: every measurement up there judges a SINGLE
+            # element, and four wrapped lines are legible, unclipped and inside
+            # the card — the defect is a RELATION between siblings, which needs
+            # siblings, and this panel was staged with ONE layout until today.
+            # The measuring itself is `__kinRows` in tests/_audit_js.py.
+            page.evaluate(LAYOUT_LIST_STAGE_JS)
+            page.wait_for_selector("#layout-panel .lay-card", state="visible",
+                                   timeout=4000)
+            kin = page.evaluate(
+                "() => __kinRows(document.querySelector('#layout-panel .lay-card'))")
+            results[f"the layout list's rows are one line, all the same "
+                    f"height @ {label}"] = not kin
+            if kin:
+                print(f"  DETAIL layout list kin rows @ {label}: {kin}")
+
+            # …AND THE NAME IS NOT THE LAST IN LINE FOR THE ROW'S WIDTH
+            # (independent grader, 2026-08-09, task 172). The kin check above
+            # is about the row as GEOMETRY and the shipped row passed it while
+            # showing "Claude Cod…" — every sibling the same height, nothing
+            # wrapped, nothing off the card, and a name too short to tell two
+            # Claude layouts apart. `__nameRoom` in tests/_audit_js.py measures
+            # the thing that check cannot see: what the row spends its width
+            # ON. Same staging, same four viewports — the defect was present at
+            # all of them.
+            room = page.evaluate(
+                "() => __nameRoom(document.querySelector('#layout-panel"
+                " .lay-card'))")
+            results[f"a layout row spends more width on its NAME than on any "
+                    f"one button @ {label}"] = not room
+            if room:
+                print(f"  DETAIL layout name room @ {label}: {room}")
+
+            # ⭐ ON THE TRUNK AND ON NOTHING ELSE (owner decision 2026-08-09,
+            # task 169). A star that appears on the wrong row is worse than no
+            # star, and the two things that could go wrong here are invisible
+            # to every other instrument: it lands on the wrong row (a fact
+            # about which layout, not about pixels), or a colour emoji's own
+            # metrics lift the row it sits in above its siblings — which is
+            # task 163's defect arriving through a new door, so the kin
+            # measurement above runs on the SAME staging, with the star on it.
+            # Expected from the staged `layouts` themselves, never from a row
+            # number, so this can never drift from what is staged.
+            star = page.evaluate("(lays) => __layoutStars(lays)",
+                                 page.evaluate("() => layouts"))
+            results[f"the ⭐ marks the trunk row and nothing else "
+                    f"@ {label}"] = not star
+            if star:
+                print(f"  DETAIL layout list star @ {label}: {star}")
+            page.evaluate(LAYOUT_LIST_CLOSE_JS)
+
+            # ONE WINDOW OUT OF A GRID (owner request 2026-08-09, task 165).
+            # Its rows are kin too — same card, same primitives, so the same
+            # law — and the one claim only the live page can settle is that
+            # every row really lights a DIFFERENT cell: the whole panel rests
+            # on "he picks the window by its position", and four VS Code
+            # windows have four nearly identical titles.
+            page.evaluate(LAYOUT_LIST_STAGE_JS + "; openMemberPanel(2)")
+            page.wait_for_selector("#layout-panel .lay-card", state="visible",
+                                   timeout=4000)
+            mem = page.evaluate(
+                "() => { const c = document.querySelector('#layout-panel"
+                " .lay-card'); return __kinRows(c).concat(__memberCells(c)); }")
+            results[f"the member chooser's rows are one line and each lights "
+                    f"its own cell @ {label}"] = not mem
+            if mem:
+                print(f"  DETAIL member chooser @ {label}: {mem}")
+            page.evaluate(LAYOUT_LIST_CLOSE_JS)
+
+            # THE CREATION LIST IS GOVERNED BY THE SAME LAW (owner 2026-08-09,
+            # tasks 163 + 168). Its rows became `.lay-item` rows this round, so
+            # they fall under the kin rule the moment they are measured — and
+            # they carry the one case no other panel has: an INDENTED child,
+            # which is deliberately NOT in its parent's group. `__kinRows`
+            # groups by indent for exactly that reason; without the grouping
+            # this staging would be either illegal or unmeasured.
+            page.evaluate(CREATION_LIST_STAGE_JS)
+            page.wait_for_selector("#layout-panel .lay-card", state="visible",
+                                   timeout=4000)
+            crea = page.evaluate(
+                "() => __kinRows(document.querySelector('#layout-panel .lay-card'))")
+            results[f"the creation list's rows are one line, equal within "
+                    f"their own indent @ {label}"] = not crea
+            if crea:
+                print(f"  DETAIL creation list kin rows @ {label}: {crea}")
+            page.evaluate(CREATION_CLOSE_JS)
 
             # D-pad labels: a set's POOL may hold reserve commands with longer
             # names than the shipped four ("Copy path", "Go to file"), and the

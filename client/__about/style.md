@@ -174,8 +174,68 @@ A grep for a hex literal or `rgb(` in this file now returns nothing. See
   drops to 64px there and `.lay-list` gives up its own `max-height`, which
   inside a column only re-introduces a scrollbar. Measured after: the tallest
   card falls from 633px of content to 355px in a 379px box and nothing
-  scrolls in either orientation; portrait is untouched, and the query needs
-  BOTH landscape and a short screen so an upright tablet never sees it.
+  scrolls in either orientation; portrait is untouched.
   The rule names `.lay-card` too, although that class is declared in
   layouts.css — one rule about one thing, and `body` prefixes the selector
   because layouts.css loads later and would otherwise win the width.
+- **…and the question it asked was the screen's HEIGHT, which was wrong**
+  (2026-08-09). `and (max-height: 560px)` describes a PHONE turned sideways, so
+  a TABLET in landscape (1280x800, where `92vh` is a comfortable 734px) kept
+  the 420px portrait column and got no reflow at all. The creation panel with a
+  real window list needs 788px of content in that column: it scrolled by 54px
+  with 860px of width standing idle beside it — the same BUG A, in the one size
+  nobody had ever staged that panel at, found the day its list was first
+  photographed (`tests/_audit_panels.py` → `CREATION_LIST_STAGE_JS`). The
+  card's own reason was never the screen's height; it is that a 420px column in
+  a landscape screen leaves most of the width unspent. So the card rules now
+  ask exactly that — plain `@media (orientation: landscape)` — and only the
+  status pill, whose reason really IS the short screen's crowded top edge (the
+  wheel's 12-o'clock item sits where the pill is centred), keeps the height
+  test in a block of its own. Measured after: the same panel is 477px of
+  content in a 734px box at 1280x800, nothing scrolls, and every panel at that
+  size stopped being a narrow column floating in a wide screen.
+- **…and giving it to EVERY card cost the layout list its names the same day**
+  (owner width question 2026-08-09, task 172). Two columns are a HEIGHT remedy
+  paid for in ROW WIDTH, and the two panel kinds pay differently. A card of
+  many SHORT items (Sets picker, Quality panel, a grid of chips) halves its
+  height for nothing. A card whose rows carry NAMES loses the only dimension
+  those rows have: the layout list's landscape row came out 347px — narrower
+  than the same tablet's PORTRAIT row at 378px — leaving the name 87px beside
+  260px of trailing buttons, so one device read 16 characters of a title
+  upright and 12 sideways and turning the phone toward its wide edge made the
+  names shorter.
+  So the reflow is now DECLARED, not inherited: `column-count` moved off
+  `.sets-card` / `.lay-card` and onto **`.card-columns`**, which a card puts on
+  itself where it is built. The width (`min(760px, 100%)`) still reaches every
+  card — free width is never worse. The direction is the deliberate part: a
+  name-bearing card that forgot to opt OUT would truncate names, which only a
+  human eye caught; a short-item card that forgets to opt IN merely grows
+  taller, which `tests/test_layout_audit.py` already measures at four
+  viewports. We default to the failure the machine can see.
+  WHICH cards ask is then measured, not categorised. The layout list goes
+  without: its rows carry four trailing controls, and off the reflow it is a
+  718px row with a 458px name — the whole 62-character title — while still
+  fitting (363px of content in the 377px card a 915x412 phone allows). The
+  creation list and the member chooser KEEP the columns: they carry no
+  trailing controls, so two columns still leave the name 92% / 81% of the row
+  (48 and 42 of 62 characters), and one column does not fit either of them
+  sideways (630px and 470px of content in 377px) — that would be BUG A again,
+  with 155px of width idle beside the scrollbar. The honest price of the
+  one-column side is counted, not estimated: the layout list scrolls from the
+  FOURTH layout at 915x412 (415px of content in 377) and from the TENTH at
+  1280x800. Rung 4, taken knowingly — a list that scrolls is legible, a name
+  cut to "Claude Cod…" is not; two columns would fit nine on the phone at 12
+  characters of name, and at nine they CLIP horizontally, which is the rung
+  the law refuses outright. From four layouts sideways this card is therefore
+  a **deliberate, stated exception to BUG A** — the only one — and
+  `noScrollWithSlack` would flag it if the audit ever staged four. The rule is
+  right in general and wrong for this card: the height those columns buy is
+  paid out of the one thing the row exists to show.
+- **Known, NOT introduced by task 172 and not yet fixed**: at 915x412 the
+  two-column creation list overflows its own second column — rows 4-6 of a
+  six-window list are painted under the "Shape:" block and cannot be tapped.
+  Proven pre-existing by rendering the panel under the pre-task-172 rule
+  reconstructed verbatim: identical geometry, row for row (all six rows at the
+  same offsets, none reported outside the card). It is invisible to the audit
+  because every row IS inside the card's box and the card does not scroll.
+  1280x800 is unaffected. It needs its own round.

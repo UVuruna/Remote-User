@@ -11,11 +11,19 @@ full-screen card overlays those actions open. Loads right after `controls.js`
 1,000 lines. It holds every overlay card's shape and the `.sets-card` /
 `.sets-row` / `.sets-list` / `.sets-done` vocabulary the Quality panel
 (`quality.js`), the notices card (`notify.js`) and the command chooser share,
-plus the landscape reflow that names `.lay-card` too — one rule about what a
-panel card does on a short screen, written once. It loads after `style.css`
-and before `layouts.css`; the `body` prefix on that reflow is what keeps it
-winning over `layouts.css`'s own `.lay-card` width, by specificity rather than
-by load order.
+plus the landscape rules that name `.lay-card` too — one rule about what a
+panel card does with a landscape screen's spare width, written once. It loads
+after `style.css` and before `layouts.css`; the `body` prefix on those rules is
+what keeps them winning over `layouts.css`'s own `.lay-card` width, by
+specificity rather than by load order.
+
+The landscape WIDTH (`min(760px, 100%)`) reaches every card. The two-column
+REFLOW is opt-in, on **`.card-columns`** (owner width question 2026-08-09,
+task 172): columns are a height remedy paid for in row width, which is free
+for a card of short items and ruinous for one whose rows carry names — see
+`style.md` for the measurements and for which cards ask. A card that declares
+nothing keeps the whole width in one column, because that is the failure mode
+the audit can already see.
 
 ## Sets picker (`openSetsPanel`)
 

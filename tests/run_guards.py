@@ -79,6 +79,27 @@ def _voice_dedup() -> None:
         check()
 
 
+def _hold_gesture() -> None:
+    """A HOLD IS A CONTACT THAT STAYED PUT (owner report 2026-08-09, task 162 —
+    he held a layout row and the layout opened). The row used to drop its hold
+    timer on ANY movement, and a finger resting on a capacitive digitizer never
+    stands still. Runs the real page rule in node against a realistic jitter
+    sequence — skipped when node is absent, like the guards above."""
+    import test_hold_gesture
+    if not test_hold_gesture.shutil.which("node"):
+        return
+    for _, check in test_hold_gesture.CHECKS:
+        check()
+
+
+def _layout_drag() -> None:
+    """The list's own two gestures, which had no gate at all until the same
+    report: a row dropped ON another makes a grid, a row dropped in a GAP only
+    moves. Imported lazily — it pulls in the real web layer."""
+    import test_layout_drag
+    assert test_layout_drag.main() == 0, "the layout drag gate failed (see output)"
+
+
 def _user_settings() -> None:
     """A setting WE retired leaves his file quietly; a setting HE mistyped is
     still reported (owner evidence 2026-08-08 — `hand` warned on every start,
@@ -156,6 +177,8 @@ FULL_ONLY_CHECKS = [
     ("actions migration (a new version's fields reach HIS file)", _actions_migration),
     ("app sets (right window, and they pay for their seat)", _app_set_wheel),
     ("voice dedup (dictation never retypes across a round boundary)", _voice_dedup),
+    ("hold gesture (a resting finger picks a layout row up)", _hold_gesture),
+    ("layout drag (a row dropped on another makes a grid)", _layout_drag),
     ("user settings (a key we retired leaves his file quietly)", _user_settings),
     ("caret lift (only if needed, only by the shortfall)", _caret_lift),
     ("caret (the PC says where the typing lands)", _caret_server),

@@ -240,13 +240,26 @@
 
    Measured after, at 915x412: the tallest card falls from 633 px of content
    to 355 px inside a 379 px box, and not one of the ten panels scrolls in
-   either orientation. Portrait is untouched (the query needs BOTH a landscape
-   orientation and a short screen, so a tablet held upright never sees it).
+   either orientation. Portrait is untouched (the query needs a landscape
+   orientation, so a tablet held upright never sees it).
+
+   THE CONDITION WAS THE SCREEN'S HEIGHT UNTIL 2026-08-09, AND THAT WAS THE
+   WRONG QUESTION. It read `and (max-height: 560px)`, which is a phone turned
+   sideways — so a TABLET in landscape (1280x800: `92vh` = 734 px, plenty of
+   height) kept the portrait card and got no reflow at all. The creation panel
+   with a real window list needs 788 px of content in that 420 px column, so
+   it scrolled by 54 px with 860 px of width standing idle beside it: BUG A
+   again, in the one size nobody had ever staged this panel at (found the day
+   the list was first photographed). The card's own reason has nothing to do
+   with how SHORT the screen is — it is that a 420 px column in a landscape
+   screen leaves most of the width unspent — so the card rules ask exactly
+   that, and only the status pill, whose reason really is the short screen's
+   crowded top edge, keeps the height test.
 
    It names BOTH card classes although `.lay-card` is declared in
-   layouts.css: this is one rule about one thing — what a panel card does when
-   the screen is short — and two copies of it in two files is how the two
-   would come to disagree.
+   layouts.css: this is one rule about one thing — what a panel card does with
+   a landscape screen's spare width — and two copies of it in two files is how
+   the two would come to disagree.
 
    (`body` prefixes the selector on purpose: `.lay-card` declares its own
    `width` in layouts.css, which loads after this file, so an equal-weight
@@ -261,17 +274,107 @@
      The pill can — ~300 CSS px stand empty either side of the ring, so while
      the wheel is open it moves into the left one. This is EVERY toast, not
      just the connect message: `toast {text}` uses the same pill. Portrait is
-     untouched, and the pill returns to centre the moment the wheel closes. */
+     untouched, and the pill returns to centre the moment the wheel closes.
+     THIS one keeps the height test: a tall landscape screen has room above
+     the wheel and moving the pill off centre there would be a change with no
+     reason behind it. */
   body.wheel-open #status {
     left: var(--space-m);
     transform: none;
     max-width: calc(50% - 185px);
     overflow-wrap: anywhere;
   }
+}
 
+@media (orientation: landscape) {
   body .sets-card,
   body .lay-card {
     width: min(760px, 100%);
+  }
+  /* TWO COLUMNS ARE A PROPERTY OF THE ROWS, NOT OF THE SCREEN (owner width
+     question 2026-08-09, task 172).
+
+     The width above is right for every card — free width is never worse. What
+     each card then DOES with it depends on what its rows are made of, and the
+     two answers are opposites:
+
+       A panel of many SHORT items (the Sets picker's checkboxes, the Quality
+       panel's segments, a grid of chips) is TALL and its rows are narrow by
+       nature. Two columns halve its height and cost it nothing: that is the
+       reflow this rule was cut for, and it is what stopped seven of the ten
+       panels scrolling on a phone held sideways.
+
+       A panel whose rows carry NAMES is the exact opposite. Its rows are ONE
+       LINE and they are as informative as they are WIDE — a window title is
+       62 characters and the phone shows whatever fits. Splitting such a card
+       in two halves the only dimension that carries meaning.
+
+     Applying the reflow to both is what shipped between the morning and the
+     evening of 2026-08-09, and it inverted the phone: the LAYOUT LIST's
+     landscape row came out 347 px — NARROWER than the same tablet's portrait
+     row at 378 px — leaving the name 87 px beside 260 px of trailing buttons,
+     so the same panel read 16 characters of a name upright and 12 sideways on
+     one device, and turning the phone toward its wide edge made the names
+     shorter. Measured, on the shipped build. Off the reflow it is a 718 px row
+     with a 458 px name: the whole 62-character title, at every audited size.
+
+     So the reflow is DECLARED, never inherited: a card asks for columns with
+     `.card-columns`, and a card that says nothing keeps the whole width in
+     one column. That DIRECTION is the deliberate part. Both mistakes are
+     possible and they are not equal — a name-bearing card that forgot to opt
+     OUT would truncate names, which nothing but a human eye caught for a day,
+     while a short-item card that forgets to opt IN merely grows taller, which
+     the phone audit already measures at four viewports on every run (nothing
+     clipped, nothing scrolling while width stands idle beside it). The
+     failure the machine can already see is the one we default to.
+
+     WHICH CARDS ASK IS THEN A MEASURED QUESTION, NOT A CATEGORY. Two columns
+     are a HEIGHT remedy paid for in NAME WIDTH, so a card takes them when it
+     needs the height and can afford the width — and both halves were measured
+     at all four audited viewports rather than reasoned about:
+
+       the layout list        one column. Its rows carry four trailing
+                              controls, so two columns leave the name 25% of
+                              the row (12 of 62 characters), and it does not
+                              need the height: 363 px of content in the 377 px
+                              card a 915x412 phone allows.
+       the creation list      columns. No trailing controls, so two columns
+       the member chooser     still give the name 92% / 81% of the row (48 and
+                              42 of 62 characters) — and ONE column does not
+                              fit either of them on a phone held sideways
+                              (630 px and 470 px of content in 377 px), which
+                              would be BUG A with 155 px of width idle beside
+                              the scrollbar. Reflow is rung 2 of the fix
+                              ladder and scroll is rung 4; taking the reflow
+                              away there would move DOWN it.
+
+     THE COST OF THE ONE-COLUMN SIDE IS REAL AND IT IS PAID, NOT HIDDEN, AND
+     THE NUMBER IS COUNTED RATHER THAN GUESSED: the layout list reaches the
+     bottom of its card sooner and scrolls from the FOURTH layout on a phone
+     held sideways (915x412 — 415 px of content in 377) and from the TENTH on
+     a 1280x800 tablet. That is rung 4 of the ladder, taken knowingly: a list
+     that scrolls is legible, a name cut to "Claude Cod…" is not, and THE
+     SPACE & LEGIBILITY LAW forbids the second, not the first. Two columns
+     would fit nine on the phone — at 12 characters of name, and at nine the
+     two-column card does not survive either: it CLIPS horizontally, which is
+     the one rung the law refuses outright.
+
+     SO THIS CARD IS A DELIBERATE, STATED EXCEPTION TO BUG A, and it is the
+     only one. `noScrollWithSlack` in tests/test_layout_audit.py reads a
+     scrollbar beside idle width as a defect, and from four layouts sideways
+     that is exactly what this list is. The rule is right in general — width
+     really can be spent as height, by these very columns — and wrong for THIS
+     card, because the height it would buy is paid for out of the one thing
+     the row exists to show. The audit stages three layouts and stays green;
+     anyone who stages four will meet this paragraph, and the answer is that
+     the trade was made on purpose, not that the list should go back to two
+     columns.
+
+     Do not "simplify" this back into one selector. The two policies are both
+     right, for different rows, and which one a card takes is written where
+     the card is built. */
+  body .sets-card.card-columns,
+  body .lay-card.card-columns {
     column-count: 2;
     column-gap: 24px;
   }
