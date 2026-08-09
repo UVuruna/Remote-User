@@ -22,32 +22,37 @@
 
 ## Where a window's FULL title is readable
 
-Three places show one, and each one shows it WHOLE — no character caps, no
-ellipsis. A title is the only thing that tells two windows of one app apart.
+A title is the only thing that tells two windows of one app apart, so it is
+never shortened in JS — but since task 163 (2026-08-09) a ROW is one line and
+the cut is made by CSS. The full title therefore lives ONE TAP AWAY, in a
+field that wraps, and every row that elides one has such a field behind it.
 
 ```
-creation panel                     layout list                  layout bar
-┌───────────────────────────────┐  ┌───────────────────────┐   ┌──────────┐
-│ Chosen (1/1) — tap to remove: │  │ 🗔 Claude Code -      │   │ 🗔 Claude│
-│ ╭───────────────────────────╮ │  │    Remote User -      │   │ Code -   │
-│ │ Claude Code - Remote User │ │  │    Visual Studio Code │   │ Remote…  │
-│ │ - Visual Studio Code      │ │  │    [Administrator]    │   └──────────┘
-│ │   [Administrator]         │ │  └───────────────────────┘   2 rows, then
-│ ╰───────────────────────────╯ │  .lay-item-main span         clamped — the
-│ Name:  ┌────────────────────┐ │  wraps, row grows            list is one
-│        │ my own name here   │ │                              tap away
-│        └────────────────────┘ │
-└───────────────────────────────┘
-  ▲ the chip is the DURABLE copy: the Name field may be retyped to
-    anything, the chip above it still carries the window's own title
-    (owner 2026-08-06 — "a pun naziv se na tom ekranu ne vidi nigde
-    kada polje Name već prepišeš")
+creation panel                        layout list                 layout bar
+┌──────────────────────────────────┐  ┌──────────────────────┐   ┌──────────┐
+│ Chosen (1/2) — tap to remove:    │  │ 🗔 Claude Code - R…  │   │ 🗔 Claude│
+│ ┌──────────────────────────────┐ │  │ 🗔 Downloads         │   │ Code -   │
+│ │ 🗔 Claude Code - Remote Us…  │ │  │ 🗔 Reading           │   │ Remote…  │
+│ └──────────────────────────────┘ │  └──────────────────────┘   └──────────┘
+│ Name:  ┌───────────────────────┐ │  one line each, cut by      2 rows, then
+│        │ Claude Code - Remote  │ │  CSS — the pencil opens     clamped — the
+│        │ User - Visual Studio  │ │  the rename card, whose     list is one
+│        │ Code [Administrator]  │ │  field wraps the whole      tap away
+│        └───────────────────────┘ │  name
+└──────────────────────────────────┘
+  ▲ the WRAPPING field is the durable copy, prefilled with the window's
+    own title (owner 2026-08-06 — the full name must be readable
+    somewhere on that screen). The rows above it are kin: same height,
+    one line, and a tab is INDENTED under its window rather than made
+    a member of its group (owner 2026-08-09, task 168)
 ```
 
-The chip and the list rows share ONE treatment (`.lay-title` /
-`.lay-item-main span`: take the free width, then wrap). The top bar is the
-single exemption in the project, written into `layouts.css` beside the rule:
-it owns one row of the phone screen, and one tap opens the list.
+Every row on both lists shares ONE treatment — `.lay-item-main span`: take the
+free width, then elide. (The wrapping title pill that predated it, `titleChip`
+/ `.lay-chip.lay-title`, was deleted on 2026-08-09 when its last caller became
+rows.) The top bar is the single exemption in the project, written into
+`layouts.css` beside the rule: it owns one row of the phone screen, and one
+tap opens the list.
 
 ## Algorithm — how long the loading animation lasts
 

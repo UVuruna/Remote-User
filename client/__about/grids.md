@@ -11,17 +11,30 @@ Split out of [Layouts](layouts.md) on 2026-08-07 (THE STRUCTURE LAW) when the
 owner's grid sheet pushed that file past 1,000 lines. Loaded BEFORE layouts.js:
 `GRID_CELLS` is a const the list and the creation panel read at runtime.
 
+> **The drawings moved out on 2026-08-09** (owner request, task 164 — the
+> layout LIST now draws each row's shape too). The partitions, the outer box
+> and `GRID_THREE` live in [Grid Icons](grid-icons.md), a PURE module whose
+> gate runs it whole and compares every partition to `server/grids.py` number
+> for number; the three functions below are one-line delegations now. This
+> file keeps what it always was about — which shapes exist, and the panels
+> that OFFER them. The move happened because the partitions were about to have
+> a third copy, and this page's own warning ("if one changes, the other must")
+> had never been checked by anything.
+
 ## What it holds
 - `GRID_CELLS` / `GRID_THREE` / `GRID_LEGACY` / `gridOf(g)` — the catalogue and
-  the mapping for layouts made before 2026-08-07.
-- `orientBox(orient)` — the 2x2-unit outer box every sketch is drawn on: wide
-  (`30x20`) for landscape, tall (`20x30`) for portrait (round 3, 2026-08-07,
+  the mapping for layouts made before 2026-08-07. `GRID_CELLS` maps a shape to
+  a COUNT (how many windows fit — the wheel-cap's question); `GRID_THREE` is
+  [Grid Icons](grid-icons.md)' own list, held once because "only a three has an
+  arrangement" is a rule and a re-derived rule is one a panel can get wrong.
+- `orientBox(orient)` — the 2x2-unit outer box every sketch is drawn on:
+  `30x20` for landscape, `20x30` for portrait (round 3, 2026-08-07,
   re-reading his own sheet: the landscape column draws EVERY shape — 2, 3, AND
-  4 — in a wide box, the portrait column in a tall one; the cell partition
-  inside a three or a four is the SAME shape, only the box changes). Shared by
-  `gridSketch` and `soloSketch` so the two stay visually consistent.
-- `gridSketch(grid, orient)` — the shape as a small inline SVG of real
-  rectangles, laid out on `orientBox(orient)`. **A grid choice is a picture,
+  4 — in a landscape-leaning box, the portrait column in a tall one; the cell
+  partition inside a three or a four is the SAME shape, only the box changes).
+  Now `gridIconBox`.
+- `gridSketch(grid, orient)` — the shape as a small inline SVG, laid out on
+  `orientBox(orient)`; now `gridIconSvg`. **A grid choice is a picture,
   not a word** (owner 2026-08-07 — he sent a sheet of drawings, not a list of
   names), and it is drawn rather than written for the same reason every icon
   in this project is: a font glyph came out a blunt cross on his device once
@@ -37,7 +50,8 @@ owner's grid sheet pushed that file past 1,000 lines. Loaded BEFORE layouts.js:
 - `soloSketch(orient)` — the "only one window" picture: a single rectangle
   filling `orientBox(orient)` — a solo window has no cells to split, so the
   box shape is the only picture its orientation has to show. This is the
-  function round 3 made the rest of the catalogue consistent with.
+  function round 3 made the rest of the catalogue consistent with; now
+  `gridIconSvg(1, null, orient)`.
 - `shapeChip(sketchHtml, caption, selected, onTap)` — a drawing with a small
   caption under it (a numeral for a count, "Portrait"/"Landscape" for an
   orientation). The drawing is still what is tapped and lit; the caption only

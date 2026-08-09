@@ -73,7 +73,7 @@
 }
 #lay-name {
   display: -webkit-box;
-  -webkit-line-clamp: 2;   /* layout-law: exempt - the top bar owns one row of the phone screen, and the FULL name is one tap away in the layout list, which no longer elides */
+  -webkit-line-clamp: 2;   /* layout-law: exempt - the top bar owns one row of the phone screen, and the FULL name is two taps away in the rename card, whose field wraps it (the layout list elides too since task 163, 2026-08-09 — kin rows are one line) */
   -webkit-box-orient: vertical;
   overflow: hidden;
   overflow-wrap: anywhere;
@@ -138,20 +138,13 @@
   color: var(--accent);
   box-shadow: 0 0 0 2px var(--accent-glow);
 }
-/* A chip carrying a WINDOW TITLE (the chosen slots and the creation list).
-   It used to be cut at 30 characters in JS — invisible to every DOM-side clip
-   test, because a string shortened before the DOM never overflows anything
-   (owner 2026-08-06, and the third independent grader who found the line).
-   The cut is gone, so the chip must be able to do what the layout list's rows
-   already do with the very same titles: take the free width, then wrap.
-   `max-width: 100%` is what keeps a 63-character title from widening the row
-   past the card instead of wrapping inside it. */
-.lay-chip.lay-title {
-  max-width: 100%;
-  white-space: normal;
-  overflow-wrap: anywhere;
-  text-align: left;
-}
+/* `.lay-chip.lay-title` stood here until 2026-08-09: the wrapping title pill
+   the creation panel's two lists were made of. Task 168 replaced both lists
+   with real `.lay-item` rows, whose title is cut by CSS on ONE line (the kin
+   rule of task 163) — the opposite treatment — so the rule had no element left
+   to reach and its own JS maker (`titleChip`) had no caller. Both are gone
+   together; the note about the 30-character JS cut it used to carry lives on
+   where the cut can still return, over `.lay-item-main span` below. */
 .lay-actions {
   display: flex;
   gap: 10px;
@@ -201,6 +194,19 @@
   align-items: stretch;
   gap: 8px;
   margin: 8px 0;
+  /* A ROW IS CARRIED, NEVER PANNED (owner 2026-08-09, task 162). The row is a
+     drag surface — hold it and it can be dropped on another row to make a
+     grid — and its parent `.lay-card` is a scroll container, so without this
+     the browser owns the vertical gesture: the moment the carried row
+     travelled, Chrome decided "scroll", took the touch and ended it with a
+     `pointercancel`. The page-level `touch-action: none` in style.css does
+     NOT reach past a scroll container, which is why the two neighbours below
+     (`.asp-prev`, `.asp-move`) each declare their own.
+     The price is real and it is PAID rather than ignored: a long list can no
+     longer be scrolled by dragging a row (the header, the gaps between rows
+     and the actions row still scroll it), so a drag in flight scrolls the
+     card by itself near its edges — `dragMoveTo` in layouts.js. */
+  touch-action: none;
 }
 .lay-item-main {
   flex: 1;
@@ -226,13 +232,27 @@
    which is the very thing THE SPACE & LEGIBILITY LAW is about. */
 .lay-item-main img,
 .lay-item-main svg { width: 20px; height: 20px; flex: none; }
-/* The list is where a layout's FULL name must be readable — the top-bar chip
-   may clamp its two rows precisely because one tap opens this list (SPACE &
-   LEGIBILITY LAW, owner 2026-08-05). A long window title wraps here; the row
-   grows, and the card scrolls only when the phone screen is genuinely full. */
+/* KIN ROWS ARE THE SAME SIZE — A ROW IS ONE LINE, LIKE A BUTTON (owner
+   2026-08-09, task 163, with his screenshot: one row wrapped to FOUR lines
+   beside a two-line sibling, because a VS Code window title is 63 characters
+   long). His rule, in translation: elements of one kin group are always the
+   same size; a long name is CUT — "the first two words, as many as fit, it
+   doesn't even matter — and three dots" — never wrapped.
+   This reverses the note that stood here since 2026-08-05 ("a long window
+   title wraps here; the row grows"), and it does so with the ladder's own
+   answer to the question it raises: the FULL name is one tap further on, in
+   the rename card, whose field is a WRAPPING textarea for exactly this reason.
+   The cut is CSS, never JS — a string shortened before it reaches the DOM is
+   invisible to every clip test in the audit, which is the 2026-08-07 finding
+   that cost three green rounds (see the `__truncated` note in
+   tests/_audit_js.py). `min-width: 0` is what lets a flex child shrink below
+   its own text at all. */
 .lay-item-main span {
-  white-space: normal;
-  overflow-wrap: anywhere;
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis; /* layout-law: exempt - owner 2026-08-09 (task 163): kin rows must be one line and the same height; the full name is one tap away in the rename card, which wraps it */
 }
 .lay-item-main.sel { border-color: var(--accent); color: var(--accent); }
 .lay-ratio {
@@ -246,9 +266,72 @@
   background: var(--chip-2);
   color: var(--text-secondary);
   font: 600 12px system-ui, sans-serif;
+  /* The same kin rule as the row itself (owner 2026-08-09, task 163): these
+     trailing buttons stretch to the row's height, so a label that wrapped
+     ("Screen" on a narrow phone) would make ONE row taller than its siblings
+     — the very defect he photographed, arriving through the other half of the
+     row. They are short by construction and never need to. */
+  white-space: nowrap;
 }
 .lay-ratio svg { width: 20px; height: 20px; }
 .lay-rename { padding: 0 10px; } /* icon only — the pencil needs no label */
+/* The row's SHAPE (owner request 2026-08-09, task 164) — the layout's own
+   grid, drawn. Its own kin group: a fixed picture in a fixed box, so every
+   row's shape button is the same width whatever the layout holds, and it is
+   deliberately OUT of the 96 px floor below (that floor exists to make two
+   different LABELS agree; a drawing has no label to disagree about, and
+   three chips at 96 px would leave a phone-width row nothing for the name).
+   Scoped to `.lay-ratio.lay-shape` on purpose: `.lay-shape` is also the
+   creation panel's captioned chip (`.lay-chip.lay-shape` further down), and a
+   bare `.lay-shape` rule here would silently restyle that one too. */
+.lay-ratio.lay-shape { padding: 0 10px; }
+.lay-ratio.lay-shape .lay-grid-ico { width: 22px; height: 22px; }
+/* The member chooser's badge (owner request 2026-08-09, task 165): the same
+   drawing with ONE CELL LIT, inside the row's main button. Bigger than the
+   20 px app icon it replaces, because it is not a badge saying WHICH APP —
+   it is the answer to WHICH WINDOW, and its cells have to be told apart. */
+.lay-item-main .lay-cell-ico { width: 26px; height: 26px; }
+/* ⭐ THE TRUNK, NOT A BRANCH (owner decision 2026-08-09, task 169): one emoji
+   before the first letter of a layout whose window other layouts' tabs were
+   torn out of. An emoji although this project draws its icons (the ✥ that came
+   out a blunt cross on his phone, 2026-08-05) — his explicit choice, and a
+   colour emoji from Android's own emoji font is exactly what that dingbat was
+   not. `line-height` is pinned to the badge's own 20 px: a colour glyph
+   carries its own metrics, and a taller line box would make a starred row
+   taller than its siblings — the kin-row defect of task 163, arriving through
+   a new door. The negative margin only takes back the flex `gap`, so the star
+   hugs the name instead of floating midway to the icon. */
+.lay-star {
+  flex: none;
+  font-style: normal;
+  font-size: 14px;
+  line-height: 20px;
+  margin-right: -5px;
+}
+/* …and the aspect chips are one kin group too (owner 2026-08-09, task 163 —
+   found by OPENING the audit's own screenshot of the fixed rows). Their labels
+   are "Screen" on one row and "3:5" on the next, so a chip sized to its own
+   text made every sibling row a different shape: the main button beside a
+   narrow chip ran 32 px longer than its neighbour's. One floor, and the pair
+   is centred in it; a label wider than the floor still takes the room it
+   needs, so nothing is ever cut.
+
+   THE FLOOR IS DERIVED, NOT CHOSEN (independent grader, 2026-08-09, task 172).
+   It was 96 px, which was the natural width of `svg("aspect")` + "Screen" — a
+   glyph meaning "aspect ratio" in front of a word saying which aspect ratio.
+   The glyph is gone (client/layouts.js), so the widest label this chip can
+   ever hold is "Screen" itself: 36 px of text in 24 px of padding inside a
+   1 px border = 62 px, measured on the real page, plus the same ~4 px of
+   headroom the 96 px floor carried over its own 92 px of content — a device
+   whose system font runs a little wider must not split the kin group. That is
+   30 px handed back to the NAME on every row, which is where the row's one
+   irreplaceable fact lives; the tooth that keeps it there is `__nameRoom` in
+   tests/_audit_js.py. Re-measure this number if the label ever changes; do not
+   round it up "to be safe", because every pixel of it is taken from the name. */
+.lay-ratio:not(.lay-rename):not(.lay-shape) {
+  min-width: 66px;
+  justify-content: center;
+}
 
 /* The layout's own name (owner 2026-08-05): typed when it is created, and
    changeable later from the list. Full width — window titles are long. */

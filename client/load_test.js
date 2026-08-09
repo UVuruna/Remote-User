@@ -85,12 +85,29 @@ const FILES = [
   "sets.js",
   "voice.js",
   "controls.js",
+  // THE LIST HAD DRIFTED FROM index.html, and the drift hid exactly the files
+  // being worked on (found 2026-08-09, tasks 166–168): chrome.js, loading.js
+  // and layout-create.js are all loaded by the page and none of the three was
+  // listed here, so a load-time error in the creation wizard — the whole point
+  // of this test — would have passed green. This file's own header says the
+  // order must match index.html EXACTLY; it does again.
+  "chrome.js",
   "theme.js",
   "panels.js",
   "quality.js",
   "region.js",
   "notify.js",
+  "hold-gesture.js",
+  // grids.js reads grid-icons.js AT LOAD (`GRID_THREE`), so the order here is
+  // the order index.html loads them in — and both are listed, because a
+  // load-time reference is exactly what this test exists to catch.
+  "loading.js",
+  "grid-icons.js",
+  "grids.js",
   "layouts.js",
+  // The creation wizard, split off layouts.js on 2026-08-08. It reads that
+  // file's panel vocabulary at load, so it is listed straight after it.
+  "layout-create.js",
   "gamepad.js",
   "gestures.js",
   "connection.js",

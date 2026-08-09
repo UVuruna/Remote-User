@@ -21,6 +21,8 @@ everything here composes and frames WINDOWS on it.
 ### Uses
 - [State](state.md) — `send`, `layouts`, `layoutActive`, `layoutRegion`,
   `layoutArm`, `streamMode`, `baseBitmap`
+- [Grid Icons](grid-icons.md) — `gridIconSvg` for each row's shape and each
+  member row's lit cell, `gridIconChoices` for the one arrangement a 4→3 asks
 - [Render](render.md) — the `<video>` element / `baseBitmap` as the frame
   source the settle watcher samples
 - [Controls](controls.md) — `keepFocus`, `svg`, `showToast`, `IN_APP`
@@ -56,8 +58,92 @@ everything here composes and frames WINDOWS on it.
   (index −1 = full desktop), `applyOrientationLock` (drives the shell's
   `Android.lockOrientation`: layout focus = locked, desktop = free).
 - **Layout list** — `openLayoutPicker`, `layRow`, `ratioLabel`: every layout
-  at once (Desktop first), a row taps to focus, its trailing buttons open the
-  RENAME card (pencil) and the aspect panel.
+  at once (Desktop first), a row taps to focus, its trailing buttons are the
+  layout's own SHAPE (task 164, below), the RENAME card (pencil) and the
+  aspect panel. `layRow`'s badge argument takes three kinds now — an app-icon
+  URL, `{draw: markup}` for a drawing we made, or `null` for the Desktop row's
+  monitor — because the member chooser's badge is a third thing and a builder
+  that could only draw two of them would have been copied instead of reused.
+- **The row says what shape the layout is** (owner request 2026-08-09, task
+  164). A solo window, a two-split and a four-grid read identically while a
+  row carried only a name, so the only way to tell them apart was to OPEN one.
+  Each row now draws its real arrangement with
+  [Grid Icons](grid-icons.md)'s `gridIconSvg(lay.members, lay.grid,
+  lay.orient)` — three fields `layout_state` has carried since 2026-08-07, so
+  the wire did not change. The drawing sits in a `.lay-ratio.lay-shape`
+  button, which is also the DOOR to the member chooser; a SOLO layout renders
+  the same picture as a `<span>` instead, because it has nothing to throw out
+  and a button that does nothing is a promise the panel cannot keep. It is
+  deliberately outside the aspect chip's label floor (that floor makes two
+  different LABELS agree — a drawing has no label to disagree about, and three
+  floored chips would leave a phone-width row nothing for the name).
+- **The name outranks the buttons beside it** (independent grader, 2026-08-09,
+  task 172: *"the starred row spends its width on two leading badges plus three
+  trailing buttons and leaves the name 'Claude Cod…' — nine characters, one
+  word, which cannot tell two Claude layouts apart"*). The aspect chip carried
+  `svg("aspect")` in FRONT of a label already reading "3:5" or "Screen", and
+  that pair is what set the chip's 96 px floor — so on a 338 px row the widest
+  trailing control spent 26 px restating its own text while the name had 48.
+  The glyph is gone and the floor is re-derived from the widest label the chip
+  can hold ("Screen": 62 px of box plus the ~4 px of headroom the old floor
+  carried), which hands the name 30 px on every row: 5 characters to 9 at
+  412 px, 10 to 15 on the tablet. `aria-label` names the button, since the
+  remaining text names only the value. **The leading badge was NOT the thing to
+  cut** — it looked like a constant because the audit staged `icon: null` on
+  every row, and the server really sends a per-app icon per layout, which is
+  the fastest answer to "which app" on a row whose name is cut; the fixture was
+  fixed instead (`tests/_audit_panels.py`). The floor is now the row's own law
+  rather than a number: `__nameRoom` (tests/_audit_js.py) fails any row that
+  gives its name less width than the widest button standing beside it.
+- **Taking one window out of a grid** — `openMemberPanel(index)` (owner
+  request 2026-08-09, task 165): *"there must be a button by which I can throw
+  ONE member out of the grid — to enter the grid state and remove any member,
+  i.e. change it to a single or to a 2-grid."* Until this round a grid could
+  only be BUILT (drag one row onto another) or removed WHOLE, so losing one
+  window of four meant deleting the layout and building it again.
+  **He picks the window by its POSITION, not by its name:** every row's badge
+  is this layout's own drawing with THAT cell lit and the rest faint (`{cell:
+  k}` — cell *k* is member *k*, the order the server places into), because
+  four VS Code windows have four nearly identical titles and only one of them
+  is the top-left square. Titles come from `layout_state.member_titles` and
+  obey task 163's one-line rule; a server too old to send them still gives a
+  usable panel, since the CELL is the picture and the title only the word.
+  A 4→3 is the one size with a shape to choose, asked of the RESULT via
+  `gridIconChoices(members - 1, null)` — a three shrinking to a two has
+  nothing to decide, and the asymmetry stays in the pure module so no panel
+  can offer a choice that does not exist. Sends `layout_member_remove {index,
+  member, grid?}`; the survivors are re-placed, so the loading cube covers it.
+  **It is not a close** — the window leaves the layout, leaves the topmost band
+  and goes on standing where it stands.
+- **⭐ marks the trunk** (owner decision 2026-08-09, task 169): one emoji
+  before the first letter of a layout whose window another layout's content was
+  torn out of — closing it would take that other layout's tab with it. The
+  server answers it (`layout_state.parent`, read off `Layout.source`); nothing
+  here guesses from a title, and only the layout SELECTOR is marked (the
+  creation list shows parenthood by indentation instead — his task 168, not
+  this one). It is its own element, not part of the name: task 163's ellipsis
+  can then never eat it, and its `line-height` is pinned to the badge's 20 px
+  so a colour emoji's own metrics cannot make a starred row taller than its
+  siblings. **An emoji although this project draws its icons** — the ✥ move
+  handle came out a blunt cross on his phone in 2026-08-05 and everything has
+  been drawn geometry since — because he asked for this one by name, and a
+  colour emoji from Android's own emoji font is exactly what that dingbat was
+  not. Gated on both ends: `tests/test_layout_drag.py` proves the server marks
+  the trunk and nothing else, `tests/test_layout_audit.py` (`__layoutStars`)
+  proves the right ROW wears it, in every look and on all four screens, without
+  changing the measured row height.
+- **Dragging a row** — the hold, `dragMoveTo`, `dragEnd`, the edge auto-scroll
+  (owner 2026-08-07, the Explorer gesture; repaired 2026-08-09, task 162).
+  Hold a row and it is picked up; dropping it ON another sends
+  `layout_merge {source, target}` (`mergeLayouts` in [Grids](grids.md) asks
+  which of the four shapes when the result is a THREE), dropping it in the gap
+  above or below one sends `layout_reorder {source, before}`. A layout that
+  already holds four greys out the moment the drag starts, so the refusal is
+  visible before the finger arrives instead of arriving as a toast after it.
+  The arming rule itself is [Hold Gesture](hold-gesture.md) — a pure module,
+  because inline it was untestable and therefore untested for two days while
+  the feature was dead on the phone. See **A hold is a contact that STAYED
+  PUT** and **One row is one line** below.
 - **Naming** — `nameField(value, placeholder)`, `openRenamePanel(index)`
   (owner 2026-08-05). A layout's auto name is the target window's title; the
   creation panel offers it prefilled in an editable Name field (`creating.name`
@@ -75,22 +161,82 @@ everything here composes and frames WINDOWS on it.
   sends `layout_aspect {index, w, h}` on a 1000-scale (`0/0` = Screen).
 - **Creation** — `openSourceChooser`, `armNextTap`, `handleLayoutOffer`,
   `renderCreationPanel`, `cancelCreation`, `slotFromOffer`/`slotFromEntry`,
-  `titleChip`, `GRID_CELLS`.
-- **A window title is never cut** (owner 2026-08-06, fixed 2026-08-07). The
-  chosen-slot chips and the creation list both used to shorten a title in JS
-  — `s.title.slice(0, 29) + "…"` — which is a truncation the DOM cannot see:
-  the element fits perfectly, `scrollWidth === clientWidth`, and every clip
-  check in the layout audit reported PASS while 225 device px stood idle on
-  that row. His words: *"čip sa izabranim prozorom skraćuje naziv na 'Claude
-  Code - Remote User - V…', a pun naziv se na tom ekranu ne vidi nigde kada
-  polje Name već prepišeš"*. `titleChip` now adds `.lay-title`, which lets a
-  chip take the free width and then WRAP — the same treatment
-  `.lay-item-main span` gives the same titles in the layout list, not a second
-  one. **And that chip is the answer to the second half of his complaint:**
-  the Name field may be retyped to anything, the chip above it still carries
-  the window's own full title. The audit gained the tooth this class needed —
-  `__truncated`, an ellipsis in the text itself beside free width on its row
-  (see [tests](../../tests/___tests.md)).
+  `GRID_CELLS`. They live in [layout-create.js](layout-create.md); this file
+  lends them its panel vocabulary and its `.lay-item` row markup.
+- **A window title is never cut IN JS** (owner 2026-08-06, fixed 2026-08-07).
+  The chosen-slot chips and the creation list both used to shorten a title in
+  JS — `s.title.slice(0, 29) + "…"` — which is a truncation the DOM cannot
+  see: the element fits perfectly, `scrollWidth === clientWidth`, and every
+  clip check in the layout audit reported PASS while 225 device px stood idle
+  on that row. His words:
+  *"čip sa izabranim prozorom skraćuje naziv na 'Claude Code - Remote User - V…', a pun naziv se na tom ekranu ne vidi nigde kada polje Name već prepišeš"* — lang-ok: owner quote.
+  That half stands and must never come back. What changed on 2026-08-09 is
+  the treatment AFTER it: task 163 made a kin group's rows one line each, cut
+  by CSS (`.lay-item-main span`), and task 168 turned the creation panel's two
+  lists into those same rows — so the wrapping title pill that answered him in
+  2026-08-07 (`titleChip` / `.lay-chip.lay-title`) lost its last caller and was
+  deleted the same day. **The second half of his complaint is answered one
+  step further on:** the Name field under the chosen rows is a WRAPPING
+  textarea prefilled with the window's own title, and the rename card is the
+  same for a layout that already exists — the full name is always exactly one
+  tap away from the row that elides it. The audit gained the tooth this class
+  needed — `__truncated`, an ellipsis in the text itself beside free width on
+  its row (see [tests](../../tests/___tests.md)).
+- **A hold is a contact that STAYED PUT, not one that never moved a pixel**
+  (owner report 2026-08-09, task 162). He held a row without moving it and the
+  layout OPENED. Three separate things defeated the gesture, and all three are
+  now fixed here: the `pointermove` handler cleared the 380 ms timer on ANY
+  movement (a resting finger on a capacitive digitizer wanders — it now asks
+  `pressVerdict` and only a travel past `HOLD_DRAG_SLOP` counts); `keepFocus`
+  fires its tap on `pointerup` with no duration test and rescues any
+  `pointercancel` under 18 px, while Chrome hands out that cancel at ~8 dp as
+  soon as it decides the touch is a scroll (the ROW now refuses a tap whose
+  press lasted `HOLD_DRAG_MS` — `keepFocus` is untouched: it is the activator
+  the gamepad shares); and `.lay-item` declared no `touch-action`, so the
+  browser owned the vertical gesture and ended the carry with a cancel. The
+  fourth fix is a latent one in the same block: `setPointerCapture` throws for
+  a pointer that is already gone, and it used to run AFTER `drag` was
+  assigned — leaving `drag` non-null with no gesture in flight, which made
+  every row in the list dead until the panel was reopened. Capture first, arm
+  only if it took.
+- **Taking the browser's pan away is PAID for, not ignored** — with
+  `touch-action: none` on a row, a long list can no longer be scrolled by
+  dragging one (the header, the gaps and the actions row still scroll it), so
+  a drag in flight scrolls the card itself when the finger nears its top or
+  bottom edge: `dragMoveTo` starts a frame loop (a finger held still at the
+  edge sends no pointer events, and that is exactly when it must keep
+  scrolling) and `dragEnd` kills it. Without that half, a drop target below
+  the fold would simply be unreachable — one broken gesture traded for
+  another.
+- **One row is one line, like a button** (owner 2026-08-09, task 163, with his
+  screenshot: one row wrapped to FOUR lines beside a two-line sibling). His
+  rule: elements of one kin group are always the same size, and a long name is
+  CUT — "the first two words, as many as fit — and three dots" — never
+  wrapped. `.lay-item-main span` elides in CSS (never in JS: a string cut
+  before the DOM is invisible to every clip check, the 2026-08-07 finding
+  above), and the trailing chips carry the same nowrap rule, because a chip
+  that wrapped would make one row taller through the other half of the same
+  kin group. The full name stays one tap further on, in the rename card, whose
+  field is a wrapping textarea for exactly this reason. The audit stages this
+  panel with THREE layouts now — a list of one has no sibling to differ from
+  and no row to drag onto, which is how both bugs shipped.
+- **The row was CUT SHORTER SIDEWAYS than upright** (owner width question
+  2026-08-09, task 172). The landscape two-column reflow in `panels.css` had
+  just been widened from short screens to all landscape — right for the panels
+  it was built for, ruinous here: this list's rows carry a name AND four
+  trailing controls, so halving the row left the name 87px of 347 and 12
+  characters of a 62-character window title, fewer than the same tablet showed
+  in PORTRAIT (378px row, 16 characters). `openLayoutPicker` therefore does not
+  put `.card-columns` on its card — deliberate, commented, and the class is the
+  declaration so the next panel cannot inherit the wrong policy silently. Off
+  the reflow the row is 718px with a 458px name: the whole title, at every
+  audited viewport, and the card still fits (363px of content in the 377px a
+  915x412 phone allows). The price is paid rather than hidden, and counted:
+  the list scrolls from the FOURTH layout sideways and the TENTH on a tablet,
+  which makes this card a stated exception to BUG A. `openMemberPanel`
+  and the creation panel answer the opposite way for measured reasons of their
+  own; see [style.md](style.md). Portrait is untouched: whether the 420px card
+  should widen for a name is the owner's own open question.
 
 ## Design Decisions
 

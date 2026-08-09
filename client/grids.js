@@ -2,12 +2,17 @@
 // one panel that asks him to choose between them.
 //
 // Split out of layouts.js on 2026-08-07 (THE STRUCTURE LAW) when the owner's
-// grid sheet — two, three or four windows, with four arrangements for three —
-// pushed that file past 1,000 lines. It mirrors `server/grids.py` shape for
-// shape; if one changes, the other must.
+// grid sheet — two, three or four windows, with four arrangements for three
+// (UV/grid_variations.png) — pushed that file past 1,000 lines.
 //
-// Loaded BEFORE layouts.js: `GRID_CELLS` is a const the list and the creation
-// panel read at runtime.
+// The SHAPES themselves left for client/grid-icons.js on 2026-08-09 (task
+// 164): the layout list draws each row's shape now, so the partitions were
+// about to have a third copy. That module is pure and its gate compares it to
+// `server/grids.py` number for number — which is the check this file's old
+// "if one changes, the other must" note asked for and never had.
+//
+// Loaded AFTER grid-icons.js (it delegates to it) and BEFORE layouts.js:
+// `GRID_CELLS` is a const the list and the creation panel read at runtime.
 "use strict";
 
 // The owner's grid catalogue (2026-08-07, given as a drawing). Mirrors
@@ -15,41 +20,34 @@
 // which edge its single window takes. Orientation decides what "2" means and
 // nothing else (his rule: 2 and 4 may change only portrait/landscape).
 const GRID_CELLS = { "2": 2, "3-top": 3, "3-bottom": 3, "3-left": 3, "3-right": 3, "4": 4 };
-const GRID_THREE = ["3-top", "3-bottom", "3-left", "3-right"];
+// The four arrangements a THREE may choose among — and the only size that has
+// a choice (owner 2026-08-07). Held once, in the pure module, so a panel can
+// never offer him a choice that does not exist: `gridIconChoices` answers it
+// per layout, and this is the same list.
+const GRID_THREE = GRID_ICON_THREE;
 const GRID_LEGACY = { "2x1": "2", "1x2": "2", "2x2": "4" };
 const gridOf = (g) => GRID_LEGACY[g] || (GRID_CELLS[g] ? g : null);
 
-// The OUTER BOX every sketch is drawn on: wide for landscape, tall for
-// portrait (owner round 3, 2026-08-07, re-reading his own sheet — the
-// landscape column draws EVERY shape, 2/3/4, in a wide box, the portrait
-// column in a tall one). A 2x2 unit grid, same as the cell coordinates below
-// use, so a cell's `[x, y, w, h]` in units maps straight onto it.
+// The OUTER BOX and the shapes themselves moved to client/grid-icons.js on
+// 2026-08-09 (owner request, task 164 — the layout LIST now draws each row's
+// shape too). Everything below is a delegation, on purpose: the partitions
+// were about to have a third copy (server/grids.py, here, and the list), and
+// this file's own header already warns that two copies must be kept in step.
+// The pure module is the one copy, and its gate compares it to the server's
+// partition number for number — a drift nothing used to catch.
 function orientBox(orient) {
-  return orient === "portrait" ? [20, 30] : [30, 20];
+  return gridIconBox(orient);
 }
 
 // A grid drawn as a real little diagram — the same shapes as his sheet, so
 // the choice is made by LOOKING, never by reading "3-left". The partition
 // (which cells exist) is fixed per grid — only "2" genuinely flips it — but
-// the BOX it is drawn on now leans with the orientation too: before this it
-// was a fixed square, which left a landscape three and a portrait three
-// drawn pixel-for-pixel identical — the exact "choose by reading, not by
-// looking" failure the sheet exists to kill, one step removed.
+// the BOX it is drawn on leans with the orientation too: before that it was a
+// fixed square, which left a landscape three and a portrait three drawn
+// pixel-for-pixel identical — the exact "choose by reading, not by looking"
+// failure the sheet exists to kill, one step removed.
 function gridSketch(grid, orient) {
-  const cells = {
-    "2": orient === "portrait" ? [[0, 0, 2, 1], [0, 1, 2, 1]]
-                               : [[0, 0, 1, 2], [1, 0, 1, 2]],
-    "3-top": [[0, 0, 2, 1], [0, 1, 1, 1], [1, 1, 1, 1]],
-    "3-bottom": [[0, 0, 1, 1], [1, 0, 1, 1], [0, 1, 2, 1]],
-    "3-left": [[0, 0, 1, 2], [1, 0, 1, 1], [1, 1, 1, 1]],
-    "3-right": [[0, 0, 1, 1], [0, 1, 1, 1], [1, 0, 1, 2]],
-    "4": [[0, 0, 1, 1], [1, 0, 1, 1], [0, 1, 1, 1], [1, 1, 1, 1]],
-  }[grid] || [];
-  const [vw, vh] = orientBox(orient);
-  const unitW = vw / 2, unitH = vh / 2;
-  const rects = cells.map(([x, y, w, h]) =>
-    `<rect x="${x * unitW + 1}" y="${y * unitH + 1}" width="${w * unitW - 2}" height="${h * unitH - 2}" rx="2"/>`).join("");
-  return `<svg class="lay-grid-ico" viewBox="0 0 ${vw} ${vh}" fill="currentColor">${rects}</svg>`;
+  return gridIconSvg(GRID_CELLS[gridOf(grid)] || 0, grid, orient);
 }
 
 
@@ -69,9 +67,7 @@ function gridChip(grid, orient, selected, onTap) {
 // window has nothing else to show, so the box shape is the only picture
 // available for its orientation (owner round 2, 2026-08-07).
 function soloSketch(orient) {
-  const [vw, vh] = orientBox(orient);
-  return `<svg class="lay-grid-ico" viewBox="0 0 ${vw} ${vh}" fill="currentColor">` +
-    `<rect x="1" y="1" width="${vw - 2}" height="${vh - 2}" rx="3"/></svg>`;
+  return gridIconSvg(1, null, orient);
 }
 
 // A drawing with a small caption under it — used where the picture alone
@@ -117,7 +113,7 @@ function mergeLayouts(source, target) {
   layPanel.innerHTML = "";
   layPanel.hidden = false;
   const card = document.createElement("div");
-  card.className = "lay-card";
+  card.className = "lay-card card-columns";
   const h = document.createElement("h2");
   h.textContent = "Three windows";
   const sub = document.createElement("p");

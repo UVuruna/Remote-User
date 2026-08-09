@@ -12,6 +12,11 @@
   <link rel="stylesheet" href="/static/style.css">
   <link rel="stylesheet" href="/static/panels.css">
   <link rel="stylesheet" href="/static/layouts.css">
+  <!-- AFTER layouts.css: the creation panel's rows reuse .lay-item /
+       .lay-item-main from there and restate only what differs — the indent a
+       tab wears under its window, and putting `touch-action` back so the list
+       still scrolls (owner 2026-08-09, task 168). -->
+  <link rel="stylesheet" href="/static/layout-create.css">
 </head>
 <body>
   <div id="status" class="connecting">Connecting…</div>
@@ -219,8 +224,16 @@
   <script src="/static/quality.js"></script>
   <script src="/static/region.js"></script>
   <script src="/static/notify.js"></script>
-  <!-- Both load BEFORE layouts.js: it reads their consts at runtime. -->
+  <!-- Before layouts.js: it owns the rule that tells a tap from a drag from a
+       HOLD, which the layout list's rows ask on every pointer event (pure, so
+       its gate runs it whole — owner report 2026-08-09, task 162). -->
+  <script src="/static/hold-gesture.js"></script>
+  <!-- All load BEFORE layouts.js: it reads their consts at runtime. And
+       grid-icons.js loads before grids.js, which delegates its drawings to
+       it AT LOAD (`GRID_THREE`) — the shapes live in one pure module now
+       (owner request 2026-08-09, task 164: the list draws each row's shape). -->
   <script src="/static/loading.js"></script>
+  <script src="/static/grid-icons.js"></script>
   <script src="/static/grids.js"></script>
   <script src="/static/layouts.js"></script>
   <script src="/static/layout-create.js"></script>
