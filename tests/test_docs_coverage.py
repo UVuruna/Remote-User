@@ -71,6 +71,14 @@ STANDARD = {
     "client/load_test.js",
     "client/state.js",
     "client/panels.js",
+    # panels.css is the overlay CARDS' styling, split out of style.css on
+    # 2026-08-09 (THE STRUCTURE LAW — the dictation card's listen control
+    # pushed that file past 1,000 lines). It shares __about/panels.md with
+    # panels.js, exactly as layouts.css shares its doc with layouts.js: one
+    # feature, one doc, two files (the doc names both). Standard, not
+    # Algorithmic like style.css: it carries no computed colour and no rule
+    # worth a flow — it is the shape of a card and the rows in it.
+    "client/panels.css",
     "client/icons.js",
     "client/region.js",
     "client/notify.js",

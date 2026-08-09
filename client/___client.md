@@ -10,6 +10,7 @@ The phone side of Remote User — a plain web page served by the PC server, load
 | `install.html` | Standard | install funnel (Open the app → Install) — the only page ANY browser ever sees — [about](__about/install.md) |
 | `theme.css` | Algorithmic | EVERY colour, in four themes (dark / light / colored / colored-light) and two fills (outlined / filled) — loaded FIRST, documented with `theme.js` in [about](__about/theme.md) · [flow](__flow/theme.md) |
 | `style.css` | Algorithmic | every component's visual rules — shape and position only; it reads theme.css's tokens and names no colour of its own — [about](__about/style.md) · [flow](__flow/style.md) |
+| `panels.css` | Standard | the OVERLAY CARDS — the Sets picker, Quality panel, dictation card, notices card and command chooser, plus the `.sets-card` / `.sets-row` vocabulary they share; split off style.css 2026-08-09 (the dictation card's listen control crossed 1,000 lines) — documented with `panels.js` in [about](__about/panels.md) |
 | `layouts.css` | Algorithmic | the layout feature's own styling (bar, list, aspect panel, creation, loading cube), split off style.css 2026-08-05 — documented with `layouts.js` in [about](__about/layouts.md) · [flow](__flow/layouts.md) |
 | `load_test.js` | Standard | dev harness — concatenates and executes the 18 client scripts below, in load order, against a stubbed DOM to catch load-time errors — [about](__about/load_test.md) |
 | `state.js` | Standard | tunables + shared state + `setStatus`/`toCanvasPx`/`send` — loads 1st — [about](__about/state.md) |

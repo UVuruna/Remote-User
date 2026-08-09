@@ -31,6 +31,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "server"))
 # stays here. See tests/_audit_js.py.
 from _audit_js import CONTRAST_JS  # noqa: E402
 
+# The panel CATALOGUE — WHICH overlay is opened and in WHAT state. Split out on
+# 2026-08-09 (THE STRUCTURE LAW), when the dictation card's listen control
+# pushed this file past 1,000 lines. See tests/_audit_panels.py.
+from _audit_panels import DICT_STAGE_JS, PANELS, UA_MODEL  # noqa: E402
+
 # THE TABLET WAS NEVER MEASURED (owner report 2026-08-08: "do sad nikad nisam
 # probao preko tableta, sad sam probao … naišao sam na taj bag da Touch ne radi
 # preko tableta"). Every size in this list was a PHONE, so every geometry
@@ -458,146 +463,6 @@ def _check_panel(page, name, open_js, close_js, card_sel, shot=False,
     return passed, ok
 
 
-# Every overlay panel the phone shows, each opened in its FULLEST real
-# state. Hoisted out of `main()` in build round R3 so the same list can be
-# swept once per LOOK (three themes x two fills) instead of once per run.
-PANELS = (
-    # FULLEST state (owner 2026-08-05): the panel states the PC's
-    # own settings and strikes out the fps steps that PC puts out
-    # of reach. A base must therefore be set before opening —
-    # without it the header is the short "Waiting for the PC's own
-    # settings…" and the audit would measure the empty case. 4K +
-    # a 10 fps PC is the longest header AND the most struck-out
-    # steps this panel can show.
-    ("Quality panel",
-     "setStreamBase({fps:10, width:3840, height:2160,"
-     " bitrate:'6M', bitrate_mid:'2400k', bitrate_low:'600k'});"
-     "openQualityPanel()",
-     "closeQualityPanel()", "#quality-panel .sets-card"),
-    # FULLEST state (owner 2026-08-06): every app set listed AND
-    # two of them wearing the live badge, which is the widest a
-    # row in this card can get — checkbox + icon + the longest set
-    # name + "ON THE WHEEL NOW". The badge exists because he asked
-    # to SEE which app set is actually riding, so it is exactly
-    # the thing that must not be cut off.
-    ("Sets picker",
-     "appSets = APP_SETS;"
-     "layouts = [{name:'Claude', process:'code.exe',"
-     " title:'Ispravka UI dizajna meni…', orient:'portrait',"
-     " icon:null, app_sets:['VSCode','Claude'], ratio:null, pos:0.5}];"
-     "layoutActive = 0; openSetsPanel()",
-     "layoutActive = null; layouts = []; closeSetsPanel()",
-     "#sets-panel .sets-card"),
-    ("Dictation card",
-     "window.Android = {"
-     " voiceLangs: () => JSON.stringify(["
-     "  {tag:'sr-RS', name:'Srpski (Srbija)', status:'download'},"
-     "  {tag:'en-US', name:'English (United States)', status:'ready'},"
-     "  {tag:'de-DE', name:'Deutsch (Deutschland)', status:'online'},"
-     "  {tag:'pt-BR', name:'Português (Brasil)', status:'download', extra:true},"
-     "  {tag:'ja-JP', name:'日本語 (日本)', status:'online', extra:true}]),"
-     " voiceMuteBeeps: () => true, voiceSetMuteBeeps: () => {},"
-     " voiceChosen: () => 'sr-RS', voiceSetLang: () => {},"
-     " voiceState: () => '' };"
-     "renderDictationCard()",
-     "closeDictationPanel()", "#dictation-panel .sets-card"),
-    # The Region grab (owner 2026-08-05). Its bar is the part that
-    # can starve: hint + Send + ✕ above the keyboard inset, on a
-    # 412 px phone.
-    #
-    # OPENED AS THE USER MEETS IT — `rgBox = null` — since 2026-08-07.
-    # It used to be staged into the top-left corner "where a bar
-    # overlap would show first", which was wrong twice: the bar is
-    # pinned bottom-centre and never moves with the frame, so the
-    # staging proved nothing about it, and the picture every grader
-    # was handed showed a frame lying across the Layout button
-    # (label read "Layou") in a position the product never opens in.
-    # A staged state nobody can reach is not evidence; the frame's
-    # real birthplace is now measured by its own check below.
-    ("Region grab",
-     "rgBox = null; openRegionPanel()",
-     "closeRegionPanel()", "#region-panel .rg-bar"),
-    # The command chooser (owner idea 2026-08-05): the longest
-    # real case is the Claude Thinking button's six levels.
-    ("Command chooser",
-     "openChoicePanel({label:'Thinking', text:'/effort',"
-     " options:['low','medium','high','xhigh','max','auto']})",
-     "closeChoicePanel()", "#choice-panel .sets-card"),
-    ("Aspect panel + Move handle",
-     "layouts = [{name:'Audit', process:'x', orient:'portrait',"
-     " icon:null, ratio:[600,1000], pos:0.5}]; openAspectPanel(0)",
-     "closeLayoutPanel()", "#layout-panel .lay-card"),
-    # THE NOTICES CARD — and the reason it is here is the finding, not the
-    # card. The owner photographed a stark WHITE "Not now" pill on it from his
-    # tablet (2026-08-08) and asked whether such things are being caught. They
-    # were not: this card was written on 2026-08-07 and registered in NO sweep,
-    # so it had never been measured, never been photographed and never been
-    # asked about its contrast in any of the eight looks. A panel outside the
-    # registry is a panel with no law over it.
-    ("Notices card",
-     "renderNoticeCard({battery: false, notifications: false})",
-     "closeNoticeCard()", "#notice-panel .sets-card"),
-    # The ✕ chooser (owner 2026-08-08, task 116). Staged at its
-    # WORST: a 4-cell grid, so both chips carry a count, under a
-    # layout name as long as one really gets. The second line is
-    # the whole point of the card — it is the difference between
-    # "the windows stay" and "the windows close" — so this shot
-    # exists to prove that line is never the thing that gets cut.
-    ("Layout close chooser",
-     "layouts = [{name:'Claude Code - Remote User - Visual Studio "
-     "Code [Administrator]', process:'code.exe', orient:'portrait',"
-     " icon:null, members:4, ratio:null, pos:0.5}];"
-     "layoutActive = 0; openCloseChooser(0)",
-     "layoutActive = null; layouts = []; closeLayoutPanel()",
-     "#layout-panel .lay-card"),
-    # The layout list carries a rename button per row (owner
-    # 2026-08-05) — a long window title must not push the row's
-    # buttons off the card.
-    ("Layout list with rename",
-     "layouts = [{name:'Claude Code - Remote User - Visual Studio "
-     "Code [Administrator]', process:'x', orient:'portrait',"
-     " icon:null, ratio:[600,1000], pos:0.5}]; openLayoutPicker()",
-     "closeLayoutPanel()", "#layout-panel .lay-card"),
-    # The rename card also carries the per-layout app-shortcut
-    # ticks (owner 2026-08-06) — the long title AND four chips.
-    ("Rename card",
-     "appSets = APP_SETS;"
-     "layouts = [{name:'Claude Code - Remote User - Visual Studio "
-     "Code [Administrator]', process:'code.exe', orient:'portrait',"
-     " icon:null, app_sets:['VSCode','Claude'], ratio:null, pos:0.5}];"
-     "openRenamePanel(0)",
-     "closeLayoutPanel()", "#layout-panel .lay-card"),
-    # Creation panel: the Name field is prefilled with the chosen
-    # window's (long) title and must fit the card.
-    # The grid catalogue he drew (owner 2026-08-07) — the THREE
-    # state, where four arrangement SKETCHES sit under the count
-    # chips. Its own case because it is the tallest the creation
-    # panel ever gets, and because a drawing nobody looked at is
-    # not a proof.
-    ("Grid arrangement choice",
-     "creating = newCreation('list');"
-     "creating.slots = [{hwnd:1, title:'Chrome', process:'chrome.exe',"
-     " icon:null, tab:null, x:0.5, y:0.5},"
-     " {hwnd:2, title:'Explorer', process:'explorer.exe',"
-     " icon:null, tab:null, x:0.5, y:0.5},"
-     " {hwnd:3, title:'Claude Code - Remote User - Visual Studio"
-     " Code [Administrator]', process:'code.exe', icon:null,"
-     " tab:null, x:0.5, y:0.5}];"
-     "creating.mode = 'grid'; creating.grid = '3-left';"
-     "renderCreationPanel()",
-     "cancelCreation(true)", "#layout-panel .lay-card"),
-    ("Creation panel + Name field",
-     "appSets = APP_SETS;"
-     "creating = newCreation('tap');"
-     "creating.slots = [{hwnd:1, title:'Claude Code - Remote User"
-     " - Visual Studio Code [Administrator]', process:'code.exe',"
-     " icon:null, tab:null, x:0.5, y:0.5}];"
-     "renderCreationPanel()",
-     "creating = null; closeLayoutPanel()",
-     "#layout-panel .lay-card"),
-)
-
-
 def main() -> int:
     import test_input_pipeline as gate
     # The shipped set NAMES, from the tables that define them
@@ -825,6 +690,74 @@ def main() -> int:
             # Everything below is geometry, and it is measured in the look the
             # product ships by default.
             _apply_look(page, *DEFAULT_LOOK)
+
+            # THE DICTATION CARD SAYS WHOSE LANGUAGES THESE ARE, AND WHICH OF
+            # THEM HE CAN HEAR (owner 2026-08-09, task 127 — a screenshot of
+            # this card and: "koristim dva uredjaja … treba da kaze OVAJ
+            # UREDJAJ ima te i te jezike" plus "treba da mogu da CUJEM da bih
+            # odabrao"). The panel sweep above already measures the card's fit
+            # and contrast in all eight looks; what it cannot say is whether
+            # the three ROW STATES are on it at all — and a row state nobody
+            # stages is exactly where this project's bugs keep arriving.
+            #
+            # The device name is measured, never merely present: the fallback
+            # wording ("this device") renders perfectly while the real path is
+            # broken, so the card must contain the model THIS context's own
+            # User-Agent carries.
+            page.evaluate(DICT_STAGE_JS)
+            page.wait_for_selector("#dictation-panel .sets-card", state="visible",
+                                   timeout=4000)
+            dictation = page.evaluate(
+                """(model) => {
+                  const bad = [];
+                  const card = document.querySelector('#dictation-panel .sets-card');
+                  const cr = card.getBoundingClientRect();
+                  const who = card.querySelector('.dict-device');
+                  const said = who ? who.textContent.trim() : '';
+                  if (!said) bad.push('the card does not say which device it describes');
+                  else if (said.indexOf(model) < 0) {
+                    bad.push('the device line does not name this device: "' + said + '"');
+                  }
+                  const rows = [...card.querySelectorAll('.dict-row')];
+                  const play = rows.filter((r) => r.querySelector('.dict-listen'));
+                  const noted = rows.filter((r) => r.querySelector('.dict-note'));
+                  if (play.length < 2) bad.push('no row offers a listen button');
+                  if (!noted.length) bad.push('no row states the honest limit');
+                  // The two limits are DIFFERENT facts and each has to be on
+                  // screen: no voice for this language, and a voice with no
+                  // sample sentence written for it.
+                  const said2 = noted.map((r) => r.querySelector('.dict-note').textContent);
+                  if (!said2.some((t) => /preview voice/.test(t))) {
+                    bad.push('the "no voice on this device" row is not staged');
+                  }
+                  if (!said2.some((t) => /sample sentence/.test(t))) {
+                    bad.push('the "no sample sentence" row is not staged');
+                  }
+                  for (const b of card.querySelectorAll('.dict-listen')) {
+                    const r = b.getBoundingClientRect();
+                    if (r.width < 40 || r.height < 40) {
+                      bad.push('a listen button is ' + Math.round(r.width) + 'x' +
+                               Math.round(r.height) + ' — not a finger target');
+                    }
+                    if (r.left < cr.left - 1 || r.right > cr.right + 1 ||
+                        r.top < cr.top - 1 || r.bottom > cr.bottom + 1) {
+                      bad.push('a listen button leaves the card');
+                    }
+                    // …and it never lands ON the row's own text.
+                    const name = b.closest('.dict-row').querySelector('.dict-name');
+                    const nr = name.getBoundingClientRect();
+                    if (nr.right > r.left + 1) {
+                      bad.push('the language name runs under its listen button');
+                    }
+                  }
+                  return bad;
+                }""",
+                UA_MODEL)
+            results[f"the dictation card names the device and stages both "
+                    f"preview states @ {label}"] = not dictation
+            if dictation:
+                print(f"  DETAIL dictation card @ {label}: {dictation}")
+            page.evaluate("closeDictationPanel()")
 
             # D-pad labels: a set's POOL may hold reserve commands with longer
             # names than the shipped four ("Copy path", "Go to file"), and the

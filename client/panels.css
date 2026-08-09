@@ -1,0 +1,408 @@
+/* The OVERLAY CARDS — every full-screen panel this phone opens over the
+   working screen, and the shared vocabulary they are all built from
+   (.sets-card / .sets-row / .sets-list / .sets-done).
+
+   Split out of style.css on 2026-08-09 (THE STRUCTURE LAW): that file crossed
+   1,000 lines while the dictation card grew its per-language listen control.
+   The boundary is a real one — style.css dresses the WORKING SCREEN (the
+   canvas, the status pill, the D-pad, the wheel, the corner buttons, the
+   Region frame), while this file dresses what covers it: the Sets picker, the
+   Quality panel, the Dictation setup card, the notices card and the command
+   chooser. They change for different reasons and are read at different times.
+
+   It follows the layouts.css precedent (2026-08-05) in every way, including
+   its documentation: one feature, two files, ONE __about page —
+   client/__about/panels.md names both halves.
+
+   Loaded after style.css and before layouts.css. The landscape reflow below
+   deliberately names .lay-card too (a rule about what a panel card does on a
+   short screen is ONE rule, and two copies of it in two files is how the two
+   come to disagree); its `body` prefix is what keeps it winning over
+   layouts.css's own .lay-card width, by specificity rather than by order. */
+
+/* Settings → Sets: the wheel-composition picker (owner 2026-08-05).
+   Same overlay pattern as the wizard. */
+#sets-panel,
+#quality-panel,
+#dictation-panel,
+#notice-panel,
+#choice-panel {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: var(--scrim);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-m);
+}
+#sets-panel[hidden],
+#quality-panel[hidden],
+#dictation-panel[hidden],
+#notice-panel[hidden],
+#choice-panel[hidden] { display: none; }
+
+/* A chooser row is a BUTTON, not a checkbox row — one tap picks and closes
+   (owner 2026-08-05: "korisnik odabere a program automatski odradi").
+
+   And BECAUSE it is a button it must say what it is made of. `.sets-row`
+   declares no background, which is harmless on a <label> and a disaster on a
+   <button>: the WebView paints its own light default chrome underneath, and
+   this rule's near-white text landed on it — six unreadable white bars
+   (owner screenshot 2026-08-06, "dizajn elemenata i bojama"). Surface and
+   border are stated here, never inherited from the platform. */
+.sets-row.choice {
+  justify-content: flex-start;
+  font: 600 16px system-ui, sans-serif;
+  background: var(--glass-fill);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  text-align: left;
+  padding: 14px var(--space-m);
+}
+.sets-row.choice:active { background: var(--accent-glow); border-color: var(--accent); }
+
+/* The option Claude Code is already SAVED as (owner 2026-08-08 — "treba da
+   bude stiklirano ono koje je trenutno aktivno"). Marked by the ACCENT EDGE
+   plus a word, never by colour alone: the eight looks include a plain one
+   where a tint carries no meaning at all, and a mark that disappears in one
+   look is not a mark. The word says "saved" rather than "active" on purpose —
+   a project settings file, an env var, a session-only switch or a resumed
+   transcript can all outrank it, and claiming more than we know is the habit
+   this project keeps paying for. */
+.sets-row.choice.chosen {
+  border-color: var(--accent);
+  box-shadow: inset 3px 0 0 0 var(--accent);
+}
+.sets-row.choice.chosen .sets-hint {
+  margin-left: auto;
+  padding-left: var(--space-s);
+  color: var(--accent);
+  font-size: 0.78em;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* Dictation setup card rows (owner round 2, 2026-08-05).
+
+   TWO ROWS, NOT TWO COLUMNS (independent grader, 2026-08-07 — 7/10 in both
+   palettes). The row used to be one flex line: radio, language name, status
+   pushed right by `margin-left:auto`. Both text boxes are shrinkable, so on a
+   412 px phone BOTH wrapped at once — "Srpski" was cut from its own "(Srbija)"
+   while the status orphaned "arrives" on a line of its own, with ~60 px of
+   unused width standing between them. THE SPACE & LEGIBILITY LAW's own
+   picture: a starving element beside a neighbour holding slack.
+
+   Ladder rung 1 (let the name take the free width) cannot fix it, and the
+   measurement says why: the longest real pair is "English (United States)" at
+   600 15 px (~175 px) plus "model will download — online until it arrives" at
+   12 px (~240 px), which is 415 px of text for a ~328 px line. There is no
+   free width to take — the two genuinely do not fit on one line. So rung 2,
+   REFLOW: the status moves under the name, left-aligned, and each takes the
+   full width of the row. Both now sit on one line each, and the card grows
+   into the vertical space that was already standing empty above it. */
+.sets-row.dict {
+  display: grid;
+  grid-template-columns: 20px 1fr;
+  gap: 1px 10px;
+  align-items: center;
+}
+.sets-row.dict input {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--accent);
+  grid-column: 1;
+  grid-row: 1 / span 2;
+}
+.dict-name { grid-column: 2; grid-row: 1; font-weight: 600; }
+.dict-status { grid-column: 2; grid-row: 2; color: var(--text-secondary); font-size: 12px; }
+.sets-row.dict.sel .dict-name { color: var(--accent); }
+
+/* HEAR IT BEFORE CHOOSING (owner 2026-08-09) — the listen button sits BESIDE
+   the row's label, not inside it: a click anywhere inside a <label> activates
+   the control that label owns, so a speaker nested in the row would also pick
+   that language. The tap that means "let me hear it first" would have decided.
+
+   44 px because it is a real finger target on the narrowest phone, and it
+   never shrinks — the language name beside it takes the slack instead
+   (`min-width: 0` on the label is what lets it, or a long endonym would push
+   the button off the card). */
+.dict-row { display: flex; align-items: center; gap: 8px; }
+.dict-row .sets-row.dict { flex: 1; min-width: 0; }
+.dict-listen {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--glass-fill);
+  color: var(--text-primary);
+}
+.dict-listen svg { width: 22px; height: 22px; }
+/* Which row is speaking. It is a STATE, not a hover: the sample cannot be
+   stopped (the shell's speech queue has no stop), so a tap on any other row
+   does nothing until this clears — and a control that ignores a tap must say
+   why by looking different while it does. */
+.dict-listen.busy {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-glow);
+}
+/* The honest limit, per row: a language he may dictate in with no voice on
+   this device to preview it. Same weight as the status line under it — a
+   quiet fact, never a warning. */
+.dict-note {
+  grid-column: 2;
+  grid-row: 3;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-style: italic;
+}
+.dict-more {
+  background: transparent;
+  border: none;
+  color: var(--accent);
+  font: 600 14px system-ui, sans-serif;
+  text-align: left;
+}
+
+/* Mic while the chosen language's model downloads: dictation works online,
+   the button says a better engine is on its way. Dashed border ONLY — the
+   pulse was too much (owner round 4, 2026-08-05); a dashed border appears
+   nowhere else, so it alone reads as "something is in progress". */
+[data-action="mic"].dl {
+  border: 1px dashed var(--accent);
+}
+
+/* Quality panel segments (owner 2026-08-05) */
+.q-row { display: flex; align-items: center; gap: 10px; padding: 7px 0; }
+.q-cap { width: 84px; color: var(--text-secondary); font-size: 14px; }
+.q-seg { display: flex; flex: 1; gap: 6px; }
+.q-seg button {
+  flex: 1;
+  padding: 9px 0;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-primary);
+  font: 500 14px system-ui, sans-serif;
+}
+.q-seg button.on {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-wash);
+}
+/* A step the PC's own settings put out of reach (owner 2026-08-05): visibly
+   inert, so nobody taps 30 fps under a 10 fps PC and wonders why nothing
+   changed. Struck through, not just dimmed — dim alone reads as "unselected". */
+.q-seg button.out {
+  color: var(--text-secondary);
+  opacity: 0.4;
+  text-decoration: line-through;
+  border-style: dashed;
+}
+.sets-card {
+  width: min(420px, 100%);
+  max-height: 92vh;
+  overflow-y: auto;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 22px 20px;
+  color: var(--text-primary);
+  font: 400 14px/1.45 system-ui, sans-serif;
+  box-shadow: 0 12px 40px var(--card-shadow);
+}
+/* A SHORT SCREEN SPENDS ITS WIDTH (independent grader's landscape shot,
+   2026-08-07 — the first landscape picture of this client that anyone had
+   ever LOOKED at, and it caught this in one second). Every panel card is
+   `min(420px, 100%)` wide and `92vh` tall, which is right in portrait: 380 px
+   of a 412 px screen, and nothing scrolls. Turn the phone and the SAME card
+   is still 420 px wide inside a 915 px screen — 495 px of width standing
+   idle — while 92vh is now only 379 px, so seven of the ten panels scrolled:
+   the Sets picker by 235 px, the grid catalogue by 256 px, and the creation
+   panel's Create button sat below the fold entirely. THE SPACE & LEGIBILITY
+   LAW draws this exact picture as BUG A: "a visible scrollbar with unused
+   space in the same window is a bug, not a style choice".
+
+   Ladder rung 1 then 2. The card TAKES the free width — which by itself lets
+   every `.lay-row` of chips collapse onto one line instead of two — and the
+   thing that is actually tall, the LIST of rows, REFLOWS into two columns.
+   The list and nothing else: a first attempt made the whole CARD a multicol
+   and it spilled a third column sideways off the screen (the Cancel button
+   landed at x=957 on a 915 px screen), because a multicol with a definite
+   height keeps making columns until the content fits and `break-inside:
+   avoid` gives it no choice. A grid on the list alone is deterministic —
+   two columns, never three, and every row stays whole.
+
+   Measured after, at 915x412: the tallest card falls from 633 px of content
+   to 355 px inside a 379 px box, and not one of the ten panels scrolls in
+   either orientation. Portrait is untouched (the query needs BOTH a landscape
+   orientation and a short screen, so a tablet held upright never sees it).
+
+   It names BOTH card classes although `.lay-card` is declared in
+   layouts.css: this is one rule about one thing — what a panel card does when
+   the screen is short — and two copies of it in two files is how the two
+   would come to disagree.
+
+   (`body` prefixes the selector on purpose: `.lay-card` declares its own
+   `width` in layouts.css, which loads after this file, so an equal-weight
+   selector here loses the cascade and the card would take the reflow WITHOUT
+   the width — two ~180 px columns, which made the layout list measurably
+   worse, not better. Measured, not assumed.) */
+@media (orientation: landscape) and (max-height: 560px) {
+  /* The status pill sits centred at the top — and in a short landscape screen
+     that is exactly where the category wheel's 12-o'clock item is, so the pill
+     painted over its label and hid it (independent grader, 2026-08-07). The
+     wheel cannot move: its bottom item already ends just above the D-pads.
+     The pill can — ~300 CSS px stand empty either side of the ring, so while
+     the wheel is open it moves into the left one. This is EVERY toast, not
+     just the connect message: `toast {text}` uses the same pill. Portrait is
+     untouched, and the pill returns to centre the moment the wheel closes. */
+  body.wheel-open #status {
+    left: var(--space-m);
+    transform: none;
+    max-width: calc(50% - 185px);
+    overflow-wrap: anywhere;
+  }
+
+  body .sets-card,
+  body .lay-card {
+    width: min(760px, 100%);
+    column-count: 2;
+    column-gap: 24px;
+  }
+  /* Only the ROWS are unbreakable. A first attempt made every direct child of
+     the card unbreakable, and the card spilled a THIRD column off the right
+     edge of the screen (the Cancel button at x=957 on a 915 px screen),
+     because a fixed column-count with nothing splittable in it has no other
+     way to place a block that will not fit. A list may divide between two of
+     its rows; a row, a chip, a button or the aspect preview may never be cut
+     in half. */
+  body .sets-row,
+  body .lay-row,
+  body .lay-item,
+  body .q-row,
+  body .asp-screen,
+  body .sets-card button,
+  body .lay-card button { break-inside: avoid; }
+  /* The Name box is a textarea sized for a portrait card; on a short screen
+     its idle air is height nobody has to spare (the grader's own portrait
+     note: "one short word over ~120 px of air"). */
+  body .lay-name-in { height: 64px; }
+  /* The lists cap their own height for a TALL card; inside a column that cap
+     only re-introduces a scrollbar of their own. */
+  body .lay-list { max-height: none; overflow-y: visible; }
+}
+
+.sets-card h2 { font-size: 19px; margin-bottom: 4px; }
+.sets-sub { color: var(--text-secondary); font-size: 13px; margin-bottom: 12px; }
+.sets-list { display: flex; flex-direction: column; gap: 2px; margin-bottom: 10px; }
+.sets-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 6px;
+  border-radius: 10px;
+  font-size: 15px;
+}
+/* A `.sets-row` THAT IS A BUTTON MUST SAY WHAT IT IS MADE OF (owner
+   screenshot, tablet, 2026-08-08 — a stark white "Not now" pill on the dark
+   notices card).
+   `.sets-row` above declares no background, which is harmless on a <label>
+   and a disaster on a <button>: the WebView paints its own light default
+   chrome underneath, and the near-white page ink lands on it. This is the
+   SAME bug as the six unreadable white bars of 2026-08-06 — and it came back
+   because that round fixed it on `.sets-row.choice`, the one class that
+   happened to be a button THAT DAY. Every card written since could reopen it
+   by writing `<button class="sets-row">`, and one did.
+   So the rule is on the ELEMENT, not on a variant: any button wearing this
+   class states its own surface, and a future card cannot reintroduce it. */
+button.sets-row {
+  background: var(--glass-fill);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  justify-content: center;
+  font: 600 15px system-ui, sans-serif;
+  width: 100%;
+  padding: 12px var(--space-m);
+  margin-top: var(--space-s);
+}
+button.sets-row:active { background: var(--accent-glow); border-color: var(--accent); }
+.sets-row input { width: 20px; height: 20px; accent-color: var(--accent); }
+/* An UNCHECKED box is drawn, not the WebView's own native chrome (owner
+   grader, 2026-08-07: on light/filled, the unchecked "Save data on mobile
+   networks" box was pure white — the platform's default checkbox fill, which
+   ignores the page theme entirely — and read as the brightest object in the
+   card). `accent-color` only reaches the CHECKED state in Chromium; the empty
+   box needs its own background and border to sit at the same weight as every
+   other unfilled control ( --glass-fill / --border ), on every theme, not
+   only light. The check itself is drawn with a small rotated corner rather
+   than a font glyph or emoji — the same house rule icons.js follows. */
+.sets-row input[type="checkbox"] {
+  -webkit-appearance: none;
+  appearance: none;
+  border-radius: 5px;
+  border: 1px solid var(--border);
+  background: var(--glass-fill);
+  position: relative;
+  flex: none;
+  cursor: pointer;
+}
+.sets-row input[type="checkbox"]:checked {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.sets-row input[type="checkbox"]:checked::after {
+  content: "";
+  position: absolute;
+  left: 6px;
+  top: 2px;
+  width: 5px;
+  height: 10px;
+  border: solid var(--on-accent);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+.sets-row.apps { border-top: 1px solid var(--border); margin-top: 6px; padding-top: 14px; }
+.sets-ic { width: 22px; height: 22px; color: var(--text-secondary); }
+.sets-ic svg { width: 22px; height: 22px; }
+/* Which app set is riding the wheel RIGHT NOW, for the focused layout (owner
+   2026-08-06 — the tick says "allowed", this says "live", and he asked for it
+   to be unmissable). Reserved even when off so a row never changes height. */
+.sets-live {
+  margin-left: auto;
+  flex: 0 0 auto;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .02em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: transparent;
+  background: transparent;
+  border: 1px solid transparent;
+}
+/* `var(--bg)` did not exist — this project's dark token is `--surface-0`, and
+   an undefined variable makes the whole declaration invalid, so the badge
+   inherited the row's near-white ink and sat at 1.96:1 on the accent (owner
+   2026-08-06; found by the audit's new contrast check, not by eye). */
+.sets-live.on {
+  color: var(--on-accent);
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.sets-done {
+  display: block;
+  margin: 14px auto 0;
+  padding: 10px 34px;
+  border-radius: 12px;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  background: transparent;
+  font: 600 15px system-ui, sans-serif;
+}

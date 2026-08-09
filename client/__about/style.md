@@ -10,8 +10,18 @@ accent — per root DESIGN.md), the connection-state pill, the invisible
 keyboard-capture field, the offscreen video surface, the see-through control
 buttons, the two-column D-pad groups (grid areas in landscape, a stacked
 column in portrait), the category wheel, the "access from anywhere" banner +
-guided wizard, and the hide-all-controls mode. `touch-action: none` is set
-everywhere the page must own gestures itself rather than the browser.
+guided wizard, the hide-all-controls mode and the Region grab's frame.
+`touch-action: none` is set everywhere the page must own gestures itself
+rather than the browser.
+
+**The OVERLAY CARDS left this file on 2026-08-09** (THE STRUCTURE LAW — the
+dictation card's per-language listen control pushed it past 1,000 lines).
+`client/panels.css` now owns every full-screen panel and the `.sets-card` /
+`.sets-row` / `.sets-list` / `.sets-done` vocabulary they share, including the
+short-landscape reflow; it is documented with `panels.js` in
+[Panels](panels.md). What stayed here is the WORKING SCREEN — everything the
+user looks at while the PC is on screen. Notes below that describe a panel
+card's rules still hold; the rules themselves live in the other file.
 
 ## Connections
 
