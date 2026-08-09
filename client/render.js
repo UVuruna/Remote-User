@@ -199,29 +199,17 @@ function updateViewport() {
   const kb = Math.max(kbSelf, imeHeight);
   if (Math.abs(w - fullView.w) > 1) fullView = { w, h: visibleH }; // rotation
   else fullView.h = Math.max(fullView.h, visibleH);
-  // THE KEYBOARD COVERS, IT NEVER MOVES ANYTHING (owner decree 2026-08-07,
+  // THE KEYBOARD'S OWN HEIGHT NEVER MOVES ANYTHING (owner decree 2026-08-07,
   // withdrawing his own 2026-08-03 request after living with it). The canvas
   // used to be LIFTED by the keyboard's height so its bottom edge sat just
   // above the keys. It reads well on paper and is wrong in the hand: the row
   // he is typing into is almost never at the very bottom of the PC screen, so
   // lifting the picture by a whole keyboard drove the text he was watching
-  // off the top — "izbaci tekst koji se kuca ... iz vidokruga". A keyboard
-  // that simply covers the lower part of the picture leaves everything else
-  // exactly where his eyes left it, and he can pan if he needs what is under
-  // it. `kbShift` stays 0, so `toCanvasPx` is a straight mapping again.
+  // off the top — "izbaci tekst koji se kuca ... iz vidokruga" (lang-ok: owner
+  // quote). What CAN move the picture is the caret's own SHORTFALL, computed
+  // at the end of this function and almost always zero — the keyboard covers
+  // what it covers, and only a row that would actually be buried is rescued.
   const h = fullView.h;
-  // ONLY THE PICTURE, ONLY IF NEEDED, ONLY BY THE SHORTFALL — the rule lives
-  // in client/caret.js and is almost always answered with 0. The canvas is
-  // never transformed: that is what carried the navy filler with it in the
-  // 2026-08-03 attempt he rejected.
-  caretRise = caretLift({
-    caret: pcCaret,
-    view,
-    canvasHeight: canvas.height,
-    keyboardHeight: kb * devicePixelRatio,
-    unknownMode: caretUnknownMode,
-  });
-  kbShift = caretRise / devicePixelRatio;
   canvas.style.transform = "";
   // NOTE: do NOT blur the keyboard field on a keyboard-height drop. Switching
   // to the IME's voice/mic input transiently shrinks the keyboard, and a blur
@@ -237,6 +225,28 @@ function updateViewport() {
   computeBaseRect();
   computeViewHome(); // rotation / keyboard resize re-fits the layout's region
   clampView();       // ...and keeps whatever zoom the user pinched into
+  // ONLY THE PICTURE, ONLY IF NEEDED, ONLY BY THE SHORTFALL — the rule lives
+  // in client/caret.js and is almost always answered with 0. The canvas is
+  // never transformed: that is what carried the navy filler with it in the
+  // 2026-08-03 attempt he rejected.
+  //
+  // LAST, and deliberately so (2026-08-09): the rule is measured against the
+  // rect the picture is really DRAWN into, so it has to run after the canvas
+  // has been resized and the home transform re-fitted — otherwise a rotation
+  // would grade the caret against the previous orientation's picture.
+  // `drawnRect()` is the un-risen rect (redraw subtracts `caretRise` from its
+  // own copy at draw time), so feeding it back in here cannot compound.
+  const pic = drawnRect();
+  caretRise = caretLift({
+    caret: pcCaret,
+    picture: pic,
+    canvasHeight: canvas.height,
+    keyboardHeight: kb * devicePixelRatio,
+  });
+  // The inverse mapping for every finger: a touch on a risen picture must
+  // still land on the PC pixel under it (state.js `toCanvasPx`).
+  kbShift = caretRise / devicePixelRatio;
+  reportKeyboard(kb, kbSelf, pic);
   redraw();
   scheduleViewport();
 }
@@ -245,6 +255,76 @@ if (window.visualViewport) {
   window.visualViewport.addEventListener("resize", updateViewport);
   window.visualViewport.addEventListener("scroll", updateViewport);
 }
+
+// THE SHELL'S PUSH — the page's half of the keyboard-height pipe, and the one
+// number that decides whether any of this can work at all.
+//
+// It is placed HERE, beside `updateViewport`, ON PURPOSE. It used to live at
+// the bottom of this file among the MSE starve-recovery code, and on
+// 2026-08-09 a revert of that streaming block took this function with it as
+// collateral — the commit message never mentioned the keyboard, nothing else
+// referenced `window.__imeHeight`, and `imeHeight` silently stayed 0 for
+// another release. Physical adjacency to code with a different lifetime is
+// what cost that; the receiver belongs next to its only consumer.
+//
+// The shell calls it whenever the IME opens, closes or resizes — see
+// `updateViewport` for why the page cannot measure this for itself.
+window.__imeHeight = (px) => {
+  const next = Math.max(0, Number(px) || 0);
+  // Say it in the log whatever it is, including a zero: "the shell reached us
+  // and reported nothing" and "the shell never reached us" are two different
+  // faults and only one of them can be fixed on the phone.
+  if (next !== imeHeight) kbReportNext = true;
+  imeHeight = next;
+  updateViewport();
+};
+
+// ONE LINE PER KEYBOARD EVENT, in his own server log (task 150). Every round
+// of this bug argued about numbers nobody could see; this prints them from HIS
+// device, and it discriminates between the ways it can still be wrong:
+//
+//   ime=0 browser=0 ............ the shell is not reaching the page at all
+//   ime=780 caret=unknown ...... the PC cannot see the caret in that app
+//   ime=780 caret=0.951 rise=0 . the arithmetic is still wrong
+//   ime=780 caret=0.951 rise=311 fixed, and hand-checkable against pic/kbTop
+//
+// It fires on every keyboard OPEN and every CLOSE — never once per page load,
+// which is what the previous attempt did: one line, at the moment the pipe
+// first carried a number, and then silence for the whole session where the
+// evidence was. A close is worth a line too, because `ime=0 browser=0` is only
+// observable if a zero can reach the log at all.
+let kbWasOpen = false;
+let kbReportNext = false;   // the shell pushed a new inset: say so, even a 0
+let kbReportTimer = null;
+let kbReportState = null;
+
+function reportKeyboard(kb, kbSelf, pic) {
+  const worthSaying = (kb > 0) !== kbWasOpen || kbReportNext;
+  kbWasOpen = kb > 0;
+  kbReportNext = false;
+  kbReportState = { kb, kbSelf, pic };
+  if (!worthSaying) return;
+  // SETTLE FIRST. Android ANIMATES the keyboard in and fires the inset
+  // listener on every frame of it, so reporting each one would bury the answer
+  // under twenty half-open keyboards — and would print a rise computed against
+  // a keyboard that was still moving. The timer is restarted by every further
+  // change, so one open costs exactly one line, with the settled numbers.
+  if (kbReportTimer) clearTimeout(kbReportTimer);
+  kbReportTimer = setTimeout(() => {
+    kbReportTimer = null;
+    const s = kbReportState;
+    send({ type: "client_log", text:
+      `[keyboard] ime=${Math.round(imeHeight)} browser=${Math.round(s.kbSelf)} ` +
+      `caret=${pcCaret ? pcCaret.y.toFixed(3) : "unknown"} ` +
+      `pic=${Math.round(s.pic.y)}+${Math.round(s.pic.h)} ` +
+      `kbTop=${Math.round(canvas.height - s.kb * devicePixelRatio)} ` +
+      `rise=${Math.round(caretRise)} dpr=${devicePixelRatio}` });
+  }, KB_REPORT_SETTLE_MS);
+}
+
+// The first fit. It runs AFTER the two `let`s above, because `reportKeyboard`
+// reads them and a `let` in its temporal dead zone is a thrown ReferenceError
+// on the very first paint — the page would die on load.
 updateViewport();
 
 // --- Region streaming -----------------------------------------------------

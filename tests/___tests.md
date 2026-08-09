@@ -205,6 +205,30 @@ page. Restored, the audit is green and the same pair differs by R13 G16 B15
 across 134,804 pixels (8.94 %), with the filled shot carrying 87,023 px of the
 solid `rgb(30,41,59)`.
 
+**THE DICTATION CARD'S THREE ROW STATES, AND WHOSE LANGUAGES THEY ARE** (owner
+2026-08-09, task 127). The card now names the DEVICE it describes and offers a
+listen button per language, so the sweep alone is not enough: it measures fit
+and contrast, but it cannot say whether the states that carry the honest limit
+are on the card at all. `tests/_audit_panels.py` → `DICT_STAGE_JS` therefore
+stages four rows on purpose — sr-RS and en-US (a voice AND a sample → the
+button), de-DE (no voice on this device) and is-IS (a voice, no sample
+sentence written) — and a dedicated check asserts all three states are
+present, that every listen button is a ≥40 px finger target inside the card
+and clear of its own row's name, and that the device line contains the model
+THIS browser context's User-Agent carries (`UA_MODEL`) rather than the
+"this device" fallback, which renders perfectly while the real path is broken.
+Self-tested by planting both defects: dropping `speakAs` from the stub turns
+the whole card into the no-preview case (**4 findings** — no listen button, no
+honest-limit row, and each of the two notes named), and asserting a model this
+context never sends reports the line's real text back. A row state nobody
+stages is where this project's bugs keep arriving.
+
+**The panel catalogue moved out** on 2026-08-09 (THE STRUCTURE LAW — the
+listen control pushed this file past 1,000 lines): `tests/_audit_panels.py`
+now holds WHICH overlay is opened and in WHAT state, the boundary this file's
+own docstring already drew, while `tests/_audit_js.py` keeps HOW a truth about
+pixels is measured.
+
 Run: `.venv\Scripts\python tests/test_layout_audit.py`
 
 ### `test_layout_audit_qt.py` — Layout Audit, Qt windows (THE SPACE & LEGIBILITY LAW)
@@ -549,6 +573,57 @@ to the pixel — and the gate goes red.
 
 Run: `.venv\Scripts\python tests/test_view_anchor.py` (needs node) — also a
 fail-closed step in `build.py` (0o/6).
+
+### `test_caret_lift.py` — Caret Lift Gate
+
+THE KEYBOARD LIFTS THE PICTURE ONLY IF NEEDED, ONLY BY THE SHORTFALL (owner
+2026-08-07, after asking for the opposite thing twice and being right both
+times: a box at the bottom is covered unless the picture rises, a box at the
+top leaves the screen if it does). Runs `client/caret.js` WHOLE in node — it
+is pure by design, the `voice.js` / `view-anchor.js` pattern.
+
+**Rewritten 2026-08-09, because this file is half of why five rounds shipped
+green while the rise was pinned at exactly 0 on his tablet.** The old fixture
+handed the rule a view transform with `VIEW = {"scale": float(CANVAS_H)}` —
+1800 — under a confident paragraph explaining why that was right. `view.scale`
+is a ZOOM FACTOR and is 1 at home; it can never hold 1800 in production. So the
+fixture made `caret.y * scale` mean "canvas pixels", the rule agreed with it,
+and on the real device the same expression put a caret at y=0.95 at 0.95
+PIXELS from the top of the screen. Same lesson as the Move handle two sections
+up: **a gate that invents its own value for a production variable proves the
+fixture to itself.**
+
+The rule now takes the rect the picture is DRAWN into (`drawnRect()`), which is
+what the owner actually looks at, and this gate feeds it rects a real phone
+produces:
+- *the production case really produces pixels* — the check the old fixture
+  could not make. Caret at y=0.95, a 700 px keyboard on an 1800 px canvas, and
+  the answer asserted EXACTLY: **660 px** on a full-canvas picture and
+  **519 px** on a LETTERBOXED one (`picture = {y: 150, h: 1500}` — layout
+  focus, where he does most of his typing, and a shape the old fixture had no
+  way to express). They must differ: the old arithmetic dropped the letterbox
+  offset entirely, so a check that cannot tell those two apart never looked at
+  the picture at all.
+- *only if needed / only by the shortfall / never off the top* — a caret at the
+  top moves nothing, a 20 px overlap lifts 34 px and not 700, and a keyboard
+  leaving a 50 px strip lifts only what the strip can take.
+- *an unknown caret never moves the picture* — and a caller still passing the
+  retired `unknownMode` argument changes nothing, so the deleted branch cannot
+  come back by accident.
+- *the plumbing, not just the arithmetic* — `window.__imeHeight` must exist in
+  `render.js`, be folded in as `Math.max(kbSelf, imeHeight)`, and sit BETWEEN
+  `updateViewport` and `initMse`. That last one is not pedantry: the receiver
+  was deleted as collateral by a revert of the streaming block it happened to
+  sit next to, and nothing noticed because nothing in the repo calls a
+  `window.*` global. `Insets.kt` must still push the inset and must carry
+  `forgetImeInset`.
+
+Proven by planting the pre-2026-08-09 `caret.y * view.scale + view.ty` back:
+five checks go red, every one of them reporting a rise of **0** — the exact
+symptom he reported six times.
+
+Run: `.venv\Scripts\python tests/test_caret_lift.py` (needs node) — also a
+fail-closed step in `build.py` (0m/6).
 
 ### `test_stream_lifecycle.py` — Stream Lifecycle Gate
 Proves that a client which is GONE takes its encoder with it. Born from the

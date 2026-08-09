@@ -911,6 +911,11 @@ class MainActivity : AppCompatActivity() {
             // load must not count as a live document.)
             pageAlive = !lastLoadFailed
             loadingView.visibility = View.GONE
+            // A new document has no `window.__imeHeight` history — the shell's
+            // memo of the last pushed inset does, and it outlives the page.
+            // Forget it and re-deliver, or a keyboard reopened at the same
+            // height after a reload is never announced (see Insets.kt).
+            forgetImeInset()
         }
     }
 

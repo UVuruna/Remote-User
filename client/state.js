@@ -75,6 +75,12 @@ const LIVE_TARGET_BEHIND_S = 0.1;
 // him moving the mouse produces several lines to compare across fps settings.
 const LIVE_REPORT_S = 15;
 const BUFFER_KEEP_S = 8;         // decoded history kept in MSE before trimming
+// How long the keyboard's height must stand still before it is worth one line
+// in the PC's log (render.js `reportKeyboard`). Android ANIMATES the IME in and
+// fires the inset listener on every frame of it, so an un-settled report would
+// bury the one number that matters under twenty half-open keyboards — and it
+// would print a rise computed against a keyboard that was still moving.
+const KB_REPORT_SETTLE_MS = 400;
 
 // The PC cursor sits exactly under the finger (owner decision 2026-08-02,
 // reversing the 2026-07-26 offset system after living with it: the pointer
@@ -168,13 +174,26 @@ window.addEventListener("error", (e) => setStatus("disconnected", `Page error: $
 window.addEventListener("unhandledrejection", (e) =>
   setStatus("disconnected", `Page error: ${e.reason}`));
 
-// The canvas keeps its FULL height when the soft keyboard opens (owner
-// 2026-08-03 — the picture must never be SQUEEZED, and that half still
-// holds). It is no longer LIFTED: the owner withdrew that on 2026-08-07
-// because a keyboard-sized lift carried the very line he was typing off the
-// top of the screen. The keyboard covers what it covers; nothing moves. So
-// `kbShift` is 0 and stays 0 — kept as the one place a future lift would go,
-// and as the one place every gesture already passes through.
+// HOW FAR THE PICTURE HAS BEEN RAISED, in CSS px, and the one place every
+// finger passes through on its way to a PC coordinate.
+//
+// THE RULE, in the shape he settled it (owner decree 2026-08-07): the canvas
+// keeps its FULL height when the soft keyboard opens — the picture is never
+// SQUEEZED — and it is NEVER lifted by the KEYBOARD's height. That second half
+// is his own 2026-08-03 request withdrawn after living with it: the row he is
+// typing into is almost never at the very bottom of the PC screen, so a
+// keyboard-sized lift carried the text he was watching off the top.
+//
+// It IS lifted by the caret's SHORTFALL — the few pixels, if any, by which the
+// row he is typing in would otherwise sit under the keys. That is the rule in
+// client/caret.js, it is answered with 0 most of the time, and `kbShift` is
+// where its answer lands in CSS px (`caretRise / devicePixelRatio`).
+//
+// So this is NOT 0 and no longer "stays 0" — it said so here until 2026-08-09,
+// months after `caretRise` started feeding it, and a comment that flatly
+// contradicts the line under it is how the next round loses an hour.
+// `toCanvasPx` must keep adding it: a finger that touches a risen picture has
+// to land on the PC pixel under it, not on the one that used to be there.
 let kbShift = 0;
 
 // WHERE THE PC SAYS THE TYPING CARET IS, and how far the picture rose for it
@@ -192,18 +211,19 @@ let kbShift = 0;
 // It rides `kbShift` for the INVERSE mapping because that is what kbShift was
 // left in place for: the one point every gesture passes through. A finger that
 // touches a risen picture must still land on the PC pixel under it.
-// HIS SWITCH for the apps that expose no caret at all (owner 2026-08-07 —
-// "alternativna verzija bi bila da korisnik ima neki svicer"): "cover" does
-// nothing, which is what he chose to live with when there was no caret to be
-// had, and "lift" is the old whole-keyboard rise for a window he knows sits at
-// the bottom. It applies ONLY when the PC says it cannot see the caret — a
-// known caret is always obeyed. Desktop-owned like every other look decision
-// (his answer P4), so it will arrive in `config.ui`; until that field exists
-// the default stands, and the default is to cover.
-let caretUnknownMode = "cover";
+//
+// WHEN THE PC CANNOT SEE THE CARET, NOTHING MOVES. There was a
+// `caretUnknownMode` here — his idea of 2026-08-07, a Settings switch letting
+// a window he knows sits at the bottom take the old whole-keyboard lift. It
+// was declared, never assigned, and `config.ui` never grew the field, so the
+// branch it fed in caret.js could not run: a documented switch that did
+// nothing. Both went on 2026-08-09 (owner decree 2026-08-07 — legacy things
+// are removed, not kept). It comes back the day the desktop Settings window
+// grows the control, and not before.
 let claudeSaved = {};
 // What the SHELL measured the keyboard to be, in CSS px (0 = closed, or a
-// dev browser that never told us). See render.js `updateViewport`.
+// dev browser that never told us). The page cannot measure this for itself
+// under edge-to-edge — see render.js `updateViewport` and `window.__imeHeight`.
 let imeHeight = 0;
 let pcCaret = null;
 let caretRise = 0;

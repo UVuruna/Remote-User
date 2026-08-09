@@ -65,3 +65,23 @@ fun MainActivity.watchImeInsets() {
         insets
     }
 }
+
+/** THE MEMO ABOVE OUTLIVES THE PAGE, AND THAT IS A BUG (found 2026-08-09).
+ *
+ *  `lastImeCss` is file-scope: it survives every WebView reload, while
+ *  `window.__imeHeight` does not — a fresh document starts at zero. So a
+ *  keyboard re-opened at the SAME height after a reload (a reconnect, a
+ *  re-pair, any `web.reload()`) matched the memo, was skipped as "no change",
+ *  and the new page never learned there was a keyboard at all. The rescue
+ *  would simply not happen for the rest of that session, silently, and only
+ *  after a reload — which is exactly the shape of a bug that survives testing.
+ *
+ *  Called from `onPageFinished`: forget what the old document was told, then
+ *  ask the platform to deliver the current insets again so the new one is told
+ *  the truth immediately, rather than waiting for the user to close and reopen
+ *  the keyboard. Re-using the listener above is deliberate — one path to the
+ *  page, so the two can never disagree. */
+fun MainActivity.forgetImeInset() {
+    lastImeCss = -1
+    ViewCompat.requestApplyInsets(web)
+}

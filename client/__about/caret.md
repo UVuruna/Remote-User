@@ -52,12 +52,47 @@ a CSS transform on an element. The canvas and the colour behind it therefore
 cannot move: the filler is the canvas backdrop showing where the picture is
 *not*, so it cannot travel with the picture — it is not part of it.
 
+## What it is measured against (2026-08-09)
+
+`caretLift({ caret, picture, canvasHeight, keyboardHeight })`. A caret is
+**monitor-normalized** (0..1, from `server/caret.py`), so the only honest way
+to turn it into a pixel is the rect the picture is actually **drawn** into —
+`drawnRect()` in [Render](render.md):
+
+```
+caretTop    = picture.y + caret.y * picture.h
+caretBottom = picture.y + (caret.y + caret.h) * picture.h
+```
+
+**It used to take the view TRANSFORM, and that was half of why five rounds
+shipped a rise of exactly 0.** The old form was `caret.y * view.scale +
+view.ty`, but `view.scale` is a ZOOM FACTOR and is **1 at home** — so a caret
+at y=0.95 landed 0.95 *pixels* from the top of an 1800 px screen. Every caret
+was already clear of every keyboard, forever, whatever height it was handed.
+
+The drawn rect folds in the zoom, the pan **and** the letterbox offset the old
+form dropped entirely, so "the lift follows the view, not the monitor" still
+holds and a letterboxed layout — where he does most of his typing — is finally
+measured where it really sits on his screen.
+
+The other half was the plumbing: `window.__imeHeight` had been deleted as
+collateral by a revert of unrelated streaming code, so the rule was being fed a
+keyboard height of 0 as well. Two independent zeros, one symptom.
+
 ## When the PC cannot find a caret
 
 Some apps expose none. An app that cannot say where it is typing is **never
-guessed at**: the fallback is his own Settings switch — `"cover"` (do nothing,
-the behaviour he chose to live with) or `"lift"` (the old whole-keyboard lift,
-for apps he knows sit at the bottom). `"cover"` is the default.
+guessed at**, and nothing moves.
+
+There was a `"lift"` fallback here — his own idea of 2026-08-07, a Settings
+switch for windows he knows sit at the bottom. It was **dead code**: the
+desktop never grew the control, `config.ui` carries no such field, and the
+page's `caretUnknownMode` was assigned nowhere, so the branch could not run
+while a comment beside it promised a switch that did not exist. It was deleted
+on 2026-08-09 (owner decree 2026-08-07 — legacy things are removed, not kept),
+and [the gate](../../tests/test_caret_lift.py) now proves a caller still
+passing the retired argument changes nothing. It comes back the day the desktop
+Settings window grows the control that would feed it.
 
 ## Why it is its own file
 

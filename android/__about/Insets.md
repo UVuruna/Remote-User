@@ -51,3 +51,18 @@ its window keeps working exactly as before.
 | `hideSystemBars()` | Immersive, transient-by-swipe. Re-applied on every focus gain — the system restores the bars after dialogs, app switches and the keyboard. |
 | `watchImeInsets()` | Pushes `__imeHeight(cssPx)` to the page whenever the inset changes, and only when it changes. |
 | `lastImeCss` | The last value pushed, so a re-layout that changes nothing costs no JavaScript call. |
+| `forgetImeInset()` | Clears that memo and re-requests the insets. Called from `onPageFinished`. |
+
+## Why the memo has to be forgotten on every page load
+
+`lastImeCss` is file-scope, so it **outlives the document**. `window.__imeHeight`
+does not — a fresh page starts knowing nothing. A keyboard reopened at the
+**same height** after a reload (a reconnect, a re-pair, any `web.reload()`)
+therefore matched the memo, was skipped as "no change", and the new page never
+learned there was a keyboard at all: the caret rescue simply did not happen for
+the rest of that session, silently, and only after a reload.
+
+`forgetImeInset()` resets it to `-1` and calls `ViewCompat.requestApplyInsets`,
+so the current inset is re-delivered down the **same listener** immediately
+rather than waiting for the user to close and reopen the keyboard. One path to
+the page, so the two can never disagree.

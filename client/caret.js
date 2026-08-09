@@ -19,12 +19,13 @@
 // shorter than the phone letterboxes. "Poenta je da tastatura kada pomera sa
 // offsetom ne pomera taj prazan deo već pomera samo vidljivi ekran gde se
 // nalazi aplikacija, i to samo ako ima potrebe."
-// In this client that is exactly what a change to the VIEW TRANSFORM does: the
-// canvas and the colour behind it do not move at all; only what is drawn
-// through the transform rises. The filler is the canvas backdrop showing where
-// the picture is not — it cannot travel with the picture, because it is not
-// part of it. That is the whole reason the lift is expressed as canvas pixels
-// added to `view.ty` and never as a CSS transform on an element.
+// In this client that is exactly what moving the DRAWN RECT does: the canvas
+// and the colour behind it do not move at all; only the picture painted into
+// that rect rises (render.js `redraw` — `D.y -= caretRise`). The filler is the
+// canvas backdrop showing where the picture is not — it cannot travel with the
+// picture, because it is not part of it. That is the whole reason the lift is
+// expressed as canvas pixels taken off the drawn rect and never as a CSS
+// transform on an element.
 //
 // --- CARET_LIFT_START (tests/test_caret_lift.py extracts this block) --------
 
@@ -46,13 +47,25 @@ const CARET_TOP_MARGIN_PX = 24;
  *  ({x, y, w, h}, 0..1 of the displayed monitor) as the PC reported it, or
  *  null when the PC could not find one — some apps expose no caret at all, and
  *  an app that cannot say where it is typing must not be guessed at.
- *  `view` is the live transform ({scale, tx, ty}); `unknownMode` is his
- *  Settings switch for the no-caret case: "cover" (do nothing — the behaviour
- *  he has now) or "lift" (the old whole-keyboard lift, for apps he knows sit
- *  at the bottom). "cover" is the default because it is the one he chose to
- *  live with when the caret was not available at all.
+ *
+ *  `picture` is the rect the monitor is DRAWN into on this canvas ({y, h} in
+ *  canvas px — render.js `drawnRect()`), and it is the only thing a 0..1
+ *  coordinate can honestly be turned into a pixel by.
+ *
+ *  IT USED TO TAKE THE VIEW TRANSFORM, AND THAT WAS THE SECOND HALF OF HIS
+ *  BUG (found 2026-08-09). The old arithmetic was `caret.y * view.scale +
+ *  view.ty`, but `view.scale` is a ZOOM FACTOR and it is 1 at home — so a
+ *  caret at y=0.95 was placed 0.95 PIXELS from the top of an 1800 px screen —
+ *  every caret was therefore "already comfortably above the keyboard" and
+ *  this function returned 0 forever, however perfect the keyboard height it
+ *  was handed. The gate could not catch it either: its fixture pinned
+ *  `view.scale` to the canvas height, a value production can never hold.
+ *  The drawn rect folds in the zoom, the pan AND the letterbox offset that
+ *  the old form dropped entirely — so "the lift follows the view, not the
+ *  monitor" still holds, and a letterboxed layout is finally measured where
+ *  it actually sits on his screen.
  */
-function caretLift({ caret, view, canvasHeight, keyboardHeight, unknownMode }) {
+function caretLift({ caret, picture, canvasHeight, keyboardHeight }) {
   // No keyboard on screen: there is nothing to be covered BY. This is checked
   // first so that a stale caret can never lift a picture nobody is typing on.
   if (!(keyboardHeight > 0)) return 0;
@@ -60,16 +73,24 @@ function caretLift({ caret, view, canvasHeight, keyboardHeight, unknownMode }) {
   if (keyboardTop <= 0) return 0; // a keyboard taller than the screen: give up
 
   if (!caret) {
-    // The PC could not say. Never guess a position — obey his switch.
-    if (unknownMode !== "lift") return 0;
-    // The old rule, kept only as HIS fallback: lift by what is covered, and
-    // never past the top margin.
-    return Math.max(0, Math.min(keyboardHeight, canvasHeight - CARET_TOP_MARGIN_PX));
+    // THE PC COULD NOT SAY, SO NOTHING MOVES. Never guess a position: a wrong
+    // lift costs him the row he IS looking at, which is the exact failure
+    // that got the 2026-08-03 lift withdrawn.
+    //
+    // A second branch stood here until 2026-08-09 — an `unknownMode: "lift"`
+    // fallback for windows he knows sit at the bottom (his own idea,
+    // 2026-08-07: a switch the user could set). It was DEAD CODE and had
+    // never once run: the desktop never grew the control, `config.ui` carries
+    // no such field, and the page's `caretUnknownMode` was assigned nowhere —
+    // so the comment beside it promised a switch that did not exist. Deleted
+    // rather than left standing (owner decree 2026-08-07 — we remove legacy
+    // things, we do not keep them), and it comes back the same day the
+    // desktop Settings window grows the control that would feed it.
+    return 0;
   }
 
-  const scale = view.scale;
-  const caretTop = caret.y * scale + view.ty;
-  const caretBottom = (caret.y + caret.h) * scale + view.ty;
+  const caretTop = picture.y + caret.y * picture.h;
+  const caretBottom = picture.y + (caret.y + caret.h) * picture.h;
 
   // ONLY IF NEEDED. The caret is already above the keyboard, with room to
   // read: the picture does not move, and this is the ordinary case.

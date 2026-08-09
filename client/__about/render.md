@@ -122,11 +122,60 @@ formula unchanged.
 soft keyboard (the shell runs `adjustResize`) shortened the canvas and the
 whole picture was re-fitted into it — the layout visibly deformed. The canvas
 now keeps the FULL height of the current orientation (`fullView`, remembered
-across keyboard openings — the width is the tell: it changes only on rotation)
-and is NOT lifted (owner 2026-08-07, withdrawing his own 2026-08-03 request
-after living with it): the keyboard simply covers what it covers. A
-keyboard-sized lift carried the very line he was typing off the TOP of the
-screen, because the row he types into is almost never at the bottom of the
-PC's picture — "izbaci tekst koji se kuca iz vidokruga". `kbShift` stays 0,
-so `toCanvasPx` ([State](state.md)) is a straight mapping again. `--kb` is
-unchanged: the phone's own controls still lift clear of the keys.
+across keyboard openings — the width is the tell: it changes only on rotation).
+
+It is never lifted by the KEYBOARD'S HEIGHT either (owner 2026-08-07,
+withdrawing his own 2026-08-03 request after living with it): a keyboard-sized
+lift carried the very line he was typing off the TOP of the screen, because
+the row he types into is almost never at the bottom of the PC's picture —
+*"izbaci tekst koji se kuca iz vidokruga"*. What it IS lifted by is the
+caret's own **shortfall** — see [Caret](caret.md) — which is 0 most of the
+time and lands in `kbShift` ([State](state.md)) so every touch keeps mapping
+onto the picture it can see. `--kb` is unchanged: the phone's own controls
+still lift clear of the keys.
+
+## The keyboard-height pipe, and why it lives beside `updateViewport`
+
+`window.__imeHeight(cssPx)` is the shell's only way in ([Insets](../../android/__about/Insets.md)).
+Under edge-to-edge on targetSdk 35 Android stops resizing the window for the
+IME, so the page's own `innerHeight - visualViewport.height` returns **0 with
+the keyboard wide open** — five rounds of caret work were handed that zero and
+correctly returned a rise of 0. `updateViewport()` takes the LARGER of the two
+readings, because a zero from either must never beat a real measurement.
+
+The receiver sits **immediately after `updateViewport()`**, deliberately. It
+used to live at the bottom of this file among the MSE starve-recovery code, and
+a revert of that streaming block took it with it as collateral — the commit
+message never mentioned the keyboard, nothing in the repo calls a `window.*`
+global, and `imeHeight` silently stayed 0 for another release. Physical
+adjacency to code with a different lifetime is what cost that, and
+[the gate](../../tests/test_caret_lift.py) now asserts the receiver's position
+between `updateViewport` and `initMse`.
+
+## Order inside `updateViewport()` (2026-08-09)
+
+The caret rise is computed **last**, after `computeBaseRect()`,
+`computeViewHome()` and `clampView()`: the rule is measured against the rect
+the picture is really drawn into, so the canvas must already be resized and the
+home transform re-fitted, or a rotation would grade the caret against the
+previous orientation's picture. `drawnRect()` returns the **un-risen** rect —
+`redraw()` subtracts `caretRise` from its own copy at draw time — so feeding it
+back in cannot compound.
+
+`reportKeyboard()` then writes one `client_log` line per keyboard **open** and
+one per **close** — never one per page load, which is what the previous attempt
+did and why the evidence was always missing. It is debounced by
+`KB_REPORT_SETTLE_MS` ([State](state.md) → Tunables): Android animates the IME
+in and fires the inset listener on every frame of it, so an un-settled report
+would bury the answer under twenty half-open keyboards and print a rise
+computed against a keyboard that was still moving. A close earns a line because
+`ime=0 browser=0` is only observable if a zero can reach the log at all.
+
+```
+[keyboard] ime=<px> browser=<px> caret=<y|unknown> pic=<y>+<h> kbTop=<px> rise=<px> dpr=<n>
+```
+
+It discriminates the ways this can still be wrong: `ime=0 browser=0` is the
+shell not reaching the page, `caret=unknown` is the PC unable to see the caret
+in that app, and `caret=0.951 rise=0` is arithmetic. A real rise is
+hand-checkable against `pic` and `kbTop` on the same line.

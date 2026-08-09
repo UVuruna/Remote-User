@@ -103,12 +103,40 @@ app comes back into the layout it was working in.
 staircase ([Gestures](gestures.md)) has applied, per layout index; `send()`
 shifts the indices down when a `layout_remove` goes out.
 
-## `kbShift` (owner 2026-08-03)
+## `kbShift` (owner 2026-08-03 / 2026-08-07)
 The canvas keeps its full height when the soft keyboard opens — it is never
-SQUEEZED ([Render](render.md)) — and since 2026-08-07 it is not LIFTED
-either: the keyboard covers what it covers. `kbShift` is therefore 0 and
-`toCanvasPx` is a straight mapping. It is kept as the ONE place a future
-lift would go, because every gesture already passes through it.
+SQUEEZED ([Render](render.md)) — and it is never lifted by the **keyboard's
+height** (owner 2026-08-07, withdrawing his own 2026-08-03 request: the row he
+types into is almost never at the bottom of the PC screen, so a keyboard-sized
+lift carried the text he was watching off the top).
+
+It IS lifted by the caret's **shortfall** — the few pixels, if any, by which
+the row he is typing in would otherwise sit under the keys ([Caret](caret.md)).
+`kbShift` is where that answer lands in CSS px (`caretRise / devicePixelRatio`)
+and `toCanvasPx` adds it, so a finger touching a risen picture still lands on
+the PC pixel under it.
+
+**This section said "`kbShift` is therefore 0" until 2026-08-09**, months after
+`caretRise` started feeding it. It was harmless while every rise really was 0
+for other reasons — and it is exactly the kind of confident, false note that
+costs the next round an hour, so it is recorded here rather than quietly
+replaced.
+
+## When the PC cannot see the caret (2026-08-09)
+Nothing moves. There was a `caretUnknownMode` here — his idea of 2026-08-07, a
+Settings switch letting a window he knows sits at the bottom take the old
+whole-keyboard lift. It was declared, **assigned nowhere**, and `config.ui`
+never grew the field, so the branch it fed in `caret.js` could not run: a
+documented switch that did nothing. Both were deleted (owner decree 2026-08-07
+— legacy things are removed, not kept). It comes back the day the desktop
+Settings window grows the control that would feed it, and not before.
+
+## `imeHeight` (2026-08-09)
+What the SHELL measured the soft keyboard to be, in CSS px — 0 when it is
+closed, and 0 forever in a dev browser that never tells us. The page cannot
+measure this for itself under edge-to-edge; see
+[Render](render.md) → the keyboard-height pipe, and
+[Insets](../../android/__about/Insets.md) for why only the shell can answer.
 
 ## The hide reason comes from the shell (owner failure 2026-08-05)
 
