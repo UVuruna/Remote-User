@@ -669,6 +669,30 @@ def main() -> int:
             # class of defect one layer up.
             portrait = h > w
 
+            # THE FROZEN PICTURE (owner report 2026-08-09, live, from his own
+            # log: behind went NEGATIVE and pinned at -11.10 s for two solid
+            # minutes while dictation still reached the PC). `behind` is
+            # buffered.end - currentTime, so negative means the player's clock
+            # has run PAST the data. The only rule was `behind > 0.5`, which a
+            # negative number matches never — so the freeze was permanent
+            # until the whole H.264 session was rebuilt.
+            drift = page.evaluate('''() => [
+              ['healthy 0.20s',   liveAction(0.20),  ''],
+              ['at the edge 0.49', liveAction(0.49), ''],
+              ['drifted 0.80s',   liveAction(0.80),  'behind'],
+              ['his freeze -11.1s', liveAction(-11.1), 'starved'],
+              ['just past zero -0.05s', liveAction(-0.05), ''],
+              ['starved -0.5s',   liveAction(-0.5),  'starved'],
+            ].filter(([, got, want]) => got !== want)''')
+            results[f"a starved player is caught, not only a late one @ {label}"] = not drift
+            if drift:
+                print(f"  DETAIL live drift @ {label}: {drift}")
+            # …and the landing must leave real headroom. 0.1 s is six frames at
+            # 60 fps: his drift rode 0.47-0.49 for a minute, crossed, and the
+            # next sample was already negative.
+            results[f"a catch-up lands with headroom, not on the edge @ {label}"] = (
+                page.evaluate("LIVE_TARGET_BEHIND_S") >= 0.3)
+
             # AUTO-HIDE — once per SIZE, not per look: it is a behaviour, and
             # a colour cannot change it. Run before the look sweep so the
             # controls are in a known state for everything that follows.

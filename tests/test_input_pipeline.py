@@ -769,6 +769,31 @@ def main():
 
         browser.close()
 
+    # ── PHONE → PC CONTENT: a picture missing its tail is still a picture ──
+    # Owner report 2026-08-09: he sent an image from the tablet, the loading
+    # animation ran, and nothing arrived. His own log named it — Pillow refused
+    # 717,894 bytes of ordinary JPEG over "image file is truncated (5 bytes not
+    # processed)", and the OpenCV fallback (which is only there for formats
+    # Pillow does not KNOW) refused it too. Three uploads died that way.
+    #
+    # This belongs in the INPUT gate: an upload is phone → PC → Ctrl+V, the
+    # same pipeline by a different door.
+    import io as _io
+    sys.path.insert(0, str(PROJECT / "server"))
+    import content as _content
+    from PIL import Image as _Image
+
+    _buf = _io.BytesIO()
+    _Image.new("RGB", (640, 480), (200, 60, 40)).save(_buf, "JPEG", quality=92)
+    _whole = _buf.getvalue()
+    results["upload: a whole JPEG decodes"] = _content.decode_upload(_whole) is not None
+    # EXACTLY his failure: five bytes short.
+    results["upload: a JPEG five bytes short still decodes"] = (
+        _content.decode_upload(_whole[:-5]) is not None)
+    # …and it must still be a picture, not anything at all.
+    results["upload: something that is not an image is still refused"] = (
+        _content.decode_upload(b"this is not an image") is None)
+
     if errors:
         print("PAGE ERRORS:")
         for e in errors:

@@ -101,8 +101,13 @@ function redraw() {
   ctx.fillStyle = canvasBg;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   const D = drawnRect();
-  D.y -= caretRise;  // the picture rises, the canvas does not
-
+  // ONCE. This line was here TWICE from 0.0.349 until 2026-08-09 — a scripted
+  // edit that meant to touch two different draw sites hit this one function
+  // twice instead. The picture therefore rose by DOUBLE the caret's shortfall
+  // whenever the keyboard was open, while `kbShift` (and so every touch
+  // coordinate) still carried the single value: the row he was typing in went
+  // out of sight and his finger no longer landed where the picture said. That
+  // is his "tastatura je sakrila kursor" of 2026-08-09, and it was mine.
   D.y -= caretRise;  // the picture rises, the canvas does not
 
   ctx.save();
@@ -348,20 +353,66 @@ function pumpMse() {
 // SERVER log every LIVE_REPORT_S while streaming, so his own log answers the
 // question on the next session he runs — no panel, nothing for him to do.
 let liveSeeks = 0;
+let liveStarves = 0;
 let liveDriftMax = 0;
+let liveDriftMin = 0;
 let liveReportAt = 0;
 
 function reportLiveDrift(behind) {
   liveDriftMax = Math.max(liveDriftMax, behind);
+  // The MINIMUM matters more than the maximum and the first version of this
+  // line did not record it: `peak` was a plain `Math.max`, so through two
+  // solid minutes of a frozen picture at -11 s it printed `peak=0.00s`. The
+  // measurement was blind to the exact failure it was written to find.
+  liveDriftMin = Math.min(liveDriftMin, behind);
   const now = performance.now();
   if (!liveReportAt) { liveReportAt = now; return; }
   if (now - liveReportAt < LIVE_REPORT_S * 1000) return;
   send({ type: "client_log", text:
     `[live] behind=${behind.toFixed(2)}s peak=${liveDriftMax.toFixed(2)}s ` +
-    `jumps=${liveSeeks} in ${Math.round((now - liveReportAt) / 1000)}s` });
+    `low=${liveDriftMin.toFixed(2)}s jumps=${liveSeeks} ` +
+    `starves=${liveStarves} in ${Math.round((now - liveReportAt) / 1000)}s` });
   liveReportAt = now;
   liveSeeks = 0;
+  liveStarves = 0;
   liveDriftMax = 0;
+  liveDriftMin = 0;
+}
+
+// THE FROZEN PICTURE, NAMED FROM HIS OWN LOG (owner report 2026-08-09, live,
+// at 60 fps / 20 Mbps: the tablet's screen stopped while dictation still
+// reached the PC and the mouse wheel did nothing).
+//
+//   [live] behind=0.48s  0.47  0.47  0.49  0.02        ← healthy, riding the
+//   [live] behind=-1.68s -4.08 -6.10 -8.44 -10.51        0.5 s threshold
+//   [live] behind=-11.09 -11.09 -11.10 -11.10 -11.10   ← FROZEN, two minutes
+//   [live] behind=0.26s                                ← only a session reset
+//                                                        brought it back
+//
+// `behind` is `buffered.end - currentTime`. NEGATIVE means the player's clock
+// has run PAST the data — the video element has nothing to show at the time
+// it is asking for, so it stalls. Once there, nothing recovered it: the only
+// rule was `behind > LIVE_MAX_BEHIND_S`, so a NEGATIVE drift matched nothing
+// and the picture stayed dead until the whole H.264 session was rebuilt.
+//
+// And it is the catch-up itself that walks him into it. The seek landed at
+// `end - 0.1s` — SIX FRAMES at 60 fps. One late chunk after that and the
+// clock is past the buffer. His log shows exactly that: the drift sat at
+// 0.47-0.49 for a minute, crossed, and the next sample was already negative.
+//
+// THE OTHER HALF, and it corrects what task 83 assumed: this is STARVATION,
+// not bufferbloat. My hypothesis was that more fps means a growing backlog
+// and a later picture. His numbers say the opposite — at 4K60 the phone runs
+// OUT of frames. So the answer to "why does 10 fps feel smoother" is that the
+// pipeline cannot sustain 60, and the old code turned every shortfall into a
+// permanent freeze instead of a stutter.
+// The DECISION, alone and pure, so its gate can run it whole rather than
+// asserting on a video element's mood: "starved" (the clock is past the data —
+// the freeze), "behind" (drifted too far back), or "" (leave it alone).
+function liveAction(behind) {
+  if (behind < LIVE_STARVED_S) return "starved";
+  if (behind > LIVE_MAX_BEHIND_S) return "behind";
+  return "";
 }
 
 function onMseUpdateEnd() {
@@ -370,9 +421,17 @@ function onMseUpdateEnd() {
     const end = b.end(b.length - 1);
     const behind = end - video.currentTime;
     reportLiveDrift(behind);
-    if (behind > LIVE_MAX_BEHIND_S) {
+    const act = liveAction(behind);
+    if (act === "starved") {
+      // STARVED: the clock is past the data. Come BACK to where the picture
+      // actually is. This is the freeze-breaker, and it is the one rule the
+      // old code had no case for.
+      liveStarves++;
+      video.currentTime = Math.max(b.start(b.length - 1), end - LIVE_TARGET_BEHIND_S);
+    } else if (act === "behind") {
       liveSeeks++;
-      video.currentTime = end - LIVE_TARGET_BEHIND_S; // fell behind (jank, slow link) — jump
+      // Land with real headroom, not on the edge — see above.
+      video.currentTime = end - LIVE_TARGET_BEHIND_S;
     }
     if (end - b.start(0) > BUFFER_KEEP_S * 2 && sourceBuffer && !sourceBuffer.updating) {
       sourceBuffer.remove(0, end - BUFFER_KEEP_S);
@@ -381,6 +440,26 @@ function onMseUpdateEnd() {
   }
   pumpMse();
 }
+
+// …AND A STALL THAT ARRIVES WITH NO APPEND MUST STILL BE CAUGHT. Everything
+// above hangs off `updateend`, which only fires when a chunk lands. His pin at
+// -11.10 s for two minutes is what that costs: no append, no check, no
+// recovery. The video element's own `waiting`/`stalled` events say "I have run
+// out" without needing one, and a slow tick is the backstop for the case where
+// even those do not fire.
+function unfreezeIfStarved() {
+  if (!sourceBuffer || !video.buffered.length) return;
+  const b = video.buffered;
+  const end = b.end(b.length - 1);
+  if (end - video.currentTime >= LIVE_STARVED_S) return;
+  liveStarves++;
+  video.currentTime = Math.max(b.start(b.length - 1), end - LIVE_TARGET_BEHIND_S);
+  if (video.paused) video.play().catch(() => {});
+}
+
+video.addEventListener("waiting", unfreezeIfStarved);
+video.addEventListener("stalled", unfreezeIfStarved);
+setInterval(unfreezeIfStarved, LIVE_UNFREEZE_TICK_MS);
 
 function renderLoop() {
   if (rafId) return;

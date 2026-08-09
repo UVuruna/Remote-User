@@ -47,9 +47,16 @@ def numbers(version: str) -> tuple[int, ...]:
     return tuple(int(p) for p in re.findall(r"\d+", version)[:3])
 
 
-def check() -> Update | None:
-    """None = up to date, disabled, dev run, no releases yet, or unreachable."""
-    if not SETTINGS.update_check:
+def check(force: bool = False) -> Update | None:
+    """None = up to date, disabled, dev run, no releases yet, or unreachable.
+
+    `force` is the owner ASKING, right now (2026-08-09: "trebao bi da imam
+    opciju i tu na licu mesta da proverim novu verziju, neki button, a ne da
+    moram restart aplikacije"). The setting below governs the automatic check
+    at START; it must never gag a check he pressed a button for — a switch
+    that silently swallows a deliberate action is the worst kind.
+    """
+    if not force and not SETTINGS.update_check:
         return None
     current = numbers(app_version())
     if not current:

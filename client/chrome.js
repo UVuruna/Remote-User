@@ -57,7 +57,12 @@ keepFocus(hideBtn, () => {
 // not an audit artefact: it is the same page his phone runs. So the rule is
 // re-decided on every tick, and a blocker that appears while the controls are
 // hidden BRINGS THEM BACK rather than merely stopping the countdown.
-const AUTO_HIDE_MS = 3000;      // his number
+// 8 s, not the 3 s he first asked for: he lived with three and came back the
+// same evening — "malo sam preterao, tri sekunde je prebrzo da nestanu ove
+// komande, jako brzo nestanu" (lang-ok: his own words, quoted). Long enough to
+// read a set and reach for the button you meant, short enough that the screen
+// still clears itself while he watches something.
+const AUTO_HIDE_MS = 8000;
 const AUTO_HIDE_TICK_MS = 250;
 
 // Every overlay this page can raise. Asked by ELEMENT rather than by a flag

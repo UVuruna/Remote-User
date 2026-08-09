@@ -20,7 +20,7 @@ import clipboard
 import cv2
 import numpy as np
 import pillow_heif
-from PIL import Image, ImageOps
+from PIL import Image, ImageFile, ImageOps
 
 from input_injector import InputInjector
 
@@ -29,6 +29,26 @@ logger = logging.getLogger(__name__)
 # Phones (Samsung/Pixel defaults) shoot HEIC/HEIF, which neither OpenCV nor
 # plain Pillow read — this registers the HEIF codec into Pillow.
 pillow_heif.register_heif_opener()
+
+# A PICTURE MISSING ITS LAST FIVE BYTES IS STILL A PICTURE (owner report
+# 2026-08-09: he sent an image from the tablet, the loading animation ran, and
+# nothing ever arrived on the PC). His own server log named it exactly:
+#
+#   WARNING content: Pillow could not decode upload (image file is truncated
+#                    (5 bytes not processed)) — trying OpenCV
+#   ERROR   web: Upload not decodable: 717894 bytes, name='1000006359.jpg',
+#                type='image/jpeg', magic=b'\xff\xd8\xff\xe1\x00\xf6Exif\x00\x00'
+#
+# The magic bytes are a perfectly ordinary JPEG and there are seven hundred
+# thousand of them; Pillow refused the whole thing over a short final scan, and
+# OpenCV — which is only a fallback for formats Pillow does not KNOW — refused
+# it too. Three of his uploads died that way, all from the tablet, while the
+# phone's went through, which is what made it look like a tablet bug.
+#
+# Refusing here loses the entire picture to save nothing. Pillow's own switch
+# says "decode what is there", and what is there is the image minus a few
+# bytes of its last row.
+ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 
 def decode_upload(data: bytes):

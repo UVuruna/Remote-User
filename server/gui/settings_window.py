@@ -57,16 +57,19 @@ nobody can trust.
 
 import logging
 
-from PySide6.QtCore import QSize, Qt, QTimer
+from PySide6.QtCore import QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QFontMetrics
 from PySide6.QtWidgets import (
     QCheckBox, QComboBox, QDialog, QFormLayout, QHBoxLayout, QLabel,
     QPushButton, QVBoxLayout, QWidget,
 )
 
+import threading
+
 import autostart
 import foreground_lock
 import notify
+import updates
 from config import SETTINGS, save_user_settings
 from gui.sizing import settle_minimum
 from gui.switch import TRACK_W as THEME_SWITCH_W, ThemeSwitch, choose_theme
@@ -166,6 +169,11 @@ STARTUP_TEXT = ("Remote User starts hidden in the tray, so the phone can "
 
 
 class SettingsWindow(QDialog):
+    # The manual update check answers from a worker thread; Qt widgets
+    # may only be touched on the GUI thread, so the answer comes back as
+    # a signal rather than as a direct call.
+    _update_answer = Signal(str, str)
+
     """Modeless, like the Traffic window: the owner watches the main window's
     status pill while a stream change restarts the server."""
 
@@ -175,6 +183,7 @@ class SettingsWindow(QDialog):
         self._restart = restart
         self._settled = False   # the minimum is measured on first show
         self._form_label_widgets: list[QLabel] = []   # aligned on first show
+        self._update_answer.connect(self._say_update)
 
         self.setWindowTitle("Settings — Remote User")
 
@@ -470,12 +479,50 @@ class SettingsWindow(QDialog):
         # may have created the task, a previous session may have deleted it,
         # and a tick that remembered an intention instead of asking would be
         # wrong in both directions (autostart.py).
+        # ASK NOW, without restarting the app (owner 2026-08-09: "trebao bi da
+        # imam opciju i tu na licu mesta da proverim novu verziju, neki button,
+        # a ne da moram restart aplikacije"). The switch above governs the
+        # AUTOMATIC check at start; this is him asking, so it runs even with
+        # that switch off — a setting must not swallow a deliberate action.
+        self.update_now = QPushButton("Check now")
+        self.update_now.setObjectName("secondary")
+        self.update_now.clicked.connect(self._check_updates_now)
+        box.addWidget(self.update_now, alignment=Qt.AlignmentFlag.AlignLeft)
+        self.update_now_caption = self._caption(box, "")
+        self.update_now_caption.hide()
         self.autostart_check = QCheckBox("Start with Windows")
         self.autostart_check.setChecked(autostart.installed())
         self.autostart_check.toggled.connect(self._toggle_autostart)
         box.addWidget(self.autostart_check)
         self.startup_caption = self._caption(box, STARTUP_TEXT)
         return frame
+
+    def _check_updates_now(self) -> None:
+        """One press, one answer, off the GUI thread — the check is a network
+        call and a frozen window is not a status report."""
+        self.update_now.setEnabled(False)
+        self._say_update("Asking GitHub…", "")
+
+        def ask():
+            try:
+                found = updates.check(force=True)
+                text = (f"Version {found.version} is available — the main "
+                        f"window carries the button that installs it."
+                        if found else "This is the newest version.")
+                tone = "accent" if found else ""
+            except Exception as e:  # noqa: BLE001 — a failed check is a state
+                logger.warning("Manual update check failed: %s", e)
+                text, tone = "Could not reach GitHub just now.", "error"
+            self._update_answer.emit(text, tone)
+
+        threading.Thread(target=ask, daemon=True).start()
+
+    def _say_update(self, text: str, tone: str) -> None:
+        self.update_now_caption.setText(text)
+        self.update_now_caption.setProperty("tone", tone or None)
+        repolish(self.update_now_caption)
+        self.update_now_caption.show()
+        self.update_now.setEnabled(text != "Asking GitHub…")
 
     # -- stream settings ---------------------------------------------------
 
