@@ -473,19 +473,19 @@
           "options": [
             {
               "label": "opus",
-              "value": "opus"
+              "value": "claude-opus-5"
             },
             {
               "label": "sonnet",
-              "value": "sonnet"
+              "value": "claude-sonnet-5"
             },
             {
               "label": "haiku",
-              "value": "haiku"
+              "value": "claude-haiku-4-5"
             },
             {
               "label": "fable",
-              "value": "fable"
+              "value": "claude-fable-5"
             },
             {
               "label": "best — Fable where available, else Opus",
@@ -497,11 +497,11 @@
             },
             {
               "label": "opus[1m] — Opus, 1M context",
-              "value": "opus[1m]"
+              "value": "claude-opus-5[1m]"
             },
             {
               "label": "sonnet[1m] — Sonnet, 1M context",
-              "value": "sonnet[1m]"
+              "value": "claude-sonnet-5[1m]"
             },
             {
               "label": "default — your account's own",
@@ -513,32 +513,7 @@
           "label": "Thinking",
           "icon": "thinking",
           "text": "/effort",
-          "options": [
-            {
-              "label": "low — least",
-              "value": "low"
-            },
-            {
-              "label": "medium",
-              "value": "medium"
-            },
-            {
-              "label": "high — the usual default",
-              "value": "high"
-            },
-            {
-              "label": "xhigh — deeper",
-              "value": "xhigh"
-            },
-            {
-              "label": "max — strongest",
-              "value": "max"
-            },
-            {
-              "label": "auto — back to the model's own default",
-              "value": "auto"
-            }
-          ]
+          "enter": true
         },
         {
           "label": "Stop",

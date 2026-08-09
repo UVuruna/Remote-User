@@ -117,14 +117,55 @@ Shipped reserves, off until you tick them:
 | **Explorer** | Rename · New dir · Delete · Up | **Next tab** · **Prev tab** · New tab · Back · Forward · Copy path · Details · Search |
 | **Claude** | Usage · Model · **Thinking** · Stop | Menu · Mode · Compact · New chat · Rewind · Context · Agents · Resume · Focus |
 
-**Thinking asks, it does not run** (owner correction 2026-08-05, with the
-screenshot — then his better idea the same evening): `/effort` takes a level
-(`low|medium|high|xhigh|max|auto`), so sending it alone only prints its usage.
-The first fix typed `/effort` and stopped, leaving Claude's own menu on screen
-for the finger. The shipped answer is his: the button carries `options`, the
-PHONE shows the levels in the middle of the screen, and one tap sends the
-finished `/effort xhigh` + Enter. Anything whose answer is a small fixed set
-belongs in that shape — `options`, not a half-typed line.
+**Model executes only the FULL id; Thinking asks a question no argument can
+answer** (owner correction 2026-08-05, REVERSED 2026-08-09 — task 174 — after
+his screenshot showed both commands describing themselves and changing
+nothing: the conversation read "Set model to Fable 5 for this session only"
+and "Set effort level to high (this session only)" while Claude's OWN menu,
+open in the same picture, still read "Switch model… = Opus (1M context)" and
+"Effort (Max)". Two different diseases needed two different fixes:
+
+- **`/model` takes an argument, and Claude Code only RUNS it when that
+  argument names exactly ONE entry.** Measured on this project's own
+  transcript, an EXECUTED command carries the FULL model id
+  (`<command-args>claude-fable-5[1m]</command-args>` →
+  `"Set model to claude-fable-5"`), never the friendly word it is labelled
+  with. `fable` alone is a PREFIX of several full ids
+  (`claude-fable-5`, `claude-fable-5[1m]`), and Claude Code answers a prefix
+  match by reopening its OWN picker with the closest entry highlighted and
+  undescribed — that is exactly his screenshot, and exactly why the button
+  looked like it worked while it changed nothing. The Model button's options
+  now carry the full id as their `value` (`claude-opus-5`, `claude-sonnet-5`,
+  `claude-fable-5`, and `claude-haiku-4-5` — Haiku's own generation is 4.5,
+  not 5; there is no Haiku in the Claude 5 family, and shipping
+  `claude-haiku-5` would type a command that resolves to nothing, exactly the
+  failure class this task exists to close — plus the same `[1m]` pattern for
+  opus/sonnet's confirmed context variants) while the LABEL stays the
+  friendly word he taps;
+  `best`, `opusplan` and `default` are not numbered models and stay bare —
+  nothing else is a prefix of them, so they were never ambiguous.
+- **`/effort` takes NO argument at all** — it is interactive-only, a menu
+  Claude Code opens for the finger to pick from, and there is no submittable
+  level that runs it directly the way `/model <id>` runs a model switch. The
+  project's own Menu button already suspected exactly this (it types `/`
+  with no Enter "so the command list can be picked with the cursor"), and
+  the 2026-08-05 `options` redesign for Thinking was never proven against a
+  real device before shipping — it assumed `/effort <level>` behaves like
+  `/model <id>`. Thinking is MENU-STANDING again, the confirmed-working
+  design it replaced: it types the bare `/effort`, presses Enter ONCE —
+  which is what actually OPENS Claude's own level menu on the stream — and
+  stops. No argument, no second Enter, no `options` panel of our own; the
+  owner picks in the menu he can see, the same way the Menu button leaves
+  Claude's command list open for him.
+
+`panels.js`'s command chooser now reads `enter` per OPTION (falling back to
+the button's own `enter`, then `true`) instead of hardcoding it for every
+options-based command, so a future menu-standing CHOICE could still say so in
+its own data without another round of this.
+
+Honest status: this ships **unconfirmed** — it needs one ten-second
+observation on his machine (caret in a Claude prompt, tap Model → a model,
+touch nothing else, screenshot) before it is marked done.
 
 `Zones` is no longer shipped — zone chords are a **custom** category the owner
 adds when wanted (this file is hand-editable; a future desktop editor will
@@ -319,7 +360,7 @@ A button is one of:
 
 `modifier+…+key` — modifiers held while the last key is tapped.
 
-- **A choice** — `{ "label": "Thinking", "text": "/effort", "options": ["low", "medium", "high", "xhigh", "max", "auto"] }` (owner idea 2026-08-05). Some commands are not an action but a QUESTION: `/effort` takes a level, so sending it alone only prints its usage. A button with `options` shows the choices ON THE PHONE, in the middle of the screen, and one tap sends the finished command (`/effort xhigh` + Enter). It beats leaving another app's menu open for the finger to poke at, because it does not depend on that menu staying where it is. Options may be plain strings or `{ "label": …, "value": … }` when the two differ.
+- **A choice** — `{ "label": "Model", "text": "/model", "enter": true, "options": [{ "label": "opus", "value": "claude-opus-5" }, { "label": "fable", "value": "claude-fable-5" }] }` (owner idea 2026-08-05, corrected 2026-08-09 — task 174). Some commands take an ARGUMENT and Claude Code only RUNS them when that argument names exactly one entry — `/model` is exactly this, and its options' `value` must be the FULL id Claude Code actually accepts, never the friendly word shown as the `label` (a bare word can be a PREFIX of several ids and only reopens Claude's own picker, uncommitted — see "Model executes only the FULL id" above). A button with `options` shows the choices ON THE PHONE, in the middle of the screen, and one tap sends the finished command (`/model claude-fable-5` + Enter). Options may be plain strings or `{ "label": …, "value": … }` when the two differ; either the OPTION or the BUTTON may also carry its own `"enter"` (absent = `true`) for a command whose finished argument still needs to leave something standing rather than submitting outright. This shape only fits a command whose argument itself EXECUTES — a command that is interactive-only no matter what argument you hand it (like `/effort`) is a **typed** button instead (`"enter": true`, no `options`), left standing on Claude's own menu for the finger.
 - **Modifiers:** `ctrl`, `alt`, `shift`, `win`
 - **Keys:** letters, digits, `f1`–`f24`, `` ` `` (backquote), `/` (`slash`), or named: `enter`, `esc`, `tab`, `space`, `backspace`, `delete`, `insert`, `home`, `end`, `pageup`, `pagedown`, `left`, `up`, `right`, `down`, `minus`, `plus`, and the media keys `playpause`, `mute`, `volup`, `voldown`, `medianext`, `mediaprev`, `mediastop`
 

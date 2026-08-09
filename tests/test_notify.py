@@ -62,6 +62,40 @@ def main() -> int:
         len(notify.clean("x" * 500, notify.MAX_TEXT)) == notify.MAX_TEXT
         and notify.clean(None, 10, "Agent") == "Agent")
 
+    # --- 174: the Claude set's Model/Thinking commands must be EXECUTABLE --
+    # ("/model fable" describes itself and changes nothing — his screenshot,
+    # 2026-08-09). Measured on this coordinator's own transcript: an EXECUTED
+    # /model writes <command-args>claude-fable-5[1m]</command-args> ->
+    # "Set model to claude-fable-5" — the argument is the FULL model id, never
+    # the bare friendly word, which is a PREFIX of several entries and only
+    # re-opens Claude's own picker on a highlighted, uncommitted choice (his
+    # screenshot). `/effort` takes no argument at all — sending it alone only
+    # prints its usage, so Thinking goes back to the CONFIRMED-WORKING
+    # pre-2026-08-05 design: type the bare command, press Enter ONCE (opens
+    # Claude's own menu), and stop — no options panel of our own for it.
+    claude_shipped = next(
+        s for s in json.loads((PROJECT / "actions.json").read_text(encoding="utf-8"))
+        ["app_sets"] if s["name"] == "Claude")
+    model_btn = next(b for b in claude_shipped["buttons"] if b["label"] == "Model")
+    thinking_btn = next(b for b in claude_shipped["buttons"] if b["label"] == "Thinking")
+    model_values = {o["value"] for o in model_btn["options"]}
+    results["Model's numbered options carry the FULL model id, not a friendly word"] = (
+        {"claude-opus-5", "claude-sonnet-5", "claude-haiku-4-5", "claude-fable-5"}
+        <= model_values
+        and not model_values & {"opus", "sonnet", "haiku", "fable"})
+    # Haiku's own generation is 4.5, not 5 — there is no Haiku in the Claude 5
+    # family (coordinator correction, 2026-08-09). `claude-haiku-5` resolves
+    # to nothing, which is exactly the failure class task 174 exists to
+    # close, so the wrong id must be REFUSED, not merely the right one seen.
+    results["haiku's id names its OWN generation (4.5), never the invented 'haiku-5'"] = (
+        "claude-haiku-5" not in model_values)
+    results["Model's 1M-context options carry the full id too"] = (
+        {"claude-opus-5[1m]", "claude-sonnet-5[1m]"} <= model_values
+        and not model_values & {"opus[1m]", "sonnet[1m]"})
+    results["Thinking is menu-standing: bare /effort, one Enter, no options panel"] = (
+        thinking_btn.get("text") == "/effort" and thinking_btn.get("enter") is True
+        and "options" not in thinking_btn)
+
     sys.path.insert(0, str(PROJECT / "setup"))
     import agent_hook
     results["hook: explicit name wins"] = agent_hook.agent_name(
@@ -266,6 +300,23 @@ def main() -> int:
             and sent[0]["enter"] is True)
         results["the chooser closes on the pick"] = page.evaluate(
             "document.getElementById('choice-panel').hidden") is True
+
+        # 174: `enter` must be DATA-DRIVEN, not hardcoded true (round 30
+        # diagnosis — `panels.js:710 hardcodes enter:true, so the enter field
+        # in actions.json is dead code for options buttons`). An option that
+        # says `enter:false` (a menu-standing command whose finished argument
+        # still opens another app's own picker) must be honoured, never
+        # overridden.
+        page.evaluate("window.__sent = []")
+        page.evaluate("openChoicePanel({label:'Menu-standing', text:'/x',"
+                      " options:[{label:'no-enter', value:'y', enter:false}]})")
+        page.wait_for_selector("#choice-panel .sets-row.choice", timeout=4000)
+        page.locator("#choice-panel .sets-row.choice", has_text="no-enter").first.tap()
+        page.wait_for_function("window.__sent.some(m => m.type === 'paste_text')",
+                               timeout=4000)
+        sent2 = [m for m in page.evaluate("window.__sent") if m["type"] == "paste_text"]
+        results["an option's own enter:false is honoured, not hardcoded true"] = (
+            len(sent2) == 1 and sent2[0]["text"] == "/x y" and sent2[0]["enter"] is False)
 
         # --- the TAP, on the page (task 110) ------------------------------
         # A notice that names a layout must reach the newer bridge method
