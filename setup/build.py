@@ -265,6 +265,14 @@ def input_gate() -> None:
     step("0g/6  STREAM LIFECYCLE GATE — a client that is gone leaves nothing "
          "behind (tests/test_stream_lifecycle.py)")
     run([sys.executable, str(PROJECT_DIR / "tests" / "test_stream_lifecycle.py")])
+    # …and its sibling one layer up: a whole server RUN that outlives the stop
+    # that gave up on it. His log of 2026-08-09 has run A finishing 38 s after
+    # run B was already serving, and writing state="stopped" over it — the
+    # STOPPED pill he photographed under a live phone, plus the live layout
+    # dropped out of the topmost band and the live encoder killed.
+    step("0x/6  SERVER GENERATION GATE — a superseded run owns nothing "
+         "(tests/test_server_generation.py)")
+    run([sys.executable, str(PROJECT_DIR / "tests" / "test_server_generation.py")])
     # And that what this build INVENTS actually reaches the owner's own
     # actions.json (owner report 2026-08-07, the fifth on one bug). His copy
     # is seeded once at install and never replaced, so the merge is the only

@@ -1179,6 +1179,26 @@ nothing.
 Run: `.venv\Scripts\python tests/test_stream_lifecycle.py` — also a
 fail-closed step in `build.py` (0g/6).
 
+### `test_server_generation.py` — Server Generation Gate
+Proves that a SUPERSEDED SERVER RUN OWNS NOTHING. Read out of the owner's own
+`server.log` on 2026-08-09, under a screenshot of the GUI saying **STOPPED**
+while his phone was streaming: a stop at `19:15:04` gave up after 10 s
+(`Server thread did not stop within 10s`), run B started at `19:15:14` and
+served fine, and run A finally unwound at `19:15:52` — writing `state =
+"stopped"` over the live server, releasing the live layout's topmost windows
+and shutting the live encoder down.
+
+Three checks drive the REAL `ServerController` (`start`/`stop`/`_run`/`_serve`)
+over fakes for uvicorn, the stream and Win32: a run that outlives its stop
+changes nothing; a superseded run's crash is not `FAILED`; and the CURRENT run
+still tears itself down completely — the last one is what stops the gate from
+passing with the whole teardown deleted. Each defence was proven by planting
+its own defect (dropping the `gen ==` guard in `_run`, the `live()` guard in
+`_serve`'s `finally`, and the early return in the crash path).
+
+Run: `.venv\Scripts\python tests/test_server_generation.py` — also a
+fail-closed step in `build.py` (0x/6).
+
 ### `test_actions_migration.py` — Actions Migration Gate
 Proves that a NEW VERSION'S FIELDS actually reach the owner's own
 `%LOCALAPPDATA%\RemoteUser\actions.json`. His copy is seeded once, at his first

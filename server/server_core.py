@@ -66,6 +66,9 @@ class ServerController:
         self.loop: asyncio.AbstractEventLoop | None = None
         self.state = "stopped"
         self.error: str | None = None
+        # Bumped by every start(); see start() for why a run must be able to
+        # recognise that it is no longer the live one.
+        self._generation = 0
         self.info: ServerInfo | None = None
         # One registry for the PROCESS, not per server run: "Apply & restart"
         # used to build a fresh empty one, which threw away the owner's
@@ -101,7 +104,20 @@ class ServerController:
             return
         self.state = "starting"
         self.error = None
-        self._thread = threading.Thread(target=self._run, name="server-core", daemon=True)
+        # Every run carries its own number, and only the CURRENT run may
+        # touch shared state. stop() gives up after `timeout` and clears
+        # `_thread`, so a run that outlives its own stop is not merely
+        # possible — his log has it: a stop at 19:15:04 whose thread only
+        # unwound at 19:15:52, 38 seconds AFTER the next run was already
+        # serving. Unguarded, that ghost's own teardown wrote
+        # state="stopped" over a running server (the GUI's STOPPED pill
+        # under a live phone), released the live layout's topmost windows
+        # and shut the live encoder down. A generation is the only thing
+        # that can tell the two runs apart from inside the thread.
+        self._generation += 1
+        gen = self._generation
+        self._thread = threading.Thread(target=self._run, args=(gen,),
+                                        name=f"server-core-{gen}", daemon=True)
         self._thread.start()
 
     def release_windows(self) -> None:
@@ -160,26 +176,33 @@ class ServerController:
 
     def run_blocking(self) -> None:
         """CLI mode: run on the calling thread until Ctrl+C/exit."""
+        self._generation += 1
+        gen = self._generation
         try:
-            asyncio.run(self._serve())
+            asyncio.run(self._serve(gen))
         finally:
             if self.state != "failed":
                 self.state = "stopped"
 
-    def _run(self) -> None:
+    def _run(self, gen: int) -> None:
         try:
-            asyncio.run(self._serve())
-            if self.state != "failed":
+            asyncio.run(self._serve(gen))
+            if gen == self._generation and self.state != "failed":
                 self.state = "stopped"
         except Exception as e:  # visible in log AND in the GUI status
             logger.exception("Server crashed")
+            if gen != self._generation:
+                # A crash on the way out of a superseded run says nothing
+                # about the server the owner is using right now.
+                return
             self.state = "failed"
             self.error = str(e)
 
     # -- the stack ---------------------------------------------------------
 
-    async def _serve(self) -> None:
+    async def _serve(self, gen: int) -> None:
         loop = asyncio.get_running_loop()
+        live = lambda: gen == self._generation  # noqa: E731 — one predicate, read many times
         self.loop = loop
 
         # Stream mode is decided per start: H.264 when a verified encoder
@@ -246,11 +269,22 @@ class ServerController:
             self.state = "running"
             await self._uvicorn.serve()
         finally:
-            self._uvicorn = None
-            self.loop = None
-            # FIRST, ahead of the encoder teardown: a hanging ffmpeg terminate
-            # must not be able to eat the one thing the owner notices.
-            self.release_windows()
+            # A superseded run owns NOTHING that is shared: the names below
+            # already point at the live run, and its layout windows and
+            # encoder are in use. It tears down only what is its own — the
+            # uvicorn instance it created and its own stream.
+            if live():
+                self._uvicorn = None
+                self.loop = None
+                # FIRST, ahead of the encoder teardown: a hanging ffmpeg
+                # terminate must not be able to eat the one thing the owner
+                # notices.
+                self.release_windows()
+            else:
+                logger.warning(
+                    "Superseded server run #%d finished after run #%d took over "
+                    "— leaving the live server's state, windows and encoder alone",
+                    gen, self._generation)
             if stream.mode == "jpeg":
                 stream.stop()
             else:
