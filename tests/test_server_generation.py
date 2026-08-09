@@ -33,17 +33,31 @@ Win32 (fakes on the same contracts):
 1. A run that outlives its own `stop()` and finishes AFTER the next run is
    serving changes nothing: the state stays "running", the live windows keep
    their band, and the live stream keeps encoding.
-2. A superseded run that finishes by CRASHING does not report "failed"
+2. A `stop()` that gives up on a thread gives up its uvicorn WITH it —
+   otherwise that abandoned object is the next stop()'s target and the same
+   pill returns one press later.
+3. A run superseded while still SETTING UP never reaches the socket: it does
+   not publish its pairing over the live run's, and it never binds the port a
+   second time.
+4. A superseded run that finishes by CRASHING does not report "failed"
    either — a ghost's death says nothing about the live server.
-3. ...and the CURRENT run still tears itself down completely — state
+5. ...and the CURRENT run still tears itself down completely — state
    "stopped", windows released, stream shut down — without which this gate
    would pass with the whole teardown deleted.
+
+Checks 2 and 3 came from an adversarial review of the first fix, and both were
+real: the first version guarded only the TEARDOWN. `run_blocking()`'s finally
+carries the same guard for symmetry; it is deliberately NOT checked here (it
+needs the CLI entry point mixed with `start()`/`stop()` on one controller,
+which nothing does) — an asymmetry is simply how the guarded half gets copied
+wrong later.
 
 Run:  .venv\\Scripts\\python tests/test_server_generation.py
 """
 
 import asyncio
 import sys
+import threading
 import time
 import types
 from pathlib import Path
@@ -250,8 +264,75 @@ def check_the_live_run_still_tears_down(server_core, released) -> bool:
             and stream.shut_down)
 
 
+def check_a_stop_that_gives_up_gives_up_the_instance(server_core, released) -> bool:
+    """`stop()` clears `_thread` when it gives up — it must give up that run's
+    uvicorn with it. Left in place, that abandoned object is the NEXT stop()'s
+    target: the "wait for the instance to exist" branch is skipped (the name is
+    not None), the exit flags land on the ghost, and the join times out against
+    a live thread nobody asked to stop — ending on state="stopped" over a
+    serving server. The same pill, one press later."""
+    ctl = fresh_controller(server_core)
+    ctl.start()
+    if not wait_for(lambda: ctl.state == "running"):
+        return False
+    ghost = FakeUvicorn.instances[-1]
+    ghost.obeys_exit = False
+
+    ctl.stop(timeout=0.3)
+    if ctl._uvicorn is not None:                   # the abandoned instance
+        ghost.release()
+        return False
+
+    ghost.release()
+    wait_for(lambda: not ghost.serving)
+    return True
+
+
+def check_superseded_during_startup_never_serves(server_core, released) -> bool:
+    """A run can be superseded while still SETTING UP — encoder detection,
+    pairing and a UIA probe take real time on a busy PC. It must never reach
+    the socket: two runs binding the same port is a crash, and its info/loop
+    would be published over the live run's."""
+    ctl = fresh_controller(server_core)
+    gate = threading.Event()
+    real_token = server_core.pairing.generate_token
+
+    def slow_token():
+        gate.wait(3.0)
+        return real_token()
+
+    server_core.pairing.generate_token = slow_token
+    try:
+        ctl.start()                                # run A: stuck in setup
+        time.sleep(0.1)
+        if FakeUvicorn.instances:
+            return False                           # the premise: no socket yet
+        ctl.stop(timeout=0.2)                      # gives up on a starting run
+
+        server_core.pairing.generate_token = real_token
+        ctl.start()                                # run B
+        if not wait_for(lambda: ctl.state == "running"):
+            return False
+        live = FakeUvicorn.instances[-1]
+        live_info = ctl.info
+
+        gate.set()                                 # …and NOW run A finishes setup
+        time.sleep(0.3)
+        return (len(FakeUvicorn.instances) == 1     # A never built a server
+                and ctl.info is live_info           # nor published its pairing
+                and ctl.state == "running"
+                and live.serving)
+    finally:
+        gate.set()
+        server_core.pairing.generate_token = real_token
+
+
 CHECKS = [
     ("a run that outlives its stop changes nothing", check_ghost_run_changes_nothing),
+    ("a stop that gives up gives up the instance too",
+     check_a_stop_that_gives_up_gives_up_the_instance),
+    ("a run superseded during startup never serves",
+     check_superseded_during_startup_never_serves),
     ("a superseded run's crash is not FAILED", check_ghost_crash_is_not_failed),
     ("the live run still tears itself down", check_the_live_run_still_tears_down),
 ]

@@ -170,6 +170,15 @@ class ServerController:
             thread.join(timeout)
             if thread.is_alive():
                 logger.error("Server thread did not stop within %.0fs", timeout)
+                # We just gave up on it, so we must give up its uvicorn with
+                # it: that instance belongs to a run nobody controls any more.
+                # Left in place it is the next stop()'s target — the branch
+                # above would skip its "wait for the instance" wait (the name
+                # is not None), the exit flags would land on the abandoned
+                # object, and the join would time out against a LIVE thread
+                # that was never asked to stop, ending on state="stopped"
+                # over a serving server. The same pill, one press later.
+                self._uvicorn = None
             self._thread = None
         if self.state != "failed":
             self.state = "stopped"
@@ -181,7 +190,10 @@ class ServerController:
         try:
             asyncio.run(self._serve(gen))
         finally:
-            if self.state != "failed":
+            # Same guard as `_run`: nothing may end on a state it no longer
+            # owns. Narrow on the CLI path, but an asymmetry here is exactly
+            # how the guarded half gets copied wrong later.
+            if gen == self._generation and self.state != "failed":
                 self.state = "stopped"
 
     def _run(self, gen: int) -> None:
@@ -203,6 +215,8 @@ class ServerController:
     async def _serve(self, gen: int) -> None:
         loop = asyncio.get_running_loop()
         live = lambda: gen == self._generation  # noqa: E731 — one predicate, read many times
+        if not live():
+            return
         self.loop = loop
 
         # Stream mode is decided per start: H.264 when a verified encoder
@@ -226,7 +240,7 @@ class ServerController:
         token = pairing.generate_token()
         urls = pairing.pairing_urls(token)
         stats = ServerStats()
-        self.info = ServerInfo(
+        info = ServerInfo(
             mode=stream.mode,
             encoder=encoder,
             monitor_width=stream.width,
@@ -253,6 +267,18 @@ class ServerController:
         # or sent while no phone is watching — which is the flat line the
         # owner's traffic graph has to be able to show.
         try:
+            # Setting up takes real time (encoder detection, pairing, a UIA
+            # probe on a busy PC), and a run can be superseded DURING it — the
+            # ghost would then publish its own info/loop/uvicorn over the live
+            # run's and bind the port a second time. A superseded run never
+            # reaches the socket at all; its `finally` still shuts its own
+            # stream down.
+            if not live():
+                logger.warning(
+                    "Server run #%d was superseded while starting up — it never serves",
+                    gen)
+                return
+            self.info = info
             # log_level info so every HTTP/WS access is visible — with "warning" a
             # failing client is invisible in the log, which already cost us a debug
             # session (the phone WAS reaching the server while the log showed nothing).
@@ -262,12 +288,13 @@ class ServerController:
             # lifespan="off": we use no startup/shutdown hooks, and force_exit
             # cancels the lifespan task mid-wait — every stop would log a
             # scary (but harmless) CancelledError traceback.
-            self._uvicorn = uvicorn.Server(uvicorn.Config(
+            server = uvicorn.Server(uvicorn.Config(
                 app, host=SETTINGS.host, port=SETTINGS.port,
                 log_level="info", log_config=None, lifespan="off",
             ))
+            self._uvicorn = server
             self.state = "running"
-            await self._uvicorn.serve()
+            await server.serve()
         finally:
             # A superseded run owns NOTHING that is shared: the names below
             # already point at the live run, and its layout windows and

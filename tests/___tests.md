@@ -1188,13 +1188,21 @@ served fine, and run A finally unwound at `19:15:52` — writing `state =
 "stopped"` over the live server, releasing the live layout's topmost windows
 and shutting the live encoder down.
 
-Three checks drive the REAL `ServerController` (`start`/`stop`/`_run`/`_serve`)
+Five checks drive the REAL `ServerController` (`start`/`stop`/`_run`/`_serve`)
 over fakes for uvicorn, the stream and Win32: a run that outlives its stop
-changes nothing; a superseded run's crash is not `FAILED`; and the CURRENT run
-still tears itself down completely — the last one is what stops the gate from
-passing with the whole teardown deleted. Each defence was proven by planting
-its own defect (dropping the `gen ==` guard in `_run`, the `live()` guard in
-`_serve`'s `finally`, and the early return in the crash path).
+changes nothing; a `stop()` that gives up on a thread gives up its uvicorn with
+it (else the abandoned object is the next stop()'s target — the same pill one
+press later); a run superseded while still SETTING UP never reaches the socket;
+a superseded run's crash is not `FAILED`; and the CURRENT run still tears
+itself down completely — the last one is what stops the gate from passing with
+the whole teardown deleted. Each defence was proven by planting its own defect.
+
+The middle two came from an adversarial review of the first fix and were both
+real — that version guarded only the TEARDOWN, leaving every setup-phase write
+(`info`, `loop`, `_uvicorn`, `state = "running"`) last-writer-wins.
+`run_blocking()` carries the same guard for symmetry and is deliberately not
+checked: it needs the CLI entry point mixed with `start()`/`stop()` on one
+controller, which nothing does.
 
 Run: `.venv\Scripts\python tests/test_server_generation.py` — also a
 fail-closed step in `build.py` (0x/6).
