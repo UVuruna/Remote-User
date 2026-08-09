@@ -77,6 +77,26 @@ def main() -> int:
         {"cwd": r"U:\Coding\UVuruna\Applications\Remote User",
          "session_id": "3f9c1a77-dead-beef"}) == "Remote User · 3f9c1a"
 
+    # --- A QUESTION IS NOT AN ENDING (owner 2026-08-09, task 137) ---------
+    # Claude Code raises a `Notification` hook when it stops to ASK — a
+    # permission, a choice, one of the votes he sees on screen. It is a
+    # different event from a turn ending and it gets a different sentence,
+    # because a turn that ended can wait and a question has stopped
+    # everything until he answers.
+    results["a question says it is a question"] = (
+        notify.compose("Remote User", "asking", "Allow Bash?")[0]
+        == "Remote User is asking you")
+    results["…and it is not the same word as a turn ending"] = (
+        notify.compose("A", "asking", "")[0] != notify.compose("A", "waiting", "")[0])
+    # BOTH hooks are installed, and each carries the flag that tells this one
+    # script which event it is answering — the payload does not say.
+    lines = {e: agent_hook.hook_entry(None, "py.exe", e)["hooks"][0]["command"]
+             for e in agent_hook.HOOK_EVENTS}
+    results["the hook installs for Stop AND Notification"] = (
+        set(lines) == {"Stop", "Notification"})
+    results["only the Notification line carries --asking"] = (
+        "--asking" in lines["Notification"] and "--asking" not in lines["Stop"])
+
     # --- WHERE it happened (owner 2026-08-08, task 110) --------------------
     # "da klikom na notifikaciju nas odvede do tog layouta." The PC answers
     # that at SEND time by matching the agent's OWN cwd — reported by the hook,

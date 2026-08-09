@@ -127,11 +127,29 @@ SETTINGS = Path.home() / ".claude" / "settings.json"
 MARKER = "agent_hook.py"
 
 
-def hook_entry(script: Path | None = None, python: str | None = None) -> dict:
-    """The Stop-hook line. `script`/`python` are given by the desktop app's
+# WHICH HOOKS THIS SCRIPT INSTALLS, and why there are two.
+#
+# `Stop` fires when a turn ENDS — the agent is no longer working and the next
+# move is his ("<agent> needs you").
+#
+# `Notification` fires when Claude Code stops to ASK — a permission, a choice,
+# one of the votes on screen (owner 2026-08-09: "kada Claude nešto da na
+# glasanje, da li možemo i to da izgovorimo"). It is a different event and it
+# deserves a different sentence: a turn that ended can wait, a question has
+# stopped everything until he answers. Same script, same delivery, one
+# argument apart — `--asking` is passed on the hook's command line, because
+# the payload does not name which hook invoked it.
+HOOK_EVENTS = ("Stop", "Notification")
+
+
+def hook_entry(script: Path | None = None, python: str | None = None,
+               event: str = "Stop") -> dict:
+    """One hook line. `script`/`python` are given by the desktop app's
     own switch (ROADMAP H2): the packaged EXE has no interpreter inside it, so
     it copies this file somewhere permanent and names a real python."""
     command = f'"{python or sys.executable}" "{(script or Path(__file__)).resolve()}"'
+    if event == "Notification":
+        command += " --asking"
     return {"matcher": "*", "hooks": [{"type": "command", "command": command}]}
 
 
@@ -142,6 +160,9 @@ def is_installed() -> bool:
         data = json.loads(SETTINGS.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return False
+    # The Stop hook is the one that has always been here and the one the
+    # desktop switch is about; a settings file written before 2026-08-09 has
+    # only that one, and must still read as installed.
     return MARKER in json.dumps(data.get("hooks", {}).get("Stop") or [])
 
 
@@ -153,14 +174,16 @@ def install(remove: bool = False, script: Path | None = None,
         print(f"Cannot read {SETTINGS}: {e}", file=sys.stderr)
         return 1
     hooks = data.setdefault("hooks", {})
-    stop = [h for h in hooks.get("Stop") or []
-            if MARKER not in json.dumps(h)]          # drop any earlier copy
-    if not remove:
-        stop.append(hook_entry(script, python))
-    if stop:
-        hooks["Stop"] = stop
-    else:
-        hooks.pop("Stop", None)
+    for event in HOOK_EVENTS:
+        # Drop any earlier copy of OURS and leave every other hook alone —
+        # this file is not the only thing that may live in his settings.
+        kept = [h for h in hooks.get(event) or [] if MARKER not in json.dumps(h)]
+        if not remove:
+            kept.append(hook_entry(script, python, event))
+        if kept:
+            hooks[event] = kept
+        else:
+            hooks.pop(event, None)
     SETTINGS.parent.mkdir(parents=True, exist_ok=True)
     SETTINGS.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
     print(("Removed from " if remove else "Installed into ") + str(SETTINGS))
@@ -188,7 +211,17 @@ def main() -> int:
     # stops to ask something. What is always true at that moment is that it is
     # no longer working and the next move is his, and that is what the phone
     # now says: "<agent> needs you".
-    send(agent_name(payload), "waiting", "", agent_project(payload))
+    # WHICH hook fired is not in the payload, so the command line says it.
+    # "asking" and "waiting" are two different sentences on the phone because
+    # they are two different situations: a turn that ended can wait, a
+    # question has stopped everything until he answers.
+    asking = "--asking" in sys.argv
+    # A Notification hook carries the text Claude Code would have shown him.
+    # Passing it through means the phone can say WHAT is being asked instead
+    # of only that something is.
+    text = str(payload.get("message") or "")[:200] if asking else ""
+    send(agent_name(payload), "asking" if asking else "waiting", text,
+         agent_project(payload))
     return 0   # a hook must never fail the turn it reports on
 
 

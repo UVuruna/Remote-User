@@ -59,6 +59,13 @@ EVENT_WORDS = {
     "finished": "finished",
     "waiting": "needs you",
     "failed": "failed",
+    # A QUESTION, not an ending (owner 2026-08-09). Claude Code raises a
+    # `Notification` hook when it stops to ask something — a permission, a
+    # choice, one of the votes he sees on screen — and that is a DIFFERENT
+    # event from a turn ending: it is the one where nothing at all moves until
+    # he answers. It gets its own word so the phone says which of the two it
+    # is without him having to look.
+    "asking": "is asking you",
 }
 
 # A notice for a phone that CANNOT BE REACHED AT ALL waits (owner 2026-08-06;
