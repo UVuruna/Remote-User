@@ -912,39 +912,83 @@ function closeWheel() {
 // 2026-08-05, THE STRUCTURE LAW) — openSetsPanel/openQualityPanel are called
 // only at runtime, after every script has loaded.
 
-// Rotation may carry a different button order per set (order_port) — and,
-// since 2026-08-08, a different SHAPE (the cross is a choice in portrait too).
+// Rotation may carry a different button order per set (order_port) and, since
+// 2026-08-09, a different SHAPE — a choice in BOTH orientations.
 matchMedia("(orientation: portrait)").addEventListener("change", () => {
   applyPadShape();
   renderGroup("left");
   renderGroup("right");
 });
 
-// ── THE D-PAD SHAPE IS HIS CHOICE, IN BOTH ORIENTATIONS (task 121) ────────
-// A 10" tablet held upright is ~800 CSS px wide, which fits two crosses with
-// the picture between them; a 412 px phone does not. So the column stays the
-// default and the cross is a per-device preference, exactly like every other
-// phone-side switch (through the shell's SharedPreferences bridge, never bare
-// localStorage — that is per-ORIGIN and split his state between the LAN and
-// Tailscale addresses once already).
-//
-// `padColumn()` is the ONE question the rest of the page asks: the CSS shape
-// and the per-set arrangement must never disagree about which of the two is
-// on screen.
-function padCross() {
-  return prefGet("padCross") === "1";
+// ── THE ARRANGEMENT IS NOT WELDED TO THE ORIENTATION (owner 2026-08-09, task
+// 177, with his screenshot; full record in client/__about/controls.md) ─────
+// Held sideways his phone shows the 16:9 desktop with a finger-wide band of
+// empty space down each side — the letterbox bars of an aspect-fitted picture
+// — and those bands hold the two sets UPRIGHT perfectly. Sideways does not
+// have to mean the joystick shape; task 121 opened the same door the other way
+// (the cross, upright, on a tablet). So the shape is A CHOICE PER ORIENTATION
+// AND THE CHOICE OUTRANKS THE DEFAULT: `auto` = what the app has always drawn
+// (column upright, cross sideways), `column` / `cross` = that shape there
+// whatever the default is. DEFAULTS DO NOT CHANGE (his ruling) — a device that
+// has chosen nothing is `auto` in both and renders yesterday's picture.
+// Task 121's `padCross` (a boolean, and only ever a PORTRAIT question) is this
+// one's SEED, translated and never reset: a saved choice is an instruction and
+// must not be dropped because we changed how we spell it. Read through the
+// shell's SharedPreferences bridge like every other phone-side switch, never
+// bare localStorage (per-ORIGIN — it split this device's state across the LAN
+// and Tailscale addresses once, 2026-08-05); nothing writes the old key now.
+// `padColumn()` stays the ONE question the rest of the page asks, so the CSS
+// shape and the per-set arrangement (`renderGroup`) can never disagree.
+const PAD_SHAPES = ["auto", "column", "cross"];
+const PAD_SHAPE_KEYS = { portrait: "padShapePort", landscape: "padShapeLand" };
+const PAD_SHAPE_LEGACY = "padCross";
+// What `auto` answers — today's shipped behaviour, as a table, not an `if`.
+const PAD_SHAPE_AUTO = { portrait: "column", landscape: "cross" };
+
+function padOrientation() {
+  return matchMedia("(orientation: portrait)").matches ? "portrait" : "landscape";
 }
 
-function padColumn() {
-  return matchMedia("(orientation: portrait)").matches && !padCross();
+// PURE — no pref, no DOM, so its gate drives every combination by argument
+// (tests/test_pad_shape.py). Anything that is not one of his two explicit
+// words means `auto`, so a pref written by a future version — or a corrupted
+// one — renders today's default rather than nothing at all.
+function padShapeFor(pref, orient) {
+  if (pref === "column" || pref === "cross") return pref;
+  return PAD_SHAPE_AUTO[orient] || PAD_SHAPE_AUTO.landscape;
 }
 
+// PURE — task 121's boolean, read as the portrait choice it always was. Its
+// unticked state meant the column, which is what `auto` answers there anyway,
+// but it is still HIS answer; no key = he was never asked = `auto`.
+function padShapeSeed(legacy) {
+  if (legacy === "1") return "cross";
+  if (legacy === "0") return "column";
+  return "auto";
+}
+
+function padShapePref(orient) {
+  const stored = prefGet(PAD_SHAPE_KEYS[orient]);
+  if (PAD_SHAPES.includes(stored)) return stored;
+  return orient === "portrait" ? padShapeSeed(prefGet(PAD_SHAPE_LEGACY)) : "auto";
+}
+
+function padShape(orient) {
+  const which = orient || padOrientation();
+  return padShapeFor(padShapePref(which), which);
+}
+
+function padColumn() { return padShape() === "column"; }
+
+// ONE class, and it names the DECISION rather than the orientation
+// (client/style.css): the cross is the base rule and this class is the page
+// asking for the column, in whichever orientation asked for it.
 function applyPadShape() {
-  document.body.classList.toggle("pad-cross", padCross());
+  document.body.classList.toggle("pad-column", padColumn());
 }
 
-function setPadCross(on) {
-  prefSet("padCross", on ? "1" : "0");
+function setPadShape(orient, value) {
+  prefSet(PAD_SHAPE_KEYS[orient], PAD_SHAPES.includes(value) ? value : "auto");
   applyPadShape();
   renderGroup("left");
   renderGroup("right");

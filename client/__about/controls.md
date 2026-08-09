@@ -141,9 +141,42 @@ for the split's general load-order reasoning.
   proves the wrapped label stays inside its 58 px button).
 - Per-orientation button arrangement (owner 2026-08-05): a set may carry
   `order_land` (slots T·L·R·B) / `order_port` (column top→bottom) from the
-  desktop editor; `renderGroup` applies the one matching the current
-  orientation (invalid orders fall back to the shipped default) and a
-  `matchMedia("(orientation: portrait)")` listener re-renders on rotation.
+  desktop editor; `renderGroup` applies the one matching the SHAPE on screen
+  (not the orientation — see below; invalid orders fall back to the shipped
+  default) and a `matchMedia("(orientation: portrait)")` listener re-renders
+  on rotation.
+- **The arrangement is not welded to the orientation** (`PAD_SHAPES`,
+  `padShapeFor`, `padShapeSeed`, `padShapePref`, `padShape`, `padColumn`,
+  `applyPadShape`, `setPadShape` — owner 2026-08-09, task 177, with his
+  screenshot). Held sideways his phone shows the 16:9 desktop with a
+  finger-wide band of empty space down each side — the letterbox bars of an
+  aspect-fitted picture — and those bands hold the two sets UPRIGHT perfectly,
+  so there is no reason sideways must mean the joystick shape. The shape is a
+  CHOICE PER ORIENTATION and the choice OUTRANKS the default:
+  - `auto` — what the app has always drawn: column upright, cross sideways.
+    **Defaults do not change** (his ruling): a device that has chosen nothing
+    is `auto` in both and renders yesterday's picture.
+  - `column` / `cross` — that shape in that orientation, whatever the default.
+
+  Stored per device through the shell's SharedPreferences bridge
+  (`padShapePort` / `padShapeLand`), never bare localStorage — that is
+  per-ORIGIN and split this device's state across the LAN and Tailscale
+  addresses once already (2026-08-05). **Task 121's `padCross` is this
+  feature's SEED, translated and never reset** — it was a boolean and only ever
+  a PORTRAIT question, so `"1"` reads as the upright cross and `"0"` as the
+  upright column; a saved choice is an instruction and must not be dropped
+  because we changed how we spell it. Nothing writes the old key any more.
+  `padShapeFor` and `padShapeSeed` are PURE (no pref, no DOM) so the gate can
+  drive every combination by argument. `padColumn()` stays the ONE question
+  the rest of the page asks — the CSS shape (`body.pad-column`, see
+  [Style](style.md)) and `renderGroup`'s `order_port`/`order_land` choice can
+  then never disagree about what is on screen. The two ticks that set it live
+  in the Sets picker ([Panels](panels.md)). Gate: `tests/test_pad_shape.py`,
+  which also measures the MIRROR IMAGE — a column really renders as a column
+  sideways and a cross as a cross upright, on phone and tablet sizes alike.
+  Honest limit: two crosses do not fit side by side on a 412 px phone with the
+  picture between them, which is exactly why the column is the upright default
+  and the cross there is offered as his choice for a wide screen.
 - `setMode(mode)` / `refreshModeButtons()` — the single-active `touchMode`
   toggle and its button-state mirroring.
 - Keyboard capture (`kbInput`, `keyboardOpen`, `toggleKeyboard`,

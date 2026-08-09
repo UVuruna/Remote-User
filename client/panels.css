@@ -399,9 +399,118 @@
   /* The lists cap their own height for a TALL card; inside a column that cap
      only re-introduces a scrollbar of their own. */
   body .lay-list { max-height: none; overflow-y: visible; }
+
+  /* ── A CARD THAT DECLARES ITS OWN COLUMNS (audit finding 2026-08-09, the
+     round that added the two D-pad shape rows to the Sets picker) ─────────
+     `column-count: 2` above makes a card a FRAGMENTAINER, and a multicol with
+     a definite height has exactly one answer when its content stops fitting:
+     it makes ANOTHER column. Two rows more and the Sets picker grew a THIRD,
+     273 px off the right edge of a 915 px screen — scrollWidth 1129 inside a
+     758 px card, with the app-shortcuts row at x=1188 and the Done button at
+     x=961. Nothing was clipped, nothing scrolled, and the primary button was
+     simply not on the screen; only `inView`/`noClip` on the CARD saw it,
+     because the card itself was innocent. This is the third time this file
+     records the same failure (the whole-card multicol of task 172, the
+     creation list of the same morning), so this card leaves the mechanism
+     rather than being tuned back under its threshold.
+
+     What replaces it is what the creation panel took, for the same reason
+     (`.lc-split`, client/layout-create.css): the two columns are DECLARED.
+     The tall thing is the LISTS, and their rows are exactly what the note
+     above calls short items, so they become an auto-fill GRID — which cannot
+     invent a third column and cannot paint outside its own box, whatever is
+     added to it next. Everything else stays in normal flow at full width, so
+     the sentence rows keep one readable line instead of being cut into a
+     190 px column.
+
+     AND THE CARD TAKES THE WIDTH, BECAUSE IT WILL STILL SCROLL. Measured at
+     915x412: 504 px of content in a 377 px box even with the grid, and the
+     owner's own device has more sets than the audit's fixture — so scroll is
+     genuine rung 4 here, not a shortcut past rung 1. It is legal only with no
+     width standing idle beside it (`noScrollWithSlack`), which is why the
+     card fills the panel and the panel's own gutter drops to `--space-s` on a
+     screen this short: 16 px of slack, where the rule allows 24. The Done
+     button is pinned outside the scroll — a primary action below the fold is
+     the same defect as one off the edge, only slower to find. */
+  body #sets-panel { padding: var(--space-s); }
+  body .sets-card.card-split {
+    width: 100%;
+    max-width: 1100px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;              /* the BODY scrolls, not the card */
+  }
+  body .sets-card.card-split .sets-body {
+    overflow-y: auto;
+    min-height: 0;                 /* or a flex item refuses to shrink */
+  }
+  /* THE TRACK IS SIZED FROM THE WIDEST ROW, NOT FROM A ROUND NUMBER. The
+     first attempt asked for 200 px tracks, and the app-set rows — checkbox,
+     icon, name AND the "on the wheel now" badge — measure 280: four rows came
+     back CLIPPED at 278>200, which is the one rung the law refuses outright.
+     300 px is the widest row plus room for a longer set name, and it is what
+     decides the column count on every screen this ships to. */
+  body .sets-card.card-split .sets-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    column-gap: 20px;
+    row-gap: 2px;
+  }
+  /* The two D-pad shape switches are ONE question asked twice (upright /
+     sideways), so they pair up — but ONLY where each still fits on one line.
+     A 300 px track paired them on a 915 px phone and cost height rather than
+     saving it: both sentences wrapped to two lines, 82 px where stacked
+     one-liners are 66. The track is therefore sized from the SENTENCE (420),
+     so a phone stacks them and a tablet pairs them. Measured both ways. */
+  body .sets-card.card-split .sets-shape {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+    column-gap: 20px;
+  }
+  /* THE BADGE BELONGS TO ITS ROW'S NAME. `margin-left: auto` pins it to the
+     row's right edge, which was right in a 380 px portrait card and absurd
+     the moment a row became 840 px wide: "ON THE WHEEL NOW" floated in the
+     middle of the card, 500 px from the VSCode it is about, reading as a
+     label for nothing (seen in this round's own screenshot). Beside the name
+     it says what it has always said. */
+  body .sets-card.card-split .sets-live { margin-left: 12px; }
+  /* A screen 412 px tall has no spare height to give to padding — not the
+     card's own, and not the gap above a button that is already the last
+     thing in it. */
+  body .sets-card.card-split { padding: 10px 18px; }
+  body .sets-card.card-split .sets-done { margin-top: 8px; }
+  body .sets-card.card-split .sets-row { padding: 5px 6px; }
+  body .sets-card.card-split .sets-sub { margin-bottom: 6px; }
+  body .sets-card.card-split .sets-list { margin-bottom: 4px; }
+  /* If it still scrolls — and on his own device, with more sets than the
+     audit's fixture, it will — the scrollbar has to be SEEN. An OVERLAY bar
+     appears while a finger drags and is invisible before it: content nobody
+     knows is there is the same failure as content off the edge, only slower
+     to find. Styling the WebKit scrollbar makes Chromium paint a classic,
+     always-present one, which is also what the screenshot can then prove
+     (`scrollbar-width: thin` is the standard spelling and is younger than
+     some WebViews this ships to; these two pseudo-elements are as old as
+     Android's WebView itself). */
+  body .sets-card.card-split .sets-body::-webkit-scrollbar { width: 6px; }
+  body .sets-card.card-split .sets-body::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 3px;
+  }
 }
 
 .sets-card h2 { font-size: 19px; margin-bottom: 4px; }
+/* Title and counter share a line — the counter is a short phrase and a row of
+   its own was height this card cannot spare on a phone held sideways. Baseline
+   alignment, so the small text sits on the title's own baseline instead of
+   floating in the middle of its cap height. */
+.sets-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.sets-head .sets-count { margin-bottom: 4px; }
 .sets-sub { color: var(--text-secondary); font-size: 13px; margin-bottom: 12px; }
 .sets-list { display: flex; flex-direction: column; gap: 2px; margin-bottom: 10px; }
 .sets-row {

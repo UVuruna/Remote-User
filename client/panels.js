@@ -128,20 +128,66 @@ function refreshSetsMeta() {
   }
 }
 
+// One tick per orientation for the D-pad shape (owner 2026-08-09, task 177).
+// `asked` is the shape THIS row asks for; unticking hands the orientation back
+// to `auto` — the default — rather than to the opposite shape, so a device
+// that ticked and unticked reads exactly like one that was never asked.
+function padShapeRow(orient, asked, text) {
+  const row = document.createElement("label");
+  row.className = "sets-row apps";
+  const cb = document.createElement("input");
+  cb.type = "checkbox";
+  cb.checked = padShape(orient) === asked;
+  cb.addEventListener("change", () =>
+    setPadShape(orient, cb.checked ? asked : "auto"));
+  row.append(cb, document.createTextNode(text));
+  return row;
+}
+
+// THIS CARD DECLARES ITS OWN COLUMNS — it is NOT a fragmentainer (defect found
+// by the phone audit 2026-08-09, the round that added the two shape rows). The
+// landscape reflow of task 172 gives a card `column-count: 2`, and a multicol
+// with a definite height has exactly one answer when its content no longer
+// fits: it makes ANOTHER column. Two rows more and this card grew a THIRD one,
+// 273 px off the right edge of a 915 px screen, carrying the app-shortcuts row
+// and the Done button with it — measured scrollWidth 1129 in a 758 px card.
+// Nothing was clipped, nothing scrolled, and the primary button was simply not
+// on the screen. So the card takes the mechanism the creation panel took for
+// the same reason (`.lc-split`, client/layout-create.css): the columns are
+// DECLARED — a grid on the LISTS, which are what is tall, and which are rows
+// of short items — and the card itself is an ordinary block that scrolls when
+// it must. A grid cannot invent a third column, and `card-split` is a class of
+// this card's own so the four other `.sets-card` panels keep the reflow they
+// were measured with.
+//
+// THE FOOTER IS PINNED for the same reason the spill mattered: on a 915x412
+// phone this card genuinely does not fit (504 px of content in 377), and a
+// Done button below the fold is the same failure by a slower route. The header
+// and the button stay; `.sets-body` between them is what scrolls.
 function openSetsPanel() {
   setsPanel.innerHTML = "";
   const card = document.createElement("div");
-  card.className = "sets-card card-columns";
+  card.className = "sets-card card-split";
   const reserve = appSetReserve();
-  card.innerHTML = `<h2>Wheel sets</h2>
-    <p class="sets-sub">Mouse, Input and Settings are always in the wheel. Pick the rest — up to ${WHEEL_MAX} in total, app shortcuts included. New sets are made on the PC (Remote User window → Controls…).</p>
-    <p class="sets-sub sets-count">${visibleCount()} of ${WHEEL_MAX} used${reserve ? ` — ${reserve} held for app shortcuts` : ""}</p>`;
+  // The count rides on the TITLE's line (2026-08-09). It is one short phrase
+  // and it was spending a whole row of a card that, on a phone held sideways,
+  // has 377 px for ten rows — the cheapest 25 px in the panel, and the title
+  // row reads better for it at every size.
+  card.innerHTML = `<div class="sets-head"><h2>Wheel sets</h2>
+    <span class="sets-sub sets-count">${visibleCount()} of ${WHEEL_MAX} used${reserve ? ` — ${reserve} held for app shortcuts` : ""}</span></div>
+    <p class="sets-sub">Mouse, Input and Settings are always in the wheel. Pick the rest — up to ${WHEEL_MAX} in total, app shortcuts included. New sets are made on the PC (Remote User window → Controls…).</p>`;
+
+  // Everything between the header and Done. In portrait it is a plain block
+  // and changes nothing; in landscape it is the part that scrolls.
+  const body = document.createElement("div");
+  body.className = "sets-body";
+  card.appendChild(body);
 
   const list = document.createElement("div");
   list.className = "sets-list";
   categories.forEach((s) => list.appendChild(setsRow(s, !!s.required)));
   customSets.forEach((s) => list.appendChild(setsRow(s, false)));
-  card.appendChild(list);
+  body.appendChild(list);
 
   // App sets are ticked ONE BY ONE (owner 2026-08-05, when Claude joined
   // VSCode on the same window): a single master switch could only say "all
@@ -162,30 +208,36 @@ function openSetsPanel() {
   });
   appHead.append(appCb, document.createTextNode(
     "App shortcuts while a layout is focused — they take wheel slots too"));
-  card.appendChild(appHead);
+  body.appendChild(appHead);
 
   if (setsPrefs().apps) {
     const appList = document.createElement("div");
     appList.className = "sets-list apps";
     appSets.forEach((s) => appList.appendChild(appSetRow(s)));
-    card.appendChild(appList);
+    body.appendChild(appList);
   }
 
-  // THE SHAPE OF THE TWO GROUPS, IN PORTRAIT (owner 2026-08-08, task 121).
-  // Landscape has always drawn the D-pad cross; upright it stacks into a
-  // column, because a 412 px phone has no room for two crosses with the
-  // picture between them. A 10" tablet held upright has ~800 px and plenty of
-  // room, and he wants the cross there — so it is a CHOICE, per device, and
-  // not a width rule that would guess wrong on the next screen size.
-  const shape = document.createElement("label");
-  shape.className = "sets-row apps";
-  const shapeCb = document.createElement("input");
-  shapeCb.type = "checkbox";
-  shapeCb.checked = padCross();
-  shapeCb.addEventListener("change", () => setPadCross(shapeCb.checked));
-  shape.append(shapeCb, document.createTextNode(
-    "Keep the D-pad cross when the screen is upright — for a wide screen"));
-  card.appendChild(shape);
+  // THE SHAPE OF THE TWO GROUPS, ONE ROW PER ORIENTATION (owner 2026-08-09,
+  // task 177 — task 121's single upright tick, now asked in both directions).
+  // Upright, a 412 px phone has no room for two crosses with the picture
+  // between them and a 10" tablet has plenty, so the cross is his to ask for;
+  // sideways, a 16:9 picture leaves a finger-wide band down each side that
+  // holds the columns perfectly, so the column is his to ask for. Neither row
+  // changes a default: each starts on the shape that orientation renders TODAY
+  // (`padShape`), and ticking it writes the explicit choice that outranks it.
+  // One question asked twice, so the two ride together (client/panels.css
+  // → `.sets-shape`): side by side where there is width, stacked where there
+  // is not.
+  const shape = document.createElement("div");
+  shape.className = "sets-shape";
+  shape.appendChild(padShapeRow(
+    "portrait", "cross",
+    "Held upright: the D-pad cross instead of the column — for a wide screen"));
+  shape.appendChild(padShapeRow(
+    "landscape", "column",
+    "Held sideways: upright columns instead of the D-pad cross — they stand "
+    + "in the empty bands beside the picture"));
+  body.appendChild(shape);
 
   const done = document.createElement("button");
   done.type = "button";
@@ -704,10 +756,19 @@ function openChoicePanel(btn) {
       row.appendChild(tag);
     }
     keepFocus(row, () => {
+      // `enter` is DATA-DRIVEN (owner round 30, 2026-08-09): this used to be
+      // hardcoded true, which made the `enter` field in actions.json dead
+      // code for every options-based command — a menu-standing command (one
+      // whose finished argument still needs a SECOND app to react, e.g.
+      // opening a picker) could never say so. Precedence: the OPTION's own
+      // `enter` wins, else the BUTTON's, else true — so every command written
+      // before this existed keeps sending Enter exactly as it did.
+      const enter = option.enter !== undefined ? option.enter
+        : (btn.enter !== undefined ? btn.enter : true);
       send({
         type: "paste_text",
         text: `${btn.text} ${option.value}`.trim(),
-        enter: true,
+        enter,
       });
       showToast(`${title}: ${option.label}`);
       closeChoicePanel();

@@ -374,6 +374,7 @@ function paintSet(el, name, surfaceVar) {
     el.style.removeProperty("--set-fill");
     el.style.removeProperty("--set-ink");
     el.style.removeProperty("--set-line");
+    el.style.removeProperty("--set-on");
     el.style.removeProperty("--set-glow");
     return;
   }
@@ -390,6 +391,15 @@ function paintSet(el, name, surfaceVar) {
   // OUTLINED: the colour is the ink, and it lands on the button's own tint.
   const lineRgb = lineOn(rgb, tokenSurface(surfaceVar || "--glass-fill"));
   el.style.setProperty("--set-line", css(lineRgb));
+  // SWITCHED ON: the button's face flips to the far end of the theme's
+  // luminance range (client/style.css → `.ctl.active`, owner 2026-08-09 task
+  // 179) — and the set's identity has to survive that flip, so its colour
+  // becomes the INK on the flipped face. Same walk, a different surface: the
+  // ON face is opaque and known, which is the one case where `lineOn` gets an
+  // easy question. Written in EVERY look, like the tokens above, and read
+  // only by the rule that needs it — a value that has to be un-set when
+  // something changes is a value that will one day be left behind.
+  el.style.setProperty("--set-on", css(lineOn(rgb, tokenSurface("--on-face"))));
   // …and the ACTIVE halo rides the same lifted colour, for the same reason:
   // it has to be seen against the surface, not against nothing.
   const glow = glowFor(lineRgb);

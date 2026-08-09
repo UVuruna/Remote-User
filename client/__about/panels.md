@@ -34,6 +34,32 @@ prefs bridge (`prefGet`/`prefSet` in controls.js) — origin-independent, see
 the bridge note there (owner bug 2026-08-05: pure localStorage split state
 between the LAN and Tailscale origins, the picker "rotated").
 
+**This card DECLARES its columns — it is not a fragmentainer** (`card-split`,
+2026-08-09). The landscape reflow gives a card `column-count: 2`, and a
+multicol with a definite height answers "content no longer fits" by making
+ANOTHER column: two rows more and this card grew a third one 273 px off the
+right edge of a 915 px screen, carrying the app-shortcuts row and the Done
+button with it (measured `scrollWidth` 1129 in a 758 px card; the card itself
+never scrolled, which is why only the phone audit saw it). It now takes the
+mechanism the creation panel took for the same reason: an auto-fill GRID on
+the LISTS — 300 px tracks, sized from the widest row, because 200 px clipped
+the app rows at 278>200 — the card filling the panel (a scroll is only legal
+with no width idle beside it), the title and counter sharing a line, and the
+Done button PINNED outside a scrolling `.sets-body`. On a 915x412 phone the
+body still hides ~32 px: that is rung 4 of the ladder, taken after rungs 1
+and 2, because fitting ten rows and a paragraph in 377 px means touch targets
+under 30 px. `card-split` is this card's own class, so the four other
+`.sets-card` panels keep the reflow they were measured with — and their
+latent version of the same spill is a known, unfixed risk, recorded here.
+
+**The D-pad shape, one tick per orientation** (`padShapeRow`, owner 2026-08-09,
+task 177 — task 121's single upright tick asked in both directions): "Held
+upright: the D-pad cross instead of the column" and "Held sideways: upright
+columns instead of the D-pad cross". Neither row changes a default — each
+starts on the shape that orientation renders TODAY (`padShape` in
+controls.js), and unticking writes `auto` rather than the opposite shape, so a
+device that ticked and unticked reads exactly like one that was never asked.
+
 App-shortcut rows are ticked one by one under a master switch — and since
 2026-08-06 they are **counted**: `visibleCount()` includes `appSetReserve()`,
 the card states `N of 8 used — M held for app shortcuts`, and a tick that

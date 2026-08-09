@@ -258,8 +258,26 @@ construction far from its surface (lighter on a dark page, darker on a light
 one), so "switched on" stays visible whichever theme is in force, without a
 token per theme.
 
+**ON IS A LUMINANCE EVENT, AND THE SET'S IDENTITY SURVIVES IT** (owner
+2026-08-09, task 179, round TWO of the same report). `.ctl.active` no longer
+signals with hues at all — the halo above is now the PRESS state's job. A
+switched-on button flips its FACE to the far end of the theme's luminance
+range: `--on-face` (near-white on dark, near-black on light), `--on-face-ink`
+for the ink when the controls are plain, `--on-gap` (the page colour) as the
+gap inside the ring, `--on-glow` for the halo. What this file contributes is
+`--set-on`: the set's own colour walked in LIGHTNESS by the same `lineOn()`
+until it reads on that flipped face, so a coloured set's ON button carries its
+identity as INK rather than losing it. The measured reason: round one's accent
+ring/wash/glow were all outranked in the coloured looks by the per-set rules
+below (`body[data-colored="true"] .ctl` is more specific than `.ctl.active`),
+so what reached the screen was a 2 px border and a halo in the button's OWN
+hue — 1.35:1 against its OFF sibling, where a shape needs 3:1 to be told
+apart. The rule itself lives in [style.css](style.md); gate:
+`tests/test_on_state.py`, which photographs the two buttons side by side in
+all eight looks.
+
 `paintSet(el, name, surfaceVar)` writes `--set-color`, `--set-fill`,
-`--set-ink`, `--set-line` and `--set-glow` onto the element that OWNS a set —
+`--set-ink`, `--set-line`, `--set-on` and `--set-glow` onto the element that OWNS a set —
 a D-pad group, a wheel item — so its four buttons, its category button and
 all their labels inherit them in one write instead of five. `surfaceVar`
 names the token the caller's OWN buttons are painted with (`--glass-fill` for

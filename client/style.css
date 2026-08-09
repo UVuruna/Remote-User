@@ -173,37 +173,92 @@ html, body {
 /* Chord buttons carry no icon — the label is the whole face */
 .ctl.text .lbl { font-size: 13px; }
 
-/* ON MUST BE UNMISTAKABLE IN ALL EIGHT LOOKS (owner 2026-08-09, with a
-   screenshot of the Mic switched on in the COLOURED look): "onaj button koji
-   je svičovan, oni koji su on/off u svakom modu — bilo da je kolor, dark,
-   light — mora da bude jasno upečatljivo vidljiv, kao što je to jasno vidljivo
-   u modu transparent light: plavi okvir umesto belog. Ovde uopšte ti nije
-   jasno, meni kao korisniku, da li i šta je uključeno." (lang-ok: his own
-   words, quoted.)
-   The old rule said ON with COLOUR ALONE — accent ink and an accent GLOW. On
-   a plain outlined button that reads instantly, because the ring is the only
-   colour on it. On a set wearing its own strong colour it does not: the glow
-   is a soft halo against a saturated fill and the ink change is one hue among
-   others. So ON is now carried by three things at once, and only one of them
-   is a hue: a SOLID RING three times the normal border width, a filled accent
-   wash on top of whatever the button already wears, and the scale. Any one of
-   them survives a look the other two get lost in. */
+/* ON IS A LUMINANCE EVENT, IN ALL EIGHT LOOKS (owner 2026-08-09, task 179,
+   ROUND TWO, with a screenshot of the Mic switched on in the COLOURED look).
+   His report, translated: a button that is switched on — in every mode,
+   coloured, dark or light — must be clearly, strikingly visible, the way it
+   already is in the transparent light mode; here, as the user, you cannot
+   tell at all whether anything is on. And the example he gave of what works:
+   lang-ok: owner quote, kept verbatim because it names the answer
+     "plavi okvir umesto belog" — a blue frame instead of a white one.
+
+   ROUND ONE ANSWERED WITH THREE HUES AND LOST TWO OF THEM TO THE CASCADE.
+   It set an accent border, an accent wash and an accent glow — and in the
+   coloured looks `body[data-colored="true"] .ctl` (one attribute + one class
+   + one type) is MORE SPECIFIC than `.ctl.active`, so the border colour and
+   the ink never applied at all; with `data-fill="full"` the per-set
+   `background:` shorthand also erased the wash. Measured on the real page,
+   what survived was a 2 px border-width change and a halo in the SAME HUE as
+   the button under it: 1.35:1 against its own OFF sibling, where a shape
+   needs 3:1 to be reliably told apart. A blue frame where a white one was is
+   a change in LUMINANCE, not of hue — which is why he can see that one at a
+   glance and could see none of these.
+
+   SO ON FLIPS THE FACE, and it does it by rewriting the TOKENS the other
+   rules read rather than by out-shouting them. `--glass-fill`, `--border`,
+   `--text-primary` and the four `--set-*` values are all declared here, ON
+   THE BUTTON ITSELF, so every rule that paints a `.ctl` — plain, coloured,
+   outlined or filled, in this file or theme.css, written today or next year —
+   picks the ON values up by itself. A declaration on the element beats one
+   inherited from the group, so there is no specificity contest left to lose.
+   The face goes to the far end of the theme's range (near-white on the dark
+   page, near-black on the light one); the ink is `--on-ink` — the SET's own
+   colour walked until it reads on that face when the controls are coloured
+   (theme.css / theme.js `--set-on`), the theme's contrast ink when they are
+   not — so a set's identity survives the flip; and the ring is face / gap /
+   ring, bright-dark-bright on dark and dark-bright-dark on light, so it
+   survives whatever the PC's screen happens to be showing behind it. The icon
+   and label shadows switch off because the face is now an opaque, known
+   surface: their whole job was legibility over an unknowable backdrop.
+   Gate: tests/test_on_state.py photographs this button beside its OFF sibling
+   in all eight looks and measures the contrast a camera sees. */
 .ctl.active {
-  color: var(--accent);
-  border-color: var(--accent);
+  --on-ink: var(--on-face-ink);
+  --glass-fill: var(--on-face);
+  --border: var(--on-ink);
+  --text-primary: var(--on-ink);
+  --set-fill: var(--on-face);
+  --set-color: var(--on-ink);
+  --set-line: var(--on-ink);
+  --set-ink: var(--on-ink);
+  --accent-glow: var(--on-glow);
+  --set-glow: var(--on-glow);
+  --ink-shadow: transparent;
+  --lbl-shadow: transparent;
+  color: var(--on-ink);
   border-width: 3px;
-  background-image: linear-gradient(var(--accent-wash), var(--accent-wash));
-  box-shadow: 0 0 0 3px var(--accent-glow), 0 0 22px var(--accent-glow);
+  /* The face is painted TWICE, on both background channels. `--glass-fill`
+     above is what every existing rule reads; this image layer is painted over
+     whatever COLOUR wins, so a rule that repaints `background-color` alone —
+     today or in a later round — still cannot take the ON face away. A per-set
+     `background:` SHORTHAND does reset it (that is how round one lost its
+     wash), and in exactly those looks the `--set-fill` override above is what
+     carries the face: two independent guarantees, neither of which needs to
+     win a specificity contest. */
+  background-image: linear-gradient(var(--on-face), var(--on-face));
+  box-shadow: 0 0 0 2px var(--on-gap), 0 0 0 5px var(--on-face),
+              0 0 20px var(--on-glow);
   transform: scale(1.06);
 }
 
 /* A CLICK/HOLD mouse button while the finger keeps it pressed — the PC
-   button is DOWN right now (drag in progress), so the glow must differ from
-   a latched toggle only in feel, not meaning: pressed-in, not switched-on. */
+   button is DOWN right now (drag in progress). It stays a HUE and a
+   pressed-in scale on purpose: the latched state above is the luminance
+   event, and a momentary press must never be mistaken for a switch. */
 .ctl.held {
   color: var(--accent);
   box-shadow: 0 0 0 2px var(--accent-glow), 0 0 14px var(--accent-glow);
   transform: scale(0.94);
+}
+
+/* Switched ON *and* under a finger (a pad button held on a toggle — see
+   `buttonPress` in controls.js). It stays the ON button and only takes the
+   press's inward scale; without this, `.ctl.held` — same specificity, later
+   in the file — would put accent ink on the flipped face and leave the label
+   unreadable for as long as the finger is down. */
+.ctl.active.held {
+  color: var(--on-ink);
+  transform: scale(0.98);
 }
 
 /* The category button is smaller — used only when switching presets.
@@ -256,25 +311,32 @@ html, body {
 .group.left  { left: var(--space-m); }
 .group.right { right: var(--space-m); }
 
-/* Portrait: the four buttons stack in a column, category in the middle.
-   …UNLESS he chose the cross (owner 2026-08-08, task 121): "i u portret modu
-   moze korisnik da bira da mu se prikazuje onako kao dpad — tableti koji imaju
-   dovoljno sirok prostor da moze lepo da stane D-pad" (lang-ok: his own words,
-   quoted). A 10" tablet held upright is 800 CSS px wide, which fits two
-   crosses with the picture between them; a 412 px phone does not, which is why
-   the column stays the default and this is a CHOICE rather than a width rule.
-   `body.pad-cross` simply declines the portrait override, so the base rule
-   above — the cross — applies in both orientations. */
-@media (orientation: portrait) {
-  body:not(.pad-cross) .group {
-    grid-template-columns: auto;
-    grid-template-areas:
-      "up"
-      "left"
-      "center"
-      "right"
-      "down";
-  }
+/* THE COLUMN IS A DECISION, NOT AN ORIENTATION (owner 2026-08-09, task 177,
+   with his screenshot). This used to be `@media (orientation: portrait)`, which
+   welded the upright stack to the upright phone: landscape ALWAYS drew the
+   cross, even though a 16:9 picture on a wider screen leaves a finger-wide
+   letterbox band down each side that holds a column perfectly — "nema razloga
+   da landscape mora da znači džojstik raspored" (lang-ok: his own words,
+   quoted). Task 121 had already made the cross a choice upright; this makes
+   the column a choice sideways, and both now hang off ONE class that names
+   what was DECIDED (controls.js -> padShape/applyPadShape). No rule here asks
+   the orientation any more: `body.pad-column` is the page saying "column",
+   whichever way the phone is being held, and the cross is the base rule above.
+
+   Nothing else has to change for the sideways case, and that is the point of
+   keeping the shape in ONE place: the group is already pinned to its own side
+   and rests on the bottom edge, so a column asked for sideways stands up in
+   the letterbox band by itself. Measured at every size this project ships to
+   (tests/test_pad_shape.py): the stack stays on screen and clear of the top
+   corner buttons, and the two sides never meet. */
+body.pad-column .group {
+  grid-template-columns: auto;
+  grid-template-areas:
+    "up"
+    "left"
+    "center"
+    "right"
+    "down";
 }
 
 /* --- Category wheel (tap to open, tap an item, X to cancel) --------------- */

@@ -8,8 +8,12 @@
 Every visual rule for the tablet page: design tokens (dark surface, one
 accent — per root DESIGN.md), the connection-state pill, the invisible
 keyboard-capture field, the offscreen video surface, the see-through control
-buttons, the two-column D-pad groups (grid areas in landscape, a stacked
-column in portrait), the category wheel, the "access from anywhere" banner +
+buttons, the two D-pad groups (the cross is the base rule; `body.pad-column`
+is the page asking for the stacked column — a DECISION, no longer an
+orientation media query, owner 2026-08-09 task 177: the shape is his choice in
+BOTH orientations and the class is written by `applyPadShape`
+([Controls](controls.md)), so a column asked for sideways stands up in the
+letterbox band beside the picture), the category wheel, the "access from anywhere" banner +
 guided wizard, the hide-all-controls mode and the Region grab's frame.
 `touch-action: none` is set everywhere the page must own gestures itself
 rather than the browser.
@@ -37,9 +41,20 @@ card's rules still hold; the rules themselves live in the other file.
 - [Render](render.md) — `updateViewport()` writes the live `--kb`/`--vtop`
   custom properties
 - [Controls](controls.md) — toggles `body.hidden-controls`, `.ctl.active`
-  (mode/keyboard/mic buttons), `.ctl.held` (a CLICK/HOLD mouse button while
-  the finger keeps the PC button pressed — pressed-in scale, not the latched
-  glow), `.wheel-item.current`, and the wizard's step classes
+  (mode/keyboard/mic buttons — **a LUMINANCE event since 2026-08-09, task
+  179**: the face flips to `--on-face`, the far end of the theme's range, with
+  the set's own colour as the ink on it (`--set-on`, [Theme](theme.md)) and a
+  face/gap/ring signature that survives any PC screen behind it. It is written
+  as an override of the TOKENS the other rules read — `--glass-fill`,
+  `--border`, `--text-primary`, the `--set-*` four — rather than as competing
+  declarations, because round one's accent ring and wash were simply outranked
+  by the per-set rules in `theme.css` and reached the screen as a 2 px border
+  and a same-hue halo, 1.35:1 against the OFF button beside it. Gate:
+  `tests/test_on_state.py`), `.ctl.held` (a CLICK/HOLD mouse button while
+  the finger keeps the PC button pressed — pressed-in scale and a HUE, kept
+  deliberately unlike the latched state; `.ctl.active.held` stays the ON
+  button and only takes the press's scale), `.wheel-item.current`, and the
+  wizard's step classes
 - [Web Layer](../../server/__about/web.md) — served from `/static/style.css` (the
   `StaticFiles` mount over `client/`)
 

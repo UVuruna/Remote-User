@@ -73,6 +73,24 @@
   --accent-glow: rgb(56 189 248 / 0.25);
   --accent-wash: rgb(56 189 248 / 0.10);
   --on-accent: #06212e;      /* ink ON the accent — never a surface token */
+  /* ── ON IS A LUMINANCE EVENT (owner 2026-08-09, task 179, round TWO) ─────
+     His one working example is a LUMINANCE flip, not a hue: "plavi okvir
+     umesto belog" — a blue frame where a white one was. Round one answered
+     with an accent ring, an accent wash and a scale, all three of them hues,
+     and in the coloured looks the per-set rules simply outranked them (see
+     the note at .ctl.active in style.css). So the switched-on button now
+     flips its FACE to the far end of the theme's luminance range: near-white
+     on the dark page, near-black on the light one. The set's identity colour
+     is not lost — it becomes the INK on that face (--set-on, computed by
+     theme.js from luminance exactly like every other ink here, never
+     tabled). --on-gap is the page colour, used as a GAP between the flipped
+     face and the ring around it: face / gap / ring is bright-dark-bright on
+     one theme and dark-bright-dark on the other, which survives ANY colour
+     the PC's own screen happens to be showing behind it. */
+  --on-face: #f6f8fc;
+  --on-face-ink: #0b1220;
+  --on-gap: var(--surface-0);
+  --on-glow: rgb(246 248 252 / 0.35);
   --success: #22c55e;
   --success-dim: rgb(34 197 94 / 0.18);
   --success-edge: rgb(34 197 94 / 0.50);
@@ -159,6 +177,11 @@ body[data-theme="light"] {
   --accent-glow: rgb(3 105 161 / 0.25);
   --accent-wash: rgb(3 105 161 / 0.10);
   --on-accent: #ffffff;
+  /* The flip goes the other way on a light page — the ON face is the darkest
+     thing on screen. --on-gap follows --surface-0 by itself. */
+  --on-face: #16161f;
+  --on-face-ink: #f6f8fc;
+  --on-glow: rgb(22 22 31 / 0.35);
   --success: #15803d;
   --success-dim: rgb(21 128 61 / 0.14);
   --success-edge: rgb(21 128 61 / 0.45);
@@ -253,10 +276,28 @@ body[data-colored="true"][data-fill="full"] .wheel-item {
 body[data-colored="true"][data-fill="full"] .ctl .lbl {
   color: var(--set-ink, var(--text-primary));
 }
-/* An ACTIVE toggle (Keys on, Scroll on) keeps meaning "switched on", so it
-   still glows — in the set's own colour rather than the one accent. */
-body[data-colored="true"] .ctl.active,
+/* A PRESSED button (a finger holding Click down) glows in the set's own
+   colour rather than the one accent. It is a momentary, pressed-in feel and
+   it stays a hue on purpose — the LATCHED state is what has to be a luminance
+   event, and the two must not look alike.
+
+   `.ctl.active` LEFT THIS SELECTOR on 2026-08-09 (task 179). It was here
+   because ON used to be a glow, and this rule — one attribute, two classes —
+   outranked `.ctl.active`'s own shadow, so the switched-on button ended up
+   wearing a halo in the SAME hue as the button underneath it: 1.35:1 against
+   its OFF sibling, measured. ON now owns exactly one rule, in style.css, for
+   all eight looks. */
 body[data-colored="true"] .ctl.held {
   box-shadow: 0 0 0 3px var(--set-glow, var(--accent-glow)),
               0 0 22px var(--set-glow, var(--accent-glow));
+}
+
+/* THE SET'S IDENTITY SURVIVES THE FLIP. On a coloured page the ink on the ON
+   face is the set's own colour, walked in LIGHTNESS until it reads there
+   (theme.js -> `--set-on`, the same `lineOn` every other ink in this file is
+   made with). Everything else about the ON state — the flipped face, the gap,
+   the ring — is one rule in style.css, and this is the single value it asks
+   this file for. */
+body[data-colored="true"] .ctl.active {
+  --on-ink: var(--set-on, var(--on-face-ink));
 }
