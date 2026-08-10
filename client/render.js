@@ -98,8 +98,29 @@ function setCanvasBackdrop(color) {
   if (color) canvasBg = color;
 }
 
+// Whether a real frame has ever reached the canvas in THIS session — the
+// difference between "nothing yet" (clear to the page colour, correct) and
+// "nothing new" (keep the last picture, see `redraw`). Reset in `initMse`.
+let everDrew = false;
+
 function redraw() {
-    ctx.fillStyle = canvasBg;
+  // A PICTURE THAT STOPPED BEATS NO PICTURE (owner report 2026-08-09, live
+  // and urgent: at resolution + bitrate + fps all at maximum the screen goes
+  // generic blue). That blue IS this function: the canvas is cleared to the
+  // theme's page colour on every frame and then nothing is drawn, because
+  // `video.readyState < 2` — the decoder has no frame to give. At 4K60 the
+  // pipeline genuinely cannot keep up (task 130: ~3 GB/s of raw pixels), so
+  // that state is not rare, and clearing first turned every shortfall into
+  // an empty screen. The stream was never gone; there was simply nothing
+  // new, and we wiped what was there.
+  //
+  // So when there is nothing to draw, we draw NOTHING — including the
+  // clear. The last good frame stays on the canvas until a real one
+  // replaces it. The status pill still says what is happening; the picture
+  // just stops instead of vanishing. This is the backstop for whatever
+  // client/live-clock.js's regulator cannot close in time — see its header.
+  if (streamMode === "h264" && video.readyState < 2 && everDrew) return;
+  ctx.fillStyle = canvasBg;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   const D = drawnRect();
   // ONCE. This line was here TWICE from 0.0.349 until 2026-08-09 — a scripted
@@ -125,7 +146,10 @@ function redraw() {
     ctx.clip();
   }
   if (streamMode === "h264") {
-    if (video.readyState >= 2) ctx.drawImage(video, D.x, D.y, D.w, D.h);
+    if (video.readyState >= 2) {
+      ctx.drawImage(video, D.x, D.y, D.w, D.h);
+      everDrew = true;
+    }
   } else {
     if (baseBitmap) ctx.drawImage(baseBitmap, D.x, D.y, D.w, D.h);
     if (view.scale > 1 && detailBitmap) {
@@ -408,6 +432,10 @@ let rafId = null;
 
 function initMse(codec) {
   teardownMse();
+  everDrew = false;         // a new session starts from a clean canvas
+  liveRate = 1;              // …and clean regulator state — no stale
+  liveDegradedSince = 0;     //   degradation or flush-gap memory carried
+  liveLastFixAt = 0;         //   over from a previous stream
   const ms = new MediaSource();
   mediaSource = ms;
   video.src = URL.createObjectURL(ms);
@@ -493,22 +521,62 @@ function reportLiveDrift(behind) {
   liveDriftMin = 0;
 }
 
-// REVERTED to the pre-2026-08-09 rule, the same night my replacement shipped.
-// The starve case is REAL — his log proved currentTime overtaking the buffer
-// and pinning at -11 s — but my fix for it seeks, a seek flushes the decoder,
-// and it went out beside two other changes of mine into a screen he could not
-// use. Nothing can be attributed while three things move at once. This comes
-// back ALONE, with him watching, after the app is usable again.
+// THE FROZEN PICTURE, NAMED FROM HIS OWN LOG (owner report 2026-08-09) —
+// and TASK 151's mechanism (2026-08-10), after the 0.0.367 fix and the
+// 0.0.373 blue-screen fix both went back on 0.0.375 for shipping three
+// streaming changes in one window. All three return here as ONE
+// mechanism, this time as a single attributable build rather than three.
+//
+// The truth table (`liveAction`) and the slow-before-flush regulator
+// (`liveRegulate`) both live in the pure module client/live-clock.js (the
+// caret.js/voice.js pattern) — see its header for the full reasoning, in
+// particular why a flush is the LAST resort and not the first response
+// (task 130: a flush fired every second turned a merely-late picture into
+// one that was never shown at all). `applyLiveDecision` is the one place
+// that runs them and performs the side effects they decide on, so the two
+// call sites below (`onMseUpdateEnd`, `unfreezeIfStarved`) can never drift
+// out of step with each other.
+let liveRate = 1;
+let liveDegradedSince = 0;
+let liveLastFixAt = 0;
+
+function applyLiveDecision(behind, now) {
+  const act = liveAction(behind, LIVE_MAX_BEHIND_S, LIVE_STARVED_S);
+  const reg = liveRegulate({
+    behind, now, starved: act === "starved",
+    rate: liveRate, degradedSince: liveDegradedSince, lastFixAt: liveLastFixAt,
+  });
+  if (reg.rate !== liveRate) video.playbackRate = reg.rate;
+  liveRate = reg.rate;
+  liveDegradedSince = reg.degradedSince;
+
+  const b = video.buffered;
+  if (!b.length) return;
+  const end = b.end(b.length - 1);
+  if (reg.seek) {
+    // STARVED, already slowed, still not recovering: the one flush this
+    // starve is allowed, and no more than one per LIVE_UNFREEZE_MIN_GAP_MS
+    // (client/live-clock.js) however often this keeps being asked.
+    liveStarves++;
+    video.currentTime = liveSeekTarget(b.start(b.length - 1), end, LIVE_TARGET_BEHIND_S);
+    liveLastFixAt = now;
+    if (video.paused) video.play().catch(() => {});
+  } else if (act === "seek_forward") {
+    // Merely LATE, not starved (jank, slow link) — jump ahead. Unrelated to
+    // the flush budget above: this is the ordinary catch-up that predates
+    // task 122 and was never the cause of the blue screen.
+    liveSeeks++;
+    video.currentTime = end - LIVE_TARGET_BEHIND_S;
+  }
+}
+
 function onMseUpdateEnd() {
   const b = video.buffered;
   if (b.length) {
     const end = b.end(b.length - 1);
     const behind = end - video.currentTime;
     reportLiveDrift(behind);
-    if (behind > LIVE_MAX_BEHIND_S) {
-      liveSeeks++;
-      video.currentTime = end - LIVE_TARGET_BEHIND_S; // fell behind (jank, slow link) — jump
-    }
+    applyLiveDecision(behind, performance.now());
     if (end - b.start(0) > BUFFER_KEEP_S * 2 && sourceBuffer && !sourceBuffer.updating) {
       sourceBuffer.remove(0, end - BUFFER_KEEP_S);
     }
@@ -516,6 +584,26 @@ function onMseUpdateEnd() {
   }
   pumpMse();
 }
+
+// …AND A STALL THAT ARRIVES WITH NO APPEND MUST STILL BE CAUGHT. Everything
+// above hangs off `updateend`, which only fires when a chunk lands. His pin
+// at -11.10 s for two minutes is what that costs: no append, no check, no
+// recovery. The video element's own `waiting`/`stalled` events say "I have
+// run out" without needing one, and a slow tick (LIVE_UNFREEZE_TICK_MS,
+// client/state.js) is the backstop for the case where even those do not
+// fire. Both run through `applyLiveDecision` — the SAME decision as
+// `onMseUpdateEnd` — so the rate/flush budget can never drift between the
+// two call sites.
+function unfreezeIfStarved() {
+  if (!sourceBuffer || !video.buffered.length) return;
+  const b = video.buffered;
+  const behind = b.end(b.length - 1) - video.currentTime;
+  applyLiveDecision(behind, performance.now());
+}
+
+video.addEventListener("waiting", unfreezeIfStarved);
+video.addEventListener("stalled", unfreezeIfStarved);
+setInterval(unfreezeIfStarved, LIVE_UNFREEZE_TICK_MS);
 
 function renderLoop() {
   if (rafId) return;

@@ -79,6 +79,10 @@ const FILES = [
   "caret.js",
   "view-anchor.js",
   "cursor-shapes.js",
+  // Also before render.js: the live-edge decision table + regulator
+  // computeViewHome's neighbour, `applyLiveDecision`, calls (task 151,
+  // 2026-08-10).
+  "live-clock.js",
   "render.js",
   "input-geometry.js",
   "icons.js",

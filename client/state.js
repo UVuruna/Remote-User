@@ -69,7 +69,21 @@ const EXCURSION_GRACE_MS = 12000;
 // while (audit 2026-08-05).
 const KEEP_AWAKE_MS = 180000;
 const LIVE_MAX_BEHIND_S = 0.5;   // jump to the live edge when this far behind
-const LIVE_TARGET_BEHIND_S = 0.1;
+// WHERE A CATCH-UP LANDS (task 122/151). Was 0.1 s — SIX FRAMES at 60 fps,
+// and his log of 2026-08-09 showed what that cost: the drift rode 0.47-0.49 s
+// for a minute, crossed the threshold, and the very next sample was already
+// NEGATIVE. A landing with no headroom turned one late chunk into a starved
+// player.
+const LIVE_TARGET_BEHIND_S = 0.45;
+// Below this, the player's own clock has run PAST the data it has and the
+// picture is frozen (task 122's freeze sat at -11 s). Not zero: a hair of
+// negative drift is ordinary jitter, and re-seeking on that would stutter
+// forever. See client/live-clock.js `liveAction` — the decision this feeds.
+const LIVE_STARVED_S = -0.2;
+// The starve check also runs on a slow tick (render.js `unfreezeIfStarved`),
+// because `updateend` only fires when a chunk ARRIVES — and the whole
+// failure is chunks not arriving.
+const LIVE_UNFREEZE_TICK_MS = 1000;
 // How often the live-drift measurement reaches the server log (task 83). Long
 // enough that a session's log stays readable, short enough that one minute of
 // him moving the mouse produces several lines to compare across fps settings.

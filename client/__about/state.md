@@ -29,7 +29,16 @@ Loads FIRST of the six client scripts (see [Client (folder)](../___client.md))
 ## Key State & Functions
 
 - **Tunables** — `ZOOM_MAX`, scroll fling constants, `VIEWPORT_MARGIN`,
-  `RECONNECT_MS`, MSE live-edge constants (`LIVE_MAX_BEHIND_S` etc.).
+  `RECONNECT_MS`, MSE live-edge constants: `LIVE_MAX_BEHIND_S` (jump forward
+  past this), `LIVE_TARGET_BEHIND_S` (where a catch-up lands — 0.45s since
+  task 151, was 0.1s/six frames at 60fps until his log showed that landing
+  turning one late chunk into a starved player), `LIVE_STARVED_S` (below
+  this the clock has run PAST the data — his freeze), `LIVE_UNFREEZE_TICK_MS`
+  (the `waiting`/`stalled` backstop tick interval). Consumed by
+  [Live Clock](live-clock.md)'s `liveAction`, fed in by
+  [Render](render.md)'s `applyLiveDecision` — the regulator's OWN numbers
+  (slow rate, degrade hold, min flush gap) live in live-clock.js itself,
+  nothing outside it reads them.
 - **Losing the route** (owner 2026-08-07) — `CONNECT_TIMEOUT_MS` = 6 s (a
   socket still CONNECTING has no route), `SERVED_TIMEOUT_MS` = 8 s (OPEN but
   never sent a `config` is a server we cannot hear), `LINK_LOST_TRIES` = 3

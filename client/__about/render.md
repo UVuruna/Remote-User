@@ -14,7 +14,10 @@ MediaSource Extensions (MSE). Second of the six client scripts to load (after
 
 ### Uses
 - [State](state.md) — `canvas`, `ctx`, `monitor`, `baseRect`, `view`,
-  `baseBitmap`/`detailBitmap`/`detailRegion`, `streamMode`, `cursorPos`
+  `baseBitmap`/`detailBitmap`/`detailRegion`, `streamMode`, `cursorPos`,
+  `LIVE_MAX_BEHIND_S`/`LIVE_TARGET_BEHIND_S`/`LIVE_STARVED_S`/`LIVE_UNFREEZE_TICK_MS`
+- [Live Clock](live-clock.md) — `liveAction`/`liveRegulate`/`liveSeekTarget`,
+  run through this file's `applyLiveDecision`
 
 ### Used by
 - [Controls](controls.md) implicitly (nothing calls into render.js directly
@@ -69,6 +72,28 @@ MediaSource Extensions (MSE). Second of the six client scripts to load (after
   is read — is never entered before `video` exists. By the time `streamMode`
   can ever become `"h264"` (only via an async `config` message), the whole
   page has finished loading.
+
+## The picture never goes blank, and a starve recovers itself (task 151, 2026-08-10)
+
+`redraw()` skips its own clear when `streamMode === "h264" && video.readyState
+< 2 && everDrew` — a starved decoder keeps the LAST drawn frame instead of
+flashing to `canvasBg`, which is what the owner photographed live as a
+generic blue screen (3b7b477's fix, reverted with everything else by
+581244b, restored here). `everDrew` is set on the first successful
+`ctx.drawImage(video, ...)` and reset to `false` in `initMse()`, so a brand
+new session still clears correctly before its first frame ever lands.
+
+The recovery mechanism itself — the truth table and the slow-before-flush
+regulator that decides WHEN a starve is even allowed to seek — lives in the
+pure module [Live Clock](live-clock.md), run through this file's
+`applyLiveDecision(behind, now)`: the ONE place both `onMseUpdateEnd`
+(fires on every MSE chunk) and `unfreezeIfStarved` (`waiting`/`stalled` +
+a 1s backstop tick, for a stall that arrives with no append at all) funnel
+through, so the rate/flush state (`liveRate`/`liveDegradedSince`/
+`liveLastFixAt`, reset in `initMse()` for a clean session) can never drift
+between the two call sites. See [Live Clock (flow)](../__flow/live-clock.md)
+for the full decision path and why "the regulator engages before the flush"
+is provable rather than merely true.
 ## Layouts (Phase F+ step 1)
 Layout focus is client-side: the view is bound to `layoutRegion`. Streaming
 itself is

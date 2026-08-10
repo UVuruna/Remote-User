@@ -29,7 +29,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "server"))
 # truth about PIXELS is computed (compositing, luminance, WCAG floors). Split
 # out on 2026-08-08 (THE STRUCTURE LAW); what is opened and what is asserted
 # stays here. See tests/_audit_js.py.
-from _audit_js import CONTRAST_JS  # noqa: E402
+from _audit_js import CONTRAST_JS, LIVE_CLOCK_BLANK_JS, LIVE_CLOCK_DRIFT_JS  # noqa: E402
 
 # The panel CATALOGUE — WHICH overlay is opened and in WHAT state. Split out on
 # 2026-08-09 (THE STRUCTURE LAW), when the dictation card's listen control
@@ -152,7 +152,6 @@ def shot_path(name: str):
     out = SHOT_DIR / subject
     out.mkdir(parents=True, exist_ok=True)
     return out / f"{name}.png"
-
 
 
 def _shot_name(name: str) -> str:
@@ -444,9 +443,9 @@ def main() -> int:
 
     from playwright.sync_api import sync_playwright
 
-    results = {"region math: _fit_rect stays inside its box, centred":
-               _fit_rect_audit(),
-               "grid math: every shape tiles its region exactly": _grid_audit()}
+    results = {"region math: _fit_rect stays inside its box, centred": _fit_rect_audit(),
+               "grid math: every shape tiles its region exactly": _grid_audit(),
+               "live-clock wiring: render.js runs the module (task 151)": all(f"{fn}(" in (PROJECT / "client" / "render.js").read_text(encoding="utf-8") for fn in ("liveAction", "liveRegulate", "liveSeekTarget"))}
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         for label, w, h in SIZES:
@@ -526,7 +525,9 @@ def main() -> int:
             results[f"an ON button is unmistakable @ {label}"] = not on
             if on:
                 print(f"  DETAIL active state @ {label}: {on}")
-
+            results[f"a gap in the stream never blanks the screen @ {label}"] = not page.evaluate(LIVE_CLOCK_BLANK_JS)
+            results[f"a starved player is caught, not only a late one @ {label}"] = not page.evaluate(LIVE_CLOCK_DRIFT_JS)
+            results[f"a catch-up lands with headroom, not on the edge @ {label}"] = page.evaluate("LIVE_TARGET_BEHIND_S") >= 0.3
             # AUTO-HIDE — once per SIZE, not per look: it is a behaviour, and
             # a colour cannot change it. Run before the look sweep so the
             # controls are in a known state for everything that follows.
@@ -994,7 +995,6 @@ def test_layout_audit():
     pytest.importorskip("playwright.sync_api")
     pytest.importorskip("uvicorn")
     assert main() == 0
-
 
 if __name__ == "__main__":
     sys.exit(main())

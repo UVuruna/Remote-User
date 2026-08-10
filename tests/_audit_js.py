@@ -736,3 +736,45 @@ window.__pillContrast = () => {
   return bad;
 };
 """
+
+# THE PICTURE NEVER GOES BLANK (task 151, 2026-08-10 — 3b7b477 restored onto
+# the new client/live-clock.js mechanism). Paints the canvas a known colour
+# once before any frame has ever been drawn (clearing IS correct there) and
+# once after (a gap must leave the last picture alone) — the generic-blue
+# failure the owner photographed live at max settings.
+LIVE_CLOCK_BLANK_JS = """() => {
+  const realBg = canvasBg;
+  streamMode = 'h264';
+  everDrew = false;
+  canvasBg = '#010203';
+  redraw();
+  const before = ctx.getImageData(1, 1, 1, 1).data;
+  const bad = [];
+  if (!(before[0] === 1 && before[1] === 2 && before[2] === 3)) {
+    bad.push('a session with no frame yet did not paint the page colour');
+  }
+  everDrew = true;
+  canvasBg = '#0a0b0c';
+  redraw();
+  const after = ctx.getImageData(1, 1, 1, 1).data;
+  if (after[0] === 10 && after[1] === 11 && after[2] === 12) {
+    bad.push('a gap in the stream wiped the last picture');
+  }
+  canvasBg = realBg;
+  everDrew = false;
+  return bad;
+}"""
+
+# THE TRUTH TABLE MATCHES HIS SIX CASES (task 151 — a9db36b restored onto
+# client/live-clock.js's `liveAction`). The pure module has its own gate
+# (tests/test_live_clock.py, driven whole in node); this is the WIRING half —
+# the live page must answer the same cases through the real globals it runs
+# with (LIVE_MAX_BEHIND_S / LIVE_STARVED_S, client/state.js).
+LIVE_CLOCK_DRIFT_JS = """() => [
+  ['healthy 0.20s', liveAction(0.20, LIVE_MAX_BEHIND_S, LIVE_STARVED_S), 'live'],
+  ['at the edge 0.49', liveAction(0.49, LIVE_MAX_BEHIND_S, LIVE_STARVED_S), 'live'],
+  ['drifted 0.80s', liveAction(0.80, LIVE_MAX_BEHIND_S, LIVE_STARVED_S), 'seek_forward'],
+  ['his freeze -11.1s', liveAction(-11.1, LIVE_MAX_BEHIND_S, LIVE_STARVED_S), 'starved'],
+  ['just past zero -0.05s', liveAction(-0.05, LIVE_MAX_BEHIND_S, LIVE_STARVED_S), 'live'],
+  ['starved -0.5s', liveAction(-0.5, LIVE_MAX_BEHIND_S, LIVE_STARVED_S), 'starved'],
+].filter(([, got, want]) => got !== want)"""

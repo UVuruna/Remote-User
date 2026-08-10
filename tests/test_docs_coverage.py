@@ -169,6 +169,13 @@ ALGORITHMIC = {
     # Algorithmic without argument — geometry that decides whether he can read
     # the row he is typing in, kept pure so its gate runs it whole.
     "client/caret.js",
+    # New 2026-08-10 (task 151): the live-edge truth table plus the
+    # slow-before-flush playbackRate regulator that recovers a starved player
+    # without ever flushing the decoder more than once per 4s. Algorithmic —
+    # real decision logic with its own state machine (degradedSince/rate),
+    # kept pure so its gate (tests/test_live_clock.py) can drive it whole
+    # against a realistic drift ramp.
+    "client/live-clock.js",
     "client/grids.js",
     # New 2026-08-07 (build rounds G1/G2 — the game controller): the whole
     # mapping lives here, and it is real algorithm — a deadzone-and-power stick
