@@ -128,8 +128,15 @@ function redraw() {
   // 2+ while the flushed decoder has no frame, so the clear landed and
   // drawImage() below silently painted nothing — one background-coloured
   // frame per unlucky seek was his blue flash.
-  if (liveHoldFrame({ mode: streamMode, readyState: video.readyState,
-                      seeking: video.seeking, everDrew })) return;
+  // `everDrew &&` is a TEMPORAL guard, not a shortcut: redraw() runs from
+  // updateViewport() at page load, BEFORE `const video` (below, MSE section)
+  // is initialized, and building the argument object would touch `video` in
+  // its dead zone — the exact class of crash the __imeHeight note above
+  // records. everDrew can only be true after a frame was drawn FROM the
+  // video element, so once it passes, `video` provably exists; and while it
+  // is false, liveHoldFrame would answer false anyway.
+  if (everDrew && liveHoldFrame({ mode: streamMode, readyState: video.readyState,
+                                  seeking: video.seeking, everDrew })) return;
   ctx.fillStyle = canvasBg;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   const D = drawnRect();
