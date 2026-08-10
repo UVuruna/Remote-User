@@ -210,7 +210,26 @@ function openRenamePanel(index) {
   actions.appendChild(layChip("Cancel", false, () => openLayoutSettings(index)));
   actions.appendChild(layChip("Save", true, () => {
     const name = field.value.trim();
-    if (name && name !== lay.name) send({ type: "layout_rename", index, name });
+    if (name && name !== lay.name) {
+      // OPTIMISTIC (owner report, task 199: he had to re-open Rename before
+      // the new name showed). `lay` IS `layouts[index]` — the very object the
+      // bar (`updateLayoutBar`), the list row (`layRow(lay.name, …)`) and
+      // this sheet's own header (`sub.textContent = lay.name` above) all read
+      // — so mutating it here, before the round trip, is what makes every one
+      // of them correct the instant the sheet closes rather than on whichever
+      // later `layout_state` happens to land. Renaming moves nothing on the
+      // PC, unlike the aspect/grid Applies right above it in this same file
+      // (`sendLayoutShape`), which get a real loading cube while the windows
+      // visibly move on the stream — a rename has no such tell, so with
+      // nothing local to show, the round trip's own latency read as "did
+      // nothing" the moment Save was tapped. The server's own echoed
+      // `layout_state` still arrives a moment later and reconciles with the
+      // identical name — a no-op, and the one thing that can ever overwrite
+      // this if the two ever disagree.
+      lay.name = name;
+      updateLayoutBar(); // reads layouts[layoutActive] synchronously — may be a no-op
+      send({ type: "layout_rename", index, name });
+    }
     closeLayoutPanel();
   }));
   card.appendChild(actions);

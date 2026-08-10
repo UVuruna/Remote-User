@@ -34,9 +34,10 @@ a layout built portrait had to be DELETED and made again to become landscape.
 
 ### Uses
 - [Layouts](layouts.md) — `layPanel`, `closeLayoutPanel`, `layChip`, `layRow`,
-  `nameField`, `openLayoutPicker`, `openMemberPanel`, and `HOLD_DRAG_SLOP`
-  **at load** (the Move handle's tap slop is derived from the row hold's — one
-  digitizer, one number), which is why it loads immediately after it
+  `nameField`, `openLayoutPicker`, `openMemberPanel`, `updateLayoutBar`, and
+  `HOLD_DRAG_SLOP` **at load** (the Move handle's tap slop is derived from the
+  row hold's — one digitizer, one number), which is why it loads immediately
+  after it
 - [Grids](grids.md) / [Grid Icons](grid-icons.md) — `gridSketch`, `soloSketch`,
   `orientChips`, `gridChip`, `gridIconChoices`
 - [Controls](controls.md) — `keepFocus`, `svg`, `showToast`
@@ -67,7 +68,9 @@ a layout built portrait had to be DELETED and made again to become landscape.
   is already true sends nothing.
 - **`openRenamePanel(index)`** — the name, and nothing else since task 175
   (between 2026-08-07 and today it also carried the shape chooser, because the
-  row had no other door to put them behind).
+  row had no other door to put them behind). Its Save handler is OPTIMISTIC
+  (task 199, 2026-08-10 — see Design Decisions): it mutates `lay.name` and
+  calls `updateLayoutBar()` itself, before `send()`.
 - **`openAspectPanel` / `renderAspectPanel` / `updateAspectPreview` /
   `aspFrac` / `clampAspect` / `dragAspect` / `dragMove` / `ratioPair` /
   `devicePair` / `ratioLabel`** — the aspect-ratio panel, moved here whole.
@@ -111,3 +114,26 @@ a layout built portrait had to be DELETED and made again to become landscape.
   about a name. `tests/test_layout_shape.py` now asserts the RECTS, because a
   shape change the phone shows and the PC ignores is the Move handle's bug in
   a new place.
+- **A RENAME MUST SHOW ITS OWN WORK, NOT THE NEXT UNRELATED FRAME'S** (owner
+  report, task 199, 2026-08-10: he had to re-open Rename before the new name
+  showed). Root cause: the Save handler sent `layout_rename` and immediately
+  called `closeLayoutPanel()`, touching neither `lay.name` nor
+  `updateLayoutBar()` — every surface that shows a layout's name (the bar, the
+  list row, this sheet's own header) reads the SAME shared `layouts` array
+  from [State](state.md), and that array was only ever overwritten wholesale
+  by connection.js's `layout_state` handler, on whichever server reply
+  happened to land next. Renaming has no PC-visible effect of its own, unlike
+  the aspect/grid Applies right above it in this same file
+  (`sendLayoutShape`), which raise a real loading cube while the windows
+  visibly move on the stream — so a rename had no local tell at all, and any
+  round-trip latency (Tailscale, a busy Wi-Fi — not just localhost) read as
+  "did nothing" the instant Save was tapped. Reopening Rename only "fixed" it
+  because `openRenamePanel` reads `layouts[index]` fresh every time, and by
+  then the array had usually already been updated by an unrelated later
+  frame. Fixed by making Save OPTIMISTIC: it mutates `lay.name` — the object
+  every surface reads — and calls `updateLayoutBar()` synchronously, both
+  BEFORE `send()`; the server's own echoed `layout_state` still arrives and
+  reconciles with the identical name, a no-op unless the two ever disagree.
+  Gated by `tests/test_layout_rename_live.py`, which stubs `send()` to a black
+  hole for the whole drive — a server reply must never be what makes the gate
+  pass, or it would only prove the rename is fast on localhost.
