@@ -290,6 +290,11 @@ class H264Manager:
         self._source_running = False
         self._shut_down = False
         self._lock = threading.Lock()
+        # Consumers that are BETWEEN sessions and will open another at once —
+        # see hold_source(). Its own lock: a hold must never wait behind an
+        # open_session that is busy starting an encoder.
+        self._holds: set = set()
+        self._holds_lock = threading.Lock()
 
     @property
     def width(self) -> int:
@@ -378,11 +383,55 @@ class H264Manager:
                        "not registered; %d active", why, len(self._sessions))
         return session
 
+    def hold_source(self, hold: object) -> None:
+        """"I am between sessions and I am opening another one right now" —
+        keep capture running even though `_sessions` is momentarily empty.
+
+        A quality change (the phone's bitrate/fps/resolution panel) can only be
+        applied by a NEW ffmpeg, so the web layer's stream loop closes one
+        session and opens the next. With one client — the normal case, "one
+        device at a time" is a hard rule — that emptied `_sessions` and dxcam
+        was torn down and rebuilt for a change that lives entirely inside one
+        ffmpeg flag. The new encoder then has NO FRAMES until dxcam is back,
+        and ffmpeg cannot write an init segment before it has encoded one: past
+        `h264_head_timeout` the whole connection died (owner report 2026-08-10;
+        his log, 20:30:21 close + `Frame buffer build(start)` → 20:30:42
+        "ffmpeg produced no init segment in time" → the phone reconnecting).
+
+        Idempotent by construction (a set of tokens, not a count), so no caller
+        can leak or double-release one. NEVER a substitute for a session: only
+        a live stream loop may hold, and it releases on every way it can end —
+        capture still runs solely while somebody is watching."""
+        with self._holds_lock:
+            self._holds.add(hold)
+
+    def release_source(self, hold: object) -> None:
+        """Drop a hold and stop capture if that was the last thing keeping it.
+
+        The stop is attempted WITHOUT waiting for `_lock`: this is called from
+        the event loop, sometimes mid-cancellation, and `open_session` holds
+        that lock for as long as an encoder takes to start. Skipping is safe —
+        whoever holds it is inside `open_session`, and every exit of that
+        method either registers a session (capture must keep running) or calls
+        `_stop_source_if_idle` itself."""
+        with self._holds_lock:
+            self._holds.discard(hold)
+        if self._lock.acquire(blocking=False):
+            try:
+                self._stop_source_if_idle()
+            finally:
+                self._lock.release()
+
     def _stop_source_if_idle(self) -> None:
-        """Caller holds `_lock`. Capture runs only while a session needs it."""
-        if not self._sessions and self._source_running:
-            self._source.stop()
-            self._source_running = False
+        """Caller holds `_lock`. Capture runs only while a session needs it —
+        or while a consumer is between two of its own (see `hold_source`)."""
+        if self._sessions or not self._source_running:
+            return
+        with self._holds_lock:
+            if self._holds:
+                return
+        self._source.stop()
+        self._source_running = False
 
     def switch_to(self, index: int) -> bool:
         """Ends every session (their owners reopen automatically and resend

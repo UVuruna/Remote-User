@@ -67,6 +67,29 @@ def decode_upload(data: bytes):
     return cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_COLOR)
 
 
+def crop_to_region(frame, msg: dict):
+    """The captured frame cropped to the monitor-normalized rect the phone
+    asked for (`screenshot {x, y, w, h}` — the Attach set's Shot sends the
+    region it is really looking at, never the whole desktop). Missing or
+    unreadable numbers mean the whole frame, which is the legacy snap.
+
+    Pure pixel arithmetic, so it lives here and not in the transport (moved out
+    of web.py 2026-08-10). Every edge is clamped INSIDE the frame and each side
+    is forced at least one pixel wide — a zero-width crop is not an image and
+    the clipboard would refuse it."""
+    try:
+        x, y = float(msg.get("x", 0)), float(msg.get("y", 0))
+        w, h = float(msg.get("w", 1)), float(msg.get("h", 1))
+    except (TypeError, ValueError):
+        x, y, w, h = 0.0, 0.0, 1.0, 1.0
+    fh, fw = frame.shape[:2]
+    x1 = min(max(int(x * fw), 0), fw - 1)
+    y1 = min(max(int(y * fh), 0), fh - 1)
+    x2 = min(max(int((x + w) * fw), x1 + 1), fw)
+    y2 = min(max(int((y + h) * fh), y1 + 1), fh)
+    return frame[y1:y2, x1:x2]
+
+
 # --- Typed commands (owner 2026-08-05) --------------------------------------
 # A `paste_text` button pastes and then presses Enter. The pause between them
 # is not cosmetic: the target app (Claude's prompt, a search box) reacts to

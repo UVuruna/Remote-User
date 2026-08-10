@@ -26,7 +26,7 @@ The `stream` argument everywhere is either an H264Manager or a JpegStreamer —
 one duck interface: mode, width, height, monitor_index, output_count(),
 switch_to(), take_screenshot(); the JPEG side adds set_viewport() plus
 start()/stop() (its capture runs on demand, driven by FrameHub.subscribers),
-the H.264 side new_owner()/open_session()/close_session().
+the H.264 side new_owner()/open_session()/close_session()/hold_source().
 """
 
 import asyncio
@@ -68,7 +68,6 @@ logger = logging.getLogger(__name__)
 # owner's own desk outranks both — lives in `presence.py` (split 2026-08-05,
 # THE STRUCTURE LAW: one responsibility, its own failure history, its own
 # gate in tests/test_presence.py). Its timings live there too.
-
 
 
 @dataclass
@@ -406,17 +405,41 @@ async def _send_frames(ws: WebSocket, queue: asyncio.Queue) -> None:
 
 async def _stream_h264(ws: WebSocket, manager, token: str,
                        conn: dict | None = None) -> None:
+    """`_h264_loop` plus the one guarantee that must survive every exit from
+    it: the capture HOLD is given back. The loop takes that hold as each
+    session ends, and a cancellation can land anywhere after it — a hold left
+    behind keeps dxcam running with nobody watching (the 2026-08-07 orphan)."""
+    hold, conn = object(), conn if conn is not None else {}
+    try:
+        await _h264_loop(ws, manager, token, conn, hold)
+    finally:
+        manager.release_source(hold)
+
+
+async def _h264_loop(ws: WebSocket, manager, token: str, conn: dict,
+                     hold: object) -> None:
     """One H.264 session per iteration: open (fresh init segment + keyframe),
     announce it via `config`, forward chunks until the session ends (monitor
     switch, slow-client reset, quality change, encoder death), then open the
-    next. The task is cancelled on disconnect; the session always closes."""
-    conn = conn if conn is not None else {}
+    next. The task is cancelled on disconnect; the session always closes.
+
+    Re-opening is the ONLY way a quality change can take effect — a bitrate
+    lives inside a running ffmpeg's flags — so the gap between two of this
+    client's sessions is a working state, not an error one. Both halves of the
+    owner's 2026-08-10 report ("changing the bitrate kills the whole app")
+    follow: capture is HELD across the gap (h264_streamer.hold_source — a
+    rebuilt dxcam starves the new encoder of the frame it needs before it can
+    write an init segment), and a failed RE-open is retried, never closing a
+    socket that carries input, layouts and dictation too."""
     loop = asyncio.get_running_loop()
+    first, failures = True, 0
     while True:
         # The phone said it is gone. Capture, ffmpeg and the socket all stay
         # idle until it says otherwise — a stream nobody can see is exactly
-        # the traffic the owner went looking for (owner 2026-08-05).
+        # the traffic the owner went looking for (owner 2026-08-05). An away
+        # phone holds NOTHING: the hold is for a gap we are closing right now.
         while conn.get("paused"):
+            manager.release_source(hold)
             await asyncio.sleep(0.25)
         queue: asyncio.Queue = asyncio.Queue(maxsize=SETTINGS.h264_queue_chunks)
         # This iteration's CLAIM on its session, made on the event loop BEFORE
@@ -457,16 +480,27 @@ async def _stream_h264(ws: WebSocket, manager, token: str,
             )
         except (RuntimeError, OSError) as e:
             owner.release()
-            logger.error("H.264 session failed to open: %s", e)
-            await _toast(ws, "Stream failed to start — see server log")
-            await ws.close(code=1011)
-            return
+            failures += 1
+            # A FIRST session that fails is fatal — there is no stream to keep.
+            # A RE-open is not: a quality change forces one, and closing takes
+            # input, layouts and dictation down with the picture. Bounded, so
+            # this can never become the 2026-07-29 loop (171 failures in 90 s).
+            if first or failures >= SETTINGS.h264_reopen_tries:
+                logger.error("H.264 session failed to open: %s", e)
+                await _toast(ws, "Stream failed to start — see server log")
+                await ws.close(code=1011)
+                return
+            logger.error("H.264 re-open %d/%d failed: %s — retrying",
+                         failures, SETTINGS.h264_reopen_tries, e)
+            await asyncio.sleep(SETTINGS.h264_reopen_pause_s)
+            continue  # the hold stays — do NOT recycle capture between tries
         except BaseException:
             # Cancellation lands HERE (socket death, 4409 takeover, server
             # stop) and the ffmpeg spawn it interrupted runs on regardless.
             # Releasing the claim closes whatever that thread produces.
             owner.release()
             raise
+        first, failures = False, 0
         try:
             await _send_config(ws, manager, token, codec=session.codec)
             while (chunk := await queue.get()) is not None:
@@ -474,10 +508,14 @@ async def _stream_h264(ws: WebSocket, manager, token: str,
         except (WebSocketDisconnect, RuntimeError):
             return  # socket closed under us — the receive loop logs the disconnect
         finally:
-            # Synchronous on purpose: it must run even mid-cancellation, and it
-            # is fast (terminate ffmpeg; capture stop wakes within one frame).
-            # One call closes the session AND silences the queue closure, so
-            # the two can never disagree about who is gone.
+            # The HOLD comes first: closing the last session is what tore dxcam
+            # down, and the very next thing this loop does is open another
+            # encoder (`_stream_h264` gives it back on every exit, the pause
+            # branch on every away). Then the release — synchronous on purpose,
+            # it must run even mid-cancellation and it is fast. One call closes
+            # the session AND silences the queue closure, so the two can never
+            # disagree about who is gone.
+            manager.hold_source(hold)
             owner.release()
         if loop.time() - started < 2.0:
             await asyncio.sleep(1.0)  # a session dying this fast is an error loop — pace it
@@ -597,22 +635,6 @@ def _load_actions() -> dict:
         return empty
 
 
-def _stream_base(stream) -> dict:
-    """The desktop Settings card, as the phone needs to read it: the fps and
-    the encoded size the PC allows, plus the bitrate every phone step is a
-    percentage of. JPEG mode has no encoder size of its own — fall back to the
-    monitor size."""
-    width, height = getattr(stream, "stream_size", (stream.width, stream.height))
-    return {
-        "fps": SETTINGS.target_fps,
-        "width": width,
-        "height": height,
-        "bitrate": SETTINGS.h264_bitrate,
-        "bitrate_mid": config.bitrate_for_level("mid"),
-        "bitrate_low": config.bitrate_for_level("low"),
-    }
-
-
 async def _send_config(ws: WebSocket, stream, token: str, codec: str | None = None) -> None:
     # tailscale_url feeds the client's guided "access from anywhere" wizard:
     # null when the PC has no Tailscale yet (the desktop window guides that
@@ -635,7 +657,7 @@ async def _send_config(ws: WebSocket, stream, token: str, codec: str | None = No
         # it has to be able to SAY what "Max / Full / High" currently mean and
         # to grey out the steps that can never take effect (owner 2026-08-05:
         # picking 30 fps under a 10 fps PC changed nothing and said nothing).
-        "base": _stream_base(stream),
+        "base": config.stream_base(stream),
         # How the phone should LOOK (build round R3, owner 2026-08-07) —
         # theme, fill and the per-set colours, decided on the DESKTOP and
         # nowhere else. Built in config.ui_config(); this file only ships it.
@@ -684,18 +706,7 @@ async def _screenshot(ws: WebSocket, stream, injector: InputInjector, msg: dict)
     if frame is None:
         await _toast(ws, "Screenshot failed — see server log")
         return
-    try:
-        x, y = float(msg.get("x", 0)), float(msg.get("y", 0))
-        w, h = float(msg.get("w", 1)), float(msg.get("h", 1))
-    except (TypeError, ValueError):
-        x, y, w, h = 0.0, 0.0, 1.0, 1.0
-    fh, fw = frame.shape[:2]
-    x1 = min(max(int(x * fw), 0), fw - 1)
-    y1 = min(max(int(y * fh), 0), fh - 1)
-    x2 = min(max(int((x + w) * fw), x1 + 1), fw)
-    y2 = min(max(int((y + h) * fh), y1 + 1), fh)
-    frame = frame[y1:y2, x1:x2]
-    ok = await asyncio.to_thread(clipboard.copy_image, frame)
+    ok = await asyncio.to_thread(clipboard.copy_image, content.crop_to_region(frame, msg))
     if ok and msg.get("paste"):
         await asyncio.to_thread(injector.press_chord, "ctrl+v")
         await _toast(ws, "Screenshot pasted on the PC")
@@ -883,6 +894,12 @@ async def _receive_input(ws: WebSocket, injector: InputInjector, stream, token: 
                     quality = None  # pure defaults — same as no override
             changed = quality != conn.get("quality")
             conn["quality"] = quality
+            if changed:
+                # SAID OUT LOUD, because it forces an encoder re-open and a
+                # re-open is what used to kill the whole socket. His 2026-08-10
+                # crash could not be dated in his own log: this branch was the
+                # only unlogged cause of a close-and-reopen.
+                logger.info("Quality change from the phone: %s", quality)
             if changed and stream.mode == "h264" and conn.get("reset_stream"):
                 conn["reset_stream"]()
             if changed:

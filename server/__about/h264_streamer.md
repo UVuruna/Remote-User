@@ -58,11 +58,12 @@ What the [Web Layer](web.md) talks to (duck interface shared with `JpegStreamer`
 
 - `new_owner()`: a fresh `SessionOwner` for the caller to hand to `open_session`. Must be created on the caller's own thread — that timing IS the defence
 - `open_session(on_data, on_end, quality, owner)` / `close_session(session)`: session registry; capture starts with the first client and stops with the last — nothing runs while nobody is watching. A session whose claim is already released, or one that finished starting after `shutdown()`, is closed and never registered
-- `switch_to(index)`: ends every session (owners reopen automatically and resend `config`) and swaps the capture monitor
+- `hold_source(hold)` / `release_source(hold)`: "I am between sessions and I am opening another one right now" — capture keeps running even though `_sessions` is momentarily empty. It exists because a quality change can only be applied by a NEW ffmpeg (a bitrate lives inside the running one's flags), and with one client — "one device at a time" is a hard rule — closing the old session emptied `_sessions`, so dxcam was torn down and rebuilt for a change that never touched capture. The new encoder then had NO FRAMES, and ffmpeg cannot write an init segment before it has encoded one: past `h264_head_timeout` the open raised and the whole socket died (owner report 2026-08-10; his log at 20:30:21 shows the close and the `Frame buffer build(start)` on the same millisecond, and the failure 21 s later). Idempotent by construction — a SET of tokens, not a count, so no caller can leak or double-release one — and `release_source` attempts the stop **without waiting for `_lock`**, because it runs on the event loop, sometimes mid-cancellation, while `open_session` can hold that lock for as long as an encoder takes to start. Skipping is safe: every exit of `open_session` either registers a session (capture must run) or calls `_stop_source_if_idle` itself. A hold is NEVER a substitute for a session — only a live stream loop may take one, and `_stream_h264` gives it back on every way that loop can end
+- `switch_to(index)`: ends every session (owners reopen automatically and resend `config`) and swaps the capture monitor. Stops the source DIRECTLY, so a hold cannot delay a monitor switch or `shutdown()`; only `_stop_source_if_idle` consults holds
 - `take_screenshot()`, `width` / `height` / `monitor_index`, `output_count()`: delegated to the source
 - `shutdown()`: server teardown — ends every session, stops capture, and stays ended (`_shut_down`), because a session already inside `session.start()` on its own thread finishes AFTER `shutdown()` returns
 
-Gate: [`tests/test_stream_lifecycle.py`](../../tests/___tests.md), fail-closed in `build.py` (0g/6).
+Gates: [`tests/test_stream_lifecycle.py`](../../tests/___tests.md), fail-closed in `build.py` (0g/6), and [`tests/test_quality_reset.py`](../../tests/___tests.md) for the hold and the re-open policy.
 
 > **Note on lock scope:** `open_session` holds `_lock` across the blocking ffmpeg spawn, so `shutdown()` from another thread cannot interleave with it — the post-start `_shut_down` check is defence in depth for a future in which that scope narrows, not a path reachable today.
 
@@ -87,8 +88,15 @@ numbers meant the desktop Bitrate combo applied only while the phone sat on
 "High", so picking "Mid" silently discarded the PC's choice — half of the
 owner's 2026-08-05 "the desktop settings do nothing" report. `"high"`/`0`/
 `"full"` all mean "no override — the desktop Settings defaults". The base the
-phone displays is published as `config.base` (`_stream_base` in web.py, fed
+phone displays is published as `config.base` (`config.stream_base`, fed
 by `H264Manager.stream_size`). The web layer resets the running session
 when the client's `quality` message changes the dict; the loop reopens with
 the new settings (same machinery as a monitor switch). Legacy
 `quality {reduced: true}` maps in web.py to the saving profile.
+
+**The re-open is the whole cost of a quality change, and it used to be paid
+with the connection** (owner report 2026-08-10, his #1: changing the bitrate
+brought the app down). Since then the gap is held (`hold_source`, above) so
+capture is never recycled for it, and a re-open that still fails is retried
+`h264_reopen_tries` times before the socket is given up — see
+[Web Layer](web.md) → `_h264_loop`.

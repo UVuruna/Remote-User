@@ -31,6 +31,17 @@ readable at all. Pillow also applies the **EXIF orientation**, and `cv2.imdecode
 ignores it — a photo would paste rotated. OpenCV stays as the fallback for
 formats Pillow does not know.
 
+## `crop_to_region` — the region the phone is really looking at
+
+Moved out of `_screenshot` on **2026-08-10** (same rule as the split above:
+pure pixel arithmetic is not transport). The Attach set's **Shot** sends the
+monitor-normalized rect the phone currently views — zoomed, or a layout's own
+region, never the whole desktop (owner 2026-08-04) — and the legacy `snap`
+sends nothing, which is why missing or unreadable numbers mean the whole frame
+rather than a failure. Every edge is clamped INSIDE the frame and each side is
+forced at least one pixel wide: a zero-width crop is not an image, and the
+clipboard would refuse it after the user had already spent the gesture.
+
 ## `paste_text` — the order IS the feature
 
 The clipboard write, then `Ctrl+V`, then `Enter`. `PASTE_ENTER_DELAY` (120 ms)

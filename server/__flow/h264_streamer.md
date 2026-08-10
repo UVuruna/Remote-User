@@ -94,7 +94,19 @@ flowchart LR
     I["close_session(session)"] --> J["session.stop()"]
     J --> K["remove from _sessions"]
     K --> L["_stop_source_if_idle()"]
+    L --> M{"_sessions empty
+    AND no _holds?"}
+    M -- yes --> N["source.stop()"]
+    M -- "no: a consumer is between
+    its own sessions" --> Q["capture keeps running"]
 ```
+
+A HOLD is the difference between "nobody is watching" and "the one watcher is
+swapping encoders" (owner report 2026-08-10 — a quality change recycled dxcam,
+the new ffmpeg had no frame to encode and so wrote no init segment, and the
+socket died on the timeout). `release_source` is the only other caller of
+`_stop_source_if_idle`, and it takes `_lock` non-blockingly because it runs on
+the event loop mid-cancellation — see [About](../__about/h264_streamer.md).
 
 ## Algorithm — the claim (SessionOwner), the 2026-08-07 fix
 

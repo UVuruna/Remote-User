@@ -104,8 +104,17 @@ Pseudocode:
             DISPATCH on msg.type to the matching injector call (see dispatch diagram)
             unknown type -> log warning, ignore
 
-    _stream_h264(ws, manager, token):
+    _stream_h264(ws, manager, token, conn):
+        hold = object()                      # this connection's capture hold
+        TRY: _h264_loop(ws, manager, token, conn, hold)
+        FINALLY: manager.release_source(hold)   # every exit, incl. cancellation
+
+    _h264_loop(ws, manager, token, conn, hold):
+        first, failures = True, 0
         LOOP forever:
+            WHILE conn["paused"]:            # the phone is away
+                manager.release_source(hold) # ...and holds nothing
+                sleep 0.25
             queue = bounded Queue(h264_queue_chunks)
             owner = manager.new_owner()      # the claim -- see h264_streamer flow
             push(item): IF NOT owner.alive -> RETURN     # nothing reads this queue
@@ -117,13 +126,19 @@ Pseudocode:
                                                 owner=owner)
                  # (a changed `quality` message resets the session via conn["reset_stream"];
                  #  the loop reopens here with the new fps/res/bitrate)
-            EXCEPT (RuntimeError, OSError): owner.release(); toast, close(1011), return
+            EXCEPT (RuntimeError, OSError):
+                 owner.release(); failures += 1
+                 IF first OR failures >= h264_reopen_tries:
+                     toast, close(1011), return   # a FIRST open has nothing to keep
+                 sleep h264_reopen_pause_s; CONTINUE  # a RE-open is retried, hold kept
             EXCEPT BaseException:            # cancelled -- socket death, 4409, server stop
                  owner.release(); re-raise   # to_thread cannot cancel the thread it started
+            first, failures = False, 0
             send config (with the session's parsed codec)
             WHILE (chunk := queue.get()) is not None:
                 ws.send_bytes(chunk)
-            FINALLY: owner.release()         # closes the session; silences push
+            FINALLY: manager.hold_source(hold)   # the gap to the next session --
+                     owner.release()             # ...closing it must not stop dxcam
             IF this session lived < 2s -> sleep 1s (paces a fast error loop)
             # loop reopens a fresh session automatically
 
@@ -133,7 +148,7 @@ Pseudocode:
 _send_config(ws, stream, token, codec)
    payload = { type, monitor_width, monitor_height, stream,
                tailscale_url, app_version, apk_version,
-               base: _stream_base(stream),
+               base: config.stream_base(stream),
                ui:   ui_config() }        <- R3: {theme, fill, colors}
    + codec (H.264 only)
 ```

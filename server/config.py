@@ -121,6 +121,16 @@ class Settings:
     # three steps: the phone can only ever go BELOW what the PC allows.
     h264_bitrate_mid_pct: int = 40
     h264_bitrate_low_pct: int = 10
+    # Re-opening this client's encoder after a quality change (owner report
+    # 2026-08-10 — "changing the bitrate kills the whole app"). A quality
+    # override lives inside one ffmpeg flag, so the only way to apply it is a
+    # NEW encoder; the FIRST session of a connection is fatal when it fails
+    # (there is nothing to keep), but a RE-open is not — the socket carries
+    # input, layouts and dictation too, and a transient encoder hiccup must
+    # not take those with it. Bounded, because an unbounded retry is the
+    # 2026-07-29 error loop (171 failures in 90 s).
+    h264_reopen_tries: int = 4      # consecutive RE-open failures tolerated
+    h264_reopen_pause_s: float = 0.8  # breath between them
     # The auto-on-mobile-data profile (legacy `reduced` maps to this too):
     h264_reduced_scale: int = 2     # halve width and height
     h264_reduced_fps: int = 10
@@ -484,6 +494,25 @@ def bitrate_for_level(level: str | None) -> str:
     if pct is None:
         return SETTINGS.h264_bitrate
     return f"{max(1, bitrate_bps(SETTINGS.h264_bitrate) * pct // 100_000)}k"
+
+
+def stream_base(stream) -> dict:
+    """The desktop Settings card, as the phone needs to read it: the fps and
+    the encoded size the PC allows, plus the bitrate every phone step is a
+    percentage of. JPEG mode has no encoder size of its own — fall back to the
+    monitor size.
+
+    It lives HERE, beside `bitrate_for_level`, because every number in it is a
+    reading of SETTINGS (moved out of web.py 2026-08-10, THE STRUCTURE LAW)."""
+    width, height = getattr(stream, "stream_size", (stream.width, stream.height))
+    return {
+        "fps": SETTINGS.target_fps,
+        "width": width,
+        "height": height,
+        "bitrate": SETTINGS.h264_bitrate,
+        "bitrate_mid": bitrate_for_level("mid"),
+        "bitrate_low": bitrate_for_level("low"),
+    }
 
 
 def apply(**changes) -> None:
