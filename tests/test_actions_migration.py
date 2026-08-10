@@ -202,6 +202,65 @@ def test_a_field_we_retired_stops_lying():
         "the same, for a built-in category")
 
 
+def test_the_nine_option_model_panel_becomes_the_official_five():
+    """Tasks 190/191 (2026-08-10): the phone's Model panel used to offer NINE
+    options nobody official ever offered (opus, sonnet, haiku, fable, best,
+    opusplan, opus[1m], sonnet[1m], default — built from this project's own
+    transcript vocabulary, never checked against the extension's own menu),
+    and Thinking sent a bare `/effort` that only raised Claude's own menu and
+    stopped. A static read of the extension's own binary settled both: the
+    official picker is exactly five entries (Default / Opus 1M / Fable /
+    Sonnet / Haiku, in that order) and `/effort <literal>` commits directly
+    for low/medium/high/xhigh/max, so Thinking gets the same choosing panel
+    Model already had. `buttons` is entirely OURS (`_merge_set` never
+    consults OWNER_SET_KEYS for it), so this must reach his file exactly like
+    `agent` finally did — proven here on his file's OLD nine/zero shape, not
+    on a freshly-derived copy of the shipped file."""
+    from gui.controls_data import merge_shipped_pools
+    shipped = shipped_actions()
+    user = copy(HIS_FILE)
+    claude = named(user["app_sets"], "Claude")
+    claude["buttons"] = [
+        {"label": "Usage", "icon": "usage", "text": "/usage", "enter": True},
+        {"label": "Model", "icon": "model", "text": "/model", "enter": True,
+         "options": [
+             {"label": "opus", "value": "claude-opus-5"},
+             {"label": "sonnet", "value": "claude-sonnet-5"},
+             {"label": "haiku", "value": "claude-haiku-4-5"},
+             {"label": "fable", "value": "claude-fable-5"},
+             {"label": "best — Fable where available, else Opus", "value": "best"},
+             {"label": "opusplan — Opus plans, Sonnet runs", "value": "opusplan"},
+             {"label": "opus[1m] — Opus, 1M context", "value": "claude-opus-5[1m]"},
+             {"label": "sonnet[1m] — Sonnet, 1M context", "value": "claude-sonnet-5[1m]"},
+             {"label": "default — your account's own", "value": "default"},
+         ]},
+        {"label": "Thinking", "icon": "thinking", "text": "/effort", "enter": True},
+    ]
+
+    merge_shipped_pools(user, shipped)
+
+    claude = named(user["app_sets"], "Claude")
+    model = next(b for b in claude["buttons"] if b["label"] == "Model")
+    thinking = next(b for b in claude["buttons"] if b["label"] == "Thinking")
+
+    assert model["options"] == [
+        {"label": "Default (recommended)", "value": "default"},
+        {"label": "Opus (1M context)", "value": "opus[1m]"},
+        {"label": "Fable", "value": "fable"},
+        {"label": "Sonnet", "value": "sonnet"},
+        {"label": "Haiku", "value": "haiku"},
+    ], (f"the Model panel did not become the official five, in the official "
+        f"order: {model.get('options')}")
+    assert thinking.get("options") == [
+        {"label": "Low", "value": "low"},
+        {"label": "Medium", "value": "medium"},
+        {"label": "High", "value": "high"},
+        {"label": "xHigh", "value": "xhigh"},
+        {"label": "Max", "value": "max"},
+    ], (f"Thinking did not gain a committing options panel like Model's: "
+        f"{thinking.get('options')}")
+
+
 def test_a_set_he_has_never_had_arrives_whole():
     """His file predates Chrome and Explorer entirely — a new SET must arrive,
     and the sets he does have must not be duplicated by it."""
@@ -227,6 +286,8 @@ CHECKS = [
     ("everything he owns survives the migration",
      test_everything_he_owns_survives_the_migration),
     ("a field we retired stops lying", test_a_field_we_retired_stops_lying),
+    ("the nine-option Model panel becomes the official five",
+     test_the_nine_option_model_panel_becomes_the_official_five),
     ("a set he has never had arrives whole",
      test_a_set_he_has_never_had_arrives_whole),
 ]

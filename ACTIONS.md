@@ -117,55 +117,48 @@ Shipped reserves, off until you tick them:
 | **Explorer** | Rename · New dir · Delete · Up | **Next tab** · **Prev tab** · New tab · Back · Forward · Copy path · Details · Search |
 | **Claude** | Usage · Model · **Thinking** · Stop | Menu · Mode · Compact · New chat · Rewind · Context · Agents · Resume · Focus |
 
-**Model executes only the FULL id; Thinking asks a question no argument can
-answer** (owner correction 2026-08-05, REVERSED 2026-08-09 — task 174 — after
-his screenshot showed both commands describing themselves and changing
-nothing: the conversation read "Set model to Fable 5 for this session only"
-and "Set effort level to high (this session only)" while Claude's OWN menu,
-open in the same picture, still read "Switch model… = Opus (1M context)" and
-"Effort (Max)". Two different diseases needed two different fixes:
+**Model mirrors the OFFICIAL picker; Thinking now CHOOSES, like Model does**
+(tasks 190/191, 2026-08-10 — REPLACING the 2026-08-09 "task 174" design
+below, which turned out to answer a question nobody had actually settled).
+His screenshots put the two menus side by side: the extension's own `/model`
+picker offers exactly **five** entries — Default (recommended) / Opus (1M
+context) / Fable / Sonnet / Haiku — while our panel offered **nine**, built
+from this project's own transcript vocabulary (`opus`, `sonnet`, `haiku`,
+`fable`, `best`, `opusplan`, `opus[1m]`, `sonnet[1m]`, `default`) and never
+checked against the surface he actually looks at. A static read of the
+extension's own binary (A1, task 190/191 investigation) is ground truth here:
 
-- **`/model` takes an argument, and Claude Code only RUNS it when that
-  argument names exactly ONE entry.** Measured on this project's own
-  transcript, an EXECUTED command carries the FULL model id
-  (`<command-args>claude-fable-5[1m]</command-args>` →
-  `"Set model to claude-fable-5"`), never the friendly word it is labelled
-  with. `fable` alone is a PREFIX of several full ids
-  (`claude-fable-5`, `claude-fable-5[1m]`), and Claude Code answers a prefix
-  match by reopening its OWN picker with the closest entry highlighted and
-  undescribed — that is exactly his screenshot, and exactly why the button
-  looked like it worked while it changed nothing. The Model button's options
-  now carry the full id as their `value` (`claude-opus-5`, `claude-sonnet-5`,
-  `claude-fable-5`, and `claude-haiku-4-5` — Haiku's own generation is 4.5,
-  not 5; there is no Haiku in the Claude 5 family, and shipping
-  `claude-haiku-5` would type a command that resolves to nothing, exactly the
-  failure class this task exists to close — plus the same `[1m]` pattern for
-  opus/sonnet's confirmed context variants) while the LABEL stays the
-  friendly word he taps;
-  `best`, `opusplan` and `default` are not numbered models and stay bare —
-  nothing else is a prefix of them, so they were never ambiguous.
-- **`/effort` takes NO argument at all** — it is interactive-only, a menu
-  Claude Code opens for the finger to pick from, and there is no submittable
-  level that runs it directly the way `/model <id>` runs a model switch. The
-  project's own Menu button already suspected exactly this (it types `/`
-  with no Enter "so the command list can be picked with the cursor"), and
-  the 2026-08-05 `options` redesign for Thinking was never proven against a
-  real device before shipping — it assumed `/effort <level>` behaves like
-  `/model <id>`. Thinking is MENU-STANDING again, the confirmed-working
-  design it replaced: it types the bare `/effort`, presses Enter ONCE —
-  which is what actually OPENS Claude's own level menu on the stream — and
-  stops. No argument, no second Enter, no `options` panel of our own; the
-  owner picks in the menu he can see, the same way the Menu button leaves
-  Claude's command list open for him.
+- **`/model <literal>` + one Enter COMMITS directly, no picker, for exactly
+  five literals**: `default`, `opus[1m]`, `fable`, `sonnet`, `haiku`. The
+  Model button's options now carry precisely these five values, in the
+  official order, with the official labels — nothing else is offered, because
+  nothing else is official.
+- **`/effort <literal>` + one Enter also COMMITS directly**, for `low`,
+  `medium`, `high`, `xhigh`, `max` — the 2026-08-09 finding that Thinking was
+  "interactive-only" was wrong: the earlier round sent a BARE `/effort` with
+  no argument at all, which is exactly why it only ever raised Claude's own
+  menu. Thinking now uses the SAME `options`-panel mechanism as Model (same
+  `panels.js` command chooser, same header pattern, same `paste_text
+  "/effort <literal>"` + Enter) with five options — Low / Medium / High /
+  xHigh / Max — instead of standing the menu up and stopping.
 
-`panels.js`'s command chooser now reads `enter` per OPTION (falling back to
-the button's own `enter`, then `true`) instead of hardcoding it for every
-options-based command, so a future menu-standing CHOICE could still say so in
-its own data without another round of this.
+Both buttons are pure DATA — `buttons` inside an app set is entirely OURS
+under `merge_shipped_pools`' ownership rule (`server/gui/controls_data.py`;
+only `active`/`order_land`/`order_port`/`enabled` and button `label` renames
+are HIS) — so this reaches the owner's seeded %LOCALAPPDATA% file exactly
+like `agent` finally did (`tests/test_actions_migration.py`). `panels.js`'s
+command chooser reads `enter` per OPTION (falling back to the button's own
+`enter`, then `true`); neither Model nor Thinking sets a per-option override
+— both commit with one Enter, so the button-level `enter: true` covers every
+option.
 
-Honest status: this ships **unconfirmed** — it needs one ten-second
-observation on his machine (caret in a Claude prompt, tap Model → a model,
-touch nothing else, screenshot) before it is marked done.
+**One honest limit no code can close**: the FIRST-ever Fable selection on an
+account must be made once in the live interactive picker (one manual
+`/model` → arrow → Enter) — a pasted `/model fable` before that consent is
+refused with a normal-looking consent sentence. He does this once, by hand;
+after that the phone's Fable option works every time. Nothing to build here —
+just something for him to do once and for us to remember when a report says
+"Fable didn't switch."
 
 `Zones` is no longer shipped — zone chords are a **custom** category the owner
 adds when wanted (this file is hand-editable; a future desktop editor will

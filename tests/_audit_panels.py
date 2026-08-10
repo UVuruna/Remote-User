@@ -327,11 +327,14 @@ PANELS = (
     ("Region grab",
      "rgBox = null; openRegionPanel()",
      "closeRegionPanel()", "#region-panel .rg-bar"),
-    # The command chooser (owner idea 2026-08-05): the longest
-    # real case is the Claude Thinking button's six levels.
+    # The command chooser (owner idea 2026-08-05): the longest real case is
+    # the Claude Model button's own five options (tasks 190/191, 2026-08-10 —
+    # replaced the old nine-option list and its since-fictional "six levels"
+    # comment; "Opus (1M context)" is the longest label either panel carries).
     ("Command chooser",
-     "openChoicePanel({label:'Thinking', text:'/effort',"
-     " options:['low','medium','high','xhigh','max','auto']})",
+     "openChoicePanel({label:'Model', text:'/model',"
+     " options:['Default (recommended)','Opus (1M context)','Fable',"
+     "'Sonnet','Haiku']})",
      "closeChoicePanel()", "#choice-panel .sets-card"),
     ("Aspect panel + Move handle",
      "layouts = [{name:'Audit', process:'x', orient:'portrait',"
