@@ -265,6 +265,14 @@ def input_gate() -> None:
     step("0g/6  STREAM LIFECYCLE GATE — a client that is gone leaves nothing "
          "behind (tests/test_stream_lifecycle.py)")
     run([sys.executable, str(PROJECT_DIR / "tests" / "test_stream_lifecycle.py")])
+    # …and the same connection's OTHER end: a quality change (owner's #1 report
+    # 2026-08-10). A bitrate can only be applied by a new encoder, and closing
+    # the old one used to tear dxcam down with it — the new ffmpeg then had no
+    # frame to encode, wrote no init segment, and the failed RE-open closed a
+    # socket that also carries input, layouts and dictation.
+    step("0r/6  QUALITY RESET GATE — changing the bitrate cannot kill the app "
+         "(tests/test_quality_reset.py)")
+    run([sys.executable, str(PROJECT_DIR / "tests" / "test_quality_reset.py")])
     # …and its sibling one layer up: a whole server RUN that outlives the stop
     # that gave up on it. His log of 2026-08-09 has run A finishing 38 s after
     # run B was already serving, and writing state="stopped" over it — the
@@ -415,6 +423,16 @@ def input_gate() -> None:
          "and the windows really move (tests/test_layout_shape.py)")
     run([sys.executable, str(PROJECT_DIR / "tests" / "test_layout_shape.py")])
 
+    # A RENAME SHOWS UP AT ONCE (owner report 2026-08-10, task 199): the Save
+    # handler sent layout_rename and closed the sheet, touching nothing the
+    # bar/list/header read — so the new name appeared only when the server's
+    # layout_state echo happened to land, and reopening Rename "fixed" it by
+    # reading fresh state. The fix is optimistic-local; the gate proves the
+    # displayed name changes with send() sent to a black hole (no server trip).
+    step("0z/6  LAYOUT RENAME GATE — a rename shows up without a second trip "
+         "through Rename (tests/test_layout_rename_live.py)")
+    run([sys.executable, str(PROJECT_DIR / "tests" / "test_layout_rename_live.py")])
+
     # THE ARRANGEMENT FOLLOWS HIS CHOICE, NOT THE ORIENTATION (owner ruling
     # 2026-08-09, task 177): portrait defaults to the column and landscape to
     # the cross exactly as before, but an explicit per-orientation choice
@@ -453,6 +471,25 @@ def input_gate() -> None:
     step("0q/6  HOLD GESTURE GATE — a resting finger picks the row up, a "
          "travelling one never does (tests/test_hold_gesture.py)")
     run([sys.executable, str(PROJECT_DIR / "tests" / "test_hold_gesture.py")])
+
+    # THE PICTURE NEVER GOES BLANK, AND WHEN IT STOPS IT STARTS AGAIN BY
+    # ITSELF (task 151, 2026-08-10 — the owner's own promise for this build).
+    # Two earlier fixes for his freeze at 60fps/20Mbps (task 122) each went
+    # back out the SAME night they shipped (0.0.375's revert, commit
+    # 581244b): the starve-recovery seek (a9db36b) was real but flushed the
+    # decoder on every recovery, and on a link that cannot keep up that fired
+    # every second — the rate-limited fix for THAT (3b7b477) landed beside two
+    # other streaming changes and the owner could not attribute any of it.
+    # This build returns all of it as ONE mechanism: slow the player down
+    # BEFORE ever reaching for a flush (client/live-clock.js `liveRegulate`),
+    # and even the flush that does become necessary fires no more than once
+    # per 4s. The pure module is driven WHOLE in node against a REALISTIC
+    # DRIFT RAMP taken from his own server log — a rule about a ramp cannot be
+    # proven by one call, the test_voice_dedup.py precedent. Needs node, like
+    # 0j/0k/0o/0p/0q — never skip it silently.
+    step("0y/6  LIVE CLOCK GATE — a starved player is caught, slowed before "
+         "it is ever flushed, and never blank (tests/test_live_clock.py)")
+    run([sys.executable, str(PROJECT_DIR / "tests" / "test_live_clock.py")])
 
 
 def generate_icons() -> None:

@@ -356,6 +356,21 @@ lines, so `COLOUR_SHOTS`, `LANDSCAPE_SHOTS` and `SHOT_SUBJECTS` joined the
 catalogue as well: which picture a panel is worth, and which subject folder it
 lands in, is the same row of the same catalogue read one step further on.
 
+**TASK 151 (2026-08-10) — the never-blank canvas and the truth-table wiring,
+restored.** This file was already at EXACTLY 1,000 lines when the mechanism
+landed — zero headroom, unlike either earlier split — so
+`LIVE_CLOCK_BLANK_JS` (paints the canvas a known colour before and after a
+starved decoder, proving a gap leaves the last picture alone) and
+`LIVE_CLOCK_DRIFT_JS` (the same six-case truth table `tests/test_live_clock.py`
+proves in isolation, driven here through the live page's own globals) joined
+`tests/_audit_js.py` rather than landing inline. A third, one-time check —
+`render.js` must actually call `liveAction`/`liveRegulate`/`liveSeekTarget` —
+sits beside `_fit_rect_audit`/`_grid_audit` in the results dict this file
+builds before opening a page, because it too is independent of screen size.
+Proven by planting: removing the never-blank guard from `redraw()` turns the
+blank check red at every SIZE; making `render.js`'s `applyLiveDecision`
+call neither function under an `if (false)` guard turns the wiring check red.
+
 Run: `.venv\Scripts\python tests/test_layout_audit.py`
 
 ### `test_layout_audit_qt.py` — Layout Audit, Qt windows (THE SPACE & LEGIBILITY LAW)
@@ -1179,6 +1194,75 @@ nothing.
 Run: `.venv\Scripts\python tests/test_stream_lifecycle.py` — also a
 fail-closed step in `build.py` (0g/6).
 
+### `test_quality_reset.py` — Quality Reset Gate
+Proves that **changing the bitrate cannot kill the app**. The owner's #1 report
+of 2026-08-10, in his words: *"pada cele aplikacije to jest strima prenosa
+podataka ukoliko se u settingsu promeni kvalitet bit rate-a"* (lang-ok: owner
+quote) — the whole application, that is the data stream, falls over when the
+bitrate quality is changed in settings.
+
+Root cause, two defects in one chain. A bitrate lives inside a running ffmpeg's
+flags, so the phone's quality panel can only be applied by closing that
+client's encoder and opening a new one. **(1)** With one client — the normal
+case, "one device at a time" is a hard rule — closing it emptied
+`H264Manager._sessions`, so `_stop_source_if_idle` tore dxcam DOWN and
+`open_session` built it again for a change that never touched capture. The new
+encoder therefore had no frames, and ffmpeg cannot write an init segment before
+it has encoded one; past `h264_head_timeout` the open raised. **(2)**
+`_stream_h264` answered a failed RE-open exactly as it answers a failed FIRST
+open — `ws.close(1011)` — and that socket carries input, layouts, dictation and
+presence as well as pictures.
+
+His own `%LOCALAPPDATA%\RemoteUser\server.log`, 2026-08-10:
+
+```
+20:29:33,516 INFO  h264_streamer: H.264 session opened — 1 active, codec avc1.4D4032
+20:30:21,267 INFO  h264_streamer: H.264 session closed — 0 active
+20:30:21,267 INFO  dxcam.dxcam:   Frame buffer build(start): 3840x2160 c=3 n=8.
+20:30:42,895 ERROR web: H.264 session failed to open: ffmpeg produced no init segment in time
+20:30:43,160 INFO  uvicorn.error: 192.168.0.30:54526 - "WebSocket /ws" [accepted]
+```
+
+Zero `stream backlog` warnings and zero ffmpeg errors in that whole file, so
+the 20:30:21 close was neither a slow client nor a dying encoder — and the
+`Frame buffer build(start)` on the same millisecond is capture being REBUILT,
+which is what a reset does and a pause does not. The same close-and-reopen
+rides every connection, because the page restates its saved quality right after
+auth: `19:29:30,138 opened avc1.4D4034` → `19:29:30,274 closed` →
+`19:29:31,514 opened avc1.4D4032`, a different H.264 LEVEL because a different
+bitrate.
+
+Seven checks over the REAL `H264Manager`, `H264Session`, `web._stream_h264`
+loop and `web._receive_input` handler, reusing the fakes of
+`test_stream_lifecycle.py` plus a `ScriptedFfmpeg` that stalls a NAMED spawn (a
+reset is two encoders in a row; one class-wide delay cannot say "the second one
+is late"): a bitrate change reaches the encoder as a new `-b:v`; it does NOT
+recycle capture (dxcam is started ONCE per connection); a slow re-open does not
+close the socket and the stream comes back by itself; a re-open that never
+recovers still gives up (so this can never become the 2026-07-29 error loop —
+171 open failures in 90 s); a FIRST open failure is still fatal at once with no
+retries; an away phone still stops capture, so the hold cannot defeat "nothing
+runs while nobody is watching"; and the change is SAID in the server log, end
+to end from a real `quality` message — his crash could not be dated in his own
+log because this branch was the one cause of a close-and-reopen that wrote
+nothing.
+
+Self-tested by planting each defect separately in the shipped source:
+
+| Planted | What goes red |
+|---------|---------------|
+| `manager.hold_source(hold)` removed from the session `finally` (the pre-fix world) | *does NOT recycle capture* |
+| a failed re-open closes the socket (`if True:` — the pre-fix world) | *a slow re-open does not kill the socket*, *a re-open that never recovers still gives up* |
+| the retry is unbounded (`if False:`) | *never recovers still gives up*, *a FIRST open failure is still fatal* |
+| the `first` term dropped, so a first failure retries | *a FIRST open failure is still fatal at once* |
+| `release_source` removed from the pause branch | *an away phone still stops capture* |
+| the log line removed | *the change is logged, end to end* |
+| `bitrate_for_level(None)` — the override never reaches ffmpeg | *reaches the encoder*, *slow re-open*, *logged end to end* |
+| `_stop_source_if_idle` ignores `_holds` | *does NOT recycle capture* |
+
+Run: `.venv\Scripts\python tests/test_quality_reset.py` — also a fail-closed
+step in `build.py`.
+
 ### `test_server_generation.py` — Server Generation Gate
 Proves that a SUPERSEDED SERVER RUN OWNS NOTHING. Read out of the owner's own
 `server.log` on 2026-08-09, under a screenshot of the GUI saying **STOPPED**
@@ -1231,12 +1315,18 @@ NOT test for the field named `agent`: it plants a field name nobody has
 invented, because a gate written around today's field would ship broken on
 tomorrow's.
 
-Six checks: his real file receives the agent switch · a field nobody has
+Seven checks: his real file receives the agent switch · a field nobody has
 invented yet arrives · a new top-level key arrives (`wheel_order`, plus an
 invented one) · everything he owns survives (`active`, `order_land`,
 `order_port`, `enabled`, `wheel_order`, `custom_sets`, `left`/`right`, and his
-button renames) · a field we retired stops lying · a set he has never had
-arrives whole.
+button renames) · a field we retired stops lying · **the nine-option Model
+panel becomes the official five** (tasks 190/191, 2026-08-10 — the same
+`buttons`-is-entirely-OURS rule proven on the Claude set's old nine-option
+Model list and bare-`/effort` Thinking button: after the merge, Model must
+carry exactly the official five `{label, value}` pairs in the official order
+and Thinking must gain the same committing `options` panel Model has, five
+levels instead of a bare command that only raises Claude's own menu) · a set
+he has never had arrives whole.
 
 Self-tested by planting the defect: restoring the old hardcoded field list and
 removing the top-level migration turns **four of the six red**, while all four
@@ -1415,6 +1505,83 @@ their held counterparts into `.claude/shots/round32-on-state/`.
 
 Run: `.venv\Scripts\python tests/test_on_state.py` (needs playwright +
 chromium + Pillow; binds its own port 8897).
+
+### `test_live_clock.py` — Live Clock Gate
+
+THE PICTURE NEVER GOES BLANK, AND WHEN IT STOPS IT STARTS AGAIN BY ITSELF
+(task 151, 2026-08-10, the owner's own promise for this build). Two earlier
+fixes for his freeze at 60fps/20Mbps (task 122) each went back out the SAME
+night they shipped (0.0.375's revert, commit 581244b): a9db36b's
+starve-recovery seek was real but flushed the decoder on every recovery, and
+on a link that cannot keep up that turned a freeze into a blank screen; the
+rate-limited fix for THAT (3b7b477) landed beside two other streaming changes
+in one window and the owner could not attribute any of it (*"da radiš
+ispravke jednu po jednu da me obaveštavaš šta se dešava"* — lang-ok: owner
+quote). This build returns all of it as ONE mechanism, in the pure module
+`client/live-clock.js` (the caret.js/voice.js pattern): a starved player is
+SLOWED (`playbackRate` to 0.97) before it is ever flushed, and even the flush
+that does become necessary fires no more than once per 4000ms
+(`LIVE_UNFREEZE_MIN_GAP_MS`). This gate drives the WHOLE mechanism in node
+against a REALISTIC DRIFT RAMP taken from his own server log (+0.34 → -0.01
+→ -0.14 → -0.96 → -4.92 → -9.09 → -13.62 → -21.03 → -24.90, over ~6 minutes,
+interpolated to a 250ms tick), asserting the starve is caught, no two
+backward seeks fire under 4000ms apart across the whole ramp, and the rate is
+already slowed on the tick before the first seek fires — proving the
+regulator engaged BEFORE the flush, not on the same call as a side door
+around the hold. Also covers the truth table's six named cases, the seek
+target's buffer-start clamp, the hysteresis band and rate recovery, and the
+wiring: `render.js`'s `applyLiveDecision` must call all three exports from
+BOTH call sites (`onMseUpdateEnd`, `unfreezeIfStarved`), `index.html` must
+load the module before `render.js`, `state.js` must still carry the
+thresholds the module is fed, and the module must stay pure. Proven by
+planting two defects against scratch copies of the module (the shipped file
+itself was never touched): a copy with no `"starved"` branch — matching
+today's pre-151 shipped rule — never classifies any sample of the ramp as
+starved and never seeks at all, going red on "the realistic ramp ... starved,
+caught, rate-limited"; a copy with the `gapOk`/`lastFixAt` rate-limit removed
+fires 580 seeks in 60 real seconds at a 100ms cadence (min gap 100ms, not
+4000ms), going red on "a backward seek never fires more than once per 4s".
+
+Run: `.venv\Scripts\python tests/test_live_clock.py` (needs node) — also a
+fail-closed step in `build.py` (0y/6).
+
+### `test_layout_rename_live.py` — Layout Rename Live Gate
+
+A RENAME MUST SHOW ITS OWN WORK, NOT THE NEXT UNRELATED FRAME'S (owner report,
+task 199, 2026-08-10: after renaming a layout from the ⚙ sheet, the new name
+did not show anywhere on the phone until he opened Rename a SECOND time).
+Root cause: `client/layout-settings.js`'s Rename Save handler sent
+`layout_rename` and closed the panel, touching neither `lay.name` nor
+`updateLayoutBar()` — every surface that shows a layout's name (the bar, the
+list row, the ⚙ sheet's own header) reads the SAME shared `layouts` array,
+which was only ever overwritten wholesale by whichever `layout_state`
+happened to arrive next. Renaming moves nothing on the PC, unlike the
+aspect/grid Applies right above it in the same file, which raise a real
+loading cube while the windows visibly move — so a rename had no local tell
+at all, and the round trip's own latency read as "did nothing" the instant
+Save was tapped; reopening Rename only "fixed" it because it reads
+`layouts[index]` fresh, by which point an unrelated later frame had usually
+already landed.
+
+The fix makes Save OPTIMISTIC: it mutates `lay.name` — the object every
+surface reads — and calls `updateLayoutBar()` synchronously, both before
+`send()`. This gate is the REAL client page + REAL server app (reuses
+`test_input_pipeline.py`'s fixture, like `test_layout_drag.py` reuses
+`test_layout_protocol.py`'s), driven by a real headless Chromium: it stages
+the layout list fixture, taps ⚙ → Rename, retypes the name and taps Save —
+with `send()` stubbed to a black hole for the WHOLE drive. That stub is the
+point: a gate that let the real reply do the work would only prove the
+rename is fast on localhost, never that it is optimistic, and the owner's
+phone is not always on a hard-wired LAN. Asserts the bar, a freshly reopened
+list row and a freshly reopened sheet header all show the new name — with no
+second rename and no server reply ever arriving — plus that `layout_rename`
+was still sent exactly once (the local update must be IN ADDITION to
+telling the server, never a replacement for it). Proven red against the
+original handler (4 of 8 checks fail: the bar, the state, the reopened row
+and the reopened sheet header all still read the old name) and green after.
+
+Run: `.venv\Scripts\python tests/test_layout_rename_live.py` (needs
+playwright + chromium; reuses `test_input_pipeline.py`'s port 8898).
 
 ## Design Decisions
 
