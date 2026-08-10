@@ -62,39 +62,46 @@ def main() -> int:
         len(notify.clean("x" * 500, notify.MAX_TEXT)) == notify.MAX_TEXT
         and notify.clean(None, 10, "Agent") == "Agent")
 
-    # --- 174: the Claude set's Model/Thinking commands must be EXECUTABLE --
-    # ("/model fable" describes itself and changes nothing — his screenshot,
-    # 2026-08-09). Measured on this coordinator's own transcript: an EXECUTED
-    # /model writes <command-args>claude-fable-5[1m]</command-args> ->
-    # "Set model to claude-fable-5" — the argument is the FULL model id, never
-    # the bare friendly word, which is a PREFIX of several entries and only
-    # re-opens Claude's own picker on a highlighted, uncommitted choice (his
-    # screenshot). `/effort` takes no argument at all — sending it alone only
-    # prints its usage, so Thinking goes back to the CONFIRMED-WORKING
-    # pre-2026-08-05 design: type the bare command, press Enter ONCE (opens
-    # Claude's own menu), and stop — no options panel of our own for it.
+    # --- 190/191: the Claude set's Model/Thinking must MATCH THE OFFICIAL
+    # picker and COMMIT with one Enter. CORRECTED 2026-08-10 against the
+    # authoritative Claude Code docs (code.claude.com/docs/en/model-config.md,
+    # confirmed via claude-code-guide), REVERSING task 174's 0.0.394 design:
+    #   * `/model <alias>` — the CANONICAL picker aliases commit with one
+    #     Enter: default / opus / opus[1m] / fable / sonnet / haiku. Task 174
+    #     claimed the alias was a non-committing prefix and only the full id
+    #     ("claude-fable-5") worked — that was WRONG, and the owner's task 190
+    #     ("match the OFFICIAL picker EXACTLY — five, not the nine invented
+    #     ids") is the ruling. The five aliases ARE the official picker.
+    #   * `/effort <level>` TAKES an argument and commits with one Enter
+    #     (low/medium/high/xhigh/max); bare /effort only opens the interactive
+    #     slider — the "menu-standing" downgrade the owner reported (task 191).
+    # This gate replaced the self-contradictory task-174 checks that shipped a
+    # wrong conclusion with teeth: B3 (0.0.401) correctly reversed the
+    # BEHAVIOUR but left this file enforcing the old one, and a declined
+    # release meant build 0d/6 never ran to catch it (2026-08-10).
     claude_shipped = next(
         s for s in json.loads((PROJECT / "actions.json").read_text(encoding="utf-8"))
         ["app_sets"] if s["name"] == "Claude")
     model_btn = next(b for b in claude_shipped["buttons"] if b["label"] == "Model")
     thinking_btn = next(b for b in claude_shipped["buttons"] if b["label"] == "Thinking")
     model_values = {o["value"] for o in model_btn["options"]}
-    results["Model's numbered options carry the FULL model id, not a friendly word"] = (
-        {"claude-opus-5", "claude-sonnet-5", "claude-haiku-4-5", "claude-fable-5"}
-        <= model_values
-        and not model_values & {"opus", "sonnet", "haiku", "fable"})
-    # Haiku's own generation is 4.5, not 5 — there is no Haiku in the Claude 5
-    # family (coordinator correction, 2026-08-09). `claude-haiku-5` resolves
-    # to nothing, which is exactly the failure class task 174 exists to
-    # close, so the wrong id must be REFUSED, not merely the right one seen.
-    results["haiku's id names its OWN generation (4.5), never the invented 'haiku-5'"] = (
-        "claude-haiku-5" not in model_values)
-    results["Model's 1M-context options carry the full id too"] = (
-        {"claude-opus-5[1m]", "claude-sonnet-5[1m]"} <= model_values
-        and not model_values & {"opus[1m]", "sonnet[1m]"})
-    results["Thinking is menu-standing: bare /effort, one Enter, no options panel"] = (
-        thinking_btn.get("text") == "/effort" and thinking_btn.get("enter") is True
-        and "options" not in thinking_btn)
+    results["Model offers EXACTLY the official five, by their picker aliases"] = (
+        model_values == {"default", "opus[1m]", "fable", "sonnet", "haiku"})
+    # The old nine full-id options (task 174) are exactly what the owner
+    # rejected — a value from that set means the regression came back.
+    results["Model dropped the old full-id options, not just added five"] = (
+        not model_values & {"claude-opus-5", "claude-opus-5[1m]", "claude-sonnet-5",
+                            "claude-sonnet-5[1m]", "claude-haiku-4-5",
+                            "claude-fable-5", "claude-haiku-5"})
+    results["Model commits with one Enter (text /model, enter true)"] = (
+        model_btn.get("text") == "/model" and model_btn.get("enter") is True)
+    # Thinking CHOOSES a level now (task 191), the same one-Enter chooser the
+    # Model button uses — not the bare-/effort slider it had at 0.0.394.
+    thinking_values = {o["value"] for o in thinking_btn.get("options", [])}
+    results["Thinking CHOOSES a level (/effort takes an argument), not menu-standing"] = (
+        thinking_btn.get("text") == "/effort"
+        and thinking_btn.get("enter") is True
+        and thinking_values == {"low", "medium", "high", "xhigh", "max"})
 
     sys.path.insert(0, str(PROJECT / "setup"))
     import agent_hook
