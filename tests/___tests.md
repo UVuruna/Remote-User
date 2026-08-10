@@ -1542,6 +1542,24 @@ caught, rate-limited"; a copy with the `gapOk`/`lastFixAt` rate-limit removed
 fires 580 seeks in 60 real seconds at a 100ms cadence (min gap 100ms, not
 4000ms), going red on "a backward seek never fires more than once per 4s".
 
+EXTENDED 2026-08-11 — THE BLUE FLASH WHILE HE DICTATES (his first night on
+v0.0.105; his log 00:37–00:39 reads `jumps=41 starves=3 in 15s` against
+`jumps=0` in every other session): the regulator's own catch-up seeks pass
+through a state where the element's `seeking` flag is already up (raised
+synchronously by the `currentTime` assignment) while `readyState` still
+reads HAVE_CURRENT_DATA with no paintable frame — the readyState-only
+never-blank guard let `redraw()` clear the canvas and `drawImage()` then
+silently painted nothing: one background-coloured frame per unlucky seek.
+The guard's decision now lives in the module as `liveHoldFrame({mode,
+readyState, seeking, everDrew})`, and two checks pin it: the hold-frame
+truth table (holds mid-seek at readyState 4, holds on a starved decoder,
+never holds a healthy frame / a session's first frame / JPEG mode) and the
+rewritten wiring check (redraw() must call `liveHoldFrame` and feed it all
+four fields — an inlined copy of the condition is how the two drift apart).
+Proven by planting both defects on 2026-08-11: dropping `seeking` from the
+table went red on the truth-table check alone; re-inlining the old
+readyState-only condition in `redraw()` went red on the wiring check alone.
+
 Run: `.venv\Scripts\python tests/test_live_clock.py` (needs node) — also a
 fail-closed step in `build.py` (0y/6).
 

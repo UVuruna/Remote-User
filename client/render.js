@@ -119,7 +119,17 @@ function redraw() {
   // replaces it. The status pill still says what is happening; the picture
   // just stops instead of vanishing. This is the backstop for whatever
   // client/live-clock.js's regulator cannot close in time — see its header.
-  if (streamMode === "h264" && video.readyState < 2 && everDrew) return;
+  //
+  // The decision is liveHoldFrame's truth table (client/live-clock.js, where
+  // the gate drives it whole). `seeking` joined readyState there on
+  // 2026-08-11, from his first night on v0.0.105: the regulator's own
+  // catch-up seeks (41 in 15s while he dictated — the burst-shaped drift of
+  // word-by-word typing) pass through a state where readyState still reads
+  // 2+ while the flushed decoder has no frame, so the clear landed and
+  // drawImage() below silently painted nothing — one background-coloured
+  // frame per unlucky seek was his blue flash.
+  if (liveHoldFrame({ mode: streamMode, readyState: video.readyState,
+                      seeking: video.seeking, everDrew })) return;
   ctx.fillStyle = canvasBg;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   const D = drawnRect();

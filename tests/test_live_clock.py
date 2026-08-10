@@ -80,7 +80,8 @@ def _module() -> str:
     gate depends on is still there before wasting a node process on it."""
     text = MODULE.read_text(encoding="utf-8")
     for needed in ("function liveAction", "function liveSeekTarget",
-                   "function liveRegulate", "LIVE_UNFREEZE_MIN_GAP_MS",
+                   "function liveRegulate", "function liveHoldFrame",
+                   "LIVE_UNFREEZE_MIN_GAP_MS",
                    "LIVE_RATE_DEGRADE_HOLD_MS", "LIVE_SLOW_RATE"):
         if needed not in text:
             fail(f"{needed!r} left client/live-clock.js — the gate cannot "
@@ -346,6 +347,45 @@ if (firstSeekAt === -1) console.log(JSON.stringify({{ rateBeforeThisCall: null }
              "before any flush, never on the same call")
 
 
+# ═══════════════════════ THE HOLD-FRAME TRUTH TABLE ═══════════════════════
+def check_hold_frame_holds_through_a_seek_not_only_a_starve() -> None:
+    """His v0.0.105 first-night report (2026-08-11): blue FLASHES while
+    dictating. The log named the state — jumps=41 starves=3 in 15s, the
+    regulator seeking ~3×/s against dictation's burst-shaped drift — and the
+    hole: assigning currentTime raises `seeking` synchronously while
+    readyState can still read HAVE_CURRENT_DATA with no paintable frame, so
+    a readyState-only guard cleared the canvas and drawImage() painted
+    nothing. RED against the pre-fix table (which had no seeking column at
+    all); each row below plants the defect that would resurrect one flash."""
+    out = dict(_run("""
+console.log(JSON.stringify([
+  // THE FLASH: mid-seek, readyState still claims a frame — must HOLD.
+  ['seeking despite readyState 4',
+   liveHoldFrame({ mode: 'h264', readyState: 4, seeking: true, everDrew: true })],
+  // B2's original case: starved decoder, no seek in flight — must HOLD.
+  ['starved decoder',
+   liveHoldFrame({ mode: 'h264', readyState: 1, seeking: false, everDrew: true })],
+  // Ordinary healthy paint — must NOT hold, or the picture never updates.
+  ['healthy frame',
+   liveHoldFrame({ mode: 'h264', readyState: 4, seeking: false, everDrew: true })],
+  // A fresh session must paint the page colour EVEN mid-seek — holding
+  // would show stale pixels from the PREVIOUS stream.
+  ['first frame of a session',
+   liveHoldFrame({ mode: 'h264', readyState: 0, seeking: true, everDrew: false })],
+  // JPEG paints bitmaps; there is no decoder state to go empty.
+  ['jpeg mode',
+   liveHoldFrame({ mode: 'jpeg', readyState: 0, seeking: true, everDrew: true })],
+]));
+"""))
+    want = {"seeking despite readyState 4": True, "starved decoder": True,
+            "healthy frame": False, "first frame of a session": False,
+            "jpeg mode": False}
+    for label, expect in want.items():
+        got = out.get(label)
+        if got is not expect:
+            fail(f"liveHoldFrame() for {label!r} = {got!r}, want {expect!r}")
+
+
 # ═══════════════════════════ THE WIRING ═══════════════════════════
 def check_render_js_actually_calls_the_module() -> None:
     """A pure function nobody calls is a feature that does not exist (the
@@ -371,17 +411,29 @@ def check_render_js_actually_calls_the_module() -> None:
 
 
 def check_the_never_blank_guard_is_still_wired_to_readystate() -> None:
-    """The 0.0.373 half of this build: redraw() must still skip the clear
-    when the decoder has nothing AND a real frame was drawn before."""
+    """The 0.0.373 half of this build, extended 2026-08-11: redraw() must
+    skip the clear through liveHoldFrame's truth table — fed the element's
+    REAL readyState, its REAL seeking flag (the blue-flash hole: a seek in
+    flight with readyState still claiming a frame), and everDrew. An inlined
+    copy of the condition is exactly how the two would drift apart again."""
     src = RENDER.read_text(encoding="utf-8")
     m = re.search(r"function redraw\(\)\s*\{(.*?)\n\}", src, re.S)
     if not m:
         fail("redraw() left client/render.js")
     body = m.group(1)
-    if "everDrew" not in body or "readyState < 2" not in body:
-        fail("redraw() no longer skips the clear on a starved decoder once "
-             "a real frame has been drawn — the never-blank guard is gone "
-             "again (the exact regression 581244b's revert caused)")
+    if "liveHoldFrame(" not in body:
+        fail("redraw() no longer asks liveHoldFrame() whether to hold the "
+             "last picture — the never-blank guard is gone again (the exact "
+             "regression 581244b's revert caused)")
+    call = re.search(r"liveHoldFrame\(\{(.*?)\}\)", body, re.S)
+    if not call:
+        fail("redraw()'s liveHoldFrame call is no longer the object form "
+             "this gate can read the inputs out of")
+    for field in ("readyState", "seeking", "everDrew", "mode"):
+        if field not in call.group(1):
+            fail(f"redraw() no longer feeds {field!r} to liveHoldFrame — "
+                 "without it the table cannot answer the case that field "
+                 "exists for (seeking = his 2026-08-11 blue flash)")
     if "everDrew = true" not in src:
         fail("nothing in render.js ever sets everDrew — the guard would "
              "clear to the background colour on the very first gap")
@@ -462,6 +514,8 @@ CHECKS = [
      check_the_realistic_ramp_from_his_own_log),
     ("the ramp proves engagement precedes the first seek",
      check_the_ramp_proves_engagement_precedes_the_first_seek),
+    ("hold-frame holds through a seek, not only a starve (his blue flash)",
+     check_hold_frame_holds_through_a_seek_not_only_a_starve),
     ("render.js actually calls the module (both call sites)",
      check_render_js_actually_calls_the_module),
     ("the never-blank guard is still wired to readyState",

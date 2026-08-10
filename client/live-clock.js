@@ -164,9 +164,33 @@ function liveRegulate({ behind, now, starved, rate, degradedSince, lastFixAt }) 
   return { rate: nextRate, degradedSince: nextDegradedSince, seek };
 }
 
+/** THE NEVER-BLANK GUARD'S OWN TRUTH TABLE — whether redraw() must HOLD the
+ *  last picture (clear nothing, draw nothing) this frame.
+ *
+ *  `seeking` joined `readyState` on 2026-08-11, from the owner's first night
+ *  on v0.0.105: blue FLASHES while he dictates. His log names the state —
+ *  00:37–00:39, `jumps=41 starves=3 in 15s`, where every other session reads
+ *  `jumps=0` — word-by-word dictation paints the PC screen in bursts, the
+ *  frame-count media clock swings between starved and too-late, and the
+ *  regulator seeks ~3×/s. Assigning currentTime raises the element's
+ *  `seeking` flag synchronously, but readyState can still read
+ *  HAVE_CURRENT_DATA while the flushed decoder has no frame to paint — so
+ *  the old readyState-only guard let the clear land and drawImage() then
+ *  silently painted nothing: one background-coloured frame per unlucky
+ *  seek, exactly the "bljesak" he reported.
+ *
+ *  everDrew=false is never held: a fresh session SHOULD paint the page
+ *  colour until its first frame — holding there would show stale pixels
+ *  from the previous stream. JPEG mode paints bitmaps and has no decoder
+ *  state to go empty — never held. */
+function liveHoldFrame({ mode, readyState, seeking, everDrew }) {
+  if (mode !== "h264" || !everDrew) return false;
+  return Boolean(seeking) || readyState < 2;
+}
+
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
-    liveAction, liveSeekTarget, liveRegulate,
+    liveAction, liveSeekTarget, liveRegulate, liveHoldFrame,
     LIVE_SLOW_RATE, LIVE_RATE_RECOVER_S, LIVE_RATE_DEGRADE_HOLD_MS,
     LIVE_UNFREEZE_MIN_GAP_MS,
   };

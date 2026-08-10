@@ -63,6 +63,21 @@ stops instead of vanishing.
   fresh node interpreter reproduce it exactly, call for call — the property
   `tests/test_live_clock.py` depends on to drive a multi-minute drift ramp.
   Returns `{rate, degradedSince, seek}`.
+- `liveHoldFrame({mode, readyState, seeking, everDrew})` — the never-blank
+  guard's own truth table (added 2026-08-11, his first night on v0.0.105):
+  whether `redraw()` must HOLD the last picture this frame — clear nothing,
+  draw nothing. `seeking` is the column his blue flashes forced in: while he
+  dictated, the regulator's own catch-up seeks fired ~3×/s (`jumps=41
+  starves=3 in 15s` in his log, against `jumps=0` everywhere else — dictation
+  types word by word, so the PC screen changes in bursts and the frame-count
+  media clock swings), and assigning `currentTime` raises the element's
+  `seeking` flag synchronously while `readyState` can still read
+  HAVE_CURRENT_DATA with no paintable frame — so the old readyState-only
+  guard let the clear land and `drawImage()` silently painted nothing: one
+  background-coloured frame per unlucky seek. Holds on `seeking ||
+  readyState < 2`, never before the session's first frame (a fresh canvas is
+  correct there — holding would show the PREVIOUS stream's pixels), never in
+  JPEG mode (bitmaps, no decoder state).
 
 ## Design Decisions
 
