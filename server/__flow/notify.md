@@ -13,15 +13,15 @@ Claude Code fires its `Stop` hook
       ▼
 setup/agent_hook.py
       ├─ agent name: $CLAUDE_AGENT_NAME → payload name → "<project> · <sid[:6]>"
-      ├─ token  ← %LOCALAPPDATA%/RemoteUser/token.txt  (dev: ./logs/token.txt)
+      ├─ token  ← %LOCALAPPDATA%/VibeCoder/token.txt  (dev: ./logs/token.txt)
       ├─ port   ← the same folder's settings.json      (default 8777)
       └─ POST http://127.0.0.1:<port>/notify?token=…
-             {"agent": "Remote User · 3f9c1a", "event": "finished", "text": ""}
+             {"agent": "Vibe Coder · 3f9c1a", "event": "finished", "text": ""}
       │
       ▼
 server/notify.py  ── token wrong ─▶ 403, no body
       ├─ clean()   every field trimmed and capped
-      ├─ compose() "Remote User · 3f9c1a finished"
+      ├─ compose() "Vibe Coder · 3f9c1a finished"
       └─ deliver(notice) ── ONE carrier, a chain of returns ───────────┐
       │                                                               │
       ▼                                                               │
@@ -122,7 +122,7 @@ working while the owner sits at his own desk.
 ## Why the TAG is the agent's name
 
 ```
-tag = "Remote User · 3f9c1a"      tag = "ML · 77bb02"
+tag = "Vibe Coder · 3f9c1a"      tag = "ML · 77bb02"
   ├─ turn 1 finished  ─▶ line A     ├─ turn 1 finished ─▶ line B
   └─ turn 2 finished  ─▶ line A     └─ turn 2 finished ─▶ line B
         (replaced, not stacked)           (its own line, never merged)

@@ -24,7 +24,7 @@ at**, and it answers the question outright. A VS Code window title ends in the
 project's folder:
 
 ```
-"Ispravka UI dizajna meni… - Remote User - Visual Studio Code [Administrator]"
+"Ispravka UI dizajna meni… - Vibe Coder - Visual Studio Code [Administrator]"
                              └── matched against the live session's cwd
 ```
 
@@ -61,8 +61,8 @@ and each only fills in what the one above could not name:
 
 Verified on the owner's machine, 2026-08-07: tier 1 alone answered
 `{15928: "uvuruna", 38044: "remote user"}`, tier 3 did not run at all, and
-`agents_for("… - Remote User - Visual Studio Code [Administrator]")` returned
-`["claude"]` while `… - DOMY Watch - …` returned `[]`.
+`agents_for("… - Vibe Coder - Visual Studio Code [Administrator]")` returned
+`["claude"]` while `… - Watch Academy - …` returned `[]`.
 
 ## The honest limits, stated where they cannot be missed
 
@@ -88,8 +88,8 @@ Verified on the owner's machine, 2026-08-07: tier 1 alone answered
   known.
 - **The folder name comes from the transcript's `cwd`, never from the slug.**
   The slug flattens both path separators and spaces into dashes, so
-  `u--Coding-UVuruna-Applications-Remote-User` cannot be split back into
-  "Remote User" — the first version of `folder_of` returned "user" and matched
+  `u--Coding-UVuruna-Applications-Vibe-Coder` cannot be split back into
+  "Vibe Coder" — the first version of `folder_of` returned "user" and matched
   nothing at all.
 - **Tier 3 is bounded by COUNT, not tightened to seconds.** Recently-written
   transcripts cannot tell a just-closed session from a live one, so the number

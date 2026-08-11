@@ -8,7 +8,7 @@ Single source of truth for every tunable value in the server (No Hardcoded Value
 
 **Two layers, one instance.** Code defaults (the `Settings` dataclass) plus a user settings JSON (`settings.json`, written only by the desktop GUI) validated against a `USER_ADJUSTABLE` allowlist — unknown keys or bad values are logged and skipped, never fatal. The module-level `SETTINGS` is the ONLY instance; runtime changes go through `apply()` (controlled mutation of the shared frozen dataclass via `object.__setattr__`), so every module that imported `SETTINGS` sees updates without rebinding.
 
-**Paths follow the run mode.** Dev checkout: everything stays inside the project (`logs/`, `PAIRING_QR.png` at the root, `actions.json`, ffmpeg from PATH). Installed EXE (`sys.frozen`): user data (settings, token, logs, QR, an owner-edited `actions.json` copy) lives in `%LOCALAPPDATA%\RemoteUser` (Program Files is not writable); bundled read-only data (`client/`, the default `actions.json`) comes from the PyInstaller bundle dir (`sys._MEIPASS`), and the installer places `ffmpeg/` next to the exe.
+**Paths follow the run mode.** Dev checkout: everything stays inside the project (`logs/`, `PAIRING_QR.png` at the root, `actions.json`, ffmpeg from PATH). Installed EXE (`sys.frozen`): user data (settings, token, logs, QR, an owner-edited `actions.json` copy) lives in `%LOCALAPPDATA%\VibeCoder` (Program Files is not writable); bundled read-only data (`client/`, the default `actions.json`) comes from the PyInstaller bundle dir (`sys._MEIPASS`), and the installer places `ffmpeg/` next to the exe.
 
 `app_version()` reads the running version from the bundled `setup/app_info.json` — `"dev"` in an unversioned checkout. It is the single source the GUI footer, the update check, and the `config` WebSocket message all read from.
 
@@ -70,7 +70,7 @@ fail-closed in `build.py` (0l/6) and in `run_guards.py`, and it starts from the
 LITERAL text of his own file rather than one we compose.
 
 ## apk_version (owner bug 2026-08-02)
-`apk_version()` reads the `RemoteUser.apk.version` sidecar (written by
+`apk_version()` reads the `VibeCoder.apk.version` sidecar (written by
 `build_apk.py`, bundled by `build.py`) — the version of the APK this server
 serves at /app.apk. The phone's update banner compares against THIS, not
 `app_version()`: the APK does not change with desktop-only releases, and the

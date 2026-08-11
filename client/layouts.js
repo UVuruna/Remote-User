@@ -534,7 +534,7 @@ function openLayoutPicker() {
 }
 
 // The name field. A WRAPPING textarea, not a one-line input: window titles
-// are long ("Claude Code - Remote User - Visual Studio Code [Administrator]")
+// are long ("Claude Code - Vibe Coder - Visual Studio Code [Administrator]")
 // and a single line hides most of one behind its own horizontal scroll —
 // exactly what THE SPACE & LEGIBILITY LAW forbids (caught by the layout
 // audit, 2026-08-05). Newlines are stripped: a name is one line of text.

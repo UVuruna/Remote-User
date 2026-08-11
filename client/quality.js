@@ -5,7 +5,7 @@
  * per-device preferences and the panel that edits them.
  *
  * The model is a HIERARCHY, not two competing dials (owner 2026-08-05, after
- * "the desktop settings seem to do nothing"): the Remote User window sets the
+ * "the desktop settings seem to do nothing"): the Vibe Coder window sets the
  * BASE (frame rate, encoded width, bitrate) and this panel may only go BELOW
  * it. That was already true in the server, but invisible here — the panel
  * happily showed "30 fps" selected while a 10 fps PC ignored it. So the panel
@@ -174,7 +174,7 @@ function openQualityPanel() {
   // are three words that could mean anything.
   const pcLine = b
     ? `This PC is set to <b>${b.fps} fps · ${b.width}×${b.height} · ${mbpsLabel(b.bitrate)}</b>
-       — change that in the Remote User window on the PC.`
+       — change that in the Vibe Coder window on the PC.`
     : "Waiting for the PC's own settings…";
   // A step marked ↑ is ABOVE the PC's own card (task 131). It is allowed —
   // the PC is a default, not a wall — but it rebuilds the shared capture, so

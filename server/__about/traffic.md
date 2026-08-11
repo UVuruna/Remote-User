@@ -35,7 +35,7 @@ wrapper is what every one of them sees.
 - **History** — a ring buffer of `SETTINGS.traffic_history_samples` (3600 = one
   hour) sampled by a daemon thread every `SETTINGS.traffic_sample_s`.
 - **Recording** — every sample is appended to `SETTINGS.traffic_csv_path`
-  (`%LOCALAPPDATA%/RemoteUser/traffic.csv`), rotated at
+  (`%LOCALAPPDATA%/VibeCoder/traffic.csv`), rotated at
   `traffic_csv_max_bytes`, so a night can be read back in the morning. A disk
   failure stops the recording and says so **once**; the live graph continues.
 - **The phone's side** — `app_rx/app_tx` (our UID) and `dev_rx/dev_tx` (the

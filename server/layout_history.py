@@ -6,7 +6,7 @@ Tap / List / New — client/chrome.js's `openMiniRadial`).
 Split out as its own module by THE STRUCTURE LAW: `LayoutRegistry` already
 carries the LIVE layouts (server-lifetime, gone on restart); history is a
 different responsibility — a persisted, capped, deduped LOG that outlives the
-process. Stored at `%LOCALAPPDATA%/RemoteUser/layout_history.json`, the
+process. Stored at `%LOCALAPPDATA%/VibeCoder/layout_history.json`, the
 `server/recents.py` / `user_settings` precedent — one small file per concern.
 
 A history entry names each member the way the phone can re-find it LATER,
@@ -49,7 +49,7 @@ _STOPWORDS = {
 
 def _path() -> Path:
     base = os.environ.get("LOCALAPPDATA", "")
-    return Path(base) / "RemoteUser" / "layout_history.json"
+    return Path(base) / "VibeCoder" / "layout_history.json"
 
 
 def _title_words(title: str) -> list[str]:

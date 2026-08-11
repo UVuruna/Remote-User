@@ -1,4 +1,4 @@
-"""All tunable values for the Remote User server. No other file may hardcode these.
+"""All tunable values for the Vibe Coder server. No other file may hardcode these.
 
 Two layers:
 - `Settings` defaults (this file) — the single source of every tunable.
@@ -10,7 +10,7 @@ Paths depend on how the app runs:
 - Dev (repo checkout): everything stays inside the project (logs/, PAIRING_QR.png,
   actions.json, ffmpeg from PATH).
 - Installed EXE (PyInstaller onedir): user data (settings, token, logs, QR,
-  edited actions.json) lives in %LOCALAPPDATA%/RemoteUser — Program Files is
+  edited actions.json) lives in %LOCALAPPDATA%/VibeCoder — Program Files is
   not writable; bundled read-only data (client/, default actions.json) comes
   from the PyInstaller bundle dir, and the installer places ffmpeg/ next to
   the exe.
@@ -33,8 +33,39 @@ FROZEN = getattr(sys, "frozen", False)
 PROJECT_ROOT = Path(sys.executable).parent if FROZEN else Path(__file__).resolve().parent.parent
 BUNDLE_DIR = Path(getattr(sys, "_MEIPASS", PROJECT_ROOT))  # onedir: <app>/_internal
 USER_DIR = (
-    Path(os.environ["LOCALAPPDATA"]) / "RemoteUser" if FROZEN else PROJECT_ROOT / "logs"
+    Path(os.environ["LOCALAPPDATA"]) / "VibeCoder" if FROZEN else PROJECT_ROOT / "logs"
 )
+
+
+def _migrate_legacy_user_dir() -> None:
+    """Carry %LOCALAPPDATA%/RemoteUser across the 2026-08-11 rename.
+
+    The app was called Remote User until then and its user data — settings,
+    token, the owner's edited actions.json, the layout history, the topmost
+    ledger — lived under that name. The rename moved the product, not his
+    data: an installed copy that simply started looking at the new path would
+    have read an empty folder and silently handed him factory defaults, which
+    reads exactly like "the update wiped my settings".
+
+    Runs ONCE, and only when the new folder does not exist yet: a MOVE, so a
+    second start finds nothing left to do and the old name can never win over
+    a newer file. A failure here is never fatal — the app must start even if
+    Windows refuses the move (a stray handle from the copy being replaced),
+    and the next start tries again.
+    """
+    if not FROZEN or USER_DIR.exists():
+        return
+    legacy = Path(os.environ["LOCALAPPDATA"]) / "RemoteUser"
+    if not legacy.is_dir():
+        return
+    try:
+        legacy.rename(USER_DIR)
+        logger.info("User data carried over from %s to %s", legacy, USER_DIR)
+    except OSError as error:                       # never fatal — retried next start
+        logger.warning("Could not carry user data over from %s: %s", legacy, error)
+
+
+_migrate_legacy_user_dir()
 SETTINGS_PATH = USER_DIR / "settings.json"
 
 # Keys the desktop GUI may override (persisted in settings.json).
@@ -238,7 +269,7 @@ class Settings:
     # silently refuses elevated apps). The switch READS and WRITES that task,
     # never a preference of its own — a switch that only remembers an
     # intention is exactly the kind of lie this project keeps paying for.
-    autostart_task: str = "RemoteUser"
+    autostart_task: str = "VibeCoder"
 
     # Notifications to the phone (ROADMAP Phase H; the desktop Settings window
     # owns all three since round R2). `notify_speak` off still raises the
@@ -278,7 +309,7 @@ class Settings:
     # install funnel — no manual file shuffling). Built by setup/build_apk.py;
     # the desktop installer ships a copy next to the exe. Its presence also
     # decides whether Android browsers get routed to the funnel page.
-    apk_path: Path = PROJECT_ROOT / ("RemoteUser.apk" if FROZEN else "dist/RemoteUser.apk")
+    apk_path: Path = PROJECT_ROOT / ("VibeCoder.apk" if FROZEN else "dist/VibeCoder.apk")
 
     # Action sets (chord shortcuts shown in the radial wheels) — hand-edited by
     # the owner; re-read on every client connection, so edits show on refresh.
@@ -292,12 +323,12 @@ class Settings:
     # nobody could reach. The Settings window's "Check for new versions when
     # the app starts" is that switch; turning it off makes updates.check()
     # return None and hides the in-window Update button entirely.
-    update_repo: str = "UVuruna/Remote-User"
+    update_repo: str = "UVuruna/Vibe-Coder"
     update_check: bool = True
 
     # THE HANDOVER (owner report 2026-08-07). Installing an update KILLED the
     # very session he was installing from: *"čim uđem u instalaciju on će meni
-    # ugasiti Remote User i više neću moći da komandujem odavde."* So the
+    # ugasiti Vibe Coder i više neću moći da komandujem odavde."* So the
     # update is now unattended end to end — see server/update_handover.py — and
     # these are the three files it leaves behind on purpose. All three live in
     # USER_DIR, never in the install folder: the installer REPLACES the install

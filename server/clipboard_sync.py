@@ -112,7 +112,7 @@ user32.GetMessageW.restype = ctypes.c_int
 user32.GetMessageW.argtypes = [ctypes.POINTER(wintypes.MSG), wintypes.HWND,
                                ctypes.c_uint, ctypes.c_uint]
 
-CLASS_NAME = "RemoteUserClipboardListener"
+CLASS_NAME = "VibeCoderClipboardListener"
 
 # ═══════════════════════════ TIMINGS ═══════════════════════════
 START_TIMEOUT_S = 1.0
@@ -300,7 +300,7 @@ def _run(on_update) -> None:
     # not fatal, only logged once at debug volume via the return value.
     user32.RegisterClassW(ctypes.byref(wc))
 
-    hwnd = user32.CreateWindowExW(0, CLASS_NAME, "RemoteUserClipboard", 0,
+    hwnd = user32.CreateWindowExW(0, CLASS_NAME, "VibeCoderClipboard", 0,
                                   0, 0, 0, 0, HWND_MESSAGE, None, wc.hInstance, None)
     if not hwnd:
         logger.warning("Could not create the clipboard listener window "

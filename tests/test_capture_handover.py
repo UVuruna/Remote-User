@@ -4,7 +4,7 @@ THE FAILURE, DATED IN THE OWNER'S OWN LOG. His report was
 "najhitniji bag ... pada cele aplikacije" — changing the bitrate quality brings
 the whole app down. 0.0.399 fixed the PHONE's half (the per-client encoder
 re-open). This is the DESKTOP's half, and it is a different mechanism
-entirely — `%LOCALAPPDATA%\\RemoteUser\\server.log.1`, 2026-08-11:
+entirely — `%LOCALAPPDATA%\\VibeCoder\\server.log.1`, 2026-08-11:
 
     00:32:48,546  User settings saved: {... 'h264_bitrate': '20M' ...}
     00:32:48,551  uvicorn: Shutting down

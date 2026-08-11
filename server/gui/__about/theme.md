@@ -174,7 +174,7 @@ declared 1280×1000 frame. Measured both ways.
 - `current_theme()` — which palette is on
 - `ASSET_DIR` / `ASSET_URL` — the assets folder as a `Path` (for `icon()`) and
   as a POSIX path for QSS `url()`; the QSS one is quoted at every use site,
-  because the installed path holds spaces (`C:/Program Files/Remote User/…`)
+  because the installed path holds spaces (`C:/Program Files/Vibe Coder/…`)
 - `qrPaper` — a QR is a MEASUREMENT, not decoration: it is scanned by a camera
   and stays white in both palettes. Named rather than inlined so nobody
   "fixes" it into a surface token one day

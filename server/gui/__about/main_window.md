@@ -294,7 +294,7 @@ cannot see.
 `UPDATE_HANDOVER_TEXT` moved to a MODULE-level constant (was a class
 attribute) specifically so `_computed_minimum`'s `widest()` call — a bare
 name lookup inside a method — can measure it like every other caption this
-button can wear; it now reads "Remote User will close to finish updating —
+button can wear; it now reads "Vibe Coder will close to finish updating —
 it comes back on its own", replacing the round's own 2026-08-09 placeholder
 comment ("=== LOADING ANIMATION GOES HERE ===") that had been left for
 exactly this task. The bar is shown and `QApplication.processEvents()` is

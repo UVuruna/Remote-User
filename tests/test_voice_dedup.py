@@ -80,7 +80,7 @@ PROJECT = Path(__file__).resolve().parent.parent
 VOICE = PROJECT / "client" / "voice.js"
 CONTROLS = PROJECT / "client" / "controls.js"
 KOTLIN = (PROJECT / "android" / "app" / "src" / "main" / "java" / "com" /
-          "uvuruna" / "remoteuser" / "VoiceInput.kt")
+          "uvuruna" / "vibecoder" / "VoiceInput.kt")
 
 
 def fail(msg: str) -> None:

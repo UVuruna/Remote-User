@@ -163,7 +163,7 @@ _ICON_CHROME = ("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5v"
 # (347 px), where 62 characters already overflow, and a fixture that proves
 # something at one width proves nothing extra by being longer everywhere.
 _LONG_TITLE = ("Widening the layout row so a window title fits"
-               " - Claude Code - Remote User - Visual Studio Code"
+               " - Claude Code - Vibe Coder - Visual Studio Code"
                " [Administrator]")
 
 # AND `parent` IS NO LONGER A FIELD OF ITS OWN (owner 2026-08-09, task 171 +
@@ -178,8 +178,8 @@ LAYOUT_LIST_STAGE_JS = (
     f"  process:'code.exe', orient:'portrait', icon:'{_ICON_VSCODE}',"
     "  ratio:[600,1000],"
     "  pos:0.5, grid:'2', members:2, parent:true, dependents:['Downloads'],"
-    "  member_titles:['Claude Code - Remote User - Visual Studio Code"
-    " [Administrator]', 'prompt.txt - Remote User']},"
+    "  member_titles:['Claude Code - Vibe Coder - Visual Studio Code"
+    " [Administrator]', 'prompt.txt - Vibe Coder']},"
     " {name:'Downloads', process:'explorer.exe', orient:'portrait',"
     f"  icon:'{_ICON_EXPLORER}',"
     "  ratio:null, pos:0.5, grid:null, members:1, parent:false, dependents:[],"
@@ -187,7 +187,7 @@ LAYOUT_LIST_STAGE_JS = (
     " {name:'Reading', process:'chrome.exe', orient:'landscape',"
     f"  icon:'{_ICON_CHROME}',"
     "  ratio:null, pos:0.5, grid:'4', members:4, parent:false, dependents:[],"
-    "  member_titles:['Claude Code - Remote User - Visual Studio Code"
+    "  member_titles:['Claude Code - Vibe Coder - Visual Studio Code"
     " [Administrator]', 'Inbox (12) - Gmail', 'Downloads', 'Notes']}];"
     "layoutActive = 0; openLayoutPicker()"
 )
@@ -273,7 +273,7 @@ LAYOUT_DRAG_STAGE_JS = (
 CREATION_LIST_STAGE_JS = (
     "creating = newCreation('list');"
     "creating.entries = ["
-    " {kind:'window', hwnd:1, title:'Claude Code - Remote User - Visual "
+    " {kind:'window', hwnd:1, title:'Claude Code - Vibe Coder - Visual "
     "Studio Code [Administrator]', process:'code.exe', icon:null,"
     "  x:0.1, y:0.5},"
     " {kind:'tab', hwnd:1, title:'prompt.txt', process:'code.exe',"
@@ -412,7 +412,7 @@ PANELS = (
     # "the windows stay" and "the windows close" — so this shot
     # exists to prove that line is never the thing that gets cut.
     ("Layout close chooser",
-     "layouts = [{name:'Claude Code - Remote User - Visual Studio "
+     "layouts = [{name:'Claude Code - Vibe Coder - Visual Studio "
      "Code [Administrator]', process:'code.exe', orient:'portrait',"
      " icon:null, members:4, ratio:null, pos:0.5, dependents:[]}];"
      "layoutActive = 0; openCloseChooser(0)",
@@ -434,8 +434,8 @@ PANELS = (
     ("Layout settings sheet",
      "(" + LAYOUT_SETTINGS_STAGE_JS + ")({name:'"
      + _LONG_TITLE + "', grid:'3-top', members:3,"
-     " titles:['Claude Code - Remote User - Visual Studio Code"
-     " [Administrator]', 'prompt.txt - Remote User', 'Downloads']})",
+     " titles:['Claude Code - Vibe Coder - Visual Studio Code"
+     " [Administrator]', 'prompt.txt - Vibe Coder', 'Downloads']})",
      LAYOUT_LIST_CLOSE_JS, "#layout-panel .lay-card"),
     # The layout list carries a rename button per row (owner
     # 2026-08-05) — a long window title must not push the row's
@@ -459,7 +459,7 @@ PANELS = (
     # ticks (owner 2026-08-06) — the long title AND four chips.
     ("Rename card",
      "appSets = APP_SETS;"
-     "layouts = [{name:'Claude Code - Remote User - Visual Studio "
+     "layouts = [{name:'Claude Code - Vibe Coder - Visual Studio "
      "Code [Administrator]', process:'code.exe', orient:'portrait',"
      " icon:null, app_sets:['VSCode','Claude'], ratio:null, pos:0.5}];"
      "openRenamePanel(0)",
@@ -477,7 +477,7 @@ PANELS = (
      " icon:null, tab:null, x:0.5, y:0.5},"
      " {hwnd:2, title:'Explorer', process:'explorer.exe',"
      " icon:null, tab:null, x:0.5, y:0.5},"
-     " {hwnd:3, title:'Claude Code - Remote User - Visual Studio"
+     " {hwnd:3, title:'Claude Code - Vibe Coder - Visual Studio"
      " Code [Administrator]', process:'code.exe', icon:null,"
      " tab:null, x:0.5, y:0.5}];"
      "creating.mode = 'grid'; creating.grid = '3-left';"
@@ -486,7 +486,7 @@ PANELS = (
     ("Creation panel + Name field",
      "appSets = APP_SETS;"
      "creating = newCreation('tap');"
-     "creating.slots = [{hwnd:1, title:'Claude Code - Remote User"
+     "creating.slots = [{hwnd:1, title:'Claude Code - Vibe Coder"
      " - Visual Studio Code [Administrator]', process:'code.exe',"
      " icon:null, tab:null, x:0.5, y:0.5}];"
      "renderCreationPanel()",

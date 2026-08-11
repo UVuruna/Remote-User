@@ -242,7 +242,7 @@ function openSetsPanel() {
   // row reads better for it at every size.
   card.innerHTML = `<div class="sets-head"><h2>Wheel sets</h2>
     <span class="sets-sub sets-count">${visibleCount()} of ${wheelCap()} used${reserve ? ` — ${reserve} held for app shortcuts` : ""}</span></div>
-    <p class="sets-sub">Mouse, Input and Settings are always in the wheel. Pick the rest — up to ${wheelCap()} in total, app shortcuts included. New sets are made on the PC (Remote User window → Controls…).</p>`;
+    <p class="sets-sub">Mouse, Input and Settings are always in the wheel. Pick the rest — up to ${wheelCap()} in total, app shortcuts included. New sets are made on the PC (Vibe Coder window → Controls…).</p>`;
 
   // Everything between the header and Done. In portrait it is a plain block
   // and changes nothing; in landscape it is the part that scrolls.

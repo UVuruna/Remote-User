@@ -59,7 +59,7 @@ import tempfile
 from pathlib import Path
 
 PROJECT = Path(__file__).resolve().parent.parent
-ANDROID = PROJECT / "android/app/src/main/java/com/uvuruna/remoteuser"
+ANDROID = PROJECT / "android/app/src/main/java/com/uvuruna/vibecoder"
 CLIENT = PROJECT / "client"
 
 

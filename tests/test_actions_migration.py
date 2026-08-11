@@ -10,7 +10,7 @@ list was written therefore never arrived. The bill:
 
   * The shipped Claude app set gained `"agent": "claude"` on 2026-08-06. His
     copy never did. Without it the set can only match by TITLE, and his window
-    is titled "Voditi agente i kontrolisati grid skice - Remote User - Visual
+    is titled "Voditi agente i kontrolisati grid skice - Vibe Coder - Visual
     Studio Code [Administrator]" — Claude Code names its VS Code tab after the
     CONVERSATION, so the word "claude" is absent and always will be. An
     unsatisfiable condition, forever. He reported the Claude set missing
@@ -56,7 +56,7 @@ def named(sets: list, name: str) -> dict | None:
 
 
 # ───────────────────────── the owner's real file, 2026-08-07 ─────────────────
-# The shape of %LOCALAPPDATA%\RemoteUser\actions.json as it actually was on his
+# The shape of %LOCALAPPDATA%\VibeCoder\actions.json as it actually was on his
 # PC while he was reporting the bug: a Claude app set with `title` and NO
 # `agent`, no top-level `wheel_order`, his own button rename on the left click,
 # and his `enabled: false` ticks. Held here as literal text, not derived from

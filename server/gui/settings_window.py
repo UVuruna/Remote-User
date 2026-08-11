@@ -163,8 +163,8 @@ VOICE_ABSENT_TEXT = ("The voice chosen here is not on the phone that is "
                      "phone that has it.")
 FOCUS_TEXT = ("While this is on, Windows stops other programs from jumping in "
               "front of whatever you are using. It is switched back off when "
-              "Remote User closes, and it is never written into the registry.")
-STARTUP_TEXT = ("Remote User starts hidden in the tray, so the phone can "
+              "Vibe Coder closes, and it is never written into the registry.")
+STARTUP_TEXT = ("Vibe Coder starts hidden in the tray, so the phone can "
                 "reach this PC without anyone logging in and opening it.")
 
 # ADVANCED (task 226, owner ballot verdict) — the four config keys that had a
@@ -196,7 +196,7 @@ class SettingsWindow(QDialog):
         self._settled = False   # the minimum is measured on first show
         self._form_label_widgets: list[QLabel] = []   # aligned on first show
 
-        self.setWindowTitle("Settings — Remote User")
+        self.setWindowTitle("Settings — Vibe Coder")
 
         root = QVBoxLayout(self)
         root.setContentsMargins(18, 16, 18, 16)
@@ -501,7 +501,7 @@ class SettingsWindow(QDialog):
     def _build_advanced_card(self):
         """LAST card, deliberately: port / H.264 / JPEG quality / QR image —
         four fields that had a `Settings` entry and no door, so an owner who
-        needed one edited `%LOCALAPPDATA%/RemoteUser/settings.json` by hand.
+        needed one edited `%LOCALAPPDATA%/VibeCoder/settings.json` by hand.
         Only the port field needs Apply & restart, matching STREAM's own rule
         (it reshapes the socket the server listens on); the other three act
         at once like every other switch in this window.

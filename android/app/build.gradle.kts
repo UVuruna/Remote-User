@@ -1,4 +1,4 @@
-// Remote User Android shell — a native wrapper around the web client.
+// Vibe Coder Android shell — a native wrapper around the web client.
 // Version comes from the build script (-PappVersion / -PappVersionCode,
 // derived from setup/app_info.json); signing config from environment
 // variables set by setup/build_apk.py (never committed).
@@ -12,11 +12,11 @@ val appVersion: String = (project.findProperty("appVersion") as String?) ?: "0.0
 val appVersionCode: Int = ((project.findProperty("appVersionCode") as String?) ?: "1").toInt()
 
 android {
-    namespace = "com.uvuruna.remoteuser"
+    namespace = "com.uvuruna.vibecoder"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.uvuruna.remoteuser"
+        applicationId = "com.uvuruna.vibecoder"
         minSdk = 26
         targetSdk = 35
         versionCode = appVersionCode
@@ -29,6 +29,8 @@ android {
             if (ksPath != null) {
                 storeFile = file(ksPath)
                 storePassword = System.getenv("RU_KEYSTORE_PASS")
+                // "remoteuser" is the key's slot inside the existing
+                // release.jks, not a product name — see setup/build_apk.py.
                 keyAlias = System.getenv("RU_KEY_ALIAS") ?: "remoteuser"
                 keyPassword = System.getenv("RU_KEYSTORE_PASS")
             }

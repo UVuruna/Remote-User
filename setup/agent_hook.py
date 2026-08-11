@@ -2,7 +2,7 @@
 
 Claude Code fires a `Stop` hook when a turn ends. This script is that hook: it
 reads the hook payload on stdin, works out WHICH agent it was, and POSTs the
-notice to the Remote User server already running on this PC — which forwards
+notice to the Vibe Coder server already running on this PC — which forwards
 it to the phone as a real notification.
 
 Why a hook and not screen-watching: the tool KNOWS when it is done. Reading
@@ -29,7 +29,7 @@ The agent's NAME, in order of preference (owner: "ime agenta je ime sesije"):
      2026-08-10 — "6ffb225" read like a hash to him; a title reads like a
      person's summary of the work)
   4. the project folder + the session id's first 6 characters, e.g.
-     "Remote User · 3f9c1a" — enough to tell four agents apart at a glance,
+     "Vibe Coder · 3f9c1a" — enough to tell four agents apart at a glance,
      and still what he sees whenever a transcript carries no title yet
 
 The notice's TEXT is built the same way: WHAT the agent just said it did,
@@ -47,7 +47,7 @@ from pathlib import Path
 # Where the server keeps the two things this script needs. Read from disk
 # rather than passed in, so the hook keeps working after a token rotation or
 # a port change (both are ordinary owner actions).
-USER_DIR = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "RemoteUser"
+USER_DIR = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "VibeCoder"
 DEV_DIR = Path(__file__).resolve().parent.parent / "logs"
 DEFAULT_PORT = 8777
 TIMEOUT_S = 3.0
@@ -206,7 +206,7 @@ def agent_project(payload: dict) -> str:
 def send(agent: str, event: str, text: str, project: str = "") -> bool:
     token = read_token()
     if not token:
-        print("agent_hook: no token file — is Remote User installed?", file=sys.stderr)
+        print("agent_hook: no token file — is Vibe Coder installed?", file=sys.stderr)
         return False
     url = f"http://127.0.0.1:{read_port()}/notify?token={token}"
     body = json.dumps({"agent": agent, "event": event, "text": text,
@@ -220,7 +220,7 @@ def send(agent: str, event: str, text: str, project: str = "") -> bool:
         # The server not running is the ordinary case, not an error worth
         # breaking a turn over — a hook that fails loudly would make every
         # agent's last word an exception.
-        print(f"agent_hook: could not reach Remote User ({e})", file=sys.stderr)
+        print(f"agent_hook: could not reach Vibe Coder ({e})", file=sys.stderr)
         return False
     if not answer.get("ok"):
         print(f"agent_hook: {answer.get('reason', 'not delivered')}", file=sys.stderr)

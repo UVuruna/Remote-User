@@ -1,4 +1,4 @@
-# Remote User — Setup Guide
+# Vibe Coder — Setup Guide
 
 Control your Windows PC from your Android phone. This is the canonical step-by-step flow. The apps guide you through these same steps on screen — this document is the source of truth for that guidance.
 
@@ -13,11 +13,11 @@ Control your Windows PC from your Android phone. This is the canonical step-by-s
 
 ## Part 1 — PC (once)
 
-1. Run **`RemoteUser_Setup.exe`**.
+1. Run **`VibeCoder_Setup.exe`**.
 2. If Windows asks to allow changes → **Yes**.
 3. Wizard → **Next** on each step → **Install**. It sets the firewall rule and installs Tailscale (for away-from-home use) automatically.
-4. Leave **“Launch Remote User”** checked → **Finish**.
-5. The **Remote User** window opens: a **QR code** and a green **RUNNING** badge. The server is up.
+4. Leave **“Launch Vibe Coder”** checked → **Finish**.
+5. The **Vibe Coder** window opens: a **QR code** and a green **RUNNING** badge. The server is up.
 
 You can close the window — the server keeps running in the tray (icon by the clock).
 
@@ -32,7 +32,7 @@ You can close the window — the server keeps running in the tray (icon by the c
 2. On that page tap **“Install the app”** → allow the download (enable “install from this source” if asked) → open the downloaded file → **Install**.
 
 ### 2b — Open and pair
-1. Tap **“Open the app”** on the same page (or open the **Remote User** app icon).
+1. Tap **“Open the app”** on the same page (or open the **Vibe Coder** app icon).
 2. On the app’s pairing screen tap **“Scan the QR code”** → allow the camera → point at the QR on the PC.
 3. **Connected** — you see the PC screen.
 
@@ -40,8 +40,8 @@ You can close the window — the server keeps running in the tray (icon by the c
 
 ## Part 3 — Daily use (after the first time)
 
-- **PC:** starts with Windows, runs in the tray. If closed, open the **Remote User** shortcut.
-- **Phone:** just open the **Remote User** app. It reconnects by itself. **No QR scanning** — you only scan the first time (or when adding a new PC).
+- **PC:** starts with Windows, runs in the tray. If closed, open the **Vibe Coder** shortcut.
+- **Phone:** just open the **Vibe Coder** app. It reconnects by itself. **No QR scanning** — you only scan the first time (or when adding a new PC).
 
 ### Controls
 - **One finger** = moves the PC cursor (does not click).
@@ -56,7 +56,7 @@ You can close the window — the server keeps running in the tray (icon by the c
 
 The home address does not work off the home Wi-Fi. For use anywhere you need **Tailscale** (free) on **both** devices.
 
-- **PC:** Tailscale is already installed (Part 1). In the Remote User window, if prompted, tap **“Set up Tailscale”** and sign in.
+- **PC:** Tailscale is already installed (Part 1). In the Vibe Coder window, if prompted, tap **“Set up Tailscale”** and sign in.
 - **Phone:**
   1. Install **Tailscale** from Google Play.
   2. Sign in with the **same account** as the PC.
@@ -96,7 +96,7 @@ You never shuffle installer files by hand again.
 
 ## Quick version
 
-1. **PC:** run `RemoteUser_Setup.exe` → Finish → window shows the QR + RUNNING.
+1. **PC:** run `VibeCoder_Setup.exe` → Finish → window shows the QR + RUNNING.
 2. **Phone on the same Wi-Fi.**
 3. Scan QR with the camera → **Install the app** → install → **Open the app**.
 4. In the app: **Scan the QR code** → point at the PC’s QR. Done.

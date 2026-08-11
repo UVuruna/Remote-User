@@ -17,7 +17,7 @@ RE-open exactly as it answers a failed FIRST open -- `ws.close(1011)`. That
 socket carries input, layouts, dictation and presence as well as pictures, so
 one slow encoder restart ended everything and the phone reconnected.
 
-His own %LOCALAPPDATA%\\RemoteUser\\server.log, 2026-08-10:
+His own %LOCALAPPDATA%\\VibeCoder\\server.log, 2026-08-10:
 
     20:29:33,516 INFO  h264_streamer: H.264 session opened - 1 active,
                                       codec avc1.4D4032, 3840x2160

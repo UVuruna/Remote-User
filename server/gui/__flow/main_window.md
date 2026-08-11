@@ -29,7 +29,7 @@ flowchart TB
         subgraph HEADER["Header row"]
             direction LR
             LOGO[logo 34x34]
-            TITLES["title 'Remote User' (#h1)\ncaption 'Control this PC…'"]
+            TITLES["title 'Vibe Coder' (#h1)\ncaption 'Control this PC…'"]
             PILL["status pill\nrunning / starting / stopped / failed"]
         end
         subgraph QRCARD["QR card"]
@@ -62,7 +62,7 @@ flowchart TB
 
     subgraph TRAY["System tray icon"]
         direction TB
-        TOPEN["Open Remote User"]
+        TOPEN["Open Vibe Coder"]
         TTOGGLE["Stop server / Start server"]
         TSEP["---"]
         TQUIT["Quit"]

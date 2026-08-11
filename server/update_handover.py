@@ -6,7 +6,7 @@ project can have:
     *"da li možeš da implementiraš da se aplikacija ugasi tek u onoj zadnjoj
     fazi kada krene da se instalira i da se ponovo upali to jest pokrene
     server — dešava se da ja ne mogu da instaliram novu verziju ako nisam
-    kući, zato što čim uđem u instalaciju on će meni ugasiti Remote User i
+    kući, zato što čim uđem u instalaciju on će meni ugasiti Vibe Coder i
     više neću moći da komandujem odavde."*
 
 Every fix this project ships reaches him ONLY through an install, and starting
@@ -74,7 +74,7 @@ from config import SETTINGS, app_version
 
 logger = logging.getLogger(__name__)
 
-# What a real Remote User installer weighs, floored hard. The whole point of
+# What a real Vibe Coder installer weighs, floored hard. The whole point of
 # this number is that a captive-portal login page, an HTML error body or a
 # zero-length file saved over a dropped connection can never be mistaken for
 # an installer — they are all orders of magnitude below it.
@@ -119,7 +119,7 @@ ALREADY_ARMED_TEXT = "An update is already installing — hold on"
 SCRIPT = r"""@echo off
 setlocal EnableExtensions
 rem ------------------------------------------------------------------
-rem  Remote User - unattended update handover.
+rem  Vibe Coder - unattended update handover.
 rem  Written by server/update_handover.py; every value arrives in the
 rem  environment. While this runs, it is the ONLY thing standing between
 rem  the owner and a PC he cannot reach. Do not make it clever.
@@ -200,7 +200,7 @@ call :say "the new app is running - the phone can reach this PC again "
 goto done
 
 :noexe
-call :say "FATAL: nothing to run at %RU_EXE% - Remote User must be launched on this PC by hand "
+call :say "FATAL: nothing to run at %RU_EXE% - Vibe Coder must be launched on this PC by hand "
 goto done
 
 :badenv
@@ -220,7 +220,7 @@ exit /b 0
 
 # ═══════════════════════════ THE FILE WE STAKE THE PC ON ═══════════════════
 def verify(path: Path, expected_size: int | None) -> str:
-    """Is this really a complete Remote User installer? Returns "" when it is,
+    """Is this really a complete Vibe Coder installer? Returns "" when it is,
     and a sentence for the LOG when it is not.
 
     This is the one check that cannot be skipped. Everything after it is
@@ -311,19 +311,19 @@ def announce() -> str:
     SETTINGS.update_record_path.unlink(missing_ok=True)
     target, running = record.get("to", "?"), app_version()
     if updates.numbers(running) == updates.numbers(target):
-        title = f"Remote User updated to v{target}"
+        title = f"Vibe Coder updated to v{target}"
         text = "The PC is back — nothing else to do."
         event = "finished"
         logger.info("Update handover succeeded: now running v%s", running)
     else:
-        title = f"Remote User is still on v{running}"
+        title = f"Vibe Coder is still on v{running}"
         text = (f"The update to v{target} did not install. "
                 f"Everything works as before; the update log on the PC says why.")
         event = "failed"
         logger.error("Update handover FAILED: wanted v%s, running v%s — see %s",
                      target, running, SETTINGS.update_log_path)
     notify.queue({
-        "type": "notify", "agent": "Remote User", "event": event,
+        "type": "notify", "agent": "Vibe Coder", "event": event,
         "title": title, "text": text,
         "speak": SETTINGS.notify_speak, "voice": SETTINGS.notify_voice,
         "rate": SETTINGS.notify_rate, "at": time.time(),
@@ -349,7 +349,7 @@ def tell_phone(controller, version: str) -> bool:
         logger.info("No running server loop — the phone gets no update notice")
         return False
     notice = {
-        "type": "notify", "agent": "Remote User", "event": "updating",
+        "type": "notify", "agent": "Vibe Coder", "event": "updating",
         "title": f"Installing v{version}",
         "text": "The picture goes for about a minute and comes back by itself.",
         "speak": SETTINGS.notify_speak, "voice": SETTINGS.notify_voice,

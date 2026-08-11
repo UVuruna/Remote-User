@@ -5,7 +5,7 @@
 ## Purpose
 
 The ONLY page a plain Android browser ever sees: the server routes Android
-User-Agents here (the APK's WebView is excluded via its `RemoteUserApp`
+User-Agents here (the APK's WebView is excluded via its `VibeCoderApp`
 marker) whenever a built APK exists — without one, Android browsers fall
 through to the same [Page Shell](index.md) as everyone else. A self-contained,
 two-step funnel: **Install** the app (first time only, downloads `/app.apk`),

@@ -1,4 +1,4 @@
-package com.uvuruna.remoteuser
+package com.uvuruna.vibecoder
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -51,7 +51,7 @@ class Notifier(private val ctx: Context) {
         private const val TAG = "Notifier"
         private const val CHANNEL_ID = "agents"
         /** Where the tapped notice happened — `{index, name}` as JSON. */
-        const val EXTRA_JUMP = "com.uvuruna.remoteuser.JUMP"
+        const val EXTRA_JUMP = "com.uvuruna.vibecoder.JUMP"
         // One id per agent name, so notifications REPLACE per agent instead of
         // stacking one line per finished turn. Hashing keeps that stable
         // across app restarts without keeping a table.

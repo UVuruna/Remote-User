@@ -15,7 +15,7 @@ CONVERSATION. All of that is still true. **The process table was never looked
 at**, and it answers the question outright — a live session names its project,
 and a VS Code window title ends in that project's folder name:
 
-    "Ispravka UI dizajna meni… - Remote User - Visual Studio Code [Administrator]"
+    "Ispravka UI dizajna meni… - Vibe Coder - Visual Studio Code [Administrator]"
                                  └── the folder a live session can be matched to
 
 That is the whole bridge, and it needs nothing from the owner.
@@ -254,8 +254,8 @@ def folder_of(slug_dir: Path) -> str:
 
     Read from the transcript's own `cwd`, never guessed from the directory
     name: the slug flattens BOTH path separators and spaces into dashes, so
-    `u--Coding-UVuruna-Applications-Remote-User` cannot be split back into
-    "Remote User" — the first version of this function returned "user" and
+    `u--Coding-UVuruna-Applications-Vibe-Coder` cannot be split back into
+    "Vibe Coder" — the first version of this function returned "user" and
     matched nothing. One line of JSON gives the exact path.
     """
     try:
@@ -528,8 +528,8 @@ def newest_transcript(folder: str) -> Path | None:
 
     Matched through `folder_of` and never through the slug's own name: the
     slug flattens separators AND spaces into dashes, so
-    `u--Coding-UVuruna-Applications-Remote-User` cannot be split back into
-    "Remote User" (the bug that made the first `folder_of` return "user")."""
+    `u--Coding-UVuruna-Applications-Vibe-Coder` cannot be split back into
+    "Vibe Coder" (the bug that made the first `folder_of` return "user")."""
     if not folder:
         return None
     best: tuple[float, Path] | None = None

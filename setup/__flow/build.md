@@ -21,11 +21,11 @@ flowchart TB
     E --> F["3b/6  smoke_test(exe)\nfrozen exe --selfcheck\nFAIL-CLOSED"]
     F -->|non-zero / timeout| X2[exit 1 — build stops]
     F -->|pass| G["4/6  sign_file(exe)\nsigntool.exe — skips w/ warning if no cert"]
-    G --> H["5/6  build_installer()\nmakensis installer.nsi\n→ dist/RemoteUser_Setup.exe"]
+    G --> H["5/6  build_installer()\nmakensis installer.nsi\n→ dist/VibeCoder_Setup.exe"]
     H --> I["6/6  sign_file(installer)"]
     I --> J["verify_build(exe, installer)\nFAIL-CLOSED — see checks below"]
     J -->|any problem| X3[exit 1]
-    J -->|OK| K["dist/RemoteUser_Setup.exe\nready for GIT RELEASE"]
+    J -->|OK| K["dist/VibeCoder_Setup.exe\nready for GIT RELEASE"]
 ```
 
 **Note (flagged, not fixed by this doc pass):** `main()` prints the "BUILD

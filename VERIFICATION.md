@@ -3,7 +3,7 @@
 One big list, as ordered ("implementiraj sve pa cu ja posle da testiram sve
 ... ostavi neku listu sta je sve uradjeno i sta ja sve treba da proverim" —
 lang-ok: owner quote). Four releases: **v0.0.108, v0.0.109, v0.0.110,
-v0.0.111** — install the newest ([Releases](https://github.com/UVuruna/Remote-User/releases))
+v0.0.111** — install the newest ([Releases](https://github.com/UVuruna/Vibe-Coder/releases))
 on the PC and BOTH phones, then walk the checklist. Every item names the task
 it closes; a broken item is a repeat — report it with what you saw.
 

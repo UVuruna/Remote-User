@@ -1,6 +1,6 @@
 # Main Activity
 
-**Script:** [Main Activity (script)](../app/src/main/java/com/uvuruna/remoteuser/MainActivity.kt) ·
+**Script:** [Main Activity (script)](../app/src/main/java/com/uvuruna/vibecoder/MainActivity.kt) ·
 **Flow:** [diagram](../__flow/MainActivity.md)
 
 ## Purpose
@@ -38,7 +38,7 @@ alone undersells it.
 ## Connections
 
 ### Uses
-- [Prefs (script)](../app/src/main/java/com/uvuruna/remoteuser/Prefs.kt) — reads both stored URLs every
+- [Prefs (script)](../app/src/main/java/com/uvuruna/vibecoder/Prefs.kt) — reads both stored URLs every
   `resolveAndLoad`; writes the Tailscale URL from the JS bridge; read by
   `Client.shouldOverrideUrlLoading` to recognize "our server" by port
 - [Gamepad](Gamepad.md) — every pad key and stick event is offered to it

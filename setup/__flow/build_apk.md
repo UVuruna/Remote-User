@@ -26,7 +26,7 @@ flowchart TB
     N --> O["gradlew assembleRelease\n-PappVersion -PappVersionCode\n+ keystore env vars"]
     O --> P{app-release.apk\nexists?}
     P -- no --> X2[exit 1]
-    P -- yes --> Q["4/4  copy to\ndist/RemoteUser.apk"]
+    P -- yes --> Q["4/4  copy to\ndist/VibeCoder.apk"]
 ```
 
 Pseudocode (language-neutral):
@@ -43,4 +43,4 @@ Pseudocode (language-neutral):
     run "gradlew assembleRelease" with the version + keystore env vars
     IF the expected release APK path is missing afterward: fail the build
 
-    copy the signed APK to dist/RemoteUser.apk
+    copy the signed APK to dist/VibeCoder.apk

@@ -6,7 +6,7 @@
 
 The `Stop` hook that tells the phone an agent finished (ROADMAP Phase H,
 owner 2026-08-05). Claude Code fires it when a turn ends; it works out WHICH
-agent that was and POSTs the notice to the Remote User server already running
+agent that was and POSTs the notice to the Vibe Coder server already running
 on this PC, which forwards it to the phone
 ([Notify](../../server/__about/notify.md)).
 
@@ -19,7 +19,7 @@ The owner's rule — *"ime agenta je ime sesije u suštini"* (lang-ok: owner quo
 3. the conversation's own TITLE, read from its transcript (task 198,
    2026-08-10 — see below);
 4. **`<project folder> · <first 6 of the session id>`**, e.g.
-   `Remote User · 3f9c1a` — enough to tell two agents in one repo apart at a
+   `Vibe Coder · 3f9c1a` — enough to tell two agents in one repo apart at a
    glance, and still what he sees whenever a transcript carries no title yet.
 
 ## The name reads like a person, not a hash (task 198, 2026-08-10)
@@ -43,7 +43,7 @@ and the transcript holds both pieces:
   block; an assistant record that ended in a tool call carries no text block
   and is skipped in favour of the real reply before it. A `Stop` fires right
   after that reply, so it is what belongs on the phone (e.g. "Ispravka UI
-  dizajna: gates green, release published" instead of "Remote User · 3f9c1a").
+  dizajna: gates green, release published" instead of "Vibe Coder · 3f9c1a").
 
 **Both read only the TAIL of the file** (`_tail_lines`, `TRANSCRIPT_TAIL_BYTES`
 = 256 KB) — a real transcript on this PC ran past 80 MB / 9,000 lines, and
@@ -72,7 +72,7 @@ current one is written, so re-running after a move never leaves two.
 ## Connections
 
 ### Uses
-- `%LOCALAPPDATA%/RemoteUser/token.txt` (dev: `./logs/token.txt`) — the same
+- `%LOCALAPPDATA%/VibeCoder/token.txt` (dev: `./logs/token.txt`) — the same
   pairing token the phone uses
 - the same folder's `settings.json` for the port (default 8777)
 

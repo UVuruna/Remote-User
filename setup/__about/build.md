@@ -9,7 +9,7 @@ The full desktop build pipeline (root SHIP.md's 7-step pipeline, plus two
 project-specific fail-closed gates layered on top): version info → INPUT
 GATE → icons → vendor payloads → PyInstaller → smoke test → sign exe → NSIS
 installer → sign installer → VERIFY. Produces the signed
-`dist/RemoteUser_Setup.exe` that the owner installs and self-updates through
+`dist/VibeCoder_Setup.exe` that the owner installs and self-updates through
 (root SHIP.md's Release Law). Always re-execs itself under the project's own
 `.venv` first — the only interpreter guaranteed to carry the complete
 dependency set (a system-Python build once shipped v0.0.045 without
@@ -48,7 +48,7 @@ Run: `python setup/build.py` (auto re-execs under `.venv`) or directly
 ### Used by
 - The owner / a build session — the entry point for root SHIP.md's GIT
   RELEASE procedure (`.venv\Scripts\python setup/build.py` →
-  `dist/RemoteUser_Setup.exe`)
+  `dist/VibeCoder_Setup.exe`)
 
 ## Functions
 
@@ -80,7 +80,7 @@ One line each; the full call sequence is in [flow](../__flow/build.md).
   (Step 2)
 - `build_pyinstaller()` — runs PyInstaller `--onedir --windowed
   --uac-admin` around `server/gui_main.py`; copies ffmpeg, `icon.ico`, and
-  the Android APK (if built) into `dist/RemoteUser/` (Step 3). Ends with the
+  the Android APK (if built) into `dist/VibeCoder/` (Step 3). Ends with the
   **PAYLOAD GATE**: every path the frozen code resolves under `BUNDLE_DIR`
   (`client/index.html`, `actions.json`, `assets/logo.svg`,
   `assets/check.svg`, `setup/app_info.json`, `setup/agent_hook.py`) must
@@ -125,7 +125,7 @@ One line each; the full call sequence is in [flow](../__flow/build.md).
 - **The exe runs elevated always (`--uac-admin`).** Not the SHIP.md
   default ("only when truly required") — here it IS required. Windows
   UIPI silently discards `SendInput` from a non-elevated process whenever
-  an elevated window has focus, so a non-elevated Remote User becomes a
+  an elevated window has focus, so a non-elevated Vibe Coder becomes a
   dead input device the moment the owner opens one admin window
   (2026-07-29 live failure — see project
   [CLAUDE.md](../../CLAUDE.md) Architecture Constraint 8).

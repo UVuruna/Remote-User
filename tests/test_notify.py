@@ -54,9 +54,9 @@ def main() -> int:
     results: dict[str, bool] = {}
 
     # --- 1 + 5: the pure pieces, no server needed --------------------------
-    title, body = notify.compose("Remote User · 3f9c1a", "finished", "12 files")
+    title, body = notify.compose("Vibe Coder · 3f9c1a", "finished", "12 files")
     results["the line names the agent first"] = (
-        title == "Remote User · 3f9c1a finished" and body == "12 files")
+        title == "Vibe Coder · 3f9c1a finished" and body == "12 files")
     results["an unknown event still speaks"] = (
         notify.compose("A", "compacted", "")[0] == "A compacted")
     results["fields are clamped, never trusted"] = (
@@ -71,17 +71,17 @@ def main() -> int:
     # page below (the notice a real request actually carries).
     long_body = ("razmisljam o resenju problema sa iscekivanjem konekcije i "
                 "sada mi treba tvoja odluka pre nego sto nastavim dalje")
-    title, body = notify.compose("Claude Code (Remote User)", "waiting", long_body)
+    title, body = notify.compose("Claude Code (Vibe Coder)", "waiting", long_body)
     speak_text = notify.speak_summary(
-        "U:/Coding/UVuruna/Applications/Remote User", "Claude Code (Remote User)")
+        "U:/Coding/UVuruna/Applications/VibeCoder", "Claude Code (Vibe Coder)")
     results["speak_summary is project — conversation, never the body"] = (
-        speak_text == "Remote User — Claude Code (Remote User)"
+        speak_text == "Vibe Coder — Claude Code (Vibe Coder)"
         and body not in speak_text
         and "needs you" not in speak_text)
     results["speak_summary survives a missing project"] = (
         notify.speak_summary("", "Solo agent") == "Solo agent")
     results["speak_summary survives a missing agent"] = (
-        notify.speak_summary("U:/x/y/Remote User", "") == "Remote User")
+        notify.speak_summary("U:/x/y/Vibe Coder", "") == "Vibe Coder")
 
     # --- 190/191: the Claude set's Model/Thinking must MATCH THE OFFICIAL
     # picker and COMMIT with one Enter. CORRECTED 2026-08-10 against the
@@ -144,8 +144,8 @@ def main() -> int:
     # The fallback is what he will actually see most of the time: the project
     # folder plus enough of the session id to tell two agents in one repo apart.
     results["hook: falls back to project · session"] = agent_hook.agent_name(
-        {"cwd": r"U:\Coding\UVuruna\Applications\Remote User",
-         "session_id": "3f9c1a77-dead-beef"}) == "Remote User · 3f9c1a"
+        {"cwd": r"U:\Coding\UVuruna\Applications\VibeCoder",
+         "session_id": "3f9c1a77-dead-beef"}) == "Vibe Coder · 3f9c1a"
 
     # --- task 198: name = conversation TITLE, text = last-reply SUMMARY ----
     # (owner 2026-08-10 — the hash-like fallback "6ffb225" irritated him; he
@@ -191,10 +191,10 @@ def main() -> int:
                 {"type": "tool_use", "name": "Bash", "input": {}}]}},
         ), encoding="utf-8")
         payload_b = {"transcript_path": str(transcript_b),
-                     "cwd": r"U:\Coding\UVuruna\Applications\Remote User",
+                     "cwd": r"U:\Coding\UVuruna\Applications\VibeCoder",
                      "session_id": "3f9c1a77-dead-beef"}
         results["hook: an absent title falls back to project · session"] = (
-            agent_hook.agent_name(payload_b) == "Remote User · 3f9c1a")
+            agent_hook.agent_name(payload_b) == "Vibe Coder · 3f9c1a")
         results["hook: an absent text summary is None, not a crash"] = (
             agent_hook.transcript_summary(payload_b) is None)
 
@@ -252,8 +252,8 @@ def main() -> int:
     # because a turn that ended can wait and a question has stopped
     # everything until he answers.
     results["a question says it is a question"] = (
-        notify.compose("Remote User", "asking", "Allow Bash?")[0]
-        == "Remote User is asking you")
+        notify.compose("Vibe Coder", "asking", "Allow Bash?")[0]
+        == "Vibe Coder is asking you")
     results["…and it is not the same word as a turn ending"] = (
         notify.compose("A", "asking", "")[0] != notify.compose("A", "waiting", "")[0])
     # BOTH hooks are installed, and each carries the flag that tells this one
@@ -289,7 +289,7 @@ def main() -> int:
     notify._layouts = reg
     # The hook sends a PATH; the registry speaks folder names, lowercased.
     results["the notice finds the layout by the agent's own cwd"] = (
-        notify.layout_of(r"U:\Coding\UVuruna\Applications\Remote User")
+        notify.layout_of(r"U:\Coding\UVuruna\Applications\VibeCoder")
         == {"index": 1, "name": "Claude"})
     results["a bare folder name works too"] = (
         notify.layout_of("Notes") == {"index": 0, "name": "Chrome"})
@@ -305,7 +305,7 @@ def main() -> int:
         and notify.layout_of("") is None and notify.layout_of(None) is None)
     notify._layouts = None
     results["with no registry at all the feature is absent, not wrong"] = (
-        notify.layout_of("Remote User") is None)
+        notify.layout_of("Vibe Coder") is None)
     notify._layouts = reg
 
     # --- THE LIFE HE ACTUALLY LIVES (task 236, his THIRD report) -----------
@@ -328,9 +328,9 @@ def main() -> int:
         # 101 = the torn-off Claude tab (conversation title, no folder at all)
         # 100 = the window it came out of, and 102 a plain sibling member.
         titles.update({
-            100: "prompt.txt - Remote User - Visual Studio Code",
+            100: "prompt.txt - Vibe Coder - Visual Studio Code",
             101: "Ispravka UI dizajna menija - Visual Studio Code",
-            102: "server.py - Remote User - Visual Studio Code [Administrator]",
+            102: "server.py - Vibe Coder - Visual Studio Code [Administrator]",
             103: "Docs - Google Chrome",
         })
         # Cell 0 is a Chrome window that names nothing; the agent's own window
@@ -377,7 +377,7 @@ def main() -> int:
         notify.logger.addHandler(sink)
         notify.logger.setLevel(_logging.INFO)
         try:
-            missed = notify.layout_of(r"U:\Coding\UVuruna\Applications\Remote User")
+            missed = notify.layout_of(r"U:\Coding\UVuruna\Applications\VibeCoder")
         finally:
             notify.logger.removeHandler(sink)
         info = [m for lvl, m in seen if lvl >= _logging.INFO]
@@ -452,7 +452,7 @@ def main() -> int:
         ctx = browser.new_context(
             viewport={"width": 412, "height": 915}, has_touch=True, is_mobile=True,
             user_agent=("Mozilla/5.0 (Linux; Android 15; Pixel 8) AppleWebKit/537.36 "
-                        "(KHTML, like Gecko) Chrome/126.0 Mobile Safari/537.36 RemoteUserApp"),
+                        "(KHTML, like Gecko) Chrome/126.0 Mobile Safari/537.36 VibeCoderApp"),
         )
         page = ctx.new_page()
         page.goto(f"http://127.0.0.1:{gate.PORT}/?token={gate.TOKEN}")
@@ -471,7 +471,7 @@ def main() -> int:
           });
         }""")
 
-        post(gate.PORT, {"agent": "Remote User · 3f9c1a", "event": "finished",
+        post(gate.PORT, {"agent": "Vibe Coder · 3f9c1a", "event": "finished",
                          "text": "controls round"}, gate.TOKEN)
         post(gate.PORT, {"agent": "ML · 77bb02", "event": "waiting", "text": ""},
              gate.TOKEN)
@@ -488,28 +488,28 @@ def main() -> int:
             all(c[0] == "notify" for c in notifs))
         results["the phone raises a banner per agent"] = (
             len(notifs) == 2
-            and notifs[0][1] == "Remote User · 3f9c1a finished"
-            and notifs[0][3] == "Remote User · 3f9c1a"      # tag = the agent
+            and notifs[0][1] == "Vibe Coder · 3f9c1a finished"
+            and notifs[0][3] == "Vibe Coder · 3f9c1a"      # tag = the agent
             and notifs[1][1] == "ML · 77bb02 needs you"
             and notifs[1][3] != notifs[0][3])               # ...so they never merge
         results["the phone speaks the agent's name"] = (
-            len(speaks) == 2 and "Remote User" in speaks[0][1])
+            len(speaks) == 2 and "Vibe Coder" in speaks[0][1])
 
         # --- THE VOICE NEVER READS THE BODY (owner v0.0.107 screenshots) ---
         # A notify with a genuinely long body must be SHOWN in full (the
         # banner's job) but SPOKEN as project + agent only.
         long_body = ("razmisljam o resenju problema sa iscekivanjem konekcije "
                     "i treba mi tvoja odluka pre nego sto nastavim dalje")
-        post(gate.PORT, {"agent": "Claude Code (Remote User)", "event": "waiting",
+        post(gate.PORT, {"agent": "Claude Code (Vibe Coder)", "event": "waiting",
                          "text": long_body,
-                         "project": "U:/Coding/UVuruna/Applications/Remote User"},
+                         "project": "U:/Coding/UVuruna/Applications/VibeCoder"},
              gate.TOKEN)
         page.wait_for_function("window.__calls.length >= 6", timeout=5000)
         speaks2 = [c for c in page.evaluate("window.__calls") if c[0] == "speak"]
         results["a long body is never read aloud"] = (
             len(speaks2) == 3
             and long_body not in speaks2[2][1]
-            and speaks2[2][1] == "Remote User — Claude Code (Remote User)")
+            and speaks2[2][1] == "Vibe Coder — Claude Code (Vibe Coder)")
 
         # --- AN OLDER SERVER (no speak_text) still speaks something ---------
         # notify.js's own fallback, proven live rather than by reading the

@@ -6,8 +6,8 @@ anything (hard owner requirement), so `build.py` fetches/bundles ffmpeg and
 chain-installs Tailscale itself.
 
 ```
-.venv\Scripts\python setup/build_apk.py   → dist/RemoteUser.apk   (run first if android/ or client/ changed)
-.venv\Scripts\python setup/build.py       → dist/RemoteUser_Setup.exe
+.venv\Scripts\python setup/build_apk.py   → dist/VibeCoder.apk   (run first if android/ or client/ changed)
+.venv\Scripts\python setup/build.py       → dist/VibeCoder_Setup.exe
 ```
 
 ## Files
@@ -69,7 +69,7 @@ Config-Section-Law candidate worth a future look.
 - **The exe runs elevated always (`--uac-admin`)** — not the SHIP.md default
   ("only when truly required"); here it IS required. Windows UIPI silently
   discards `SendInput` from a non-elevated process whenever an elevated
-  window has focus, so a non-elevated Remote User is a dead input device the
+  window has focus, so a non-elevated Vibe Coder is a dead input device the
   moment the owner opens one admin window (2026-07-29 live failure, see
   project [CLAUDE.md](../CLAUDE.md) Architecture Constraint 8). Autostart
   therefore uses a Task Scheduler `/RL HIGHEST` logon task, not the registry

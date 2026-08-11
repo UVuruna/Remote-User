@@ -1,4 +1,4 @@
-"""Remote User CLI entry point — headless server with console pairing (QR in
+"""Vibe Coder CLI entry point — headless server with console pairing (QR in
 the terminal + image viewer). The desktop app entry point is gui_main.py; both
 share the same bootstrap and server core.
 

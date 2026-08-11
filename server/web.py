@@ -140,14 +140,14 @@ def create_app(stream, hub: FrameHub | None, injector: InputInjector, token: str
         # desktop-Linux User-Agent with no "Android" token at all, so any
         # detect-Android routing silently serves the live client in a browser
         # — the exact forbidden half-experience. Therefore the client goes
-        # ONLY to the APK's WebView (it appends the RemoteUserApp marker);
+        # ONLY to the APK's WebView (it appends the VibeCoderApp marker);
         # every other User-Agent, on every device, gets the install funnel,
         # whose "Open the app" hands this exact URL (token included) to the
         # app via intent:// — pairing stays one tap. Sole exception: a dev
         # checkout with no APK built yet, where the funnel would have nothing
         # to offer (official installers always bundle the APK).
         ua = request.headers.get("user-agent", "")
-        if "RemoteUserApp" not in ua and SETTINGS.apk_path.exists():
+        if "VibeCoderApp" not in ua and SETTINGS.apk_path.exists():
             return FileResponse(SETTINGS.client_dir / "install.html")
         return FileResponse(SETTINGS.client_dir / "index.html")
 
@@ -176,7 +176,7 @@ def create_app(stream, hub: FrameHub | None, injector: InputInjector, token: str
         return FileResponse(
             SETTINGS.apk_path,
             media_type="application/vnd.android.package-archive",
-            filename="RemoteUser.apk",
+            filename="VibeCoder.apk",
         )
 
     @app.post("/upload")
@@ -211,7 +211,7 @@ def create_app(stream, hub: FrameHub | None, injector: InputInjector, token: str
         Token-gated like the WebSocket."""
         if request.query_params.get("token") != token:
             return JSONResponse({"ok": False, "error": "unauthorized"}, status_code=401)
-        drop = Path(tempfile.gettempdir()) / "RemoteUserDrop"
+        drop = Path(tempfile.gettempdir()) / "VibeCoderDrop"
         # The PREVIOUS upload's files are cleared here, not right after their
         # paste — a target app may still be reading them from the clipboard.
         shutil.rmtree(drop, ignore_errors=True)

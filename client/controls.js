@@ -442,7 +442,7 @@ function openWizard() {
     // probe would wait forever with no explanation. Say what unblocks it
     // (owner principle: every step guided in-app, never left hanging).
     wizStatus.textContent = "The PC is not on Tailscale yet";
-    wizHint.textContent = "On the PC, open the Remote User window and press " +
+    wizHint.textContent = "On the PC, open the Vibe Coder window and press " +
       "“Set up Tailscale”. Then come back here — this screen finishes by itself.";
   }
   wizProbe();

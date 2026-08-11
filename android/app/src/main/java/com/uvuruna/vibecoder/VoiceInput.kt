@@ -1,4 +1,4 @@
-package com.uvuruna.remoteuser
+package com.uvuruna.vibecoder
 
 import android.app.Activity
 import android.content.Context

@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Remote User</string>
+    <string name="app_name">Vibe Coder</string>
 
     <!-- Onboarding -->
-    <string name="onboarding_title">Remote User</string>
+    <string name="onboarding_title">Vibe Coder</string>
     <string name="onboarding_subtitle">Control your PC from this phone</string>
     <string name="connect_card_title">Last step — scan the QR</string>
-    <string name="connect_card_body">Point the camera at the QR code in the Remote User window on your PC (both on the same Wi-Fi). That connects you — nothing else to do.</string>
+    <string name="connect_card_body">Point the camera at the QR code in the Vibe Coder window on your PC (both on the same Wi-Fi). That connects you — nothing else to do.</string>
     <string name="scan_qr">Scan the QR code</string>
     <string name="or_divider">or paste the link from the PC window</string>
     <string name="link_hint">http://…?token=…</string>
@@ -22,13 +22,13 @@
          step (owner request 2026-08-04). Titles/bodies/buttons pair up with
          MainActivity.Fail. -->
     <string name="error_title">Cannot reach the PC</string>
-    <string name="error_body">The tunnel is up, so the PC itself is not answering. Check that it is switched on, awake, and that the Remote User app is running on it. This app keeps retrying by itself.</string>
+    <string name="error_body">The tunnel is up, so the PC itself is not answering. Check that it is switched on, awake, and that the Vibe Coder app is running on it. This app keeps retrying by itself.</string>
 
     <string name="err_nonet_title">This phone has no internet</string>
     <string name="err_nonet_body">No Wi-Fi and no mobile data right now. Turn one of them on — the connection continues by itself the moment the phone is online again.</string>
 
     <string name="err_pcts_title">Turn Tailscale on — on the PC</string>
-    <string name="err_pcts_body">The home address does not answer, and the PC has not signed in to Tailscale yet, so there is no way in from outside. Open the Remote User window on the PC and finish the Tailscale card there. Then this phone reaches it from anywhere.</string>
+    <string name="err_pcts_body">The home address does not answer, and the PC has not signed in to Tailscale yet, so there is no way in from outside. Open the Vibe Coder window on the PC and finish the Tailscale card there. Then this phone reaches it from anywhere.</string>
 
     <string name="err_ts_missing_title">One app is missing: Tailscale</string>
     <string name="err_ts_missing_body">The home address does not answer, so the connection has to go through Tailscale — the free tunnel between this phone and your PC — and it is not installed. Install it, sign in with the SAME account as the PC, and come back here: the connection continues by itself.</string>
@@ -49,5 +49,5 @@
          idle, and why the line is there at all. -->
     <string name="notice_service_title">Waiting for your PC</string>
     <string name="notice_service_body">Ready to tell you the moment an agent on your PC finishes or needs you — even with this app closed. Nothing is being streamed and nothing is being sent; the phone is only listening. Android requires this line to be shown.</string>
-    <string name="notice_battery_no_screen">This phone has no battery-optimisation screen to open. Look for Battery → Remote User in Settings and allow it to run in the background.</string>
+    <string name="notice_battery_no_screen">This phone has no battery-optimisation screen to open. Look for Battery → Vibe Coder in Settings and allow it to run in the background.</string>
 </resources>

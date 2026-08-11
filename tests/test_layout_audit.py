@@ -424,7 +424,7 @@ def main() -> int:
                 device_scale_factor=2,
                 user_agent=("Mozilla/5.0 (Linux; Android 15; Pixel 8) "
                             "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 "
-                            "Mobile Safari/537.36 RemoteUserApp"),
+                            "Mobile Safari/537.36 VibeCoderApp"),
             )
             page = ctx.new_page()
             errors = []
@@ -638,7 +638,7 @@ def main() -> int:
             # too short to fill the phone's width) is staged here so this
             # gate proves the toast itself, not a synthetic square div.
             page.evaluate(
-                "() => showToast('Claude Code (Remote User) needs you — "
+                "() => showToast('Claude Code (Vibe Coder) needs you — "
                 "razmisljam o resenju problema sa iscekivanjem konekcije i "
                 "treba mi tvoja odluka pre nego sto nastavim dalje')")
             page.wait_for_selector("#status.connecting", state="visible",
@@ -786,7 +786,7 @@ def main() -> int:
             # arrangement to choose. Rule: `__settingsSheet` in _audit_js.py.
             for members, grid in ((3, "3-top"), (1, None)):
                 page.evaluate(LAYOUT_SETTINGS_STAGE_JS,
-                              {"name": "Claude Code - Remote User - Visual "
+                              {"name": "Claude Code - Vibe Coder - Visual "
                                        "Studio Code [Administrator]",
                                "grid": grid, "members": members,
                                "titles": ["Claude Code", "prompt.txt", "Notes"]})

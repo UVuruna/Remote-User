@@ -1,4 +1,4 @@
-package com.uvuruna.remoteuser
+package com.uvuruna.vibecoder
 
 import android.content.Context
 import java.util.UUID
@@ -10,7 +10,7 @@ import java.util.UUID
  *  MainActivity probes both and loads whichever is reachable, so the app
  *  works at home (LAN) and anywhere (mesh) without the user knowing why. */
 object Prefs {
-    private const val FILE = "remoteuser"
+    private const val FILE = "vibecoder"
     private const val KEY_LAN = "pairing_url"
     private const val KEY_TS = "tailscale_url"
     private const val KEY_DEVICE = "device_id"

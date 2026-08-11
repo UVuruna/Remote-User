@@ -120,13 +120,13 @@ def shipped_app_sets() -> list:
 CLAUDE_TITLES = ["Claude Code", "claude code", "Claude"]
 NOT_CLAUDE_TITLES = [
     "CLAUDE.md",                                   # the constitution itself
-    "CLAUDE.md — Remote User — Visual Studio Code",
+    "CLAUDE.md — VibeCoder — Visual Studio Code",
     "claude.md",
     "transcript.txt",
     "claude-transcript.json",                      # a document about Claude
     "controls.js",
     "README",                                      # a plain file, no keyword
-    "Remote User — Visual Studio Code",
+    "VibeCoder — Visual Studio Code",
 ]
 
 
@@ -208,7 +208,7 @@ def test_detection_decides_and_a_stored_tick_list_can_never_win():
 
     His real window, probed on his own PC:
 
-        'Ispravka UI dizajna meni… - Remote User - Visual Studio Code [Administrator]'
+        'Ispravka UI dizajna meni… - VibeCoder - Visual Studio Code [Administrator]'
         TAB 'Ispravka UI dizajna meni…, Window 2: Editor Group 1'
 
     No string in it says "claude", the tab wears the same UIA class as
@@ -325,7 +325,7 @@ def test_the_pc_decides_whether_claude_is_live():
     # His real window: the tab is named after the CONVERSATION, and there is
     # not one letter of "claude" anywhere in it.
     live = {"process": "code.exe", "agents": ["claude"],
-            "title": "Ispravka UI dizajna meni… - Remote User - Visual Studio Code"}
+            "title": "Ispravka UI dizajna meni… - VibeCoder - Visual Studio Code"}
     got = names_for(live)
     assert "Claude" in got, f"a LIVE session must bring the Claude set out: {got}"
     assert "VSCode" in got, f"VSCode rides alongside it as always: {got}"
@@ -349,7 +349,7 @@ def test_the_window_title_names_the_project():
     sys.path.insert(0, str(PROJECT / "server"))
     import agents as agents_mod
     cases = {
-        "Ispravka UI dizajna meni… - Remote User - Visual Studio Code [Administrator]": "remote user",
+        "Ispravka UI dizajna meni… - VibeCoder - Visual Studio Code [Administrator]": "vibecoder",
         "Kreiraj GUI smernice i p… - UVuruna - Visual Studio Code [Administrator]": "uvuruna",
         "ubacio sam 3 nove letter… - Watch Academy - Visual Studio Code": "watch academy",
         "Some Folder - Notepad": "",

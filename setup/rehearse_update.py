@@ -28,7 +28,7 @@ build. Three reasons, each a hard blocker rather than a missing feature:
 
   1. installer.nsi's SecMain writes to the REAL, MACHINE-WIDE HKLM
      Uninstall key under this project's own registry path — the SAME key
-     a real installed copy of Remote User uses. Running it in this sandbox
+     a real installed copy of Vibe Coder uses. Running it in this sandbox
      (or any CI box) risks colliding with a genuinely installed copy on
      that machine, or leaving registry litter behind that a "disposable
      environment" promise cannot actually keep — NSIS has no registry
@@ -241,8 +241,8 @@ def rehearse_full_previous_to_candidate(
         from pathlib import Path
         from setup.rehearse_update import rehearse_full_previous_to_candidate
         ok, detail = rehearse_full_previous_to_candidate(
-            Path('RemoteUser_Setup_0.0.103.exe'),
-            Path('dist/RemoteUser_Setup.exe'),
+            Path('VibeCoder_Setup_0.0.103.exe'),
+            Path('dist/VibeCoder_Setup.exe'),
             allow_real=True)
         print(ok, detail)"
 
@@ -250,7 +250,7 @@ def rehearse_full_previous_to_candidate(
     temp folder (LOCALAPPDATA is NOT redirectable the same way for a
     FROZEN app — see config.py's USER_DIR, which reads the real env var —
     so this still writes update.json etc. under the REAL
-    %LOCALAPPDATA%\\RemoteUser; that is the one piece of "disposable" this
+    %LOCALAPPDATA%\\VibeCoder; that is the one piece of "disposable" this
     function cannot deliver honestly on a real Windows install, which is
     exactly why it insists on a throwaway machine rather than promising
     isolation it cannot provide), then silent-installs `candidate_installer`
@@ -286,9 +286,9 @@ def rehearse_full_previous_to_candidate(
                     "log conventions; a non-zero /S exit is itself the "
                     "signal something in the chain (Tailscale check, "
                     "firewall rule, elevation) did not go silently")
-        exe = install_dir / "RemoteUser.exe"
+        exe = install_dir / "VibeCoder.exe"
         return exe.exists(), (
-            f"both installs completed; RemoteUser.exe present: {exe.exists()}"
+            f"both installs completed; VibeCoder.exe present: {exe.exists()}"
             " — this proves the ORDINARY upgrade path on real Windows "
             "machinery, not the forked-handover storm itself (see docstring)")
     finally:

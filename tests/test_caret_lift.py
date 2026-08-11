@@ -281,7 +281,7 @@ def test_the_page_still_carries_the_keyboard_height_to_the_rule():
         "the __imeHeight receiver is parked in the streaming code again — that "
         "adjacency is exactly what deleted it once already")
     kotlin = (CLIENT.parent.parent / "android" / "app" / "src" / "main" / "java"
-              / "com" / "uvuruna" / "remoteuser" / "Insets.kt").read_text(encoding="utf-8")
+              / "com" / "uvuruna" / "vibecoder" / "Insets.kt").read_text(encoding="utf-8")
     assert "__imeHeight(" in kotlin, "the shell no longer pushes the ime inset"
     assert "fun MainActivity.forgetImeInset" in kotlin, (
         "nothing resets the shell's pushed-inset memo, so a keyboard reopened "

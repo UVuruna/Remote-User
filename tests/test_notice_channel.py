@@ -295,14 +295,14 @@ def check_a_closed_page_still_gets_the_notice(chan: Waiting) -> bool:
     """THE feature. The page is gone; the phone is waiting; the notice lands
     whole — same agent, same line, same voice instructions as on the page."""
     reset()
-    status, answer = post({"agent": "Remote User · 3f9c1a", "event": "waiting",
+    status, answer = post({"agent": "Vibe Coder · 3f9c1a", "event": "waiting",
                            "text": "controls round"})
     got = chan.next()
     return (status == 200 and answer.get("ok") is True
             and got is not None
             and got["type"] == "notify"
-            and got["agent"] == "Remote User · 3f9c1a"
-            and got["title"] == "Remote User · 3f9c1a needs you"
+            and got["agent"] == "Vibe Coder · 3f9c1a"
+            and got["title"] == "Vibe Coder · 3f9c1a needs you"
             and got["text"] == "controls round"
             and "speak" in got and "voice" in got and "rate" in got
             and got["at"] > 0
@@ -550,7 +550,7 @@ def check_the_service_can_never_kill_the_app() -> bool:
     """
     manifest = (PROJECT / "android/app/src/main/AndroidManifest.xml").read_text(
         encoding="utf-8")
-    service = (PROJECT / "android/app/src/main/java/com/uvuruna/remoteuser"
+    service = (PROJECT / "android/app/src/main/java/com/uvuruna/vibecoder"
                / "NoticeService.kt").read_text(encoding="utf-8")
     ok = True
 
@@ -588,7 +588,7 @@ def check_the_shell_sends_an_id_and_backs_off() -> bool:
     before), and a connection that ended without the PC ever speaking must
     back OFF rather than retry at once, which is what turned a kick into a
     ping-pong every few seconds all night."""
-    src = PROJECT / "android/app/src/main/java/com/uvuruna/remoteuser"
+    src = PROJECT / "android/app/src/main/java/com/uvuruna/vibecoder"
     link = (src / "NoticeLink.kt").read_text(encoding="utf-8")
     service = (src / "NoticeService.kt").read_text(encoding="utf-8")
     prefs = (src / "Prefs.kt").read_text(encoding="utf-8")

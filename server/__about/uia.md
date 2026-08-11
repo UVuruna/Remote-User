@@ -107,7 +107,7 @@ SetFocus the next (raising its window first). Fails soft to None.
 Firefox, Brave, Opera, Vivaldi, LibreWolf, VSCode/Insiders, Cursor, Windsurf,
 Explorer and Windows Terminal get their tabs offered. UIA has no "this tab can
 become a window" property, and an app's internal section switcher (the
-Pointer / Ring / Umbra pills in DOMY Watch's design pane) is a `TabItem` in
+Pointer / Ring / Umbra pills in Watch Academy's design pane) is a `TabItem` in
 the window's top strip exactly like a Chrome tab — offering those cost six
 seconds of extraction that always fell back to the whole window. The list is
 the set of apps the three strategies actually cover; everything else is

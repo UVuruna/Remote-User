@@ -60,7 +60,7 @@ TAB_TOP_FRACTION = 0.15   # real tab strips live in the window's top 15%
 
 # Only THESE apps get their tabs offered (owner decision 2026-08-03). UIA has
 # no "this tab can become a window" property: an app's internal section
-# switcher (the Pointer/Ring/Umbra pills in DOMY Watch's design pane) is a
+# switcher (the Pointer/Ring/Umbra pills in Watch Academy's design pane) is a
 # TabItem in the window's top strip exactly like a Chrome tab, and offering it
 # cost 6 s of extraction that always fell back to the whole window. The list
 # is the set of apps the extraction strategies actually cover — everything

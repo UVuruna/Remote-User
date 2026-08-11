@@ -129,12 +129,12 @@ and answers "that process is gone" — instantly and wrongly, every time.
  "Connecting to …" → "Connected"      the first probe that lands wins
       │
       ▼
- "Remote User updated to v0.0.093 — the PC is back, nothing else to do."
+ "Vibe Coder updated to v0.0.093 — the PC is back, nothing else to do."
       │                                    ← announce(), queued at start-up
       │                                      and drained by the phone's auth
       ▼
  …or, if it did not take:
- "Remote User is still on v0.0.091 — the update to v0.0.093 did not
+ "Vibe Coder is still on v0.0.091 — the update to v0.0.093 did not
   install. Everything works as before; the update log on the PC says why."
 ```
 
@@ -146,7 +146,7 @@ handover changes nothing on the phone:
 | Link | Where | Why it survives |
 |------|-------|-----------------|
 | the address | the WebView's loaded page | never reloaded (`pageAlive`), so `location.host` is unchanged |
-| the token | `%LOCALAPPDATA%/RemoteUser/token.txt` | `pairing.generate_token()` reuses it; the installer only writes to `$INSTDIR`, never to `USER_DIR` (only UNINSTALL removes it) |
+| the token | `%LOCALAPPDATA%/VibeCoder/token.txt` | `pairing.generate_token()` reuses it; the installer only writes to `$INSTDIR`, never to `USER_DIR` (only UNINSTALL removes it) |
 | the port | the same `settings.json`, same folder | unchanged for the same reason |
 | the retry | `client/connection.js` | `setInterval(ensureConnected, RECONNECT_MS = 2000)` |
 | the notice link | `NoticeLink.kt` | its own reconnect (5 s, backing off), independent of the page |

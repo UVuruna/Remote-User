@@ -1,4 +1,4 @@
-"""Build the Remote User Android APK (the phone shell around the web client).
+"""Build the Vibe Coder Android APK (the phone shell around the web client).
 
 Steps:
   1. Toolchain: Android Studio's bundled JDK + the SDK in %LOCALAPPDATA%;
@@ -7,7 +7,7 @@ Steps:
   2. Keystore: generated ONCE into android/keystore/ (gitignored — back it
      up; losing it means users must uninstall/reinstall on upgrades).
   3. gradlew assembleRelease with version props from setup/app_info.json.
-  4. Copy the signed APK to dist/RemoteUser.apk — the server offers it at
+  4. Copy the signed APK to dist/VibeCoder.apk — the server offers it at
      /app.apk (the Android-browser install funnel), and the desktop installer
      bundles it when present.
 
@@ -41,6 +41,12 @@ SDK_DIR = Path(os.environ["LOCALAPPDATA"]) / "Android" / "Sdk"
 KEYSTORE_DIR = ANDROID_DIR / "keystore"
 KEYSTORE = KEYSTORE_DIR / "release.jks"
 KEYSTORE_PASS_FILE = KEYSTORE_DIR / "password.txt"
+# The slot name inside release.jks, and the ONE identifier the 2026-08-11
+# rename deliberately left reading "remoteuser". It is not a name anyone ever
+# sees: it addresses a key inside a gitignored binary keystore that already
+# exists on the owner's machine and cannot be renamed in place. Changing it
+# means generating a NEW keystore — a new signing identity, which Android
+# treats as a different publisher. Keep it.
 KEY_ALIAS = "remoteuser"
 
 APP_INFO = json.loads((SETUP_DIR / "app_info.json").read_text(encoding="utf-8"))
@@ -134,7 +140,7 @@ def build(env: dict, password: str) -> Path:
 
 
 def main() -> None:
-    print(f"Building Remote User APK v{APP_INFO['version']}")
+    print(f"Building Vibe Coder APK v{APP_INFO['version']}")
     env = {**os.environ, "JAVA_HOME": str(JBR)}
     check_toolchain()
     password = ensure_keystore(env)
@@ -142,10 +148,10 @@ def main() -> None:
 
     step("4/4  Publish to dist/")
     DIST_DIR.mkdir(exist_ok=True)
-    target = DIST_DIR / "RemoteUser.apk"
+    target = DIST_DIR / "VibeCoder.apk"
     shutil.copy2(apk, target)
     shutil.copy2(apk.with_name(apk.name + ".version"),
-                 DIST_DIR / "RemoteUser.apk.version")
+                 DIST_DIR / "VibeCoder.apk.version")
     print(f"  {target} ({target.stat().st_size / 1e6:.1f} MB)")
     print("  The server now offers it at /app.apk (Android browsers get the install funnel).")
 

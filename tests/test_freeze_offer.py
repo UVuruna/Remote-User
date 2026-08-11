@@ -20,7 +20,7 @@ sys.path.insert(0, str(PROJECT / "server" / "gui"))
 
 def _fresh_config(monkeypatch, tmp_path):
     """A clean `config` module bound to a throwaway settings.json, so this
-    gate can never touch the real %LOCALAPPDATA%/RemoteUser/settings.json."""
+    gate can never touch the real %LOCALAPPDATA%/VibeCoder/settings.json."""
     for name in list(sys.modules):
         if name == "config" or name.startswith("config."):
             del sys.modules[name]

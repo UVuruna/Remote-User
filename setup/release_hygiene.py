@@ -10,7 +10,7 @@ already carries (`decisions-are-dated-quotes` / `owner-runs-stale-build`
 memory) and it was not followed here.
 
 This module answers exactly one question, honestly, from local disk state
-alone: **does %LOCALAPPDATA%/RemoteUser/update.json say a handover is
+alone: **does %LOCALAPPDATA%/VibeCoder/update.json say a handover is
 genuinely still in flight right now?** It does not, and cannot, ask
 GitHub, and it does not reach into any other machine -- it reads
 `update.json` on WHATEVER MACHINE THIS RUNS ON, which is only useful when
@@ -49,8 +49,8 @@ STALE_AFTER_S = 15 * 60
 def update_record_path(user_dir: Path | None = None) -> Path:
     """Where update.json lives. `user_dir` is for tests and for pointing
     this at a machine OTHER than the one running the check (e.g. a copy of
-    the owner's %LOCALAPPDATA%\\RemoteUser pulled down for inspection);
-    default is THIS machine's own %LOCALAPPDATA%\\RemoteUser, which is the
+    the owner's %LOCALAPPDATA%\\VibeCoder pulled down for inspection);
+    default is THIS machine's own %LOCALAPPDATA%\\VibeCoder, which is the
     right answer only when this script runs where the release matters —
     see HONEST LIMITS.
     """
@@ -61,7 +61,7 @@ def update_record_path(user_dir: Path | None = None) -> Path:
         raise RuntimeError(
             "LOCALAPPDATA is not set — cannot locate update.json on this "
             "machine (not Windows, or a stripped environment)")
-    return Path(local) / "RemoteUser" / "update.json"
+    return Path(local) / "VibeCoder" / "update.json"
 
 
 def update_in_flight(user_dir: Path | None = None) -> tuple[bool, str]:

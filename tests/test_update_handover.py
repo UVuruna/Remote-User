@@ -41,7 +41,7 @@ What must hold, and what each check would let through if it were missing:
      version is the fork's fuel.
 
 The installer and the app are FAKED — no real install runs here, and no real
-RemoteUser.exe is touched, waited on or killed (the harness refuses to run
+VibeCoder.exe is touched, waited on or killed (the harness refuses to run
 otherwise; see `refuse_to_touch_the_real_app`). What IS real is the shipped
 handover script itself: it is written from `update_handover.SCRIPT` and
 executed, so the batch this project ships is the batch this gate proves.
@@ -70,7 +70,7 @@ from config import SETTINGS  # noqa: E402
 # argument rests on them: every process it starts, waits for or kills carries
 # one of these, and the real app carries none.
 FAKE_APP = "RU_GATE_FAKE_APP.exe"
-REAL_APP = "remoteuser.exe"
+REAL_APP = "vibecoder.exe"
 
 # A "good" installer for verify(): the smallest thing that is a complete
 # Windows program as far as this module can tell.
@@ -82,7 +82,7 @@ started: list[subprocess.Popen] = []
 
 # ═══════════════════════════ THE SAFETY RAIL ═══════════════════════════
 def refuse_to_touch_the_real_app(env: dict) -> None:
-    """The owner is AWAY and his RemoteUser.exe is serving his phone right
+    """The owner is AWAY and his VibeCoder.exe is serving his phone right
     now. This gate runs a script whose job is to wait for a pid to die and
     then start an exe — so before any of that, prove the pid and the exe are
     ours and nobody else's. A gate that could take his session down while

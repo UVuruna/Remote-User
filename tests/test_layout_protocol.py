@@ -99,7 +99,7 @@ def fake_windows():
     """Three open windows: a tab-capable one holding THREE tabs, a plain one,
     and a tab-capable one holding exactly ONE (see FAKE_TABS)."""
     return [
-        {"hwnd": WIN_A, "title": "Remote User - Visual Studio Code",
+        {"hwnd": WIN_A, "title": "Vibe Coder - Visual Studio Code",
          "process": "code.exe", "icon": None},
         {"hwnd": WIN_B, "title": "Downloads", "process": "explorer.exe",
          "icon": None},
@@ -144,7 +144,7 @@ def install_fakes(track_placement: bool = False) -> None:
 
         window_manager.place_window = place
         window_manager._frame_rect = lambda hwnd: FRAME.get(hwnd, (0, 0, 1000, 1000))
-    window_manager._title = lambda hwnd: "Remote User - Visual Studio Code"
+    window_manager._title = lambda hwnd: "Vibe Coder - Visual Studio Code"
     window_manager._process_name = lambda hwnd: "code.exe"
     window_manager._process_path = lambda hwnd: "C:/code.exe"
     window_manager.icon_data_uri = lambda path: None
@@ -161,7 +161,7 @@ def install_fakes(track_placement: bool = False) -> None:
     # The snapshot argument is the fix of 2026-08-07: the real function is a
     # 1.85 s PowerShell probe, and the handlers used to reach it once per
     # entry, bare, on the event loop. `live` is what they pass now.
-    agents.agents_for = lambda title, live=None: ["claude"] if "Remote User" in title else []
+    agents.agents_for = lambda title, live=None: ["claude"] if "Vibe Coder" in title else []
     agents.live_agents = lambda: {"claude": {"remote user"}}
 
 
@@ -314,7 +314,7 @@ def check_the_list_probes_the_process_table_once() -> bool:
     calls = []
     agents.live_agents = lambda: (calls.append(1), {"claude": {"remote user"}})[1]
     agents.agents_for = lambda title, live=None: (
-        [] if live is None else ["claude"] if "Remote User" in title else [])
+        [] if live is None else ["claude"] if "Vibe Coder" in title else [])
     ws, _, _ = drive([{"type": "layout_list"}])
     entries = sent_of(ws, "layout_offer")[0]["entries"]
     if len(calls) != 1:

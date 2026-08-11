@@ -1,6 +1,6 @@
 # Gamepad (Android)
 
-**Script:** [Gamepad.kt](../app/src/main/java/com/uvuruna/remoteuser/Gamepad.kt)
+**Script:** [Gamepad.kt](../app/src/main/java/com/uvuruna/vibecoder/Gamepad.kt)
 
 ## Purpose
 

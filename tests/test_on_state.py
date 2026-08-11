@@ -228,7 +228,7 @@ def main() -> int:
             has_touch=True, is_mobile=True, device_scale_factor=DPR,
             user_agent=("Mozilla/5.0 (Linux; Android 15; Pixel 8) "
                         "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 "
-                        "Mobile Safari/537.36 RemoteUserApp"))
+                        "Mobile Safari/537.36 VibeCoderApp"))
         page = ctx.new_page()
         errors = []
         page.on("pageerror", lambda e: errors.append(str(e)))

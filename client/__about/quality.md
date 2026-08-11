@@ -8,7 +8,7 @@ wheel's `keepFocus` from controls.js, `ghostClickArmor` from panels.js).
 
 ## The rule: a hierarchy, not two dials
 
-The Remote User window on the PC sets the **base** — frame rate, encoded
+The Vibe Coder window on the PC sets the **base** — frame rate, encoded
 width, bitrate. This panel may only go **below** it. That was already how the
 server behaved, but the phone never said so: it happily showed "30 fps"
 selected while a 10 fps PC ignored the choice, and the bitrate steps were
@@ -27,7 +27,7 @@ Two fixes, one on each side:
 ## What the panel shows (`openQualityPanel`)
 
 A header stating the PC's live values ("This PC is set to 10 fps · 3840×2160
-· 6 Mbps — change that in the Remote User window on the PC"), then segment
+· 6 Mbps — change that in the Vibe Coder window on the PC"), then segment
 rows built by `segRow` — which lived here as `qualitySegRow` until
 2026-08-11, when the Phone card needed the identical control and it moved
 to panels.js as the one builder both call:

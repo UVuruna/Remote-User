@@ -52,14 +52,14 @@ FAKE_RECENTS = """() => {
     window.__asked.push(url);
     if (url.indexOf('/recents/open') === 0) {
       return {json: async () => ({ok: true, window: {
-        hwnd: 4660, title: 'Remote User - Visual Studio Code',
+        hwnd: 4660, title: 'Vibe Coder - Visual Studio Code',
         process: 'Code.exe', icon: null}})};
     }
     return {json: async () => ({ok: true, entries: [
       {app: 'vscode', kind: 'new', label: 'New window', sub: '',
        id: 'vscode|new|'},
-      {app: 'vscode', kind: 'recent', label: 'Remote User',
-       sub: 'U:\\\\Coding\\\\Remote User', id: 'vscode|recent|U:\\\\Coding'},
+      {app: 'vscode', kind: 'recent', label: 'Vibe Coder',
+       sub: 'U:\\\\Coding\\\\Vibe Coder', id: 'vscode|recent|U:\\\\Coding'},
       {app: 'chrome', kind: 'new', label: 'New window', sub: '',
        id: 'chrome|new|'},
       {app: 'chrome', kind: 'private', label: 'Incognito', sub: '',
@@ -280,7 +280,7 @@ def _checks(page, label, out):
     # task 184 — "the chosen thing OPENS and becomes the member").
     page.evaluate("""() => {
       const row = [...document.querySelectorAll('#layout-panel .lay-item-main')]
-        .find((r) => r.textContent.indexOf('Remote User') >= 0);
+        .find((r) => r.textContent.indexOf('Vibe Coder') >= 0);
       // Task 227b moved row selection to RELEASE under a travel slop, driven
       // by real pointer events — so the gate presses the way a finger does,
       // not through the button activator.
@@ -375,7 +375,7 @@ def main() -> int:
                 viewport={"width": w, "height": h}, has_touch=True, is_mobile=True,
                 user_agent=("Mozilla/5.0 (Linux; Android 15; Pixel 8) "
                             "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 "
-                            "Mobile Safari/537.36 RemoteUserApp"))
+                            "Mobile Safari/537.36 VibeCoderApp"))
             page = ctx.new_page()
             errors: list[str] = []
             page.on("pageerror", lambda e: errors.append(str(e)))

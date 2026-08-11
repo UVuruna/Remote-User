@@ -273,7 +273,7 @@ tombstone, because the mistake is worth more than the feature was.
 
 The problem it answered is real. Probing his PC with a Claude Code
 conversation open found the window titled
-`Ispravka UI dizajna meni… - Remote User - Visual Studio Code [Administrator]`
+`Ispravka UI dizajna meni… - Vibe Coder - Visual Studio Code [Administrator]`
 and its tab `Ispravka UI dizajna meni…, Window 2: Editor Group 1` — Claude
 Code names itself after the CONVERSATION. Beside it sat `prompt.txt` with an
 identical UIA class and empty `AutomationId`/`HelpText`; a walk of the whole

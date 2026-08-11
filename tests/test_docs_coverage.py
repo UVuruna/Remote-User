@@ -27,7 +27,7 @@ from _guards_common import PROJECT_ROOT, iter_source_files  # noqa: E402
 TRIVIAL = {
     "server/main.py",
     "server/gui/__init__.py",
-    "android/app/src/main/java/com/uvuruna/remoteuser/Prefs.kt",
+    "android/app/src/main/java/com/uvuruna/vibecoder/Prefs.kt",
 }
 
 # Standard: ordinary module. Needs __about/{name}.md only.
@@ -208,9 +208,9 @@ STANDARD = {
     "client/set-editor.css",
     "setup/create_cert.py",
     "setup/agent_hook.py",
-    "android/app/src/main/java/com/uvuruna/remoteuser/Notifier.kt",
-    "android/app/src/main/java/com/uvuruna/remoteuser/OnboardingActivity.kt",
-    "android/app/src/main/java/com/uvuruna/remoteuser/VoiceInput.kt",
+    "android/app/src/main/java/com/uvuruna/vibecoder/Notifier.kt",
+    "android/app/src/main/java/com/uvuruna/vibecoder/OnboardingActivity.kt",
+    "android/app/src/main/java/com/uvuruna/vibecoder/VoiceInput.kt",
     # Split out of MainActivity.kt on 2026-08-07 (THE STRUCTURE LAW): the JS
     # bridge is the PAGE's protocol surface, a different job from being the
     # window. Standard, not Algorithmic — it carries no decision of its own,
@@ -219,17 +219,17 @@ STANDARD = {
     # system bars we hide and the keyboard inset only the shell can measure.
     # Standard: one dependency (WindowInsets), no decision of its own; the
     # rule that USES the keyboard height lives on the page (client/caret.js).
-    "android/app/src/main/java/com/uvuruna/remoteuser/Insets.kt",
-    "android/app/src/main/java/com/uvuruna/remoteuser/Bridge.kt",
+    "android/app/src/main/java/com/uvuruna/vibecoder/Insets.kt",
+    "android/app/src/main/java/com/uvuruna/vibecoder/Bridge.kt",
     # New 2026-08-07 (build round G1 — the game controller): an ADAPTER, the
     # same reading as Bridge. Platform events in, three page callbacks out; the
     # whole mapping (which button, which curve) lives on the page, so this
     # file carries no decision of its own worth a flow diagram.
-    "android/app/src/main/java/com/uvuruna/remoteuser/Gamepad.kt",
+    "android/app/src/main/java/com/uvuruna/vibecoder/Gamepad.kt",
     # New 2026-08-07 (owner decree — the waiting channel): the foreground
     # service is Android lifecycle plus the permanent notification the
     # platform demands. The state machine lives in NoticeLink, below.
-    "android/app/src/main/java/com/uvuruna/remoteuser/NoticeService.kt",
+    "android/app/src/main/java/com/uvuruna/vibecoder/NoticeService.kt",
 }
 
 # Algorithmic: real algorithm, GUI window/widget, config/data table, or
@@ -392,12 +392,12 @@ ALGORITHMIC = {
     "setup/svg_to_ico.py",
     "setup/build_apk.py",
     "setup/build.py",
-    "android/app/src/main/java/com/uvuruna/remoteuser/MainActivity.kt",
+    "android/app/src/main/java/com/uvuruna/vibecoder/MainActivity.kt",
     # New 2026-08-07 (owner decree — the waiting channel): one thread that
     # holds an idle socket open, a connect/read/backoff state machine with
     # its own timing rules against the PC's beat. Algorithmic — it earns a
     # flow the same way presence.py does.
-    "android/app/src/main/java/com/uvuruna/remoteuser/NoticeLink.kt",
+    "android/app/src/main/java/com/uvuruna/vibecoder/NoticeLink.kt",
 }
 
 ALL_CLASSIFIED = TRIVIAL | STANDARD | ALGORITHMIC

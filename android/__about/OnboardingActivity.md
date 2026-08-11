@@ -1,6 +1,6 @@
 # Onboarding Activity
 
-**Script:** [Onboarding Activity (script)](../app/src/main/java/com/uvuruna/remoteuser/OnboardingActivity.kt)
+**Script:** [Onboarding Activity (script)](../app/src/main/java/com/uvuruna/vibecoder/OnboardingActivity.kt)
 
 ## Purpose
 
@@ -10,7 +10,7 @@ logic:
 
 - **Automatic (normal path):** the install funnel page (what an Android
   browser sees when it opens the QR link) launches this activity via
-  `remoteuser://pair?url=…` carrying the tokened LAN URL — one tap, no
+  `vibecoder://pair?url=…` carrying the tokened LAN URL — one tap, no
   typing, no scanning. The activity is `singleTask` (see the manifest), so
   this launch can land in `onCreate` (fresh instance) OR `onNewIntent` (an
   instance is already alive — e.g. the user tapped "Open" on the package
@@ -34,7 +34,7 @@ from home must never strand the phone with nothing left to connect to.
 ## Connections
 
 ### Uses
-- [Prefs (script)](../app/src/main/java/com/uvuruna/remoteuser/Prefs.kt) — `setLanUrl` stores the freshly paired LAN
+- [Prefs (script)](../app/src/main/java/com/uvuruna/vibecoder/Prefs.kt) — `setLanUrl` stores the freshly paired LAN
   address; `setTsUrl(null)` clears the previously learned Tailscale address
   (it may belong to a different PC/token now — it is relearned on first
   connect via the JS bridge)
@@ -49,7 +49,7 @@ from home must never strand the phone with nothing left to connect to.
 - The Android launcher (`MAIN`/`LAUNCHER` intent filter) — first cold start
 - The install funnel page (`client/install.html`, served by the PC, not part
   of this app) — its "Open the app" button targets the
-  `remoteuser://pair?url=…` intent filter; see
+  `vibecoder://pair?url=…` intent filter; see
   [Client (folder)](../../client/___client.md)
 
 ## Classes
@@ -70,7 +70,7 @@ The pairing screen (`AppCompatActivity`).
   without overriding it, a funnel launch arriving while an instance is
   already alive is silently dropped and the empty pairing card comes forward
   instead of connecting
-- `handlePairIntent(intent)`: validates a `remoteuser://pair?url=…` intent
+- `handlePairIntent(intent)`: validates a `vibecoder://pair?url=…` intent
   (scheme + `token=` present) and calls `tryConnect`; returns whether it
   acted, so `onCreate` knows whether to fall through to the stored-URL
   shortcut

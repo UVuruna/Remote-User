@@ -1,4 +1,4 @@
-package com.uvuruna.remoteuser
+package com.uvuruna.vibecoder
 
 import android.net.Uri
 import android.util.Log

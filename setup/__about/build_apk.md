@@ -10,7 +10,7 @@ into a signed release APK: locates the dev-machine toolchain (Android
 Studio's bundled JDK + the local Android SDK + a vendored Gradle, downloaded
 on first run), generates the release signing keystore once, runs
 `gradlew assembleRelease` with version properties derived from
-`setup/app_info.json`, and copies the signed APK to `dist/RemoteUser.apk` —
+`setup/app_info.json`, and copies the signed APK to `dist/VibeCoder.apk` —
 the server offers it at `/app.apk` and `build.py` bundles it into the
 desktop installer when it exists. Must run BEFORE `build.py` so the
 installer picks up a fresh APK: `.venv\Scripts\python setup/build_apk.py`.
@@ -52,7 +52,7 @@ find the SDK — regenerated every run, never committed.
 ### `ensure_keystore(env) -> str`
 Reuses `android/keystore/release.jks` and its persisted password if
 present; otherwise generates a fresh 2048-bit RSA keystore via
-`keytool -genkeypair` (10000-day validity, alias `remoteuser`,
+`keytool -genkeypair` (10000-day validity, alias `vibecoder`,
 `CN=UVuruna, O=UVuruna`) and a random 24-byte password, persisting both to
 `android/keystore/`. The keystore is never regenerated once created —
 losing it breaks upgrade signing for every phone that already has the app
@@ -70,4 +70,4 @@ expected release APK path doesn't exist afterward.
 
 ### `main() -> None`
 Runs the three steps above in order, then copies the signed APK to
-`dist/RemoteUser.apk`.
+`dist/VibeCoder.apk`.

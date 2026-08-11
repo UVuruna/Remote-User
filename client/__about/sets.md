@@ -75,7 +75,7 @@ The detection exists because the title guess was **proven impossible**.
 Probing the owner's own PC while a Claude Code conversation was open found:
 
 ```
-WIN 'Ispravka UI dizajna meni… - Remote User - Visual Studio Code [Administrator]'
+WIN 'Ispravka UI dizajna meni… - Vibe Coder - Visual Studio Code [Administrator]'
      TAB 'Ispravka UI dizajna meni…, Window 2: Editor Group 1'   ← Claude
      TAB 'prompt.txt, Editor Group 1'                            ← a file
 ```

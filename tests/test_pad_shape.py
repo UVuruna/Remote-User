@@ -140,7 +140,7 @@ def open_page(browser, gate, w, h, init=None):
         device_scale_factor=2,
         user_agent=("Mozilla/5.0 (Linux; Android 15; Pixel 8) "
                     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 "
-                    "Mobile Safari/537.36 RemoteUserApp"))
+                    "Mobile Safari/537.36 VibeCoderApp"))
     if init:
         ctx.add_init_script(init)
     page = ctx.new_page()

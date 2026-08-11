@@ -1,4 +1,4 @@
-package com.uvuruna.remoteuser
+package com.uvuruna.vibecoder
 
 import android.Manifest
 import android.annotation.SuppressLint
@@ -314,7 +314,7 @@ class MainActivity : AppCompatActivity() {
             mediaPlaybackRequiresUserGesture = false // MSE video must start by itself
             // The server routes plain Android browsers to the install funnel;
             // this marker is how the app itself gets the real client page.
-            userAgentString = "$userAgentString RemoteUserApp"
+            userAgentString = "$userAgentString VibeCoderApp"
         }
         // No framework focus rectangle over our content: the page's keyboard
         // capture field is deliberately invisible, and any highlight drawn

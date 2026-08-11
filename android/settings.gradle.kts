@@ -13,5 +13,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "RemoteUser"
+rootProject.name = "VibeCoder"
 include(":app")

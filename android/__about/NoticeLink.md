@@ -1,6 +1,6 @@
 # NoticeLink (Android)
 
-**Script:** [NoticeLink.kt](../app/src/main/java/com/uvuruna/remoteuser/NoticeLink.kt) ·
+**Script:** [NoticeLink.kt](../app/src/main/java/com/uvuruna/vibecoder/NoticeLink.kt) ·
 **Flow:** [diagram](../__flow/NoticeLink.md)
 
 ## Purpose

@@ -278,7 +278,7 @@ function renderNoticeCard(state) {
   card.className = "sets-card card-columns";
   card.innerHTML = `<h2>Notices while the app is closed</h2>
     <p class="sets-sub">Your PC tells this phone the moment an agent finishes
-    or needs you — with Remote User closed and the screen off. It is not a
+    or needs you — with Vibe Coder closed and the screen off. It is not a
     stream: the phone only listens, and it costs about as much as a chat app
     sitting idle.</p>
     <p class="sets-sub">Android holds messages back for apps it has put to
@@ -286,7 +286,7 @@ function renderNoticeCard(state) {
     dialog, and it is done for good.</p>` +
     (state && state.notifications === false
       ? `<p class="sets-sub">Notifications are also switched off for Remote
-         User right now. Android Settings → Apps → Remote User →
+         User right now. Android Settings → Apps → Vibe Coder →
          Notifications turns them back on — without that, notices can only be
          spoken.</p>`
       : "");

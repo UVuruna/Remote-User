@@ -223,14 +223,14 @@ def speak_summary(project, agent: str) -> str:
     Serbian sentence, because `handleNotify()` on the phone had always been
     told to speak `title + ". " + body` and nothing here ever gave it a
     shorter alternative. His order: the spoken line is ONLY the project name
-    plus the conversation/agent title, e.g. "Remote User — Fix layout" — never
+    plus the conversation/agent title, e.g. "Vibe Coder — Fix layout" — never
     the free-text body, which can be an arbitrarily long question or status
     line an agent wrote for the SCREEN, not for a voice.
 
     `project` = the human folder name from the agent's own `cwd` (never
     lower-cased, never guessed — the same field `layout_of` already reads,
     kept in its original case here because this one is READ ALOUD and
-    "remote user" spoken is not the same word as "Remote User" written).
+    "remote user" spoken is not the same word as "Vibe Coder" written).
     `agent` = the same string `compose()` turns into the title, taken
     BEFORE the " needs you"/"finished"/… suffix is appended and the body is
     never part of it, structurally — this function is never handed the body
@@ -604,14 +604,14 @@ async def send_pending(ws) -> int:
 # try/except that turns anything unexpected into HOOK_CHANGE_FAILED_TEXT —
 # `_hook_module()` is the only thing still allowed to raise past this
 # function, and only with a message already written for a human.
-MISSING_SCRIPT_TEXT = ("This copy of Remote User is missing its notifier "
+MISSING_SCRIPT_TEXT = ("This copy of Vibe Coder is missing its notifier "
                        "script. Reinstalling the app from the latest release "
                        "puts it back.")
 UNLOADABLE_SCRIPT_TEXT = "The notifier script could not be loaded on this PC."
 NO_PYTHON_TEXT = ("This PC has no Python on PATH, and Claude Code's hooks "
                   "need one to run the notifier. Install Python and switch "
                   "this on again.")
-HOOK_CHANGE_FAILED_TEXT = ("Remote User could not change the notifier hook on "
+HOOK_CHANGE_FAILED_TEXT = ("Vibe Coder could not change the notifier hook on "
                            "this PC — the log has the exact reason.")
 
 

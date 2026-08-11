@@ -1,4 +1,4 @@
-package com.uvuruna.remoteuser
+package com.uvuruna.vibecoder
 
 import android.content.Intent
 import android.os.Bundle
@@ -13,7 +13,7 @@ import com.journeyapps.barcodescanner.ScanOptions
  *
  *  The normal path is fully automatic: the install funnel page (what an
  *  Android browser sees on the QR link) launches us via
- *  `remoteuser://pair?url=…` with the tokened URL — one tap, connected.
+ *  `vibecoder://pair?url=…` with the tokened URL — one tap, connected.
  *  Because the activity is singleTask, that launch lands in onCreate OR
  *  onNewIntent (when an instance is already alive — e.g. the user tapped
  *  "Open" on the package installer first); both feed handlePairIntent.
@@ -66,7 +66,7 @@ class OnboardingActivity : AppCompatActivity() {
 
     /** True when the intent carried a valid pairing URL and we acted on it. */
     private fun handlePairIntent(intent: Intent?): Boolean {
-        val handed = intent?.data?.takeIf { it.scheme == "remoteuser" }?.getQueryParameter("url")
+        val handed = intent?.data?.takeIf { it.scheme == "vibecoder" }?.getQueryParameter("url")
         if (handed != null && handed.startsWith("http") && handed.contains("token=")) {
             tryConnect(handed)
             return true

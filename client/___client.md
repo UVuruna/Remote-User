@@ -1,6 +1,6 @@
 # client/
 
-The phone side of Remote User — a plain web page served by the PC server, loaded inside the Android app's WebView. NO **browser** ever sees it (owner rule, hardened 2026-08-02 — tablet Chrome carries a desktop User-Agent, so "detect Android" routing leaked the client): the server serves the client only to the `RemoteUserApp` WebView marker and routes every other User-Agent to the install funnel (`install.html`). No framework, no build step.
+The phone side of Vibe Coder — a plain web page served by the PC server, loaded inside the Android app's WebView. NO **browser** ever sees it (owner rule, hardened 2026-08-02 — tablet Chrome carries a desktop User-Agent, so "detect Android" routing leaked the client): the server serves the client only to the `VibeCoderApp` WebView marker and routes every other User-Agent to the install funnel (`install.html`). No framework, no build step.
 
 ## Files
 
@@ -59,7 +59,7 @@ The phone side of Remote User — a plain web page served by the PC server, load
 ### Used by
 - [Web Layer](../server/__about/web.md) — serves `index.html` or `install.html` at `/` by User-Agent, and every file here at `/static/*` (`StaticFiles` mount)
 - [Tests (folder)](../tests/___tests.md) — `test_input_pipeline.py` drives `index.html` end-to-end in real headless Chromium
-- [Android (folder)](../android/___android.md) — the APK's WebView loads `index.html` (its User-Agent carries the `RemoteUserApp` marker, so it never gets the install funnel)
+- [Android (folder)](../android/___android.md) — the APK's WebView loads `index.html` (its User-Agent carries the `VibeCoderApp` marker, so it never gets the install funnel)
 
 ## Design Decisions
 
@@ -69,7 +69,7 @@ The phone side of Remote User — a plain web page served by the PC server, load
 - **Browsers get funneled, never the client** (owner rule — no half-working
   browser sessions, hardened 2026-08-02 to ALL browsers after tablet Chrome's
   desktop User-Agent leaked the client): the server routes every User-Agent
-  without the APK WebView's `RemoteUserApp` marker to
+  without the APK WebView's `VibeCoderApp` marker to
   [Install Funnel](__about/install.md); only the WebView reaches
   [Page Shell](__about/index.md). Dev exception: with no APK built the funnel
   has nothing to offer, so a dev checkout still serves the client. See

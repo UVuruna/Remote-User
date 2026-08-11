@@ -187,7 +187,7 @@ everything here composes and frames WINDOWS on it.
   see: the element fits perfectly, `scrollWidth === clientWidth`, and every
   clip check in the layout audit reported PASS while 225 device px stood idle
   on that row. His words:
-  *"čip sa izabranim prozorom skraćuje naziv na 'Claude Code - Remote User - V…', a pun naziv se na tom ekranu ne vidi nigde kada polje Name već prepišeš"* — lang-ok: owner quote.
+  *"čip sa izabranim prozorom skraćuje naziv na 'Claude Code - Vibe Coder - V…', a pun naziv se na tom ekranu ne vidi nigde kada polje Name već prepišeš"* — lang-ok: owner quote.
   That half stands and must never come back. What changed on 2026-08-09 is
   the treatment AFTER it: task 163 made a kin group's rows one line each, cut
   by CSS (`.lay-item-main span`), and task 168 turned the creation panel's two

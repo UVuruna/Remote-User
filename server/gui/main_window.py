@@ -76,7 +76,7 @@ UPDATE_FAILED_TEXT = "Update download failed — retry"
 # plain and complete: what is happening, that we are closing, and that we
 # come back. Module-level (not a class attribute) so `_computed_minimum`
 # can measure it like every other caption this button can wear.
-UPDATE_HANDOVER_TEXT = "Remote User will close to finish updating — it comes back on its own"
+UPDATE_HANDOVER_TEXT = "Vibe Coder will close to finish updating — it comes back on its own"
 
 PILL_TEXT = {"running": "RUNNING", "starting": "STARTING…",
              "stopped": "STOPPED", "failed": "FAILED"}
@@ -132,7 +132,7 @@ class MainWindow(QMainWindow):
         self._settings = None        # the Settings window, built on first open
         self._settled_for = None     # content the declared minimum was measured against
 
-        self.setWindowTitle("Remote User")
+        self.setWindowTitle("Vibe Coder")
         # ON THE APPLICATION, not on this window (build round R3): a
         # per-widget stylesheet WINS over its parent's, so styling this window
         # alone would have left Controls, Traffic, Settings and the
@@ -276,7 +276,7 @@ class MainWindow(QMainWindow):
         # switch) would simply overlap. Logo 34 + its 10 gap, the longest of
         # the two title lines, the longest pill with its QSS padding, the
         # switch and its gap.
-        header_row = (34 + 10 + widest(("Remote User",
+        header_row = (34 + 10 + widest(("Vibe Coder",
                                         "Control this PC from your phone"))
                       + widest(tuple(PILL_TEXT.values())) + 28
                       + 10 + THEME_SWITCH_W)
@@ -313,7 +313,7 @@ class MainWindow(QMainWindow):
                                       Qt.TransformationMode.SmoothTransformation))
         titles = QVBoxLayout()
         titles.setSpacing(0)
-        title = QLabel("Remote User")
+        title = QLabel("Vibe Coder")
         title.setObjectName("h1")
         sub = QLabel("Control this PC from your phone")
         sub.setObjectName("caption")
@@ -559,7 +559,7 @@ class MainWindow(QMainWindow):
     def _build_tray(self, icon: QIcon) -> None:
         self.tray = QSystemTrayIcon(icon, self)
         menu = QMenu()
-        open_action = QAction("Open Remote User", menu)
+        open_action = QAction("Open Vibe Coder", menu)
         open_action.triggered.connect(self._show_window)
         self.tray_toggle = QAction("Stop server", menu)
         self.tray_toggle.triggered.connect(self._toggle_server)
@@ -640,7 +640,7 @@ class MainWindow(QMainWindow):
         info = self.controller.info
         if info:
             QGuiApplication.clipboard().setText(info.qr_url)
-            self.tray.showMessage("Remote User", "Pairing link copied.",
+            self.tray.showMessage("Vibe Coder", "Pairing link copied.",
                                   QSystemTrayIcon.MessageIcon.Information, 2000)
 
     def _open_browser(self) -> None:
@@ -719,7 +719,7 @@ class MainWindow(QMainWindow):
             self._update_progress = (received, total)
 
         try:
-            path = Path(tempfile.gettempdir()) / f"RemoteUser_Setup_v{upd.version}.exe"
+            path = Path(tempfile.gettempdir()) / f"VibeCoder_Setup_v{upd.version}.exe"
             updates.download(upd.installer_url, path, on_progress=report)
         except Exception as e:
             logger.error("Update download failed: %s", e)
@@ -735,7 +735,7 @@ class MainWindow(QMainWindow):
 
         THE WHOLE POINT (owner report 2026-08-07): he installs from the PHONE,
         through the very session the install is about to end. *"čim uđem u
-        instalaciju on će meni ugasiti Remote User i više neću moći da
+        instalaciju on će meni ugasiti Vibe Coder i više neću moći da
         komandujem odavde."* So from the tap on this button there is nothing
         left for anyone to click — [update_handover] verifies the file, tells
         the phone, arms the script that will install and restart us, and only
@@ -903,7 +903,7 @@ class MainWindow(QMainWindow):
                 self.tailscale_btn.show()
             mode = "H.264 · " + (info.encoder or "?") if info.mode == "h264" else "JPEG fallback"
             clients = info.stats.clients
-            self.tray.setToolTip(f"Remote User — running ({mode}, "
+            self.tray.setToolTip(f"Vibe Coder — running ({mode}, "
                                  f"{clients} client{'s' if clients != 1 else ''})")
         else:
             self._shown_qr_url = None
@@ -914,7 +914,7 @@ class MainWindow(QMainWindow):
             # The reason a stopped server gives goes where the guidance goes —
             # one place under the QR that speaks, instead of two.
             self.reach_label.setText(self.controller.error or "")
-            self.tray.setToolTip("Remote User — stopped")
+            self.tray.setToolTip("Vibe Coder — stopped")
 
         self._refresh_buttons()
         if state == "failed":
@@ -963,7 +963,7 @@ class MainWindow(QMainWindow):
         self._tray_notice_shown = True
         self._mark_tray_notice_seen()
         self.tray.showMessage(
-            "Remote User is still running",
+            "Vibe Coder is still running",
             "The server keeps working in the tray. Right-click the icon to quit.",
             QSystemTrayIcon.MessageIcon.Information, 3000,
         )

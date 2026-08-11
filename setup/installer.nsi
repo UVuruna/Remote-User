@@ -17,9 +17,9 @@
 !include "Sections.nsh"   ; SelectSection / UnselectSection -- the silent path
 
 ; -- App Info -----------------------------------------------------
-!define APP_NAME "RemoteUser"
+!define APP_NAME "VibeCoder"
 !define APP_DISPLAY "Remote User"
-!define APP_EXE "RemoteUser.exe"
+!define APP_EXE "VibeCoder.exe"
 !define APP_DESCRIPTION "Control this PC from your phone — screen, mouse, keyboard"
 
 !define UNINST_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}"
@@ -229,7 +229,7 @@ Function .onInit
     ; is its native TCHAR width), which would have made every install refuse
     ; itself with the "already installing" message -- the opposite failure
     ; from the one this lock exists to prevent.
-    System::Call 'kernel32::CreateMutexA(i 0, i 1, t "Global\RemoteUserInstallerRunning") i .r0 ?e'
+    System::Call 'kernel32::CreateMutexA(i 0, i 1, t "Global\VibeCoderInstallerRunning") i .r0 ?e'
     Pop $1  ; GetLastError() -- 183 = ERROR_ALREADY_EXISTS
     IntCmp $1 183 MutexHeld MutexFree MutexFree
 MutexHeld:
@@ -249,7 +249,7 @@ MutexFree:
 
     ; ---- STRAY HANDOVER-LOCK CLEANUP (task 187b) ----
     ; server/update_handover.py's own arming lock (handover.lock, beside
-    ; the .cmd script in %LOCALAPPDATA%\RemoteUser) is supposed to go
+    ; the .cmd script in %LOCALAPPDATA%\VibeCoder) is supposed to go
     ; stale and get reclaimed by the NEXT arm -- but "the next arm" is
     ; the very app this installer is about to replace and restart, and a
     ; storm like his leaves that lock pointing at a pid that is already
@@ -260,7 +260,7 @@ MutexFree:
     ; may still be the very process running us (Windows does not lock a
     ; batch file while cmd.exe executes it), and it is Python's file to
     ; rewrite fresh on its next arm regardless.
-    Delete "$LOCALAPPDATA\RemoteUser\handover.lock"
+    Delete "$LOCALAPPDATA\VibeCoder\handover.lock"
 
     IfSilent 0 InitDone
 
@@ -313,7 +313,7 @@ Section "Uninstall"
     RMDir /r "$INSTDIR"
 
     ; User data (settings, token, logs) -- ${APP_DISPLAY} keeps it under
-    ; LOCALAPPDATA\RemoteUser (see server/config.py)
+    ; LOCALAPPDATA\VibeCoder (see server/config.py)
     RMDir /r "$LOCALAPPDATA\${APP_NAME}"
 
     DeleteRegKey HKLM "${UNINST_KEY}"

@@ -6,7 +6,7 @@
 
 Installing a new version WITHOUT losing the session you are installing from.
 
-The owner's report (2026-08-07): *"dešava se da ja ne mogu da instaliram novu verziju ako nisam kući, zato što čim uđem u instalaciju on će meni ugasiti Remote User i više neću moći da komandujem odavde."* Every fix this project ships reaches him only through an install, and starting the install killed the remote session he was installing FROM — so a man away from home sat on an old build unable to take the new one. The trap ate itself.
+The owner's report (2026-08-07): *"dešava se da ja ne mogu da instaliram novu verziju ako nisam kući, zato što čim uđem u instalaciju on će meni ugasiti Vibe Coder i više neću moći da komandujem odavde."* Every fix this project ships reaches him only through an install, and starting the install killed the remote session he was installing FROM — so a man away from home sat on an old build unable to take the new one. The trap ate itself.
 
 He asked for "quit later". This module builds the stronger requirement, because "later" still leaves him holding a phone in front of a Next button he cannot press: **after one tap on the window's Update button, nothing more is needed from anybody, and control comes back by itself.**
 

@@ -90,7 +90,7 @@ def set_autostart(on: bool) -> tuple[bool, str]:
         message = detail[-1] if detail else f"schtasks exited {result.returncode}"
         logger.error("schtasks %s failed: %s", "create" if on else "delete", message)
         return False, ("Windows refused to change the startup task. "
-                       "Running Remote User as administrator lets it. "
+                       "Running Vibe Coder as administrator lets it. "
                        f"({message})")
     logger.info("Autostart task %s", "created" if on else "removed")
     return True, ""

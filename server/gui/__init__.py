@@ -1,1 +1,1 @@
-"""Desktop GUI for the Remote User server (PySide6). Entry: gui_main.py."""
+"""Desktop GUI for the Vibe Coder server (PySide6). Entry: gui_main.py."""

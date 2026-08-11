@@ -1,6 +1,6 @@
 # server/
 
-The PC side of Remote User: captures the screen, streams it over WebSocket as H.264 (JPEG fallback), streams the cursor position, and injects mouse/keyboard input received from the tablet client. Two entry points around one core: `gui_main.py` (the desktop app — what the installed EXE runs) and `main.py` (headless CLI for dev).
+The PC side of Vibe Coder: captures the screen, streams it over WebSocket as H.264 (JPEG fallback), streams the cursor position, and injects mouse/keyboard input received from the tablet client. Two entry points around one core: `gui_main.py` (the desktop app — what the installed EXE runs) and `main.py` (headless CLI for dev).
 
 ## Files
 

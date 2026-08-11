@@ -1,4 +1,4 @@
-"""Build Remote User into a distributable installer (monorepo build spec).
+"""Build Vibe Coder into a distributable installer (monorepo build spec).
 
 Steps:
   0. Generate version_info.txt (app_info.json + root company.json)
@@ -770,15 +770,15 @@ def build_pyinstaller() -> Path:
     # Icon at dist root so NSIS shortcuts can reference $INSTDIR\icon.ico.
     shutil.copy2(ICON_PATH, app_dir / "icon.ico")
     if ANDROID_APK.exists():
-        shutil.copy2(ANDROID_APK, app_dir / "RemoteUser.apk")
-        shutil.copy2(ANDROID_APK, DIST_DIR / "RemoteUser.apk")  # dev server serves this one
+        shutil.copy2(ANDROID_APK, app_dir / "VibeCoder.apk")
+        shutil.copy2(ANDROID_APK, DIST_DIR / "VibeCoder.apk")  # dev server serves this one
         # The sidecar version rides along — config.apk_version tells the
         # phone what /app.apk actually is (update-banner truth).
         apk_ver = ANDROID_APK.with_name(ANDROID_APK.name + ".version")
         if apk_ver.exists():
-            shutil.copy2(apk_ver, app_dir / "RemoteUser.apk.version")
-            shutil.copy2(apk_ver, DIST_DIR / "RemoteUser.apk.version")
-        print("  Bundled the phone app (RemoteUser.apk)")
+            shutil.copy2(apk_ver, app_dir / "VibeCoder.apk.version")
+            shutil.copy2(apk_ver, DIST_DIR / "VibeCoder.apk.version")
+        print("  Bundled the phone app (VibeCoder.apk)")
     else:
         print("  NOTE: no phone APK found (run setup/build_apk.py) — shipping without it")
     print(f"  Output: {exe_path}")

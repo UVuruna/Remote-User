@@ -1,6 +1,6 @@
 # Bridge (Android)
 
-**Script:** [Bridge.kt](../app/src/main/java/com/uvuruna/remoteuser/Bridge.kt)
+**Script:** [Bridge.kt](../app/src/main/java/com/uvuruna/vibecoder/Bridge.kt)
 
 ## Purpose
 

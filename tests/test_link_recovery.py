@@ -73,7 +73,7 @@ import focus_guard  # noqa: E402
 import presence  # noqa: E402
 import web  # noqa: E402
 
-ANDROID = PROJECT / "android/app/src/main/java/com/uvuruna/remoteuser"
+ANDROID = PROJECT / "android/app/src/main/java/com/uvuruna/vibecoder"
 CLIENT = PROJECT / "client"
 
 

@@ -79,7 +79,7 @@ sends `layout_recent {}`, answered `layout_recent {entries}`
 `layout_recent_use {id}`, handled in [Layout API](layout_api.md) —
 `layout_api.layout_recent`/`layout_recent_use`.
 
-Stored at `%LOCALAPPDATA%/RemoteUser/layout_history.json`.
+Stored at `%LOCALAPPDATA%/VibeCoder/layout_history.json`.
 
 ## Gate
 `tests/test_layout_history.py` — dedupe (order-independent), the 30-entry

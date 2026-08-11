@@ -128,7 +128,7 @@ function drawSetEditor() {
     <p class="sets-sub">Pick which of this set's commands ride the controls, then
        tap two positions to swap them. You are arranging the
        ${column ? "upright column" : "D-pad cross"} — the shape this phone is
-       showing now. New commands are made on the PC (Remote User window →
+       showing now. New commands are made on the PC (Vibe Coder window →
        Controls…).</p>`;
 
   const body = document.createElement("div");

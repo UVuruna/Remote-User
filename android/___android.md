@@ -5,7 +5,7 @@ Phase D). The page carries ALL product UI and guidance; the shell adds only
 what a browser tab cannot. One wizard, one client, two containers.
 
 Kotlin, two activities, two dependencies (AppCompat + the embedded ZXing
-scanner). Package `com.uvuruna.remoteuser`, min Android 8 (API 26).
+scanner). Package `com.uvuruna.vibecoder`, min Android 8 (API 26).
 
 ## Files
 
@@ -44,7 +44,7 @@ always-on-top over the owner's desk. See
   (all user-facing copy — onboarding card, connecting screen, error card,
   the foreign-Wi-Fi toast), launcher icons generated from `assets/logo.svg`
 - `AndroidManifest.xml` — `OnboardingActivity` is `singleTask` (exported,
-  `MAIN`/`LAUNCHER` + the `remoteuser://pair` `VIEW` intent filter);
+  `MAIN`/`LAUNCHER` + the `vibecoder://pair` `VIEW` intent filter);
   a `<queries>` element declares `com.tailscale.ipn` so Android 11+ package
   visibility lets the error card tell "Tailscale not installed" from
   "installed but off"; `MainActivity` is not exported, declares
@@ -64,7 +64,7 @@ always-on-top over the owner's desk. See
 ## Building
 
 ```
-.venv\Scripts\python setup/build_apk.py      → dist/RemoteUser.apk
+.venv\Scripts\python setup/build_apk.py      → dist/VibeCoder.apk
 ```
 
 Toolchain: Android Studio's bundled JDK + the SDK in `%LOCALAPPDATA%`;
@@ -74,7 +74,7 @@ The keystore is generated ONCE into gitignored `android/keystore/` —
 
 ## Distribution
 
-`dist/RemoteUser.apk` is served by the server at **`/app.apk`**. Any Android
+`dist/VibeCoder.apk` is served by the server at **`/app.apk`**. Any Android
 browser hitting the server (the QR link) gets the full-screen **install
 funnel** instead of the client: Open the app (pairs itself via `intent://`)
 first and primary, Install (downloads the APK) below it. The desktop build
@@ -100,7 +100,7 @@ phone app too. No file shuffling, ever.
 - Nothing internal — this is the end-user-facing app, a terminal node with
   no in-repo caller
 - Built by [Setup (folder)](../setup/___setup.md)'s `build_apk.py` into
-  `dist/RemoteUser.apk`, run BEFORE `build.py` so the desktop installer
+  `dist/VibeCoder.apk`, run BEFORE `build.py` so the desktop installer
   bundles the APK and the server can serve it at `/app.apk`
 - The owner's phone (v1: sideloaded APK; a Play Store listing is a later
   distribution decision)
@@ -111,7 +111,7 @@ The shell adds only what a browser tab cannot — everything below is WHY,
 not just what:
 
 - **Pairing is one tap**: the install funnel page (what an Android browser
-  sees on the QR link) launches the app via `remoteuser://pair?url=…` with
+  sees on the QR link) launches the app via `vibecoder://pair?url=…` with
   the tokened URL — `OnboardingActivity` stores it and connects; nothing is
   typed or scanned. Being singleTask, the handover is handled in BOTH
   `onCreate` and `onNewIntent` (an instance is often already alive — the
@@ -123,7 +123,7 @@ not just what:
   replaces any old `MainActivity` instance instead of stacking WebViews. That
   LAN URL plus the learned Tailscale URL are the only stored state
   (`Prefs`).
-- **The WebView identifies itself**: `RemoteUserApp` is appended to the
+- **The WebView identifies itself**: `VibeCoderApp` is appended to the
   User-Agent — that is how the server knows to serve the app the real client
   while plain Android browsers get the funnel.
 - **Two addresses, probed on every start**: the QR gives the LAN address; the

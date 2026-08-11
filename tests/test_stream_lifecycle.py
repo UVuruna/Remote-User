@@ -1,7 +1,7 @@
 """Stream Lifecycle Gate: a client that is gone leaves NOTHING behind.
 
 Regression proof for the live failure of 2026-08-07, found in the owner's own
-`%LOCALAPPDATA%\\RemoteUser\\server.log` while his mouse juddered:
+`%LOCALAPPDATA%\\VibeCoder\\server.log` while his mouse juddered:
 
     12:05:11,822  Client authenticated: port=56482
     12:05:12,730  dxcam: Frame buffer build(start): 3840x2160     <- open_session

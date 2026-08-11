@@ -1,7 +1,7 @@
 """RETURN GATE (task 203): coming back from an excursion costs ONE encoder.
 
 THE MEASUREMENT THAT WROTE THIS FILE — the owner's own server log,
-`%LOCALAPPDATA%\\RemoteUser\\server.log.1`, two real returns from a gallery
+`%LOCALAPPDATA%\\VibeCoder\\server.log.1`, two real returns from a gallery
 excursion on 2026-08-11:
 
     10:21:12,553  Phone announced an excursion

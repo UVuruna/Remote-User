@@ -292,7 +292,7 @@ def build_with_a_torn_off_tab(cell: int = 0, process: str = "code.exe"):
     # The extraction itself is Windows' job (a menu command or a SendInput
     # drag) and cannot run here — WIN_C is the window it would have produced.
     window_manager.window_at_hwnd = lambda hwnd: {
-        "hwnd": hwnd, "title": "Remote User - Visual Studio Code",
+        "hwnd": hwnd, "title": "Vibe Coder - Visual Studio Code",
         "process": process, "icon": None}
     # `Layout.process` is read via wm._process_name at create, not from the
     # dict above — the harness pins it to code.exe (test_layout_protocol:148),

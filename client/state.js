@@ -1,4 +1,4 @@
-// Remote User client — H.264 (MSE) or JPEG stream rendering, virtual cursor,
+// Vibe Coder client — H.264 (MSE) or JPEG stream rendering, virtual cursor,
 // pinch zoom, two configurable D-pad groups, and a single toggle "touch mode"
 // that decides what one finger on the screen does.
 //

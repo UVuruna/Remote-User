@@ -41,7 +41,7 @@ from config import BUNDLE_DIR, FROZEN, PROJECT_ROOT
 # ═══════════════════════════ ASSET PATHS ═══════════════════════════
 # QSS reaches assets by PATH, so it needs the one the app is actually running
 # from. Forward slashes and quotes: the installed path holds spaces
-# ("C:/Program Files/Remote User/…") and a bare url() would break on them.
+# ("C:/Program Files/Vibe Coder/…") and a bare url() would break on them.
 ASSET_DIR = (BUNDLE_DIR if FROZEN else PROJECT_ROOT) / "assets"
 ASSET_URL = ASSET_DIR.as_posix()
 

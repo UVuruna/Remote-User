@@ -50,7 +50,7 @@ A window where some switches act and others wait for a button is a window nobody
 
 ## A raw exception is never the caption (round R2's SECOND independent grader, 2026-08-07)
 
-The grader's finding, verbatim in substance: under "Tell my phone when an agent finishes", the caption slot was printing `[Errno 2] No such file or directory: 'C:\Program Files\Remote User\_internal\setup\agent_hook.py'` — an `OSError` repr standing where a sentence belongs, in ordinary caption grey. The root cause was two-layered:
+The grader's finding, verbatim in substance: under "Tell my phone when an agent finishes", the caption slot was printing `[Errno 2] No such file or directory: 'C:\Program Files\Vibe Coder\_internal\setup\agent_hook.py'` — an `OSError` repr standing where a sentence belongs, in ordinary caption grey. The root cause was two-layered:
 
 1. **The literal path had already been fixed** (`notify._hook_module()`, v0.0.251) — the specific "script missing from the bundle" case prints a human sentence. What survived was the GUI's `except OSError as e: ok, detail = False, str(e)` in `_toggle_agent_hook` — a catch-all that would turn **any** `OSError` reaching it into raw text, and `notify.set_agent_hook()` still had two unguarded steps (`shutil.copyfile`, `agent_hook.install()`'s settings-file write) that could raise one. Closed at the source: see [Notify](../../__about/notify.md) → "Every sentence this switch can print is named".
 2. **No caption in this window had a distinct colour for FAILURE.** `_set_caption()` is the fix: every one of the three toggle handlers (`_toggle_agent_hook`, `_toggle_focus_lock`, `_toggle_autostart`) now routes its failure text through it with `error=True`, painting the theme's semantic Error hue (DESIGN.md) instead of the routine `#caption` grey — colour and words fixed together, because the grader named both.
@@ -110,7 +110,7 @@ owner's decision, and the ladder says reflow first anyway (rules/GUI.md — free
 space -> reflow -> minimum -> scroll).
 
 So **FOCUS and STARTUP now share one row**. They are the two shortest cards
-AND the two that belong together — both answer "how does Remote User behave on
+AND the two that belong together — both answer "how does Vibe Coder behave on
 this PC" rather than "what does it send". The window has roughly 666 px of
 unused WIDTH inside its own frame and 0 px of spare height, so spending one to
 save the other is what the ladder's first two rungs are for. The three cards

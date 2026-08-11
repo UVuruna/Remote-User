@@ -105,7 +105,7 @@ def run() -> int:
                 # selectors would simply never appear.
                 user_agent=("Mozilla/5.0 (Linux; Android 15; Pixel 8) "
                             "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 "
-                            "Mobile Safari/537.36 RemoteUserApp"))
+                            "Mobile Safari/537.36 VibeCoderApp"))
             page = ctx.new_page()
             page.goto(f"http://127.0.0.1:{gate.PORT}/?token={gate.TOKEN}")
             _wait_ready(page)

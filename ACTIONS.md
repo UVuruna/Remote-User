@@ -317,7 +317,7 @@ previous round stopped one source too early. Probing the owner's PC with a
 Claude Code conversation open found:
 
 ```
-WIN 'Ispravka UI dizajna meni… - Remote User - Visual Studio Code [Administrator]'
+WIN 'Ispravka UI dizajna meni… - VibeCoder - Visual Studio Code [Administrator]'
      TAB 'Ispravka UI dizajna meni…, Window 2: Editor Group 1'   ← Claude
      TAB 'prompt.txt, Editor Group 1'                            ← a file
 ```
@@ -335,9 +335,9 @@ test was `CLAUDE.md` — the document case the owner banned.
 ```
 claude.exe  parent Code.exe 37624  --resume=0eb7cbe2-…   ← a live conversation
       └─ ~/.claude/projects/<slug>/0eb7cbe2-….jsonl
-            └─ "cwd": "u:\…\Remote User"   →  folder "remote user"
+            └─ "cwd": "u:\…\VibeCoder"    →  folder "vibecoder"
                                                      ↕
-     window title "… - Remote User - Visual Studio Code [Administrator]"
+     window title "… - VibeCoder - Visual Studio Code [Administrator]"
 ```
 
 The creation panel pre-ticks every set whose `process` matches and that either

@@ -1,7 +1,7 @@
 """Server Generation Gate: a superseded server run owns NOTHING.
 
 Regression proof for the live failure of 2026-08-09, read out of the owner's
-own `%LOCALAPPDATA%\\RemoteUser\\server.log` while his GUI showed **STOPPED**
+own `%LOCALAPPDATA%\\VibeCoder\\server.log` while his GUI showed **STOPPED**
 under a phone that was streaming perfectly:
 
     19:13:52  Started server process [20120]        <- run A

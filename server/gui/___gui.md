@@ -1,6 +1,6 @@
 # gui/
 
-The desktop face of Remote User: a PySide6 window + tray icon around the
+The desktop face of Vibe Coder: a PySide6 window + tray icon around the
 [Server Core](../__about/server_core.md). This is what the installed EXE runs (entry
 point: `server/gui_main.py`, documented under [Server (folder)](../___server.md));
 the CLI (`server/main.py`) stays for dev. Design follows root DESIGN.md
@@ -40,7 +40,7 @@ client (see [Theme](__about/theme.md) for the verified overlap).
   token-by-token in [Theme](__about/theme.md))
 
 ### Used by
-- The installed EXE (`RemoteUser.exe` → `gui_main.py`); dev:
+- The installed EXE (`VibeCoder.exe` → `gui_main.py`); dev:
   `python server/gui_main.py`. `gui_main.py` itself lives one level up and is
   documented in [Server (folder)](../___server.md) — it has no dedicated
   `__about`/`__flow` pair of its own.

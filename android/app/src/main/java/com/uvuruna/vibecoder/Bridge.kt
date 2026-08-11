@@ -1,4 +1,4 @@
-package com.uvuruna.remoteuser
+package com.uvuruna.vibecoder
 
 import android.Manifest
 import android.content.ClipData
@@ -308,7 +308,7 @@ class Bridge(private val host: MainActivity) {
     fun setClipboard(text: String) {
         host.runOnUiThread {
             val cm = host.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-            cm.setPrimaryClip(ClipData.newPlainText("RemoteUser", text))
+            cm.setPrimaryClip(ClipData.newPlainText("VibeCoder", text))
         }
     }
 

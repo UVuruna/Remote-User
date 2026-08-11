@@ -32,7 +32,7 @@ with an indent instead of the old `"↳ "` prefix:
 
 ```
 ┌──────────────────────────────────────────────┐
-│ [icon] Remote User - Visual Studio Code      │   a WINDOW: app icon
+│ [icon] Vibe Coder - Visual Studio Code      │   a WINDOW: app icon
 ├──────────────────────────────────────────────┤
 │    ┌─────────────────────────────────────────┤
 │    │ prompt.txt                              │   a TAB: indented by exactly

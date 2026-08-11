@@ -13,7 +13,7 @@ Which is why the switch had to read the real thing. A tick that merely remembere
 ## Connections
 
 ### Uses
-- [Config](config.md) — `autostart_task` (the task name, `"RemoteUser"`, the same `${APP_NAME}` the installer uses), `FROZEN`, `PROJECT_ROOT`
+- [Config](config.md) — `autostart_task` (the task name, `"VibeCoder"`, the same `${APP_NAME}` the installer uses), `FROZEN`, `PROJECT_ROOT`
 
 ### Used by
 - `gui/settings_window.py` (see [GUI (subfolder)](../gui/___gui.md)) — the STARTUP card's "Start with Windows" switch: `installed()` on every open, `set_autostart()` on every toggle

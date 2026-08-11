@@ -369,7 +369,7 @@ def main():
             # The APK WebView's marker — Android UAs without it get the
             # install funnel instead of the client page.
             user_agent=("Mozilla/5.0 (Linux; Android 15; Pixel 8) AppleWebKit/537.36 "
-                        "(KHTML, like Gecko) Chrome/126.0 Mobile Safari/537.36 RemoteUserApp"),
+                        "(KHTML, like Gecko) Chrome/126.0 Mobile Safari/537.36 VibeCoderApp"),
         )
         page = ctx.new_page()
         errors = []

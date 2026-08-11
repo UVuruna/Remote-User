@@ -1,6 +1,6 @@
 # Notifier (Android)
 
-**Script:** [Notifier.kt](../app/src/main/java/com/uvuruna/remoteuser/Notifier.kt)
+**Script:** [Notifier.kt](../app/src/main/java/com/uvuruna/vibecoder/Notifier.kt)
 
 ## Purpose
 

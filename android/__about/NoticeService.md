@@ -1,6 +1,6 @@
 # NoticeService (Android)
 
-**Script:** [NoticeService.kt](../app/src/main/java/com/uvuruna/remoteuser/NoticeService.kt)
+**Script:** [NoticeService.kt](../app/src/main/java/com/uvuruna/vibecoder/NoticeService.kt)
 
 ## Purpose
 

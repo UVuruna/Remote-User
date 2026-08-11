@@ -201,7 +201,7 @@ def _checks(page, label, out):
     # the shipped rule): arrows sized `var(--corner)` with a border and a fill,
     # or `#lay-frame` back to `flex: 0 1 auto` — with a long name, both put the
     # frame under 60% of the bar and the name under a readable width.
-    page.evaluate("layouts[0].name = 'Remote User — Applications — UVuruna';"
+    page.evaluate("layouts[0].name = 'Vibe Coder — Applications — UVuruna';"
                   " updateLayoutBar()")
     page.wait_for_timeout(80)
     room = page.evaluate("""() => {
@@ -736,7 +736,7 @@ def main() -> int:
                 viewport={"width": w, "height": h}, has_touch=True, is_mobile=True,
                 user_agent=("Mozilla/5.0 (Linux; Android 15; Pixel 8) "
                             "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 "
-                            "Mobile Safari/537.36 RemoteUserApp"))
+                            "Mobile Safari/537.36 VibeCoderApp"))
             page = ctx.new_page()
             errors: list[str] = []
             page.on("pageerror", lambda e: errors.append(str(e)))

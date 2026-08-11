@@ -17,7 +17,7 @@ break it and watching the assertion catch it (recorded below per check):
 
 Isolated from the real machine: `LOCALAPPDATA` is redirected to a temp
 directory before `layout_history` is imported, so this gate never touches
-`%LOCALAPPDATA%/RemoteUser/layout_history.json` on the machine it runs on.
+`%LOCALAPPDATA%/VibeCoder/layout_history.json` on the machine it runs on.
 
 Run:  .venv\\Scripts\\python tests/test_layout_history.py
 """
@@ -41,12 +41,12 @@ def _reset():
 
 def test_record_dedupes_by_member_set_order_independent():
     _reset()
-    members_ab = [{"process": "code.exe", "title": "Remote User - VSCode"},
+    members_ab = [{"process": "code.exe", "title": "Vibe Coder - VSCode"},
                   {"process": "chrome.exe", "title": "Gmail - Chrome"}]
     members_ba = list(reversed(members_ab))  # same set, tapped in the other order
 
-    layout_history.record("Work", "2", "landscape", "Remote User", members_ab)
-    layout_history.record("Work", "2", "landscape", "Remote User", members_ba)
+    layout_history.record("Work", "2", "landscape", "Vibe Coder", members_ab)
+    layout_history.record("Work", "2", "landscape", "Vibe Coder", members_ba)
 
     entries = layout_history.load()
     # PLANTED-DEFECT PROOF: comment out `signature()`'s `sorted(...)` (order-
@@ -100,7 +100,7 @@ def test_match_finds_by_process_and_fuzzy_title():
     # a MAJORITY of the stored words are still present, so it matches on the
     # first (title-aware) pass, not the process-only fallback.
     open_windows = [
-        _win(1, "code.exe", "● Remote User - Visual Studio Code"),
+        _win(1, "code.exe", "● Vibe Coder - Visual Studio Code"),
         _win(2, "notepad.exe", "Untitled - Notepad"),
     ]
     matched, missing = layout_history.match(entry, open_windows)

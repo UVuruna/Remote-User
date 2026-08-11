@@ -102,7 +102,7 @@ sight — this module is exactly what that test was already exercising.
   gained `"agent": "claude"` on 2026-08-06; his copy never did; the set could
   then only match by TITLE, and Claude Code names its VS Code tab after the
   CONVERSATION — his title reads *"Voditi agente i kontrolisati grid skice -
-  Remote User - Visual Studio Code [Administrator]"*, so the condition was
+  Vibe Coder - Visual Studio Code [Administrator]"*, so the condition was
   unsatisfiable forever. The same engine had already kept "Anywhere" in his
   Settings set after the update that replaced it, and `wheel_order` was one
   release from joining them.

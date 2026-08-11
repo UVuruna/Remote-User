@@ -124,7 +124,7 @@ string can be shortened. The one deliberate ellipsis this app draws ("More
 languages (2)…") declares itself with `data-opens-more` in `client/panels.js`,
 in the product rather than in an allow-list nobody editing the product would
 see. Self-tested by planting the cap again: 14 checks fail, naming *"Claude
-Code - Remote User - V…" … was cut with 129 CSS px still free on its row*.
+Code - Vibe Coder - V…" … was cut with 129 CSS px still free on its row*.
 
 **THE REGION FRAME OPENS CLEAR OF EVERY CONTROL** (same grader). `#region-panel`
 draws at z-index 55, above every control, so a newborn grab frame lying on one
@@ -1311,7 +1311,7 @@ it has encoded one; past `h264_head_timeout` the open raised. **(2)**
 open — `ws.close(1011)` — and that socket carries input, layouts, dictation and
 presence as well as pictures.
 
-His own `%LOCALAPPDATA%\RemoteUser\server.log`, 2026-08-10:
+His own `%LOCALAPPDATA%\VibeCoder\server.log`, 2026-08-10:
 
 ```
 20:29:33,516 INFO  h264_streamer: H.264 session opened — 1 active, codec avc1.4D4032
@@ -1511,7 +1511,7 @@ fail-closed step in `build.py` (0x/6).
 
 ### `test_actions_migration.py` — Actions Migration Gate
 Proves that a NEW VERSION'S FIELDS actually reach the owner's own
-`%LOCALAPPDATA%\RemoteUser\actions.json`. His copy is seeded once, at his first
+`%LOCALAPPDATA%\VibeCoder\actions.json`. His copy is seeded once, at his first
 install, and never replaced — `merge_shipped_pools` is the only path a later
 version has into it, and until 2026-08-07 it copied a **hardcoded list of field
 names** (`name, icon, required, process, title`). Anything invented after that
@@ -1557,7 +1557,7 @@ Run: `.venv\Scripts\python tests/test_actions_migration.py` — also in
 ### `test_update_handover.py` — Update Handover Gate
 Proves that an update never costs him the session he is installing FROM. His
 report on 2026-08-07: *"dešava se da ja ne mogu da instaliram novu verziju ako
-nisam kući, zato što čim uđem u instalaciju on će meni ugasiti Remote User i
+nisam kući, zato što čim uđem u instalaciju on će meni ugasiti Vibe Coder i
 više neću moći da komandujem odavde."* Every fix this project ships reaches him
 only through an install, so an install that kills the remote session is a bug
 that eats the project.

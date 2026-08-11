@@ -1,6 +1,14 @@
-# Remote User
+# Vibe Coder
 
 Control your Windows PC from an Android tablet or phone — see the screen, tap to click, type on the native keyboard. No app store, no cables, no cloud: the PC serves a web page, the tablet opens it, and everything stays on your local network.
+
+## Why "Vibe Coder"
+
+Because it turns your phone into the machine: you write code from the beach,
+from the bath, thumbing a controller like you are playing a game, and what
+comes out the other end is a running program. "Remote User" described the
+plumbing; "Vibe Coder" names what the product is actually for, in the words
+the market already uses for it.
 
 ## Table of Contents
 
@@ -20,7 +28,7 @@ Control your Windows PC from an Android tablet or phone — see the screen, tap 
 
 ## 🖥️ Overview
 
-Remote User has two sides:
+Vibe Coder has two sides:
 
 - **PC server (Python)** — captures the screen, streams it over the local network, and injects mouse/keyboard input it receives back.
 - **Tablet client (web page / PWA)** — served by the PC itself and opened in Chrome on the Android device. Displays the live screen; touch gestures and the native soft keyboard are translated into input events. **Zero Android development** — the browser is the app.
@@ -107,7 +115,7 @@ This keeps the exact security model: end-to-end encrypted, no ports forwarded, a
 
 ## 🚀 Quick Start
 
-**Installed app (the normal way):** run `RemoteUser_Setup.exe` (built by [Setup (folder)](setup/___setup.md)). The installer carries everything — bundled ffmpeg, a chain-installed Tailscale, the firewall rule — you never install a dependency by hand. Launch **Remote User**, scan the QR in the window with the phone camera, done. The app lives in the tray; closing the window keeps it running. Full step-by-step: [Setup Guide](GUIDE.md) (the apps guide you through these same steps on screen).
+**Installed app (the normal way):** run `VibeCoder_Setup.exe` (built by [Setup (folder)](setup/___setup.md)). The installer carries everything — bundled ffmpeg, a chain-installed Tailscale, the firewall rule — you never install a dependency by hand. Launch **Vibe Coder**, scan the QR in the window with the phone camera, done. The app lives in the tray; closing the window keeps it running. Full step-by-step: [Setup Guide](GUIDE.md) (the apps guide you through these same steps on screen).
 
 **Dev checkout (headless CLI):**
 
@@ -124,7 +132,7 @@ The CLI prints the pairing URL and a QR (console + image viewer). Dev note: H.26
 ## 📁 Project Structure
 
 ```
-📁 Remote User/
+📁 Vibe Coder/
   📝 README.md         ← You are here
   📝 GUIDE.md          ← Step-by-step setup guide (mirrored by the in-app guidance)
   📝 ROADMAP.md        ← Development phases and status
@@ -191,4 +199,3 @@ The CLI prints the pairing URL and a QR (console + image viewer). Dev note: H.26
 - [Android (folder)](android/___android.md) — the phone app (shell around the client)
 - [Tests (folder)](tests/___tests.md) — end-to-end input gate (run fail-closed by the build)
 - [Setup (folder)](setup/___setup.md) — build pipeline, installer, APK
-- [Rename handover](RENAME.md) — the approved Remote User ➜ Vibe Coder rename, pending execution

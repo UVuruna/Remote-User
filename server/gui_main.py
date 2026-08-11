@@ -1,4 +1,4 @@
-"""Remote User desktop app entry point — window + tray around the server core.
+"""Vibe Coder desktop app entry point — window + tray around the server core.
 
 This is what the installed EXE runs. Order matters exactly as in main.py:
 bootstrap first (DPI awareness before any screen-touching import), then Qt,
@@ -7,7 +7,7 @@ installer's autostart entry); the server itself always starts on launch.
 
 ONE INSTANCE PER PC (owner 2026-08-09). The handover fork of that night —
 "instalirao mi je preko 20 aplikacija" — multiplied  # lang-ok: owner quote
-because every extra RemoteUser.exe the racing handover scripts started simply
+because every extra VibeCoder.exe the racing handover scripts started simply
 LIVED: each one checked GitHub within seconds, each found one of that night's
 six releases newer than itself, and each could arm an installer of its own.
 A named Win32 mutex collapses the swarm to one: whoever claims the name runs,
@@ -19,7 +19,7 @@ stays unguarded (a leftover dev server is its own, separate story).
 import logging
 import sys
 
-MUTEX_NAME = "RemoteUserGuiSingleton"
+MUTEX_NAME = "VibeCoderGuiSingleton"
 
 # The claimed mutex handle, held for the WHOLE process on purpose and never
 # closed by us: the OS frees a named mutex the instant its holder dies,
@@ -98,14 +98,14 @@ def main() -> None:
     # pass on a dev PC whose real app is running.
     if not _claim_gui_singleton():
         logging.getLogger(__name__).warning(
-            "Remote User is already running — this second instance exits "
+            "Vibe Coder is already running — this second instance exits "
             "(single-instance guard, owner 2026-08-09)")
         return
 
     from PySide6.QtWidgets import QApplication
 
     app = QApplication(sys.argv)
-    app.setApplicationName("Remote User")
+    app.setApplicationName("Vibe Coder")
     app.setQuitOnLastWindowClosed(False)  # closing the window hides to tray
 
     from gui.main_window import MainWindow

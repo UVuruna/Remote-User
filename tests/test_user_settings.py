@@ -20,7 +20,7 @@ gate holds for settings.json.
 AND IT STARTS FROM HIS FILE, NOT FROM OURS. The actions.json failure ran four
 releases green because every guard built its "user file" as a copy of the
 shipped one, so it already had the new shape before the migration ran. The
-fixture below is the LITERAL text of %LOCALAPPDATA%/RemoteUser/settings.json as
+fixture below is the LITERAL text of %LOCALAPPDATA%/VibeCoder/settings.json as
 it stood on his machine on 2026-08-08, dead key and all.
 """
 

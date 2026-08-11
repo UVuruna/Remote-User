@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.RemoteUser" parent="Theme.AppCompat.NoActionBar">
+    <style name="Theme.VibeCoder" parent="Theme.AppCompat.NoActionBar">
         <item name="android:windowBackground">@color/surface0</item>
         <item name="android:statusBarColor">@color/surface0</item>
         <item name="android:navigationBarColor">@color/surface0</item>
