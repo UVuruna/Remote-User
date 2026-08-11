@@ -22,12 +22,21 @@
 
 /* Settings → Sets: the wheel-composition picker (owner 2026-08-05).
    Same overlay pattern as the wizard. */
+/* `#set-editor-panel` joined the list on 2026-08-11 (round 40's independent
+   visual proof). set-editor.css deliberately styles only what is NEW and
+   reuses `.sets-card`/`.sets-row`/`.sets-done` from here — but the OVERLAY
+   itself is a property of the panel element, not of the card, and the new
+   panel was never added to these three selector lists. Without them it has no
+   `position: fixed`, no scrim and no centring: it rendered in normal document
+   flow under the fixed controls, so the whole set editor was invisible on the
+   real page and its Save button sat off the bottom of the screen. */
 #sets-panel,
 #quality-panel,
 #phone-panel,
 #claude-panel,
 #dictation-panel,
 #notice-panel,
+#set-editor-panel,
 #choice-panel {
   position: fixed;
   inset: 0;
@@ -44,6 +53,7 @@
 #claude-panel[hidden],
 #dictation-panel[hidden],
 #notice-panel[hidden],
+#set-editor-panel[hidden],
 #choice-panel[hidden] { display: none; }
 
 /* A chooser row is a BUTTON, not a checkbox row — one tap picks and closes
@@ -512,6 +522,7 @@
   body #claude-panel,
   body #dictation-panel,
   body #notice-panel,
+  body #set-editor-panel,
   body #choice-panel,
   body #layout-panel {
     overflow-y: auto;
@@ -800,6 +811,7 @@ button.sets-row:active { background: var(--accent-glow); border-color: var(--acc
   body #claude-panel,
   body #dictation-panel,
   body #notice-panel,
+  body #set-editor-panel,
   body #choice-panel,
   body #layout-panel {
     overflow-y: auto;
