@@ -17,6 +17,7 @@ import logging
 import time
 
 import clipboard
+import clipboard_sync
 import cv2
 import numpy as np
 import pillow_heif
@@ -200,6 +201,10 @@ def paste_text(injector: InputInjector, text: str, enter: bool, guard=None) -> s
     if not text:
         return ""
     if clipboard.copy_text(text):
+        # Written on the phone's behalf (task 182) — the live clipboard
+        # listener must not read this back and push it to the phone as if
+        # it were a fresh copy made at the PC.
+        clipboard_sync.note_written(text)
         injector.press_chord("ctrl+v")
     else:
         logger.warning("Clipboard busy — typing %r instead of pasting it", text[:40])

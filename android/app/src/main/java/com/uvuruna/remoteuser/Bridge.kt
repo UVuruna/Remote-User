@@ -1,6 +1,8 @@
 package com.uvuruna.remoteuser
 
 import android.Manifest
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -169,16 +171,21 @@ class Bridge(private val host: MainActivity) {
      *  orientation (owner 2026-08-02); "" unlocks (full-desktop view,
      *  rotation free). The page sends "landscape" or "portrait" — the owner
      *  banned the word "wide" on 2026-08-07: one name per thing. "wide" is
-     *  still accepted so a page from an older PC keeps rotating. */
+     *  still accepted so a page from an older PC keeps rotating.
+     *
+     *  Task 204: the mode is REMEMBERED in Prefs, not just set on this live
+     *  Activity instance. `requestedOrientation` is not persisted by Android
+     *  at all — an Activity recreation (the process reclaimed for memory
+     *  during an excursion's picker, an OEM quirk) comes back with a FRESH
+     *  instance defaulting to the manifest's unspecified orientation, and
+     *  the page only calls this method when the layout FOCUS changes, so a
+     *  recreated Activity that landed back on the same focused layout would
+     *  never be told to lock again. `onCreate`/`onResume` re-assert the
+     *  remembered mode before the page has even loaded. */
     @JavascriptInterface
     fun lockOrientation(mode: String) {
-        host.runOnUiThread {
-            host.requestedOrientation = when (mode) {
-                "portrait" -> android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
-                "landscape", "wide" -> android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
-                else -> android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-            }
-        }
+        Prefs.setOrientLock(host, mode)
+        host.runOnUiThread { host.applyOrientationLock(mode) }
     }
 
     /** The page's Mic switcher (owner 2026-08-04): start one listening
@@ -285,6 +292,25 @@ class Bridge(private val host: MainActivity) {
      *  them. The PC cannot enumerate them itself. */
     @JavascriptInterface
     fun ttsVoices(): String = host.notifier.voices()
+
+    /** THE CLIPBOARD LIVES ON BOTH DEVICES (task 182): a NEW method, not an
+     *  argument added to an existing one — the page is served by the PC
+     *  while this shell is installed separately, so a changed signature
+     *  would simply stop resolving for an older page.
+     *
+     *  Android lets only the FOREGROUND app write the system clipboard —
+     *  true while this session streams, false during an away. The page
+     *  already holds a push it could not deliver then (`_pending` in
+     *  `server/clipboard_sync.py`) and only calls this once it is visible
+     *  again, so no guard is needed here beyond what `ClipboardManager`
+     *  itself already enforces. */
+    @JavascriptInterface
+    fun setClipboard(text: String) {
+        host.runOnUiThread {
+            val cm = host.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            cm.setPrimaryClip(ClipData.newPlainText("RemoteUser", text))
+        }
+    }
 
     // ── The waiting channel (owner decree 2026-08-07) ────────────────────
     // *"Radimo taj mali servis … android strana čeka signal, ne prima ništa
