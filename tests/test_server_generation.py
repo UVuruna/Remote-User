@@ -158,6 +158,10 @@ def install_fakes():
     server_core.pairing.pairing_urls = lambda _t: {
         "qr": "u", "lan": "u", "tailscale_ip": None}
     server_core.create_app = lambda *a, **kw: object()
+    # 202 registers the window-offer route on the app at _serve; this gate's
+    # app is a bare object on purpose (routes are not its subject), so the
+    # registration is stubbed like every other collaborator above.
+    server_core.layout_popup.register = lambda *a, **kw: None
     server_core.traffic.METER.start = lambda: None
     server_core.uvicorn = types.SimpleNamespace(
         Server=FakeUvicorn, Config=lambda *a, **kw: object())
