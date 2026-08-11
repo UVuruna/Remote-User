@@ -16,7 +16,8 @@
 // --- Saved preferences -----------------------------------------------------
 
 const QUALITY_FPS = [0, 10, 15, 30, 60]; // 0 = follow the PC (its own max)
-const QUALITY_RES = ["full", "2/3", "1/2"];
+// "native" is ABOVE the PC's own encoder width — see RAISING below.
+const QUALITY_RES = ["native", "full", "2/3", "1/2"];
 const QUALITY_BR = ["high", "mid", "low"];
 const QUALITY_DEFAULTS = { fps: 0, res: "full", bitrate: "high", auto: false };
 
@@ -35,10 +36,49 @@ function setStreamBase(base) {
   }
 }
 
-// An fps step at or above the PC's own frame rate is identical to "Max" — the
-// server clamps it away (it only ever lowers). Saying so beats pretending.
-function fpsUnreachable(fps) {
-  return !!(streamBase && fps > 0 && fps >= streamBase.fps);
+// --- RAISING (owner decision, task 131) ------------------------------------
+// The PC's card is the DEFAULT, not a wall. LOWERING is free — it happens
+// inside this client's own ffmpeg on the PC and touches nothing else. RAISING
+// is not: the shared capture has to grab faster or wider, so every encoder
+// running off it is rebuilt and THE PICTURE BLINKS. That is affordable only
+// because one device at a time is a hard rule (4409), and it is never done
+// silently — a raised step SAYS it will blink, before he taps it.
+//
+// Two axes can be raised, and they are the two the PC's own defaults take
+// away: the frame rate, and the encoder width (task 130 lowered the shipped
+// default to 2560, so "Native" is how he gets his 4K monitor back). The
+// bitrate cannot: its steps are PERCENTAGES of the PC's own choice by the
+// owner's 2026-08-05 rule, so there is no number above "High" to ask for.
+
+/** True when this fps step is ABOVE what the PC is set to — reachable, but
+ *  only by rebuilding capture. Replaces the old `fpsUnreachable`, which greyed
+ *  these out on the belief that the server would clamp them away. */
+function fpsRaises(fps) {
+  return !!(streamBase && fps > 0 && fps > streamBase.fps);
+}
+
+/** An fps step EQUAL to the PC's rate is simply "Max" said twice — not a
+ *  raise, and not a lie either. Left selectable and unmarked. */
+function fpsUnreachable() {
+  return false;
+}
+
+/** "Native" asks for the monitor's own width when the PC's encoder is set
+ *  lower. When the PC already streams the full monitor it is the same picture
+ *  as "Full" and is marked so rather than offered as a phantom upgrade. */
+function resRaises(res) {
+  return !!(res === "native" && streamBase && monitor &&
+            streamBase.width < monitor.w);
+}
+
+/** What the server needs in order to rebuild capture — absent (0) whenever
+ *  nothing is being raised, so an ordinary panel tap carries nothing extra. */
+function raiseRequest() {
+  const p = qualityPrefs();
+  return {
+    raise_fps: fpsRaises(p.fps) ? p.fps : 0,
+    raise_width: resRaises(p.res) && monitor ? monitor.w : 0,
+  };
 }
 
 function rawQualityPrefs() {
@@ -85,7 +125,10 @@ function qualityOverridden() {
 }
 
 function sendQuality() {
-  send({ type: "quality", ...effectiveQuality() });
+  // `raise_*` rides the existing message as optional fields (the cursor-shape
+  // pattern): a PC that predates task 131 ignores them and the panel simply
+  // cannot go above its card, which is exactly the old behaviour.
+  send({ type: "quality", ...effectiveQuality(), ...raiseRequest() });
 }
 
 function refreshQualityButtons() {
@@ -133,16 +176,27 @@ function openQualityPanel() {
     ? `This PC is set to <b>${b.fps} fps · ${b.width}×${b.height} · ${mbpsLabel(b.bitrate)}</b>
        — change that in the Remote User window on the PC.`
     : "Waiting for the PC's own settings…";
+  // A step marked ↑ is ABOVE the PC's own card (task 131). It is allowed —
+  // the PC is a default, not a wall — but it rebuilds the shared capture, so
+  // the picture blinks. Said here, before he taps, rather than discovered.
+  const raised = QUALITY_FPS.some(fpsRaises) || resRaises("native");
   card.innerHTML = `<h2>Stream quality</h2>
     <p class="sets-sub">${pcLine}</p>
-    <p class="sets-sub">The steps below can only go <b>lower</b> than the PC —
-       greyed-out steps are already above what it allows.</p>`;
+    <p class="sets-sub">Lower steps apply instantly.${raised ? `
+       Steps marked <b>↑</b> are above what the PC is set to — they still work,
+       but the picture <b>blinks once</b> while the PC rebuilds the capture.` : ""}</p>`;
 
+  const upIf = (test) => (v, label) => (test(v) ? `${label} ↑` : label);
+  const fpsLabel = upIf(fpsRaises);
   card.appendChild(segRow("FPS", QUALITY_FPS,
-    ["Max", "10", "15", "30", "60"], p.fps, (v) => saveQuality({ fps: v }),
-    fpsUnreachable));
+    ["Max", "10", "15", "30", "60"].map((l, i) => fpsLabel(QUALITY_FPS[i], l)),
+    p.fps, (v) => saveQuality({ fps: v })));
   card.appendChild(segRow("Resolution", QUALITY_RES,
-    ["Full", "⅔", "½"], p.res, (v) => saveQuality({ res: v })));
+    [resRaises("native") ? "Native ↑" : "Native", "Full", "⅔", "½"],
+    p.res, (v) => saveQuality({ res: v }),
+    // "Native" with nothing above the PC's width is the same picture as
+    // "Full" — greyed rather than offered as a phantom upgrade.
+    (v) => v === "native" && !resRaises("native")));
   card.appendChild(segRow("Bitrate", QUALITY_BR,
     b ? [mbpsLabel(b.bitrate), mbpsLabel(b.bitrate_mid), mbpsLabel(b.bitrate_low)]
       : ["High", "Mid", "Low"],

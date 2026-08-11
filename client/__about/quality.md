@@ -53,3 +53,34 @@ Tailscale addresses). `rawQualityPrefs()` is what is stored;
 `qualityPrefs()` is that clamped against the current base, and
 `setStreamBase()` rewrites a stored fps that a lowered PC has just made
 impossible — a lit step that cannot happen is a lie.
+
+## Raising the ceiling (owner decision, task 131)
+
+The PC's card is a **default, not a wall**. Lowering is free — it happens
+inside this client's own ffmpeg on the PC and touches nothing else. Raising is
+not: the shared capture has to grab faster or wider, so every encoder running
+off it is rebuilt and **the picture blinks once**. That is affordable only
+because one device at a time is a hard rule (4409), and it is never done
+silently — every raised step is marked **↑** and the panel's own subtitle says
+it will blink, before he taps.
+
+Two axes can be raised, and they are the two the PC's defaults take away:
+
+- **FPS** — steps above the PC's rate. They used to be greyed out on the
+  belief that the server would clamp them away; `fpsRaises()` replaced
+  `fpsUnreachable()`, which now returns `false` for everything.
+- **Resolution → "Native"** — the monitor's own width when the PC's encoder is
+  set lower. This matters because task 130 lowered the shipped encoder width to
+  2560 to stop starving the phone; "Native" is how he asks for his 4K monitor
+  back. Greyed (not offered as a phantom upgrade) when the PC already streams
+  the full monitor.
+- **Bitrate cannot be raised.** Its steps are PERCENTAGES of the PC's own
+  choice by the owner's 2026-08-05 rule, so there is no number above "High" to
+  ask for. Stated rather than silently missing.
+
+`raiseRequest()` puts `raise_fps` / `raise_width` on the existing `quality`
+message as OPTIONAL fields (the cursor-shape pattern): a PC that predates this
+ignores them and the panel simply cannot go above its card — exactly the old
+behaviour. Server side: `capture.RawFrameSource.raise_limits` decides,
+`H264Manager.raise_limits` rebuilds. Gate:
+[`tests/test_quality_raise.py`](../../tests/___tests.md).
