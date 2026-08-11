@@ -575,6 +575,8 @@ function refreshCategories() {
     if (groups[side] >= n) groups[side] = 0;
     renderGroup(side);
   }
+  // Groups just (re)built at their real width — re-measure the bar (task 237).
+  if (typeof layBarFit === "function") layBarFit();
 }
 
 // Buttons fire on pointerUP — the moment a touch grants transient user
@@ -990,6 +992,7 @@ function setPadShape(orient, value) {
   applyPadShape();
   renderGroup("left");
   renderGroup("right");
+  if (typeof layBarFit === "function") layBarFit();
 }
 
 applyPadShape();

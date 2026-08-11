@@ -38,7 +38,13 @@ from _audit_panels import DICT_STAGE_JS, LAYOUT_LIST_STAGE_JS  # noqa: E402
 HIDE_HOLD_WAIT_MS = 550
 
 SIZES = [("portrait 412x915", 412, 915), ("landscape 915x412", 915, 412),
-         ("tablet landscape 1280x800", 1280, 800)]
+         ("tablet landscape 1280x800", 1280, 800),
+         # Task 237, his sizing rule: a SECOND real device class — a 1280x800
+         # tablet rotated upright — is the other half of the min-width proof.
+         # His phone (412-class) must OVERFLOW the row; his tablet (800-class)
+         # must FIT it between the D-pad columns. Neither claim is provable at
+         # only one width.
+         ("tablet portrait 800x1280", 800, 1280)]
 
 # Two layouts, so the bar is not hidden (`updateLayoutBar` hides it when there
 # are none) and the list has rows to draw.
@@ -587,6 +593,123 @@ def _checks(page, label, out):
                   " layoutActive = null; updateLayoutBar()")
 
 
+# ── TASK 237: HIS FULL SPEC ON THE BAR'S GEOMETRY (verdict ~21:4x) ──────────
+# Three claims, each provable at exactly one of the three sizes this function
+# is called at: his PHONE (412-class portrait) must OVERFLOW the row and drop
+# into its own full-width strip; his TABLET (800-class portrait) must FIT the
+# bar IN the row, sandwiched between the D-pad columns, at the SAME size as
+# the top bar; LANDSCAPE must honor the Bottom setting (the bug being fixed)
+# and stay centered under the ~560px cap. Each check is proven RED by
+# reverting the one CSS/JS rule it guards — see the session report for the
+# planted-defect transcript.
+def _bar_geometry_checks(page, label, out):
+    page.evaluate(STAGE_LAYOUTS)
+    page.wait_for_timeout(80)
+
+    if label.startswith("tablet portrait"):
+        # Catches: dropping `--group-w` (or the whole in-row rule) — the bar
+        # would either overflow on a device with plenty of room, or draw at
+        # some width that does not match the top row's own reservation.
+        bad = page.evaluate("""() => {
+          const out = [];
+          setLayBarPos('bottom');
+          if (document.body.classList.contains('laybar-overflow')) {
+            out.push('his tablet (800-class portrait) overflowed the row — ' +
+                     'there is room, it must fit');
+          }
+          const bar = document.getElementById('layout-bar').getBoundingClientRect();
+          const groups = [...document.querySelectorAll('.group')]
+            .map((g) => g.getBoundingClientRect())
+            .sort((a, b) => a.left - b.left);
+          const [gl, gr] = groups;
+          if (bar.left < gl.right - 1 || bar.right > gr.left + 1) {
+            out.push('the bar is not sandwiched between the D-pad columns: ' +
+              JSON.stringify({barLeft: Math.round(bar.left), barRight: Math.round(bar.right),
+                               leftColRight: Math.round(gl.right), rightColLeft: Math.round(gr.left)}));
+          }
+          setLayBarPos('top');
+          const barTop = document.getElementById('layout-bar').getBoundingClientRect();
+          setLayBarPos('bottom');
+          if (Math.abs(bar.width - barTop.width) > 1 || Math.abs(bar.height - barTop.height) > 1) {
+            out.push('the in-row bottom bar is not the SAME size as the top bar: ' +
+              JSON.stringify({bottom: {w: Math.round(bar.width), h: Math.round(bar.height)},
+                               top: {w: Math.round(barTop.width), h: Math.round(barTop.height)}}));
+          }
+          setLayBarPos('top');
+          return out;
+        }""")
+        out[f"tablet (800-class): the bottom bar fits IN the row, between the columns @ {label}"] = not bad
+        if bad:
+            print(f"  DETAIL tablet in-row @ {label}: {bad}")
+
+    if label.startswith("portrait"):
+        # Catches: raising LAY_BAR_MIN_GAP so low his own phone never
+        # overflows (the whole point of the rule), or dropping the corner-drop
+        # / own-strip fallback CSS so an overflowed bar just gets squeezed.
+        bad = page.evaluate("""() => {
+          const out = [];
+          setLayBarPos('bottom');
+          if (!document.body.classList.contains('laybar-overflow')) {
+            out.push('his phone (412-class portrait) did NOT overflow at the ' +
+                     'bottom — the row has no room for it there');
+          }
+          const barBottom = document.getElementById('layout-bar').getBoundingClientRect();
+          if (barBottom.width < 300) {
+            out.push('the overflowed bottom bar is only ' + Math.round(barBottom.width) +
+                     'px wide — it should spend its own full row, not be squeezed');
+          }
+          setLayBarPos('top');
+          if (!document.body.classList.contains('laybar-overflow')) {
+            out.push('his phone did NOT overflow at the top either');
+          }
+          const corner = document.getElementById('btn-newlay').getBoundingClientRect();
+          const barTop = document.getElementById('layout-bar').getBoundingClientRect();
+          if (corner.top <= barTop.bottom - 1) {
+            out.push('the Layout corner button did not drop BELOW the ' +
+                     'overflowed top bar\\'s own row');
+          }
+          return out;
+        }""")
+        out[f"phone (412-class): the bar overflows into its own row @ {label}"] = not bad
+        if bad:
+            print(f"  DETAIL phone overflow @ {label}: {bad}")
+
+    if label.startswith("landscape"):
+        # Catches: the pre-237 bug (Bottom ignored in landscape, bar always at
+        # the same top y) coming back, or the ~560px cap / centering breaking.
+        bad = page.evaluate("""() => {
+          const out = [];
+          setLayBarPos('top');
+          const barTopPos = document.getElementById('layout-bar').getBoundingClientRect();
+          setLayBarPos('bottom');
+          const barBottomPos = document.getElementById('layout-bar').getBoundingClientRect();
+          if (Math.abs(barBottomPos.top - barTopPos.top) < 5) {
+            out.push('the Bottom setting did nothing in landscape — the bar ' +
+                     'stayed at the same y: ' + JSON.stringify(
+                     {top: Math.round(barTopPos.top), bottom: Math.round(barBottomPos.top)}));
+          }
+          if (barBottomPos.top <= barTopPos.top) {
+            out.push('the "bottom" bar is not below the "top" bar in landscape');
+          }
+          if (barBottomPos.width > 561) {
+            out.push('the landscape bar exceeds the 560px max width: ' +
+                     Math.round(barBottomPos.width));
+          }
+          const cx = (barBottomPos.left + barBottomPos.right) / 2;
+          if (Math.abs(cx - innerWidth / 2) > 2) {
+            out.push('the landscape bar is not centered: ' + Math.round(cx) +
+                     ' vs ' + Math.round(innerWidth / 2));
+          }
+          setLayBarPos('top');
+          return out;
+        }""")
+        out[f"landscape: Bottom is honored, bar centered under the max width @ {label}"] = not bad
+        if bad:
+            print(f"  DETAIL landscape bar @ {label}: {bad}")
+
+    page.evaluate("closeLayoutPanel(); layouts = []; layoutActive = null; updateLayoutBar()")
+
+
 def main() -> int:
     import test_input_pipeline as gate
     threading.Thread(target=gate.run_server, daemon=True).start()
@@ -621,6 +744,7 @@ def main() -> int:
             page.wait_for_selector("#group-left button", timeout=8000)
             page.wait_for_function("() => monitor.w > 0", timeout=10000)
             _checks(page, label, results)
+            _bar_geometry_checks(page, label, results)
             _reflow_checks(page, label, results, LAYOUT_LIST_STAGE_JS,
                            DICT_STAGE_JS)
             results[f"no page errors @ {label}"] = not errors

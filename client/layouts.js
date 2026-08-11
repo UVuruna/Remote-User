@@ -63,9 +63,67 @@ function applyLayBarPos() {
 function setLayBarPos(pos) {
   prefSet("layBarPos", LAY_BAR_POSITIONS.includes(pos) ? pos : "top");
   applyLayBarPos();
+  layBarFit();
 }
 
 applyLayBarPos();
+
+// ── HIS SIZING RULE, TASK 237 (verdict ~21:4x) ──────────────────────────────
+// The bar has a MINIMUM width it needs to draw the name usefully; below it,
+// the row can't hold both the bar AND its neighbours (the corner buttons at
+// top, the two D-pad columns at bottom), so it takes its OWN full row instead
+// of shrinking further — `body.laybar-overflow`, toggled here.
+//
+// THE NUMBER: 340 CSS px for the bar's own content width, chosen from his two
+// real devices (owner spec ~21:5x): on his PHONE (portrait 412-class CSS
+// width) the row must NOT fit — the overflow layout applies; on his TABLET
+// (portrait ~800-class, a 1280x800 tablet rotated) it MUST fit between the
+// columns. Measured against both device classes at both bar positions:
+//   TOP    reserves 2 * (space-m 16 + corner 58 + space-s 8) = 164px, plus
+//          the bar's own 2 * space-s (8px) gap to those buttons = 16px more,
+//          so the threshold GAP between the two corner buttons is 340+16=356.
+//   BOTTOM reserves the two D-pad groups' own width (190px each in the
+//          default cross shape) the same way: gap threshold 356 as well —
+//          the SAME 340px bar content plus the SAME 16px of margin either
+//          side, whatever sits beside it.
+//   Phone @ top:    338 - 74  =  264px gap  → under 356 → OVERFLOW.
+//   Phone @ bottom: 206 - 206 =    0px gap  → under 356 → OVERFLOW.
+//   Tablet @ top:   726 - 74  =  652px gap  → over  356 → fits, in-row.
+//   Tablet @ bottom:594 - 206 =  388px gap  → over  356 → fits, in-row.
+// A number anywhere in 320-360 clears the same four cases; 340 sits in the
+// middle of his stated range with margin either side (up to ~92px of slack
+// at the phone, ~30px at the tightest tablet case) so a later font or corner
+// retune does not flip the verdict by a few pixels.
+const LAY_BAR_MIN_GAP = 356;  // = 340 (bar content) + 2 * 8 (space-s margins)
+
+// Landscape is its OWN geometry (ballot drawings 1-3, approved as drawn): a
+// centered bar with a max width, never the portrait in-row/overflow choice —
+// see client/layouts.css. Measuring the portrait gap there would be
+// meaningless (the bar is never asked to stand between the corners or the
+// D-pad columns in landscape), so this function does nothing there and the
+// CSS media query carries the whole rule by itself.
+function layBarFit() {
+  if (window.matchMedia && window.matchMedia("(orientation: landscape)").matches) {
+    document.body.classList.remove("laybar-overflow");
+    return;
+  }
+  let gap;
+  if (layBarPos() === "bottom") {
+    const left = document.querySelector(".group.left");
+    const right = document.querySelector(".group.right");
+    if (!left || !right) return;   // groups not built yet — re-run once they are
+    gap = right.getBoundingClientRect().left - left.getBoundingClientRect().right;
+  } else {
+    const tl = document.getElementById("btn-newlay");
+    const tr = document.getElementById("btn-hide");
+    if (!tl || !tr) return;
+    gap = tr.getBoundingClientRect().left - tl.getBoundingClientRect().right;
+  }
+  document.body.classList.toggle("laybar-overflow", gap < LAY_BAR_MIN_GAP);
+}
+
+window.addEventListener("resize", layBarFit);
+if (window.visualViewport) window.visualViewport.addEventListener("resize", layBarFit);
 
 function updateLayoutBar() {
   layoutBar.hidden = layouts.length === 0;
@@ -74,6 +132,7 @@ function updateLayoutBar() {
   layNameEl.textContent = lay ? lay.name : "Desktop";
   layIconEl.hidden = !(lay && lay.icon);
   if (lay && lay.icon) layIconEl.src = lay.icon;
+  layBarFit();
 }
 
 // Switching a layout means the PC restores and re-places real windows — the

@@ -429,6 +429,90 @@ stands at the top, another that it appears and stands at the bottom.
   switch with two doors is two states to keep in step. `layBarPos()` /
   `setLayBarPos()` are unchanged and still live in this file.
 
+## The bar's MINIMUM width, and the bottom position rebuilt (task 237, verdict ~21:4x)
+
+His full spec, BALLOT-approved with one correction to the drawings: TOP is
+unchanged from the 2026-08-11 fix above — the name takes almost the whole row,
+the arrows are slim glyphs (~2 px gap) tight against the frame. BOTTOM is
+IDENTICAL to the top drawing, only at the bottom: WHEN THERE IS ROOM the bar
+sits **IN** the bottom controls row, between the left and right D-pad columns,
+at the SAME width/height/style as the top row, with the same edge gap from the
+bottom the top row has from the top. It is **never** on its own strip above
+the pads while there is room in the row — that shape (the one this file
+described above, "above the D-pad, never on it") is now the approved OVERFLOW
+fallback only ("slika 2 ok"), not the default any more. And there is a MINIMUM
+width: below it the bar takes its own full row instead of being squeezed —
+at TOP the Layout/Hide corners drop to the row below the bar; at BOTTOM the
+bar falls back to its own strip above the pads (the pre-237 shape). LANDSCAPE
+honors the Top/Bottom setting (bug fixed — it used to always sit at the top,
+full width regardless) and is centered under a ~560 px cap.
+
+- **`layBarFit()`** (client/layouts.js) is the new measurement: it reads the
+  REAL gap between whatever would share the row with the bar — the two corner
+  buttons at the top, the two `.group` elements at the bottom — and toggles
+  `body.laybar-overflow` when that gap is under `LAY_BAR_MIN_GAP` (356 CSS
+  px). It runs after `updateLayoutBar()`, `setLayBarPos()`, `refreshCategories()`
+  (a set swap rebuilds the groups) and `setPadShape()` (cross vs. column
+  changes a group's width), plus on `resize` and `visualViewport` resize — a
+  D-pad rebuild or a rotation is exactly when the measurement can change.
+  Landscape is skipped entirely (it removes `laybar-overflow` and returns):
+  landscape has no in-row/overflow CHOICE at all, only the centered/capped
+  shape below, so measuring the portrait gap there would be meaningless.
+- **The number: 340 CSS px of bar content** (356 measured as the gap between
+  neighbours, which folds in the bar's own 2×8px margin to them), chosen from
+  his two real devices (owner spec ~21:5x) — a phone (412-class CSS width)
+  must OVERFLOW at both positions; a tablet (a 1280x800 tablet rotated
+  upright, ~800-class CSS width) must FIT at both. The reservation on each
+  side is `space-m + X + space-s` where `X` is `--corner` at the top and the
+  new **`--group-w`** at the bottom (client/style.css, declared beside
+  `--group-h` the same way — a group's real rendered width, `3*corner+16px`
+  in the cross shape and plain `--corner` in the column shape, which is what
+  portrait uses by default, so top and bottom reserve the SAME width there).
+  Measured: phone-top gap 264px, phone-bottom gap 0-264px depending on pad
+  shape, tablet-top gap 652px, tablet-bottom gap 388px — 340 sits with slack
+  on every side of that 320-360 window so a later font or corner retune
+  cannot flip the verdict by a few pixels.
+- **The bottom in-row rule** (`body.laybar-bottom:not(.laybar-overflow)
+  #layout-bar`, wrapped in `@media (orientation: portrait)` — see below for
+  why the wrap is load-bearing) centers the bar vertically on the D-pad
+  groups' own height band (`bottom: … + (--group-h − --corner)/2`) and bounds
+  it horizontally with `--group-w` mirroring the top row's own
+  `space-m + X + space-s` formula. No frame override is needed — the base
+  `#lay-frame { flex: 1 1 auto }` rule already applies.
+- **The overflow fallback** at the bottom (`body.laybar-bottom.laybar-overflow
+  #layout-bar`) is the exact pre-237 rule this file described above: its own
+  strip, above the D-pad, spending the whole edge, one-line name. At the top
+  (`body.laybar-overflow:not(.laybar-bottom)`) the bar takes `left`/`right:
+  var(--space-m)` (its own full row) and `.corner` drops to
+  `top + --corner + --space-s` — below the bar's row. `--topbar` (the line
+  every floating notice starts below) grows by one more `--corner` in this
+  state, so a toast never covers the dropped corner row.
+- **Landscape is its own geometry**, in `@media (orientation: landscape)`:
+  centered (`left: 50%; transform: translateX(-50%)`), capped at
+  `min(560px, 100% - 2*(space-m+corner+space-s))`, honoring Top/Bottom for
+  VERTICAL placement only — at the bottom it clears the D-pad exactly like the
+  pre-237 formula (`+ --group-h + --space-s`), because landscape never had an
+  in-row shape to offer in the first place: a 915px-wide phone's capped,
+  centered bar already reaches into the two groups' own band, so sandwiching
+  gains nothing narrower is fought for.
+- **Why the portrait rules are wrapped in `@media (orientation: portrait)`
+  instead of standing bare**: a media query changes WHEN a rule is eligible,
+  never its SPECIFICITY. The bottom-position class selectors
+  (`body.laybar-bottom … #layout-bar`, specificity 1,2,1) outrank the plain
+  `#layout-bar` landscape rules (1,0,0) regardless of which orientation is
+  actually live, so an unscoped class rule still won the cascade in landscape
+  too — found live while building this round (the bar tried to center inside
+  a `left`/`right` box the portrait rule had already pinned, landing 280 px
+  off-screen). Scoping both sides to their own orientation lets the simpler
+  selector govern in landscape without a specificity fight.
+- Gate: `tests/test_phone_chrome.py` → `_bar_geometry_checks`, three
+  planted-defect-proven claims, one per size in `SIZES` (portrait phone,
+  landscape, and the new tablet-portrait 800x1280 entry) — his phone
+  overflows both positions, his tablet fits in-row at the bottom at the SAME
+  size as the top bar, and landscape honors Bottom while staying centered
+  under the cap. `tests/test_layout_audit.py` and `tests/run_guards.py` stay
+  green; visual proof in `.claude/layout-proof.md` → "ROUND 44".
+
 ## The desktop is a LIST OF MONITORS (owner 2026-08-09, task 155)
 
 His instruction: Monitor leaves the Settings menu and becomes part of these

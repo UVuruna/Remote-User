@@ -333,6 +333,15 @@ html, body {
    same edit. */
 :root { --group-h: calc(3 * var(--corner) + 16px); }
 body.pad-column { --group-h: calc(4 * var(--corner) + 42px + 32px); }
+/* HOW WIDE A GROUP STANDS (task 237) — the same reasoning as `--group-h`
+   above, read sideways: the layout bar's BOTTOM position needs to know a
+   group's real rendered width the same way the TOP position already knows a
+   corner button's (`--corner`). The cross is three COLUMNS of `--corner`
+   with two 8px gaps (the "up"/"center"/"down" cells all draw a `--corner` or
+   narrower button, so the widest column is `--corner`); the column shape
+   stacks everything into ONE column, `--corner` wide. */
+:root { --group-w: calc(3 * var(--corner) + 16px); }
+body.pad-column { --group-w: var(--corner); }
 
 .group {
   position: fixed;
