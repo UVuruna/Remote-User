@@ -162,6 +162,7 @@ def install_fakes():
     # app is a bare object on purpose (routes are not its subject), so the
     # registration is stubbed like every other collaborator above.
     server_core.layout_popup.register = lambda *a, **kw: None
+    server_core.recents.register = lambda *a, **kw: None
     server_core.traffic.METER.start = lambda: None
     server_core.uvicorn = types.SimpleNamespace(
         Server=FakeUvicorn, Config=lambda *a, **kw: object())
