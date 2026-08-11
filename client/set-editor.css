@@ -1,0 +1,96 @@
+/* Settings → Wheel sets → one set's editor (client/set-editor.js, owner
+   2026-08-04 / task 218b). Only what is NEW lives here: the card, its rows,
+   its checkboxes and its Save button are `.sets-card` / `.sets-row` /
+   `.sets-list` / `.sets-done` from panels.css — already styled, already
+   audited, already photographed, and a second copy of a measured surface is
+   how two panels come to look like two products. */
+
+/* THE ARRANGEMENT IS A PICTURE OF THE REAL THING. The grid below is the SAME
+   `grid-template-areas` the live D-pad uses (client/style.css → .group), so
+   what he taps here is laid out exactly where it will be under his thumb. Not
+   shared with that rule on purpose: the group is `position: fixed` on the edge
+   of the screen and this is a block inside a scrolling card — same geometry,
+   different job, and welding the two would put the panel's constraints on the
+   control that actually has to work. */
+.se-arrange {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-areas:
+    ".    up     ."
+    "left .      right"
+    ".    down   .";
+  justify-items: stretch;
+  margin: 0 auto var(--space-m);
+  width: min(300px, 100%);
+}
+
+/* The column shape, when THIS phone is showing the column (task 177 made the
+   shape a choice rather than an orientation — `padColumn()` is the one
+   question, and the editor asks it too). Auto-flow, so it follows the DOM
+   order the swap produced instead of needing four more named areas. */
+.se-arrange.se-column {
+  grid-template-columns: 1fr;
+  grid-template-areas: none;
+  width: min(220px, 100%);
+}
+
+.se-slot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 64px;
+  padding: 10px 6px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--glass-fill);
+  color: var(--text-primary);
+  font: 600 12px/1.2 system-ui, sans-serif;
+  text-align: center;
+  cursor: pointer;
+}
+.se-slot svg { width: 22px; height: 22px; }
+/* THE LABEL WRAPS — it is never cut. A command name that needs two lines gets
+   two lines and the cell grows with it (the arms are `1fr` and `min-height`,
+   so the row simply gets taller and the picture stays a picture). The ladder's
+   rung 2, and the reason the cell is a column-flex box rather than a fixed
+   pill: the whole point of this preview is that he can read what is going to
+   be under his thumb. */
+.se-slot span {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+/* THE ARMED CELL. A tap-to-swap picker has exactly one piece of state and it
+   must be unmistakable — his standing complaint about the selected switcher
+   (2026-08-09: a selected control that is barely distinguishable from an
+   unselected one). Filled with the accent and outlined, never dimmed. */
+.se-slot.picked {
+  background: var(--accent-glow);
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+/* THE EDIT DOOR on a row of the Sets picker. A button INSIDE the row's
+   `<label>`, so it must never activate the label's checkbox — set-editor.js
+   swallows the click; this only makes it look like the separate control it is.
+   It takes no space from the set's name: the name row keeps `flex: 1` and this
+   sits at the end at its own intrinsic width. */
+.sets-edit {
+  flex: none;
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--glass-fill);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+.sets-edit svg { width: 18px; height: 18px; }
+.sets-edit:active { background: var(--accent-glow); border-color: var(--accent); }

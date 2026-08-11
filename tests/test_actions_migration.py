@@ -325,7 +325,47 @@ def test_a_set_he_has_never_had_arrives_whole():
         "a newly shipped set arrived without its commands")
 
 
+# ── WHAT THE PHONE WROTE MUST OUTLIVE THE NEXT RELEASE (task 218b, 2026-08-11)
+# The phone's set editor writes `active` / `order_land` / `order_port` into the
+# same actions.json this module migrates. Those keys are already in
+# OWNER_SET_KEYS, which is exactly why the feature is safe — and that is a fact
+# nobody had a reason to keep true until now. This gate now holds it from BOTH
+# sides: `server/actions_api.py` asserts its own list is a subset at import
+# time, and this asserts the migration really carries the arrangement through.
+#
+# Without it the failure would be the quietest kind this project has: he
+# arranges his D-pad on the tablet, it works, and the NEXT release's merge
+# restores the shipped order without a word — a bug reported weeks later as
+# "it keeps resetting itself", with nothing in any log.
+def test_the_phones_arrangement_survives_the_next_release():
+    import actions_api
+    from gui.controls_data import OWNER_SET_KEYS, merge_shipped_pools
+
+    assert actions_api.PHONE_EDITABLE <= OWNER_SET_KEYS, (
+        f"the phone writes {sorted(actions_api.PHONE_EDITABLE - OWNER_SET_KEYS)}, "
+        "which this merge treats as OURS — the next update would silently "
+        "overwrite his arrangement")
+
+    shipped = shipped_actions()
+    mine = copy(HIS_FILE)
+    mouse = named(mine["categories"], "Mouse")
+    # What the phone would have saved: a different crew, in a chosen order,
+    # in BOTH shapes. His file has never carried the two order keys at all.
+    mouse["active"] = ["right", "click", "x1"]
+    mouse["order_land"] = [2, 0, 1]
+    mouse["order_port"] = [1, 2, 0]
+    merge_shipped_pools(mine, copy(shipped))
+    after = named(mine["categories"], "Mouse")
+    assert after["active"] == ["right", "click", "x1"], (
+        f"the phone's chosen crew did not survive the merge: {after.get('active')}")
+    assert after["order_land"] == [2, 0, 1] and after["order_port"] == [1, 2, 0], (
+        "the phone's arrangement did not survive the merge — his D-pad would "
+        "silently rearrange itself on the next update")
+
+
 CHECKS = [
+    ("the phone's arrangement survives the next release",
+     test_the_phones_arrangement_survives_the_next_release),
     ("his real file receives the agent switch",
      test_his_real_file_receives_the_agent_switch),
     ("a field nobody has invented yet arrives",
