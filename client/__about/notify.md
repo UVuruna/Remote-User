@@ -37,8 +37,22 @@ TextToSpeech engine's voices differ per device, per language pack, per
 Android version. A dev browser has no bridge and simply sends nothing.
 
 `msg.speak` still wins over everything: the desktop's "Say it out loud" off
-sends `false`, and the banner is raised regardless — muting one carrier never
-loses a notice.
+sends `false`, and the banner is raised regardless — a server-side mute is a
+separate, higher-priority rule from the phone's own per-device switches below.
+
+## THE LAST-RESORT RULE (task 226, owner ballot verdict)
+
+`notifyPrefs()` reads what the switches below are set to; `handleNotify()`
+never reads it directly — it reads `effectiveNotifyPrefs()`, which applies
+one override: **if all three of `banner`/`speak`/`tone` are off, the banner
+is answered ON anyway.** Muting every carrier at once is read as "give me
+back whichever one costs the least", never as "send nothing" — the banner
+needs no sound and is the only one of the three that still reaches him with
+the screen off. The Phone card's banner switch is labelled to say this
+("last resort — stays on if you mute the rest") so the override is never a
+silent surprise. `notifyPrefs()` itself is untouched by the rule — it is the
+raw, honestly-stored state the Phone card's UI reads back to show what he
+actually ticked.
 
 ## A tap on the notice goes THERE (owner 2026-08-08, task 110)
 
@@ -77,6 +91,13 @@ between the LAN and Tailscale addresses):
 - `speak` — TextToSpeech (default ON)
 - `tone` — the in-page chime (default **OFF**: it is the one that annoys when
   the phone sits on the desk beside the PC)
+
+`saveNotifyPrefs()` was, until task 226, a function nothing called — the
+switches existed in the read path and in `notifyPrefs()`'s defaults but had
+no door on the phone to change them. The door is the Phone card's
+"Notification channels" section
+([Phone Panel](phone-panel.md)): one on/off row per key, saved through
+`saveNotifyPrefs()` and re-read on the card's own re-render.
 
 ## The notice card (owner decree 2026-08-07)
 

@@ -61,7 +61,7 @@ from PySide6.QtCore import QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QFontMetrics
 from PySide6.QtWidgets import (
     QCheckBox, QComboBox, QDialog, QFormLayout, QHBoxLayout, QLabel,
-    QPushButton, QVBoxLayout, QWidget,
+    QPushButton, QSpinBox, QVBoxLayout, QWidget,
 )
 
 import threading
@@ -116,7 +116,7 @@ PHONE_FILLS = [("Outlined", "transparent"), ("Filled", "full")]
 # from the widest of them ALL so the cards' fields line up in one straight
 # edge instead of each card finding its own.
 FORM_LABELS = ("The phone", "Monitor", "Resolution", "Bitrate", "Frame rate",
-               "Voice", "Speaking pace")
+               "Voice", "Speaking pace", "Port", "JPEG quality")
 
 # The Voice dropdown's first entry: no choice at all, which is the honest
 # default — the phone then uses whatever its own engine considers best for
@@ -167,6 +167,23 @@ FOCUS_TEXT = ("While this is on, Windows stops other programs from jumping in "
 STARTUP_TEXT = ("Remote User starts hidden in the tray, so the phone can "
                 "reach this PC without anyone logging in and opening it.")
 
+# ADVANCED (task 226, owner ballot verdict) — the four config keys that had a
+# field in Settings but no door in this window: port, use_h264, jpeg_quality,
+# open_qr_image. Last card on purpose — every owner who never needs these
+# never has to scroll past them to reach anything he does need.
+PORT_TEXT = ("Which network port the PC listens on. Changing it needs the "
+             "server restarted — Apply & restart, same as the stream card.")
+H264_TEXT = ("H.264 is the normal path — hardware-encoded, small on the "
+             "wire. Off falls back to sending a plain JPEG picture every "
+             "frame, which any PC can do but costs far more bandwidth; use "
+             "it only if H.264 will not run here.")
+JPEG_QUALITY_TEXT = ("Sharpness of the JPEG fallback picture, 1 to 100. Only "
+                     "spent while H.264 is off — a native H.264 stream never "
+                     "reads this.")
+QR_IMAGE_TEXT = ("Also opens the pairing QR as its own image file when the "
+                 "server starts — useful for scanning it from a second "
+                 "screen. The app's own window shows the QR either way.")
+
 
 class SettingsWindow(QDialog):
     """Modeless, like the Traffic window: the owner watches the main window's
@@ -216,6 +233,7 @@ class SettingsWindow(QDialog):
         pair.addWidget(self._build_focus_card(), 1)
         pair.addWidget(self._build_startup_card(), 1)
         root.addLayout(pair)
+        root.addWidget(self._build_advanced_card())
 
     def _section(self, box: QVBoxLayout, title: str) -> None:
         label = QLabel(title)
@@ -480,6 +498,67 @@ class SettingsWindow(QDialog):
         self.startup_caption = self._caption(box, STARTUP_TEXT)
         return frame
 
+    def _build_advanced_card(self):
+        """LAST card, deliberately: port / H.264 / JPEG quality / QR image —
+        four fields that had a `Settings` entry and no door, so an owner who
+        needed one edited `%LOCALAPPDATA%/RemoteUser/settings.json` by hand.
+        Only the port field needs Apply & restart, matching STREAM's own rule
+        (it reshapes the socket the server listens on); the other three act
+        at once like every other switch in this window.
+        """
+        frame, box = card()
+        self._section(box, "ADVANCED")
+
+        form = self._form()
+        self.port_spin = QSpinBox()
+        self.port_spin.setRange(1024, 65535)
+        self.port_spin.setValue(SETTINGS.port)
+        self._row(form, "Port", self.port_spin)
+        box.addLayout(form)
+        self._caption(box, PORT_TEXT)
+
+        self.h264_check = QCheckBox("H.264 streaming")
+        self.h264_check.setChecked(SETTINGS.use_h264)
+        self.h264_check.toggled.connect(self._toggle_h264)
+        box.addWidget(self.h264_check)
+        self._caption(box, H264_TEXT, indent=CAPTION_INDENT_LEFT)
+        box.addSpacing(6)
+
+        jpeg_form = self._form()
+        self.jpeg_quality_spin = QSpinBox()
+        self.jpeg_quality_spin.setRange(1, 100)
+        self.jpeg_quality_spin.setValue(SETTINGS.jpeg_quality)
+        self.jpeg_quality_spin.valueChanged.connect(self._save_jpeg_quality)
+        self._row(jpeg_form, "JPEG quality", self.jpeg_quality_spin)
+        box.addLayout(jpeg_form)
+        self._caption(box, JPEG_QUALITY_TEXT)
+
+        self.qr_image_check = QCheckBox("Also open the QR as an image file")
+        self.qr_image_check.setChecked(SETTINGS.open_qr_image)
+        self.qr_image_check.toggled.connect(self._toggle_qr_image)
+        box.addWidget(self.qr_image_check)
+        self._caption(box, QR_IMAGE_TEXT, indent=CAPTION_INDENT_LEFT)
+
+        apply_row = QHBoxLayout()
+        apply_row.addStretch()
+        self.advanced_apply_btn = QPushButton("Apply && restart")
+        self.advanced_apply_btn.clicked.connect(self._apply_advanced)
+        apply_row.addWidget(self.advanced_apply_btn)
+        box.addLayout(apply_row)
+        return frame
+
+    def _apply_advanced(self) -> None:
+        save_user_settings({"port": self.port_spin.value()})
+        self._restart()
+
+    def _toggle_h264(self, on: bool) -> None:
+        save_user_settings({"use_h264": bool(on)})
+
+    def _save_jpeg_quality(self) -> None:
+        save_user_settings({"jpeg_quality": self.jpeg_quality_spin.value()})
+
+    def _toggle_qr_image(self, on: bool) -> None:
+        save_user_settings({"open_qr_image": bool(on)})
 
     # -- stream settings ---------------------------------------------------
 

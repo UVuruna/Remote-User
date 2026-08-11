@@ -53,6 +53,9 @@ USER_ADJUSTABLE = {
     # else (owner answer P4: one source of truth, no menu on the phone) and
     # carried to it in every `config` frame.
     "ui_theme", "phone_theme", "phone_colored", "phone_fill",
+    # The one-time 4K@60 freeze offer (task 226) — whether it has already
+    # been shown and answered, so it never asks twice.
+    "offered_2560",
 }
 
 
@@ -115,6 +118,11 @@ class Settings:
     # A saved setting always wins: this is the default for a PC that has never
     # been told otherwise, never an override of a choice the owner made.
     h264_max_width: int = 2560
+    # Whether the one-time 4K@60 freeze offer (task 226 — gui_main.py, the
+    # freeze recipe of task 151 above) has already been shown and answered.
+    # Set on EITHER choice, Switch or Keep 4K — the ask is "may we say this
+    # once", not "did you take our advice".
+    offered_2560: bool = False
     h264_bitrate: str = "12M"       # target bitrate cap — reached only on heavy motion; static
                                     # screens use a fraction of it regardless of resolution
     h264_gop: int = 60              # keyframe every N frames (reconnect/seek granularity)

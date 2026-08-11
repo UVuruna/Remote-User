@@ -28,6 +28,7 @@ It exists because the [Main Window](main_window.md) had become two things at onc
 | **NOTIFICATIONS** | "Tell my phone when an agent finishes" (the ROADMAP H2 hook switch, moved from the main window) · "Say it out loud" · Voice · Speaking pace | at once |
 | **FOCUS** | "Don't let applications steal focus" — default OFF | at once |
 | **STARTUP** | "Check for new versions when the app starts" (`update_check`, which had existed in code with no UI at all) · "Start with Windows" | at once |
+| **ADVANCED** (task 226, owner ballot verdict) | Port, then **Apply & restart** · "H.264 streaming" checkbox · JPEG quality (1-100, only spent while H.264 is off) · "Also open the QR as an image file" | Port on Apply (reshapes the listening socket); the other three at once |
 
 A window where some switches act and others wait for a button is a window nobody can trust, so **everything except STREAM acts on the toggle** — the rule the notify switch already set on the main window.
 

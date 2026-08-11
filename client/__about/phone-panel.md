@@ -35,7 +35,17 @@ the same round — a switch with two doors is two states to keep in step.
    panels.js). Neither changes a default: each starts on the shape that
    orientation renders TODAY, and ticking writes the explicit choice that
    outranks it.
-4. A **pointer** to the dictation card for the listening beeps and the
+4. **Notification channels** (task 226, owner ballot verdict) — three on/off
+   rows, one per carrier `notify.js` already read and never had a door to
+   write: banner, speak, tone. Each row is `notifyPrefs()`'s own current
+   value, and ticking one calls `saveNotifyPrefs()` with the merged object and
+   re-renders the card so the tick lights correctly. The banner row's own
+   label states the last-resort rule (`notify.js` → `effectiveNotifyPrefs()`,
+   documented in full in [Notify](notify.md)): muting all three still leaves
+   the banner on, so the label reads "last resort — stays on if you mute the
+   rest" rather than leaving him to discover that by muting everything and
+   still getting a notification.
+5. A **pointer** to the dictation card for the listening beeps and the
    language.
 
 ## Why the dictation beeps stayed put

@@ -92,8 +92,21 @@ function notifyWhen(at) {
   return mins < 60 ? `${mins} min ago` : `${Math.floor(mins / 60)} h ago`;
 }
 
+// THE LAST-RESORT RULE: muting a carrier must never lose the notice, only
+// quiet it. Muting all three at once is not "no notice" — it is "give me
+// back whichever carrier costs him the least", and that is the banner: it
+// needs no sound and reaches him with the screen off, which speech and the
+// toast cannot. So an all-off state is answered as banner-only, and the
+// Phone card's banner switch is labelled the last resort so this is not a
+// silent surprise (client/phone-panel.js).
+function effectiveNotifyPrefs() {
+  const p = notifyPrefs();
+  if (!p.banner && !p.speak && !p.tone) return { banner: true, speak: false, tone: false };
+  return p;
+}
+
 function handleNotify(msg) {
-  const prefs = notifyPrefs();
+  const prefs = effectiveNotifyPrefs();
   const title = String(msg.title || msg.agent || "Agent");
   const when = notifyWhen(msg.at);
   const body = [String(msg.text || ""), when].filter(Boolean).join(" · ");

@@ -90,6 +90,33 @@ function openPhonePanel() {
     + "in the empty bands beside the picture"));
   body.appendChild(shape);
 
+  // NOTIFICATION CHANNELS (task 226, owner ballot verdict). Per-device mute
+  // switches for the three carriers `notify.js` already reads and never had
+  // a door to write: `notifyPrefs()`/`saveNotifyPrefs()` there, persisted
+  // through the SAME prefGet/prefSet SharedPreferences bridge as every other
+  // row on this card — never bare localStorage (that split state across the
+  // LAN and Tailscale origins once already, 2026-08-05).
+  //
+  // THE LAST-RESORT RULE (documented once, here, where he reads it): muting
+  // all three never means "send nothing" — the banner is the one carrier
+  // that needs no sound and still reaches him with the screen off, so an
+  // all-off state is answered as banner-only by `effectiveNotifyPrefs()` in
+  // notify.js. The banner switch says so in its own label instead of
+  // depending on him having read this comment.
+  const notify = document.createElement("div");
+  notify.className = "sets-shape";
+  const np = notifyPrefs();
+  const chanRow = (key, label) => segRow(label, [true, false], ["On", "Off"],
+    np[key], (v) => {
+      const next = { ...notifyPrefs(), [key]: v };
+      saveNotifyPrefs(next);
+      openPhonePanel();
+    });
+  notify.appendChild(chanRow("banner", "Notification banner (last resort — stays on if you mute the rest)"));
+  notify.appendChild(chanRow("speak", "Speak the notice aloud"));
+  notify.appendChild(chanRow("tone", "Notification tone"));
+  body.appendChild(notify);
+
   // The pointer, not a copy. It says where the switch lives and takes him
   // there in one tap — the dictation card owns it because the engine that
   // reads it is the one that beeps.
