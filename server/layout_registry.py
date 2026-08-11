@@ -86,6 +86,14 @@ class Layout:
         # 2026-08-03); `place_pending` is the explicit re-place order a
         # structural change (grid arrangement, orientation, merge) leaves,
         # for the case where every member still happens to pass `_standing`.
+        # WINDOWS THIS LAYOUT'S WORK OPENED (owner eruption 2026-08-11, task
+        # 202): an agent's HTML report, a member's "Open this link?" dialog,
+        # the viewer a member started. They are not members — the grid does
+        # not grow and nothing is re-arranged around them — but while the
+        # phone shows this layout they are brought INTO its picture and into
+        # the always-on-top band with it ([Layout Popup](layout_popup.py)),
+        # so this list is what owes them the way back down (constraint 10).
+        self.adopted: list[int] = []
         self.ratio: tuple[int, int] | None = None
         self.pos: float = 0.5
         self.arranged_ratio: tuple[int, int] | None = None
@@ -101,6 +109,23 @@ class Layout:
         `merge` re-ordering). A stored int could only have gone stale."""
         return self.sources.get(self.members[0], 0) if self.members else 0
 
+    def release_adopted(self) -> list[int]:
+        """Hand every window this layout ADOPTED back to the desk — out of the
+        always-on-top band, with its own minimize/restore animation returned —
+        and forget it. Returns what was released, for the log.
+
+        Called wherever this layout stops being what the phone shows: another
+        layout focused, Desktop chosen, the layout removed, the phone gone.
+        The window is NOT moved back and NOT closed: no window is ever moved
+        by us without being asked to be (the rule `remove` and `drop_member`
+        already follow), and closing one is an act only the ✕ chooser has —
+        a report he still wants to read must survive being let go of."""
+        released, self.adopted = self.adopted, []
+        for hwnd in released:
+            wm.freeze_transitions(hwnd, False)
+            wm.drop_topmost(hwnd)
+        return released
+
     def project(self) -> str:
         """The project folder this layout's window belongs to, MEASURED every
         call — an extracted tab's own window can be titled bare `Visual Studio
@@ -110,6 +135,14 @@ class Layout:
         seen = [h for h in (self.members[0] if self.members else 0, self.source)
                 if h and wm.is_alive(h)]
         return agents.first_folder(wm._title(h) for h in seen) or self.folder
+
+
+# The apps whose torn-out content still DEPENDS on the window it came from
+# (owner correction 2026-08-10, task 201): a VS Code editor group belongs to
+# its window; a Chrome/Explorer tab moved out is an independent window and
+# closing the origin destroys nothing. Consulted by `state()`'s dependents
+# computation — the ⭐ and the ✕ chooser's warning.
+PARENT_CLOSE_APPS = {"code.exe"}
 
 
 class LayoutRegistry:
@@ -152,9 +185,25 @@ class LayoutRegistry:
             # is what makes ANOTHER layout wear the ⭐, and a layout must never
             # be marked as the trunk of a branch it no longer holds.
             lay.sources = {h: s for h, s in lay.sources.items() if h in alive}
+            # An ADOPTED window (task 202) that has been closed leaves the same
+            # way a member does: off the list, and handed back through the
+            # ledger so nothing of ours is left claiming it.
+            still = []
+            for hwnd in lay.adopted:
+                if wm.user32.IsWindow(hwnd):
+                    still.append(hwnd)
+                else:
+                    wm.drop_topmost(hwnd)
+            lay.adopted = still
             if alive and lay.last_member not in alive:
                 lay.last_member = alive[0]  # the typing target closed at the desk
         kept = [i for i, lay in enumerate(self.layouts) if lay.members]
+        # A layout whose last member closed disappears — and it is exactly the
+        # list that could still name the windows IT adopted, so they are handed
+        # back here rather than left above the desk forever (constraint 10).
+        for i, lay in enumerate(self.layouts):
+            if i not in kept:
+                lay.release_adopted()
         self.layouts = [self.layouts[i] for i in kept]
         return kept
 
@@ -218,9 +267,14 @@ class LayoutRegistry:
         above everything, and the phone then showed the desktop over it."""
         self.prune()
         for other in self.layouts:
+            if 0 <= index < len(self.layouts) and other is self.layouts[index]:
+                continue
             for hwnd in other.members:
-                if not (0 <= index < len(self.layouts)) or other is not self.layouts[index]:
-                    wm.drop_topmost(hwnd)
+                wm.drop_topmost(hwnd)
+            # …and whatever that layout's work had opened goes with it (task
+            # 202): the popup was above the world only for as long as the
+            # phone was showing the layout it belongs to.
+            other.release_adopted()
         if not 0 <= index < len(self.layouts):
             return None
         lay = self.layouts[index]
@@ -295,6 +349,13 @@ class LayoutRegistry:
         later restores its own members (place/raise SW_RESTORE)."""
         self.prune()
         members = [h for lay in self.layouts for h in lay.members]
+        # The adopted windows (task 202) leave the topmost band with their
+        # layout, but are NOT minimized: Desktop means "show me what is not
+        # layout material", and a report the layout's work opened is exactly
+        # the thing he chose Desktop to get to. Minimizing it here would be
+        # the original failure again, in a new place.
+        for lay in self.layouts:
+            lay.release_adopted()
         for hwnd in members:
             wm.freeze_transitions(hwnd)  # no slide-down to watch
             # Out of the topmost band FIRST — a member the owner later restores
@@ -486,6 +547,12 @@ class LayoutRegistry:
         # record silently un-stars its own trunk.
         dst.sources = {h: s for h, s in {**dst.sources, **src.sources}.items()
                        if h in members}
+        # The dragged layout is about to disappear, so anything ITS work had
+        # opened (task 202) is inherited rather than orphaned — the windows
+        # are the same windows, in the same picture, and the list that owes
+        # them the way out of the topmost band must not be the one popped.
+        dst.adopted += [h for h in src.adopted if h not in dst.adopted]
+        src.adopted = []
         dst.template = self._template_for(len(members), grid)
         dst.place_pending = True    # the shape changed — re-place on focus
         self.layouts.pop(source)
@@ -536,6 +603,11 @@ class LayoutRegistry:
         The caller tells the phone; see `close_windows`."""
         alive: list[int] = []
         if 0 <= index < len(self.layouts):
+            # Whatever this layout's work opened stops being ours first (task
+            # 202) — and is never closed with the members: `close` is the act
+            # he asked for on the windows he chose, and a popup he never
+            # listed is not one of them.
+            self.layouts[index].release_adopted()
             members = list(self.layouts[index].members)
             if close:
                 # close_windows drops topmost and unfreezes each window itself
@@ -605,10 +677,20 @@ class LayoutRegistry:
         # the FIRST slot's source was stored, so a tab extracted into cell 2+
         # of a grid left no record and BOTH under-reported; every slot is
         # recorded now.
+        # ONLY VS CODE HAS THE PARENT-CLOSE DEPENDENCY (owner correction
+        # 2026-08-10, task 201, with his screenshot of a starred Chrome
+        # layout): a Chrome or Explorer tab moved to its own window is a
+        # fully independent window — closing the origin destroys nothing —
+        # so an extraction records a source for EVERY app, but the star and
+        # the ✕ warning are about what a close would DESTROY, and that is
+        # true only where the torn-out content still depends on its origin.
+        # Judged by the BRANCH's app (the tab and its origin are the same
+        # app), so no extra Win32 call rides the state frame.
         owners = [(lay, src) for lay in self.layouts for src in lay.sources.values()]
         dependents = {
             id(lay): [other.name for other, src in owners
-                      if other is not lay and src in lay.members]
+                      if other is not lay and src in lay.members
+                      and (other.process or "").lower() in PARENT_CLOSE_APPS]
             for lay in self.layouts}
         return {
             "type": "layout_state",

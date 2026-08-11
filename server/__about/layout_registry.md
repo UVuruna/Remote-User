@@ -70,6 +70,15 @@ directly, first, finds a half-initialized `window_manager` and fails loudly.
   `members[0]` and about nothing else, so the answer follows that member
   instead of going stale. Gates: `tests/test_layout_drag.py` (both cells, and
   the names asserted by relation), `tests/test_layout_member.py`.
+- **Only VS Code's torn-out content depends on its origin** (task 201, owner
+  correction 2026-08-10 — his screenshot: a Chrome layout wearing the ⭐). A
+  Chrome/Explorer tab moved to its own window is fully independent, so a close
+  destroys nothing there; the star and the ✕ warning therefore consult
+  `PARENT_CLOSE_APPS` (`{"code.exe"}`), judged by the BRANCH layout's process
+  — the tab and its origin are the same app, and no extra Win32 call rides the
+  state frame. The extraction still records its source for every app
+  (`project()` needs it); the rule scoped the STAR, never the record. Gate:
+  the Chrome-pair check in `tests/test_layout_drag.py`.
 - **The keyboard member is raised LAST** (owner 2026-08-06): `last_member`
   survives excursions, so dictation resumes in the window he was typing into.
 - **The ✕ wears two acts** (owner 2026-08-08, task 116): `remove(close=False)`

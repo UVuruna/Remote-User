@@ -272,7 +272,7 @@ def check_a_reorder_keeps_the_focus_on_the_same_layout() -> bool:
 
 
 # ═══════════════════ THE ⭐: WHICH ROW IS THE TRUNK ═══════════════════
-def build_with_a_torn_off_tab(cell: int = 0):
+def build_with_a_torn_off_tab(cell: int = 0, process: str = "code.exe"):
     """Three layouts, the REAL way: the window a tab was torn OUT of, an
     unrelated one, and the tab itself — now its own window, with the layout
     remembering where it came from. Only Windows is faked; `resolve_slot`,
@@ -293,7 +293,11 @@ def build_with_a_torn_off_tab(cell: int = 0):
     # drag) and cannot run here — WIN_C is the window it would have produced.
     window_manager.window_at_hwnd = lambda hwnd: {
         "hwnd": hwnd, "title": "Remote User - Visual Studio Code",
-        "process": "code.exe", "icon": None}
+        "process": process, "icon": None}
+    # `Layout.process` is read via wm._process_name at create, not from the
+    # dict above — the harness pins it to code.exe (test_layout_protocol:148),
+    # so the app under test is steered here (task 201's Chrome variant).
+    window_manager._process_name = lambda hwnd, p=process: p
     uia.extract_tab = lambda rect, x, y, info, name=None: WIN_C
     tab_slot = {"hwnd": WIN_A, "tab": {"name": "prompt.txt"},
                 "x": 0.3, "y": 0.02}
@@ -427,6 +431,35 @@ def check_the_phone_is_told_WHICH_layouts_a_close_would_destroy() -> bool:
     return ok
 
 
+def check_a_chrome_pair_never_stars() -> bool:
+    """TASK 201 (owner correction 2026-08-10, his screenshot: a Chrome "DOMY"
+    layout wore the ⭐): a Chrome or Explorer tab moved to its own window is a
+    fully independent window — closing the origin destroys nothing — so the
+    extraction still RECORDS its source (the record serves `project()` too),
+    but neither the star nor the ✕ warning may fire. Only VS Code's torn-out
+    content depends on its origin (PARENT_CLOSE_APPS). The same build as the
+    VS Code pair, process swapped — so this check and the trunk check can
+    only diverge on the app rule itself."""
+    ok = True
+    ws, conn, layouts = build_with_a_torn_off_tab(process="chrome.exe")
+    got = stars_of(ws)
+    want = {"Trunk": False, "Plain": False, "Branch": False}
+    if got != want:
+        print(f"  DETAIL a Chrome pair is starred: {got}, expected {want}")
+        ok = False
+    deps = deps_of(ws)
+    if any(deps.values()):
+        print(f"  DETAIL a Chrome close warns about: {deps}")
+        ok = False
+    # …while the source is still REMEMBERED (project() needs it) — the rule
+    # scoped the STAR, never the record.
+    branch = next((l for l in layouts.layouts if l.name == "Branch"), None)
+    if branch is None or list(branch.sources.values()) != [WIN_A]:
+        print("  DETAIL the Chrome branch forgot its source entirely")
+        ok = False
+    return ok
+
+
 CHECKS = [
     ("a row dropped on another makes every grid size (1+1, 1+2, 1+3)",
      check_a_drop_makes_every_grid_size),
@@ -448,6 +481,8 @@ CHECKS = [
      check_a_tab_in_a_LATER_cell_is_recorded_too),
     ("the phone is told WHICH layouts a close would destroy",
      check_the_phone_is_told_WHICH_layouts_a_close_would_destroy),
+    ("a Chrome pair never stars — only VS Code has the parent dependency",
+     check_a_chrome_pair_never_stars),
 ]
 
 
