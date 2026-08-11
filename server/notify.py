@@ -230,9 +230,48 @@ def compose(agent: str, event: str, text: str) -> tuple[str, str]:
 BEAT_S = 60.0
 BEAT_MISS = 3          # the shell keeps its own copy of this rule; see NoticeLink.kt
 
-# One waiting phone at a time, mirroring the web layer's one-device rule: a
-# second attach displaces the first rather than doubling every notice.
-_waiting: dict = {"q": None}
+# ONE CHANNEL PER DEVICE, NOT ONE CHANNEL (owner's log, 2026-08-11, task 209).
+#
+# This used to be a single slot — `{"q": None}` — mirroring the web layer's
+# one-device rule, and that mirroring was the mistake: the STREAMING session
+# must be one device (two phones driving one mouse is nonsense), but WAITING
+# for news is not driving anything. The owner runs the foreground service on
+# his tablet AND his phone, so each attach kicked the other, the kicked one
+# reconnected at once, and his log carried an attach→kick→retry ping-pong every
+# few seconds, continuously, since 2026-08-09 — thousands of lines a night,
+# both radios woken for nothing, and (the part he actually felt) a notice
+# reaching ONLY whichever device held the slot that second while the other
+# learned about it minutes later out of the queue: "notifications sometimes
+# never arrive".
+#
+# So the channels are keyed by a DEVICE ID the shell supplies
+# (`GET /notices?token=…&device=<id>`), and:
+#
+#   - a notice with no page to go to goes to EVERY waiting device, once each.
+#     Per-device de-duplication is structural — a device has exactly one
+#     channel, so it cannot be handed the same notice twice;
+#   - a second attach from the SAME id replaces that device's own channel (its
+#     service restarted, Wi-Fi moved) and touches no other device;
+#   - a request with NO `device` is an older APK, and it keeps exactly today's
+#     behaviour: it shares the one LEGACY key, so two old shells still fight
+#     over one slot. Nothing about an old phone changes when this PC updates.
+#
+# The cap is not a policy, it is a stop: an id that changed on every attach
+# (a broken shell) would otherwise grow this dict without limit. The oldest
+# channel gives way, and it is said in the log.
+LEGACY_DEVICE = ""     # the single slot an APK that sends no id shares
+MAX_DEVICES = 8
+_waiting: dict[str, asyncio.Queue] = {}
+
+
+def device_key(value) -> str:
+    """The device id as we are willing to keep it: trimmed, capped, and made
+    of characters that are safe to print in a log line. Anything else — an
+    absent parameter, a blank one, junk — falls back to the LEGACY slot, which
+    is the behaviour an old shell already has."""
+    text = str(value if value is not None else "").strip()[:64]
+    clean_id = "".join(c for c in text if c.isalnum() or c in "-_.:")
+    return clean_id or LEGACY_DEVICE
 
 # The web layer's one-device-at-a-time slot, handed over by register(). Read
 # ONLY — this module never writes it, and that is the whole reason a waiting
@@ -240,23 +279,47 @@ _waiting: dict = {"q": None}
 _page: dict = {"ws": None}
 
 
+def page_socket():
+    """The LIVE page socket, or None — read only, for the one other module
+    that has something to say to the page from a task the web layer did not
+    hand a socket to ([Layout Popup](layout_popup.py)'s window offer, task
+    202). It is this module's slot because the web layer handed it here and
+    this project keeps exactly one registry of the connected phone; a second
+    one is how a phone that took the session over (code 4409) starts getting
+    someone else's messages."""
+    return _page["ws"]
+
+
 def waiting() -> bool:
-    """Whether a phone is holding the waiting channel open right now."""
-    return _waiting["q"] is not None
+    """Whether ANY device is holding a waiting channel open right now."""
+    return bool(_waiting)
+
+
+def waiting_devices() -> int:
+    """How many devices are waiting. One line in the log, and the number the
+    gate reads — the whole point of task 209 is that this can be 2."""
+    return len(_waiting)
 
 
 async def deliver(notice: dict) -> str:
-    """Hand one notice to EXACTLY ONE carrier. Returns which took it.
+    """Hand one notice to EXACTLY ONE CARRIER TYPE. Returns which took it.
 
     The order is the rule that makes a double notice impossible — it is a
     chain of `return`s, not three sends:
 
       "page"    — the app is open and the owner is looking at it. The page
                   toasts, speaks and raises the banner exactly as before.
-      "waiting" — the page is gone but the phone is holding the channel open.
-                  This is the case the whole round exists for.
-      "held"    — neither. The phone is off, killed or offline; the queue is
-                  now what it was always meant to be.
+      "waiting" — the page is gone but at least one device is holding a
+                  channel open. This is the case the whole round exists for.
+      "held"    — neither. Every device is off, killed or offline; the queue
+                  is now what it was always meant to be.
+
+    "One carrier" is a rule about the SAME DEVICE hearing a notice twice, and
+    it still holds exactly: a device has one channel, and the page belongs to
+    the device that is on screen. Since task 209 the waiting branch fans the
+    notice out to EVERY waiting device once — his tablet and his phone are two
+    ears, not two copies, and the alternative (one slot) meant one of them
+    simply never heard it.
 
     The page's socket dying between the check and the send is not an error and
     not a queue: the phone has just hidden the page, its service is very
@@ -270,15 +333,18 @@ async def deliver(notice: dict) -> str:
         except RuntimeError:
             logger.warning("The page's socket closed mid-notice — "
                            "trying the waiting channel")
-    channel = _waiting["q"]
-    if channel is not None:
-        channel.put_nowait(notice)
+    # A snapshot: a channel detaching while we hand out is harmless (its queue
+    # is simply dropped with it), and iterating the live dict is not.
+    channels = list(_waiting.values())
+    if channels:
+        for channel in channels:
+            channel.put_nowait(notice)
         return "waiting"
     queue(notice)
     return "held"
 
 
-async def _wait_for_news():
+async def _wait_for_news(device: str = LEGACY_DEVICE):
     """The body of `GET /notices`: a response that never ends.
 
     Everything a streaming session normally drags along is absent here, and
@@ -290,10 +356,23 @@ async def _wait_for_news():
     A waiting phone is a phone that is NOT here.
     """
     channel: asyncio.Queue = asyncio.Queue()
-    previous, _waiting["q"] = _waiting["q"], channel
+    # Only THIS device's own channel is displaced (task 209). A second attach
+    # from the same id is the same phone whose service restarted; a different
+    # id is a different phone, and taking its channel away is what made his
+    # tablet and his phone fight over one slot all night.
+    previous = _waiting.get(device)
+    _waiting[device] = channel
     if previous is not None:
-        previous.put_nowait(None)   # the older channel ends itself
-    logger.info("Notice channel attached — the phone is waiting for news")
+        previous.put_nowait(None)   # its own older channel ends itself
+    while len(_waiting) > MAX_DEVICES:
+        # Insertion order, so the oldest attach gives way — a stop against an
+        # id that changes on every attach, never something his two phones meet.
+        oldest = next(iter(_waiting))
+        logger.warning("More than %d waiting devices — dropping the oldest "
+                       "channel (%s)", MAX_DEVICES, oldest or "no id")
+        _waiting.pop(oldest).put_nowait(None)
+    logger.info("Notice channel attached (device %s) — %d waiting",
+                device or "no id (older app)", len(_waiting))
     # Whatever piled up while the phone was truly unreachable is handed over
     # now, oldest first — but only when the page is not already about to be
     # handed the same thing on its own auth (web.py -> notify.send_pending).
@@ -311,9 +390,10 @@ async def _wait_for_news():
                 return               # displaced by a newer channel
             yield (json.dumps(notice) + "\n").encode()
     finally:
-        if _waiting["q"] is channel:
-            _waiting["q"] = None
-        logger.info("Notice channel gone — notices wait in the queue again")
+        if _waiting.get(device) is channel:
+            del _waiting[device]
+        logger.info("Notice channel gone (device %s) — %d still waiting",
+                    device or "no id (older app)", len(_waiting))
 
 
 def register(app, token: str, active_client: dict, layouts=None) -> None:
@@ -331,15 +411,22 @@ def register(app, token: str, active_client: dict, layouts=None) -> None:
     global _page, _layouts
     _page = active_client
     _layouts = layouts
+    refresh_agent_hook()
 
     @app.get("/notices")
     async def notices(request: Request):  # noqa: ANN202 — FastAPI route
         """The phone's waiting state. Token-gated like every real endpoint:
         without it this would be a way to make any phone on the network buzz,
-        and to learn that an agent runs here at all."""
+        and to learn that an agent runs here at all.
+
+        `device` (task 209) is the shell's own per-install id and is what gives
+        each of his phones a channel of its own. It is OPTIONAL on purpose: an
+        APK that predates it sends none, lands on the LEGACY slot, and behaves
+        exactly as it did before this PC was updated."""
         if request.query_params.get("token") != token:
             return JSONResponse({"ok": False}, status_code=403)
-        return StreamingResponse(_wait_for_news(),
+        device = device_key(request.query_params.get("device"))
+        return StreamingResponse(_wait_for_news(device),
                                  media_type="application/x-ndjson",
                                  headers={"Cache-Control": "no-store"})
 
@@ -480,6 +567,36 @@ def agent_hook_installed() -> bool:
     except OSError as e:  # noqa: BLE001 — a missing script is "not installed"
         logger.warning("agent hook state unreadable: %s", e)
         return False
+
+
+def refresh_agent_hook() -> None:
+    """Bring the installed copy of the hook up to date with the bundled one.
+
+    The copy in USER_DIR is written only by `set_agent_hook(on=True)` — a
+    toggle. An app update ships a newer script inside the bundle, but nothing
+    re-toggled the switch, so the owner's machine kept running the OLD hook
+    forever while the repo said fixed (found closing task 198). Called once at
+    `register()`: when the hook is installed and the deployed bytes differ
+    from the bundled ones, the deployed file is rewritten in place. Purely
+    frozen-path: a dev checkout registers the repo file directly and has no
+    second copy to age.
+    """
+    if not FROZEN:
+        return
+    try:
+        if not agent_hook_installed():
+            return
+        source = pathlib.Path(_hook_module().__file__)
+        target = USER_DIR / "agent_hook.py"
+        if target.exists() and target.read_bytes() == source.read_bytes():
+            return
+        USER_DIR.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(source, target)
+        logger.info("agent hook refreshed to the bundled version (%s)", target)
+    except OSError as e:
+        # A locked file or a permissions error must never stop the server —
+        # the stale hook still works, it merely names agents the old way.
+        logger.warning("agent hook refresh failed: %s", e)
 
 
 def set_agent_hook(on: bool) -> tuple[bool, str]:

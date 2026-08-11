@@ -129,6 +129,10 @@ stated.
 
 ### Uses
 - [NoticeLink](NoticeLink.md) — the wire; this class knows nothing about sockets
+- `Prefs.deviceId()` — handed to the link as a lambda so the PC can key one
+  waiting channel per device (task 209): he waits on a tablet AND a phone, and
+  until the PC could tell them apart each service kicked the other off the
+  single channel every few seconds
 - [Notifier](Notifier.md) — the banner and the speech
 - `Prefs` — the two stored addresses, and the page's preference store
 

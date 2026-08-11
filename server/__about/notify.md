@@ -37,14 +37,55 @@ function that chooses between them:
 | Order | Carrier | When | Result |
 |-------|---------|------|--------|
 | 1 | **the page** — `active_client["ws"]` | the app is open and he is looking | unchanged behaviour: banner + speech + toast |
-| 2 | **the waiting channel** — `GET /notices` | the page is gone, the service is holding the line | banner + speech, from [NoticeService](../../android/__about/NoticeService.md) |
+| 2 | **the waiting channels** — `GET /notices` | the page is gone, one or more devices are holding the line | banner + speech on EVERY waiting device, from [NoticeService](../../android/__about/NoticeService.md) |
 | 3 | **the queue** | neither: app killed, phone off, no network | held, and handed over the moment either channel returns |
 
 **A double notice is impossible by construction**, not by a de-duplication
 rule: `deliver()` is a chain of `return`s, so exactly one branch runs. A page
 socket that dies between the check and the send is not an error and not a
 queue — the phone has just hidden the page, its service is very probably
-already waiting, so the notice falls through to carrier 2.
+already waiting, so the notice falls through to carrier 2. Carrier 2 hands the
+notice to every waiting DEVICE once (below): "never twice" is a rule about one
+device's ear, and the same notice on his tablet and on his phone is the feature.
+
+## One channel per device (task 209, his own log, 2026-08-11)
+
+The waiting channel used to be a single SLOT, mirroring the web layer's
+one-device rule — and that mirroring was the mistake. The streaming session
+must be one device (two phones driving one mouse is nonsense); WAITING for news
+drives nothing. He runs the foreground service on his tablet **and** his phone,
+so each attach kicked the other's channel, the kicked one reconnected at once,
+and his log carried an attach→kick→retry ping-pong every few seconds,
+continuously, since 2026-08-09:
+
+- thousands of log lines a night (192.168.0.30 ↔ .27 on LAN, 100.95.132.34 via
+  Tailscale), and both radios woken for nothing;
+- and the half he actually felt: a notice reached only whichever device held
+  the slot that second, while the other learned about it minutes or hours later
+  out of the queue — *"notifications sometimes never arrive"*.
+
+`_waiting` is therefore a dict keyed by a **device id** the shell supplies:
+
+```
+GET /notices?token=…&device=<per-install UUID>
+```
+
+| Case | What happens |
+|------|--------------|
+| two devices waiting | the notice goes to both, once each — per-device de-duplication is structural, since a device has exactly one channel |
+| a second attach with the SAME id | that device's own older channel is ended (its service restarted); no other device is touched |
+| **no `device` parameter** | an APK older than this round: it shares the LEGACY key, so two old shells still fight over one slot — exactly the behaviour they were built against. Nothing about an old phone changes when this PC updates |
+| more than `MAX_DEVICES` (8) | the oldest channel gives way, and it is said in the log. Not a policy — a stop against a shell whose id changed on every attach |
+
+`device_key()` trims, caps at 64 and keeps only characters safe to print in a
+log line; anything else falls back to the legacy slot.
+
+**The honest limit:** the queue is drained by whichever device attaches while
+it is non-empty, and draining is destructive. A notice held while BOTH devices
+were unreachable reaches the first one back, not both. That is the pre-existing
+behaviour of the last-resort store and it is deliberately unchanged here — the
+queue is the path taken when nothing is reachable, and the round's fix is that
+it is now almost never taken at all.
 
 ## `GET /notices` — the waiting channel
 
@@ -81,8 +122,8 @@ the topmost ledger, the presence/away protocol and the layout defence working
 exactly as before. Proven by
 [tests/test_notice_channel.py](../../tests/___tests.md).
 
-One waiting phone at a time, mirroring the web layer's own one-device rule: a
-second attach displaces the first rather than doubling every notice.
+One channel per DEVICE since task 209 (above): a second attach displaces only
+the channel of the device it came from.
 
 ## HOW it is said is the desktop's decision (round R2, owner 2026-08-07)
 
@@ -180,15 +221,22 @@ that does it.
   is the verb (`EVENT_WORDS`: finished / needs you / failed), free text is the
   second line. An unknown event is shown as-is rather than swallowed.
 - `deliver(notice) -> "page" | "waiting" | "held"` — the carrier decision, and
-  the reason a notice can never arrive twice.
-- `waiting() -> bool` — whether a phone is holding the waiting channel open.
+  the reason a notice can never arrive twice ON ONE DEVICE. The `waiting`
+  branch fans out to every waiting device, once each.
+- `waiting() -> bool` — whether ANY device is holding a channel open.
+- `waiting_devices() -> int` — how many are. The whole point of task 209 is
+  that this can be 2.
+- `device_key(value) -> str` — the id as we are willing to keep it: trimmed,
+  capped at 64, log-safe characters only; anything else is the LEGACY slot,
+  which is what an APK that sends no id already lands on.
 - `queue(notice)` / `drain(now)` — the last-resort store: `QUEUE_TTL_S` 30 min,
   `QUEUE_MAX` 20, each notice carrying the time it happened so the phone can
   say "8 min ago" instead of pretending it just landed.
 - `send_pending(ws)` — what was held, on a page's return. Normally empty since
   2026-08-07, and that is the fix rather than a regression.
 - `register(app, token, active_client)` — adds `POST /notify` and
-  `GET /notices`, and hands this module the web layer's one-device slot.
+  `GET /notices` (whose optional `device` parameter keys the channels), and
+  hands this module the web layer's one-device slot.
 
 ## Design Decisions
 

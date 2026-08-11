@@ -1,6 +1,7 @@
 package com.uvuruna.remoteuser
 
 import android.content.Context
+import java.util.UUID
 
 /** Two stored addresses, both tokened page URLs:
  *  - LAN: written by pairing (the QR always encodes the home address)
@@ -12,6 +13,7 @@ object Prefs {
     private const val FILE = "remoteuser"
     private const val KEY_LAN = "pairing_url"
     private const val KEY_TS = "tailscale_url"
+    private const val KEY_DEVICE = "device_id"
 
     /** Where the PAGE's own per-device preferences live (the `prefGet`/
      *  `prefSet` bridge). Named here rather than in Bridge.kt because the
@@ -23,6 +25,30 @@ object Prefs {
      *  this order exactly as MainActivity's resolver does. */
     fun addresses(context: Context): List<String> =
         listOfNotNull(lanUrl(context), tsUrl(context)).distinct()
+
+    /** WHICH PHONE THIS IS, to the PC's notice channel (task 209).
+     *
+     *  The owner runs the app on a tablet AND a phone. The PC used to keep a
+     *  single waiting channel, so each device's attach kicked the other's and
+     *  the two ping-ponged every few seconds all night — and a notice reached
+     *  only whichever held the slot at that instant. It now keys one channel
+     *  per device, and this is the key.
+     *
+     *  A random UUID made on first use and kept in this app's own preferences:
+     *  it identifies an INSTALL, not a person and not a handset. Deliberately
+     *  NOT `ANDROID_ID`, IMEI or any hardware id — those are restricted,
+     *  survive an uninstall, and would be a real identifier travelling in a
+     *  query string for a job a throwaway random number does perfectly. A
+     *  reinstall or a cleared app-data simply mints a new one; the worst that
+     *  costs is one stale channel on the PC until its socket dies. */
+    fun deviceId(context: Context): String {
+        val store = context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
+        val stored = store.getString(KEY_DEVICE, null)
+        if (!stored.isNullOrBlank()) return stored
+        val fresh = UUID.randomUUID().toString()
+        store.edit().putString(KEY_DEVICE, fresh).apply()
+        return fresh
+    }
 
     fun lanUrl(context: Context): String? =
         context.getSharedPreferences(FILE, Context.MODE_PRIVATE).getString(KEY_LAN, null)

@@ -18,11 +18,14 @@ NoticeService.onCreate
   │        ├─ for each, in order, until one ACCEPTS ──▶ wait(url) │   │
   │        │                                                      │   │
   │        ▼                                                      │   │
-  │   accepted?                                                   │   │
-  │     ├─ yes ─▶ backoff = 5 s     (the link merely dropped)     │   │
-  │     └─ no  ─▶ backoff ×2, cap 5 min  (nothing answered)       │   │
-  │        │                                                      │   │
-  │        └──────────── sleep(backoff) ──────────────────────────┘   │
+  │   Attempt?                                                    │   │
+  │     ├─ LIVE   ─▶ sleep 5 s, both backoffs reset               │   │
+  │     │            (it spoke to us, then the link ended)        │   │
+  │     ├─ SILENT ─▶ sleep quiet, then quiet ×3, cap 60 s         │   │
+  │     │            (200 and then not ONE beat — a KICK)         │   │
+  │     └─ NONE   ─▶ sleep dead,  then dead  ×2, cap 5 min        │   │
+  │        │         (nothing answered at all)                    │   │
+  │        └──────────── sleep ───────────────────────────────────┘   │
   │                                                                   │
   └── running == false ──▶ return ◀── stop(): disconnect + interrupt ─┘
 ```
@@ -33,8 +36,9 @@ NoticeService.onCreate
    http://<host>:<port>/?token=T          the STORED pairing url
               │
               │  host + port + token reused verbatim
+              │  + Prefs.deviceId() — this install's own UUID (task 209)
               ▼
-   GET http://<host>:<port>/notices?token=T
+   GET http://<host>:<port>/notices?token=T&device=<uuid>
        connectTimeout  8 s
        readTimeout   180 s   =  BEAT_S 60 × BEAT_MISS 3
               │
@@ -42,7 +46,7 @@ NoticeService.onCreate
         response code
          ├─ 403 ─────────▶ log, return false   (token rotated — pair again)
          ├─ not 200 ─────▶ log, return false   (captive portal, wrong host)
-         └─ 200 ─────────▶ accepted = true
+         └─ 200 ─────────▶ accepted = true  (LIVE only once a line lands)
               │
               ▼
         ┌── readLine() ──────────────────────────────────────┐
@@ -55,7 +59,10 @@ NoticeService.onCreate
         └────────────────────────────────────────────────────┘
               │
               ▼
-        finally: live = null, disconnect(), return accepted
+        finally: live = null, disconnect(), and the verdict:
+                   heard a line  ─▶ LIVE     (reconnect in 5 s)
+                   accepted only ─▶ SILENT   (kicked — back off 5/15/45/60 s)
+                   neither       ─▶ NONE     (no PC here — back off ×2 to 5 min)
 ```
 
 ## What travels, over a whole idle day
@@ -76,6 +83,10 @@ H.264 client is measured in megabits per second.
 ## Where it breaks, and what happens
 
 ```
+another device took the slot   → 200 then EOF with no beat → SILENT →
+  (an older PC only; a PC with        back off 5→15→45→60 s instead of the
+   task 209 keys channels per         instant retry that made his tablet and
+   device and never kicks)            his phone ping-pong all night
 Wi-Fi handover / Doze wakeup   → read throws → reconnect in 5 s
 PC asleep or off               → connect fails on both addresses → back off ×2
 phone out of the house, no VPN → same, until the 5-minute ceiling

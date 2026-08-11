@@ -126,6 +126,10 @@ class NoticeService : Service() {
     private val link = NoticeLink(
         addresses = { Prefs.addresses(applicationContext) },
         onNotice = { deliver(it) },
+        // WHICH phone this is (task 209). He waits on a tablet AND a phone,
+        // and until the PC could tell them apart each one's service kicked
+        // the other's off the single channel every few seconds.
+        deviceId = { Prefs.deviceId(applicationContext) },
     )
 
     override fun onBind(intent: Intent?): IBinder? = null

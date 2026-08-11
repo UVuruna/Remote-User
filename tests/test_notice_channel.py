@@ -31,6 +31,25 @@ What must hold, and what each check would let through if it were missing:
   6. Idle really is idle: between notices the channel carries exactly one byte
      per beat and nothing else.
 
+TASK 209 (his own log, 2026-08-11) added the second half of the contract. The
+channel was ONE SLOT, so his tablet and his phone kicked each other off it
+every few seconds — continuously since 2026-08-09, thousands of log lines a
+night, both radios woken for nothing, and a notice reaching only whichever
+device held the slot at that instant while the other learned about it minutes
+later out of the queue. It is now one channel PER DEVICE, keyed by an id the
+shell sends as `&device=…`:
+
+  7. Two devices waiting = two ears, not two copies. Each receives the notice
+     exactly once, and neither is kicked.
+  8. A request with NO device id is an older APK and keeps EXACTLY today's
+     behaviour: it works alone, and a second id-less attach displaces it.
+  9. A second attach from the SAME id replaces that device's own channel (its
+     service restarted) and leaves every other device alone.
+ 10. The page still outranks everything: with the page open, neither waiting
+     device hears a thing.
+ 11. The queue is reached only when NOBODY waits — one waiting device is
+     enough to keep it empty.
+
 The Kotlin half (NoticeService / NoticeLink / Bridge) cannot be exercised here
 — there is no Android runtime on this machine and no device attached. This gate
 proves the PC's half of the contract and the exact bytes the shell must read;
@@ -182,16 +201,22 @@ class Waiting:
     """What the Android foreground service does, in twenty lines: open
     `/notices` once and block on readline() forever. It sends NOTHING."""
 
-    def __init__(self):
+    def __init__(self, device: str | None = None):
+        # None = an APK older than task 209: it sends no `device` parameter at
+        # all, which is exactly what the compatibility check has to exercise.
+        self.device = device
         self.lines: queue.Queue = queue.Queue()
         self.beats = 0
+        self.ended = threading.Event()      # the PC closed the response on us
         self._response = None
         self._stop = False
         self._thread = threading.Thread(target=self._read, daemon=True)
 
     def open(self, timeout: float = 5.0) -> "Waiting":
-        self._response = urllib.request.urlopen(
-            f"http://127.0.0.1:{PORT}/notices?token={TOKEN}", timeout=timeout)
+        url = f"http://127.0.0.1:{PORT}/notices?token={TOKEN}"
+        if self.device is not None:
+            url += f"&device={self.device}"
+        self._response = urllib.request.urlopen(url, timeout=timeout)
         self._thread.start()
         return self
 
@@ -204,6 +229,7 @@ class Waiting:
                 # a blocked readline — teardown noise in THIS harness only.
                 return
             if not raw:
+                self.ended.set()            # displaced, or the server stopped
                 return                      # the PC ended the response
             text = raw.decode().strip()
             if not text:
@@ -247,6 +273,12 @@ def until(pred, timeout: float = 4.0) -> bool:
 def reset() -> None:
     notify._pending.clear()
     notify._page["ws"] = None
+
+
+def quiet(chan: Waiting) -> bool:
+    """Nothing more arrived on this channel. Given a beat's worth of grace by
+    the caller — an instant check would pass even on a real double."""
+    return chan.next(timeout=0.3) is None
 
 
 # ═══════════════════════════ THE CHECKS ═══════════════════════════
@@ -353,6 +385,141 @@ def check_the_queue_is_the_last_resort() -> bool:
         chan.close()
 
 
+# ═══════════════ TASK 209 — HIS TWO DEVICES, EACH WITH ITS OWN EAR ═════════
+# What the single slot cost him is in his own log: attach → kicked → retry,
+# every few seconds, between 192.168.0.30 and .27, all night, since 2026-08-09.
+# These five checks are the contract that replaces it.
+def check_two_devices_each_get_one_copy() -> bool:
+    """The fix, stated: two devices waiting are two EARS, not two copies.
+    Both hear the notice exactly once, and neither is kicked to make room."""
+    reset()
+    tablet = Waiting(device="tablet-a").open()
+    phone = Waiting(device="phone-b").open()
+    try:
+        if not until(lambda: notify.waiting_devices() == 2):
+            return False
+        _, answer = post({"agent": "Two ears", "event": "finished", "text": ""})
+        first, second = tablet.next(), phone.next()
+        # Long enough for a second copy — or a kick — to show itself.
+        time.sleep(TEST_BEAT_S * 3)
+        return (answer.get("ok") is True
+                and first is not None and second is not None
+                and first["agent"] == "Two ears" == second["agent"]
+                and quiet(tablet) and quiet(phone)      # never twice
+                and not tablet.ended.is_set()           # and never kicked
+                and not phone.ended.is_set()
+                and notify.waiting_devices() == 2
+                and not notify._pending)                # nobody was queued
+    finally:
+        tablet.close()
+        phone.close()
+
+
+def check_an_old_apk_behaves_exactly_as_before() -> bool:
+    """COMPATIBILITY. A shell that predates task 209 sends no `device` at all.
+    It must still attach and still receive — and two of them must still fight
+    over the one legacy slot, because that is the behaviour it was built
+    against and nothing about an old phone may change when this PC updates."""
+    reset()
+    old = Waiting().open()                     # no `device` parameter at all
+    try:
+        if not until(lambda: notify.waiting_devices() == 1):
+            return False
+        post({"agent": "Old shell", "event": "finished", "text": ""})
+        got = old.next()
+        if got is None or got["agent"] != "Old shell":
+            return False
+        newer = Waiting().open()               # a second id-less attach
+        try:
+            kicked = old.ended.wait(4)
+            if not until(lambda: notify.waiting_devices() == 1):
+                return False
+            post({"agent": "Legacy two", "event": "finished", "text": ""})
+            after = newer.next()
+            return (kicked and after is not None
+                    and after["agent"] == "Legacy two"
+                    and quiet(old))
+        finally:
+            newer.close()
+    finally:
+        old.close()
+
+
+def check_a_reattach_replaces_only_its_own_device() -> bool:
+    """The phone's service restarts (Android reclaimed it, Wi-Fi moved). Its
+    OWN older channel must end — otherwise the PC accumulates dead channels
+    and writes every notice into a socket nobody reads — and the OTHER
+    device's channel must not be touched, which is the whole bug."""
+    reset()
+    first = Waiting(device="same-id").open()
+    other = Waiting(device="other-id").open()
+    try:
+        if not until(lambda: notify.waiting_devices() == 2):
+            return False
+        again = Waiting(device="same-id").open()
+        try:
+            replaced = first.ended.wait(4)
+            time.sleep(TEST_BEAT_S * 3)
+            if not (replaced and not other.ended.is_set()
+                    and notify.waiting_devices() == 2):
+                return False
+            post({"agent": "After restart", "event": "finished", "text": ""})
+            fresh, bystander = again.next(), other.next()
+            return (fresh is not None and bystander is not None
+                    and fresh["agent"] == "After restart"
+                    and bystander["agent"] == "After restart"
+                    and quiet(first))          # the replaced one hears nothing
+        finally:
+            again.close()
+    finally:
+        first.close()
+        other.close()
+
+
+def check_the_page_still_outranks_every_device() -> bool:
+    """The carrier order is unchanged by task 209: the device he is LOOKING at
+    takes the notice, and the waiting channels hear nothing at all. Fanning
+    out to every device must not have become fanning out to everything."""
+    reset()
+    tablet = Waiting(device="tablet-a").open()
+    phone = Waiting(device="phone-b").open()
+    page = FakePageWs()
+    try:
+        if not until(lambda: notify.waiting_devices() == 2):
+            return False
+        notify._page["ws"] = page
+        _, answer = post({"agent": "Looking", "event": "finished", "text": ""})
+        delivered = until(lambda: len(page.sent) == 1)
+        time.sleep(TEST_BEAT_S * 3)
+        return (delivered and answer.get("ok") is True
+                and page.sent[0]["agent"] == "Looking"
+                and tablet.lines.empty() and phone.lines.empty()
+                and not notify._pending)
+    finally:
+        notify._page["ws"] = None
+        tablet.close()
+        phone.close()
+
+
+def check_one_waiting_device_keeps_the_queue_empty() -> bool:
+    """The queue is the LAST resort and stayed one. With even a single device
+    waiting, nothing may be held — a notice that is both delivered and queued
+    arrives twice, hours apart, which is exactly what his phone did."""
+    reset()
+    lone = Waiting(device="lonely").open()
+    try:
+        if not until(lambda: notify.waiting_devices() == 1):
+            return False
+        _, answer = post({"agent": "Not held", "event": "finished", "text": ""})
+        got = lone.next()
+        return (got is not None and got["agent"] == "Not held"
+                and answer.get("ok") is True        # not the "held" answer
+                and "held" not in str(answer.get("reason", "")).lower()
+                and not notify._pending)
+    finally:
+        lone.close()
+
+
 # The companion permissions Android 14+ accepts for a `connectedDevice`
 # foreground service. Holding NONE of them makes startForeground throw in the
 # SERVICE's onCreate — off the caller's stack, so nothing catches it and the
@@ -413,6 +580,54 @@ def check_the_service_can_never_kill_the_app() -> bool:
     return ok
 
 
+def check_the_shell_sends_an_id_and_backs_off() -> bool:
+    """The shell's half of task 209, read from its source — the only thing a
+    PC with no Android runtime can prove. Two promises, and the fix is worth
+    nothing without either: the request must CARRY the id (a server keyed by
+    device and a phone that sends none is the single slot again, exactly as
+    before), and a connection that ended without the PC ever speaking must
+    back OFF rather than retry at once, which is what turned a kick into a
+    ping-pong every few seconds all night."""
+    src = PROJECT / "android/app/src/main/java/com/uvuruna/remoteuser"
+    link = (src / "NoticeLink.kt").read_text(encoding="utf-8")
+    service = (src / "NoticeService.kt").read_text(encoding="utf-8")
+    prefs = (src / "Prefs.kt").read_text(encoding="utf-8")
+    ok = True
+    # The id must reach the WIRE, encoded — not merely be mentioned in a
+    # comment, which is the whole of what a source check can get wrong. So:
+    # a line that builds `&device=` and encodes the value on the same line.
+    if not any("&device=" in line and "Uri.encode(" in line
+               for line in link.splitlines()) or "deviceId" not in link:
+        print("    NoticeLink does not put a device id on the request — the "
+              "PC cannot tell his tablet from his phone and the single slot "
+              "is back", file=sys.stderr)
+        ok = False
+    if "deviceId" not in service:
+        print("    NoticeService never hands the link a device id",
+              file=sys.stderr)
+        ok = False
+    if "UUID.randomUUID" not in prefs or "KEY_DEVICE" not in prefs:
+        print("    Prefs has no stored per-install id (and it must NOT be a "
+              "hardware id)", file=sys.stderr)
+        ok = False
+    # A HARDWARE id would be restricted, survive an uninstall, and be a real
+    # identifier riding in a query string for a job a random number does. The
+    # two ways one could get in are named, not guessed at by keyword — the
+    # comment in Prefs.kt says the word ANDROID_ID and must be allowed to.
+    if "Settings.Secure" in prefs or "TelephonyManager" in prefs:
+        print("    the device id is read from the SYSTEM — that is a hardware "
+              "id, not a per-install one", file=sys.stderr)
+        ok = False
+    # The backoff must distinguish "answered and said nothing" from "answered
+    # and talked to us": one variable for both is the old instant retry.
+    if "SILENT" not in link or "QUIET_BACKOFF_MAX_MS" not in link:
+        print("    NoticeLink does not back off after a connection that ended "
+              "without a single beat — a kick retries instantly",
+              file=sys.stderr)
+        ok = False
+    return ok
+
+
 def main() -> int:
     notify.BEAT_S = TEST_BEAT_S
     threading.Thread(target=run_server, daemon=True).start()
@@ -453,6 +668,23 @@ def main() -> int:
                 check_a_dying_page_falls_through_not_into_the_queue(chan))
     finally:
         chan.close()
+
+    # Task 209 — one channel per device. These run with the single channel
+    # above already closed, so each opens exactly the devices it is about.
+    if not until(lambda: notify.waiting_devices() == 0, timeout=6):
+        results["the closed channel really detaches"] = False
+    results["the shell sends an id and backs off when kicked"] = (
+        check_the_shell_sends_an_id_and_backs_off())
+    results["two devices each get ONE copy, neither kicked"] = (
+        check_two_devices_each_get_one_copy())
+    results["an older APK (no device id) behaves exactly as before"] = (
+        check_an_old_apk_behaves_exactly_as_before())
+    results["a re-attach replaces its OWN channel and no other"] = (
+        check_a_reattach_replaces_only_its_own_device())
+    results["the page still outranks every waiting device"] = (
+        check_the_page_still_outranks_every_device())
+    results["one waiting device keeps the queue empty"] = (
+        check_one_waiting_device_keeps_the_queue_empty())
 
     results["the queue is the last resort, and drains oldest first"] = (
         check_the_queue_is_the_last_resort())
