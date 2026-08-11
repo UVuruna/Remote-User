@@ -34,6 +34,9 @@ from _audit_panels import DICT_STAGE_JS, LAYOUT_LIST_STAGE_JS  # noqa: E402
 # Both orientations, and a tablet: task 160's bottom position has to clear a
 # D-pad group whose HEIGHT differs between the cross and the column, and those
 # two shapes are what the orientations render by default.
+# HIDE_HOLD_MS is 380 in client/chrome.js; the wait gives the timer headroom.
+HIDE_HOLD_WAIT_MS = 550
+
 SIZES = [("portrait 412x915", 412, 915), ("landscape 915x412", 915, 412),
          ("tablet landscape 1280x800", 1280, 800)]
 
@@ -430,6 +433,56 @@ def _checks(page, label, out):
     out[f"the Hide radial leans away from the edge @ {label}"] = not lean
     if lean:
         print(f"  DETAIL hide radial @ {label}: {lean}")
+
+    # ── 229: THE HOLD SURVIVES A REAL FINGER'S JITTER ────────────────────────
+    # Catches: cancelling the hold timer on ANY pointermove. A fingertip on
+    # glass moves a pixel within milliseconds, so a move-cancels hold can only
+    # ever fire under a perfectly still mouse — which is exactly how this
+    # shipped broken (owner repeat report 2026-08-11). The gesture is driven
+    # here WITH jitter injected; real travel past the slop must still cancel.
+    page.evaluate("""() => {
+      const btn = document.getElementById('btn-hide');
+      const b = btn.getBoundingClientRect();
+      const cx = b.left + b.width / 2, cy = b.top + b.height / 2;
+      const ev = (type, x, y) => btn.dispatchEvent(new PointerEvent(type, {
+        bubbles: true, isPrimary: true, pointerId: 7, clientX: x, clientY: y}));
+      ev('pointerdown', cx, cy);
+      ev('pointermove', cx + 3, cy + 2);   // the jitter every finger has
+      ev('pointermove', cx + 1, cy + 4);
+    }""")
+    page.wait_for_timeout(HIDE_HOLD_WAIT_MS)
+    jitter = page.evaluate("""() => {
+      const bad = [];
+      const open = document.querySelectorAll('#mini-radial .mini-item').length === 2;
+      if (!open) bad.push('a hold with sub-slop jitter never opened the mode radial');
+      closeMiniRadial();
+      const btn = document.getElementById('btn-hide');
+      btn.dispatchEvent(new PointerEvent('pointerup', {bubbles: true, isPrimary: true, pointerId: 7}));
+      hideHeld = false;
+      // Real travel — a swipe across the button — must still cancel the hold.
+      const b = btn.getBoundingClientRect();
+      const cx = b.left + b.width / 2, cy = b.top + b.height / 2;
+      const ev = (type, x, y) => btn.dispatchEvent(new PointerEvent(type, {
+        bubbles: true, isPrimary: true, pointerId: 8, clientX: x, clientY: y}));
+      ev('pointerdown', cx, cy);
+      ev('pointermove', cx + 40, cy);
+      return bad;
+    }""")
+    page.wait_for_timeout(HIDE_HOLD_WAIT_MS)
+    jitter += page.evaluate("""() => {
+      const bad = [];
+      if (document.querySelectorAll('#mini-radial .mini-item').length) {
+        bad.push('a swipe across Hide opened the mode radial — the slop is not a slop');
+        closeMiniRadial();
+      }
+      const btn = document.getElementById('btn-hide');
+      btn.dispatchEvent(new PointerEvent('pointerup', {bubbles: true, isPrimary: true, pointerId: 8}));
+      hideHeld = false;
+      return bad;
+    }""")
+    out[f"the Hide hold survives finger jitter @ {label}"] = not jitter
+    if jitter:
+        print(f"  DETAIL hide hold jitter @ {label}: {jitter}")
 
     # ── 159: THE TWO HIDE MODES REALLY DIFFER ────────────────────────────────
     # Catches: `sticky` not being read by wakeControls (a touch would bring the

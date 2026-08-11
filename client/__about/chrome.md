@@ -164,6 +164,13 @@ and Tailscale addresses once already).
 - **The primary act is never lost.** A tap on Hide hides — the one thing this
   button has always done. The MODE lives on a HOLD (380 ms, the same hold a
   layout row is picked up by), so a radial can never swallow the press.
+- **The hold survives a real finger's jitter** (owner repeat report
+  2026-08-11): the timer used to cancel on ANY pointermove, and a fingertip on
+  glass moves a pixel within milliseconds — the radial could only open under a
+  perfectly still mouse, which is exactly what every gate drove. The hold now
+  tolerates 12 px of wander (`HIDE_HOLD_SLOP`, the same allowance
+  `hold-gesture.js` gives layout rows); real travel still cancels. Gated WITH
+  injected jitter in `tests/test_phone_chrome.py`.
 - **A blocker still brings the controls back in BOTH modes.** A panel, a card
   or the wheel is something he must READ, and every one of them is reached
   THROUGH the controls — except the two that open themselves (the notices card

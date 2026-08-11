@@ -1,4 +1,4 @@
-// The page's own FURNITURE, and what it does with itself: the Hide button and
+﻿// The page's own FURNITURE, and what it does with itself: the Hide button and
 // its two modes, the mini radial a two-job button opens, the rule that hides
 // the controls after a quiet spell, and the toast.
 //
@@ -280,8 +280,17 @@ function setHideMode(mode) {
 // hold a layout row is picked up by (client/layouts.js), so the two gestures on
 // this page that mean "tell me more about this thing" agree.
 const HIDE_HOLD_MS = 380;
+// A REAL fingertip jitters: pointermove fires within milliseconds of the
+// touch, so cancelling the hold on ANY move meant the radial could never open
+// on a phone — only on a perfectly still mouse, which is exactly what every
+// gate used (owner repeat report 2026-08-11: the hold "does not exist" on his
+// device). The hold survives movement under this slop; real travel (a swipe
+// across the button) still cancels.
+const HIDE_HOLD_SLOP = 12;
 let hideHoldTimer = null;
 let hideHeld = false;
+let hideHoldX = 0;
+let hideHoldY = 0;
 
 function openHideModes() {
   const current = hideMode();
@@ -303,15 +312,17 @@ function openHideModes() {
   if (miniEl.children[lit]) miniEl.children[lit].classList.add("active");
 }
 
-hideBtn.addEventListener("pointerdown", () => {
+hideBtn.addEventListener("pointerdown", (e) => {
   hideHeld = false;
+  hideHoldX = e.clientX;
+  hideHoldY = e.clientY;
   hideHoldTimer = setTimeout(() => {
     hideHoldTimer = null;
     hideHeld = true;
     openHideModes();
   }, HIDE_HOLD_MS);
 });
-for (const kind of ["pointerup", "pointercancel", "pointermove"]) {
+for (const kind of ["pointerup", "pointercancel"]) {
   hideBtn.addEventListener(kind, () => {
     if (hideHoldTimer) {
       clearTimeout(hideHoldTimer);
@@ -319,6 +330,13 @@ for (const kind of ["pointerup", "pointercancel", "pointermove"]) {
     }
   });
 }
+hideBtn.addEventListener("pointermove", (e) => {
+  if (!hideHoldTimer) return;
+  if (Math.hypot(e.clientX - hideHoldX, e.clientY - hideHoldY) > HIDE_HOLD_SLOP) {
+    clearTimeout(hideHoldTimer);
+    hideHoldTimer = null;
+  }
+});
 
 keepFocus(hideBtn, () => {
   // The hold already answered this press — it opened the mode radial, and the
