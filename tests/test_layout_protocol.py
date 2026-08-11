@@ -162,7 +162,7 @@ def install_fakes(track_placement: bool = False) -> None:
     # 1.85 s PowerShell probe, and the handlers used to reach it once per
     # entry, bare, on the event loop. `live` is what they pass now.
     agents.agents_for = lambda title, live=None: ["claude"] if "Vibe Coder" in title else []
-    agents.live_agents = lambda: {"claude": {"remote user"}}
+    agents.live_agents = lambda: {"claude": {"vibecoder"}}
 
 
 def fresh_conn() -> dict:
@@ -312,7 +312,7 @@ def check_the_list_probes_the_process_table_once() -> bool:
     fix; this counts it."""
     install_fakes()
     calls = []
-    agents.live_agents = lambda: (calls.append(1), {"claude": {"remote user"}})[1]
+    agents.live_agents = lambda: (calls.append(1), {"claude": {"vibecoder"}})[1]
     agents.agents_for = lambda title, live=None: (
         [] if live is None else ["claude"] if "Vibe Coder" in title else [])
     ws, _, _ = drive([{"type": "layout_list"}])

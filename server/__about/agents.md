@@ -60,7 +60,7 @@ and each only fills in what the one above could not name:
    conversations tiers 1–2 could not name.
 
 Verified on the owner's machine, 2026-08-07: tier 1 alone answered
-`{15928: "uvuruna", 38044: "remote user"}`, tier 3 did not run at all, and
+`{15928: "uvuruna", 38044: "vibecoder"}`, tier 3 did not run at all, and
 `agents_for("… - Vibe Coder - Visual Studio Code [Administrator]")` returned
 `["claude"]` while `… - Watch Academy - …` returned `[]`.
 

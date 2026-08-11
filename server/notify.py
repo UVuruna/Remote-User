@@ -230,7 +230,7 @@ def speak_summary(project, agent: str) -> str:
     `project` = the human folder name from the agent's own `cwd` (never
     lower-cased, never guessed — the same field `layout_of` already reads,
     kept in its original case here because this one is READ ALOUD and
-    "remote user" spoken is not the same word as "Vibe Coder" written).
+    "vibecoder" spoken is not the same word as "Vibe Coder" written).
     `agent` = the same string `compose()` turns into the title, taken
     BEFORE the " needs you"/"finished"/… suffix is appended and the body is
     never part of it, structurally — this function is never handed the body

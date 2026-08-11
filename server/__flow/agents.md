@@ -17,20 +17,20 @@ Get-CimInstance Win32_Process -Filter claude.exe
     TIER 1  ~/.claude/sessions/<pid>.json          ← Claude Code's own record
               {pid, cwd, procStart, kind, …}
               pid alive?  procStart matches?  ──▶  "u:\…\Vibe Coder"
-                                                        └─ "remote user"
+                                                        └─ "vibecoder"
     TIER 2  "…\claude.exe --resume=0eb7cbe2-…"     ← an older CLI
               └─ ~/.claude/projects/<slug>/0eb7cbe2-….jsonl
-                    └─ first lines carry "cwd"  ──▶  "remote user"
+                    └─ first lines carry "cwd"  ──▶  "vibecoder"
     TIER 3  the N most recently written projects   ← N = still unnamed
               (never more than that, never older than FRESH_S)
 
-live_agents()  ->  {"claude": {"remote user", "uvuruna"}}
+live_agents()  ->  {"claude": {"vibecoder", "uvuruna"}}
                                   │
 Layout.project()   ← MEASURED every frame, never stored
   1. the member's OWN title    "Visual Studio Code"      -> no folder
   2. the SOURCE window's title  (the tab was torn out of it, still alive)
        "… - Vibe Coder - Visual Studio Code [Administrator]"
-                  └── title_folder() -> "remote user"  ──┘  match
+                  └── title_folder() -> "vibecoder"  ──┘  match
   3. the folder read at creation  ← last resort, source closed
                                     (a FOLDER, never an answer)
 
@@ -69,7 +69,7 @@ worst case per state send      one scan, shared by every layout in it
 ## What the conversation is running now (`claude_state`, task 208)
 
 ```
-the focused layout ──▶ Layout.project()  ──▶  "remote user"
+the focused layout ──▶ Layout.project()  ──▶  "vibecoder"
                                                    │
               newest_transcript(folder)            │
                 ~/.claude/projects/*/               │

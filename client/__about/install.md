@@ -24,7 +24,7 @@ the client.
   its `click` handler marks step 1 done (green check) and highlights step 2
 - `#step-open` — `#open`, an `<a>` whose `href` is built in-page from
   `location.href`:
-  `intent://pair?url=<here>#Intent;scheme=remoteuser;package=com.uvuruna.remoteuser;S.browser_fallback_url=<here>;end`
+  `intent://pair?url=<here>#Intent;scheme=vibecoder;package=com.uvuruna.vibecoder;S.browser_fallback_url=<here>;end`
   — launches the installed app with this page's URL, or reloads this same
   page if the app is missing
 

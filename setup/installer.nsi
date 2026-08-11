@@ -1,7 +1,7 @@
 ﻿Unicode true
 
 ; =================================================================
-; Remote User Installer -- NSIS Script
+; Vibe Coder Installer -- NSIS Script
 ;
 ; A standard Windows installer that also drives the dependencies
 ; (hard owner requirement -- the user NEVER side-installs anything):
@@ -18,7 +18,7 @@
 
 ; -- App Info -----------------------------------------------------
 !define APP_NAME "VibeCoder"
-!define APP_DISPLAY "Remote User"
+!define APP_DISPLAY "Vibe Coder"
 !define APP_EXE "VibeCoder.exe"
 !define APP_DESCRIPTION "Control this PC from your phone — screen, mouse, keyboard"
 
