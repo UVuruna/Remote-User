@@ -50,7 +50,15 @@ function setControlsHidden(hidden) {
 // becomes south / south-WEST there. The two directions stay distinct and
 // diagonal, which is all the stick needs, and nothing is ever clamped on top of
 // its sibling.
-const MINI_RADIUS = 92;      // px from the anchor's centre to an option's centre
+// px from the anchor's centre to an option's centre. GROWS WITH THE FACE:
+// 92 was the radius for 58 px faces; when the faces widened to 74 px (ALG-6
+// label insets, 0.0.421) the radius stayed and the south and diagonal options
+// overlapped by 9 px — the re-grade of 2026-08-11 caught it. The separator is
+// the HORIZONTAL gap (the two options always share vertical range):
+// dx = R·cos45 must clear the face width plus daylight — 114·0.707 ≈ 80.6 px
+// against 74 px faces leaves the same ~7 px the original pairing had.
+const MINI_RADIUS = 114;
+
 const MINI_EDGE = 8;         // px an option keeps clear of the screen edge
 const MINI_ANGLES = { south: Math.PI / 2, diagonal: Math.PI / 4 };
 
