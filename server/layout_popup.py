@@ -606,3 +606,116 @@ def handle(lay, hwnd: int, root: int, conn: dict) -> str:
         return ""
     _offer(lay, hwnd, conn, reason)
     return ""
+
+
+# ═══════════════════════ THE SWEEP — DETECTION WITHOUT FOCUS ═══════════════
+# HIS FOURTH REPORT OF ONE BUG (task 239, 2026-08-11): the chip did appear —
+# but only after he LEFT the layout and came back, and then everything worked.
+#
+# That timeline names the defect exactly. `handle` above is reached from
+# `focus_guard._decide`, and only ever with the FOREGROUND window: a foreground
+# that IS a member returns one line earlier (focus_guard.py, the `if fg in
+# members` branch), so `handle` is never called at all. And the window this
+# whole module was written about CANNOT take the foreground:
+#
+#   * the layout's members are always-on-top while the phone shows them
+#     (constraint 10), so the new window comes up UNDER them;
+#   * Windows refuses `SetForegroundWindow` to a process with no user input of
+#     its own and flashes a taskbar button instead — an agent's browser opening
+#     an HTML report is precisely that process;
+#   * and if it did steal the foreground for an instant, `focus_guard.watch`'s
+#     own defence hands focus straight back inside the layout.
+#
+# So the window stood there, attributable, offerable — and unseen, because the
+# only eye we had was the foreground. The moment he switched layouts the
+# members left the topmost band, the report window finally reached the
+# foreground, `handle` ran for the first time and the chip appeared. Every
+# gate written for task 202 passed throughout, because every one of them hands
+# the popup the foreground it never gets in real life.
+#
+# The sweep is therefore ENUMERATION, not focus: which top-level windows are
+# new since the baseline, attributed by the same rules, offered by the same
+# `_offer` with the same one-chip-per-window bookkeeping — so a window the
+# sweep offered can never be offered a second time when it later does reach
+# the foreground and `handle` looks at it.
+#
+# It moves NOTHING. No raise, no placement, no foreground: the only act is a
+# sentence on the phone, and the PC is touched only when he taps Show in
+# layout, exactly as before.
+
+# How often the desk is enumerated. Not every 0.25 s tick: `_top_level_hwnds`
+# is one EnumWindows returning handles only, but it runs beside a defence loop
+# that must stay cheap, and the requirement is "within a few seconds", not
+# "within a frame".
+SWEEP_EVERY_S = 1.0
+# How long a brand-new window keeps being re-attributed before it is written
+# off as a stranger. A window is often visible a moment before the thing that
+# identifies it — its owner chain, or the child process that will host it —
+# exists, and `_judged` is permanent: one look taken at the wrong instant would
+# make a window unattributable for the rest of the session.
+SWEEP_GRACE_S = 3.0
+
+
+def _owner_root(hwnd: int) -> int:
+    """The top of `hwnd`'s owner chain — a dialog resolves to the window that
+    raised it. A local copy of the walk [Focus Guard](focus_guard.py) does,
+    because that module imports THIS one and the import may not run both ways.
+    Bounded, since a recycled handle can make the chain a ring."""
+    seen = hwnd
+    for _ in range(8):
+        nxt = int(wm.user32.GetWindow(seen, GW_OWNER) or 0)
+        if not nxt or nxt == seen:
+            break
+        seen = nxt
+    return seen
+
+
+def _focused(layouts, conn: dict):
+    """The layout the phone is showing, or None. Also a local copy, for the
+    import reason above — and it must stay in step with
+    `focus_guard._active_layout`, which is why both are three lines long."""
+    index = conn.get("active")
+    if layouts is None or index is None or not 0 <= index < len(layouts.layouts):
+        return None
+    lay = layouts.layouts[index]
+    return lay if lay.members else None
+
+
+def sweep(layouts, conn: dict) -> None:
+    """One enumeration pass: has a window of THIS layout's work appeared,
+    whether or not it ever took the foreground? Blocking Win32 — the watcher
+    runs it on a worker thread, on its own cadence.
+
+    Offers only. Nothing here places, raises or foregrounds anything."""
+    lay = _focused(layouts, conn)
+    if lay is None or conn.get("away") or conn.get("left"):
+        return
+    if conn.get("popup_known") is None:
+        return          # no baseline yet: nothing is new, exactly as in `handle`
+    now = time.monotonic()
+    if now - conn.get("popup_swept", 0.0) < SWEEP_EVERY_S:
+        return
+    conn["popup_swept"] = now
+
+    pending = conn.setdefault("popup_pending", {})
+    asked = conn.get("popup_asked", ())
+    declined = conn.get("popup_declined", ())
+    for hwnd in _top_level_hwnds():
+        if not _is_new(conn, hwnd):
+            continue
+        if hwnd in lay.members or hwnd in lay.adopted:
+            continue
+        if hwnd in asked or hwnd in declined:
+            continue
+        reason = _attribute(lay, hwnd, _owner_root(hwnd), conn)
+        if reason:
+            pending.pop(hwnd, None)
+            _judged(conn, hwnd)
+            _offer(lay, hwnd, conn, f"{reason}, seen by the sweep")
+            continue
+        # Not yet attributable. Give it the grace above before writing it off
+        # for good — `_judged` cannot be taken back.
+        first = pending.setdefault(hwnd, now)
+        if now - first >= SWEEP_GRACE_S:
+            pending.pop(hwnd, None)
+            _judged(conn, hwnd)

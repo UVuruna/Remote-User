@@ -71,6 +71,32 @@ the whole screen.*
    let go of — minimizing the report he chose Desktop to reach would be the
    original failure in a new place.
 
+## Two eyes, because the foreground was never one (task 239, 2026-08-11)
+His FOURTH report of this failure carried the mechanism in his own words: the
+chip appeared, but only after he **left the layout and came back** — and then
+everything worked. `handle()` is reached from `focus_guard._decide` and only
+ever with the FOREGROUND window, and a foreground that IS a member returns one
+line earlier. The window this module was written about cannot have the
+foreground:
+
+* the members are always-on-top while the phone shows them (constraint 10), so
+  it opens UNDER them;
+* Windows refuses `SetForegroundWindow` to a process with no user input of its
+  own and flashes a taskbar button instead — an agent's browser opening an HTML
+  report is exactly that process;
+* and if it stole the foreground for an instant, `focus_guard.watch`'s own
+  defence hands focus straight back into the layout.
+
+So `sweep()` asks the question by ENUMERATION instead: every
+`SWEEP_EVERY_S` the watcher lists the top-level windows, and one that is new
+since the baseline runs through the SAME attribution and the SAME `_offer`.
+It moves nothing — no raise, no placement, no foreground — and it shares
+`popup_asked` / `popup_declined` / `popup_known` with the foreground path, so
+a window one eye offered can never be offered again by the other. `_judged` is
+permanent, so a window that cannot yet be identified is retried for
+`SWEEP_GRACE_S` before it is written off: a look taken a moment too early would
+otherwise make it a stranger for the whole session.
+
 ## The honest limits
 * **An already-running third-party app cannot be attributed.** An agent that
   opens its report in a Chrome that was already running gets a window from a
@@ -83,17 +109,24 @@ the whole screen.*
 * **Before the baseline exists, nothing is new.** `baseline()` is taken once
   per connection by `focus_guard.watch`; until it has run, this module does
   nothing at all and the fence behaves exactly as it did before task 202.
+* **Detection is bounded by the sweep's cadence**, not instant: up to
+  `SWEEP_EVERY_S` (1 s) after the window appears, plus `SWEEP_GRACE_S` (3 s)
+  more when it could not be identified on the first look. The foreground path
+  is still the faster one when a window does take the foreground.
 * **A window that refuses every rect is left alone** after
   `MAX_CONTAIN_TRIES`, logged by name — it is still in `Layout.adopted`, so the
   ledger still owes it the way back down, and it is not fought four times a
   second for the rest of the session.
 
 ## Gate
-`tests/test_layout_popup.py`, fail-closed in `setup/build.py` (0ad/6). Fifteen
+`tests/test_layout_popup.py`, fail-closed in `setup/build.py` (0ad/6). Twenty
 checks, each proven by planting its own defect: the offer replaced by an
 auto-grab, the chip re-sent on every poll, the decline forgotten, `pick`
 ignoring his answer, the chip never reaching the phone, containment removed,
 attribution loosened to "any new window", the newness rule dropped, the
 full-screen branch removed, the release removed, the prune's clean-up removed,
-the measurement removed (re-placed on every poll), the try cap removed, and the
-watcher made to act while the phone is away.
+the measurement removed (re-placed on every poll), the try cap removed, the
+watcher made to act while the phone is away, the sweep made a no-op (the
+pre-239 foreground-only eye), the sweep left unwired from `watch`, the grace
+removed so a slow window is judged on its first look, and the one-question
+rule deleted so a layout switch asks twice.

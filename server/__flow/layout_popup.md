@@ -39,6 +39,40 @@ A window is judged **once**: after the decision it joins the baseline set, so a
 stranger that fights for the foreground does not cost a process-table read four
 times a second, and a popup we could not place is never re-read as a thief.
 
+## Algorithm — the sweep: it is seen WITHOUT the foreground (task 239)
+
+His fourth report of one failure, and his own observation carried the cause:
+the chip appeared only after he **left the layout and came back**. The flow
+above starts at `focus_guard._decide` with the FOREGROUND — and the window
+this module exists for cannot have it. It opens under the members'
+always-on-top band (constraint 10); Windows refuses the foreground to a
+process with no input of its own; and `watch`'s own defence hands focus back
+inside the layout anyway. So the report window stood there, attributable and
+unseen, until a layout switch dropped the members out of the topmost band and
+it finally reached the foreground.
+
+```mermaid
+flowchart TB
+    A["focus_guard.watch — every WATCH_POLL_S,<br/>a layout focused and the phone watching"] --> B{"SWEEP_EVERY_S elapsed?"}
+    B -- no --> Z["nothing"]
+    B -- yes --> C["EnumWindows — handles only"]
+    C --> D{"new since the baseline,<br/>and not a member / adopted / asked / declined?"}
+    D -- no --> Z
+    D -- yes --> E["the SAME attribution as above<br/>(owner chain, process, ancestry)"]
+    E -- attributed --> O["judged, then ONE CHIP — the same _offer()"]
+    E -- "not (yet)" --> G{"first seen more than SWEEP_GRACE_S ago?"}
+    G -- yes --> J["judged: a stranger, for good"]
+    G -- no --> Z
+```
+
+The sweep **moves nothing** — no raise, no placement, no foreground; the only
+act is a sentence on the phone. It shares `popup_asked` / `popup_declined` /
+`popup_known` with the foreground path, so a window one eye has offered can
+never be offered again by the other, whichever saw it first. The grace exists
+because `_judged` is permanent: a window is often visible a moment before the
+thing that identifies it, and one look taken too early would make it a
+stranger for the rest of the session.
+
 ## Algorithm — where it is put
 
 ```mermaid

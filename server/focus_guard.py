@@ -516,6 +516,14 @@ async def watch(layouts, conn: dict) -> None:
             if not _defending(conn):
                 continue
             await asyncio.to_thread(_defend, layouts, conn, announced)
+            # DID A WINDOW OF THIS LAYOUT'S WORK APPEAR? (task 239.) Asked by
+            # ENUMERATION and not by the foreground, because the window this
+            # answers cannot HAVE the foreground: it opens under the members'
+            # always-on-top band, and `_defend` one line above hands focus
+            # back inside the layout anyway. The foreground-only eye is why
+            # his chip appeared only when he left the layout — the pass below
+            # is the one that sees it while he stays (server/layout_popup.py).
+            await asyncio.to_thread(layout_popup.sweep, layouts, conn)
             # …and whatever the pass wants to ASK him goes out on the page's
             # own socket (task 202): a new window of the layout's work is
             # offered — "Show in layout" / "Leave on desktop" — never taken.

@@ -37,8 +37,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from _focus_fakes import (  # noqa: E402
-    MEMBER_A, MEMBER_B, Raises, focus_guard, fresh_conn, layout_with,
-    run_checks, window_manager, with_win32,
+    MEMBER_A, MEMBER_B, FakeWs, Raises, fake_listen, focus_guard, fresh_conn,
+    layout_with, run_checks, window_manager, with_win32,
 )
 
 import layout_popup  # noqa: E402
@@ -69,6 +69,11 @@ HOME = {MEMBER_A: (100, 100, 600, 800), MEMBER_B: (700, 100, 600, 800),
 MINSIZE = {BIG: (1400, 900)}
 
 RECTS: dict = {}
+# What EnumWindows would return — the sweep's whole eye (task 239). Mutable
+# during a check on purpose: a window that opens WHILE the layout stays
+# focused is the entire subject, and a set fixed at setup time could only ever
+# describe a desk that never changes.
+DESK_WINDOWS: set = set()
 PLACED: list = []
 LEDGER: dict = {}
 MINIMIZED: list = []
@@ -99,6 +104,9 @@ def desk(fg, alive=None, owner=None):
 
     layout_popup._pid = lambda hwnd: PIDS.get(hwnd, 0)
     layout_popup._parent_pids = lambda: dict(PARENTS)
+    DESK_WINDOWS.clear()
+    DESK_WINDOWS.update(alive)
+    layout_popup._top_level_hwnds = lambda: set(DESK_WINDOWS)
 
     reg = layout_with([MEMBER_A, MEMBER_B], last_member=MEMBER_A)
     conn = fresh_conn(active=0)
@@ -454,6 +462,166 @@ def check_one_window_is_never_fought_forever() -> bool:
     return len(PLACED) > 0
 
 
+# ═══ 5. IT IS SEEN WHILE HE STAYS IN THE LAYOUT (task 239) ═══
+# HIS FOURTH REPORT of one bug, and his own observation carried the mechanism:
+# the chip appeared only after he LEFT the layout and came back. The checks
+# above are exactly why nobody caught it — every one of them hands the popup
+# the FOREGROUND, and the window this module was written about never gets it:
+# it opens under the members' always-on-top band, Windows refuses the
+# foreground to a process with no input of its own, and the guard one line
+# above hands focus back into the layout anyway.
+def check_a_window_opened_under_a_focused_layout_is_offered_at_once() -> bool:
+    """A member has the foreground the whole time — which is the NORMAL state
+    of a focused, defended layout — and the report window opens beneath it.
+    The foreground eye sees nothing (that is the bug, asserted here so this
+    check cannot quietly stop measuring it); the sweep sees it."""
+    reg, conn = desk(fg=MEMBER_A, alive=(MEMBER_A, MEMBER_B, OLD_TWIN))
+    focus_guard.guard(reg, conn)              # the layout is standing, defended
+    DESK_WINDOWS.add(POPUP)                   # the agent opens its HTML report
+    RECTS[POPUP] = HOME[POPUP]
+    focus_guard.guard(reg, conn)              # the foreground eye, task 202
+    if offers(conn):
+        print("  DETAIL the foreground path saw it — this check no longer "
+              "measures the reported failure")
+        return False
+
+    layout_popup.sweep(reg, conn)
+    queued = offers(conn)
+    if len(queued) != 1 or not queued[0]["id"].startswith(f"{POPUP:x}-"):
+        print(f"  DETAIL no chip while the layout stayed focused: {queued}")
+        return False
+    if PLACED or LEDGER:
+        print(f"  DETAIL the sweep MOVED something: {PLACED} {LEDGER}")
+        return False
+    return True
+
+
+def check_it_is_not_asked_twice_when_he_then_switches_layout() -> bool:
+    """His timeline continued: he changed layout, the window finally reached
+    the foreground and the old path looked at it. One window, one question —
+    whichever eye saw it first."""
+    # A member's DIALOG, deliberately, and not the report window: a dialog is
+    # attributed by its OWNER chain, so it stays attributable after the sweep
+    # has judged it. Planting proved the report window masks this check — the
+    # sweep marks it judged, and "not new any more" would refuse a second chip
+    # even with the one-question rule deleted. The check has to be able to see
+    # the defect it is written about (the 2026-08-09 lesson, task 165).
+    reg, conn = desk(fg=MEMBER_A, alive=(MEMBER_A, MEMBER_B, OLD_TWIN, DIALOG))
+    layout_popup.sweep(reg, conn)
+    first = len(offers(conn))
+    # The switch: the members leave the topmost band and the window comes up.
+    # Same connection, same layout registry — only the foreground moved.
+    window_manager.user32.fg = DIALOG
+    focus_guard.guard(reg, conn)
+    conn["popup_swept"] = 0.0                 # and the next sweep, unthrottled
+    layout_popup.sweep(reg, conn)
+    if first != 1 or len(offers(conn)) != 1:
+        print(f"  DETAIL asked {len(offers(conn))} times, first pass {first}")
+        return False
+    # And once he has answered, neither eye asks again.
+    layout_popup.pick(offers(conn)[-1]["id"], "desktop")
+    conn["popup_swept"] = 0.0
+    layout_popup.sweep(reg, conn)
+    focus_guard.guard(reg, conn)
+    if len(offers(conn)) != 1:
+        print(f"  DETAIL re-asked after his answer: {offers(conn)}")
+        return False
+    return True
+
+
+def check_the_watcher_itself_runs_the_sweep_and_the_chip_reaches_him() -> bool:
+    """The wiring, end to end, with no layout change anywhere in it: the real
+    `focus_guard.watch` loop, a window appearing MID-RUN, and the chip arriving
+    on the page's own socket. A pure function nobody calls is a feature that
+    does not exist — this project has paid for that lesson twice."""
+    import notify
+
+    reg, conn = desk(fg=MEMBER_A, alive=(MEMBER_A, MEMBER_B, OLD_TWIN))
+    released, restore = fake_listen(lambda _cb: True)
+    ws = FakeWs([])
+    was_page = notify._page["ws"]
+    notify._page["ws"] = ws
+
+    async def run():
+        task = asyncio.ensure_future(focus_guard.watch(reg, conn))
+        await asyncio.sleep(focus_guard.WATCH_POLL_S)
+        DESK_WINDOWS.add(POPUP)               # it opens while he works
+        RECTS[POPUP] = HOME[POPUP]
+        # Long enough for the sweep's own cadence — "a few seconds", his
+        # requirement — and no longer.
+        await asyncio.sleep(layout_popup.SWEEP_EVERY_S + focus_guard.WATCH_POLL_S * 2)
+        task.cancel()
+
+    try:
+        asyncio.run(run())
+    finally:
+        restore()
+        notify._page["ws"] = was_page
+
+    chips = [m for m in ws.sent if m.get("type") == "window_offer"]
+    if len(chips) != 1 or not chips[0]["id"].startswith(f"{POPUP:x}-"):
+        print(f"  DETAIL the watcher sent {chips}")
+        return False
+    if PLACED:
+        print(f"  DETAIL the watcher moved something: {PLACED}")
+        return False
+    return bool(released)
+
+
+def check_the_sweep_is_silent_at_the_desktop_and_while_he_is_away() -> bool:
+    """Same two conditions the foreground path already honours. A sweep that
+    offered at the desktop would ask about a window with no region to put it
+    in; one that offered while the phone is away would ask nobody."""
+    reg, conn = desk(fg=MEMBER_A, alive=(MEMBER_A, MEMBER_B, OLD_TWIN, POPUP))
+    conn["active"] = None
+    layout_popup.sweep(reg, conn)
+    if offers(conn):
+        print(f"  DETAIL offered at the desktop: {offers(conn)}")
+        return False
+
+    reg, conn = desk(fg=MEMBER_A, alive=(MEMBER_A, MEMBER_B, OLD_TWIN, POPUP))
+    conn["away"] = True
+    layout_popup.sweep(reg, conn)
+    if offers(conn):
+        print(f"  DETAIL offered while the phone was away: {offers(conn)}")
+        return False
+
+    # And with no baseline yet, nothing is new — the rule `handle` already has.
+    reg, conn = desk(fg=MEMBER_A, alive=(MEMBER_A, MEMBER_B, OLD_TWIN, POPUP))
+    conn.pop("popup_known")
+    layout_popup.sweep(reg, conn)
+    return not offers(conn)
+
+
+def check_a_stranger_is_never_offered_by_the_sweep_either() -> bool:
+    """The sweep enumerates the whole desk, so it is the place where a wrong
+    attribution would cost the owner another agent's window. Its rules are the
+    foreground path's, unchanged: a stranger and his OTHER window of the same
+    app are refused — and a refusal is not taken so early that a window which
+    was merely slow to identify itself can never be attributed (SWEEP_GRACE_S).
+    """
+    reg, conn = desk(fg=MEMBER_A,
+                     alive=(MEMBER_A, MEMBER_B, OLD_TWIN, STRANGER))
+    layout_popup.sweep(reg, conn)
+    if offers(conn) or PLACED:
+        print(f"  DETAIL a stranger was offered: {offers(conn)}")
+        return False
+    # Slow to identify itself: it enumerates before its process does anything
+    # that ties it to a member. Within the grace it is NOT written off.
+    if STRANGER in conn["popup_known"]:
+        print("  DETAIL judged on the first look — a window that identifies "
+              "itself a moment later could never be attributed")
+        return False
+    PIDS[STRANGER] = MEMBER_PID               # …and a moment later it does
+    conn["popup_swept"] = 0.0
+    layout_popup.sweep(reg, conn)
+    ok = len(offers(conn)) == 1
+    PIDS[STRANGER] = OTHER_PID
+    if not ok:
+        print("  DETAIL the second look was never taken")
+    return ok
+
+
 CHECKS = [
     ("a new window is OFFERED to the phone, never grabbed",
      check_a_new_window_is_offered_and_not_grabbed),
@@ -485,6 +653,16 @@ CHECKS = [
      check_a_contained_popup_is_not_re_placed_four_times_a_second),
     ("one window is never fought forever",
      check_one_window_is_never_fought_forever),
+    ("it is offered WHILE the layout stays focused, with no foreground",
+     check_a_window_opened_under_a_focused_layout_is_offered_at_once),
+    ("and never asked twice when he then switches layout",
+     check_it_is_not_asked_twice_when_he_then_switches_layout),
+    ("the watcher itself sweeps, and the chip reaches the page's socket",
+     check_the_watcher_itself_runs_the_sweep_and_the_chip_reaches_him),
+    ("the sweep is silent at the desktop, while away, and with no baseline",
+     check_the_sweep_is_silent_at_the_desktop_and_while_he_is_away),
+    ("the sweep refuses a stranger, but not before it could identify itself",
+     check_a_stranger_is_never_offered_by_the_sweep_either),
 ]
 
 
