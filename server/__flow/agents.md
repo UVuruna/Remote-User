@@ -65,3 +65,38 @@ cached                         2 s                  CACHE_S
 called from                    layout_state, layout_offer
 worst case per state send      one scan, shared by every layout in it
 ```
+
+## What the conversation is running now (`claude_state`, task 208)
+
+```
+the focused layout ──▶ Layout.project()  ──▶  "remote user"
+                                                   │
+              newest_transcript(folder)            │
+                ~/.claude/projects/*/               │
+                  └─ folder_of(slug) == folder ?   ◀┘   (cwd, never the slug name)
+                  └─ newest *.jsonl of the winners
+                             │
+              _tail_records(path)   last 256 KB, first (torn) line dropped
+                             │      unparsable lines skipped in silence
+                             ▼
+              walk the records BACKWARDS, taking the first of each:
+
+                 {"type":"assistant", "effort":"high",        ─▶ effort
+                  "message":{"model":"claude-opus-5[1m]"}}    ─▶ model_id
+                        │  (tool-call records carry both — nothing is skipped)
+                        └─ model_family()  strips "[1m]"      ─▶ model  "opus"
+
+                 the first record that HAS "permissionMode"   ─▶ mode  "plan"
+                        (a tool RESULT is type:"user" and has none;
+                         {"type":"mode"} reads "normal" always — not the source)
+
+              claude_settings()  ~/.claude/settings.json      ─▶ saved
+                             │
+                             ▼
+   {"type":"claude_state", model, model_id, effort, mode, saved}  ───▶  the phone
+```
+
+Nothing in that column raises: every step that finds nothing contributes
+`None`, and the frame is sent with the fields it could fill. The desktop (no
+focused layout) asks for the empty folder and lands on the same answer — only
+`saved` stands there, because there is no one conversation to describe.

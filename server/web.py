@@ -44,11 +44,13 @@ from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 import caret
+import claude_api
 import clipboard
 import config
 import cursor_shape
 import focus_guard
 import layout_api
+import monitor_api
 import monitors
 import notify
 import pairing
@@ -644,6 +646,10 @@ async def _send_config(ws: WebSocket, stream, token: str, codec: str | None = No
         "type": "config",
         "monitor_width": stream.width,
         "monitor_height": stream.height,
+        # `monitor` + `monitors` — every screen the PC can stream and which
+        # one this is (owner 2026-08-09, task 155). Built in
+        # monitor_api.config_fields; this file only ships it, like `base`.
+        **monitor_api.config_fields(stream),
         "stream": stream.mode,
         "tailscale_url": f"http://{ts_ip}:{SETTINGS.port}/?token={token}" if ts_ip else None,
         # The phone's update source is THIS PC, never the internet. The
@@ -666,34 +672,6 @@ async def _send_config(ws: WebSocket, stream, token: str, codec: str | None = No
     if codec:
         payload["codec"] = codec
     await ws.send_text(json.dumps(payload))
-
-
-async def _switch_monitor(ws: WebSocket, injector: InputInjector, stream, token: str,
-                          layouts=None, conn: dict | None = None) -> None:
-    count = stream.output_count()
-    if count < 2:
-        await _toast(ws, "Only one active monitor")
-        return
-    new_index = (stream.monitor_index + 1) % count
-    ok = await asyncio.to_thread(stream.switch_to, new_index)
-    if not ok:
-        await _toast(ws, "Monitor switch failed — see server log")
-        return
-    injector.set_monitor_rect(
-        monitors.rect_for_size(stream.width, stream.height, stream.monitor_index)
-    )
-    # A focused layout stands on the monitor we just stopped watching, and it
-    # is still always-on-top there — over a desk the phone can no longer even
-    # see (audit 2026-08-05). Switching monitors therefore LEAVES the layout,
-    # exactly like choosing Desktop; the layout bar is still there to step
-    # back into it once the phone is looking at its monitor again.
-    if layouts is not None and conn is not None and conn.get("active") is not None:
-        await asyncio.to_thread(layouts.minimize_members)
-        conn["active"], conn["region"] = None, None
-        await layout_api.send_layout_state(ws, layouts, conn)
-    if stream.mode == "jpeg":
-        await _send_config(ws, stream, token)  # H.264 clients get config from their fresh session
-    await _toast(ws, f"Monitor {stream.monitor_index + 1}/{count}")
 
 
 async def _screenshot(ws: WebSocket, stream, injector: InputInjector, msg: dict) -> None:
@@ -838,7 +816,13 @@ async def _receive_input(ws: WebSocket, injector: InputInjector, stream, token: 
             # into an autocomplete menu that re-filters on every character,
             # and one atomic insert cannot be raced by it. Enter is a separate
             # press so `enter: false` can leave the menu standing for the
-            # finger to pick from.
+            # finger to pick from. `focus: "claude"` puts the caret in the
+            # Claude prompt first (owner order 2026-08-11) — a refusal there
+            # injects NOTHING and has already toasted, so nothing is typed
+            # into whatever window really held the keyboard.
+            if msg.get("focus") == "claude" and not await claude_api.focus_prompt(
+                    ws, injector, focus_guard.typist(layouts, conn)):
+                continue
             lost = await asyncio.to_thread(
                 content.paste_text, injector, str(msg.get("text", "")),
                 bool(msg.get("enter", True)), focus_guard.typist(layouts, conn))
@@ -858,7 +842,12 @@ async def _receive_input(ws: WebSocket, injector: InputInjector, stream, token: 
             # back to where the chord just left (focus_guard).
             focus_guard.retarget(conn)
         elif kind == "monitor_switch":
-            await _switch_monitor(ws, injector, stream, token, layouts, conn)
+            # `index` is the monitor the phone's layout list asked for (task
+            # 155) and is optional — absent means the cycle this message has
+            # always been (server/monitor_api.py).
+            await monitor_api.switch(
+                ws, injector, stream, layouts, conn, msg.get("index"),
+                lambda: _send_config(ws, stream, token))
         elif kind == "screenshot":
             await _screenshot(ws, stream, injector, msg)
         elif kind == "layout_pick":
@@ -913,6 +902,10 @@ async def _receive_input(ws: WebSocket, injector: InputInjector, stream, token: 
             # enumerate another device's TTS engine, so this is the only
             # source the desktop Settings window's "Voice" dropdown can have.
             notify.set_voices(msg.get("voices"))
+        elif kind == "claude_state":
+            # What the focused layout's conversation is running NOW (task 208)
+            # — read from its own transcript, never from a phone-side memory.
+            await claude_api.send_state(ws, layouts, conn)
         elif kind == "client_log":
             # Silent phone-side diagnostics (owner round 2, 2026-08-05: voice
             # evidence goes to THIS log, never to a panel on the phone).

@@ -418,3 +418,147 @@ def claude_settings() -> dict:
     if isinstance(raw.get("effortLevel"), str):
         out["effort"] = raw["effortLevel"]
     return out
+
+
+# ═══════════════════════ WHAT THE CONVERSATION IS RUNNING NOW ═══════════════════════
+# The other half of the honesty above (owner report 2026-08-11, task 208: "model
+# ne piše koji je trenutno", and a Thinking panel that highlighted Medium while
+# his PC was really on Max).  `claude_settings()` answers what the NEXT session
+# will start as; this answers what the conversation ON HIS SCREEN is running,
+# and the two genuinely differ — /model and /effort apply to the running session
+# only, and a session resumed from a transcript keeps what it was saved with.
+#
+# The source is the transcript Claude Code writes as it goes,
+# `~/.claude/projects/<slug>/<session>.jsonl`, the same file this module already
+# resolves for tiers 2 and 3.  MEASURED on real transcripts here on 2026-08-11,
+# because task 208's original note ("effort has no such trail") was FALSE and
+# cost a round:
+#
+#   * EVERY `assistant` record carries BOTH `message.model` and a top-level
+#     `effort` — including the tool-call-only ones, which are most of them in a
+#     working session.  There is nothing to skip and nothing to search past.
+#   * `permissionMode` rides only SOME `user` records — the real prompts.  A
+#     tool RESULT is also a `user` record and carries none, so "the last user
+#     record" is the wrong rule and would answer null nearly every time; the
+#     rule is the last record that HAS the field.
+#   * A dedicated `{"type": "mode", "mode": ...}` record exists too, and on this
+#     PC it reads `normal` in all 373 of them across every project — it cannot
+#     currently distinguish plan mode from anything else, so it is deliberately
+#     NOT the source.  `permissionMode` is (default / auto / acceptEdits /
+#     plan), and plan mode is exactly what the phone's Mode button must know.
+#
+# Read from the TAIL: a working transcript reaches tens of megabytes, the answer
+# is always in its last few records, and this is asked from a phone panel.
+TAIL_BYTES = 256 * 1024
+
+# The model FAMILY, for a panel that wants to light one of five rows.  A running
+# session reports ids like `claude-fable-5` or `claude-opus-5[1m]`, and the `[1m]`
+# is a context-window variant of the SAME family — stripped for the family, kept
+# whole in `model_id` so nothing downstream has to guess what was really running.
+MODEL_FAMILIES = ("fable", "opus", "sonnet", "haiku")
+
+
+def model_family(model_id: str) -> str:
+    """`claude-opus-5[1m]` → `opus`; anything unrecognised → "".
+
+    Never a near-miss: an id we do not know answers nothing rather than the
+    closest family, because a panel lighting the wrong row is a lie the owner
+    would act on."""
+    low = (model_id or "").split("[", 1)[0].lower()
+    for family in MODEL_FAMILIES:
+        if family in low:
+            return family
+    return ""
+
+
+def _tail_records(path: Path) -> list[dict]:
+    """The last `TAIL_BYTES` of a transcript, parsed, oldest first.
+
+    The first line of the slice is dropped whenever we seeked — it is a
+    fragment of whatever record straddled the cut. Anything that will not
+    parse is skipped in silence: a transcript being APPENDED to while we read
+    it legitimately ends mid-line."""
+    try:
+        size = path.stat().st_size
+        with path.open("rb") as fh:
+            if size > TAIL_BYTES:
+                fh.seek(size - TAIL_BYTES)
+            raw = fh.read()
+    except OSError:
+        return []
+    lines = raw.decode("utf-8", errors="replace").splitlines()
+    if size > TAIL_BYTES:
+        lines = lines[1:]
+    out: list[dict] = []
+    for line in lines:
+        try:
+            record = json.loads(line)
+        except (json.JSONDecodeError, ValueError):
+            continue
+        if isinstance(record, dict):
+            out.append(record)
+    return out
+
+
+def newest_transcript(folder: str) -> Path | None:
+    """The most recently written transcript of the project whose own `cwd`
+    ends in `folder` — the conversation the phone is looking at.
+
+    Matched through `folder_of` and never through the slug's own name: the
+    slug flattens separators AND spaces into dashes, so
+    `u--Coding-UVuruna-Applications-Remote-User` cannot be split back into
+    "Remote User" (the bug that made the first `folder_of` return "user")."""
+    if not folder:
+        return None
+    best: tuple[float, Path] | None = None
+    try:
+        slugs = list(CLAUDE_PROJECTS.iterdir())
+    except OSError:
+        return None
+    for slug in slugs:
+        try:
+            files = [(f.stat().st_mtime, f) for f in slug.glob("*.jsonl")]
+        except OSError:
+            continue
+        if not files:
+            continue
+        newest = max(files, key=lambda pair: pair[0])
+        if best is not None and newest[0] <= best[0]:
+            continue                      # cannot win — do not pay for folder_of
+        if folder_of(slug) != folder.lower():
+            continue
+        best = newest
+    return best[1] if best is not None else None
+
+
+def claude_state(folder: str) -> dict:
+    """The `claude_state` frame for the phone — what the conversation in this
+    project is running RIGHT NOW, beside what is merely saved.
+
+    Every field is independently nullable and nothing here raises: no project,
+    no transcript, a transcript whose tail holds no assistant record yet, a
+    half-written line — each simply answers `None` for what it could not read.
+    A panel that is told nothing shows nothing, which is the honest state; an
+    exception here would take the whole message down instead."""
+    transcript = newest_transcript(folder)
+    model_id = effort = mode = None
+    if transcript is not None:
+        records = _tail_records(transcript)
+        for record in reversed(records):
+            if model_id is None and record.get("type") == "assistant":
+                message = record.get("message")
+                if isinstance(message, dict) and isinstance(message.get("model"), str):
+                    model_id = message["model"]
+                    # Taken from the SAME record on purpose: effort rides every
+                    # assistant record, so the newest one that names a model is
+                    # also the newest that names the level it thought with.
+                    if isinstance(record.get("effort"), str):
+                        effort = record["effort"]
+            if mode is None and isinstance(record.get("permissionMode"), str):
+                mode = record["permissionMode"]
+            if model_id is not None and mode is not None:
+                break
+    return {"type": "claude_state",
+            "model": model_family(model_id or "") or None,
+            "model_id": model_id, "effort": effort, "mode": mode,
+            "saved": claude_settings()}

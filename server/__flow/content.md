@@ -61,3 +61,35 @@ a guard and returns a string. `web.py` owns the socket and the toast; the
 
 That separation is the whole point of the 2026-08-08 split — see
 [the description](../__about/content.md#why-it-is-its-own-module).
+
+## `paste_text {focus: "claude"}` — the prompt first (task 200)
+
+```
+web.py  paste_text branch
+  │
+  ├─ focus == "claude" ?  no ──────────────────────────┐  (unchanged since 2026-08-05)
+  │                                                    │
+  └─ yes → claude_api.focus_prompt()                   │
+             │                                         │
+             └─ content.focus_claude_prompt()          │
+                  guard()  ── 0 ──▶ refuse, 0 injections, toast
+                     │
+                  process_of(target) != "code.exe" ──▶ refuse, 0 injections, toast
+                     │
+                  clipboard ← "Claude Code: Focus input"   busy ──▶ refuse, toast
+                     │
+                  Ctrl+Shift+P  ─ settle ─ guard() ─ 0 ─▶ abandon (palette left open)
+                     │
+                  Ctrl+V        ─ settle ─ guard() ─ 0 ─▶ abandon, ENTER WITHHELD
+                     │
+                  Enter                     the caret is now in the prompt
+                     │                                   │
+                     └─ "" ────────────────────────────▶ ┤
+                                                         ▼
+                                          content.paste_text(text, enter)
+                                            clipboard ← the real text
+                                            Ctrl+V ─ settle ─ guard ─ Enter
+```
+
+A refusal `continue`s the dispatcher: the paste never runs, so the command
+cannot arrive half-delivered in a window nobody chose.

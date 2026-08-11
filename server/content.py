@@ -98,6 +98,94 @@ def crop_to_region(frame, msg: dict):
 PASTE_ENTER_DELAY = 0.12
 
 
+# --- Focusing the Claude prompt first (owner order 2026-08-11, task 200) -----
+# His complaint, in his own words: a Claude command "fails when the prompt is
+# not selected" — the paste lands wherever the caret happens to be inside VS
+# Code (the editor, the terminal, the file tree), so `/model` ends up as text in
+# a source file. His instruction was to make the program put the caret in the
+# prompt ITSELF before typing.
+#
+# The mechanism was measured this round. The Claude Code extension registers the
+# command **"Claude Code: Focus input"** (`claude-vscode.focus`), whose webview
+# receiver focuses the prompt box and, with an empty payload, inserts nothing —
+# exactly the act wanted and nothing else. `Ctrl+Escape` was REJECTED: it is a
+# focus/BLUR toggle, so firing it blind is a coin flip that half the time takes
+# focus AWAY from the prompt. What is left is the one delivery that does not
+# depend on any current state: the Command Palette.
+#
+# THE PROCESS IS ASSERTED FIRST AND THE REFUSAL IS TOTAL. `Ctrl+Shift+P` in a
+# stranger's window is not a harmless no-op — it is a global chord fired into
+# whatever the focus guard's target really is, and that accident is the class of
+# failure this whole feature exists to prevent (constraint 11). So a target that
+# is not VS Code costs ZERO injections and the phone is told why.
+CLAUDE_FOCUS_COMMAND = "Claude Code: Focus input"
+CLAUDE_FOCUS_PROCESS = "code.exe"
+# Between the palette opening, the name landing in it and the Enter that runs
+# it. Same reason as PASTE_ENTER_DELAY above, one step further: the palette
+# FILTERS on every change, and a key delivered inside that reaction is applied
+# to the list as it was.
+FOCUS_STEP_DELAY = 0.18
+
+
+def _target_process(hwnd: int) -> str:
+    """The executable behind a window, lowercased. Imported where it is used
+    rather than at module import: everything else in this file is pure content
+    conversion, and only this one path needs the window layer."""
+    import window_manager
+    return (window_manager._process_name(hwnd) or "").lower()
+
+
+def _settled(guard) -> bool:
+    """The pause between two injections of one sequence, with the fence
+    re-checked across it — the `PASTE_ENTER_DELAY` rule of `paste_text`,
+    applied to every gap in the palette chord instead of only the last one."""
+    time.sleep(FOCUS_STEP_DELAY)
+    return guard is None or bool(guard())
+
+
+def focus_claude_prompt(injector: InputInjector, guard=None,
+                        process_of=None) -> str:
+    """Puts the caret in Claude Code's prompt box. `""` = it is there; anything
+    else is the sentence the phone is shown, and NOTHING was left half-done.
+
+    Blocking on purpose (the caller runs it in a thread), like `paste_text`
+    below, and it runs BEFORE that function rather than inside it: a refusal
+    here must cost zero keystrokes, not a partial command."""
+    process_of = process_of or _target_process
+    target = guard() if guard is not None else 0
+    if guard is not None and not target:
+        logger.error("Claude focus refused — focus could not be secured")
+        return "The command was NOT sent — another window holds the keyboard"
+    name = process_of(target) if target else ""
+    if name != CLAUDE_FOCUS_PROCESS:
+        logger.error("Claude focus refused — the target runs %s, not %s",
+                     name or "nothing readable", CLAUDE_FOCUS_PROCESS)
+        return ("The command was NOT sent — VS Code is not the window in "
+                "front. Open the Claude conversation first.")
+    if not clipboard.copy_text(CLAUDE_FOCUS_COMMAND):
+        # No typed fallback: the command name would go into the palette
+        # character by character while it re-filters, and a MIS-filtered
+        # palette entry run by the Enter below is an arbitrary VS Code command.
+        logger.error("Clipboard busy — the Claude prompt was not focused")
+        return "Clipboard busy — try the command again"
+    injector.press_chord("ctrl+shift+p")
+    if not _settled(guard):
+        # The palette is left standing on the PC, deliberately: the Escape that
+        # would close it is another injection, and focus is exactly what we no
+        # longer have — it would land in the thief.
+        logger.error("Claude focus abandoned — focus left before the command "
+                     "name could be pasted")
+        return "The command was NOT sent — another window took the keyboard"
+    injector.press_chord("ctrl+v")
+    if not _settled(guard):
+        logger.error("Claude focus abandoned — focus left before the palette "
+                     "entry could be run; nothing was submitted")
+        return "The command was NOT sent — another window took the keyboard"
+    injector.press_key("enter")
+    time.sleep(FOCUS_STEP_DELAY)
+    return ""
+
+
 def paste_text(injector: InputInjector, text: str, enter: bool, guard=None) -> str:
     """Writes `text` into the focused box on the PC through the clipboard.
 

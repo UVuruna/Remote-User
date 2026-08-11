@@ -80,3 +80,48 @@ whole path exists to avoid is a button that silently does nothing.
 fail-closed INPUT GATE in `build.py` — pins the ORDER
 (`clipboard → ctrl+v → enter`), the Menu button's *no Enter*, and the
 clipboard-busy fallback.
+
+## Focusing the Claude prompt first (owner order 2026-08-11, task 200)
+
+His complaint: a Claude command "fails when the prompt is not selected". The
+paste lands wherever the caret happens to be inside VS Code — the editor, the
+terminal, the file tree — so `/model` arrives as literal text in a source file.
+His instruction was that the program must put the caret in the prompt ITSELF
+before typing.
+
+The mechanism was measured this round. The Claude Code extension registers the
+command **"Claude Code: Focus input"** (`claude-vscode.focus`), whose webview
+receiver focuses the prompt box and, with an empty payload, inserts nothing —
+exactly the act wanted and nothing else. `Ctrl+Escape` was REJECTED: it is a
+focus/**blur** toggle, so firing it blind is a coin flip that half the time
+takes focus away from the prompt. What is left is the one delivery that depends
+on no current state: the Command Palette.
+
+`focus_claude_prompt(injector, guard, process_of=None)` therefore runs
+`Ctrl+Shift+P` → paste the command name → Enter, with the focus fence
+re-checked across every gap (the `PASTE_ENTER_DELAY` rule of `paste_text`,
+applied to all of them instead of only the last). It returns `""` on success,
+or the sentence the phone is shown.
+
+**The process is asserted first, and the refusal is total.** `Ctrl+Shift+P` is
+a GLOBAL chord, not a harmless no-op — fired into a stranger's window it is
+precisely the accident constraint 11 exists to prevent. A target that is not
+`Code.exe`, a fence that could not be restored, or a busy clipboard all cost
+**zero injections** and are told to the phone. There is no typed fallback for
+the command name either: the palette re-filters on every character, and the
+Enter would then run whatever it had filtered to — an arbitrary VS Code
+command, submitted. If the fence is lost mid-sequence the palette is left
+standing on the PC on purpose: the Escape that would close it is another
+injection, and focus is exactly what we no longer have.
+
+It runs BEFORE `paste_text` rather than inside it, from
+[Claude API](claude_api.md) → `focus_prompt()`, so a refusal costs no
+keystrokes at all instead of half a command. A `paste_text` without
+`focus: "claude"` never reaches this path and behaves exactly as it has since
+2026-08-05.
+
+### Gate
+[`tests/test_claude_focus.py`](../../tests/test_claude_focus.py) — fail-closed
+in `build.py` (0ab/6): the palette completes strictly before the command's own
+Ctrl+V, a plain `paste_text` is still exactly two injections, a non-VS-Code
+target injects nothing, and a fence lost mid-sequence withholds the Enter.

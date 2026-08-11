@@ -149,3 +149,61 @@ Verified on the owner's machine, 2026-08-07: tier 1 alone answered
   async handlers — that time is the whole event loop stopped: no stream, no
   heartbeats. `layout_list` took one snapshot in a thread from 2026-08-07,
   and tests/test_layout_protocol.py counts the probes and fails at two.
+
+## What the conversation is running NOW (task 208, 2026-08-11)
+
+`claude_settings()` answers *what the next session will start as*. It is
+deliberately called **saved** and never *active* — a project or local
+`.claude/settings.json`, `CLAUDE_CODE_EFFORT_LEVEL` / `ANTHROPIC_MODEL`, a
+session-only switch in the picker and a resumed transcript all outrank it.
+
+His report proved that the distinction is not academic: the Thinking panel
+highlighted Medium while his PC was really on Max, because `/model` and
+`/effort` apply to the **running session only** and no file on disk records
+that. So the live answer is read from the transcript Claude Code writes as it
+goes — `~/.claude/projects/<slug>/<session>.jsonl`, the same file tiers 2 and
+3 above already resolve.
+
+**The shape of that file was MEASURED here on 2026-08-11**, on real
+transcripts, because task 208's own note ("effort has no such trail") was
+FALSE and a fix built on it would have shipped a panel that could never say
+anything:
+
+- every `assistant` record carries BOTH `message.model` and a top-level
+  `effort` — tool-call records included, and in a working session those are
+  most of them. There is nothing to skip and nothing to search past;
+- `permissionMode` rides only SOME `user` records — the real prompts. A tool
+  RESULT is a `user` record too and carries none, so "the last user record" is
+  the wrong rule and answers null nearly every time. The rule is **the last
+  record that HAS the field**;
+- a dedicated `{"type": "mode", "mode": …}` record exists, and read `normal` in
+  all 373 of them across every project on this PC. It cannot currently
+  distinguish plan mode from anything else and is deliberately NOT the source.
+
+### Functions
+- `model_family(model_id)` — `claude-opus-5[1m]` → `opus`. The `[1m]` is a
+  context-window variant of the same family, stripped for the family and kept
+  whole in `model_id`. An id we do not know answers `""`, never the nearest
+  match: a panel lighting the wrong row is a lie the owner would act on.
+- `newest_transcript(folder)` — the most recently written transcript of the
+  project whose own `cwd` ends in `folder`. Matched through `folder_of()` and
+  never through the slug's name (the slug flattens separators AND spaces into
+  dashes — the bug that once made `folder_of` return "user").
+- `_tail_records(path)` — the last `TAIL_BYTES` (256 KB) parsed, oldest first.
+  A working transcript reaches tens of megabytes and the answer is always in
+  its last few records. The first line of the slice is dropped whenever we
+  seeked (it is a fragment of the record that straddled the cut), and anything
+  that will not parse is skipped in silence — a transcript being APPENDED to
+  while we read it legitimately ends mid-line.
+- `claude_state(folder)` — the frame itself, `{type, model, model_id, effort,
+  mode, saved}`. Every live field is independently nullable and **nothing here
+  raises**: no project, no transcript, no assistant record yet, a half-written
+  line — each simply answers `None` for what it could not read. A panel told
+  nothing shows nothing, which is the honest state; an exception would take the
+  whole message down instead. The exact wire contract lives in
+  [Claude API](claude_api.md) → The wire contract.
+
+### Gate
+[`tests/test_claude_state.py`](../../tests/test_claude_state.py) — fail-closed
+in `build.py` (0ac/6). It drives the real reader over transcripts built like
+his, so a later round cannot quietly go back to a rule that reads nothing.
