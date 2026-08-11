@@ -823,6 +823,12 @@ async def _receive_input(ws: WebSocket, injector: InputInjector, stream, token: 
             await layout_api.layout_pick(ws, layouts, stream, msg)
         elif kind == "layout_list":
             await layout_api.layout_list(ws, layouts, stream)
+        elif kind == "layout_recent":
+            # The FOURTH creation source (task 228): every layout previously
+            # created on this PC, persisted across restarts.
+            await layout_api.layout_recent(ws)
+        elif kind == "layout_recent_use":
+            await layout_api.layout_recent_use(ws, layouts, stream, conn, msg)
         elif kind == "next_input":
             # Scope follows the view (owner spec): layout focus → only its
             # member windows; full desktop → every visible window.

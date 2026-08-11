@@ -94,6 +94,11 @@ const ICONS = {
   // of its top edge (New — the window does not exist yet, which is the whole
   // difference from `newwin`, whose + sits inside an open window).
   tapwin: '<rect x="2.5" y="3.5" width="13" height="10" rx="1.8"/><line x1="2.5" y1="7" x2="15.5" y2="7"/><path d="M11.5 21.5V15a1.6 1.6 0 0 1 3.2 0v3.2"/><path d="M14.7 17.6a1.5 1.5 0 0 1 3 0v.9"/><path d="M17.7 18.1a1.5 1.5 0 0 1 3 0v1.6a4 4 0 0 1-1.4 3l-1 .8"/>',
+  // The layout-birth radial's FOURTH option (owner report 2026-08-11, task
+  // 228 — "Recent", a drawn clock, NEVER a font glyph, the ✥ lesson of
+  // 2026-08-05). A plain clock face reads at 74px beside Tap/List/New's own
+  // house style without borrowing any of their marks.
+  recentwin: '<circle cx="12" cy="12" r="9.5"/><path d="M12 6.5V12l4 2.3"/>',
   listwin: '<rect x="2.5" y="4" width="8" height="16" rx="1.8"/><line x1="2.5" y1="7.5" x2="10.5" y2="7.5"/><line x1="14" y1="7" x2="21.5" y2="7"/><line x1="14" y1="12" x2="21.5" y2="12"/><line x1="14" y1="17" x2="21.5" y2="17"/>',
   winplus: '<rect x="2.5" y="9.5" width="19" height="11.5" rx="2"/><line x1="2.5" y1="13.5" x2="21.5" y2="13.5"/><line x1="12" y1="1.5" x2="12" y2="7.5"/><line x1="9" y1="4.5" x2="15" y2="4.5"/>',
   // Four-way move (the aspect panel's Move handle). A drawn icon, not the

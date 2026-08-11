@@ -373,6 +373,11 @@ function connect() {
         }
       } else if (msg.type === "layout_progress") {
         cubeNext(); // one window created on the PC = one cube turn
+      } else if (msg.type === "layout_recent") {
+        // The Recent creation source's answer (task 228) — routed here like
+        // every other layout-panel reply; the render itself lives in
+        // layout-create.js, which owns the whole wizard's panels.
+        handleLayoutRecent(msg);
       }
     } else if (streamMode === "h264") {
       mseQueue.push(e.data);

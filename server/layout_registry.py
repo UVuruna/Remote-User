@@ -25,6 +25,7 @@ asyncio.to_thread.
 import logging
 
 import agents
+import layout_history
 import window_manager as wm
 
 logger = logging.getLogger(__name__)
@@ -250,6 +251,15 @@ class LayoutRegistry:
                                    template, orient, aspect,
                                    wm.icon_data_uri(wm._process_path(target)),
                                    kept, folder))
+        # RECORDED, not merely built (owner report 2026-08-11, task 228 — the
+        # "Recent" creation source): every successful create() is a row in
+        # the persisted history, so it can be tapped back into being after a
+        # restart. Best-effort and never fatal — `layout_history.record`
+        # swallows its own errors — because a history write must not cost
+        # him the layout he just asked for.
+        layout_history.record(name, template, orient, folder, [
+            {"process": wm._process_name(h), "title": wm._title(h) or ""}
+            for h in members])
         return len(self.layouts) - 1, placed
 
     def focus(self, index: int, device_ratio: float,
