@@ -1054,6 +1054,23 @@ record blocks the window instead of the "declined" one and the behaviour is
 identical. It exists so that the DECLINE record is the thing doing the work —
 which is exactly what the plant of that record proves.
 
+FIVE CHECKS WERE ADDED ON HIS FOURTH REPORT (task 239, 2026-08-11), and the
+PROCESS failure is the bigger half of that round: every check above hands the
+popup the FOREGROUND, which is the one thing it never gets in real life — it
+opens under the members' always-on-top band, Windows refuses the foreground to
+a process with no input of its own, and the guard hands focus back into the
+layout anyway. So `handle()` was never called while he stayed in the layout,
+and the chip he finally saw was the one raised by his layout SWITCH. A gate
+that drives a detector with the event it is missing proves nothing about when
+the detector runs. The new checks state the live shape instead: a member holds
+the foreground throughout, the window appears mid-run, and the chip must go out
+on the page's own socket with NO layout change anywhere — driven through the
+real `focus_guard.watch` loop, because a pure function nobody calls is a
+feature that does not exist. One of them had to be re-aimed after planting: the
+"never asked twice" check used the report window, and the sweep's own `_judged`
+masked the deleted one-question rule, so it now uses a member's DIALOG, which
+is attributed by its owner chain and stays attributable after judging.
+
 Run: `.venv\Scripts\python tests/test_layout_popup.py` — also a fail-closed
 step in `build.py` (0ad/6).
 

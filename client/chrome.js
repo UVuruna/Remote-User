@@ -160,6 +160,41 @@ function miniRingPoints(count, screen, size) {
   });
 }
 
+// The D-pad group's own CATEGORY wheel (controls.js -> openWheel) draws a
+// bigger, plain ring — not the centered mini-radial above, which caps at four
+// options by design (Tap/List/New). Its own points live here, next to
+// `miniRingPoints`, because they are the SAME fix for the SAME shape: task
+// 238, owner screenshot, "in landscape the wheel shows only four sets while
+// portrait shows all enabled ones". `openWheel` used a fixed 118 px radius
+// with NO clamp at all — unlike `miniRingPoints`, which already shrinks on a
+// small screen rather than letting an option leave it. A phone's landscape
+// HEIGHT is its SHORT side (~360-412 px, against an ~900 px portrait height),
+// so the same 118 px radius that comfortably fits six-plus items in portrait
+// leaves only a thin margin in landscape — and on a real device (a slightly
+// shorter phone, or the transient system bars constraint 9 describes) that
+// margin goes negative and an item's CENTRE lands outside the viewport. The
+// item never left the DOM — every one of them still rendered — but a finger
+// cannot reach a centre off-screen and a screenshot shows a hole where it
+// should be, which reads as "the wheel dropped it". Shrinking the radius
+// keeps every item ON the ring and ON screen, whatever the count; nothing is
+// ever sliced off the list — the actual "drop entries silently" failure is
+// what this function exists to NOT do. PURE, so its gate can drive every
+// size and count by argument, same discipline as `miniRingPoints`.
+const WHEEL_RADIUS = 118;
+const WHEEL_ITEM_SIZE = 74;  // px — matches .wheel-item in style.css
+const WHEEL_EDGE = 8;        // px an item keeps clear of the screen edge
+
+function wheelPoints(count, screen, size) {
+  const half = (size || WHEEL_ITEM_SIZE) / 2 + WHEEL_EDGE;
+  const r = Math.max(0, Math.min(WHEEL_RADIUS, Math.min(screen.width, screen.height) / 2 - half));
+  const cx = screen.width / 2;
+  const cy = screen.height / 2;
+  return Array.from({ length: count }, (_, i) => {
+    const angle = -Math.PI / 2 + (i * 2 * Math.PI) / Math.max(1, count);
+    return { x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle) };
+  });
+}
+
 // `options` = [{icon, label, onPick}] — at most two ANCHORED (see the note
 // above), up to four on the centered ring.
 //

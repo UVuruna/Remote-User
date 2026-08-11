@@ -845,20 +845,22 @@ function renderGroup(side) {
 // --- Category wheel (tap to open, tap an item, X to cancel) ---------------
 
 const wheelEl = document.getElementById("wheel");
-const WHEEL_RADIUS = 118;
+// The ring's own point geometry lives in client/chrome.js (`wheelPoints`,
+// beside `miniRingPoints` — the sibling it copies the clamp pattern from);
+// this file only calls it. THE STRUCTURE LAW: geometry with no PC-facing
+// side effect belongs with the rest of the chrome's own furniture, and
+// controls.js was already at the line cap.
 
 function openWheel(side) {
   wheelEl.innerHTML = "";
-  const cx = window.innerWidth / 2;
-  const cy = window.innerHeight / 2;
+  const screen = { width: window.innerWidth, height: window.innerHeight };
   // wheelCats(side), not allCats() — task 181's drop-out wheel: no duplicate
   // of the other side's placed set, and drop-out also sheds this side's own
   // (sets.js). Renderer unchanged otherwise — it draws whatever list it gets.
   const cats = wheelCats(side);
   const currentCat = placedCat(side);
-  const n = cats.length;
+  const points = wheelPoints(cats.length, screen);
   cats.forEach((cat, i) => {
-    const angle = -Math.PI / 2 + (i * 2 * Math.PI) / Math.max(1, n);
     const item = document.createElement("div");
     item.className = "wheel-item" + (cat === currentCat ? " current" : "");
     item.innerHTML = svg(cat.icon) + `<span>${cat.name}</span>`;
@@ -866,8 +868,8 @@ function openWheel(side) {
     // painted with `--glass-strong` (0.85), a different surface from a D-pad
     // button's 0.20 tint, so it gets its own ink.
     paintSet(item, cat.name, "--glass-strong");
-    item.style.left = `${cx + WHEEL_RADIUS * Math.cos(angle)}px`;
-    item.style.top = `${cy + WHEEL_RADIUS * Math.sin(angle)}px`;
+    item.style.left = `${points[i].x}px`;
+    item.style.top = `${points[i].y}px`;
     keepFocus(item, () => {
       groups[side] = allCats().indexOf(cat); // index into the FULL list
       rememberGroup(side, cat.name); // outlives the next excursion (sets.js)

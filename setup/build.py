@@ -432,6 +432,7 @@ def input_gate() -> None:
         ("test_birth_radial", "the centered birth radial and the L2 grammar (186)"),
         ("test_release_hygiene", "no release over an update in flight (187)"),
         ("test_wheel_dropout", "a placed set leaves the wheel, cap 10 (181)"),
+        ("test_wheel_geometry", "the wheel's ring fits the shorter side — nothing pushed off screen (238)"),
     ]:
         step(f"0ai/6 {_title} (tests/{_name}.py)")
         run([sys.executable, str(PROJECT_DIR / "tests" / f"{_name}.py")])
