@@ -32,6 +32,7 @@ Run:  .venv\\Scripts\\python tests/test_layout_popup.py
 
 import asyncio
 import sys
+import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -50,11 +51,12 @@ BIG = 0x41             # a window whose MINIMUM size is larger than the region
 STRANGER = 0x50        # another agent's window — a different process, no kin
 OLD_TWIN = 0x51        # his OTHER VS Code window: same process, already open
 CHILD = 0x52           # the viewer a member started
+CLICKED = 0x53         # an already-running third-party app, opened by HIS click
 
 MEMBER_PID, OTHER_PID, CHILD_PID = 1000, 2000, 3000
 PIDS = {MEMBER_A: MEMBER_PID, MEMBER_B: MEMBER_PID, DIALOG: MEMBER_PID,
         POPUP: MEMBER_PID, BIG: MEMBER_PID, OLD_TWIN: MEMBER_PID,
-        STRANGER: OTHER_PID, CHILD: CHILD_PID}
+        STRANGER: OTHER_PID, CHILD: CHILD_PID, CLICKED: OTHER_PID}
 PARENTS = {CHILD_PID: MEMBER_PID, OTHER_PID: 4, MEMBER_PID: 4}
 
 MONITOR = (0, 0, 2560, 1400)
@@ -64,7 +66,7 @@ HOME = {MEMBER_A: (100, 100, 600, 800), MEMBER_B: (700, 100, 600, 800),
         POPUP: (1800, 900, 400, 300),   # outside the region, and small
         BIG: (1700, 40, 1600, 1000),    # outside the region, and too big
         STRANGER: (1500, 500, 800, 600), OLD_TWIN: (1500, 500, 800, 600),
-        CHILD: (2000, 200, 300, 200)}
+        CHILD: (2000, 200, 300, 200), CLICKED: (1600, 700, 700, 500)}
 # What a window REFUSES to shrink below — how a minimum size looks from here.
 MINSIZE = {BIG: (1400, 900)}
 
@@ -622,6 +624,64 @@ def check_a_stranger_is_never_offered_by_the_sweep_either() -> bool:
     return ok
 
 
+# ═══ 6. THE CLICK CORRELATION (task 240) ═══
+# His shape: an ALREADY-RUNNING third-party app (old Chrome, parent long dead)
+# opens a new window because he clicked something through the stream. Rules 2
+# and 3 both need the PROCESS to say something, and this window's process says
+# nothing — the click he just made is the only evidence left.
+def check_a_window_after_his_click_is_offered_with_no_process_tie() -> bool:
+    """No owner chain, no shared process, no ancestry — CLICKED is exactly the
+    stranger rule 2/3 could never reach. A click he injected moments earlier
+    is what task 240 adds: it is offered through the ordinary chip, and
+    nothing moves before his tap, same as every other case above."""
+    reg, conn = desk(fg=CLICKED)
+    conn["click_times"] = [time.monotonic() - 1.0]   # he clicked a second ago
+    queued = ask(reg, conn)
+    if PLACED or LEDGER or reg.layouts[0].adopted:
+        print(f"  DETAIL grabbed without asking: {PLACED}")
+        return False
+    if len(queued) != 1 or queued[0]["title"] != f"window {CLICKED:#x}":
+        print(f"  DETAIL not offered: {queued}")
+        return False
+    # …and his tap adopts it exactly as any other "Show in layout" answer.
+    layout_popup.pick(queued[0]["id"], "layout")
+    return CLICKED in reg.layouts[0].adopted and PLACED == [
+        (CLICKED, centered(HOME[CLICKED]))]
+
+
+def check_the_same_window_with_no_recent_click_is_still_refused() -> bool:
+    """THE SAFETY PROPERTY for this rule: without a click in the grace window
+    the old refusal must survive unwidened — an unattributable stranger stays
+    a stranger just because a window happened to appear."""
+    reg, conn = desk(fg=CLICKED)
+    conn["click_times"] = [time.monotonic() - (layout_popup.CLICK_GRACE_S + 5)]
+    queued = ask(reg, conn)
+    if queued or PLACED:
+        print(f"  DETAIL offered with a stale click: {queued} {PLACED}")
+        return False
+    # …and with no click at all.
+    reg, conn = desk(fg=CLICKED)
+    queued = ask(reg, conn)
+    if queued or PLACED:
+        print(f"  DETAIL offered with no click ever: {queued} {PLACED}")
+        return False
+    return True
+
+
+def check_a_click_correlated_window_is_never_asked_twice() -> bool:
+    """The one-chip-per-window rule must hold for this attribution path too —
+    the watcher polls four times a second and the click stays 'recent' for
+    the whole grace window."""
+    reg, conn = desk(fg=CLICKED)
+    conn["click_times"] = [time.monotonic() - 1.0]
+    for _ in range(5):
+        focus_guard.guard(reg, conn)
+    if len(offers(conn)) != 1:
+        print(f"  DETAIL {len(offers(conn))} chips for one click-correlated window")
+        return False
+    return True
+
+
 CHECKS = [
     ("a new window is OFFERED to the phone, never grabbed",
      check_a_new_window_is_offered_and_not_grabbed),
@@ -663,6 +723,12 @@ CHECKS = [
      check_the_sweep_is_silent_at_the_desktop_and_while_he_is_away),
     ("the sweep refuses a stranger, but not before it could identify itself",
      check_a_stranger_is_never_offered_by_the_sweep_either),
+    ("a window after his click is offered with no process tie (task 240)",
+     check_a_window_after_his_click_is_offered_with_no_process_tie),
+    ("the same window with no recent click is still refused",
+     check_the_same_window_with_no_recent_click_is_still_refused),
+    ("a click-correlated window is never asked twice",
+     check_a_click_correlated_window_is_never_asked_twice),
 ]
 
 

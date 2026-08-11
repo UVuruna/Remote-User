@@ -17,7 +17,9 @@ flowchart TB
     F -- yes --> P
     F -- no --> G{"its process was started by a member's?<br/>(parent links, up to ANCESTRY_HOPS)"}
     G -- yes --> P
-    G -- no --> X
+    G -- no --> K{"a new window AND an injected click<br/>within CLICK_GRACE_S? (task 240)"}
+    K -- yes --> P
+    K -- no --> X
     P --> Q{"already offered, or already declined?"}
     Q -- yes --> X
     Q -- no --> O["ONE CHIP on the phone:<br/>Show in layout / Leave on desktop"]
@@ -39,6 +41,15 @@ A window is judged **once**: after the decision it joins the baseline set, so a
 stranger that fights for the foreground does not cost a process-table read four
 times a second, and a popup we could not place is never re-read as a thief.
 
+**The click tier (task 240) is the LAST resort, not an extra chance for
+everyone.** It only fires when a window is genuinely NEW since the baseline
+AND none of the process-based rules found a tie — an already-running
+third-party app opened by his click through the stream is exactly the shape
+none of rules 1–3 could ever reach, because its process has no relation to any
+member at all. It reuses `click_times`, the same list task 185's `note_click`
+fills from every injected left click or press (`web.py`), so a click already
+being tracked for one feature is what the other reads too.
+
 ## Algorithm — the sweep: it is seen WITHOUT the foreground (task 239)
 
 His fourth report of one failure, and his own observation carried the cause:
@@ -58,7 +69,7 @@ flowchart TB
     B -- yes --> C["EnumWindows — handles only"]
     C --> D{"new since the baseline,<br/>and not a member / adopted / asked / declined?"}
     D -- no --> Z
-    D -- yes --> E["the SAME attribution as above<br/>(owner chain, process, ancestry)"]
+    D -- yes --> E["the SAME attribution as above<br/>(owner chain, process, ancestry, injected click)"]
     E -- attributed --> O["judged, then ONE CHIP — the same _offer()"]
     E -- "not (yet)" --> G{"first seen more than SWEEP_GRACE_S ago?"}
     G -- yes --> J["judged: a stranger, for good"]

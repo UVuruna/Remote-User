@@ -51,6 +51,14 @@ the whole screen.*
      is refused however well its process matches.
    * a **NEW window of a process a member started** — the parent links in the
      process table, up to `ANCESTRY_HOPS`.
+   * a **NEW window seen within `CLICK_GRACE_S` of an INJECTED click** (task
+     240) — checked LAST, only when none of the process ties above fired. This
+     is the ONE tier with no process evidence at all: it exists for an
+     already-running third-party app (his old Chrome, parent long dead) that a
+     click through the stream just opened a window in. It reuses the exact
+     `click_times` task 185's `note_click` already fills from every left click
+     or press (`web.py`) — one source of "did he just click", two features
+     that ask it slightly different questions.
 3. **Fit is MEASURED, never assumed** (constraint 13, the lesson the Move
    handle cost four rounds). The region is the union of the members' real frame
    rects, read fresh. A popup that fits is placed inside it at its own size,
@@ -98,12 +106,19 @@ permanent, so a window that cannot yet be identified is retried for
 otherwise make it a stranger for the whole session.
 
 ## The honest limits
-* **An already-running third-party app cannot be attributed.** An agent that
-  opens its report in a Chrome that was already running gets a window from a
-  process nobody in this layout started, whose parent died long ago. Nothing
-  ties it to the layout, so it is refused like any stranger. What this module
-  does catch is the common shape of the same failure: the member's own dialog,
-  its own second window, and the viewer or browser it launches itself.
+* **An already-running third-party app IS now attributed, but only through a
+  click** (task 240). Without one within `CLICK_GRACE_S` it is still refused
+  like any stranger — the process-tie rules above still catch the far more
+  common shape of the same failure: the member's own dialog, its own second
+  window, the viewer or browser it launches itself; the click rule is only the
+  fallback for the one shape they cannot reach.
+* **The click grace is a coincidence window, not proof.** Any new top-level
+  window appearing within `CLICK_GRACE_S` of an injected click is offered,
+  whoever really opened it. The cost of a wrong guess is a chip he declines,
+  never a moved window — nothing places, raises or grabs anything before his
+  own tap.
+* **A new TAB is not a new window** and is out of this module's scope
+  entirely, for every attribution tier including the click one.
 * **Parent PIDs can be recycled.** The newness requirement bounds a wrong
   answer to windows created during this phone session.
 * **Before the baseline exists, nothing is new.** `baseline()` is taken once
@@ -119,14 +134,17 @@ otherwise make it a stranger for the whole session.
   second for the rest of the session.
 
 ## Gate
-`tests/test_layout_popup.py`, fail-closed in `setup/build.py` (0ad/6). Twenty
-checks, each proven by planting its own defect: the offer replaced by an
-auto-grab, the chip re-sent on every poll, the decline forgotten, `pick`
-ignoring his answer, the chip never reaching the phone, containment removed,
-attribution loosened to "any new window", the newness rule dropped, the
-full-screen branch removed, the release removed, the prune's clean-up removed,
-the measurement removed (re-placed on every poll), the try cap removed, the
-watcher made to act while the phone is away, the sweep made a no-op (the
-pre-239 foreground-only eye), the sweep left unwired from `watch`, the grace
-removed so a slow window is judged on its first look, and the one-question
-rule deleted so a layout switch asks twice.
+`tests/test_layout_popup.py`, fail-closed in `setup/build.py` (0ad/6).
+Twenty-three checks, each proven by planting its own defect: the offer
+replaced by an auto-grab, the chip re-sent on every poll, the decline
+forgotten, `pick` ignoring his answer, the chip never reaching the phone,
+containment removed, attribution loosened to "any new window", the newness
+rule dropped, the full-screen branch removed, the release removed, the
+prune's clean-up removed, the measurement removed (re-placed on every poll),
+the try cap removed, the watcher made to act while the phone is away, the
+sweep made a no-op (the pre-239 foreground-only eye), the sweep left unwired
+from `watch`, the grace removed so a slow window is judged on its first look,
+the one-question rule deleted so a layout switch asks twice, and (task 240)
+the click-correlation tier removed so an unattributable window after his own
+click is refused, plus the same window with a stale or absent click proving
+the rule was not widened into offering every stranger.

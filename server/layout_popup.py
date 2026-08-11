@@ -51,18 +51,38 @@ Hence ATTRIBUTION comes first, and it is deliberately narrow:
 3. **A NEW window of a process a member STARTED** is the layout's work — the
    member's own child (or grandchild) process, read from the process table's
    parent links.
+4. **A NEW top-level window seen within `CLICK_GRACE_S` of an INJECTED
+   click** is the layout's work, even with no process tie at all (task 240,
+   owner GO). Rules 2 and 3 both assume the window's PROCESS says something —
+   and an already-running third-party app (his old Chrome, opened long before
+   the layout existed) says nothing: a new window of that process has a
+   parent that has been dead for hours. The click is the same evidence task
+   185 already uses for "did he just open something" — the only difference
+   is WHERE the answer goes. Task 185 asks "make a layout with it?" for a
+   window at the DESKTOP; this asks "show it in THIS layout?" for a window
+   that appeared while a layout was already focused, through the very same
+   `_offer` chip rules 1–3 use (`pick(..., "layout")` adopts it exactly as a
+   member's own dialog would). A new TAB in an existing window is not a new
+   TOP-LEVEL window and is out of scope here, same as everywhere else in this
+   module.
 
 Everything else is a stranger and goes back to the guard's refusal, untouched.
 
 ## The honest limits (named, not hidden)
 
-* **An already-running third-party app cannot be attributed.** An agent that
-  opens its report in a Chrome that was already running gets its new window
-  from a process nobody in this layout started, whose parent died long ago.
-  There is no signal left to tie it to the layout, so it is refused like any
-  other stranger. What this module DOES catch is the far more common shape of
-  the same failure: the member's own dialog, its own second window, and the
-  browser or viewer it launches itself.
+* **An already-running third-party app opened through a click IS now
+  attributed** (rule 4) — that is the point of task 240. What is still
+  refused is the same app appearing with NO recent click: a background
+  agent's browser opening its own tab moments after he happened to click a
+  layout button gets nothing from that coincidence, because rule 4 only
+  fires on a window that is genuinely NEW since the baseline — an existing
+  window raising a tab is not this module's business at all.
+* **The click grace is a coincidence window, not proof.** A click followed
+  within `CLICK_GRACE_S` by ANY new top-level window offers it, whoever
+  really opened it — a background agent's dialog landing in that gap would
+  be offered too. The cost of a wrong guess here is a chip he can decline,
+  never a moved window: nothing places, raises or grabs anything before his
+  own tap on "Show in layout".
 * **Parent PIDs can be recycled.** Windows re-uses PIDs, and a parent link is
   only a number; the newness requirement bounds that to windows created during
   this phone session, which is the only stretch of time where a wrong answer
@@ -113,6 +133,14 @@ ANCESTRY_HOPS = 4
 # process at a higher integrity level) must not be fought four times a second
 # for the rest of the session.
 MAX_CONTAIN_TRIES = 3
+# How long after an INJECTED click a brand-new top-level window is still
+# attributable BY CORRELATION ALONE — task 240. This is deliberately its own
+# constant and not task 185's `BIRTH_AFTER_CLICK_S`: that one waits out a cold
+# app start before asking "make a layout with it?" at the DESKTOP; this one
+# only needs to catch a window that has ALREADY appeared while a layout was
+# focused, so "a few seconds" (his own phrase) is enough and a shorter window
+# means fewer chips offered on a coincidence.
+CLICK_GRACE_S = 5.0
 
 
 # ═══════════════════════════ WINDOWS FACTS ═══════════════════════════
@@ -234,6 +262,15 @@ def _judged(conn: dict, hwnd: int) -> None:
 
 
 # ═══════════════════════════ ATTRIBUTION ═══════════════════════════
+def _recent_click(conn: dict) -> bool:
+    """Did the phone inject a mouse click within `CLICK_GRACE_S`? The SAME
+    `click_times` task 185's `note_click` already fills from every left click
+    or press (server/web.py) — one source, read by two features that ask
+    slightly different questions of it."""
+    times = conn.get("click_times") or []
+    return bool(times) and time.monotonic() - times[-1] <= CLICK_GRACE_S
+
+
 def _attribute(lay, hwnd: int, root: int, conn: dict) -> str:
     """WHY this window is the layout's work — a phrase for the log — or "" for
     a stranger, which is every window this module is not certain about."""
@@ -246,13 +283,18 @@ def _attribute(lay, hwnd: int, root: int, conn: dict) -> str:
         # (constraint 11).
         return ""
     pid = _pid(hwnd)
-    if not pid:
-        return ""
-    member_pids = {p for p in (_pid(h) for h in lay.members) if p}
-    if pid in member_pids:
-        return "a new window of a layout window's own process"
-    if _descends_from(pid, member_pids):
-        return "a window a layout window started"
+    if pid:
+        member_pids = {p for p in (_pid(h) for h in lay.members) if p}
+        if pid in member_pids:
+            return "a new window of a layout window's own process"
+        if _descends_from(pid, member_pids):
+            return "a window a layout window started"
+    # No process tie — the shape task 240 exists for: an ALREADY-RUNNING
+    # third-party app (old Chrome, dead parent) opened a new window through
+    # his own click on the stream. The click is the only evidence left, so it
+    # is checked LAST, after every process-based rule has had its say.
+    if _recent_click(conn):
+        return "opened moments after an injected click"
     return ""
 
 
