@@ -103,6 +103,29 @@ function setCanvasBackdrop(color) {
 // "nothing new" (keep the last picture, see `redraw`). Reset in `initMse`.
 let everDrew = false;
 
+// The pixels carried across a genuine buffer resize (rotation, a real keyboard
+// resize) so the seam is never a blank frame — the other half of
+// `liveResizePlan`'s rule. The copy is stretched into the new box: it is the
+// PREVIOUS picture and it is about to be replaced by the next real frame
+// anyway, so a moment of the old aspect beats a moment of nothing. One
+// off-screen canvas, allocated on first use and re-used, because a rotation
+// must not allocate a 4K buffer every time an inset twitches.
+let keepCanvas = null;
+
+function keepCanvasPixels() {
+  if (!canvas.width || !canvas.height) return null;
+  if (!keepCanvas) keepCanvas = document.createElement("canvas");
+  keepCanvas.width = canvas.width;
+  keepCanvas.height = canvas.height;
+  keepCanvas.getContext("2d").drawImage(canvas, 0, 0);
+  return { w: canvas.width, h: canvas.height };
+}
+
+function restoreCanvasPixels(kept) {
+  ctx.drawImage(keepCanvas, 0, 0, kept.w, kept.h,
+                0, 0, canvas.width, canvas.height);
+}
+
 function redraw() {
   // A PICTURE THAT STOPPED BEATS NO PICTURE (owner report 2026-08-09, live
   // and urgent: at resolution + bitrate + fps all at maximum the screen goes
@@ -279,8 +302,36 @@ function updateViewport() {
   root.setProperty("--vtop", `${vv ? vv.offsetTop : 0}px`);
   canvas.style.width = `${w}px`;
   canvas.style.height = `${h}px`;
-  canvas.width = Math.round(w * devicePixelRatio);
-  canvas.height = Math.round(h * devicePixelRatio);
+  // PAINT-THEN-SWAP — the hole task 216 was really flashing through.
+  //
+  // Assigning canvas.width/height RE-INITIALISES the drawing buffer to
+  // transparent black, per the HTML spec, EVEN when the value assigned is the
+  // one already there. This function runs on every window resize, every
+  // visualViewport resize AND scroll, and on every IME inset the shell pushes
+  // (`window.__imeHeight`) — constantly while he dictates. The wipe was
+  // invisible only because `redraw()` below repaints inside the same task,
+  // before the browser composites.
+  //
+  // Then liveHoldFrame (2026-08-11) gave redraw() permission to paint
+  // NOTHING, and with 36 catch-up seeks in 15s the two overlapped constantly:
+  // wiped buffer, held frame, one composited frame of transparent canvas —
+  // which shows the page's own background colour. That was the blue flash the
+  // hold-frame fix did not close, because the hold-frame fix is what made it
+  // visible. The rule is now the plain one: never clear unless a new picture
+  // is provably about to exist. So the buffer is re-sized only when the size
+  // really changed, and the old pixels are carried across that seam. The
+  // decision itself is liveResizePlan's (client/live-clock.js), where the
+  // gate can drive it whole.
+  const nextW = Math.round(w * devicePixelRatio);
+  const nextH = Math.round(h * devicePixelRatio);
+  const plan = liveResizePlan({ width: canvas.width, height: canvas.height,
+                                nextWidth: nextW, nextHeight: nextH, everDrew });
+  const kept = plan.preserve ? keepCanvasPixels() : null;
+  if (plan.resize) {
+    canvas.width = nextW;
+    canvas.height = nextH;
+  }
+  if (kept) restoreCanvasPixels(kept);
   computeBaseRect();
   computeViewHome(); // rotation / keyboard resize re-fits the layout's region
   clampView();       // ...and keeps whatever zoom the user pinched into
@@ -453,6 +504,9 @@ function initMse(codec) {
   liveRate = 1;              // …and clean regulator state — no stale
   liveDegradedSince = 0;     //   degradation or flush-gap memory carried
   liveLastFixAt = 0;         //   over from a previous stream
+  liveLateSince = 0;         //   (the catch-up's budget included — a new
+  liveLastLateAt = 0;        //    session is not still mid-episode, and its
+  liveLastJumpAt = 0;        //    spacing must not block the first catch-up)
   const ms = new MediaSource();
   mediaSource = ms;
   video.src = URL.createObjectURL(ms);
@@ -556,6 +610,12 @@ function reportLiveDrift(behind) {
 let liveRate = 1;
 let liveDegradedSince = 0;
 let liveLastFixAt = 0;
+// The forward catch-up's own memory (task 216) — hysteresis + spacing, the
+// same shape as the rescue seek's above. His 10:11:55 telemetry counted 36 of
+// these jumps in 15 seconds while he dictated; each one flushes the decoder.
+let liveLateSince = 0;
+let liveLastLateAt = 0;
+let liveLastJumpAt = 0;
 
 function applyLiveDecision(behind, now) {
   const act = liveAction(behind, LIVE_MAX_BEHIND_S, LIVE_STARVED_S);
@@ -566,6 +626,15 @@ function applyLiveDecision(behind, now) {
   if (reg.rate !== liveRate) video.playbackRate = reg.rate;
   liveRate = reg.rate;
   liveDegradedSince = reg.degradedSince;
+
+  // Asked on EVERY call, late or not — the episode's clock has to be cleared
+  // the moment the lateness ends, or a burst that crosses the threshold once
+  // an hour would look like an hour of sustained lag.
+  const cat = liveCatchUp({ late: act === "seek_forward", now,
+                            lateSince: liveLateSince, lastLateAt: liveLastLateAt,
+                            lastJumpAt: liveLastJumpAt });
+  liveLateSince = cat.lateSince;
+  liveLastLateAt = cat.lastLateAt;
 
   const b = video.buffered;
   if (!b.length) return;
@@ -578,12 +647,17 @@ function applyLiveDecision(behind, now) {
     video.currentTime = liveSeekTarget(b.start(b.length - 1), end, LIVE_TARGET_BEHIND_S);
     liveLastFixAt = now;
     if (video.paused) video.play().catch(() => {});
-  } else if (act === "seek_forward") {
-    // Merely LATE, not starved (jank, slow link) — jump ahead. Unrelated to
-    // the flush budget above: this is the ordinary catch-up that predates
-    // task 122 and was never the cause of the blue screen.
+  } else if (cat.jump) {
+    // Merely LATE, not starved (jank, slow link) — jump ahead. It carries its
+    // OWN budget since task 216: the lateness must have survived
+    // LIVE_JUMP_HOLD_MS and at least LIVE_JUMP_MIN_GAP_MS must have passed
+    // since the last jump. A forward seek flushes the decoder exactly like the
+    // rescue seek does, and dictation's burst-shaped drift was firing it ~2.4
+    // times a second (his log, `jumps=36 ... in 15s`), which is a decoder that
+    // is almost never holding a paintable frame.
     liveSeeks++;
     video.currentTime = end - LIVE_TARGET_BEHIND_S;
+    liveLastJumpAt = now;
   }
 }
 

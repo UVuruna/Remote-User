@@ -78,6 +78,54 @@ stops instead of vanishing.
   readyState < 2`, never before the session's first frame (a fresh canvas is
   correct there — holding would show the PREVIOUS stream's pixels), never in
   JPEG mode (bitmaps, no decoder state).
+- `liveCatchUp({late, now, lateSince, lastLateAt, lastJumpAt})` — the FORWARD
+  catch-up's own budget (task 216, 2026-08-11). Same shape and same memory
+  discipline as `liveRegulate`. Returns `{lateSince, lastLateAt, jump}`.
+- `liveResizePlan({width, height, nextWidth, nextHeight, everDrew})` — whether
+  the canvas's drawing buffer may be re-initialised at all this call, and
+  whether the pixels on it must be carried across. Returns
+  `{resize, preserve}`.
+
+## Task 216 — the hole the hold-frame fix left open, and the thrash under it
+
+His report of 2026-08-11 ~10:12: the blue flash SURVIVED v0.0.106, which
+already carried `liveHoldFrame`. Two things were wrong, and only one of them
+is a streaming problem.
+
+**1. The clear that was never behind the guard.** Assigning
+`canvas.width` / `canvas.height` re-initialises the drawing buffer to
+transparent black — per the HTML spec, EVEN when the value assigned is the
+one already there. [Render](render.md)'s `updateViewport()` assigned both
+unconditionally, and it runs on every window resize, every `visualViewport`
+resize AND scroll, and on every IME inset the Android shell pushes
+(`window.__imeHeight`) — i.e. constantly while he dictates. That wipe was
+invisible for as long as `redraw()` repainted inside the same task, before
+the browser composited. `liveHoldFrame` then gave `redraw()` permission to
+paint NOTHING, and every overlap of an inset push with a seek in flight left
+a transparent canvas standing for one composited frame — which shows the
+page's own background colour. **The guard did not fail to cover the wipe; the
+guard is what made the wipe visible.** `liveResizePlan` is the rule that
+closes it: never clear unless a new picture is provably about to exist — no
+resize when the size did not change, and the old pixels carried over the seam
+when it genuinely did.
+
+**2. The frequency that made every gap visible.** His 10:11:55 telemetry:
+`jumps=36 starves=2 in 15s`, with `jumps=0` in every neighbouring window.
+`jumps` counts the FORWARD catch-up, which carried no budget at all — the
+reasoning being that it was never what caused the blue screen. Dictation
+types word by word, the PC screen changes in bursts, the frame-count media
+clock swings across `LIVE_MAX_BEHIND_S` on nearly every sample, and the
+decoder was flushed ~2.4 times a second. `liveCatchUp` gives it the same two
+teeth the rescue seek has, one notch shorter: the lateness must have survived
+`LIVE_JUMP_HOLD_MS` (400ms) and at most one jump per `LIVE_JUMP_MIN_GAP_MS`
+(1500ms) — ~36 in 15s becomes at most 10.
+
+**The episode ends on a healthy STRETCH, not on one healthy sample**, and
+this gate's own burst check is what forced that. The first version cleared
+`lateSince` on any non-late sample; against a drift shaped like his (late
+300ms, clear 100ms, endlessly) it then never accrued its hold and never
+caught up AT ALL — a picture drifting further behind forever, traded for a
+flash. Damping must SPACE the flushes, never abolish them.
 
 ## Design Decisions
 
@@ -102,8 +150,18 @@ stops instead of vanishing.
   log line, so a single source of truth feeds both the decision and the
   evidence a session's own server log carries. This module owns only the
   regulator's OWN numbers (`LIVE_SLOW_RATE`, `LIVE_RATE_RECOVER_S`,
-  `LIVE_RATE_DEGRADE_HOLD_MS`, `LIVE_UNFREEZE_MIN_GAP_MS`), which nothing
-  outside it reads.
+  `LIVE_RATE_DEGRADE_HOLD_MS`, `LIVE_UNFREEZE_MIN_GAP_MS`,
+  `LIVE_JUMP_HOLD_MS`, `LIVE_JUMP_MIN_GAP_MS`), which nothing outside it
+  reads.
+- **The cost of task 216's damping is stated, not hidden**: up to
+  `LIVE_JUMP_MIN_GAP_MS` of extra latency before a genuine lag is corrected.
+  His peak that morning was 0.52s behind, so the picture stays under a second
+  late while the flush count falls by ~3.6×.
+- **`liveResizePlan` lives HERE and not in render.js** even though it is
+  about a canvas: it is the same rule as `liveHoldFrame` — when may pixels be
+  thrown away — and the gate can only drive it whole while it stays pure.
+  render.js owns the side effects (`keepCanvasPixels` / `restoreCanvasPixels`,
+  the actual `canvas.width =`), exactly as it owns `video.currentTime`.
 - **One decision function, two call sites, never two copies of the rule.**
   [Render](render.md)'s `applyLiveDecision` is the single place that runs
   `liveAction`/`liveRegulate`/`liveSeekTarget` and performs the side effects

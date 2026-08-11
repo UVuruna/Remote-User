@@ -94,6 +94,41 @@ through, so the rate/flush state (`liveRate`/`liveDegradedSince`/
 between the two call sites. See [Live Clock (flow)](../__flow/live-clock.md)
 for the full decision path and why "the regulator engages before the flush"
 is provable rather than merely true.
+
+## PAINT-THEN-SWAP — the clear that was never behind that guard (task 216, 2026-08-11)
+
+His blue flash SURVIVED v0.0.106, which already carried the hold-frame guard
+above, and the reason is in THIS file rather than in the decoder. Assigning
+`canvas.width` / `canvas.height` re-initialises the drawing buffer to
+transparent black — per the HTML spec, EVEN when the value assigned is the one
+already there — and `updateViewport()` assigned both unconditionally on every
+window resize, every `visualViewport` resize AND scroll, and every IME inset
+the shell pushes through `window.__imeHeight`: constantly, while he dictates.
+
+That wipe was invisible for as long as `redraw()` repainted inside the same
+task, before the browser composited. `liveHoldFrame` then gave `redraw()`
+permission to paint NOTHING — and with 36 catch-up seeks in 15 seconds (his
+10:11:55 telemetry) the two overlapped constantly, leaving a transparent
+canvas standing for one composited frame. A transparent canvas shows the
+PAGE's own background colour. **The guard did not fail to cover the wipe; the
+guard is what made the wipe visible.**
+
+The rule is now the plain one — nothing may clear unless a new picture is
+provably about to exist:
+
+- the decision is `liveResizePlan`'s ([Live Clock](live-clock.md)), pure so
+  its gate can drive it whole;
+- `plan.resize` false ⇒ the buffer is not touched at all (the dictation case:
+  an inset push that changes no size);
+- `plan.preserve` ⇒ `keepCanvasPixels()` copies the live canvas into one
+  re-used off-screen canvas before the resize and `restoreCanvasPixels()`
+  stretches it back after, so even a genuine rotation has no blank seam. The
+  stretched copy is the PREVIOUS picture and the next real frame replaces it
+  immediately: a moment of the old aspect beats a moment of nothing.
+
+The forward catch-up's own flush budget (`liveCatchUp`, the other half of task
+216) is carried here as `liveLateSince` / `liveLastLateAt` / `liveLastJumpAt`,
+reset in `initMse()` beside the rescue seek's state.
 ## Layouts (Phase F+ step 1)
 Layout focus is client-side: the view is bound to `layoutRegion`. Streaming
 itself is

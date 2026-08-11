@@ -85,6 +85,35 @@ const LIVE_RATE_DEGRADE_HOLD_MS = 2000;
 // (task 130, his live report the same night as the fix that caused it).
 const LIVE_UNFREEZE_MIN_GAP_MS = 4000;
 
+// ── THE FORWARD CATCH-UP IS A FLUSH TOO (task 216, his report 2026-08-11) ──
+//
+// Everything above governs the BACKWARD (rescue) seek. The ordinary forward
+// catch-up — "I am more than half a second late, jump to the live edge" —
+// carried no budget at all, on the reasoning that it was never what caused
+// the blue screen. His own telemetry that morning says otherwise about its
+// FREQUENCY: `jumps=36 starves=2 in 15s` while he dictated, with `jumps=0`
+// in every neighbouring window. `jumps` counts exactly this seek. Dictation
+// types word by word, so the PC screen changes in bursts, the frame-count
+// media clock swings across the 0.5s threshold on nearly every sample, and
+// the player was flushed ~2.4 times a second for fifteen seconds.
+//
+// A decoder flushed that often is a decoder that is almost never holding a
+// paintable frame, which is what makes every OTHER gap in the pipeline
+// visible. So the catch-up gets the same two teeth the rescue seek has, one
+// notch shorter (it answers a real, ordinary lag and must not become a
+// permanent drift):
+//
+//   HYSTERESIS — the lateness must have SURVIVED LIVE_JUMP_HOLD_MS. A single
+//                burst-shaped sample crossing the line is jitter, not lag.
+//   SPACING    — and at most one jump per LIVE_JUMP_MIN_GAP_MS.
+//
+// Cost, stated honestly: up to LIVE_JUMP_MIN_GAP_MS of extra latency before a
+// genuine lag is corrected. His peak that morning was 0.52s behind, so the
+// picture stays under a second late while the flush count falls from ~36 in
+// 15s to at most 10.
+const LIVE_JUMP_HOLD_MS = 400;
+const LIVE_JUMP_MIN_GAP_MS = 1500;
+
 /** THE TRUTH TABLE. `behind` is `buffered.end - currentTime`; `maxBehindS`
  *  and `starvedS` are the caller's own thresholds (client/state.js
  *  `LIVE_MAX_BEHIND_S` / `LIVE_STARVED_S`) — passed in, never read off a
@@ -164,6 +193,77 @@ function liveRegulate({ behind, now, starved, rate, degradedSince, lastFixAt }) 
   return { rate: nextRate, degradedSince: nextDegradedSince, seek };
 }
 
+/** THE CATCH-UP'S OWN BUDGET — whether the ordinary forward jump to the live
+ *  edge may fire THIS call. Same shape as `liveRegulate` and for the same
+ *  reason: no state of its own, the caller carries the memory and feeds it
+ *  back, so a node interpreter reproduces a whole session call for call.
+ *
+ *    late        — liveAction(...) === "seek_forward" for this same `behind`
+ *    now         — performance.now(), THIS call
+ *    lateSince   — ms timestamp the current lateness EPISODE began, or 0
+ *    lastLateAt  — ms timestamp of the most recent late sample, or 0
+ *    lastJumpAt  — ms timestamp of the last forward jump, or 0 if none yet
+ *
+ *  Returns { lateSince, lastLateAt, jump }.
+ *
+ *  THE EPISODE ENDS ON A HEALTHY STRETCH, NOT ON ONE HEALTHY SAMPLE — and
+ *  this gate's own burst-pattern check is what forced that (the first
+ *  version cleared `lateSince` on any non-late sample, and against a drift
+ *  shaped like his — late 300ms, clear 100ms, endlessly — it then never
+ *  accrued its hold and never caught up AT ALL: a picture drifting further
+ *  behind forever, traded for a flash. Damping must space the flushes, never
+ *  abolish them). So the clock survives a dip and is cleared only once the
+ *  drift has been healthy for LIVE_JUMP_HOLD_MS — hysteresis in both
+ *  directions, off the one constant.
+ *
+ *  A jump RESETS the episode, so the next one must earn a fresh hold; that
+ *  hold runs CONCURRENTLY with the spacing wait, which is why two jumps in a
+ *  permanent lag land LIVE_JUMP_MIN_GAP_MS apart and not the sum. */
+function liveCatchUp({ late, now, lateSince, lastLateAt, lastJumpAt }) {
+  let nextLateSince = lateSince;
+  let nextLastLateAt = lastLateAt;
+  if (late) {
+    if (!nextLateSince) nextLateSince = now;
+    nextLastLateAt = now;
+  } else if (nextLastLateAt && (now - nextLastLateAt) >= LIVE_JUMP_HOLD_MS) {
+    nextLateSince = 0;
+    nextLastLateAt = 0;
+  }
+  const heldLongEnough = nextLateSince > 0 &&
+    (now - nextLateSince) >= LIVE_JUMP_HOLD_MS;
+  const gapOk = !lastJumpAt || (now - lastJumpAt) >= LIVE_JUMP_MIN_GAP_MS;
+  const jump = Boolean(late) && heldLongEnough && gapOk;
+  return { lateSince: jump ? 0 : nextLateSince, lastLateAt: nextLastLateAt, jump };
+}
+
+/** PAINT-THEN-SWAP: whether the canvas's drawing buffer must be re-sized at
+ *  all this call, and whether the pixels on it must be carried across.
+ *
+ *  THE HOLE THE 2026-08-11 HOLD-FRAME FIX LEFT OPEN, and the one that was
+ *  really flashing (task 216). Assigning `canvas.width` / `canvas.height`
+ *  RE-INITIALISES the bitmap to transparent black — per the HTML spec, even
+ *  when the value assigned is the one already there. render.js's
+ *  `updateViewport()` assigned both unconditionally, and it runs on every
+ *  window resize, every visualViewport resize AND scroll, and every IME inset
+ *  the Android shell pushes (`window.__imeHeight`) — i.e. constantly while he
+ *  dictates. That wipe is invisible only because `redraw()` runs at the end of
+ *  the same task and paints over it before the browser composites.
+ *
+ *  Then `liveHoldFrame` gave `redraw()` permission to paint NOTHING. Every
+ *  overlap of "the shell pushed an inset" with "a seek is in flight" — and
+ *  with 36 seeks in 15s that is most of them — left a transparent canvas
+ *  standing for a frame, and a transparent canvas shows the page's own
+ *  background colour: his blue flash. The guard did not fail to cover the
+ *  wipe; the guard is what made the wipe visible.
+ *
+ *  The rule, therefore, is that nothing may clear before a new picture
+ *  exists: don't resize when the size did not change, and when it genuinely
+ *  did, carry the old pixels over the seam. */
+function liveResizePlan({ width, height, nextWidth, nextHeight, everDrew }) {
+  const resize = width !== nextWidth || height !== nextHeight;
+  return { resize, preserve: resize && Boolean(everDrew) };
+}
+
 /** THE NEVER-BLANK GUARD'S OWN TRUTH TABLE — whether redraw() must HOLD the
  *  last picture (clear nothing, draw nothing) this frame.
  *
@@ -190,8 +290,9 @@ function liveHoldFrame({ mode, readyState, seeking, everDrew }) {
 
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
-    liveAction, liveSeekTarget, liveRegulate, liveHoldFrame,
+    liveAction, liveSeekTarget, liveRegulate, liveCatchUp, liveResizePlan,
+    liveHoldFrame,
     LIVE_SLOW_RATE, LIVE_RATE_RECOVER_S, LIVE_RATE_DEGRADE_HOLD_MS,
-    LIVE_UNFREEZE_MIN_GAP_MS,
+    LIVE_UNFREEZE_MIN_GAP_MS, LIVE_JUMP_HOLD_MS, LIVE_JUMP_MIN_GAP_MS,
   };
 }

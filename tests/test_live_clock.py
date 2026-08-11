@@ -81,7 +81,9 @@ def _module() -> str:
     text = MODULE.read_text(encoding="utf-8")
     for needed in ("function liveAction", "function liveSeekTarget",
                    "function liveRegulate", "function liveHoldFrame",
-                   "LIVE_UNFREEZE_MIN_GAP_MS",
+                   "function liveCatchUp", "function liveResizePlan",
+                   "LIVE_UNFREEZE_MIN_GAP_MS", "LIVE_JUMP_MIN_GAP_MS",
+                   "LIVE_JUMP_HOLD_MS",
                    "LIVE_RATE_DEGRADE_HOLD_MS", "LIVE_SLOW_RATE"):
         if needed not in text:
             fail(f"{needed!r} left client/live-clock.js — the gate cannot "
@@ -386,6 +388,207 @@ console.log(JSON.stringify([
             fail(f"liveHoldFrame() for {label!r} = {got!r}, want {expect!r}")
 
 
+# ═════════════ THE CATCH-UP'S BUDGET (task 216, half 2) ═════════════
+def check_the_forward_catch_up_is_spaced_and_hysteretic() -> None:
+    """His 2026-08-11 10:11:55 telemetry: `jumps=36 starves=2 in 15s`, with
+    `jumps=0` in every neighbouring window. `jumps` counts the FORWARD
+    catch-up, which carried no budget at all — dictation's burst-shaped drift
+    crossed the 0.5s line on nearly every sample and flushed the decoder ~2.4
+    times a second.
+
+    Driven here against a burst pattern of that shape (late 300ms, clear
+    100ms, for 15 real seconds). Two independent rules must hold, and each is
+    RED against its own planted defect: SPACING (drop `gapOk` from
+    liveCatchUp) and the sheer count."""
+    out = _run("""
+let state = { lateSince: 0, lastLateAt: 0, lastJumpAt: 0 };
+let now = 0, lateTicks = 0;
+const jumps = [];
+for (let i = 0; i < 150; i++) {            // 15s at a 100ms tick
+  now += 100;
+  const late = (i % 4) < 3;                // burst: late 300ms, clear 100ms
+  if (late) lateTicks++;
+  const cat = liveCatchUp({ late, now, lateSince: state.lateSince,
+                             lastLateAt: state.lastLateAt,
+                             lastJumpAt: state.lastJumpAt });
+  state.lateSince = cat.lateSince;
+  state.lastLateAt = cat.lastLateAt;
+  if (cat.jump) { jumps.push(now); state.lastJumpAt = now; }
+}
+console.log(JSON.stringify({ jumps, lateTicks }));
+""")
+    jumps = out["jumps"]
+    if not jumps:
+        fail("a genuine 15-second lag never produced a single catch-up — the "
+             "damping must SPACE the jumps, never abolish them (the picture "
+             "would drift permanently behind)")
+    for prev, cur in zip(jumps, jumps[1:]):
+        if cur - prev < 1500:
+            fail(f"two forward catch-up seeks fired {cur - prev}ms apart "
+                 f"(< LIVE_JUMP_MIN_GAP_MS): {prev} then {cur} — each one "
+                 "flushes the decoder, and 36 in 15s is what his blue flash "
+                 "was standing on")
+    if len(jumps) > 10:
+        fail(f"{len(jumps)} catch-up seeks in 15s — the spacing rule permits "
+             "at most 10, and the point of task 216 is that ~36 was the "
+             "flash generator")
+    if len(jumps) * 3 > out["lateTicks"]:
+        fail(f"{len(jumps)} jumps against {out['lateTicks']} late samples — "
+             "the budget is not actually damping anything")
+
+
+def check_a_single_late_sample_never_flushes_the_decoder() -> None:
+    """THE HYSTERESIS half, alone. One sample over the threshold is jitter —
+    exactly what word-by-word dictation produces — and must never cost a
+    flush. RED if `heldLongEnough` is dropped from liveCatchUp."""
+    out = _run("""
+const one = liveCatchUp({ late: true, now: 1000, lateSince: 0, lastLateAt: 0,
+                          lastJumpAt: 0 });
+// …and a lateness that keeps being INTERRUPTED never accrues its hold either:
+let state = { lateSince: 0, lastLateAt: 0, lastJumpAt: 0 };
+let now = 1000, early = 0;
+for (let i = 0; i < 3; i++) {          // 300ms of lateness, under the hold
+  now += 100;
+  const cat = liveCatchUp({ late: true, now, lateSince: state.lateSince,
+                             lastLateAt: state.lastLateAt,
+                             lastJumpAt: state.lastJumpAt });
+  state.lateSince = cat.lateSince;
+  state.lastLateAt = cat.lastLateAt;
+  if (cat.jump) early++;
+}
+console.log(JSON.stringify({ firstSample: one.jump, earlyJumps: early }));
+""")
+    if out["firstSample"] is not False:
+        fail("the very FIRST late sample fired a catch-up seek — the "
+             "hysteresis is gone, and burst-shaped drift is precisely what "
+             "dictation produces")
+    if out["earlyJumps"] != 0:
+        fail(f"{out['earlyJumps']} catch-up seeks fired inside the first "
+             "300ms of lateness — under LIVE_JUMP_HOLD_MS nothing may flush")
+
+
+def check_a_jump_starts_the_hysteresis_over() -> None:
+    """A jump resets `lateSince`: the next one must earn its own sustained
+    lateness rather than riding one endless episode. Without this the spacing
+    alone would fire like clockwork forever once a single episode began."""
+    out = _run("""
+let state = { lateSince: 0, lastLateAt: 0, lastJumpAt: 0 };
+let now = 0, firstJump = 0, secondJump = 0, sinceAfterJump = null;
+for (let i = 0; i < 200; i++) {
+  now += 100;
+  const cat = liveCatchUp({ late: true, now, lateSince: state.lateSince,
+                             lastLateAt: state.lastLateAt,
+                             lastJumpAt: state.lastJumpAt });
+  state.lateSince = cat.lateSince;
+  state.lastLateAt = cat.lastLateAt;
+  if (cat.jump) {
+    state.lastJumpAt = now;
+    if (!firstJump) { firstJump = now; sinceAfterJump = cat.lateSince; }
+    else if (!secondJump) secondJump = now;
+  }
+}
+console.log(JSON.stringify({ firstJump, secondJump, sinceAfterJump }));
+""")
+    if not out["firstJump"] or not out["secondJump"]:
+        fail(f"a permanent 20s lag did not produce two catch-ups: {out!r}")
+    if out["firstJump"] < 400:
+        fail(f"the first catch-up fired at {out['firstJump']}ms — before "
+             "LIVE_JUMP_HOLD_MS of sustained lateness had passed")
+    if out["sinceAfterJump"] != 0:
+        fail(f"a jump did not reset the lateness episode "
+             f"(lateSince = {out['sinceAfterJump']!r}) — one endless episode "
+             "would then satisfy the hold forever and only the spacing would "
+             "be left standing")
+    if out["secondJump"] - out["firstJump"] < 1500:
+        fail(f"the second catch-up came {out['secondJump'] - out['firstJump']}ms "
+             "after the first — under LIVE_JUMP_MIN_GAP_MS")
+
+
+# ═══════ PAINT-THEN-SWAP: THE HOLE 210 LEFT OPEN (task 216, half 1) ═══════
+def check_the_resize_plan_never_clears_without_a_new_picture() -> None:
+    """Assigning canvas.width/height re-initialises the drawing buffer to
+    transparent black — per the HTML spec, EVEN when the value assigned is the
+    one already there. redraw() repainting inside the same task hid that
+    forever; liveHoldFrame (2026-08-11) then let redraw() paint nothing, and
+    every overlap of an IME inset push with a seek in flight composited one
+    transparent frame — the page's own background colour, his blue flash.
+
+    So: no resize when the size did not change, and the pixels carried over a
+    resize that genuinely must happen."""
+    out = dict(_run("""
+console.log(JSON.stringify([
+  // The dictation case: the shell pushes an inset, nothing about the buffer
+  // changed — it must NOT be touched at all.
+  ['same size', liveResizePlan({ width: 1080, height: 2000, nextWidth: 1080,
+                                  nextHeight: 2000, everDrew: true })],
+  // A real rotation / keyboard resize: re-size, but carry the pixels.
+  ['real resize', liveResizePlan({ width: 1080, height: 2000, nextWidth: 2000,
+                                    nextHeight: 1080, everDrew: true })],
+  // Before the session's first frame there is nothing worth carrying — the
+  // page colour IS the correct picture there (the everDrew rule).
+  ['first fit', liveResizePlan({ width: 300, height: 150, nextWidth: 1080,
+                                  nextHeight: 2000, everDrew: false })],
+]));
+"""))
+    same = out["same size"]
+    if same["resize"] or same["preserve"]:
+        fail("an unchanged size still re-initialised the canvas buffer: "
+             f"{same!r} — this is the wipe his blue flash came through, and "
+             "it fires on every IME inset the shell pushes while he dictates")
+    real = out["real resize"]
+    if not real["resize"] or not real["preserve"]:
+        fail(f"a genuine resize does not carry the last picture across: "
+             f"{real!r} — the seam would be one blank frame")
+    first = out["first fit"]
+    if not first["resize"] or first["preserve"]:
+        fail(f"the first fit of a session must resize and must NOT preserve "
+             f"(there are no pixels yet): {first!r}")
+
+
+def check_updateviewport_never_wipes_the_canvas_unconditionally() -> None:
+    """The wiring half. `updateViewport()` must ask liveResizePlan and assign
+    canvas.width/height ONLY inside its answer — an unconditional assignment
+    is the defect itself, whatever the plan says."""
+    src = RENDER.read_text(encoding="utf-8")
+    m = re.search(r"function updateViewport\(\)\s*\{(.*?)\n\}", src, re.S)
+    if not m:
+        fail("updateViewport() left client/render.js — the gate cannot find "
+             "the wiring it must prove")
+    body = m.group(1)
+    if "liveResizePlan(" not in body:
+        fail("updateViewport() no longer asks liveResizePlan() whether the "
+             "canvas buffer may be re-initialised — an inlined copy of the "
+             "condition is exactly how the two drift apart again")
+    guarded = re.search(r"if\s*\(\s*plan\.resize\s*\)\s*\{(.*?)\n  \}", body, re.S)
+    if not guarded or "canvas.width" not in guarded.group(1):
+        fail("the canvas.width/height assignment is no longer inside the "
+             "`if (plan.resize)` block — assigning either one wipes the "
+             "buffer to transparent black even when the value is unchanged")
+    for line in body.splitlines():
+        stripped = line.strip()
+        if re.match(r"canvas\.(width|height)\s*=", stripped) and \
+                stripped not in guarded.group(1):
+            fail(f"an UNGUARDED canvas buffer assignment survives in "
+                 f"updateViewport(): {stripped!r}")
+    if "plan.preserve" not in body:
+        fail("updateViewport() never acts on plan.preserve — a genuine "
+             "resize would still show one blank frame at the seam")
+    if "restoreCanvasPixels(" not in body:
+        fail("nothing restores the kept pixels after the resize — keeping "
+             "them and then not painting them is the same blank frame")
+
+
+def check_render_js_carries_the_pixels_itself() -> None:
+    """The preserve half is a real copy, not a name: render.js must own an
+    off-screen canvas it draws the live one into and back out of."""
+    src = RENDER.read_text(encoding="utf-8")
+    for needed in ("function keepCanvasPixels(", "function restoreCanvasPixels(",
+                   "createElement(\"canvas\")"):
+        if needed not in src:
+            fail(f"{needed!r} is not in client/render.js — the pixels are not "
+                 "actually being carried across a resize")
+
+
 # ═══════════════════════════ THE WIRING ═══════════════════════════
 def check_render_js_actually_calls_the_module() -> None:
     """A pure function nobody calls is a feature that does not exist (the
@@ -398,10 +601,24 @@ def check_render_js_actually_calls_the_module() -> None:
         fail("applyLiveDecision() left client/render.js — the gate cannot "
              "find the wiring it must prove")
     body = m.group(1)
-    for needed in ("liveAction(", "liveRegulate(", "liveSeekTarget("):
+    for needed in ("liveAction(", "liveRegulate(", "liveSeekTarget(",
+                   "liveCatchUp("):
         if needed not in body:
             fail(f"applyLiveDecision() no longer calls {needed!r} — the "
                  "mechanism would be dead code that looks alive")
+    # The forward catch-up must be gated on the BUDGET's answer, never on the
+    # raw truth-table verdict again (task 216): `act === "seek_forward"` alone
+    # is the unbudgeted rule that fired 36 times in 15 seconds.
+    if re.search(r'else if \(act === "seek_forward"\)', body):
+        fail('the forward catch-up is gated on `act === "seek_forward"` '
+             "again — liveCatchUp's hysteresis and spacing would be computed "
+             "and then ignored, which is worse than not having them")
+    if "cat.jump" not in body:
+        fail("nothing in applyLiveDecision() acts on liveCatchUp's `jump` — "
+             "the budget would be dead code that looks alive")
+    if "liveLastJumpAt = now" not in body:
+        fail("applyLiveDecision() never records WHEN it jumped — the spacing "
+             "rule has no memory and would permit every tick again")
     for site in ("onMseUpdateEnd", "unfreezeIfStarved"):
         m2 = re.search(rf"function {site}\([^)]*\)\s*\{{(.*?)\n\}}", src, re.S)
         if not m2 or "applyLiveDecision(" not in m2.group(1):
@@ -516,6 +733,18 @@ CHECKS = [
      check_the_ramp_proves_engagement_precedes_the_first_seek),
     ("hold-frame holds through a seek, not only a starve (his blue flash)",
      check_hold_frame_holds_through_a_seek_not_only_a_starve),
+    ("the forward catch-up is spaced and hysteretic (his jumps=36 in 15s)",
+     check_the_forward_catch_up_is_spaced_and_hysteretic),
+    ("a single late sample never flushes the decoder",
+     check_a_single_late_sample_never_flushes_the_decoder),
+    ("a jump starts the hysteresis over",
+     check_a_jump_starts_the_hysteresis_over),
+    ("the resize plan never clears without a new picture",
+     check_the_resize_plan_never_clears_without_a_new_picture),
+    ("updateViewport never wipes the canvas unconditionally",
+     check_updateviewport_never_wipes_the_canvas_unconditionally),
+    ("render.js really carries the pixels across a resize",
+     check_render_js_carries_the_pixels_itself),
     ("render.js actually calls the module (both call sites)",
      check_render_js_actually_calls_the_module),
     ("the never-blank guard is still wired to readyState",

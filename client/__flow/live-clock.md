@@ -14,10 +14,11 @@ sourceBuffer "updateend"          video "waiting" / "stalled"
                          ▼
               applyLiveDecision(behind, now)
                          │
-          ┌──────────────┼──────────────┐
-          ▼              ▼              ▼
-    liveAction()   liveRegulate()  liveSeekTarget()
-   (truth table)   (rate + gate)    (landing math)
+          ┌──────────┬───┴────┬──────────┐
+          ▼          ▼        ▼          ▼
+    liveAction()  liveRegulate()  liveCatchUp()  liveSeekTarget()
+   (truth table)  (rate + rescue  (forward jump   (landing math)
+                   flush budget)   budget, 216)
 ```
 
 ## The truth table
@@ -72,15 +73,57 @@ immediately before the first real seek and requires it already be
 `LIVE_SLOW_RATE` — proving the order held against his own drift numbers, not
 just against a hand-picked unit case.
 
+## The forward catch-up's budget (task 216)
+
+```
+late = liveAction(...) === "seek_forward"
+
+late ? ──► lateSince ||= now ; lastLateAt = now      (the episode opens)
+   │ no
+   ▼
+(now - lastLateAt) >= LIVE_JUMP_HOLD_MS ? ──► lateSince = 0, lastLateAt = 0
+                        (the episode closes on a healthy STRETCH — one
+                         healthy sample must NOT close it, or a burst-shaped
+                         drift never accrues its hold and never catches up)
+
+heldLongEnough = lateSince > 0
+                 && (now - lateSince) >= LIVE_JUMP_HOLD_MS     (400ms)
+gapOk          = !lastJumpAt
+                 || (now - lastJumpAt) >= LIVE_JUMP_MIN_GAP_MS (1500ms)
+
+jump = late && heldLongEnough && gapOk      → and a jump RESETS lateSince,
+                                              so the next one earns its own
+                                              hold (concurrent with the gap)
+```
+
+His `jumps=36 ... in 15s` becomes at most 10, and each one is a decoder flush.
+
 ## The residual gap — `redraw()`'s never-blank guard
 
 ```
-streamMode === "h264" && video.readyState < 2 && everDrew ?
+streamMode === "h264" && everDrew && (video.seeking || readyState < 2) ?
         │ yes ──► return    (keep the last picture — SKIP the clear)
         │ no
         ▼
    clear to canvasBg, draw the current frame if one is ready
    (everDrew = true on the first successful draw of a session)
+```
+
+## …and the clear that was never behind that guard (task 216)
+
+```
+updateViewport()   ← window resize · visualViewport resize AND scroll
+      │              · every IME inset the shell pushes (__imeHeight)
+      ▼
+liveResizePlan({ width, height, nextWidth, nextHeight, everDrew })
+      │
+      ├─ resize false ─► the buffer is NOT touched at all
+      │                  (assigning canvas.width wipes it to transparent
+      │                   black even when the value is unchanged — and a
+      │                   transparent canvas shows the PAGE's background:
+      │                   his blue flash, on every overlap with a held frame)
+      └─ resize true  ─► keepCanvasPixels() → canvas.width/height = …
+                         → restoreCanvasPixels()      (paint-then-swap)
 ```
 
 Whatever the regulator's three steps cannot close in time — the buffer is

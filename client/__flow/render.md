@@ -52,9 +52,15 @@ Pseudocode:
         IF sourceBuffer not updating AND queue not empty:
             appendBuffer(next chunk)   # errors close the socket, never freeze
 
-    ON every MSE updateend:
-        IF buffered end - currentTime > LIVE_MAX_BEHIND_S:
-            jump currentTime to (end - LIVE_TARGET_BEHIND_S)   # catch up to live
+    ON every MSE updateend (and on waiting/stalled + a 1s backstop tick):
+        applyLiveDecision(behind, now):        # client/live-clock.js decides
+            liveRegulate(...)  → playbackRate, and WHETHER a rescue seek is due
+            liveCatchUp(...)   → whether the FORWARD catch-up may fire at all
+                                 (task 216: the lateness must have survived
+                                  LIVE_JUMP_HOLD_MS, and at most one jump per
+                                  LIVE_JUMP_MIN_GAP_MS — every jump is a
+                                  decoder flush, and his log counted 36 in 15s)
+            perform at most ONE of the two seeks, via liveSeekTarget()
         IF buffered history > 2 * BUFFER_KEEP_S:
             trim oldest history down to BUFFER_KEEP_S
         pumpMse()   # feed the next queued chunk, if any
@@ -62,7 +68,18 @@ Pseudocode:
     renderLoop (requestAnimationFrame, H.264 only):
         redraw() every frame while a stream is active
 
+    updateViewport()  (window/visualViewport resize + scroll, IME inset push):
+        plan = liveResizePlan(current size, next size, everDrew)
+        IF plan.preserve → kept = keepCanvasPixels()   # BEFORE anything clears
+        IF plan.resize   → canvas.width/height = next  # this WIPES the buffer
+        IF kept          → restoreCanvasPixels(kept)
+        # a size that did not change is never assigned at all — assigning it
+        # wipes the canvas to transparent black regardless (task 216)
+        computeBaseRect(); computeViewHome(); clampView(); caret rise; redraw()
+
     redraw():
+        IF liveHoldFrame(mode, readyState, seeking, everDrew) → return
+             # nothing paintable: hold the last picture, SKIP THE CLEAR
         clear canvas
         draw source pixels (video element OR base+detail bitmaps) into drawnRect()
         drawCursor()
