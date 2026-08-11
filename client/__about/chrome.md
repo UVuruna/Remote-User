@@ -173,3 +173,51 @@ and Tailscale addresses once already).
 
 Gate: `tests/test_phone_chrome.py` — the radial's two directions and its
 edge lean, both modes' real behaviour, and that STICKY never hides by itself.
+
+## The radial has a second placement — CENTERED (owner 2026-08-09, task 186)
+
+His own answer, once the Layout button's options became three: the radial shows
+**centered on screen**, the category wheel's rule —
+
+> "najbolje da se držimo istog pravila" <!-- lang-ok: owner quote -->
+
+— and not beside the button as his first sketch had it. It is the SAME
+component: the options are still `.ctl` faces built by `makeButton`, and only
+their placement differs. Two reasons it must be the same one:
+
+* a corner cannot hold three unambiguous directions — one is always clamped by
+  a screen edge, and unambiguous directions are the whole point of the
+  geometry;
+* the ring uses the WHEEL's own angles (`-PI/2 + i·2π/n`, item 0 straight up,
+  clockwise), so the gamepad's existing `padPointedIndex` maps a stick angle
+  onto it with no second arithmetic. Hold L2, point, release — the L1/R1
+  grammar, unchanged (see [Gamepad](gamepad.md)).
+
+The veil rides `body.mini-open::before` at z-index 10, exactly like the wheel's:
+a dim painted on `#mini-radial` itself (z-index 36) would sit UNDER the options
+and take their contrast with it — the measured failure that moved the wheel's
+veil to its own layer.
+
+Hide keeps the anchored two-option radial. Its pair really is two, and beside a
+corner is where they belong.
+
+## The layout bar switches by SWIPE too (owner 2026-08-11)
+
+Reported with a screenshot of v0.0.107, in which the bar's corner-sized arrows
+had squeezed the name frame so hard that not one letter of the layout name
+showed. Two halves of one correction: the arrows shrink to a big glyph in a
+very small footprint (`client/layouts.css`), and a **horizontal drag anywhere on
+the bar steps the layouts** — so a smaller arrow costs nothing, because the
+whole bar became the target.
+
+It lives here because nothing in this file reaches the PC: a swipe calls
+`layoutStep`, the very function the arrows call. The listener is in the
+CAPTURE phase on `#layout-bar`, which is load-bearing — the bar's inner
+controls fire on pointerup, so a drag ending on the framed name would otherwise
+step the layout AND open the list. A real swipe stops the event there; anything
+under 44 px, or more vertical than horizontal, is left alone and reaches the
+button it landed on.
+
+Gate: `tests/test_phone_chrome.py` — the frame keeps at least 60% of the bar,
+the arrows stay under 40 px while their glyphs stay 24 px+, and a swipe sends
+`layout_focus` while a wobble does not.

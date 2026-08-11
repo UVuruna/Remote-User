@@ -73,7 +73,17 @@ const PAD_MAP = {
   f_left:  { group: "right", pos: "left" },
   f_right: { group: "right", pos: "right" },
   f_down:  { group: "right", pos: "down" },
-  l2:      { corner: "btn-newlay" },
+  // L2 CARRIES THE TWO JOBS THE LAYOUT BUTTON CARRIES (owner 2026-08-09, task
+  // 186 — "aha ok onda L2, u pravu si"; lang-ok: owner quote). His sketches
+  // said L1, and L1 held is already the left category wheel, so the mapping
+  // flag was raised and he moved it: TAP arms the tap-pick, exactly as the
+  // Layout button did before it grew a radial, and HOLD opens the source
+  // radial with the stick pointing at it. That is the L1/R1 grammar verbatim —
+  // hold, point, release confirms, release at nothing changes nothing — which
+  // is why it is worth one more entry here and not a second model to learn.
+  // R2 keeps its own two modes (tap = hide now, hold = the Hide radial),
+  // untouched.
+  l2:      { radial: "layout", tap: () => layoutTapSource() },
   r2:      { corner: "btn-hide" },
   l1:      { shoulder: "left",  step: -1 },
   r1:      { shoulder: "right", step: 1 },
@@ -106,6 +116,11 @@ let padScrollAccH = 0;   // sub-tick scroll carry (horizontal, rx)
 const padHeld = new Map();
 // {side, step, at, index} while a shoulder is down and the wheel is open.
 let padWheel = null;
+// {at, index} while L2 is down and the layout-birth radial is open (task 186).
+// A SECOND variable rather than a mode inside `padWheel`: the two menus are
+// different components with different contents, and folding them together
+// would mean every branch below asking which one it is holding.
+let padRadial = null;
 
 // Deadzone + gentle curve. Returns 0 inside the deadzone, ±1 at full tilt.
 function padCurve(v) {
@@ -171,11 +186,12 @@ function padTick(now) {
   padLast = now;
   padCursorStep(dt);
   padScrollStep(dt);
-  padLoop = padSticksLive() && !padWheel ? requestAnimationFrame(padTick) : null;
+  padLoop = padSticksLive() && !padWheel && !padRadial
+    ? requestAnimationFrame(padTick) : null;
 }
 
 function padStartLoop() {
-  if (padLoop !== null || padWheel || !padSticksLive()) return;
+  if (padLoop !== null || padWheel || padRadial || !padSticksLive()) return;
   padLast = performance.now();
   padLoop = requestAnimationFrame(padTick);
 }
@@ -208,12 +224,72 @@ function padShoulderPress(m, down) {
   padWheel = null;
   closeWheel();
   if (w.index !== null) {
-    groups[w.side] = w.index;
-    renderGroup(w.side);
+    // w.index points into the FILTERED ring (task 181's wheelCats), and
+    // `groups` holds an index into the FULL list — the finger's own pick in
+    // controls.js maps through allCats().indexOf(cat), and the pad must map
+    // the same way or pointing at one set shows another (caught by the
+    // input-pipeline gate the day drop-out landed).
+    const cat = wheelCats(w.side)[w.index];
+    if (cat) {
+      groups[w.side] = allCats().indexOf(cat);
+      rememberGroup(w.side, cat.name);
+      renderGroup(w.side);
+    }
   } else if (performance.now() - w.at < PAD_TAP_MS) {
     layoutStep(w.step);
   }
   padStartLoop();
+}
+
+// ── L2: THE SAME GRAMMAR, THE OTHER MENU (owner 2026-08-09, task 186) ───────
+// Hold L2 and the layout-birth radial opens in the middle of the screen; the
+// stick points at New / List / Tap and letting go takes the one being pointed
+// at. Letting go while pointing at nothing changes nothing, and if the whole
+// press was quick it was the TAP instead — the tap-pick, armed as it always
+// was. Every line of that sentence is `padShoulderPress` with a different menu
+// in it, which is the point: the owner learns one grammar and it is already
+// the one his shoulders speak.
+//
+// The RADIAL ITSELF is chrome.js's, opened by layout-create.js's own
+// `openSourceChooser` — the very function the finger runs. Nothing here draws
+// anything, and there is no controller-only option list to drift from the
+// touch one (constraint 9).
+function padRadialPress(m, down) {
+  if (down) {
+    if (padRadial || padWheel) return;
+    padReleaseHeld();   // nothing of ours may stay pressed under an open menu
+    padStopLoop();      // the sticks POINT now; they do not steer or scroll
+    // A radial a FINGER left open must not be toggled shut by the press that
+    // is opening this one: `openMiniRadial` closes on a re-open of the same
+    // anchor, and that door is the finger's, not the pad's.
+    closeMiniRadial();
+    padRadial = { at: performance.now(), index: null };
+    openSourceChooser();
+    return;
+  }
+  const r = padRadial;
+  if (!r) return;
+  padRadial = null;
+  if (r.index !== null) {
+    padStartLoop();
+    miniRadialPick(r.index);      // pointing at one: that is the choice
+    return;
+  }
+  closeMiniRadial();
+  // Pointing at nothing: a QUICK press was the tap, a long one was a look.
+  if (performance.now() - r.at < PAD_TAP_MS) m.tap();
+  padStartLoop();
+}
+
+function padAimRadial() {
+  const r = padRadial;
+  if (!r) return;
+  const items = miniRadialItems();
+  if (!items.length) return;
+  // The SAME pointing arithmetic the wheel uses — and it can be, because the
+  // centered radial places its options at the wheel's own angles (chrome.js).
+  r.index = padPointedIndex(items);
+  miniRadialLight(r.index === null ? -1 : r.index);
 }
 
 // Which wheel item the stick points at. Either thumb may do it — the sticks
@@ -299,7 +375,12 @@ window.__padButton = (name, down) => {
     padShoulderPress(m, down);
     return;
   }
-  if (padWheel) return;   // a wheel is open: only its shoulder is listened to
+  if (m.radial) {
+    padRadialPress(m, down);
+    return;
+  }
+  // A menu is open: only the button holding it is listened to.
+  if (padWheel || padRadial) return;
   if (m.group) {
     padPressElement(name, groupButton(m.group, m.pos), down);
     return;
@@ -323,6 +404,10 @@ window.__padAxis = (lx, ly, rx, ry) => {
   padAxes.ry = ry;
   if (padWheel) {
     padAimWheel();
+    return;
+  }
+  if (padRadial) {
+    padAimRadial();
     return;
   }
   padStartLoop();

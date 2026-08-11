@@ -504,6 +504,15 @@ async def watch(layouts, conn: dict) -> None:
     try:
         while True:
             announced = await _wait_for_change(woken)
+            # DID SOMETHING HE JUST OPENED APPEAR? (task 185.) Outside the
+            # `_defending` gate on purpose: the commonest shape of his request
+            # is at the DESKTOP — he double-clicks an .xlsx through the stream
+            # and wants to be asked whether to make a layout with it. It moves
+            # nothing and takes no foreground; the scan's own rules decide
+            # whether there is anything to ask (server/layout_popup.py).
+            if not conn.get("away") and not conn.get("left"):
+                await asyncio.to_thread(layout_popup.scan, layouts, conn)
+                await layout_popup.flush_offers(conn)
             if not _defending(conn):
                 continue
             await asyncio.to_thread(_defend, layouts, conn, announced)

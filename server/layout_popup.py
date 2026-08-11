@@ -209,7 +209,14 @@ def baseline(conn: dict) -> None:
     — the caller runs it on a worker thread. Before it has run, `_is_new`
     answers False for everything and this whole module does nothing: a guard
     that adopted windows on a missing baseline would adopt his entire desk."""
-    conn["popup_known"] = _top_level_hwnds()
+    known = _top_level_hwnds()
+    conn["popup_known"] = known
+    # THE SECOND SET, and it must be a second one (task 185). `popup_known` is
+    # also the JUDGED set — a window it has ruled on stops being "new" for the
+    # attribution above — so the layout-birth scan below cannot share it: one
+    # look at a window would make it old for the other feature. Same baseline,
+    # separate bookkeeping.
+    conn["birth_seen"] = set(known)
 
 
 def _is_new(conn: dict, hwnd: int) -> bool:
@@ -401,6 +408,108 @@ async def flush_offers(conn: dict) -> int:
     return sent
 
 
+# ═══════════════════════ WHEN AN APP OPENS, OFFER A LAYOUT ═══════════════════
+# Owner request 2026-08-09 (task 185): he double-clicks a picture or an .xlsx
+# through the stream, the viewer or Excel opens — and the phone should ASK
+# whether to make a layout with it, with the usual single/grid choices.
+#
+# The SCOPING was recorded before a line was written, and every clause of it is
+# a rule below rather than a hope:
+#
+# * **Only while a phone session is live.** This runs inside `focus_guard.watch`,
+#   which exists per connection, and it stands down while the phone is away —
+#   those windows belong to his desk again.
+# * **Only NEW top-level windows, never dialogs.** `wm.list_windows` already
+#   drops tool windows, cloaked windows, shell chrome, untitled windows and our
+#   own process; an OWNED window (`GW_OWNER`) is a dialog of something else and
+#   is dropped here. A layout member cannot hold a dialog anyway.
+# * **Correlated with an injected DOUBLE-CLICK.** This is the load-bearing one.
+#   This PC is never quiet — background agents launch GUI apps all day
+#   (constraint 11, and the memory note that names it) — so "a window
+#   appeared" is not evidence of anything. What makes it HIS act is that the
+#   phone injected two clicks, close together, moments before. No click, no
+#   question.
+# * **A non-modal chip, on the phone, that auto-dismisses**, reusing the
+#   window-offer flow above rather than a second one. Ignoring it is an answer.
+# * **It never steals PC focus.** Nothing here places, raises or foregrounds
+#   anything at all: the offer is a sentence on the phone, and the creation
+#   panel does every later step through the paths that already exist.
+
+# Two clicks no further apart than this are a double-click. Windows' own
+# default is 500 ms; a little more is right for a finger on a phone driving a
+# button, and being generous here can only ask a question, never move a window.
+DOUBLE_CLICK_S = 0.7
+# How long after that double-click a new window may still be its result. Cold
+# starts are slow (Excel on a busy machine), and the correlation is only ever
+# used to decide whether to ASK.
+BIRTH_AFTER_CLICK_S = 15.0
+GW_OWNER = 4
+
+
+def note_click(conn: dict) -> None:
+    """The phone injected a mouse click. Called from the web layer's click and
+    press branches — the ONLY source, deliberately: a click the PC's own mouse
+    made is not the phone opening something, and cannot be one."""
+    times = conn.setdefault("click_times", [])
+    times.append(time.monotonic())
+    del times[:-4]
+
+
+def _double_clicked(conn: dict) -> bool:
+    times = conn.get("click_times") or []
+    if len(times) < 2:
+        return False
+    now = time.monotonic()
+    return (times[-1] - times[-2] <= DOUBLE_CLICK_S
+            and now - times[-1] <= BIRTH_AFTER_CLICK_S)
+
+
+def _offer_birth(conn: dict, win: dict) -> None:
+    """Queue the "layout with it?" chip for a window he just opened."""
+    global _NEXT_ID
+    _expire()
+    _NEXT_ID += 1
+    hwnd = win["hwnd"]
+    key = f"b{hwnd:x}-{_NEXT_ID}"
+    _OFFERS[key] = {"hwnd": hwnd, "lay": None, "conn": conn, "birth": True,
+                    "at": time.monotonic()}
+    conn.setdefault("birth_asked", set()).add(hwnd)
+    conn.setdefault("popup_send", []).append({
+        "type": "window_offer", "id": key, "act": "layout_new",
+        "title": win.get("title", ""), "process": win.get("process", ""),
+        "hwnd": hwnd, "icon": win.get("icon")})
+    logger.info("New window %s offered as a layout (task 185)",
+                _describe(hwnd))
+
+
+def scan(layouts, conn: dict) -> None:
+    """One pass: did a window HE opened appear? Blocking Win32 — the watcher
+    runs it on a worker thread.
+
+    Cheap in the common case, and that matters because this runs beside a
+    0.25 s poll: with no recent double-click it costs one comparison and
+    returns. The window sweep is only paid when he has just clicked twice."""
+    seen = conn.get("birth_seen")
+    if seen is None or conn.get("away") or conn.get("left"):
+        return
+    if not _double_clicked(conn):
+        return
+    members: set[int] = set()
+    for lay in getattr(layouts, "layouts", []):
+        members.update(lay.members)
+        members.update(getattr(lay, "adopted", ()))
+    for win in wm.list_windows():
+        hwnd = win["hwnd"]
+        if hwnd in seen:
+            continue
+        seen.add(hwnd)          # judged once, whatever the answer
+        if wm.user32.GetWindow(hwnd, GW_OWNER):
+            continue            # a dialog of something else, never a member
+        if hwnd in members or hwnd in conn.get("birth_asked", ()):
+            continue
+        _offer_birth(conn, win)
+
+
 def pick(offer_id: str, act: str) -> bool:
     """His tap. `act` is "layout" (place it by the rules above) or anything
     else, which is "leave it on the desktop" — the safe answer, so an act we
@@ -412,6 +521,13 @@ def pick(offer_id: str, act: str) -> bool:
     if offer is None:
         return False
     lay, hwnd, conn = offer["lay"], offer["hwnd"], offer["conn"]
+    if offer.get("birth"):
+        # Task 185's chip. NOTHING on the PC moves either way — a yes opens the
+        # creation panel on the phone, seeded with this window, and every step
+        # after that is the ordinary creation flow. All that is settled here is
+        # that the question has been answered and will not be asked again.
+        conn.get("birth_asked", set()).discard(hwnd)
+        return bool(wm.user32.IsWindow(hwnd))
     # The question is answered, so it stops being a question. `popup_asked` is
     # ONLY "a chip is out for this window": what stops it being offered again
     # afterwards is his ANSWER — `popup_declined` for the desktop, membership

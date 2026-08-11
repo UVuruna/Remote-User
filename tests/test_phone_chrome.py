@@ -155,7 +155,12 @@ def _checks(page, label, out):
       const cr = corner.getBoundingClientRect();
       const cs = getComputedStyle(corner);
       const rad = (el) => parseFloat(getComputedStyle(el).borderTopLeftRadius);
-      for (const sel of ['#lay-frame', '#lay-prev', '#lay-next']) {
+      // THE ARROWS ARE DELIBERATELY *NOT* CORNER BUTTONS ANY MORE (owner
+      // 2026-08-11, superseding his own task-160 ruling after seeing it): two
+      // 58 px squares left the name nothing, and "not one letter" of it showed
+      // on his phone. The FRAME still wears the top row's style — that half of
+      // 160 was right and is what keeps the row reading as one row.
+      for (const sel of ['#lay-frame']) {
         const el = document.querySelector(sel);
         const r = el.getBoundingClientRect();
         if (Math.abs(r.height - cr.height) > 1) {
@@ -180,6 +185,124 @@ def _checks(page, label, out):
     out[f"the layout bar wears the top row's own style @ {label}"] = not same
     if same:
         print(f"  DETAIL bar style @ {label}: {same}")
+
+    # ── 2026-08-11: THE NAME TAKES THE ROW, THE ARROWS TAKE ALMOST NONE ──────
+    # His report on v0.0.107, with the screenshot: the bar showed not one
+    # letter of the layout name. Catches (proven by restoring either half of
+    # the shipped rule): arrows sized `var(--corner)` with a border and a fill,
+    # or `#lay-frame` back to `flex: 0 1 auto` — with a long name, both put the
+    # frame under 60% of the bar and the name under a readable width.
+    page.evaluate("layouts[0].name = 'Remote User — Applications — UVuruna';"
+                  " updateLayoutBar()")
+    page.wait_for_timeout(80)
+    room = page.evaluate("""() => {
+      const bad = [];
+      const bar = document.getElementById('layout-bar').getBoundingClientRect();
+      const frame = document.getElementById('lay-frame').getBoundingClientRect();
+      const share = frame.width / bar.width;
+      if (share < 0.6) {
+        bad.push('the name frame is ' + Math.round(share * 100) + '% of the ' +
+                 'bar — the arrows are eating the row he reads');
+      }
+      for (const sel of ['#lay-prev', '#lay-next']) {
+        const a = document.querySelector(sel).getBoundingClientRect();
+        if (a.width > 40) {
+          bad.push(sel + ' is ' + Math.round(a.width) + 'px wide — his rule ' +
+                   'is a big glyph in a very small footprint, not a button');
+        }
+        // …and the glyph itself stays big: shrinking the BOX is the fix, not
+        // shrinking the arrow he has to hit.
+        const svg = document.querySelector(sel + ' svg').getBoundingClientRect();
+        if (svg.width < 24) {
+          bad.push(sel + ' shrank its glyph to ' + Math.round(svg.width) + 'px');
+        }
+      }
+      // The logo sits near the LEFT edge of the frame and the ✕ near the RIGHT
+      // one — his words, and what the small inner padding buys.
+      const pick = document.getElementById('lay-pick').getBoundingClientRect();
+      const close = document.getElementById('lay-close').getBoundingClientRect();
+      if (pick.left - frame.left > 12) {
+        bad.push('the name starts ' + Math.round(pick.left - frame.left) +
+                 'px inside the frame');
+      }
+      if (frame.right - close.right > 12) {
+        bad.push('the ✕ stands ' + Math.round(frame.right - close.right) +
+                 'px from the frame\\'s right edge');
+      }
+      // And something of the name is actually READ — the whole complaint.
+      const name = document.getElementById('lay-name').getBoundingClientRect();
+      if (name.width < 100) {
+        bad.push('the name has ' + Math.round(name.width) + 'px to live in');
+      }
+      return bad;
+    }""")
+    out[f"the bar gives the row to the name @ {label}"] = not room
+    if room:
+        print(f"  DETAIL bar room @ {label}: {room}")
+
+    # …AND IT SWITCHES BY SWIPE (owner 2026-08-11, the same report).
+    # Catches: no swipe handler at all, or one that fires on a tap / on a
+    # mostly-vertical drag, or one that lets the drag ALSO open the layout list
+    # under its own finger.
+    swipe = page.evaluate("""() => {
+      const bad = [];
+      const bar = document.getElementById('layout-bar');
+      const r = bar.getBoundingClientRect();
+      const y = r.top + r.height / 2;
+      // Dispatched on the framed NAME, the one inner control a swipe is
+      // likely to end on — so the last check below is a real question.
+      const on = document.getElementById('lay-pick');
+      const drag = (dx, dy) => {
+        const at = (x, yy, type) => on.dispatchEvent(new PointerEvent(type, {
+          clientX: x, clientY: yy, pointerId: 1, isPrimary: true,
+          bubbles: true, cancelable: true}));
+        const x0 = r.left + r.width / 2;
+        at(x0, y, 'pointerdown');
+        at(x0 + dx, y + dy, 'pointerup');
+      };
+      // The step is ASKED OF THE PC (`layout_focus`) — `layoutActive` only
+      // moves when the server's own state frame comes back, so what is read
+      // here is what really went out.
+      layoutActive = 0;
+      const seen = [];
+      const real = window.send;
+      window.send = (m) => seen.push(m);
+      try {
+        drag(-120, 0);
+        if (seen.length !== 1 || seen[0].type !== 'layout_focus' ||
+            seen[0].index !== 1) {
+          bad.push('a swipe left did not step forward: ' + JSON.stringify(seen));
+        }
+        seen.length = 0;
+        drag(120, 0);
+        if (seen.length !== 1 || seen[0].index !== -1) {
+          bad.push('a swipe right did not step back: ' + JSON.stringify(seen));
+        }
+        seen.length = 0;
+        drag(10, 0);
+        if (seen.length) bad.push('a tap-sized wobble stepped the layout');
+        drag(60, 200);
+        if (seen.length) bad.push('a mostly-vertical drag stepped it');
+        // A real swipe must not ALSO open the list under the finger. (The
+        // tap-sized wobble above legitimately DID open it — that is what a tap
+        // on the framed name means — so the panel is closed first, or this
+        // would be measuring the tap.)
+        closeLayoutPanel();
+        seen.length = 0;
+        drag(-120, 0);
+        if (!document.getElementById('layout-panel').hidden) {
+          bad.push('the swipe opened the layout list as well');
+        }
+      } finally {
+        window.send = real;
+      }
+      layoutActive = 0; updateLayoutBar();
+      return bad;
+    }""")
+    out[f"a swipe on the bar switches layouts @ {label}"] = not swipe
+    if swipe:
+        print(f"  DETAIL bar swipe @ {label}: {swipe}")
+    page.evaluate(STAGE_LAYOUTS)
 
     # ── 160: AT THE BOTTOM IT STANDS CLEAR OF THE D-PAD ──────────────────────
     # Catches: pinning the bottom position to the screen edge (or dropping
@@ -216,31 +339,49 @@ def _checks(page, label, out):
     if clear:
         print(f"  DETAIL bar bottom @ {label}: {clear}")
 
-    # ── 158: THE RADIAL IS SOUTH AND SOUTH-EAST, DRAWN AND LABELLED ──────────
-    # Catches: spreading the options around a ring (his geometry is for the
-    # analog stick), dropping the icon or the label (his "with a picture and
-    # with text"), or letting an option open off the screen.
+    # ── 186 SUPERSEDES 158 FOR THE LAYOUT BUTTON: CENTERED, THREE OPTIONS ────
+    # His own words on seeing v0.0.107, which still shipped the two-option
+    # south/south-east radial here: the LAST version is the only one that may
+    # ship. Task 186 answered that this radial stands CENTERED, with New / List
+    # / Tap around a ✕ ("najbolje da se držimo istog pravila" — lang-ok: owner
+    # quote), so the anchored two-option geometry may leave NO TRACE on this
+    # button. It survives on HIDE, whose two modes are still a pair beside a
+    # corner — the check below this one.
+    # Catches: the old two-option call coming back, or the `centered` flag
+    # being dropped (the options fall beside the corner again).
+    # The ring's own geometry and the pad's grammar are proven in full by
+    # tests/test_birth_radial.py; what is held HERE is that this button's
+    # radial is the new one at all.
     radial = page.evaluate("""() => {
       const bad = [];
       const btn = document.getElementById('btn-newlay');
       const b = btn.getBoundingClientRect();
       openSourceChooser();
       const items = [...document.querySelectorAll('#mini-radial .mini-item')];
-      if (items.length !== 2) {
+      if (items.length !== 3) {
         closeMiniRadial();
-        return ['the Layout button offered ' + items.length + ' options, not 2'];
+        return ['the Layout button offered ' + items.length + ' sources, not ' +
+                'the three of task 186 (New / List / Tap)'];
+      }
+      const words = items.map((el) => el.querySelector('.lbl').textContent.trim());
+      for (const want of ['New', 'List', 'Tap']) {
+        if (words.indexOf(want) < 0) bad.push('no "' + want + '" option: ' + words);
       }
       const c = items.map((el) => {
         const r = el.getBoundingClientRect();
         return {x: r.left + r.width / 2, y: r.top + r.height / 2, r};
       });
+      const cx = innerWidth / 2, cy = innerHeight / 2;
+      const radii = c.map((p) => Math.hypot(p.x - cx, p.y - cy));
+      if (Math.max(...radii) - Math.min(...radii) > 2) {
+        bad.push('the options are not on one ring around the screen centre');
+      }
+      // And NOT the superseded geometry: nothing may sit anchored below the
+      // Layout button the way the two-option variant did.
       const bx = b.left + b.width / 2, by = b.top + b.height / 2;
-      if (!(c[0].y > by + 40)) bad.push('the first option is not SOUTH of the button');
-      if (Math.abs(c[0].x - bx) > 2) bad.push('the first option is not straight below it');
-      if (!(c[1].y > by + 20)) bad.push('the second option is not below the button');
-      if (!(Math.abs(c[1].x - bx) > 20)) {
-        bad.push('the second option is not DIAGONAL — the two directions a ' +
-                 'stick has to tell apart are the same direction');
+      if (c.every((p) => p.y > by) && c.every((p) => Math.abs(p.x - bx) < 140)) {
+        bad.push('the options still hang under the Layout button — the ' +
+                 'superseded task-158 shape');
       }
       for (const item of items) {
         const r = item.getBoundingClientRect();
@@ -248,18 +389,15 @@ def _checks(page, label, out):
           bad.push('an option opened off the screen');
         }
         if (!item.querySelector('svg')) bad.push('an option carries no drawing');
-        const lbl = item.querySelector('.lbl');
-        if (!lbl || !lbl.textContent.trim()) bad.push('an option carries no words');
       }
-      // Kin: the two options are the same kind in one container.
       if (Math.abs(c[0].r.width - c[1].r.width) > 1 ||
           Math.abs(c[0].r.height - c[1].r.height) > 1) {
-        bad.push('the two options are different sizes');
+        bad.push('the options are different sizes');
       }
       closeMiniRadial();
       return bad;
     }""")
-    out[f"the Layout radial drops south and south-east @ {label}"] = not radial
+    out[f"the Layout radial is centered with all three sources @ {label}"] = not radial
     if radial:
         print(f"  DETAIL layout radial @ {label}: {radial}")
 

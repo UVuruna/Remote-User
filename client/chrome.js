@@ -75,7 +75,30 @@ let miniAnchor = null;
 function closeMiniRadial() {
   miniEl.hidden = true;
   miniEl.innerHTML = "";
+  miniEl.classList.remove("centered");
+  document.body.classList.remove("mini-open");
   miniAnchor = null;
+}
+
+// What the CONTROLLER needs of this component, and nothing more (task 186).
+// The pad holds L2, points, and lets go — so it must be able to ask which
+// options are on screen, light the one being pointed at, and run it. All three
+// go through the SAME elements the finger taps.
+function miniRadialItems() {
+  return [...miniEl.querySelectorAll(".mini-item")];
+}
+
+function miniRadialOpen() {
+  return !miniEl.hidden;
+}
+
+function miniRadialLight(index) {
+  miniRadialItems().forEach((el, i) => el.classList.toggle("current", i === index));
+}
+
+function miniRadialPick(index) {
+  const el = miniRadialItems()[index];
+  if (el && el.__miniPick) el.__miniPick();
 }
 
 // PURE — the geometry alone, so its gate can drive every corner by argument
@@ -99,7 +122,46 @@ function miniRadialPoints(anchor, count, screen) {
   });
 }
 
-// `options` = [{icon, label, onPick}] — at most two today (see the note above).
+// ── AND THE THREE-WAY ONE STANDS IN THE MIDDLE OF THE SCREEN (owner
+// 2026-08-09, task 186, answering his own sketch) ───────────────────────────
+//
+// His sketch had the layout-birth radial beside the Layout (+) button, like
+// the two above. He changed it himself when the options became three:
+//   lang-ok: owner quote
+//   "najbolje da se držimo istog pravila"
+// The rule he means is the category wheel's — CENTERED, with a ✕ in the middle
+// — and it is the right one for three options for a reason the two-option case
+// does not have: a corner cannot hold three distinct directions without one of
+// them being clamped by an edge, and the whole point of the geometry is that a
+// thumb can point at each option unambiguously.
+//
+// SAME COMPONENT, not a second one. The angles are the WHEEL'S OWN
+// (`-PI/2 + i*2PI/n` — item 0 straight up, increasing i sweeping clockwise),
+// so the pad's `padPointedIndex` maps a stick angle onto this ring with the
+// arithmetic it already uses for L1/R1, and an option is still a `.ctl` built
+// by `makeButton`. One radial, two placements, one grammar.
+const MINI_RING_RADIUS = 132;
+
+// PURE — the ring's option centres, so its gate can drive any screen and any
+// count by argument. The radius shrinks on a small screen rather than letting
+// an option leave it: `half` is the option's own half-face plus the edge
+// keep-out, exactly as the anchored clamp above uses it.
+function miniRingPoints(count, screen, size) {
+  const cx = screen.width / 2;
+  const cy = screen.height / 2;
+  const half = (size || 74) / 2 + MINI_EDGE;
+  const r = Math.max(
+    half,
+    Math.min(MINI_RING_RADIUS,
+             Math.min(screen.width, screen.height) / 2 - half));
+  return Array.from({ length: count }, (_, i) => {
+    const a = -Math.PI / 2 + (i * 2 * Math.PI) / Math.max(1, count);
+    return { x: cx + r * Math.cos(a), y: cy + r * Math.sin(a) };
+  });
+}
+
+// `options` = [{icon, label, onPick}] — at most two ANCHORED (see the note
+// above), up to four on the centered ring.
 //
 // A SECOND PRESS OF THE SAME BUTTON CLOSES IT, and that is not a convenience —
 // it is the only way OUT for the gamepad (found by the input gate, 2026-08-11).
@@ -111,11 +173,42 @@ function miniRadialPoints(anchor, count, screen) {
 // activator is unchanged and still the one a finger runs: what changed is that
 // the activator's own body now toggles, so BOTH input paths get the same door
 // in and the same door out, which is what constraint 12 is for.
-function openMiniRadial(anchorEl, options) {
+function openMiniRadial(anchorEl, options, opts) {
+  const centered = !!(opts && opts.centered);
   const reopening = !miniEl.hidden && miniAnchor === anchorEl;
   closeMiniRadial();
   if (reopening) return;
   miniAnchor = anchorEl;
+  const screen = { width: window.innerWidth, height: window.innerHeight };
+  if (centered) {
+    miniEl.classList.add("centered");
+    document.body.classList.add("mini-open");
+    const items = options.slice(0, 4);
+    const points = miniRingPoints(items.length, screen, 74);
+    items.forEach((opt, i) => {
+      const el = makeButton("ctl mini-item", opt.icon, opt.label);
+      el.style.left = `${points[i].x}px`;
+      el.style.top = `${points[i].y}px`;
+      // The pick is held ON the element so BOTH input paths reach the same
+      // one: the finger through `keepFocus`, the pad through `miniRadialPick`.
+      // A second copy of the option list for the controller is exactly the
+      // parallel button path constraint 9 was written about.
+      el.__miniPick = () => {
+        closeMiniRadial();
+        opt.onPick();
+      };
+      keepFocus(el, () => el.__miniPick());
+      miniEl.appendChild(el);
+    });
+    // The ✕ in the middle, the wheel's own (`.wheel-x`) — his "same rule".
+    const x = document.createElement("div");
+    x.className = "wheel-x mini-x";
+    x.innerHTML = svg("x");
+    keepFocus(x, closeMiniRadial);
+    miniEl.appendChild(x);
+    miniEl.hidden = false;
+    return;
+  }
   const r = anchorEl.getBoundingClientRect();
   const items = options.slice(0, 2);
   const points = miniRadialPoints(
@@ -126,17 +219,17 @@ function openMiniRadial(anchorEl, options) {
     // conservative on the vertical one and can therefore only ever keep an
     // option further from an edge, never closer.
     { left: r.left, top: r.top, width: r.width, height: r.height, size: 74 },
-    items.length,
-    { width: window.innerWidth, height: window.innerHeight });
+    items.length, screen);
   items.forEach((opt, i) => {
     // The SAME maker every other button on this page goes through.
     const el = makeButton("ctl mini-item", opt.icon, opt.label);
     el.style.left = `${points[i].x}px`;
     el.style.top = `${points[i].y}px`;
-    keepFocus(el, () => {
+    el.__miniPick = () => {
       closeMiniRadial();
       opt.onPick();
-    });
+    };
+    keepFocus(el, () => el.__miniPick());
     miniEl.appendChild(el);
   });
   miniEl.hidden = false;
@@ -356,6 +449,53 @@ setInterval(() => {
     setControlsHidden(true);
   }
 }, AUTO_HIDE_TICK_MS);
+
+// ── THE LAYOUT BAR ALSO SWITCHES BY SWIPE (owner 2026-08-11, with his
+// screenshot of v0.0.107) ────────────────────────────────────────────────────
+//
+// He asked for it in the same breath as making the arrows small again: the bar
+// should step the layouts when a finger is dragged across it left or right,
+// not only when one of the two arrows is hit. The two are one thought — the
+// arrows shrink to give the NAME the row, and the gesture is what makes that
+// affordable, because a small glyph is a smaller target and the whole bar
+// becomes the big one.
+//
+// It lives HERE rather than in layouts.js for the reason this file exists:
+// nothing in it reaches the PC. A swipe decides which layout the bar is
+// showing by calling `layoutStep`, the very function the arrows call — one
+// activator, never a second path (constraint 9).
+//
+// CAPTURE PHASE, and that is the load-bearing detail. The bar's inner controls
+// (the framed name, the ✕) fire on pointerup through `keepFocus`; a drag that
+// ENDS on the name would otherwise both step the layout AND open the list. So
+// the decision is taken before the target hears anything, and a real swipe
+// stops the event there.
+const SWIPE_MIN_PX = 44;      // below this it is a tap with a shaky finger
+const layBar = document.getElementById("layout-bar");
+let swipeFrom = null;
+
+layBar.addEventListener("pointerdown", (e) => {
+  swipeFrom = { x: e.clientX, y: e.clientY, id: e.pointerId };
+}, true);
+
+layBar.addEventListener("pointerup", (e) => {
+  const from = swipeFrom;
+  swipeFrom = null;
+  if (!from || from.id !== e.pointerId) return;
+  const dx = e.clientX - from.x;
+  // HORIZONTAL, and more horizontal than vertical: a finger travelling mostly
+  // downward is reaching for the picture, not stepping a layout.
+  if (Math.abs(dx) < SWIPE_MIN_PX || Math.abs(dx) <= Math.abs(e.clientY - from.y)) {
+    return;
+  }
+  e.preventDefault();
+  e.stopPropagation();
+  // Dragging LEFT moves forward, the way a stack of cards behaves under a
+  // finger — the same direction the › arrow on that side points.
+  layoutStep(dx < 0 ? 1 : -1);
+}, true);
+
+layBar.addEventListener("pointercancel", () => { swipeFrom = null; }, true);
 
 // --- Toast ----------------------------------------------------------------
 

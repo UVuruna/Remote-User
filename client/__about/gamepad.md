@@ -154,3 +154,29 @@ positive → Windows' own "tilted right".
   `__padButton` / `__padAxis` / `__padInfo`
 - [Tests (folder)](../../tests/___tests.md) — `test_input_pipeline.py` drives
   the real mapping with synthetic pad events (fail-closed in `build.py`)
+
+## L2 carries the Layout button's two jobs (owner 2026-08-09, task 186)
+
+His sketches said L1; L1 held is already the left category wheel, so the
+mapping flag was raised and he moved it:
+
+> "aha ok onda L2, u pravu si" <!-- lang-ok: owner quote -->
+
+* **Tap** — arms the tap-pick, exactly as the Layout button did before it grew
+  a radial (`layoutTapSource`, which is also what the button itself runs when a
+  creation is already live: the second tap cancels).
+* **Hold** — opens the layout-birth radial (New / List / Tap around a ✕), the
+  stick points at an option and the release takes it. Releasing while pointing
+  at nothing changes nothing; a hold shorter than `PAD_TAP_MS` was the tap.
+
+That is `padShoulderPress` with a different menu in it, deliberately: the owner
+learns ONE grammar and it is already the one his shoulders speak. The radial
+itself is opened by `openSourceChooser` — the very function the finger runs —
+and confirmed through the option element's own handler, so there is no
+controller-only option list to drift from the touch one (constraint 9).
+
+R2 keeps its own two modes (tap = hide now, hold = the Hide radial).
+
+Gate: `tests/test_birth_radial.py` — hold opens, the stick lights the option it
+points at, the release runs that option's real handler, a long release at
+nothing does nothing, and a tap arms the pick.

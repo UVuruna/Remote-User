@@ -22,6 +22,7 @@ import encoders
 import focus_hook
 import foreground_lock
 import layout_popup
+import recents
 import monitors
 import pairing
 import traffic
@@ -261,6 +262,10 @@ class ServerController:
         # to — the route itself lives with the rest of that feature in
         # server/layout_popup.py.
         layout_popup.register(app, token)
+        # THE NEW SOURCE of a layout (task 184): the phone asks what the PC can
+        # open — VS Code / Chrome / Explorer recents — and asks it to open one.
+        # Two plain request/response routes, same reason as the line above.
+        recents.register(app, token)
         # The traffic meter samples for the life of the PROCESS once started:
         # a stopped server has to read as a line of zeros on the owner's
         # graph, never as a hole where anything could have happened.

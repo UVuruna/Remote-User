@@ -46,10 +46,40 @@ html, body {
   left: 50%;
   transform: translateX(-50%);
   padding: var(--space-s) 20px;
-  border-radius: var(--radius-pill);
+  /* Capped ABSOLUTE, not `var(--radius-pill)` alone: the short "Connected"/
+     "Connecting…" state is one line (~36-40px tall) and 24px still clamps to
+     a full pill end there (browser caps any radius at half the box's own
+     shorter side, same as --radius-pill always did) — but once a wrapped
+     multi-line toast grows the box's HEIGHT, an uncapped 999px radius grows
+     with it and eats further into the text on every line, which is what the
+     CLIP TOOTH below is for (tests/_audit_frame.py __radiusAndKin). 24px is
+     legal at every height this element reaches AND small enough that the
+     8px vertical / 20px horizontal padding already clears the 0.3*r content
+     inset ALG-6 requires (0.3*24 = 7.2px). */
+  border-radius: min(var(--radius-pill), 24px);
   font: 600 14px system-ui, sans-serif;
   z-index: 40;
   transition: opacity 0.4s;
+  /* THE CIRCLE (owner screenshot, v0.0.107): a notify toast's text is long
+     enough to wrap but not long enough to fill the viewport, so unconstrained
+     `width: auto` shrink-to-fit landed on a near-SQUARE box for exactly that
+     length of sentence — and `border-radius: 999px` (--radius-pill) is CORRECT
+     CSS, clamped by the browser's own algorithm to half the shorter side on
+     every box, which on a square box IS a circle, and the wrapped words got
+     clipped mid-word under its curved corners. This is BUG A of THE SPACE &
+     LEGIBILITY LAW (grader 2026-08-11) arriving through a second door:
+     #update-banner had the identical shrink-to-fit failure and was given a
+     band to spend instead of a shrink-wrap (`width: min(92vw, 560px)` below
+     this rule). #status never received the same fix because nobody re-ran
+     that instrument against the notify toast specifically — ALG-6's own
+     __radiusAndKin() is correct and would have convicted this shape on sight,
+     but every call site points it at a staged PANEL ROOT (dictation card,
+     layout list, member chooser…), and a toast that lives outside every panel
+     was never once handed to it. Bounding the width keeps the box reliably
+     WIDE (AR >= 2) for any real notify sentence, so --radius-pill's own clamp
+     stays a legitimate pill end, never a circle. Gate: the toast case in
+     tests/test_layout_audit.py (frame-law section), fail-closed. */
+  width: min(92vw, 440px);
 }
 
 /* THE INK COMES WITH THE FILL, not with the theme (2026-08-08). This pill is
@@ -444,6 +474,32 @@ body.wheel-open::before {
   z-index: 36;
 }
 #mini-radial[hidden] { display: none; }
+/* THE THREE-WAY RADIAL STANDS IN THE MIDDLE (owner 2026-08-09, task 186:
+   "najbolje da se držimo istog pravila" — lang-ok: owner quote). The rule he
+   means is the category wheel's, so this variant borrows the wheel's veil and
+   the wheel's own ✕: a choice that takes the whole screen says so, exactly as
+   the wheel does, while the two-option anchored radial above deliberately
+   does not. Only these three declarations differ — the options are the same
+   `.mini-item` faces, placed by the same code. */
+/* THE VEIL IS THE WHEEL'S OWN LAYER, and that is not decoration: a veil
+   painted UNDER the options (this element is z-index 36) is exactly the defect
+   measured above — it costs a coloured face far more luminance than it costs
+   white, and no ink can recover it. So it rides `body.mini-open::before` at
+   z-index 10, over the stream and under every control, byte for byte the
+   `body.wheel-open` rule. */
+body.mini-open::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  background: var(--scrim-soft);
+  pointer-events: none;      /* the tap belongs to #mini-radial */
+}
+#mini-radial .mini-item.current {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-glow), 0 0 22px var(--accent-glow);
+  color: var(--accent);
+}
 /* An option IS a `.ctl` — same face, same icon, same label (see chrome.js).
    Only its POSITION is this rule's business; every look, every theme and every
    fill it wears comes from the `.ctl` rules above, so an option can never drift

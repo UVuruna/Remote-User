@@ -43,10 +43,36 @@ keepFocus(newlayBtn, () => {
   openSourceChooser();
 });
 
+// THE PAD'S SHORT PRESS, and the same act the Layout button performs when a
+// session is already live (task 186: "L2 tap = arm tap-pick as today, HOLD =
+// this radial"). It is a FUNCTION and not a copy of the handler above: the
+// controller must never grow a second creation path — constraint 9, the rule
+// that keeps `buttonPress` the one activator.
+function layoutTapSource() {
+  if (creating || layoutArm) {
+    cancelCreation();
+    return;
+  }
+  startTapSource();
+}
+
+function startTapSource() {
+  creating = newCreation("tap");
+  armNextTap();
+}
+
+function startListSource() {
+  creating = newCreation("list");
+  refreshNewlayButton();
+  closeLayoutPanel();
+  showLayLoading("Collecting windows and tabs…");
+  send({ type: "layout_list" });
+}
+
 
 function newCreation(source) {
   return {
-    source,                 // "list" | "tap"
+    source,                 // "list" | "tap" | "new"
     entries: null,          // list source: [{kind, hwnd, title, process, icon, tab?, x?, y?}]
     slots: [],              // chosen cells, in order — slot 1 names the layout
     name: null,             // owner-typed name; null = follow slot 1's title
@@ -83,20 +109,164 @@ function newCreation(source) {
 // options closes it, and Layout's own press already cancels an armed session
 // (see the handler above). A modal needed a Cancel; two buttons on the picture
 // do not.
+// THREE SOURCES NOW, AND THEY STAND IN THE MIDDLE OF THE SCREEN (owner
+// 2026-08-09, tasks 184 + 186). The third — **New** — makes a layout out of a
+// window that is not open yet, which is the point of task 184; and with three
+// options his own answer moved the radial to the centre, the category wheel's
+// rule ("najbolje da se držimo istog pravila" — lang-ok: owner quote). The
+// geometry, the ✕ and the pointing grammar all live once, in chrome.js.
+//
+// ONE WORD EACH, AND THE DRAWING CARRIES IT (his ruling ~20:25, task 184):
+// "the SVG matters more than the word — users learn the radial after a couple
+// of uses or from the guide". So Tap / List / New, each with a face of its own
+// in icons.js. His pick between his three word-triples (tap-point-touch /
+// list-open-current / new-create-start) is the one thing still open here, and
+// changing a word is changing three strings — nothing about the flow.
 function openSourceChooser() {
   openMiniRadial(newlayBtn, [
-    { icon: "list", label: "From a list", onPick: () => {
-        creating = newCreation("list");
-        refreshNewlayButton();
-        closeLayoutPanel();
-        showLayLoading("Collecting windows and tabs…");
-        send({ type: "layout_list" });
-      } },
-    { icon: "newwin", label: "Tap a window", onPick: () => {
-        creating = newCreation("tap");
-        armNextTap();
-      } },
-  ]);
+    { icon: "winplus", label: "New", onPick: openRecentsPanel },
+    { icon: "listwin", label: "List", onPick: startListSource },
+    { icon: "tapwin", label: "Tap", onPick: startTapSource },
+  ], { centered: true });
+}
+
+// ── NEW: A WINDOW THAT IS NOT OPEN YET (owner 2026-08-09, task 184) ─────────
+//
+// His observation is the whole design: "recent imaju svi" (lang-ok: owner
+// quote) — VS Code, Chrome and Explorer each keep a recent list the taskbar
+// already shows him, so the phone can offer to OPEN one and make a layout out
+// of what appears. The PC owns every hard part (server/recents.py, which is
+// also where the honest per-app limits are written down); this side is a list
+// and one POST.
+//
+// Over HTTP and not the socket, exactly like the uploads and the window offer:
+// a list and a window are plain request/response, and the socket's dispatcher
+// belongs to another round.
+const APP_ICON = { vscode: "vscode", chrome: "chrome", explorer: "explorer" };
+const APP_NAME = { vscode: "VS Code", chrome: "Chrome", explorer: "Explorer" };
+
+async function openRecentsPanel() {
+  if (!creating) creating = newCreation("new");
+  refreshNewlayButton();
+  closeLayoutPanel();
+  showLayLoading("Asking the PC what it can open…");
+  let list = [];
+  try {
+    const res = await fetch(`/recents?token=${encodeURIComponent(token)}`);
+    const data = await res.json();
+    list = data.entries || [];
+  } catch (err) {
+    hideLayLoading();
+    showToast(`Could not read the PC's recent list: ${err.message}`);
+    return;
+  }
+  hideLayLoading();
+  if (!list.length) {
+    // NAMED, never a blank card. None of the three apps installed is a real
+    // state of a PC, and a panel with nothing in it reads as a broken feature.
+    showToast("None of VS Code, Chrome or Explorer is installed on the PC");
+    return;
+  }
+  renderRecentsPanel(list);
+}
+
+function renderRecentsPanel(list) {
+  layPanel.innerHTML = "";
+  layPanel.hidden = false;
+  const card = document.createElement("div");
+  card.className = "lay-card card-columns";
+  const h = document.createElement("h2");
+  h.textContent = "Open a window";
+  const sub = document.createElement("p");
+  sub.className = "lay-sub";
+  sub.textContent = "It opens on the PC and becomes part of the layout.";
+  card.append(h, sub);
+
+  const rows = document.createElement("div");
+  rows.className = "lc-rows lc-scroll";
+  let app = null;
+  list.forEach((e) => {
+    if (e.app !== app) {
+      app = e.app;
+      const head = document.createElement("p");
+      head.className = "lay-sub lc-app";
+      head.textContent = APP_NAME[app] || app;
+      rows.appendChild(head);
+    }
+    rows.appendChild(recentRow(e));
+  });
+  card.appendChild(rows);
+
+  const actions = document.createElement("div");
+  actions.className = "lay-actions";
+  actions.appendChild(layChip("Cancel", false, () => cancelCreation()));
+  card.appendChild(actions);
+  layPanel.appendChild(card);
+}
+
+// A row of the New list. It wears its APP's drawn face (icons.js) rather than
+// the process icon the other two lists show — nothing has been opened yet, so
+// there is no window whose icon this could be, and drawing one would claim a
+// window exists. A `recent` row is INDENTED under its app's heading for the
+// same reason a tab is indented under its window (task 168): it belongs to it.
+function recentRow(e) {
+  const row = document.createElement("div");
+  row.className = "lay-item lc-row" + (e.kind === "recent" ? " lc-kid" : "");
+  const main = document.createElement("button");
+  main.type = "button";
+  main.className = "lay-item-main";
+  main.innerHTML = svg(APP_ICON[e.app] || "newwin");
+  const name = document.createElement("span");
+  name.textContent = e.label;
+  main.appendChild(name);
+  if (e.sub) {
+    const note = document.createElement("small");
+    note.className = "lc-note";
+    note.textContent = e.sub;
+    main.appendChild(note);
+  }
+  keepFocus(main, () => openRecentEntry(e));
+  row.appendChild(main);
+  return row;
+}
+
+// The chosen thing OPENS, and the window that appears becomes the slot — the
+// ordinary creation flow from there on, with nothing new on the wire: the
+// panel already knows how to hold a slot, and `layout_create` already knows
+// how to resolve one from a handle.
+//
+// The LOADING OVERLAY covers the whole wait (owner 2026-08-03, repeatedly):
+// cold-starting VS Code is several visible seconds of the PC doing something,
+// and a phone that looks frozen during it is the complaint that rule exists
+// for. The server is what waits for the window, so the overlay's end is the
+// window's arrival and not a reply about an intention.
+async function openRecentEntry(e) {
+  closeLayoutPanel();
+  showLayLoading(`Opening ${e.label}…`);
+  let data = {};
+  try {
+    const res = await fetch(`/recents/open?token=${encodeURIComponent(token)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: e.id }),
+    });
+    data = await res.json();
+  } catch (err) {
+    data = { ok: false, error: err.message };
+  }
+  hideLayLoading();
+  if (!data.ok || !data.window) {
+    showToast(data.error || "The PC could not open it");
+    renderCreationPanel();
+    return;
+  }
+  const w = data.window;
+  creating.slots.push({
+    hwnd: w.hwnd, title: w.title, process: w.process, icon: w.icon,
+    agents: w.agents || [], tab: null, x: 0.5, y: 0.5,
+  });
+  refreshNewlayButton();
+  renderCreationPanel();
 }
 
 function armNextTap() {
@@ -244,6 +414,27 @@ function handleLayoutOffer(msg) {
     creating.slots.push(slotFromOffer(msg));
     creating.awaitingTap = false;
   }
+  refreshNewlayButton();
+  renderCreationPanel();
+}
+
+// ── AN APP HE JUST OPENED IS ALREADY A SLOT (owner request 2026-08-09, task
+// 185) ──────────────────────────────────────────────────────────────────────
+//
+// He double-clicks an .xlsx through the stream, Excel opens, and the phone
+// asks "layout with it?" (the chip lives in window-offer.js; the PC's side of
+// the question is server/layout_popup.py). Saying yes lands HERE — in the
+// creation panel he already knows, pre-seeded with that window, with the usual
+// single/grid and portrait/landscape choices. There is no second wizard: the
+// only thing task 185 adds to this file is a way IN that starts with a slot.
+function startFromWindow(win) {
+  if (!win || !win.hwnd) return;
+  creating = newCreation("new");
+  creating.slots.push({
+    hwnd: win.hwnd, title: win.title || "", process: win.process || "",
+    icon: win.icon || null, agents: win.agents || [], tab: null,
+    x: 0.5, y: 0.5,
+  });
   refreshNewlayButton();
   renderCreationPanel();
 }
@@ -482,6 +673,15 @@ function renderCreationPanel() {
     row.className = "lay-row";
     row.appendChild(layChip(`Tap window ${c.slots.length + 1} of ${cellsNeeded()}`,
                             false, armNextTap));
+    box.appendChild(row);
+  } else if (c.source === "new" && c.slots.length < cellsNeeded()) {
+    // The New source can fill a grid too: each cell is another thing opened.
+    // It is the SAME chip the tap source shows, so a half-built grid looks the
+    // same however its members are being found.
+    const row = document.createElement("div");
+    row.className = "lay-row";
+    row.appendChild(layChip(`Open window ${c.slots.length + 1} of ${cellsNeeded()}`,
+                            false, openRecentsPanel));
     box.appendChild(row);
   }
 

@@ -85,6 +85,17 @@ const ICONS = {
   // geometry, never a font glyph (the ✥ of 2026-08-05).
   hideauto: '<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="2.6"/>',
   hidestay: '<path d="M2 12s3.6-7 10-7c1.7 0 3.2.4 4.5 1.1"/><path d="M8.4 18.5A14.6 14.6 0 0 1 2 12"/><line x1="3" y1="3" x2="21" y2="21"/><rect x="13.5" y="15.5" width="8" height="5.5" rx="1.4"/><path d="M15.5 15.5v-1.4a2 2 0 0 1 4 0v1.4"/>',
+  // ── THE THREE WAYS A LAYOUT IS BORN (owner 2026-08-09, tasks 184 + 186) ──
+  // His ruling on the names: ONE WORD per button, "and the SVG matters more
+  // than the word" — users learn the radial after a couple of uses, so the
+  // drawing is what carries it. Hence three faces that differ at a glance and
+  // not three near-identical windows: a FINGERTIP on a window's corner (Tap),
+  // a STACK of rows beside a window (List), and a window with a + rising OUT
+  // of its top edge (New — the window does not exist yet, which is the whole
+  // difference from `newwin`, whose + sits inside an open window).
+  tapwin: '<rect x="2.5" y="3.5" width="13" height="10" rx="1.8"/><line x1="2.5" y1="7" x2="15.5" y2="7"/><path d="M11.5 21.5V15a1.6 1.6 0 0 1 3.2 0v3.2"/><path d="M14.7 17.6a1.5 1.5 0 0 1 3 0v.9"/><path d="M17.7 18.1a1.5 1.5 0 0 1 3 0v1.6a4 4 0 0 1-1.4 3l-1 .8"/>',
+  listwin: '<rect x="2.5" y="4" width="8" height="16" rx="1.8"/><line x1="2.5" y1="7.5" x2="10.5" y2="7.5"/><line x1="14" y1="7" x2="21.5" y2="7"/><line x1="14" y1="12" x2="21.5" y2="12"/><line x1="14" y1="17" x2="21.5" y2="17"/>',
+  winplus: '<rect x="2.5" y="9.5" width="19" height="11.5" rx="2"/><line x1="2.5" y1="13.5" x2="21.5" y2="13.5"/><line x1="12" y1="1.5" x2="12" y2="7.5"/><line x1="9" y1="4.5" x2="15" y2="4.5"/>',
   // Four-way move (the aspect panel's Move handle). A drawn icon, not the
   // "✥" character: that glyph is whatever the device's font makes of it, and
   // on the owner's phone it came out a blunt cross with no arrowheads

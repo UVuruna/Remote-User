@@ -72,6 +72,20 @@
   margin-left: 30px;
 }
 
+/* THE NEW SOURCE'S APP HEADING (owner 2026-08-09, task 184). The list of
+   things that can be OPENED is grouped by app, and each group's rows are
+   indented under its heading with `.lc-kid` — the same 30px column a tab takes
+   under its window, and for the same reason his ruling of task 168 gives: a
+   child does not belong to its parent's kin group, so a minimal indent is the
+   thing that says whose list this is. The heading is a `.lay-sub` (one type
+   scale for every caption on this page) and only claims the space above it. */
+.lc-app {
+  margin-top: 10px;
+}
+.lc-app:first-child {
+  margin-top: 0;
+}
+
 /* Unavailable, and it LOOKS it (owner 2026-08-09, task 166): the Create
    button before its cells are filled, and a row that cannot be chosen while
    its own window (or its own tab) already is. Both still answer a tap — with

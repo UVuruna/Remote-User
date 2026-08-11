@@ -236,3 +236,33 @@ Trimming that air plus the footer's height takes the left column from 86 px
 hidden to none — the column no longer scrolls at any size this project ships to.
 Nothing readable got smaller. The two actions are also one kin group in one
 column and take the same width (task 156's rule, ALG-5).
+
+## A THIRD source: New — a window that is not open yet (owner 2026-08-09, task 184)
+
+> "recent imaju svi" <!-- lang-ok: owner quote -->
+
+The source radial now offers **New / List / Tap** (one word each, each with its
+own drawn face in `icons.js` — his ruling that the SVG matters more than the
+word). New asks the PC what it can open (`GET /recents`), draws the answer
+grouped by app with each app's recents indented under its heading, and opens
+the chosen one (`POST /recents/open`). The window that appears becomes a slot
+and everything from there is the ordinary creation flow — nothing new on the
+wire, because `layout_create` already resolves a slot from a handle.
+
+The PC owns every hard part, including the honest per-app limits (Chrome offers
+only New window / Incognito): [Recents](../../server/__about/recents.md).
+
+A grid can be filled this way too — each cell is another thing opened, through
+the same chip the tap source shows.
+
+## And a window he JUST opened is already a slot (owner 2026-08-09, task 185)
+
+He double-clicks an .xlsx through the stream, Excel opens, and the phone asks
+"a layout with it?" — the chip is `client/window-offer.js`, the PC's side is
+`server/layout_popup.py`. His yes lands in `startFromWindow`, which is the only
+thing task 185 adds here: the creation panel he already knows, pre-seeded with
+that window and offering the usual single/grid and portrait/landscape choices.
+There is no second wizard.
+
+Gates: `tests/test_birth_radial.py` (the phone half) and
+`tests/test_layout_birth.py` (the PC half).
