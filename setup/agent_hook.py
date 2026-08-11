@@ -25,8 +25,16 @@ without waiting for an agent.
 The agent's NAME, in order of preference (owner: "ime agenta je ime sesije"):
   1. $CLAUDE_AGENT_NAME  — an explicit name, when the harness sets one
   2. the payload's session/agent name, if the hook host provides one
-  3. the project folder + the session id's first 6 characters, e.g.
-     "Remote User · 3f9c1a" — enough to tell four agents apart at a glance
+  3. the conversation's own TITLE, read from its transcript (task 198,
+     2026-08-10 — "6ffb225" read like a hash to him; a title reads like a
+     person's summary of the work)
+  4. the project folder + the session id's first 6 characters, e.g.
+     "Remote User · 3f9c1a" — enough to tell four agents apart at a glance,
+     and still what he sees whenever a transcript carries no title yet
+
+The notice's TEXT is built the same way: WHAT the agent just said it did,
+read from the last thing it actually wrote (task 198) — see
+`transcript_summary` below.
 """
 
 import json
@@ -43,6 +51,15 @@ USER_DIR = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "RemoteUser"
 DEV_DIR = Path(__file__).resolve().parent.parent / "logs"
 DEFAULT_PORT = 8777
 TIMEOUT_S = 3.0
+
+# A real Claude Code transcript on this PC ran past 80 MB / 9,000 lines
+# (measured 2026-08-11, task 198) — reading it whole on every Stop would make
+# the hook the slowest thing in the turn. 256 KB is generous: on that same
+# 80 MB transcript the last `ai-title` record sat at line 8,944 of 8,956,
+# comfortably inside a much smaller window, and the last assistant reply is
+# by definition the very end of the file.
+TRANSCRIPT_TAIL_BYTES = 256 * 1024
+TEXT_SUMMARY_CHARS = 150
 
 
 def read_token() -> str | None:
@@ -69,6 +86,92 @@ def read_port() -> int:
     return DEFAULT_PORT
 
 
+def _tail_lines(path: Path, tail_bytes: int = TRANSCRIPT_TAIL_BYTES) -> list[str]:
+    """The last COMPLETE lines of a JSONL file, without reading the whole
+    thing. Seeking into the middle of the file can start mid-line — that
+    first fragment is not a complete line and is dropped by whoever parses
+    these (a truncated JSON string never parses), so every line after it is
+    clean."""
+    try:
+        size = path.stat().st_size
+    except OSError:
+        return []
+    try:
+        with path.open("rb") as fh:
+            fh.seek(max(0, size - tail_bytes))
+            data = fh.read()
+    except OSError:
+        return []
+    return data.decode("utf-8", errors="ignore").split("\n")
+
+
+def _transcript_records(payload: dict) -> list[dict]:
+    """The tail of `payload["transcript_path"]`, parsed as JSONL records.
+    Empty (never raises) when the field is absent, the file is gone, or a
+    line fails to parse — a hook must never fail the turn it reports on."""
+    transcript = payload.get("transcript_path")
+    if not transcript:
+        return []
+    path = Path(str(transcript))
+    if not path.is_file():
+        return []
+    records = []
+    for line in _tail_lines(path):
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            obj = json.loads(line)
+        except (json.JSONDecodeError, ValueError):
+            continue
+        if isinstance(obj, dict):
+            records.append(obj)
+    return records
+
+
+def transcript_title(payload: dict) -> str | None:
+    """The conversation's human-readable title (task 198, owner 2026-08-10 —
+    the phone was naming agents by a session-id hash like "6ffb225" and it
+    irritated him).
+
+    Verified against REAL transcripts on this PC before writing this
+    function (FIXED = VERIFIED): there is no top-level `slug` or `summary`
+    field — Claude Code writes the title as its own JSONL record,
+    `{"type": "ai-title", "aiTitle": "..."}`, rewritten every so often as the
+    conversation continues. The LAST such record in the file is therefore
+    the current title; every transcript sampled (30+, across this project's
+    own session history) carried at least one once the conversation had
+    gone a few turns."""
+    title = None
+    for record in _transcript_records(payload):
+        if record.get("type") == "ai-title":
+            value = str(record.get("aiTitle") or "").strip()
+            if value:
+                title = value
+    return title
+
+
+def transcript_summary(payload: dict) -> str | None:
+    """WHAT the agent just said it did — the first line (clamped to
+    `TEXT_SUMMARY_CHARS`) of the LAST assistant message that actually
+    carries text. A `Stop` hook fires right after the agent's own reply, so
+    that reply is what belongs on the phone; a reply that ended in a
+    tool call (an `assistant` record whose content is tool-use blocks only)
+    carries no `text` block and is skipped in favour of the one before it."""
+    for record in reversed(_transcript_records(payload)):
+        if record.get("type") != "assistant":
+            continue
+        content = (record.get("message") or {}).get("content")
+        if not isinstance(content, list):
+            continue
+        for block in content:
+            if isinstance(block, dict) and block.get("type") == "text":
+                text = str(block.get("text") or "").strip()
+                if text:
+                    return text.splitlines()[0][:TEXT_SUMMARY_CHARS]
+    return None
+
+
 def agent_name(payload: dict) -> str:
     explicit = os.environ.get("CLAUDE_AGENT_NAME", "").strip()
     if explicit:
@@ -77,6 +180,9 @@ def agent_name(payload: dict) -> str:
         value = str(payload.get(key) or "").strip()
         if value:
             return value[:60]
+    title = transcript_title(payload)
+    if title:
+        return title[:60]
     project = Path(payload.get("cwd") or os.getcwd()).name
     session = str(payload.get("session_id") or "")[:6]
     return f"{project} · {session}".strip(" ·")[:60]
@@ -218,8 +324,10 @@ def main() -> int:
     asking = "--asking" in sys.argv
     # A Notification hook carries the text Claude Code would have shown him.
     # Passing it through means the phone can say WHAT is being asked instead
-    # of only that something is.
-    text = str(payload.get("message") or "")[:200] if asking else ""
+    # of only that something is. A Stop hook carries no such text — instead
+    # the transcript's own last reply says WHAT the agent just did (task 198).
+    text = (str(payload.get("message") or "")[:200] if asking
+            else (transcript_summary(payload) or ""))
     send(agent_name(payload), "asking" if asking else "waiting", text,
          agent_project(payload))
     return 0   # a hook must never fail the turn it reports on

@@ -118,6 +118,104 @@ def main() -> int:
         {"cwd": r"U:\Coding\UVuruna\Applications\Remote User",
          "session_id": "3f9c1a77-dead-beef"}) == "Remote User · 3f9c1a"
 
+    # --- task 198: name = conversation TITLE, text = last-reply SUMMARY ----
+    # (owner 2026-08-10 — the hash-like fallback "6ffb225" irritated him; he
+    # wants WHO + WHAT). Verified against REAL transcripts on this PC before
+    # writing agent_hook.py: there is no top-level `slug`/`summary` field —
+    # the title lives in `{"type": "ai-title", "aiTitle": "..."}` records,
+    # rewritten as the conversation goes, so the LAST one is current. These
+    # checks drive that extraction against FAKE transcript files, each
+    # proving its own defect.
+    import tempfile
+
+    def _jsonl(*records) -> str:
+        return "\n".join(json.dumps(r) for r in records) + "\n"
+
+    with tempfile.TemporaryDirectory() as tmp:
+        # A: the LAST ai-title wins over an earlier one; a trailing
+        # tool-use-only assistant record is skipped in favour of the real
+        # text reply before it; agent_name prefers the title over the
+        # project·session fallback.
+        transcript_a = Path(tmp) / "a.jsonl"
+        transcript_a.write_text(_jsonl(
+            {"type": "ai-title", "aiTitle": "First guess title"},
+            {"type": "ai-title", "aiTitle": "Ispravka UI dizajna"},
+            {"type": "assistant", "message": {"content": [
+                {"type": "text", "text": "gates green, release published\nmore detail"}]}},
+            {"type": "assistant", "message": {"content": [
+                {"type": "tool_use", "name": "Bash", "input": {}}]}},
+        ), encoding="utf-8")
+        payload_a = {"transcript_path": str(transcript_a)}
+        results["hook: title comes from the LAST ai-title record"] = (
+            agent_hook.transcript_title(payload_a) == "Ispravka UI dizajna")
+        results["hook: a trailing tool-use-only reply is skipped for the summary"] = (
+            agent_hook.transcript_summary(payload_a)
+            == "gates green, release published")
+        results["hook: agent_name prefers the transcript title"] = (
+            agent_hook.agent_name(payload_a) == "Ispravka UI dizajna")
+
+        # B: no ai-title record at all -> the old project·session fallback
+        # still holds, and a summary of nothing is None, not a crash.
+        transcript_b = Path(tmp) / "b.jsonl"
+        transcript_b.write_text(_jsonl(
+            {"type": "assistant", "message": {"content": [
+                {"type": "tool_use", "name": "Bash", "input": {}}]}},
+        ), encoding="utf-8")
+        payload_b = {"transcript_path": str(transcript_b),
+                     "cwd": r"U:\Coding\UVuruna\Applications\Remote User",
+                     "session_id": "3f9c1a77-dead-beef"}
+        results["hook: an absent title falls back to project · session"] = (
+            agent_hook.agent_name(payload_b) == "Remote User · 3f9c1a")
+        results["hook: an absent text summary is None, not a crash"] = (
+            agent_hook.transcript_summary(payload_b) is None)
+
+        # C: a transcript far bigger than the tail window still finds the
+        # title and the summary when both sit near the end — mirrors the
+        # real ~80 MB transcript measured on this PC, where the last
+        # ai-title sat at line 8,944 of 8,956, well inside any sane window.
+        transcript_c = Path(tmp) / "c.jsonl"
+        filler = _jsonl(*[{"type": "user", "message": {"role": "user",
+                           "content": "x" * 500}} for _ in range(1000)])
+        tail = _jsonl(
+            {"type": "ai-title", "aiTitle": "Buried under filler"},
+            {"type": "assistant", "message": {"content": [
+                {"type": "text", "text": "still found near the end"}]}},
+        )
+        transcript_c.write_text(filler + tail, encoding="utf-8")
+        results["hook: the fake transcript really is bigger than one record"] = (
+            transcript_c.stat().st_size > 400_000)
+        payload_c = {"transcript_path": str(transcript_c)}
+        results["hook: title survives a file much larger than the tail window"] = (
+            agent_hook.transcript_title(payload_c) == "Buried under filler")
+        results["hook: summary survives a file much larger than the tail window"] = (
+            agent_hook.transcript_summary(payload_c)
+            == "still found near the end")
+
+        # D: the tail SEEK really excludes the front of the file — proven by
+        # forcing a tiny window and planting a title only in the discarded
+        # part; the default (generous) window still reads a small file whole.
+        transcript_d = Path(tmp) / "d.jsonl"
+        transcript_d.write_text(
+            _jsonl({"type": "ai-title", "aiTitle": "front only"})
+            + ("y" * 5000) + "\n"
+            + _jsonl({"type": "assistant", "message": {"content": [
+                {"type": "text", "text": "tail reply"}]}}),
+            encoding="utf-8")
+        small_tail = agent_hook._tail_lines(transcript_d, tail_bytes=200)
+        results["hook: a small tail window really excludes the front"] = (
+            "front only" not in "\n".join(small_tail))
+        results["hook: the default tail window still reads a small file whole"] = (
+            agent_hook.transcript_title({"transcript_path": str(transcript_d)})
+            == "front only")
+
+        # E: a missing transcript path degrades to None, never an exception —
+        # the hook must never fail the turn it reports on.
+        results["hook: a missing transcript file is handled, not fatal"] = (
+            agent_hook.transcript_title(
+                {"transcript_path": str(Path(tmp) / "missing.jsonl")}) is None
+            and agent_hook.transcript_summary({"transcript_path": ""}) is None
+            and agent_hook.transcript_title({}) is None)
+
     # --- A QUESTION IS NOT AN ENDING (owner 2026-08-09, task 137) ---------
     # Claude Code raises a `Notification` hook when it stops to ASK — a
     # permission, a choice, one of the votes he sees on screen. It is a

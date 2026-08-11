@@ -12,13 +12,51 @@ on this PC, which forwards it to the phone
 
 ## The agent's name
 
-The owner's rule — *"ime agenta je ime sesije u suštini"* — in order:
+The owner's rule — *"ime agenta je ime sesije u suštini"* (lang-ok: owner quote) — in order:
 
 1. `$CLAUDE_AGENT_NAME`, when the harness sets an explicit one;
 2. a name in the hook payload (`agent_name` / `session_name` / `name`);
-3. **`<project folder> · <first 6 of the session id>`**, e.g.
+3. the conversation's own TITLE, read from its transcript (task 198,
+   2026-08-10 — see below);
+4. **`<project folder> · <first 6 of the session id>`**, e.g.
    `Remote User · 3f9c1a` — enough to tell two agents in one repo apart at a
-   glance, which is what he actually reads on a notification line.
+   glance, and still what he sees whenever a transcript carries no title yet.
+
+## The name reads like a person, not a hash (task 198, 2026-08-10)
+
+The owner reported that a notification named the agent by a session-id
+fragment ("6ffb225") and asked whether it could say WHO and WHAT instead. The
+`Stop` payload itself carries no name — but it does carry `transcript_path`,
+and the transcript holds both pieces:
+
+- **WHO** — `transcript_title(payload)` reads the conversation's own title.
+  Verified against REAL transcripts on this PC before writing the function
+  (FIXED = VERIFIED, not assumed): there is no top-level `slug` or `summary`
+  field on any sampled transcript (30+, this project's own session history).
+  The title lives in a record Claude Code writes as the conversation goes,
+  `{"type": "ai-title", "aiTitle": "..."}`, rewritten every so often — the
+  LAST such record in the file is therefore the current title. Falls back to
+  the old `<project> · <session6>` form when the transcript carries none yet
+  (a very young conversation) or is unreadable.
+- **WHAT** — `transcript_summary(payload)` takes the first line (clamped to
+  150 chars) of the LAST assistant message that actually carries a `text`
+  block; an assistant record that ended in a tool call carries no text block
+  and is skipped in favour of the real reply before it. A `Stop` fires right
+  after that reply, so it is what belongs on the phone (e.g. "Ispravka UI
+  dizajna: gates green, release published" instead of "Remote User · 3f9c1a").
+
+**Both read only the TAIL of the file** (`_tail_lines`, `TRANSCRIPT_TAIL_BYTES`
+= 256 KB) — a real transcript on this PC ran past 80 MB / 9,000 lines, and
+reading it whole on every `Stop` would make the hook the slowest thing in the
+turn. Measured on that same 80 MB file: the last `ai-title` record sat at
+line 8,944 of 8,956, comfortably inside the tail window. A seek that lands
+mid-line drops that one partial line automatically (a truncated JSON string
+never parses) — every line after it is clean.
+
+Gate: the transcript-extraction checks in `tests/test_notify.py`, driven
+against fake transcript files (title-wins-by-recency, tool-use-only skip,
+absent-title fallback, a file far bigger than the tail window, and the tail
+seek itself really excluding the front).
 
 ## Installation
 
