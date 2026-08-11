@@ -170,12 +170,24 @@ class SlotDelegate(RowDelegate):
 
 
 class SlotList(QListWidget):
-    """A list that asks for exactly the height of its rows.
+    """A list that asks for exactly the height of its rows — and, since task
+    232, the WIDTH its rows really need too.
 
     THE SPACE & LEGIBILITY LAW, ladder step 1: a hard height on this widget
     made it scroll with four items while ~300 px of the same dialog stood
     empty (the owner's screenshot of 2026-08-05). A content-derived size hint
     takes what it needs and leaves the free space to the command table.
+
+    The WIDTH half of the same law went unpaid until the Controls editor's
+    reflow put two of these side by side in a narrower column (task 232):
+    Qt's default `QListWidget` size hint has no idea `SlotDelegate` draws two
+    right-aligned columns (a slot name plus a button label) — it quoted a
+    generic viewport width, the real content ran past it, and the list grew
+    a silent HORIZONTAL scrollbar (found only because it crashed an unrelated
+    audit check that had never met a scrolling QListWidget before). The fix
+    is the same shape as `_fit_set_list`'s width half: ask the delegate for
+    its own widest row via `sizeHintForColumn(0)`, the one column this list
+    has.
     """
 
     def _needed_height(self) -> int:
@@ -183,11 +195,19 @@ class SlotList(QListWidget):
         frame = 2 * self.frameWidth() + 2
         return max(rows + frame, self.fontMetrics().height() * 2 + frame)
 
+    def _needed_width(self) -> int:
+        # CONTENT-DRIVEN, not `super().sizeHint().width()` — that generic Qt
+        # default (a flat 256 px, whatever the rows hold) is BIGGER than most
+        # real ladders here and would inflate the floor right back up, the
+        # same lie `_fit_set_list`'s own comment already names for height.
+        frame = 2 * self.frameWidth() + 2
+        return self.sizeHintForColumn(0) + frame
+
     def sizeHint(self) -> QSize:  # noqa: N802 — Qt override
-        return QSize(super().sizeHint().width(), self._needed_height())
+        return QSize(self._needed_width(), self._needed_height())
 
     def minimumSizeHint(self) -> QSize:  # noqa: N802 — Qt override
-        return QSize(super().minimumSizeHint().width(), self._needed_height())
+        return QSize(self._needed_width(), self._needed_height())
 
 
 class OrderList(QWidget):

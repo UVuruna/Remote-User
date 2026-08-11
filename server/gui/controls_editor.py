@@ -274,7 +274,7 @@ class ControlsEditor(QDialog):
         mode_row.addWidget(self.wheel_mode_combo, 1)
         left.addLayout(mode_row)
 
-        # right: the selected set
+        # middle: the selected set's identity + its command pool
         right = QVBoxLayout()
         form = QGridLayout()
         form.addWidget(QLabel("Name"), 0, 0)
@@ -318,11 +318,16 @@ class ControlsEditor(QDialog):
         bbox.addLayout(table_row)
         right.addWidget(self.buttons_group, 1)  # takes the free height
 
+        # far right: the selected command's own editor + the arrangement box
+        # — task 232's TWO-PLUS-ONE reflow (see the long comment on `arr`
+        # below for why this got its own column rather than sharing the
+        # middle one).
+        far = QVBoxLayout()
         self.detail_group = QGroupBox("The selected command")
         dbox = QVBoxLayout(self.detail_group)
         self.detail = CommandDetail(self.icons, self.builtins)
         dbox.addWidget(self.detail)
-        right.addWidget(self.detail_group)
+        far.addWidget(self.detail_group)
 
         # The caption says only what the box IS (owner 2026-08-06): every
         # position is spelled out in the rows below it, so repeating
@@ -349,30 +354,22 @@ class ControlsEditor(QDialog):
         reset.clicked.connect(self._reset_arrangement)
         reset_row.addWidget(reset)
         acol.addLayout(reset_row)
-        # THE REFLOW, done properly this time (2026-08-07, second independent
-        # grader). Arrangement is a LEFT-column box: everything on the left
-        # answers "which set, and how does it ride" (pick it, make it, order
-        # the wheel, arrange its four buttons) and everything on the right
-        # answers "which commands" (the pool, the selected one).
-        #
-        # The first attempt at this move failed and the failure is worth
-        # keeping: the box went left, all thirteen commands became visible and
-        # the minimum FELL to 799 — and the set list then SCROLLED AND CLIPPED
-        # "Explorer" mid-row, because nothing in this window ever declared how
-        # tall the set list needs to be. Qt quotes a QListWidget's
-        # `minimumSizeHint` at a couple of rows whatever it holds, so the
-        # settle loop never grew the window for it and the reflow simply moved
-        # the starvation from one column to the other.
-        #
-        # `_fit_set_list` now declares the list's real content height (capped,
-        # exactly like `CommandTable.ROWS_SHOWN`), so the window's minimum is
-        # the honest max of the two columns and BOTH fit: fifteen list rows on
-        # the left, all thirteen pool rows on the right, nothing scrolling,
-        # no hole. The 253 px of idle set-list space the grader measured is
-        # what pays for the three pool rows that used to hide behind a
-        # scrollbar — which is what ladder step 2 means.
-        left.addWidget(arr)
+        # THE REFLOW (task 232 — closes the 1662x598 floor debt Round 40
+        # raised; full history in .claude/layout-frame.json). The 2026-08-07
+        # layout put Arrangement in the LEFT column with the set list — two
+        # OrderLists side by side there, each carrying a right-aligned slot
+        # column plus the widest button label, drove the window past 1662
+        # wide. Stacking Arrangement under the pool+detail column instead
+        # fixed the width but pushed the height past 1000 (three boxes one
+        # column deep). The window is now genuinely THREE panes: LEFT
+        # ("which set" — list, Wheel mode), MIDDLE ("which commands" — the
+        # set's identity form + pool table), FAR RIGHT ("the one command,
+        # and how its four ride" — detail form + Arrangement). Each column
+        # owns fewer stacked boxes, so the window's height is the TALLEST
+        # column, not the sum of all of them.
+        far.addWidget(arr)
         root.addLayout(left, 0)
+        root.addLayout(right, 1)
 
         actions = QHBoxLayout()
         open_json = QPushButton("Open the file")
@@ -386,8 +383,8 @@ class ControlsEditor(QDialog):
         cancel.clicked.connect(self.reject)
         actions.addWidget(save)
         actions.addWidget(cancel)
-        right.addLayout(actions)
-        root.addLayout(right, 1)
+        far.addLayout(actions)
+        root.addLayout(far, 1)
 
         self._reload_list()          # fills the widest real content first…
         self.setMinimumSize(self._computed_minimum())   # …then measure it
@@ -409,6 +406,7 @@ class ControlsEditor(QDialog):
             return
         self._settled = True
         self._fit_set_list()
+        self.detail.fit_kind_width()  # task 232 — real font, real column
         # gui/sizing.py — one settle for every window. The loop that used to
         # live here trusted `minimumSizeHint`, and this dialog's wrapping
         # captions made it quote 59 px less than the dialog needs.
@@ -481,22 +479,44 @@ class ControlsEditor(QDialog):
         # be weighed here against the field column's own, much bigger, need.
         record = metrics.horizontalAdvance("Record") + 44
         checkbox = metrics.horizontalAdvance(self.enabled_check.text()) + 60
-        width = max(side + caption + field + record, side + checkbox) + 72
+        # MIDDLE (identity form + pool table) and FAR RIGHT (detail form +
+        # Arrangement) are two separate columns since task 232, but this is
+        # still a FLOOR — `settle_minimum` grows it to whatever Qt's own
+        # `minimumSizeHint` reports once the real widgets are laid out, and
+        # never SHRINKS a floor that overshoots. A first attempt at this
+        # estimate charged the far column a SECOND `checkbox` — the
+        # wheel-cap SENTENCE ("Shown in the wheel by default…"), which lives
+        # in the MIDDLE column, not the far one — and overshot to 1323 where
+        # Qt's own measured minimum was 1003: a floor that never shrinks is
+        # exactly as wrong as a floor that clips. The far column's honest
+        # extra charge is its OWN detail-form caption + one field + the
+        # Record button, same shape as the middle column's but never wider
+        # than the pool table's own widest row (`field` already covers the
+        # widest single command in the file, and the detail form shows only
+        # ONE command at a time).
+        width = max(side + (caption + field + record) + (caption + record),
+                    side + checkbox) + 72
 
+        # Three columns since task 232 (see the long comment on `arr` above):
+        # LEFT (set list), MIDDLE (identity form + pool table), FAR RIGHT
+        # (selected-command form + Arrangement + the Save/Cancel row). The
+        # window's height floor is the TALLEST of the three, not their sum —
+        # that is the whole point of the reflow.
         rows = metrics.height() + 12
         left = (rows * 8                      # eight set rows before the
                                               # settle takes over from
                                               # _fit_set_list's real count
-                + rows * 7                    # arrangement: caption + 4 slots
-                                              # + the ↑↓ row + the Default row
                 + rows * 2)                   # the caption and the button row
-        right = (rows * 6                     # six pool rows before the settle
-                 + rows * 5                   # the detail form's FULLEST state
+        middle = (rows * 6                    # six pool rows before the settle
+                  + rows * 2 + rows * 2)      # the identity form + group titles
+        far = (rows * 5                       # the detail form's FULLEST state
                                               # (Text kind: Does, Text, Enter,
                                               # Name, Icon — one row more than
                                               # the chord state, build round R6)
-                 + rows * 4)                  # header, group titles, actions
-        return QSize(width, max(left, right) + 190)  # frames, margins, buttons
+               # arrangement: caption + 4 slots + the ↑↓ row + the Default row
+               + rows * 7
+               + rows * 3)                    # group titles + the actions row
+        return QSize(width, max(left, middle, far) + 190)  # frames, margins, buttons
 
     # -- data helpers --------------------------------------------------------
 
@@ -662,6 +682,19 @@ class ControlsEditor(QDialog):
         rows = min(self.set_list.count(), self.ROWS_SHOWN)
         frame = 2 * self.set_list.frameWidth()
         self.set_list.setMinimumWidth(self.set_list.sizeHintForColumn(0) + frame + 12)
+        # "Wheel mode" rides the same stretch-0 left column (task 181, then
+        # task 232's own audit hit it again): a QComboBox's `sizeHint` is
+        # capped by the theme's own QSS floor, not by its widest ITEM, and a
+        # stretch-0 column is never handed more than its own declared need —
+        # growing the WINDOW'S floor around `mode_w` (below, in
+        # `_computed_minimum`) does not by itself widen a combo that never
+        # asked for the room. `setMinimumWidth`, like the set list two lines
+        # up, is what actually asks.
+        metrics = QFontMetrics(self.wheel_mode_combo.font())
+        widest_item = max((metrics.horizontalAdvance(
+            self.wheel_mode_combo.itemText(i))
+            for i in range(self.wheel_mode_combo.count())), default=0)
+        self.wheel_mode_combo.setMinimumWidth(widest_item + 60)
         if rows:
             self.set_list.setMinimumHeight(
                 sum(self.set_list.sizeHintForRow(i) for i in range(rows)) + frame + 2)

@@ -205,6 +205,63 @@ hard size), and every editor field owns a full-width row — the two failures th
 law names (a list scrolling beside empty space, a shortcut rendered "ift+tab")
 cannot recur here. Proof: [tests/test_layout_audit_qt.py](../../../tests/___tests.md).
 
+### THE SECOND REFLOW — task 232, the window outgrows the 1280 floor (2026-08-11)
+
+The window kept growing (the shipped file's own pool sizes are what drive its
+minimum) and outran the project's 1280-wide layout floor: declared minimum
+1662×598, and `.claude/layout-frame.json` was raised to 1700 for this window
+alone at Round 40. Task 232 closes that debt by finishing the move the first
+reflow above only half-made — the Arrangement box had gone into the LEFT
+column with the set list, and that is exactly what cost the width: two
+`OrderList`s side by side, each carrying `SlotDelegate`'s own right-aligned
+slot column plus the widest button label in the file, is close to the whole
+window's content width on its own, and cramming that into the narrower left
+column (already holding the set list and the Wheel-mode combo) was the real
+driver.
+
+**The window is now THREE columns, not two** — the two-plus-one shape THE
+SPACE & LEGIBILITY LAW's reflow step calls for once a two-column split still
+overflows: **LEFT** "which set, and how does it ride" (set list, Wheel mode)
+· **MIDDLE** "which commands" (the set's identity form + its command pool) ·
+**FAR RIGHT** "the one selected command, and how its four ride" (the detail
+form + Arrangement, stacked — the two `OrderList`s stay side by side inside
+this column, since it no longer shares width with the pool table). A first
+attempt stacked Arrangement UNDER the pool+detail column instead of giving it
+its own — that fixed the WIDTH (881×941) but pushed the HEIGHT to 920×1099,
+still missing the 1280×1000 frame: three boxes one column deep is the same
+"reflow the column, not the row" mistake the law warns about, just moved to
+the other axis.
+
+Splitting the columns exposed two widgets that had never had to declare their
+OWN minimum width, because they used to sit in a column wide enough anyway:
+
+- **`SlotList`** (the `OrderList`'s inner `QListWidget`, in
+  [Controls Order](controls_order.md)) now measures its widest row via
+  `sizeHintForColumn(0)` — the same pattern `_fit_set_list` already used for
+  the set list — instead of Qt's generic `QListWidget` default (a flat 256 px
+  regardless of content, which is BIGGER than most real ladders here and was
+  making the far column wider than it needed to be).
+- **`CommandTable`** gained a `_fit_width()` beside its existing `_fit_rows()`
+  (height): its "Name on the button" column is `Stretch` mode, which never by
+  itself forces a horizontal scrollbar — it just keeps shrinking — so a table
+  with no declared width floor can be squeezed by a narrower column straight
+  into a silent scroll. `_fit_width` sums the three `ResizeToContents`
+  columns' own real widths plus a legible floor for the stretch column.
+- **`CommandDetail.kind`** (the "Does" combo — its widest item is a
+  `"Built-in: … (…)"` entry) now declares its own `setMinimumWidth` from a new
+  `fit_kind_width()`, called from `ControlsEditor.showEvent` — AFTER the
+  theme's real font is polished, the exact lesson `gui/sizing.py` already
+  names for the window as a whole, paid here for the first time by a single
+  combo box measured in `__init__` against the pre-theme default font.
+
+**Result:** declared minimum **1178×750** (down from 1662×598 — narrower AND
+shorter, since three shallow columns need less height than two taller ones).
+`.claude/layout-frame.json` `floor_width` restored **1700 → 1280**; `floor_
+height` untouched at 1000. Audited by `tests/test_layout_audit_qt.py` at
+minimum and +50%, both palettes, PASS. Proof and shots:
+[.claude/layout-proof.md](../../../.claude/layout-proof.md) → "task 232 — the
+ControlsEditor reflow".
+
 ## Connections
 
 ### Uses

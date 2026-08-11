@@ -435,6 +435,20 @@ class CommandDetail(QWidget):
         self._shortcut_row = (self._shortcut_caption, self.chord, self.record)
         self._text_row = (self._text_caption, self.text, self.enter_check)
 
+    def fit_kind_width(self) -> None:
+        """DECLARED, not left to Qt's default sizeHint (task 232 — the Kind
+        combo sat in a column shared with the pool table before the Controls
+        editor's three-pane reflow gave it a column of its own, and a combo
+        no longer sharing that width must ask for its own). Called from the
+        DIALOG's `showEvent`, after the theme's real font is polished —
+        `self.kind.font()` in `__init__` still reads the pre-theme default,
+        which under-measured this by 19 px and the audit caught it clipped.
+        """
+        metrics = QFontMetrics(self.kind.font())
+        self.kind.setMinimumWidth(max(
+            (metrics.horizontalAdvance(self.kind.itemText(i))
+             for i in range(self.kind.count())), default=0) + 50)
+
     # -- state ---------------------------------------------------------------
 
     def show_button(self, btn: dict | None, editable: bool) -> None:
@@ -646,6 +660,7 @@ class CommandTable(QTableWidget):
         self.resizeRowsToContents()
         self.blockSignals(False)
         self._fit_rows()
+        self._fit_width()
 
     # ROWS_SHOWN is where the law's ladder stops for this table (owner's
     # SPACE & LEGIBILITY LAW, rules/GUI.md: free space -> reflow -> raised
@@ -673,6 +688,31 @@ class CommandTable(QTableWidget):
         height = self.horizontalHeader().height() + 2 * self.frameWidth()
         height += sum(self.rowHeight(r) for r in range(rows))
         self.setMinimumHeight(height)
+
+    # The MINIMUM WIDTH FLOOR of the whole table (task 232, found by the
+    # runtime audit after the three-column reflow). Columns 0/2/3 are
+    # ResizeToContents and column 1 ("Name on the button") is Stretch — Qt's
+    # Stretch mode never triggers a horizontal scrollbar on its own, it just
+    # keeps shrinking, so a table with NO declared minimum width can be
+    # squeezed arbitrarily thin by a layout that has less to give it. That
+    # is exactly what task 232's reflow did: narrowing the middle column
+    # squeezed columns 0/2/3 down to their own floor and the stretch column
+    # past legibility, and nothing here ever told the window's settle loop
+    # that the table needed more — `minimumSizeHint` on a QTableWidget does
+    # not measure its columns' real content either. The floor is the three
+    # ResizeToContents columns' own widths (real, from `sizeHintForColumn`,
+    # like `_fit_set_list` does for the set list) plus a legible floor for
+    # the stretch column — never a guess, and never zero.
+    NAME_COLUMN_FLOOR = 160
+
+    def _fit_width(self) -> None:
+        if not self.rowCount():
+            return
+        fixed = sum(self.sizeHintForColumn(c) for c in (0, 2, 3))
+        width = fixed + self.NAME_COLUMN_FLOOR + 2 * self.frameWidth()
+        if self.verticalScrollBar().isVisible() or self.rowCount() > self.ROWS_SHOWN:
+            width += self.verticalScrollBar().sizeHint().width()
+        self.setMinimumWidth(width)
 
     def checked_rows(self) -> list[int]:
         return [r for r in range(self.rowCount())
