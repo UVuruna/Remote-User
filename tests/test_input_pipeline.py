@@ -595,19 +595,20 @@ def main():
         # under a full-screen overlay with no way out — and it left one standing
         # over every later check in this file, which is what killed 10e4's tap
         # on the Scroll button downstream.
-        # THE LAST VERSION of the grammar (task 186, superseding 158's
-        # two-option S/SE shape — the 221 lesson): pressing L2 DOWN opens the
-        # CENTERED birth radial with the full source set (New / List / Tap),
-        # each drawn AND labelled; a quick release pointing at nothing is the
-        # TAP (arms tap-pick, today's act); a long release at nothing only
-        # closes. The radial must never linger over later checks.
+        # THE LAST VERSION of the grammar (task 186 superseded 158's
+        # two-option S/SE shape — the 221 lesson — and task 228 grew the ring
+        # to FOUR: New / List / Tap / Recent): pressing L2 DOWN opens the
+        # CENTERED birth radial with the full source set, each drawn AND
+        # labelled; a quick release pointing at nothing is the TAP (arms
+        # tap-pick, today's act); a long release at nothing only closes. The
+        # radial must never linger over later checks.
         results["pad: L2 -> Layout (+)"] = page.evaluate("""() => {
             closeLayoutPanel();
             closeMiniRadial();
             __padButton('l2', true);
             const items = [...document.querySelectorAll('#mini-radial .mini-item')];
             const opened = !document.getElementById('mini-radial').hidden &&
-                           items.length === 3 &&
+                           items.length === 4 &&
                            items.every((el) => el.querySelector('svg') &&
                                                el.querySelector('.lbl').textContent.trim());
             __padButton('l2', false);   // quick release at nothing = the tap

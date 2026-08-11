@@ -361,13 +361,13 @@ def _checks(page, label, out):
       const b = btn.getBoundingClientRect();
       openSourceChooser();
       const items = [...document.querySelectorAll('#mini-radial .mini-item')];
-      if (items.length !== 3) {
+      if (items.length !== 4) {
         closeMiniRadial();
         return ['the Layout button offered ' + items.length + ' sources, not ' +
-                'the three of task 186 (New / List / Tap)'];
+                'the four of tasks 186+228 (New / List / Tap / Recent)'];
       }
       const words = items.map((el) => el.querySelector('.lbl').textContent.trim());
-      for (const want of ['New', 'List', 'Tap']) {
+      for (const want of ['New', 'List', 'Tap', 'Recent']) {
         if (words.indexOf(want) < 0) bad.push('no "' + want + '" option: ' + words);
       }
       const c = items.map((el) => {
