@@ -717,7 +717,7 @@ function openMemberPanel(index) {
       const eject = document.createElement("button");
       eject.type = "button";
       eject.className = "lay-ratio lay-eject";
-      eject.innerHTML = svg("newwin");
+      eject.innerHTML = svg("ejectwin");
       eject.setAttribute("aria-label", "Move to its own layout");
       keepFocus(eject, () => {
         closeLayoutPanel();

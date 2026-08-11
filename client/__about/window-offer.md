@@ -68,3 +68,12 @@ nothing else.
    `flex: 1 1 0`, so they are equal by construction rather than by a hardcoded
    number that goes stale the day a label is reworded. Measured after the fix:
    180 px each at 412x915, 211 px each at 915x412.
+4. **`flex: 1 1 0` + `min-width: max-content` was still content-dependent**
+   (grader flag b, task 233): it equalised width only while both labels' own
+   min-content sizes were CLOSE — the `layout_new` variant's wording ("Make a
+   layout" / "No") has one two-character label, and the flex algorithm handed
+   it a floor far smaller than its sibling's, measuring 115 px vs 55 px — a
+   different pair of unequal numbers from the same root cause. The buttons are
+   now wrapped in `#window-offer-actions`, a CSS `grid-template-columns: 1fr
+   1fr` — width by construction, independent of either label's length, so no
+   future wording of either variant can land unequal again.

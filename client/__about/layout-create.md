@@ -76,6 +76,13 @@ vocabulary, so the phone never has two competing card styles.
 
 ## Design Decisions
 
+- **A Recent row's trailing fact no longer starves its name** (grader flag c,
+  task 233): `.lc-note` (shared with every other row's trailing fact) had no
+  width cap, and the Recent-history row's note can be a full relative time —
+  unbounded, it took whatever room its own text needed and left the NAME to
+  shrink first, the thing he actually reads on that row. `recentHistoryRow`
+  now tags it `lc-recent-note` too, a narrower selector (`client/layout-create.css`)
+  that caps and ellipses the note itself instead.
 - **Two sources, one slot shape.** A window picked from the list and a window
   tapped on the stream reach the panel as the same object. Everything after
   the pick is written once.

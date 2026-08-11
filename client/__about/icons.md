@@ -45,6 +45,7 @@ Every entry obeys it, and a new one must too:
 | Claude | `claude` `usage` `model` `thinking` `cmode` `compact` `newchat` `rewind` |
 | App faces | `vscode` `chrome` `explorer` |
 | System / panels | `settings` `monitor` `monitor2` `gauge` `globe` `list` `aspect` `move` |
+| Layout birth (task 233) | `addwin` (grow by one member) `splitwin` (a grid splits into solos) `ejectwin` (one member leaves into its own layout) |
 
 ## Connections
 
@@ -67,6 +68,15 @@ Every entry obeys it, and a new one must too:
   and the desktop set list said "some app set" instead of naming the app.
   Drawn in the same stroke language as everything else — recognisable at
   24 px, never a bitmap logo. `claude` (the asterisk) was already there.
+
+## One drawing per act (grader flag a, task 233)
+
+`layout-settings.md`'s "Add a window" / "Split into windows" rows and
+`layouts.md`'s member-chooser eject button all drew the same `newwin` icon —
+three different acts on a layout reading as one picture. `addwin` (a window
+gaining a member, `+` inside), `splitwin` (one window pulling apart into two)
+and `ejectwin` (an arrow leaving a frame) give each its own face, at the same
+size as every sibling row.
 
 ## The two Hide modes (owner 2026-08-09, task 159)
 

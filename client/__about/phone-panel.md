@@ -35,16 +35,17 @@ the same round — a switch with two doors is two states to keep in step.
    panels.js). Neither changes a default: each starts on the shape that
    orientation renders TODAY, and ticking writes the explicit choice that
    outranks it.
-4. **Notification channels** (task 226, owner ballot verdict) — three on/off
-   rows, one per carrier `notify.js` already read and never had a door to
-   write: banner, speak, tone. Each row is `notifyPrefs()`'s own current
-   value, and ticking one calls `saveNotifyPrefs()` with the merged object and
-   re-renders the card so the tick lights correctly. The banner row's own
-   label states the last-resort rule (`notify.js` → `effectiveNotifyPrefs()`,
-   documented in full in [Notify](notify.md)): muting all three still leaves
-   the banner on, so the label reads "last resort — stays on if you mute the
-   rest" rather than leaving him to discover that by muting everything and
-   still getting a notification.
+4. **Notification channels** (task 226, owner ballot verdict; label wording
+   corrected under grader flag d, task 233) — three on/off rows, one per
+   carrier `notify.js` already read and never had a door to write: banner,
+   speak, tone. Each row is `notifyPrefs()`'s own current value, and ticking
+   one calls `saveNotifyPrefs()` with the merged object and re-renders the
+   card so the tick lights correctly. The last-resort rule (`notify.js` →
+   `effectiveNotifyPrefs()`, documented in full in [Notify](notify.md): muting
+   all three still leaves the banner on) used to be stated INSIDE the banner
+   row's own label, which wrapped 5-6 lines in this card's narrow column. It
+   now sits ONCE, as a `.sets-sub` note above all three rows, and each row's
+   own label is a short name — "Notification banner" — never a sentence.
 5. A **pointer** to the dictation card for the listening beeps and the
    language.
 

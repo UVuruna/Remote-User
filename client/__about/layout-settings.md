@@ -82,6 +82,11 @@ a layout built portrait had to be DELETED and made again to become landscape.
 
 ## Design Decisions
 
+- **"Add a window" and "Split into windows" each draw their own icon**
+  (grader flag a, task 233): both used to wear `newwin`, the same face the
+  member chooser's eject button drew too — three acts, one picture. Now
+  `addwin` / `splitwin` (this file) and `ejectwin` ([Layouts](layouts.md)),
+  same size as every sibling `menuRow`.
 - **Two kinds of control, and the difference is deliberate.** Rename, Aspect
   ratio and Take one window out are DOORS — they open the panel that owns that
   act, with its own Apply. Orientation and Arrangement are the act ITSELF: one

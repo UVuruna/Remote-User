@@ -107,7 +107,7 @@ function openLayoutSettings(index) {
             () => openMemberPanel(index));
     // SPLIT a grid into as many solo layouts as it has members (task 197a) —
     // never offered on a solo, which has nothing to split.
-    menuRow("newwin", "Split into windows", `${members} separate layouts`,
+    menuRow("splitwin", "Split into windows", `${members} separate layouts`,
             () => sendSplit(index));
   }
   // ADD a window — solo→2, 2→3, 3→4 (task 195, owner: "if there is room ...
@@ -115,7 +115,7 @@ function openLayoutSettings(index) {
   // panel cannot keep (the same rule that hides Take one window out on a
   // solo), so it is simply absent once the layout is already full.
   if (members < 4) {
-    menuRow("newwin", "Add a window", null, () => openAddMemberPanel(index));
+    menuRow("addwin", "Add a window", null, () => openAddMemberPanel(index));
   }
 
   // ORIENTATION — the half of this task the owner could not do at all before

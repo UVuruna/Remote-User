@@ -54,19 +54,25 @@
   overflow-wrap: anywhere;
 }
 
-/* THE TWO BUTTONS ARE KIN AND SHARE A WIDTH (ALG-5, grader 2026-08-11): they
-   measured 117 px and 137 px side by side, so the control's size depended on
-   the length of its own text — the exact thing that rule forbids. `flex: 1 1 0`
-   gives both the same basis and the same growth, which is equality by
-   construction rather than a hardcoded number that goes stale the day a label
-   is reworded; `min-width: max-content` is what keeps that equality from ever
-   costing a word (THE SPACE & LEGIBILITY LAW — they overflow onto their own
-   row before anything is cut, which is what `flex-wrap` above is for).
-   A button also states its own `font`: a <button> does not inherit the page's,
-   which is why these came out in Arial while the chip's text did not. */
+/* THE TWO BUTTONS ARE KIN AND SHARE A WIDTH (ALG-5, grader 2026-08-11, tightened
+   task 233): the flex-basis-0 + min-width:max-content pair equalised width only
+   while both labels' MIN-CONTENT sizes were close ("Show in layout" / "Leave on
+   desktop", 117/137 → equal). The `layout_new` wording ("Make a layout" / "No")
+   exposed the real flaw: a two-character label's min-content floor is tiny, so
+   the flex algorithm handed it far less of the row than its long sibling —
+   measured 115 px vs 55 px, still visibly unequal, just a different pair of
+   numbers. `#window-offer-actions` below is a CSS GRID of two equal columns:
+   width by construction, independent of either label's length, which is the
+   only rule that holds for every wording the chip is ever given. */
+#window-offer-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  flex: 1 1 100%;
+}
+
 #window-offer button {
-  flex: 1 1 0;
-  min-width: max-content;
+  min-width: 0;
   padding: 8px 12px;
   min-height: 40px;          /* a real touch target, like every other control */
   border-radius: 10px;

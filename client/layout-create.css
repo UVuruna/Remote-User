@@ -126,6 +126,22 @@
   opacity: 0.45;
 }
 
+/* THE RECENT ROW'S TRAILING FACT GIVES THE NAME BACK ITS ROOM (task 233,
+   grader flag c). `.lc-note` (client/layouts.css) is `flex: none` with no
+   width cap — right for a short fixed word like "minimized", wrong for the
+   Recent-history row, whose note can be a full relative time ("used 5 days
+   ago"): unbounded, it took as much of the row as its own text needed and
+   left the name — the thing he actually reads here — to shrink first. This
+   narrower selector wins on specificity alone (two classes beat one) and
+   caps + ellipses the NOTE instead, so a long fact abbreviates itself rather
+   than crowding the name out — step 1 of the ladder (free space goes to the
+   starving element) applied to the row's OTHER child. */
+.lc-recent-note {
+  max-width: 84px;
+  overflow: hidden;
+  text-overflow: ellipsis; /* layout-law: exempt - task 233: the deliberate fix itself — this note gives its own room back to the name beside it instead of starving it, so THIS text abbreviates on purpose */
+}
+
 /* `.lc-note` — a short fact kept ON the row ("minimized", which is why that
    window shows no tabs) — is styled in client/layouts.css beside `.lay-note`,
    the same thing on a settings row. It moved there on 2026-08-09 (task 175)

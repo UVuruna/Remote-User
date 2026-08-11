@@ -356,7 +356,12 @@ function recentHistoryRow(e) {
   main.appendChild(name);
   if (e.project) {
     const note = document.createElement("small");
-    note.className = "lc-note";
+    // Task 233 (grader flag c): `.lc-recent-note` caps the trailing fact's
+    // own width and ellipses IT instead of letting an unbounded note (e.g.
+    // "used 5 days ago") eat the room a real project/window name needs —
+    // `.lay-item-main span` already shrinks the name first, so a long note
+    // was squeezing the one thing he actually reads off this row.
+    note.className = "lc-note lc-recent-note";
     note.textContent = e.project;
     main.appendChild(note);
   }

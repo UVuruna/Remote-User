@@ -101,6 +101,18 @@ const ICONS = {
   recentwin: '<circle cx="12" cy="12" r="9.5"/><path d="M12 6.5V12l4 2.3"/>',
   listwin: '<rect x="2.5" y="4" width="8" height="16" rx="1.8"/><line x1="2.5" y1="7.5" x2="10.5" y2="7.5"/><line x1="14" y1="7" x2="21.5" y2="7"/><line x1="14" y1="12" x2="21.5" y2="12"/><line x1="14" y1="17" x2="21.5" y2="17"/>',
   winplus: '<rect x="2.5" y="9.5" width="19" height="11.5" rx="2"/><line x1="2.5" y1="13.5" x2="21.5" y2="13.5"/><line x1="12" y1="1.5" x2="12" y2="7.5"/><line x1="9" y1="4.5" x2="15" y2="4.5"/>',
+
+  // ── Task 233 (grader flag a) — "Add a window", "Split into windows" and
+  // the member-chooser's eject button all wore the SAME `newwin` face, three
+  // different acts drawn as one picture. Each gets its own.
+  // addwin: a window with a + INSIDE it (mirrors `winplus`'s + rising OUT —
+  // that one is a window that does not exist yet; this one already exists
+  // and gains a member).
+  addwin: '<rect x="2.5" y="4" width="19" height="16" rx="2"/><line x1="12" y1="9" x2="12" y2="15"/><line x1="9" y1="12" x2="15" y2="12"/>',
+  // splitwin: one window breaking into two, a gap opening down the middle.
+  splitwin: '<rect x="1.5" y="5" width="9.5" height="14" rx="1.8"/><rect x="13" y="5" width="9.5" height="14" rx="1.8"/><polyline points="10 10 10 14"/><polyline points="14 10 14 14"/>',
+  // ejectwin: an arrow leaving a frame — the window pulled out on its own.
+  ejectwin: '<rect x="2" y="8" width="12" height="12" rx="1.8"/><path d="M13 11 21 3"/><polyline points="15.5 3 21 3 21 8.5"/>',
   // Four-way move (the aspect panel's Move handle). A drawn icon, not the
   // "✥" character: that glyph is whatever the device's font makes of it, and
   // on the owner's phone it came out a blunt cross with no arrowheads

@@ -141,8 +141,15 @@
        disease. See window-offer.js. -->
   <div id="window-offer" hidden>
     <span id="window-offer-text"></span>
-    <button id="window-offer-in" type="button">Show in layout</button>
-    <button id="window-offer-out" type="button">Leave on desktop</button>
+    <!-- Task 233 (grader flag b): the pair is wrapped so BOTH answers share
+         a CSS-grid row of two equal columns — width by construction, never
+         by matching each button's own content length, which is what let the
+         layout_new wording ("Make a layout" / "No") come out 115px/55px
+         while the older wording happened to land near-equal at 180/180. -->
+    <div id="window-offer-actions">
+      <button id="window-offer-in" type="button">Show in layout</button>
+      <button id="window-offer-out" type="button">Leave on desktop</button>
+    </div>
   </div>
 
   <!-- Layout creation offer (filled by controls.js from `layout_offer`) -->

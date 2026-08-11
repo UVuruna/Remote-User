@@ -258,6 +258,10 @@ everything here composes and frames WINDOWS on it.
 
 ## Design Decisions
 
+- **The eject button draws `ejectwin`, not `newwin`** (grader flag a, task
+  233): the member chooser's eject act now has its own arrow-leaving-a-frame
+  icon, distinct from `addwin`/`splitwin` in
+  [Layout Settings](layout-settings.md) — see [Icons](icons.md).
 - **The overlay is the FRONT; the work happens behind it** (owner rule, said
   four times). It may fade out only when the layout window is in place and
   alone on screen — or, for Desktop, when every layout member is really

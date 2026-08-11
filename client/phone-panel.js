@@ -103,6 +103,16 @@ function openPhonePanel() {
   // all-off state is answered as banner-only by `effectiveNotifyPrefs()` in
   // notify.js. The banner switch says so in its own label instead of
   // depending on him having read this comment.
+  // Task 233 (grader flag d): the banner row's own label used to carry the
+  // last-resort rule inline and wrapped 5-6 lines in this card's narrow
+  // column. The rule is said ONCE, above the three rows, so no row's label
+  // has to be a sentence — each stays a short name, ~2 lines at most.
+  const notifyNote = document.createElement("p");
+  notifyNote.className = "sets-sub";
+  notifyNote.textContent = "Muting all three still reaches you: the banner "
+    + "is the last resort and stays on until you turn it off yourself.";
+  body.appendChild(notifyNote);
+
   const notify = document.createElement("div");
   notify.className = "sets-shape";
   const np = notifyPrefs();
@@ -112,7 +122,7 @@ function openPhonePanel() {
       saveNotifyPrefs(next);
       openPhonePanel();
     });
-  notify.appendChild(chanRow("banner", "Notification banner (last resort — stays on if you mute the rest)"));
+  notify.appendChild(chanRow("banner", "Notification banner"));
   notify.appendChild(chanRow("speak", "Speak the notice aloud"));
   notify.appendChild(chanRow("tone", "Notification tone"));
   body.appendChild(notify);
