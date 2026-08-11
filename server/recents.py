@@ -27,12 +27,13 @@ promise Chrome history it cannot read:
   window can be opened on) and `{679F85CB-…}` (Quick Access itself, whose
   entries are mostly recent FILES — filtered to folders, since opening a file
   is not opening an Explorer window).
-* **VS Code — a plain read.** `%APPDATA%/Code/User/globalStorage/storage.json`
-  carries `lastKnownMenubarData`, VS Code's own cached File menu, whose
-  "Open Recent" submenu is exactly the list he sees in the jump list. Verified
-  against the real file on this machine (2026-08-11): the entries are
-  `{"id": "openRecentFolder", "label": "U:\\\\…", "uri": {...}}`. It is a
-  CACHE of a menu, which is the honest limit named below.
+* **VS Code — a plain read.** `%APPDATA%/Code/User/globalStorage/state.vscdb`
+  (SQLite) carries `history.recentlyOpenedPathsList`, the LIVE list VS Code
+  itself rewrites on every folder it opens and renders "Open Recent" from —
+  most-recent-first, `folderUri`/`workspace.configPath` entries only.
+  (Task 242 corrected this from `storage.json`'s `lastKnownMenubarData`, a
+  cache of the menu's last PAINT that on this machine was stale enough to
+  miss the project open in front of him.)
 * **Chrome — honestly nothing yet.** Its "recently closed" lives in the
   session files (`Sessions/Session_*`), an undocumented binary command stream
   that changes between versions. Parsing it is deferred, and this module says
@@ -42,9 +43,9 @@ promise Chrome history it cannot read:
 ## The honest limits (named here, not discovered later)
 
 * Chrome recents are NOT read. Two plain entries stand in their place.
-* VS Code's list is a cached MENU. A profile that has never opened its File
-  menu, or a VS Code fork under another folder name, yields nothing — and
-  nothing is what this returns, never a guess.
+* VS Code's list needs `state.vscdb` to exist and be readable. A profile
+  that has never opened a folder, or a VS Code fork under another folder
+  name, yields nothing — and nothing is what this returns, never a guess.
 * Quick Access's own list is mostly recent FILES. Only its folders are
   offered, so it is usually shorter here than in Explorer's own pane.
 * An entry names a PATH, and a path can be gone (a removed drive, a deleted
@@ -65,9 +66,11 @@ import asyncio
 import json
 import logging
 import os
+import sqlite3
 import subprocess
 import time
 from pathlib import Path
+from urllib.parse import unquote, urlparse
 
 from fastapi import Request
 from fastapi.responses import JSONResponse
@@ -148,37 +151,85 @@ def app_exe(app: str) -> str:
     return ""
 
 
-# ═══════════════════════════ THE LISTS ═══════════════════════════
-def vscode_recents() -> list[dict]:
-    """VS Code's own cached File ▸ Open Recent submenu.
+def _uri_to_path(uri: str) -> str:
+    """`file:///u%3A/Coding/…` → `u:\\Coding\\…`. VS Code's own `file://`
+    encoding — a drive letter is always followed by the encoded colon."""
+    raw = unquote(urlparse(uri).path)          # -> "/u:/Coding/…"
+    if len(raw) >= 3 and raw[0] == "/" and raw[2] == ":":
+        raw = raw[1:]                          # -> "u:/Coding/…"
+    return str(Path(raw))
 
-    Read straight out of `storage.json` — no VS Code process is touched and no
-    command is run. Every failure mode (no file, unreadable JSON, a menu shape
-    a future version changed) yields an EMPTY list: the phone then shows the
-    plain "New window" entry alone, which is honest, instead of a broken row."""
-    path = Path(_env("APPDATA")) / "Code/User/globalStorage/storage.json"
+
+def vscode_recents() -> list[dict]:
+    """VS Code's real, LIVE File ▸ Open Recent list.
+
+    Task 242 (owner report, with screenshot): the previous version read
+    `storage.json`'s `lastKnownMenubarData` — a snapshot of the menu taken the
+    last time it happened to be RENDERED, which on this machine (checked
+    2026-08-11) was stale enough to be missing the project open in front of
+    him and full of places he had not touched in months (`M:\\nothing`,
+    `U:\\$`, `V:\\Movies`) — "totalno ludacka mesta" (lang-ok: owner quote).
+    That cache is not what "Open Recent" shows; it is whatever the menu bar
+    happened to hold at its last paint.
+
+    The list VS Code itself opens the menu FROM, and rewrites on every folder
+    it opens, is `state.vscdb` (a plain SQLite file) under the key
+    `history.recentlyOpenedPathsList` — verified against the real file on this
+    machine, same session: entry 0 was the project last opened, entry 4 was
+    THIS project. Only `folderUri` / `workspace.configPath` entries are used
+    (a `fileUri` entry is a single FILE VS Code once opened loosely, never a
+    window "Open Recent" would launch); order is the file's own order, which
+    is already most-recent-first. A path that no longer exists is dropped
+    here — Explorer's own "not there any more" toast still covers the window
+    between this read and the phone's tap, but a gone folder should not even
+    be offered as a choice. Every failure mode (no file, locked, unreadable,
+    a shape a future version changed) yields an EMPTY list, same as before:
+    the phone then shows "New window" alone, honest, instead of a broken
+    row — never a fall back to the stale menu cache, which is exactly the bug
+    reported."""
+    path = Path(_env("APPDATA")) / "Code/User/globalStorage/state.vscdb"
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError) as e:
+        # Read-only: a running VS Code holds this file open in WAL mode, and
+        # this must never block on, or disturb, its writer.
+        con = sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=2)
+    except sqlite3.OperationalError as e:
         logger.info("VS Code recents unavailable: %s", e)
         return []
-    menus = (data.get("lastKnownMenubarData") or {}).get("menus") or {}
-    items = (menus.get("File") or {}).get("items") or []
+    try:
+        row = con.execute(
+            "SELECT value FROM ItemTable WHERE key = 'history.recentlyOpenedPathsList'"
+        ).fetchone()
+    except sqlite3.DatabaseError as e:
+        logger.info("VS Code recents unavailable: %s", e)
+        return []
+    finally:
+        con.close()
+    if not row:
+        return []
+    try:
+        entries = json.loads(row[0]).get("entries") or []
+    except (ValueError, AttributeError) as e:
+        logger.info("VS Code recents unavailable: %s", e)
+        return []
+
     out: list[dict] = []
-    for item in items:
-        # "Open &&Recent" — the ampersands are the menu's accelerator markup.
-        if "recent" not in str(item.get("label", "")).lower():
+    seen: set[str] = set()
+    for entry in entries:
+        uri = entry.get("folderUri") or (entry.get("workspace") or {}).get("configPath")
+        if not uri:
+            continue                            # a fileUri — a loose file, not a window
+        try:
+            target = _uri_to_path(uri)
+        except ValueError:
             continue
-        for sub in (item.get("submenu") or {}).get("items") or []:
-            if not str(sub.get("id", "")).startswith("openRecent"):
-                continue
-            label = str(sub.get("label") or "").replace("&&", "&")
-            if not label:
-                continue
-            out.append({"target": label, "label": Path(label).name or label,
-                        "sub": label})
-            if len(out) >= MAX_PER_APP:
-                return out
+        key = target.lower()
+        if key in seen or not os.path.exists(target):
+            continue
+        seen.add(key)
+        out.append({"target": target, "label": Path(target).name or target,
+                    "sub": target})
+        if len(out) >= MAX_PER_APP:
+            break
     return out
 
 

@@ -231,41 +231,87 @@ def check_the_two_questions_do_not_eat_each_other() -> bool:
     return layout_popup._is_new(conn, NEWWIN)
 
 
-# ═══════════════ TASK 184: the lists are real, and the window is new ═════════
+# ═══════════════ TASK 184/242: the lists are real, and the window is new ═════
+def _write_state_db(appdata: Path, entries: list[dict]) -> Path:
+    """A fixture `state.vscdb` — the SQLite key `history.recentlyOpenedPathsList`
+    holds exactly what the real file on this machine holds (verified
+    2026-08-11): an `entries` array of `folderUri`/`workspace`/`fileUri` rows,
+    most-recent-first."""
+    import sqlite3 as sq
+    path = appdata / "Code/User/globalStorage/state.vscdb"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if path.exists():
+        path.unlink()               # a previous garbage file must not linger
+    con = sq.connect(str(path))
+    try:
+        con.execute("CREATE TABLE ItemTable (key TEXT PRIMARY KEY, value TEXT)")
+        con.execute("INSERT INTO ItemTable VALUES (?, ?)",
+                    ("history.recentlyOpenedPathsList",
+                     json.dumps({"entries": entries})))
+        con.commit()
+    finally:
+        con.close()
+    return path
+
+
 def check_vscode_recents_are_read_from_the_real_key() -> bool:
-    """VS Code's own cached File ▸ Open Recent submenu, in the shape the real
-    file on this machine carries (verified 2026-08-11). A list read from the
-    wrong key is a feature that silently offers nothing."""
+    """VS Code's real, LIVE Open Recent list — `state.vscdb`'s
+    `history.recentlyOpenedPathsList` — NOT the stale menu-paint cache in
+    `storage.json` that task 242 found missing the project open in front of
+    him. The fixture plants BOTH the real menu list and decoy garbage
+    (an indexed `fileUri` and a workspace entry whose folder is gone) — only
+    the real, ordered, existing folder list may survive."""
     with tempfile.TemporaryDirectory() as tmp:
         appdata = Path(tmp)
-        path = appdata / "Code/User/globalStorage/storage.json"
-        path.parent.mkdir(parents=True)
-        path.write_text(json.dumps({"lastKnownMenubarData": {"menus": {"File": {
-            "items": [
-                {"id": "workbench.action.files.openFile", "label": "&&Open File"},
-                {"id": "submenuitem", "label": "Open &&Recent", "submenu": {"items": [
-                    {"id": "workbench.action.reopenClosedEditor", "label": "&&Reopen"},
-                    {"id": "vscode.menubar.separator"},
-                    {"id": "openRecentFolder", "label": "U:\\Coding\\Remote User",
-                     "uri": {"path": "/u:/Coding/Remote User", "scheme": "file"}},
-                    {"id": "openRecentFolder", "label": "M:\\nothing"},
-                ]}},
-            ]}}}}), encoding="utf-8")
+        real_folder = appdata / "real-project"
+        real_folder.mkdir()
+        gone_folder = str(appdata / "gone-workspace-folder")   # never created
+        _write_state_db(appdata, [
+            {"folderUri": "file:///" + str(real_folder).replace("\\", "/").replace(":", "%3A")},
+            # decoy: a loose FILE, never a window "Open Recent" would launch
+            {"fileUri": "file:///c%3A/Users/vurun/Downloads/readme.md"},
+            # decoy: a workspace whose folder no longer exists
+            {"workspace": {"configPath": "file:///" + gone_folder.replace("\\", "/").replace(":", "%3A")}},
+        ])
         real = recents._env
         recents._env = lambda name: str(appdata) if name == "APPDATA" else real(name)
         try:
             found = recents.vscode_recents()
         finally:
             recents._env = real
-    if len(found) != 2:
-        print(f"  DETAIL {len(found)} recents read, expected 2: {found}")
+    if len(found) != 1:
+        print(f"  DETAIL {len(found)} recents read, expected 1 (decoys must not survive): {found}")
         return False
-    if found[0]["target"] != "U:\\Coding\\Remote User":
+    if found[0]["target"] != str(real_folder):
         print(f"  DETAIL the path is not what VS Code would open: {found[0]}")
         return False
     # The label is the folder's NAME — a row of full paths is unreadable on a
     # phone, and the path still stands under it as the row's note.
-    return found[0]["label"] == "Remote User" and found[0]["sub"].endswith("Remote User")
+    return found[0]["label"] == "real-project" and found[0]["sub"].endswith("real-project")
+
+
+def check_vscode_recents_point_at_the_wrong_key_go_red() -> bool:
+    """Planted-defect proof: pointing the parser at the OLD/decoy key — the
+    indexed-workspace-style `fileUri` entries a lookup by the wrong field
+    would return — must fail this gate. Proves the key really matters and the
+    check above is not vacuously true."""
+    with tempfile.TemporaryDirectory() as tmp:
+        appdata = Path(tmp)
+        real_folder = appdata / "real-project"
+        real_folder.mkdir()
+        _write_state_db(appdata, [
+            {"fileUri": "file:///c%3A/Users/vurun/Downloads/readme.md"},
+        ])
+        real = recents._env
+        recents._env = lambda name: str(appdata) if name == "APPDATA" else real(name)
+        try:
+            found = recents.vscode_recents()
+        finally:
+            recents._env = real
+    # The decoy-only db must yield NOTHING (a fileUri is never a folder to
+    # open) — proving the parser really discriminates by key/shape rather
+    # than accepting whatever the first entry happens to be.
+    return found == []
 
 
 def check_a_missing_or_broken_storage_file_yields_nothing_not_a_guess() -> bool:
@@ -279,15 +325,40 @@ def check_a_missing_or_broken_storage_file_yields_nothing_not_a_guess() -> bool:
         try:
             if recents.vscode_recents():
                 return False
-            path = Path(tmp) / "Code/User/globalStorage/storage.json"
+            path = Path(tmp) / "Code/User/globalStorage/state.vscdb"
             path.parent.mkdir(parents=True)
-            path.write_text("{not json", encoding="utf-8")
+            path.write_text("not a sqlite file", encoding="utf-8")
             if recents.vscode_recents():
                 return False
-            path.write_text('{"lastKnownMenubarData": {}}', encoding="utf-8")
+            _write_state_db(Path(tmp), [])
             return not recents.vscode_recents()
         finally:
             recents._env = real
+
+
+def check_vscode_recents_are_capped_and_ordered() -> bool:
+    """The db's own order is most-recent-first, and it is not re-sorted; a cap
+    exists so a decade of history does not become an unreadable phone list."""
+    with tempfile.TemporaryDirectory() as tmp:
+        appdata = Path(tmp)
+        folders = []
+        for i in range(recents.MAX_PER_APP + 5):
+            f = appdata / f"proj{i}"
+            f.mkdir()
+            folders.append(f)
+        entries = [{"folderUri": "file:///" + str(f).replace("\\", "/").replace(":", "%3A")}
+                  for f in folders]
+        _write_state_db(appdata, entries)
+        real = recents._env
+        recents._env = lambda name: str(appdata) if name == "APPDATA" else real(name)
+        try:
+            found = recents.vscode_recents()
+        finally:
+            recents._env = real
+    if len(found) != recents.MAX_PER_APP:
+        print(f"  DETAIL {len(found)} recents, expected the cap {recents.MAX_PER_APP}")
+        return False
+    return [e["target"] for e in found] == [str(f) for f in folders[:recents.MAX_PER_APP]]
 
 
 def check_chrome_offers_only_what_it_can_really_do() -> bool:
@@ -419,9 +490,13 @@ CHECKS = [
      check_nothing_is_asked_while_the_phone_is_away),
     ("185: it does not blind the layout-adoption question next door",
      check_the_two_questions_do_not_eat_each_other),
-    ("184: VS Code recents come from the real storage.json key",
+    ("242: VS Code recents come from the LIVE state.vscdb list, not the stale menu cache",
      check_vscode_recents_are_read_from_the_real_key),
-    ("184: a missing or broken storage.json yields nothing, never a guess",
+    ("242: a decoy/wrong-key db yields nothing, never chaotic entries",
+     check_vscode_recents_point_at_the_wrong_key_go_red),
+    ("242: VS Code recents are capped and stay in the db's own order",
+     check_vscode_recents_are_capped_and_ordered),
+    ("184: a missing or broken state db yields nothing, never a guess",
      check_a_missing_or_broken_storage_file_yields_nothing_not_a_guess),
     ("184: Chrome offers only what it can really do",
      check_chrome_offers_only_what_it_can_really_do),
