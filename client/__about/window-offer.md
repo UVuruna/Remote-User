@@ -43,3 +43,28 @@ asks whether to open it in the layout or normally on the desktop.
 - Colours come from the shared tokens in `theme.css` only, so the chip wears
   every theme and both fills, and the phone audit measures it like every other
   card.
+
+## What the independent grader corrected (2026-08-11)
+Three defects on this one chip, all of them found by OPENING the picture and
+then measured on the live page — none of them caught by any existing tooth,
+because the round's new surfaces were measured for fit and contrast and for
+nothing else.
+
+1. **It rendered in Times New Roman.** `window-offer.css` set a `font-size`
+   and nothing else, so the family fell back to the UA default while every
+   other surface of this page is on the system stack — and the two buttons came
+   out in Arial beside it, because a `<button>` does not inherit the page's
+   font at all. Both now state the whole `font` shorthand, exactly as
+   `style.css` does everywhere else.
+2. **The primary action never wore its accent.** `#window-offer-in` is
+   specificity (0,1,0) and `#window-offer button` above it is (0,1,1), so the
+   plain chip fill won every cascade and *Show in layout* was byte-identical to
+   *Leave on desktop* in all eight looks. Corrected by writing the accent rule
+   to be more specific (`#window-offer #window-offer-in`), never by
+   `!important`.
+3. **The two buttons were 117 px and 137 px** — a control sized by the length
+   of its own text, which is ALG-5. The title now takes a row of its own
+   (`flex: 1 1 100%`) and the two acts split the row below it with the same
+   `flex: 1 1 0`, so they are equal by construction rather than by a hardcoded
+   number that goes stale the day a label is reworded. Measured after the fix:
+   180 px each at 412x915, 211 px each at 915x412.

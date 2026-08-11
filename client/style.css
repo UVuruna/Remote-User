@@ -451,6 +451,25 @@ body.wheel-open::before {
 #mini-radial .mini-item {
   position: absolute;
   transform: translate(-50%, -50%);
+  /* ── THE FACE IS WIDER THAN A CORNER SQUARE (ALG-6, grader 2026-08-11) ─────
+     A `.ctl` is 58 px with a 16 px radius and a label capped at 54 px, which
+     leaves 2 px of inset — and a 16 px corner geometrically eats 0.3 * 16 =
+     4.8 px. On the D-pad that never showed, because those labels are one short
+     word; these two are "From a list" and "Tap a window", the longest strings
+     any face on this page carries, and they ran rim to rim.
+     THE ANSWER IS ROOM, NOT SMALLER WORDS (the resolution ladder's rung 1 —
+     the screen around these two buttons is empty): the face takes 74 px and
+     spends the extra 16 on padding, so the same 54 px label now sits 10 px
+     clear of every edge. 74 is not a taste — it is the WIDEST face that still
+     opens straight below the Layout (+) button without being pushed sideways
+     by the screen-edge clamp: that corner's centre is 16 + 58/2 = 45 px in,
+     and 74/2 + MINI_EDGE = 45. A wider face would shift the first option off
+     the anchor's axis, which is the geometry the owner chose for the analog
+     stick (chrome.js) and which tests/test_phone_chrome.py holds to 2 px.
+     Height stays `--corner`, so AR is 1.28 and the 16 px radius is still
+     inside ALG-6's 30%-of-the-shorter-side tier. */
+  width: 74px;
+  padding-inline: 10px;
 }
 
 /* --- "Access from anywhere" banner + guided wizard ------------------------ */
@@ -503,8 +522,19 @@ body.region-open #anywhere-banner { display: none; }
   -webkit-tap-highlight-color: transparent;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
+  /* IT SPENDS THE BAND IT STANDS IN (BUG A of THE SPACE & LEGIBILITY LAW,
+     grader 2026-08-11). `inline-flex` with no width is shrink-to-fit, which was
+     harmless while the label was five words — then task 207's downloading
+     sentence arrived and the same pill broke it over FIVE ragged lines at
+     209 px while 203 px of the identical band stood empty. Free space first,
+     reflow second: the banner now takes the band (the same `min(92vw, …)`
+     shape the window chip and the wizard card use), and the sentence sits on
+     one or two lines. */
+  width: min(92vw, 560px);
 }
+#update-banner-text { text-align: left; }
 #update-banner svg { width: 16px; height: 16px; flex: none; }
 #update-banner[hidden] { display: none; }
 body.hidden-controls #update-banner { display: none; }

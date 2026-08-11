@@ -194,10 +194,14 @@ function renderClaudeModelPanel() {
   const list = document.createElement("div");
   list.className = "sets-list";
   const nowRow = claudeNowModel(claudeState);
+  // BY FAMILY, not by the raw id (grader 2026-08-11): settings.json holds
+  // `claude-fable-5[1m]` on the owner's own PC and no row's `value` is ever
+  // that, so the saved mark could never land on any of the five.
+  const savedRow = claudeSavedModel(claudeSaved);
   for (const m of CLAUDE_MODELS) {
     const marks = [];
     if (nowRow && m.value === nowRow) marks.push({ kind: "now", text: "now" });
-    if (claudeSaved && claudeSaved.model === m.value) {
+    if (savedRow && m.value === savedRow) {
       marks.push({ kind: "saved", text: "saved" });
     }
     const row = claudeOptionRow(

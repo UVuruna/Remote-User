@@ -108,6 +108,23 @@ function claudeNowModel(state) {
   return row ? row.value : null;
 }
 
+/** Which model ROW the PC has SAVED as its default, or null.
+ *
+ *  BY FAMILY, EXACTLY LIKE THE LIVE ONE ABOVE (grader 2026-08-11). `saved.model`
+ *  is the literal in his settings.json — `claude-fable-5[1m]` on the owner's
+ *  own PC — and comparing that against this list's `value` field ("fable",
+ *  "opus[1m]", …) matched nothing, ever, so no row was marked saved and the
+ *  chip printed the raw id. `saved.model_family` is the server's normalised
+ *  answer through the same `model_family()` the live path uses; an older
+ *  server that does not send it leaves this null, which is the honest
+ *  "unknown" and never a guess. */
+function claudeSavedModel(saved) {
+  const family = saved && saved.model_family ? String(saved.model_family) : "";
+  if (!family) return null;
+  const row = CLAUDE_MODELS.find((m) => m.family === family);
+  return row ? row.value : null;
+}
+
 // ── THE STARS ARE DRAWN, NEVER TYPED ───────────────────────────────────────
 // A dingbat character is not an icon in this product, and the reason is on the
 // record: the ✥ move handle came out a blunt cross on the owner's own phone
@@ -189,10 +206,16 @@ function claudeModelChips(state, saved) {
   const now = state && state.model ? String(state.model) : "";
   const was = saved && saved.model ? String(saved.model) : "";
   const nowRow = claudeNowModel(state);
+  const wasRow = claudeSavedModel(saved);
   return [
     { key: "saved", kind: "fact", label: "Saved as the default",
-      text: was ? claudeLabelFor(CLAUDE_MODELS, was) : CLAUDE_UNKNOWN,
-      value: was || null },
+      // Same rule as the NOW chip below it: the family is the fact and the
+      // row's label is only how we spell it. A saved id no row claims — an
+      // alias like `default`, or a model this page has never heard of — is
+      // printed exactly as the PC holds it rather than dropped.
+      text: was ? (wasRow ? claudeLabelFor(CLAUDE_MODELS, wasRow) : was)
+        : CLAUDE_UNKNOWN,
+      value: wasRow || was || null },
     { key: "now", kind: "fact", label: "This conversation now",
       // The family is the fact; the row's label is only how we spell it. A
       // family no row claims (a model we have never heard of) is printed as
@@ -232,7 +255,8 @@ if (typeof module !== "undefined" && module.exports) {
   module.exports = {
     CLAUDE_MODELS, CLAUDE_EFFORTS, CLAUDE_MODES, CLAUDE_UNKNOWN,
     CLAUDE_STAR_PATH, CLAUDE_MODEL_NOTE, CLAUDE_EFFORT_NOTE, CLAUDE_MODE_NOTE,
-    claudeModePresses, claudeMode, claudeNowModel, claudeStarsSvg,
+    claudeModePresses, claudeMode, claudeNowModel, claudeSavedModel,
+    claudeStarsSvg,
     claudeChipValue, claudeLabelFor,
     claudeEffortChips, claudeModelChips, claudeModeChips,
   };

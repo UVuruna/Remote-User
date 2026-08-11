@@ -157,6 +157,22 @@ deliberately called **saved** and never *active* — a project or local
 `.claude/settings.json`, `CLAUDE_CODE_EFFORT_LEVEL` / `ANTHROPIC_MODEL`, a
 session-only switch in the picker and a resumed transcript all outrank it.
 
+**Both halves of the frame are normalised through `model_family()`**
+(independent grader, 2026-08-11). The live half always was; the saved half was
+handed to the phone RAW, and the owner's own `settings.json` holds
+`claude-fable-5[1m]` — a full id, which equals none of the five aliases the
+phone's picker offers (`client/claude-state.js` → `CLAUDE_MODELS`). So on HIS
+machine the "saved" mark could never light a row and the chip printed the raw
+id back at him: a card whose only job is to say which model is chosen, unable
+to say which model is chosen. `claude_settings()` now answers
+`{model, model_family, effort}` — the raw id stays because it is a fact and a
+panel may need to print it, and `model_family` is the field anything MATCHING
+must read. A settings file naming something we do not know, or the alias
+`default` (which names no family on purpose — it resolves to whatever the
+account picks), leaves `model_family` OFF the frame entirely rather than
+guessing a near one: the same rule `model_family()` itself obeys, and the
+reason it never answers the closest family.
+
 His report proved that the distinction is not academic: the Thinking panel
 highlighted Medium while his PC was really on Max, because `/model` and
 `/effort` apply to the **running session only** and no file on disk records
@@ -207,3 +223,8 @@ anything:
 [`tests/test_claude_state.py`](../../tests/test_claude_state.py) — fail-closed
 in `build.py` (0ac/6). It drives the real reader over transcripts built like
 his, so a later round cannot quietly go back to a rule that reads nothing.
+Since 2026-08-11 it also drives the SAVED half over the id shape his own file
+carries (`check_a_saved_1m_id_lights_its_family_row`) and reads the page's own
+matching code (`check_the_phone_matches_the_saved_row_by_family`) — a server
+field nothing on the phone reads is a feature that does not exist, which is
+the actions.json lesson of 2026-08-07.

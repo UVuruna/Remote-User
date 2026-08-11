@@ -150,13 +150,26 @@ so an import written before this correction cannot quietly resurrect a second
 table; new code reads `SET_COLORS`. Hue AND lightness still separate the sets
 that share the wheel, unchanged by the correction — the four blues and the
 four warms are pulled apart on both axes, so an eye that cannot tell two hues
-apart still has a second signal. The exact thirteen hexes are not restated
+apart still has a second signal. The exact fourteen hexes are not restated
 here or anywhere else — they live only in `server/config.py` → `SET_COLORS`,
 see [theme.md](../../client/__about/theme.md).
 
 Custom sets are deliberately NOT listed — the owner names his own sets, so the
 phone hands each unnamed one the next colour of the palette that nothing
 already wears (`client/theme.js`). One table, no second one to keep in step.
+
+**A set WE ship must be in that table, though** (independent grader,
+2026-08-11). `Claude Tools` (task 219) shipped without an entry, and the
+fallback above is not "no colour" — it hands an unnamed set the next palette
+colour nothing holds, and when every colour IS held it falls through to the
+first one. The set therefore rendered `rgb(24, 107, 137)`, byte-identical to
+Mouse, and two sets sat on one wheel wearing one identity — in the very look
+whose whole purpose is that a set's colour IS its identity. That fallback is
+right for a set the owner invents and names himself; it is a bug for one we
+ship. `Claude Tools` is now `#4E8A1F`: hue 94, the widest gap the ring had
+left (between Chrome's 50 and Input's 145), at 33% lightness against Input's
+26%, so hue and lightness separate it from the only other green exactly as
+the rule above requires.
 
 `set_colors(theme=None)` is still the ONLY place that decides "which palette
 does a set wear" — but it now returns the same dict regardless of `theme`.

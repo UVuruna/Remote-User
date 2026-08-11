@@ -400,6 +400,21 @@ stands at the top, another that it appears and stands at the bottom.
   middle. `--group-h` (declared in `client/style.css` beside the grid that
   decides it) is what the bar clears, plus the same `--kb` and safe-area insets
   every other bottom-anchored element respects.
+- **And down there it spends the WHOLE band** (independent grader,
+  2026-08-11). The top position reserves the width of a corner button on each
+  side because at the top that is literally what stands beside it — Layout (+)
+  and Hide. At the bottom nothing does: the D-pad groups are BELOW, which is
+  exactly what the `--group-h` above clears. Those two reservations were
+  therefore 164 px of idle band held for buttons in another row, while the bar
+  stayed 248 px wide and gave a 111-character layout name 36 px to live in —
+  eight readable characters, wrapped to two lines and THEN ellipsed. Rung 1 of
+  the resolution ladder: `body.laybar-bottom` drops the reservations
+  (`left`/`right` become plain `--space-m`), `#lay-frame` grows into the band
+  (`flex: 1 1 auto` — at the top it must NOT, or the name would push the arrows
+  out, owner 2026-08-03), and the name takes **one** line plus an ellipsis
+  instead of two clamped ones, so the bar stays exactly one row tall against
+  the D-pad it has to clear. Measured after the fix: 380 px of a 412 px screen
+  with 193 px for the name, 883 px of 915 with 696 px for the name.
 - The Top / Bottom chips **left this card on 2026-08-11** (task 218a). The note
   that used to stand here said it plainly: they sat on the layout list because
   the Sets picker next door was the wrong room too, task 161 was the open

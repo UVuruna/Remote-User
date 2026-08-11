@@ -117,7 +117,8 @@ def node_run(body: str):
     script.write_text(
         f"const M = require({json.dumps(str(MODULE))});\n"
         "const {CLAUDE_MODELS, CLAUDE_EFFORTS, CLAUDE_MODES, CLAUDE_UNKNOWN,\n"
-        "       claudeModePresses, claudeMode, claudeNowModel, claudeStarsSvg,\n"
+        "       claudeModePresses, claudeMode, claudeNowModel,\n"
+        "       claudeSavedModel, claudeStarsSvg,\n"
         "       claudeEffortChips, claudeModelChips, claudeModeChips} = M;\n"
         f"console.log(JSON.stringify((() => {{ {body} }})()));\n",
         encoding="utf-8")
@@ -275,6 +276,51 @@ def check_a_model_family_is_matched_not_guessed() -> None:
         raise AssertionError(
             "an unknown or absent family must mark NOTHING — Default is not a "
             f"catch-all: {got}")
+
+
+def check_the_saved_id_is_matched_by_family_too() -> None:
+    """THE SAVED HALF OF THE SAME RULE (grader 2026-08-11).
+
+    The live half above was matched by family from the day it shipped; the
+    saved half was compared RAW — and the owner's own settings.json holds
+    `claude-fable-5[1m]`, which is none of the five aliases this list offers.
+    On his PC the "saved" mark could therefore never light a row and the chip
+    printed the id back at him, on a card whose only job is to say which model
+    is chosen.
+
+    PLANTED DEFECT: have `claudeSavedModel` read `saved.model` (the raw id)
+    instead of `saved.model_family` — the first branch then answers null for
+    the very file he has.
+
+    The second half is the honest limit, and it is deliberate: an older server
+    sends no `model_family` at all, and a `default` alias names no family on
+    purpose. Both must mark NOTHING and print what the PC actually said,
+    exactly as an unknown live family does above."""
+    got = node_run(
+        "return {rows: ["
+        "  claudeSavedModel({model:'claude-fable-5[1m]', model_family:'fable'}),"
+        "  claudeSavedModel({model:'claude-opus-5[1m]', model_family:'opus'}),"
+        "  claudeSavedModel({model:'claude-sonnet-4-5', model_family:'sonnet'}),"
+        "  claudeSavedModel({model:'default'}),"
+        "  claudeSavedModel({}), claudeSavedModel(null)],"
+        " chip: claudeModelChips(null,"
+        "   {model:'claude-fable-5[1m]', model_family:'fable'})[0],"
+        " legacy: claudeModelChips(null, {model:'claude-fable-5[1m]'})[0]};")
+    if got["rows"][:3] != ["fable", "opus[1m]", "sonnet"]:
+        raise AssertionError(
+            f"a saved family no longer marks its row: {got['rows']}")
+    if any(r is not None for r in got["rows"][3:]):
+        raise AssertionError(
+            "an alias that names no family, and a server that sends none, must "
+            f"mark NOTHING rather than guess a near row: {got['rows']}")
+    if got["chip"]["text"] != "Fable":
+        raise AssertionError(
+            "the SAVED chip must SPELL the family the PC saved, not print the "
+            f"raw id at him: {got['chip']}")
+    if got["legacy"]["text"] != "claude-fable-5[1m]":
+        raise AssertionError(
+            "with no family from the PC the chip must print exactly what the "
+            f"PC does hold — never a blank and never a guess: {got['legacy']}")
 
 
 # ═════ 4. A MEMORY MAY NOT WEAR A FACT'S CLOTHES (task 208, in one line) ════
@@ -643,6 +689,8 @@ CHECKS = [
      check_saved_is_never_read_as_now),
     ("a live model family marks its row, and nothing else does",
      check_a_model_family_is_matched_not_guessed),
+    ("a saved model id marks its row by FAMILY, on his own settings file",
+     check_the_saved_id_is_matched_by_family_too),
     ("this phone's last tap is a memory, and looks like one",
      check_last_sent_is_marked_as_a_memory),
     ("only the live answer lights a Thinking row",

@@ -110,10 +110,26 @@ two directions serve a thumb on a controller later.
   button that opened them, and `miniRadialPoints` is the geometry alone —
   PURE, so its gate drives every corner by argument.
 - **An option is a real `.ctl`.** It is built by `makeButton` from
-  [Controls](controls.md) — the same 58 px face, the same icon size, the same
-  label treatment as the D-pad and the corners. There is no second button
-  implementation to drift from them, which is the rule CLAUDE.md constraint 9
-  exists for.
+  [Controls](controls.md) — the same icon size, the same label treatment as the
+  D-pad and the corners. There is no second button implementation to drift from
+  them, which is the rule CLAUDE.md constraint 9 exists for.
+- **Its face is 74 px wide, not the corners' 58** (independent grader,
+  2026-08-11). A `.ctl` caps its label at 54 px inside a 58 px face, which is a
+  2 px inset under a 16 px radius — and ALG-6 ([GUI Rules](../../../../rules/GUI.md))
+  wants 0.3·r = 4.8 px, because that is what a rounded corner geometrically
+  eats. On the D-pad it never showed: those labels are one short word. These
+  two are "From a list" and "Tap a window", the longest strings any face on
+  this page carries, and they ran rim to rim. The answer is ROOM, not smaller
+  words (the resolution ladder's first rung — the screen around these two
+  buttons is empty): 74 px with 10 px of padding puts the same label 11 px
+  clear of every edge, measured. **74 is not a taste** — it is the widest face
+  that still opens straight below Layout (+) without the screen-edge clamp
+  pushing it sideways: that corner's centre is `16 + 58/2 = 45` px in, and
+  `74/2 + MINI_EDGE = 45`. A wider face would shift the first option off the
+  anchor's axis, which is the geometry the owner chose for the stick and which
+  `tests/test_phone_chrome.py` holds to 2 px. `openMiniRadial` therefore hands
+  `miniRadialPoints` the OPTION's own size (74), not the anchor's — the clamp
+  exists to keep an option on screen and must be told how big one is.
 - **It leans away from the right edge.** Hide sits in the top-RIGHT corner, so
   a fixed south-east would open off the screen; the pair becomes south /
   south-WEST on the right half. The two directions stay distinct and diagonal,

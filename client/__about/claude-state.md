@@ -58,6 +58,18 @@ matches by family and not by string equality. **Default carries no family**:
 it resolves to whatever the account picks, so no row may honestly claim to be
 it, and marking it would be a guess of exactly the kind 208 was about.
 
+**`claudeSavedModel(saved)` is the same rule for the SAVED default**
+(independent grader, 2026-08-11). It was the half nobody had applied it to:
+the panel compared `saved.model` — the literal in his `settings.json`, which
+on his PC is `claude-fable-5[1m]` — against this table's `value` column, so
+the saved mark could never land on any of the five and the chip printed the
+raw id at him. The server now sends `saved.model_family` beside the id
+(`server/agents.py` → `claude_settings`), and this function reduces it to a
+row exactly as `claudeNowModel` reduces the live one. An older server sends no
+family, and `default` names none on purpose; both answer **null**, mark
+nothing, and let the chip print what the PC really holds rather than a
+guess.
+
 **`CLAUDE_EFFORTS`** — `/effort low|medium|high|xhigh|max`. The label is his
 word for it, the value is the argument: "Extra high" is spoken, `xhigh` is
 typed.

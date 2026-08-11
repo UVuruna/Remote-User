@@ -53,6 +53,16 @@ never a frozen number pretending to track a transfer this page cannot see.
   plain looping sweep, the same honest shape the desktop bar falls back to
   when ITS response gives no `Content-Length`
   ([Main Window](../../server/gui/__about/main_window.md)).
+- **It takes the band it stands in** (independent grader, 2026-08-11).
+  `display: inline-flex` with no width is shrink-to-fit, which was harmless
+  while the label was five words — then this task's own downloading sentence
+  arrived and the same pill broke it over FIVE ragged lines inside 209 px
+  while 203 px of the identical band stood empty. That is BUG A of THE SPACE &
+  LEGIBILITY LAW ([GUI Rules](../../../../rules/GUI.md)), created by this
+  round's own text change: free space first, reflow second. `#update-banner`
+  now carries `width: min(92vw, 560px)` — the same shape the window chip and
+  the wizard card use — and the sentence sits on one line (measured: 379 px at
+  412x915, 560 px at 915x412).
 - **The banner stays up rather than auto-hiding on a timer.** A vanishing
   banner mid-download would read exactly like the silent-disappearance bug
   this task exists to end; it is left showing the bar until the page's next

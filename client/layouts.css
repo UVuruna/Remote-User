@@ -133,6 +133,28 @@ body.laybar-bottom #layout-bar {
   top: auto;
   bottom: calc(var(--space-m) + var(--kb) + env(safe-area-inset-bottom, 0px)
                + var(--group-h) + var(--space-s));
+  /* ── AND DOWN HERE IT SPENDS THE WHOLE BAND (grader 2026-08-11) ────────────
+     The `left`/`right` above reserve the width of a corner BUTTON on each
+     side, because at the top that is literally what stands beside the bar:
+     Layout (+) and Hide. At the bottom nothing does — the two D-pad groups are
+     BELOW it, which is exactly what the `--group-h` in the `bottom` calc
+     clears — so those two reservations were 164 px of idle band held for
+     buttons in another row, while the bar itself stayed 248 px and gave a
+     111-character layout name 36 px to live in. Rung 1 of the resolution
+     ladder: the starving element takes the free space first. */
+  left: var(--space-m);
+  right: var(--space-m);
+}
+/* The frame GROWS into that band instead of shrink-to-fitting inside it. At
+   the top it must not (the name would push the arrows out — owner 2026-08-03,
+   and `flex: 0 1 auto` is what holds that); here there is nothing to push. */
+body.laybar-bottom #lay-frame { flex: 1 1 auto; }
+/* ONE LINE, THEN THE ELLIPSIS — never wrap-then-ellipse. Two clamped lines in
+   a 36 px column produced the eight readable characters the grader measured;
+   with the full band the name has room for a real fragment, and a single line
+   keeps the bar exactly one row tall against the D-pad it must clear. */
+body.laybar-bottom #lay-name {
+  -webkit-line-clamp: 1;   /* layout-law: exempt - the bar owns one row of the phone screen and the FULL name is two taps away in the rename card, exactly as the top position's own clamp above */
 }
 
 #layout-panel {

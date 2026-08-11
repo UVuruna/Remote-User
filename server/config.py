@@ -363,8 +363,19 @@ class Settings:
 #     warms (Claude 13, Explorer 24, Attach 36, Chrome 50) are pulled apart in
 #     lightness as well as hue, so a colour-blind eye still has a second
 #     signal.
+#   * A SET THAT IS MISSING HERE IS NOT UNCOLOURED — IT WEARS ANOTHER SET'S
+#     COLOUR (grader 2026-08-11). `client/theme.js -> setColors` hands an
+#     unnamed set the next colour of this palette nothing already holds, and
+#     when every colour IS held it falls through to the first one — so
+#     `Claude Tools` (task 219) rendered rgb(24,107,137), byte-identical to
+#     Mouse, and two sets sat on one wheel wearing one identity. That fallback
+#     is right for a set the owner invents and names himself; a set WE ship
+#     must be in this table. Its hue 94 is the widest gap the ring had left
+#     (between Chrome's 50 and Input's 145) and it is 33% light against
+#     Input's 26%, so hue and lightness separate it from the only green here,
+#     per the rule two lines up.
 #
-# Every combination is swept by tests/test_layout_audit.py — all 13 colours,
+# Every combination is swept by tests/test_layout_audit.py — all 14 colours,
 # BOTH themes, both fills, D-pad and wheel — and the ink is computed from the
 # surface the text really lands on (client/theme.js), never tabled, so the
 # contrast tooth stays green whatever he retunes here later.
@@ -385,6 +396,7 @@ SET_COLORS = {
     "Chrome": "#A58E1D",
     "Explorer": "#DC7028",
     "Claude": "#A3472E",
+    "Claude Tools": "#4E8A1F",
     "Cursor": "#B02971",
 }
 

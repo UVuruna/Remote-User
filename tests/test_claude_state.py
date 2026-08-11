@@ -44,6 +44,7 @@ import agents  # noqa: E402
 import claude_api  # noqa: E402
 
 WEB = PROJECT / "server" / "web.py"
+CLIENT = PROJECT / "client"
 
 DEFECTS = {
     "the newest assistant record wins":
@@ -63,6 +64,11 @@ DEFECTS = {
         "max, first-wins instead of newest-wins)",
     "the reader is really wired to the phone":
         "delete the claude_state branch from web.py",
+    "a saved [1m] id lights its family row":
+        "drop the two lines that compute `family` in agents.claude_settings "
+        "— the raw id alone, which is the shipped behaviour this fixes",
+    "the phone matches the saved row by FAMILY":
+        "restore `claudeSaved.model === m.value` in claude-panels.js",
 }
 
 
@@ -94,6 +100,14 @@ def tool_result() -> dict:
 def mode_record() -> dict:
     """The dedicated record that reads `normal` on every transcript here."""
     return {"type": "mode", "mode": "normal"}
+
+
+# What `Projects` below writes into its fake settings.json, as the frame must
+# carry it. `model_family` rides BESIDE the raw id, never instead of it (see
+# `check_a_saved_1m_id_lights_its_family_row`): the id is the fact on disk and
+# the family is the only field anything may MATCH on.
+SAVED = {"model": "claude-sonnet-4-5", "model_family": "sonnet",
+         "effort": "high"}
 
 
 class Projects:
@@ -194,6 +208,82 @@ def check_the_1m_variant_is_one_family_and_keeps_its_id() -> bool:
     return True
 
 
+def check_a_saved_1m_id_lights_its_family_row() -> bool:
+    """THE SAVED HALF IS NORMALISED TOO (grader 2026-08-11).
+
+    The owner's own settings.json holds `claude-fable-5[1m]` — a full id with a
+    context-window suffix. The LIVE half of this frame has always been reduced
+    to a family, but the saved half was handed to the phone raw, and the phone
+    compares it against the five literals of its own picker ("fable",
+    "opus[1m]", …). A full id equals none of them, so the "saved" mark could
+    never land on any row on HIS machine and the chip printed the id back at
+    him — a panel about which model is chosen that cannot say which is chosen.
+
+    So the check is the owner's own file, not a tidy one: a `[1m]` id must
+    carry `model_family` that the phone's row list can match, the raw id must
+    still be there beside it, and an alias that names no family (`default`)
+    must leave the field OFF rather than guess a near one.
+
+    PLANTED DEFECT (proof this check can fail): dropping the two lines that
+    compute `family` in `agents.claude_settings` — i.e. returning the raw id
+    alone, which is exactly the shipped behaviour this fixes — makes the first
+    branch below fail with `model_family` absent."""
+    with Projects() as pj:
+        for raw, family in (("claude-fable-5[1m]", "fable"),
+                            ("claude-opus-5[1m]", "opus"),
+                            ("sonnet", "sonnet")):
+            agents.CLAUDE_SETTINGS.write_text(
+                json.dumps({"model": raw, "effortLevel": "high"}),
+                encoding="utf-8")
+            saved = agents.claude_state("demo")["saved"]
+            if saved.get("model_family") != family:
+                print(f"    {raw!r} → model_family "
+                      f"{saved.get('model_family')!r}, wanted {family!r}")
+                return False
+            if saved.get("model") != raw:
+                print(f"    the raw id was lost: {saved}")
+                return False
+        # A family we cannot name is answered with SILENCE, never the nearest
+        # one — the same rule `model_family` itself obeys. `default` names no
+        # family on purpose: it resolves to whatever the account picks, so no
+        # row of the phone's list may claim to be it.
+        for raw in ("default", "some-other-model"):
+            agents.CLAUDE_SETTINGS.write_text(
+                json.dumps({"model": raw, "effortLevel": "high"}),
+                encoding="utf-8")
+            saved = agents.claude_state("demo")["saved"]
+            if "model_family" in saved:
+                print(f"    {raw!r} guessed a family: {saved}")
+                return False
+            if saved.get("model") != raw:
+                print(f"    the raw id was lost: {saved}")
+                return False
+    return True
+
+
+def check_the_phone_matches_the_saved_row_by_family() -> bool:
+    """The other half of the same bug, on the page: a field the server sends
+    that nothing reads is a feature that does not exist (the actions.json
+    lesson, 2026-08-07). `client/claude-state.js` must reduce `saved` through
+    its OWN row list and `client/claude-panels.js` must mark the row by that
+    answer — never by `saved.model`, which is the raw id.
+
+    PLANTED DEFECT: restoring `claudeSaved.model === m.value` in
+    claude-panels.js fails the second branch."""
+    state_js = (CLIENT / "claude-state.js").read_text(encoding="utf-8")
+    panels_js = (CLIENT / "claude-panels.js").read_text(encoding="utf-8")
+    if "model_family" not in state_js or "claudeSavedModel" not in state_js:
+        print("    claude-state.js never reduces the saved id to a family")
+        return False
+    if "claudeSavedModel(claudeSaved)" not in panels_js:
+        print("    the Model panel does not ask which row is saved")
+        return False
+    if "claudeSaved.model ===" in panels_js:
+        print("    the Model panel still compares the RAW saved id to a row")
+        return False
+    return True
+
+
 def check_the_mode_is_the_last_record_that_has_it() -> bool:
     """Tool results are `user` records with no permissionMode, and a session
     ends on one far more often than not. "The last user record" would answer
@@ -224,7 +314,7 @@ def check_nothing_readable_answers_nulls() -> bool:
             if any(state[k] is not None for k in ("model", "model_id", "effort", "mode")):
                 print(f"    {folder!r} invented {state}")
                 return False
-            if state["saved"] != {"model": "claude-sonnet-4-5", "effort": "high"}:
+            if state["saved"] != SAVED:
                 print(f"    saved was {state['saved']}")
                 return False
         empty = pj.session("u--Coding-Demo", "s1", [])
@@ -303,14 +393,14 @@ def check_the_reader_is_really_wired_to_the_phone() -> bool:
     focused, desktop, stale = ws.sent
     if focused != {"type": "claude_state", "model": "fable",
                    "model_id": "claude-fable-5", "effort": "high", "mode": "plan",
-                   "saved": {"model": "claude-sonnet-4-5", "effort": "high"}}:
+                   "saved": SAVED}:
         print(f"    focused frame was {focused}")
         return False
     for frame in (desktop, stale):
         if frame["model"] is not None or frame["mode"] is not None:
             print(f"    a layout-less frame claimed {frame}")
             return False
-        if frame["saved"] != {"model": "claude-sonnet-4-5", "effort": "high"}:
+        if frame["saved"] != SAVED:
             return False
     web = WEB.read_text(encoding="utf-8")
     if 'kind == "claude_state"' not in web or "claude_api.send_state" not in web:
@@ -333,6 +423,10 @@ CHECKS = [
      check_the_newest_session_of_the_project_is_read),
     ("the reader is really wired to the phone",
      check_the_reader_is_really_wired_to_the_phone),
+    ("a saved [1m] id lights its family row",
+     check_a_saved_1m_id_lights_its_family_row),
+    ("the phone matches the saved row by FAMILY",
+     check_the_phone_matches_the_saved_row_by_family),
 ]
 
 

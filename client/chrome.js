@@ -111,7 +111,13 @@ function openMiniRadial(anchorEl, options) {
   const r = anchorEl.getBoundingClientRect();
   const items = options.slice(0, 2);
   const points = miniRadialPoints(
-    { left: r.left, top: r.top, width: r.width, height: r.height, size: 58 },
+    // `size` is the OPTION's own face, not the anchor's: the clamp exists to
+    // keep an option on screen, so it must be told how big an option is. It is
+    // the face's WIDTH (74 px — client/style.css, widened for ALG-6's content
+    // inset on 2026-08-11) and the same number governs both axes, which is
+    // conservative on the vertical one and can therefore only ever keep an
+    // option further from an edge, never closer.
+    { left: r.left, top: r.top, width: r.width, height: r.height, size: 74 },
     items.length,
     { width: window.innerWidth, height: window.innerHeight });
   items.forEach((opt, i) => {

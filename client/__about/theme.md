@@ -234,8 +234,11 @@ that a WHITE label clears AA on it as a fill, vivid enough to read as itself
 on either page, because the label reads against the COLOUR, never against
 whatever page sits behind it. Nothing reaches 100% saturation — the third of
 his three original sentences, unaffected by this correction. The exact
-thirteen hexes live only in `server/config.py` → `SET_COLORS` — not
-duplicated here, since a second copy is exactly what goes stale.
+fourteen hexes live only in `server/config.py` → `SET_COLORS` — not
+duplicated here, since a second copy is exactly what goes stale. A set WE ship
+that is MISSING from that table is not uncoloured: `setColors` below hands it
+another set's hex, which is how `Claude Tools` rendered as Mouse until the
+independent grader measured it on 2026-08-11.
 
 **Hue AND lightness separate the sets that share the wheel** — unchanged by
 the correction, and still the one property worth keeping from having had two

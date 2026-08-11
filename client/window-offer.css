@@ -25,7 +25,13 @@
   background: var(--bar);
   color: var(--text-primary);
   box-shadow: 0 8px 24px rgb(0 0 0 / 0.35);
-  font-size: 15px;
+  /* The WHOLE font, not only its size (grader, 2026-08-11): a bare
+     `font-size` leaves the family to the UA default, and the chip therefore
+     rendered in Times New Roman while every other surface of this page is on
+     the system stack — measured as computed `fontFamily` on the live page.
+     Written as the `font` shorthand for the same reason style.css does it
+     everywhere else: one declaration nobody can half-copy. */
+  font: 400 15px/1.35 system-ui, sans-serif;
 }
 
 #window-offer[hidden] { display: none; }
@@ -36,23 +42,47 @@
    a guess. A very long one takes a second line and pushes nothing off screen,
    because the buttons wrap with it. */
 #window-offer-text {
-  flex: 1 1 12ch;
+  /* IT TAKES ITS OWN ROW (grader 2026-08-11). It used to share the line when a
+     title was short — and sharing is what made the two buttons unequal: with
+     the title growing beside them each button fell back on its own words for a
+     width, which is ALG-5's defect exactly (117 px beside 137 px, measured).
+     A row of its own costs nothing here (the chip floats over the stream and
+     the space below it is empty) and it buys the two acts a row they can split
+     evenly, whatever either one is called. */
+  flex: 1 1 100%;
   min-width: 0;
   overflow-wrap: anywhere;
 }
 
+/* THE TWO BUTTONS ARE KIN AND SHARE A WIDTH (ALG-5, grader 2026-08-11): they
+   measured 117 px and 137 px side by side, so the control's size depended on
+   the length of its own text — the exact thing that rule forbids. `flex: 1 1 0`
+   gives both the same basis and the same growth, which is equality by
+   construction rather than a hardcoded number that goes stale the day a label
+   is reworded; `min-width: max-content` is what keeps that equality from ever
+   costing a word (THE SPACE & LEGIBILITY LAW — they overflow onto their own
+   row before anything is cut, which is what `flex-wrap` above is for).
+   A button also states its own `font`: a <button> does not inherit the page's,
+   which is why these came out in Arial while the chip's text did not. */
 #window-offer button {
-  flex: 0 0 auto;
+  flex: 1 1 0;
+  min-width: max-content;
   padding: 8px 12px;
   min-height: 40px;          /* a real touch target, like every other control */
   border-radius: 10px;
   border: 1px solid var(--border);
   background: var(--chip);
   color: var(--text-primary);
-  font-size: 14px;
+  font: 600 14px system-ui, sans-serif;
 }
 
-#window-offer-in {
+/* THE PRIMARY WEARS THE ACCENT — and it needs the id TWICE to do it (grader
+   2026-08-11). `#window-offer-in` alone is (0,1,0) and `#window-offer button`
+   above is (0,1,1), so the plain chip fill won every cascade and the primary
+   action was byte-identical to the secondary one in all eight looks. The fix
+   is specificity, not `!important`: the rule that must win is written to be
+   more specific than the rule it must win over. */
+#window-offer #window-offer-in {
   border-color: var(--accent);
   background: var(--accent-wash);
 }

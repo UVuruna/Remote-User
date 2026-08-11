@@ -405,9 +405,28 @@ CLAUDE_SETTINGS = CLAUDE_HOME / "settings.json"
 
 
 def claude_settings() -> dict:
-    """`{"model": ..., "effort": ...}` from Claude Code's user settings — the
-    keys it writes itself (`model`, `effortLevel`). Missing keys mean he has
-    never chosen, which is a real answer: nothing is marked."""
+    """`{"model": ..., "model_family": ..., "effort": ...}` from Claude Code's
+    user settings — the keys it writes itself (`model`, `effortLevel`). Missing
+    keys mean he has never chosen, which is a real answer: nothing is marked.
+
+    ── THE MATCHING FIELD IS THE FAMILY, NOT THE ID (grader 2026-08-11) ───────
+    `model` is whatever settings.json literally holds, and on the owner's own
+    PC that is `claude-fable-5[1m]` — a full id. The LIVE half of this frame
+    has always been normalised (`claude_state` sends `model_family(model_id)`),
+    but the SAVED half was handed over raw, and the phone compares it against
+    the five literals of its own picker (`client/claude-state.js` →
+    `CLAUDE_MODELS`). A full id equals none of them, so on his machine the
+    "saved" mark could never light a row and the chip printed the raw id back
+    at him — a panel about which model is chosen, unable to say which model is
+    chosen.
+
+    So BOTH halves of the frame now normalise through the SAME function. The
+    raw id stays under `model` because it is a fact and the panel may want to
+    print it when nothing claims it; `model_family` is what anything MATCHING
+    must read. A settings file naming something we do not know (or the alias
+    `default`, which names no family on purpose) leaves `model_family` off
+    entirely rather than guessing a near one — the rule `model_family` itself
+    obeys, and the reason it never answers the closest family."""
     try:
         raw = json.loads(CLAUDE_SETTINGS.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError, ValueError):
@@ -415,6 +434,9 @@ def claude_settings() -> dict:
     out = {}
     if isinstance(raw.get("model"), str):
         out["model"] = raw["model"]
+        family = model_family(raw["model"])
+        if family:
+            out["model_family"] = family
     if isinstance(raw.get("effortLevel"), str):
         out["effort"] = raw["effortLevel"]
     return out
