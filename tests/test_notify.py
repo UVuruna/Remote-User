@@ -20,6 +20,7 @@ Run:  .venv\\Scripts\\python tests/test_notify.py
 
 import asyncio
 import json
+import re
 import sys
 import threading
 import time
@@ -79,29 +80,37 @@ def main() -> int:
     # wrong conclusion with teeth: B3 (0.0.401) correctly reversed the
     # BEHAVIOUR but left this file enforcing the old one, and a declined
     # release meant build 0d/6 never ran to catch it (2026-08-10).
+    # SINCE 0.0.419 (his ballot) the five options live in the PANEL modules,
+    # not on the button: the button carries `panel`, and client/claude-state.js
+    # is the one table of literals (drawn stars, three truth chips). The
+    # intent guarded here is UNCHANGED — the official five aliases and the
+    # five effort levels, each committing with one Enter — only the carrier
+    # moved; test_claude_panels.py drives the modules end to end, this check
+    # pins that the SHIPPED file wires the buttons to those panels and that
+    # the table never regresses to the rejected full-id nine.
     claude_shipped = next(
         s for s in json.loads((PROJECT / "actions.json").read_text(encoding="utf-8"))
         ["app_sets"] if s["name"] == "Claude")
     model_btn = next(b for b in claude_shipped["buttons"] if b["label"] == "Model")
     thinking_btn = next(b for b in claude_shipped["buttons"] if b["label"] == "Thinking")
-    model_values = {o["value"] for o in model_btn["options"]}
-    results["Model offers EXACTLY the official five, by their picker aliases"] = (
-        model_values == {"default", "opus[1m]", "fable", "sonnet", "haiku"})
+    results["Model opens the panel chooser (ballot design, 0.0.419)"] = (
+        model_btn.get("panel") == "claude-model")
+    results["Thinking opens the panel chooser, not a menu-standing /effort"] = (
+        thinking_btn.get("panel") == "claude-effort")
+    state_js = (PROJECT / "client" / "claude-state.js").read_text(encoding="utf-8")
+    values = set(re.findall(r'value:\s*"([^"]+)"', state_js))
+    results["The table sends EXACTLY the official five /model aliases"] = (
+        {"default", "haiku", "sonnet", "opus[1m]", "fable"} <= values)
     # The old nine full-id options (task 174) are exactly what the owner
-    # rejected — a value from that set means the regression came back.
-    results["Model dropped the old full-id options, not just added five"] = (
-        not model_values & {"claude-opus-5", "claude-opus-5[1m]", "claude-sonnet-5",
-                            "claude-sonnet-5[1m]", "claude-haiku-4-5",
-                            "claude-fable-5", "claude-haiku-5"})
-    results["Model commits with one Enter (text /model, enter true)"] = (
-        model_btn.get("text") == "/model" and model_btn.get("enter") is True)
-    # Thinking CHOOSES a level now (task 191), the same one-Enter chooser the
-    # Model button uses — not the bare-/effort slider it had at 0.0.394.
-    thinking_values = {o["value"] for o in thinking_btn.get("options", [])}
-    results["Thinking CHOOSES a level (/effort takes an argument), not menu-standing"] = (
-        thinking_btn.get("text") == "/effort"
-        and thinking_btn.get("enter") is True
-        and thinking_values == {"low", "medium", "high", "xhigh", "max"})
+    # rejected — one of them in the table means the regression came back.
+    results["The table dropped the old full-id options, not just added five"] = (
+        not any(bad in values
+                for bad in ("claude-opus-5", "claude-sonnet-5",
+                            "claude-haiku-4-5", "claude-fable-5",
+                            "claude-haiku-5")))
+    results["Thinking CHOOSES a level (/effort takes an argument)"] = (
+        {"low", "medium", "high", "xhigh", "max"} <= values
+        and "/effort" in state_js)
 
     sys.path.insert(0, str(PROJECT / "setup"))
     import agent_hook
