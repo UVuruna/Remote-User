@@ -156,6 +156,7 @@ class FakeSource:
         self.stream_w, self.stream_h = 3840, 2160
         self.monitor_index = 0
         self.running = False
+        self.closed = False
         self.starts = 0
         self.sinks: list = []
 
@@ -172,6 +173,25 @@ class FakeSource:
 
     def stop(self) -> None:
         self.running = False
+
+    def close(self) -> None:
+        """Task 193 gave shutdown a real teardown: stop AND give the dxcam
+        instance back, because dxcam is a singleton per monitor and a merely
+        stopped camera is the one the NEXT server run is handed. A fake that
+        models the interface must model this too — the same lesson as
+        `output_count` above."""
+        self.stop()
+        self.closed = True
+
+    # Task 131 let the phone raise the ceiling above the desktop's card; the
+    # H.264 session reads `capture_fps` off its source to know what rate frames
+    # really arrive at. A fake that models the interface must carry both.
+    capture_fps = 30
+    raised_fps = None
+    raised_width = None
+
+    def raise_limits(self, fps, width) -> bool:
+        return False                        # nothing raised in a lifecycle test
 
     def add_sink(self, sink) -> None:
         self.sinks.append(sink)

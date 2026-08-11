@@ -101,16 +101,28 @@ class H264Session:
             self._quality.get("res"), (1, 1))
         if den != num:
             chain.append(f"scale=trunc(iw*{num}/{den}/2)*2:trunc(ih*{num}/{den}/2)*2")
+        # The rate frames really ARRIVE at — the desktop's, or the higher one
+        # this client raised the capture to (task 131). Comparing against
+        # SETTINGS.target_fps instead would insert an `fps` filter that THROWS
+        # AWAY the very frames the raise was asked for.
+        source_fps = getattr(self._source, "capture_fps", SETTINGS.target_fps)
         fps = int(self._quality.get("fps") or 0)
-        if 0 < fps < SETTINGS.target_fps:
+        if 0 < fps < source_fps:
             chain.append(f"fps={fps}")
         filters = ["-vf", ",".join(chain)] if chain else []
         bitrate = config.bitrate_for_level(self._quality.get("bitrate"))
         return [
             SETTINGS.ffmpeg_path, "-hide_banner", "-loglevel", "error",
-            # bgr24 — REVERTED with capture.py on 2026-08-09; see there.
-            "-f", "rawvideo", "-pix_fmt", "bgr24",
-            "-s", f"{self.width}x{self.height}", "-r", str(SETTINGS.target_fps),
+            # yuv420p in, not bgr24: capture.py hands us I420 (task 130 — half
+            # the bytes through this pipe, and it removes the swscale
+            # conversion ffmpeg used to do on the CPU for every frame). These
+            # two lines are ONE decision with `RawFrameSource._process` — a
+            # mismatch here does not fail, it produces a picture in the wrong
+            # colours. Every encoder in `h264_encoder_order` takes yuv420p
+            # natively, libx264 fallback included; it is the format they all
+            # convert TO anyway.
+            "-f", "rawvideo", "-pix_fmt", "yuv420p",
+            "-s", f"{self.width}x{self.height}", "-r", str(source_fps),
             "-i", "pipe:0", "-an",
             *filters,
             "-c:v", self._encoder, *encoders.encoder_args(self._encoder),
@@ -433,6 +445,37 @@ class H264Manager:
         self._source.stop()
         self._source_running = False
 
+    def raise_limits(self, fps: int | None, width: int | None) -> bool:
+        """THE PHONE MAY RAISE THE CEILING (owner decision, task 131).
+
+        The desktop Settings card is the DEFAULT this client works from, and
+        going BELOW it is free — that happens inside this client's own ffmpeg
+        and touches nobody. Going ABOVE it is not: capture is shared, so the
+        camera itself has to grab faster or wider, and everything currently
+        encoding from it has to be rebuilt.
+
+        That is affordable for exactly one reason, and it is a design rule
+        rather than an accident: ONE DEVICE AT A TIME (4409). There is never a
+        second client whose picture this could disturb.
+
+        So the cost is real, bounded and honest: the picture BLINKS. The
+        phone's quality panel says so on the raised steps before he taps —
+        `capture.raise_limits` is the decision, this is the rebuild, and
+        `stream_base` keeps telling the panel what the desktop itself is set
+        to, so "raised" never quietly becomes the new normal.
+
+        Blocking (dxcam teardown + rebuild) — call via asyncio.to_thread.
+        Returns True when anything actually changed."""
+        with self._lock:
+            if not self._source.raise_limits(fps, width):
+                return False
+            for session in list(self._sessions):
+                session.stop()          # every encoder is built for the old size
+            if self._source_running:
+                self._source.stop()
+                self._source.start()    # same camera, new target fps / width
+            return True
+
     def switch_to(self, index: int) -> bool:
         """Ends every session (their owners reopen automatically and resend
         config) and swaps the capture monitor. Blocking."""
@@ -454,6 +497,15 @@ class H264Manager:
             for session in list(self._sessions):
                 session.stop()
             self._sessions.clear()
-            if self._source_running:
-                self._source.stop()
-                self._source_running = False
+            self._source_running = False
+            # close(), not stop() — the dxcam instance must be RELEASED here
+            # (task 193). dxcam is a singleton per monitor, so a camera merely
+            # stopped is still the one the NEXT server run is handed: Apply &
+            # restart builds the new capture while this thread is still
+            # unwinding, and the line below then stopped the picture the new
+            # server had already started serving. His log, 2026-08-11 00:32:58:
+            # "Server thread did not stop within 10s" and, a quarter of a
+            # second later, dxcam's "instance already exists ... returning
+            # existing instance". Releasing is what makes the next create() a
+            # real create.
+            self._source.close()
