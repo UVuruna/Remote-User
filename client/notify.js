@@ -119,7 +119,16 @@ function handleNotify(msg) {
     }
   }
   if (prefs.speak && msg.speak !== false && window.Android && Android.speak) {
-    const spoken = body ? `${title}. ${body}` : title;
+    // WHAT THE VOICE SAYS is now SHORT — project + conversation title only,
+    // never the body (owner order, v0.0.107 screenshots: a long Serbian
+    // notification body was read out loud in full). `speak_text` is built
+    // server-side (server/notify.py -> speak_summary) so the same rule
+    // covers every carrier — page, waiting channel, queued — since all
+    // three forward this exact `notice` dict unchanged. A server that
+    // predates this field sends none, and the fallback is the OLD
+    // behaviour rather than silence: an older PC must keep speaking
+    // something.
+    const spoken = msg.speak_text || (body ? `${title}. ${body}` : title);
     try {
       // HOW it is said is the PC's decision and rides on every frame (owner
       // round R2) — nothing about the voice is stored on this phone, so a

@@ -618,6 +618,40 @@ def main() -> int:
             # product ships by default.
             _apply_look(page, *DEFAULT_LOOK)
 
+            # THE NOTIFY TOAST MUST NEVER BECOME A CIRCLE (owner screenshot,
+            # v0.0.107: a huge filled amber circle over the streamed VS Code,
+            # bold notification text clipped mid-word by its own curved edges).
+            # The toast reuses #status (client/chrome.js showToast()), which
+            # was `width: auto` shrink-to-fit until this round: a notify
+            # sentence long enough to wrap but not long enough to fill the
+            # viewport landed on a near-SQUARE box, and --radius-pill's own
+            # `border-radius: 999px` — correct CSS, clamped by the browser to
+            # half the SHORTER side on every box — turned that square into a
+            # circle. ALG-6's own instrument (__radiusAndKin, below) would
+            # have convicted this shape on sight; it never saw it because
+            # every OTHER call site in this file points it at a staged PANEL
+            # ROOT (the dictation card, the layout list, the member chooser…)
+            # and a toast that lives outside every panel was never once
+            # handed to it — the law and the tooth were both correct, and the
+            # coverage gap is the bug. A realistic long notify sentence (the
+            # exact shape that produced the report: too long for one line,
+            # too short to fill the phone's width) is staged here so this
+            # gate proves the toast itself, not a synthetic square div.
+            page.evaluate(
+                "() => showToast('Claude Code (Remote User) needs you — "
+                "razmisljam o resenju problema sa iscekivanjem konekcije i "
+                "treba mi tvoja odluka pre nego sto nastavim dalje')")
+            page.wait_for_selector("#status.connecting", state="visible",
+                                   timeout=2000)
+            toast = page.evaluate(
+                "() => __radiusAndKin(document.body).filter("
+                "(m) => m.includes(' connecting '))")
+            results[f"the notify toast never clips into a circle "
+                    f"@ {label}"] = not toast
+            if toast:
+                print(f"  DETAIL notify toast radius @ {label}: {toast}")
+            page.evaluate("() => setStatus('connected', 'Connected')")
+
             # THE DICTATION CARD SAYS WHOSE LANGUAGES THESE ARE, AND WHICH OF
             # THEM HE CAN HEAR (owner 2026-08-09, task 127 — a screenshot of
             # this card and: "koristim dva uredjaja … treba da kaze OVAJ

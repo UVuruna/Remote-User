@@ -63,6 +63,26 @@ def main() -> int:
         len(notify.clean("x" * 500, notify.MAX_TEXT)) == notify.MAX_TEXT
         and notify.clean(None, 10, "Agent") == "Agent")
 
+    # --- THE VOICE READS THE SUMMARY, NEVER THE BODY (owner v0.0.107
+    # screenshots — a long Serbian notification body was read out loud in
+    # full). speak_summary() is the ONLY thing that may compute what the
+    # voice says, and it never sees the body at all, structurally — this
+    # proves it from the pure function outward, then again through the live
+    # page below (the notice a real request actually carries).
+    long_body = ("razmisljam o resenju problema sa iscekivanjem konekcije i "
+                "sada mi treba tvoja odluka pre nego sto nastavim dalje")
+    title, body = notify.compose("Claude Code (Remote User)", "waiting", long_body)
+    speak_text = notify.speak_summary(
+        "U:/Coding/UVuruna/Applications/Remote User", "Claude Code (Remote User)")
+    results["speak_summary is project — conversation, never the body"] = (
+        speak_text == "Remote User — Claude Code (Remote User)"
+        and body not in speak_text
+        and "needs you" not in speak_text)
+    results["speak_summary survives a missing project"] = (
+        notify.speak_summary("", "Solo agent") == "Solo agent")
+    results["speak_summary survives a missing agent"] = (
+        notify.speak_summary("U:/x/y/Remote User", "") == "Remote User")
+
     # --- 190/191: the Claude set's Model/Thinking must MATCH THE OFFICIAL
     # picker and COMMIT with one Enter. CORRECTED 2026-08-10 against the
     # authoritative Claude Code docs (code.claude.com/docs/en/model-config.md,
@@ -391,6 +411,34 @@ def main() -> int:
             and notifs[1][3] != notifs[0][3])               # ...so they never merge
         results["the phone speaks the agent's name"] = (
             len(speaks) == 2 and "Remote User" in speaks[0][1])
+
+        # --- THE VOICE NEVER READS THE BODY (owner v0.0.107 screenshots) ---
+        # A notify with a genuinely long body must be SHOWN in full (the
+        # banner's job) but SPOKEN as project + agent only.
+        long_body = ("razmisljam o resenju problema sa iscekivanjem konekcije "
+                    "i treba mi tvoja odluka pre nego sto nastavim dalje")
+        post(gate.PORT, {"agent": "Claude Code (Remote User)", "event": "waiting",
+                         "text": long_body,
+                         "project": "U:/Coding/UVuruna/Applications/Remote User"},
+             gate.TOKEN)
+        page.wait_for_function("window.__calls.length >= 6", timeout=5000)
+        speaks2 = [c for c in page.evaluate("window.__calls") if c[0] == "speak"]
+        results["a long body is never read aloud"] = (
+            len(speaks2) == 3
+            and long_body not in speaks2[2][1]
+            and speaks2[2][1] == "Remote User — Claude Code (Remote User)")
+
+        # --- AN OLDER SERVER (no speak_text) still speaks something ---------
+        # notify.js's own fallback, proven live rather than by reading the
+        # source: a notice with the field stripped must fall back to the OLD
+        # title(.body) behaviour, never silence.
+        page.evaluate("window.__calls = []")
+        page.evaluate("""() => handleNotify({type:'notify', agent:'Old Server',
+          event:'finished', title:'Old Server finished', text:'', speak:true,
+          at: Date.now() / 1000})""")
+        speaks3 = [c for c in page.evaluate("window.__calls") if c[0] == "speak"]
+        results["speak_text absent still speaks the title"] = (
+            len(speaks3) == 1 and speaks3[0][1] == "Old Server finished")
         # The command CHOOSER (owner idea 2026-08-05): picking a level must
         # send the FINISHED command, not the bare one. This is the same page
         # and socket, so it rides along here rather than paying for a second

@@ -225,8 +225,13 @@ class NoticeService : Service() {
         val jump = msg.optJSONObject("layout")?.toString().orEmpty()
         if (banner) notifier().post(title, body, agent, jump)
         if (speak && msg.optBoolean("speak", true)) {
+            // speak_text (task 224): the voice says only "project — title";
+            // the full body stays on the banner. Older servers send no
+            // speak_text and keep the old sentence.
+            val speakText = msg.optString("speak_text")
             notifier().speak(
-                if (body.isBlank()) title else "$title. $body",
+                if (speakText.isNotBlank()) speakText
+                else if (body.isBlank()) title else "$title. $body",
                 msg.optString("voice"),
                 msg.optDouble("rate", 1.0).toFloat(),
             )

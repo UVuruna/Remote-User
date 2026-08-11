@@ -203,6 +203,34 @@ def compose(agent: str, event: str, text: str) -> tuple[str, str]:
     return f"{agent} {word}".strip(), text
 
 
+def speak_summary(project, agent: str) -> str:
+    """What the VOICE says — deliberately NOT what the banner shows.
+
+    THE REPEAT (owner screenshots, v0.0.107): the banner's body is fine — the
+    problem is that TTS read the WHOLE thing, body included, sentence after
+    Serbian sentence, because `handleNotify()` on the phone had always been
+    told to speak `title + ". " + body` and nothing here ever gave it a
+    shorter alternative. His order: the spoken line is ONLY the project name
+    plus the conversation/agent title, e.g. "Remote User — Fix layout" — never
+    the free-text body, which can be an arbitrarily long question or status
+    line an agent wrote for the SCREEN, not for a voice.
+
+    `project` = the human folder name from the agent's own `cwd` (never
+    lower-cased, never guessed — the same field `layout_of` already reads,
+    kept in its original case here because this one is READ ALOUD and
+    "remote user" spoken is not the same word as "Remote User" written).
+    `agent` = the same string `compose()` turns into the title, taken
+    BEFORE the " needs you"/"finished"/… suffix is appended and the body is
+    never part of it, structurally — this function is never handed the body
+    at all.
+    """
+    folder = pathlib.Path(str(project or "").strip()).name
+    agent = str(agent or "").strip()
+    if folder and agent:
+        return f"{folder} — {agent}"
+    return agent or folder
+
+
 # ═══════════════════ THE WAITING CHANNEL (owner decree 2026-08-07) ═══════════
 # *"Radimo taj mali servis — samo je važno da ta komunikacija koja mora da bude
 #  u pozadini bude minimalna … android strana čeka signal, ne prima ništa od
@@ -445,6 +473,7 @@ def register(app, token: str, active_client: dict, layouts=None) -> None:
         text = clean(data.get("text"), MAX_TEXT)
         title, body = compose(agent, event, text)
         logger.info("Notify: %s | %s", title, body or "-")
+        speak_text = speak_summary(data.get("project"), agent)
 
         notice = {
             "type": "notify",
@@ -452,6 +481,11 @@ def register(app, token: str, active_client: dict, layouts=None) -> None:
             "event": event,
             "title": title,
             "text": body,
+            # WHAT THE VOICE SAYS, kept apart from what the banner SHOWS
+            # (owner order, v0.0.107 screenshots: the banner text is fine,
+            # the spoken line must be short — project + conversation name,
+            # never the body). See speak_summary() below.
+            "speak_text": speak_text,
             # HOW the phone says it is the DESKTOP's decision (Settings
             # window, round R2). "Speak it out loud" off sends speak:false and
             # nothing more — the Android banner still appears, so a notice is

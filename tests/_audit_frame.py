@@ -100,12 +100,59 @@ RADIUS_KIN_JS = RADIUS_EXEMPT_JS + """
       const allowed = ar >= 2 ? 0.5 * b.height
                     : ar >= 1.4 ? 0.3 * b.height
                     : 0.30 * Math.min(b.width, b.height);
-      if (r > allowed + 0.5) {
+      // ABSOLUTE CEILING ON LARGE SURFACES (owner screenshot v0.0.107, the
+      // notify toast). The percent tiers exist for CHIPS — the owner's own
+      // 58px/16px buttons that set the 30% squarish figure — and a percent
+      // that is correct at chip size becomes a full circle's worth of pixels
+      // once the same rule is applied to a box grown by dynamic content
+      // (wrapped multi-line text, a long toast). "Larger than ~2x the
+      // tier's design size" is measured directly against the chip reference
+      // (58px corner button = the largest signature control the tier was
+      // tuned against): past ~116px on its SHORTER side, the percent tier is
+      // additionally capped at an absolute ceiling so growth alone can never
+      // walk a surface into circle territory. Chips stay governed by percent
+      // alone — the cap only ever tightens a LARGE element's allowance, never
+      // a chip's.
+      const LARGE_SIDE = 116;
+      const ABS_CEILING = 28;
+      const cap = Math.min(b.width, b.height) > LARGE_SIDE
+                ? Math.min(allowed, ABS_CEILING) : allowed;
+      if (r > cap + 0.5) {
         bad.push('radius ' + Math.round(r) + 'px on ' +
                  (cls(el) || el.tagName) + ' ' + Math.round(b.width) + 'x' +
                  Math.round(b.height) + ' (AR ' + ar.toFixed(2) + ') — the law ' +
-                 'allows ' + Math.round(allowed) + 'px at that shape: it is a ' +
+                 'allows ' + Math.round(cap) + 'px at that shape: it is a ' +
                  'circle or an egg, not a rounded box');
+      }
+      // CLIP TOOTH (owner screenshot v0.0.107): even a radius the tier and
+      // ceiling allow must not reach far enough into a corner to intersect
+      // the element's OWN TEXT — that is what a rounded corner geometrically
+      // eats (rules/GUI.md ALG-6's own words), checked directly against what
+      // is actually rendered rather than assumed from padding. Every text
+      // node's client rects must clear a 0.3*r inset from every edge the
+      // radius rounds; this fires independently of whether the radius
+      // itself was already convicted above, because a radius that passes
+      // the tier can still clip content that sits too close to the edge.
+      if (r > 0) {
+        const inset = 0.3 * r;
+        const lim = { l: b.left + inset, t: b.top + inset,
+                      right: b.right - inset, bot: b.bottom - inset };
+        for (const node of el.childNodes) {
+          if (node.nodeType !== Node.TEXT_NODE || !node.textContent.trim()) continue;
+          const range = document.createRange();
+          range.selectNodeContents(node);
+          for (const tr of range.getClientRects()) {
+            if (tr.width === 0 || tr.height === 0) continue;
+            if (tr.left < lim.l - 0.5 || tr.right > lim.right + 0.5 ||
+                tr.top < lim.t - 0.5 || tr.bottom > lim.bot + 0.5) {
+              bad.push('text clips the rounded corner of ' +
+                       (cls(el) || el.tagName) + ' — radius ' + Math.round(r) +
+                       'px needs a ' + Math.round(inset) + 'px content inset ' +
+                       'that this text does not have');
+              break;
+            }
+          }
+        }
       }
     }
     // ── ALG-5: kin are the SAME KIND under the SAME PARENT ─────────────────
