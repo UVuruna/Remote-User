@@ -13,6 +13,7 @@
     "Settings",
     "VSCode",
     "Claude",
+    "Claude Tools",
     "Chrome",
     "Explorer"
   ],
@@ -372,10 +373,13 @@
       "name": "Settings",
       "icon": "settings",
       "required": true,
+      "active": [
+        "sets",
+        "quality",
+        "dictation",
+        "phone"
+      ],
       "buttons": [
-        {
-          "action": "monitor"
-        },
         {
           "action": "sets"
         },
@@ -384,6 +388,9 @@
         },
         {
           "action": "dictation"
+        },
+        {
+          "action": "phone"
         },
         {
           "action": "anywhere"
@@ -463,63 +470,20 @@
           "label": "Usage",
           "icon": "usage",
           "text": "/usage",
-          "enter": true
+          "enter": true,
+          "focus": "claude"
         },
         {
+          "id": "model",
           "label": "Model",
           "icon": "model",
-          "text": "/model",
-          "enter": true,
-          "options": [
-            {
-              "label": "Default (recommended)",
-              "value": "default"
-            },
-            {
-              "label": "Opus (1M context)",
-              "value": "opus[1m]"
-            },
-            {
-              "label": "Fable",
-              "value": "fable"
-            },
-            {
-              "label": "Sonnet",
-              "value": "sonnet"
-            },
-            {
-              "label": "Haiku",
-              "value": "haiku"
-            }
-          ]
+          "panel": "claude-model"
         },
         {
+          "id": "effort",
           "label": "Thinking",
           "icon": "thinking",
-          "text": "/effort",
-          "enter": true,
-          "options": [
-            {
-              "label": "Low",
-              "value": "low"
-            },
-            {
-              "label": "Medium",
-              "value": "medium"
-            },
-            {
-              "label": "High",
-              "value": "high"
-            },
-            {
-              "label": "xHigh",
-              "value": "xhigh"
-            },
-            {
-              "label": "Max",
-              "value": "max"
-            }
-          ]
+          "panel": "claude-effort"
         },
         {
           "label": "Stop",
@@ -530,53 +494,109 @@
           "label": "Menu",
           "icon": "list",
           "text": "/",
-          "enter": false
+          "enter": false,
+          "focus": "claude"
         },
         {
+          "id": "mode",
           "label": "Mode",
           "icon": "cmode",
-          "chord": "shift+tab"
-        },
-        {
-          "label": "Compact",
-          "icon": "compact",
-          "text": "/compact",
-          "enter": true
+          "panel": "claude-mode"
         },
         {
           "label": "New chat",
           "icon": "newchat",
           "text": "/clear",
-          "enter": true
+          "enter": true,
+          "focus": "claude"
         },
         {
           "label": "Rewind",
           "icon": "rewind",
           "text": "/rewind",
-          "enter": true
+          "enter": true,
+          "focus": "claude"
         },
         {
           "label": "Context",
           "icon": "gauge",
           "text": "/context",
-          "enter": true
+          "enter": true,
+          "focus": "claude"
         },
         {
           "label": "Agents",
           "icon": "target",
           "text": "/agents",
-          "enter": true
+          "enter": true,
+          "focus": "claude"
         },
         {
           "label": "Resume",
           "icon": "reopen",
           "text": "/resume",
-          "enter": true
+          "enter": true,
+          "focus": "claude"
         },
         {
           "label": "Focus",
           "icon": "input",
           "chord": "ctrl+esc"
+        }
+      ],
+      "agent": "claude"
+    },
+    {
+      "process": "code",
+      "name": "Claude Tools",
+      "icon": "tools",
+      "enabled": false,
+      "active": [
+        "review",
+        "security",
+        "simplify",
+        "compact"
+      ],
+      "buttons": [
+        {
+          "id": "review",
+          "label": "Review",
+          "icon": "review",
+          "text": "/code-review",
+          "enter": true,
+          "focus": "claude"
+        },
+        {
+          "id": "security",
+          "label": "Security",
+          "icon": "security",
+          "text": "/security-review",
+          "enter": true,
+          "focus": "claude"
+        },
+        {
+          "id": "simplify",
+          "label": "Clean up",
+          "icon": "simplify",
+          "text": "/simplify",
+          "enter": true,
+          "focus": "claude"
+        },
+        {
+          "id": "compact",
+          "label": "Compact",
+          "icon": "compact",
+          "text": "/compact",
+          "enter": true,
+          "focus": "claude"
+        },
+        {
+          "id": "init",
+          "label": "Init CLAUDE",
+          "icon": "initdoc",
+          "text": "/init",
+          "enter": true,
+          "focus": "claude"
         }
       ],
       "agent": "claude"

@@ -36,7 +36,9 @@ The two D-pad groups on the tablet are defined entirely by [actions.json](action
 - The **app sets** ride along while a matching layout is focused — and they
   DO charge against the count (owner 2026-08-06): what they hold is the
   largest group that can appear together, so VSCode + Claude reserve two
-  slots and leave six for the rest. See App-aware sets below.
+  slots and leave six for the rest — and VSCode + Claude + Claude Tools
+  reserve three, which is why Claude Tools ships unticked. See App-aware
+  sets below.
 - Hard cap **8** in the wheel: over the cap, non-required sets are bumped
   from the END (they return when the app set goes away).
 - **The ORDER the sets ride in is the owner's choice** (build round R5,
@@ -111,46 +113,64 @@ Shipped reserves, off until you tick them:
 | Cursor | Undo · ← · → · Redo | Up · Down · Word ← · Word → · Home · End |
 | Media | Play · Vol− · Vol+ · Mute | Next · Prev · Stop |
 | Windows | Alt+Tab · Win · Desktop · Tasks | Close · Max · Min · Snap ← · Snap → · Explorer · Run |
-| Settings | Monitor · Sets · Quality · Language | Anywhere (owner 2026-08-05: Next box and Snap left this pool — Next box lives in Input, Snap in Attach) |
+| Settings | Sets · Quality · Language · **Phone** | Anywhere (owner 2026-08-05: Next box and Snap left this pool — Next box lives in Input, Snap in Attach; Monitor left it 2026-08-09 for the layout panels, task 155, and **Phone** took the freed slot 2026-08-11, tasks 161/218a) |
 | **VSCode** | Sidebar · Palette · Terminal · Find | **Preview (ctrl+shift+v)** · **Next tab** · **Prev tab** · Save · Go to file · Comment |
 | **Chrome** | New tab · Close · Next tab · Address | **Prev tab** · Reopen · Reload · Back · Forward · Find |
 | **Explorer** | Rename · New dir · Delete · Up | **Next tab** · **Prev tab** · New tab · Back · Forward · Copy path · Details · Search |
-| **Claude** | Usage · Model · **Thinking** · Stop | Menu · Mode · Compact · New chat · Rewind · Context · Agents · Resume · Focus |
+| **Claude** | Usage · Model · **Thinking** · Stop | Menu · **Mode** · New chat · Rewind · Context · Agents · Resume · Focus (Compact MOVED to Claude Tools 2026-08-11) |
+| **Claude Tools** | Review · Security · Clean up · Compact | Init CLAUDE |
 
-**Model mirrors the OFFICIAL picker; Thinking now CHOOSES, like Model does**
-(tasks 190/191, 2026-08-10 — REPLACING the 2026-08-09 "task 174" design
-below, which turned out to answer a question nobody had actually settled).
-His screenshots put the two menus side by side: the extension's own `/model`
-picker offers exactly **five** entries — Default (recommended) / Opus (1M
-context) / Fable / Sonnet / Haiku — while our panel offered **nine**, built
-from this project's own transcript vocabulary (`opus`, `sonnet`, `haiku`,
-`fable`, `best`, `opusplan`, `opus[1m]`, `sonnet[1m]`, `default`) and never
-checked against the surface he actually looks at. A static read of the
-extension's own binary (A1, task 190/191 investigation) is ground truth here:
+**Model, Thinking and Mode are WRITTEN panels, not generated option lists**
+(owner ballot verdict 2026-08-11, tasks 190 / 191 / 208). Each of the three
+buttons carries a `"panel"` field instead of `options`, and
+`client/claude-panels.js` draws it. The reason is task 208: a generic list can
+offer choices, but it cannot say what the PC is running RIGHT NOW, and every
+one of his three complaints was a panel stating something it did not know.
 
-- **`/model <literal>` + one Enter COMMITS directly, no picker, for exactly
-  five literals**: `default`, `opus[1m]`, `fable`, `sonnet`, `haiku`. The
-  Model button's options now carry precisely these five values, in the
-  official order, with the official labels — nothing else is offered, because
-  nothing else is official.
-- **`/effort <literal>` + one Enter also COMMITS directly**, for `low`,
-  `medium`, `high`, `xhigh`, `max` — the 2026-08-09 finding that Thinking was
-  "interactive-only" was wrong: the earlier round sent a BARE `/effort` with
-  no argument at all, which is exactly why it only ever raised Claude's own
-  menu. Thinking now uses the SAME `options`-panel mechanism as Model (same
-  `panels.js` command chooser, same header pattern, same `paste_text
-  "/effort <literal>"` + Enter) with five options — Low / Medium / High /
-  xHigh / Max — instead of standing the menu up and stopping.
+- **Model** — the official five, in HIS order (by strength, Default first),
+  with **capability stars** beside the names: Default (recommended) · Haiku ★ ·
+  Sonnet ★★ · Opus (1M context) ★★★ · Fable ★★★★. Each taps to
+  `paste_text "/model <alias>"` with one Enter, the aliases proven to commit
+  directly: `default`, `haiku`, `sonnet`, `opus[1m]`, `fable`. Task 190 was
+  that we offered NINE (`best`, `opusplan`, `sonnet[1m]`…), built from this
+  project's own transcript vocabulary and never checked against the surface he
+  looks at. The stars are DRAWN SVG paths, never a font glyph — the ✥ lesson.
+- **Thinking** — Low / Medium / High / Extra high / Max, each
+  `paste_text "/effort <level>"` with one Enter (`low`, `medium`, `high`,
+  `xhigh`, `max`). Task 191 was that Thinking only RAISED the menu.
+- **Mode** — Default / Accept edits / Plan. There is no `/mode` command:
+  Shift+Tab steps a three-mode ring and wraps, so the panel computes how many
+  presses reach the target and sends that many `chord {shift+tab}` messages.
 
-Both buttons are pure DATA — `buttons` inside an app set is entirely OURS
+**The three chips of truth** (task 208, the one he actually reported): each
+panel states SAVED (from the PC's settings file), NOW (from the live
+conversation) and — Thinking only — LAST SENT (this phone's own memory). A
+memory may never wear a fact's look: he read a lit "Medium" as the PC's live
+state while it ran on Max, believed the panel, and reported the command as
+broken. The rules live in `client/claude-state.js`, kept pure so
+`tests/test_claude_panels.py` runs them whole.
+
+**`claude_state` is asked for and never depended on.** The panel sends
+`claude_state {}` on open and draws in the same frame with "unknown" chips; an
+answer decorates the card in place. An older PC has no such handler and the
+cards stay fully usable — every chip has a truthful thing to say with no
+answer at all.
+
+**Claude Tools** (task 219) is ONE new app-aware set riding beside Claude on
+the same `"agent": "claude"` detection, holding the built-in commands with
+DESCRIPTIVE labels because the official names "svima plivaju i ne ukazuju na
+to šta rade": <!-- lang-ok: owner quote --> Review (`/code-review`), Security
+(`/security-review`), Clean up (`/simplify`), Compact (`/compact`, MOVED here
+from the base Claude set — "neka budu svi u 1 grupi") <!-- lang-ok: owner quote -->
+and Init CLAUDE (`/init`, waiting in the pool: it is a once-per-project act).
+It **ships `"enabled": false`** — see the slot arithmetic below.
+
+Both new sets are pure DATA — `buttons` inside an app set is entirely OURS
 under `merge_shipped_pools`' ownership rule (`server/gui/controls_data.py`;
 only `active`/`order_land`/`order_port`/`enabled` and button `label` renames
-are HIS) — so this reaches the owner's seeded %LOCALAPPDATA% file exactly
-like `agent` finally did (`tests/test_actions_migration.py`). `panels.js`'s
-command chooser reads `enter` per OPTION (falling back to the button's own
-`enter`, then `true`); neither Model nor Thinking sets a per-option override
-— both commit with one Enter, so the button-level `enter: true` covers every
-option.
+are HIS) — so this reaches the owner's seeded %LOCALAPPDATA% file exactly like
+`agent` finally did (`tests/test_actions_migration.py`), and a set he has
+never had is added whole.
 
 **One honest limit no code can close**: the FIRST-ever Fable selection on an
 account must be made once in the live interactive picker (one manual
@@ -246,11 +266,23 @@ Explorer and VSCode can never be on screen at the same moment. So:
 |---|---|---|
 | Chrome + Explorer + VSCode | 1 | 7 |
 | VSCode + Claude | 2 | **6** |
+| VSCode + Claude + Claude Tools | 3 | **5** |
 | none (or the master switch off) | 0 | 8 |
 
 The picker states it — `N of 8 used — M held for app shortcuts` — and refuses
 the tick that would overflow instead of letting the wheel drop a set you
 already chose.
+
+**Why Claude Tools ships `"enabled": false`** (2026-08-11, task 219). All
+three `code`-process sets can be on the wheel at once, so ticking the new one
+raises the reserve from 2 to 3. The shipped defaults already stand at exactly
+8 — Mouse, Input, Settings (required) + Attach, Edit, Navigate + a reserve of
+2 — so a set that arrived ticked would make 9, and the very first connection
+would greet him by switching one of them off with a toast
+(`enforceWheelCap`). A set he turns on himself, after unticking one he chose,
+is honest; a set that evicts one of his is not. `tests/test_claude_panels.py`
+→ `check_the_wheel_cost_is_stated_honestly` computes the shipped total and
+fails if it ever passes 8.
 
 ### The cap is a LAW over the stored state (owner 2026-08-06)
 
@@ -344,7 +376,9 @@ A button is one of:
   - `sets` — open the phone's wheel picker: which custom sets are shown on THIS device (max 3) and whether app sets appear. Shipped in **Settings**.
   - `quality` — open the stream-quality panel (fps / resolution / bitrate + auto-save on mobile data — owner 2026-08-05, replacing the old cycle). Shipped in **Settings**.
   - `dictation` — open the dictation-language card (choose the language you speak; model download guided). Shipped in **Settings** (owner 2026-08-05).
+  - `phone` — open the **Phone** card: the per-device switches that describe THIS handset and change nothing on the PC — layout bar Top/Bottom, what Hide means (comes back / stays hidden), and the D-pad shape per orientation. Shipped in **Settings** (owner 2026-08-11, tasks 161 + 218a). Each of those three switches previously sat in a card named for another subject (the Wheel sets picker, the layout list, a hold on Hide) and was MOVED here, never copied.
   - `anywhere` — open the "use from anywhere" wizard (Tailscale setup). NOT in the defaults since 2026-08-05 (the first-contact banner still guides new phones); stays in the pool for custom sets.
+- **A written panel** — `{ "id": "model", "label": "Model", "icon": "model", "panel": "claude-model" }` (owner ballot verdict 2026-08-11). The button opens a card the PRODUCT wrote, not one generated from a list: `claude-model`, `claude-effort` and `claude-mode` are drawn by `client/claude-panels.js` and carry live state read off the PC, capability stars and an honest line about what the command really changes — none of which a generic `options` list can say. Prefer `options` for an ordinary command that only needs its argument picked; a `panel` is for the ones that must also TELL THE TRUTH about the state they are changing.
 - **Chord** — `{ "label": "Copy", "chord": "ctrl+c" }` — fires a key combination (see below). An optional `"icon"` from the list above gives it an icon face.
 - **Special key** — `{ "label": "Esc", "key": "escape" }` — a single structural key; `"icon"` works here too.
 - **Typed text** — `{ "label": "Usage", "text": "/usage", "enter": true }` (owner 2026-08-05) — the PC pastes the text into whatever box has focus and presses Enter. Built for the **Claude** set, whose commands are not shortcuts at all but slash commands written into the app's own prompt. The paste goes through the clipboard (one atomic insert; a character-by-character type races the autocomplete menu that re-filters on every keystroke). `"enter": false` leaves the line standing — that is the `Menu` button, which types `/` and lets you pick from the list with the cursor.

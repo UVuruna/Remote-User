@@ -171,9 +171,15 @@ and the reflow had been tried once and reverted, so it went back in properly:
   loop had nothing to grow the window for and the reflow simply moved the
   starvation from one column to the other (the list scrolled and clipped
   "Explorer" mid-row). A column that does not state its need cannot be given
-  its share. `ROWS_SHOWN = 15` caps the declaration exactly as
+  its share. `ROWS_SHOWN` caps the declaration exactly as
   `CommandTable.ROWS_SHOWN` caps the pool's — the raise must still fit the
-  declared 1280×1000 frame.
+  declared 1280×1000 frame. **It is the shipped file's own row count and it
+  moves when that file does:** it was 15 (thirteen sets plus two headings) and
+  became **16** on 2026-08-11, when `Claude Tools` joined (task 219). The
+  runtime Qt audit convicted this window of BUG A the same run the set was
+  added — the list scrolled while the pool table beside it held 145 px of idle
+  space — so a set added to `actions.json` raises this number in the SAME
+  commit, or the ladder's first step is skipped by arithmetic.
 - **Result, measured:** 723×956 → **733×950**, with all fifteen list rows AND
   all thirteen pool rows visible, no scrollbar anywhere, in both palettes.
   What remains is ~124 px of empty grid under the pool's last row — the right

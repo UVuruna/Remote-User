@@ -128,10 +128,52 @@ function refreshSetsMeta() {
   }
 }
 
+// ── ONE SEGMENTED ROW, SHARED BY EVERY CARD THAT ASKS A SMALL CHOICE ───────
+// Born in quality.js as `qualitySegRow` and lifted here on 2026-08-11 when the
+// Phone card (task 161) needed the same row: a caption on the left, a strip of
+// mutually exclusive buttons on the right, one of them lit. Its `.q-row` /
+// `.q-seg` classes keep their names — they are already styled, already audited
+// and already photographed, and renaming measured CSS buys nothing.
+//
+// `disabled(v)` marks a step that exists but is out of reach here (the quality
+// panel's fps above what the PC allows) — inert AND visibly so, never simply
+// missing, because a step that vanished cannot explain itself.
+function segRow(title, values, labels, current, onPick, disabled) {
+  const row = document.createElement("div");
+  row.className = "q-row";
+  const cap = document.createElement("span");
+  cap.className = "q-cap";
+  cap.textContent = title;
+  const seg = document.createElement("div");
+  seg.className = "q-seg";
+  values.forEach((v, i) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.textContent = labels[i];
+    b.classList.toggle("on", v === current);
+    if (disabled && disabled(v)) {
+      b.classList.add("out");
+      b.disabled = true;
+    } else {
+      b.addEventListener("click", () => {
+        seg.querySelectorAll("button").forEach((x) => x.classList.remove("on"));
+        b.classList.add("on");
+        onPick(v);
+      });
+    }
+    seg.appendChild(b);
+  });
+  row.append(cap, seg);
+  return row;
+}
+
 // One tick per orientation for the D-pad shape (owner 2026-08-09, task 177).
 // `asked` is the shape THIS row asks for; unticking hands the orientation back
 // to `auto` — the default — rather than to the opposite shape, so a device
 // that ticked and unticked reads exactly like one that was never asked.
+//
+// The rows themselves moved to the PHONE card on 2026-08-11 (task 218a) — the
+// builder stays here beside the other row builders, its callers do not.
 function padShapeRow(orient, asked, text) {
   const row = document.createElement("label");
   row.className = "sets-row apps";
@@ -217,27 +259,13 @@ function openSetsPanel() {
     body.appendChild(appList);
   }
 
-  // THE SHAPE OF THE TWO GROUPS, ONE ROW PER ORIENTATION (owner 2026-08-09,
-  // task 177 — task 121's single upright tick, now asked in both directions).
-  // Upright, a 412 px phone has no room for two crosses with the picture
-  // between them and a 10" tablet has plenty, so the cross is his to ask for;
-  // sideways, a 16:9 picture leaves a finger-wide band down each side that
-  // holds the columns perfectly, so the column is his to ask for. Neither row
-  // changes a default: each starts on the shape that orientation renders TODAY
-  // (`padShape`), and ticking it writes the explicit choice that outranks it.
-  // One question asked twice, so the two ride together (client/panels.css
-  // → `.sets-shape`): side by side where there is width, stacked where there
-  // is not.
-  const shape = document.createElement("div");
-  shape.className = "sets-shape";
-  shape.appendChild(padShapeRow(
-    "portrait", "cross",
-    "Held upright: the D-pad cross instead of the column — for a wide screen"));
-  shape.appendChild(padShapeRow(
-    "landscape", "column",
-    "Held sideways: upright columns instead of the D-pad cross — they stand "
-    + "in the empty bands beside the picture"));
-  body.appendChild(shape);
+  // THE D-PAD SHAPE TICKS LEFT THIS CARD on 2026-08-11 (task 218a). They asked
+  // about the shape of the CONTROL GROUPS on this handset and sat in a card
+  // titled "Wheel sets", which is about which sets ride the wheel — the owner
+  // named the misplacement himself, and this round's Phone card is the home
+  // task 160's comment above already promised them. Not copied: MOVED (see
+  // client/phone-panel.js), because a switch with two doors is two states to
+  // keep in step.
 
   const done = document.createElement("button");
   done.type = "button";
@@ -769,6 +797,10 @@ function openChoicePanel(btn) {
         type: "paste_text",
         text: `${btn.text} ${option.value}`.trim(),
         enter,
+        // Passed through like the plain typed button's (controls.js): a
+        // command that must land in a named box says so in its own data, and
+        // the generic chooser must not be the one place that drops it.
+        ...(btn.focus ? { focus: btn.focus } : {}),
       });
       showToast(`${title}: ${option.label}`);
       closeChoicePanel();

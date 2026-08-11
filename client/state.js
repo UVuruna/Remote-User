@@ -109,6 +109,14 @@ const statusEl = document.getElementById("status");
 const token = new URLSearchParams(location.search).get("token");
 
 let monitor = { w: 0, h: 0 };
+// EVERY monitor the PC can stream, and which one it is streaming now (owner
+// 2026-08-09, task 155): the layout list's single "Desktop" row became one row
+// PER MONITOR, each naming its resolution. Both arrive on the EXISTING `config`
+// frame as OPTIONAL fields, so a server too old to send them leaves this list
+// empty and the list draws the one Desktop row it always did — nothing on the
+// wire had to become required for a feature the phone can live without.
+let monitorList = [];      // [{index, width, height, primary}]
+let monitorIndex = 0;      // which of them the stream is showing
 let baseRect = { x: 0, y: 0, w: 1, h: 1 };
 let view = { scale: 1, tx: 0, ty: 0 };
 

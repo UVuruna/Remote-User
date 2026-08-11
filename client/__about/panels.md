@@ -52,13 +52,19 @@ under 30 px. `card-split` is this card's own class, so the four other
 `.sets-card` panels keep the reflow they were measured with — and their
 latent version of the same spill is a known, unfixed risk, recorded here.
 
-**The D-pad shape, one tick per orientation** (`padShapeRow`, owner 2026-08-09,
-task 177 — task 121's single upright tick asked in both directions): "Held
-upright: the D-pad cross instead of the column" and "Held sideways: upright
-columns instead of the D-pad cross". Neither row changes a default — each
-starts on the shape that orientation renders TODAY (`padShape` in
-controls.js), and unticking writes `auto` rather than the opposite shape, so a
-device that ticked and unticked reads exactly like one that was never asked.
+**The D-pad shape ticks LEFT this card on 2026-08-11** (task 218a). They asked
+about the shape of the CONTROL GROUPS on this handset while sitting in a card
+titled "Wheel sets", which is about which sets ride the wheel — ALG-9 SECTION
+TAXONOMY, and the owner named the misplacement himself. Their home is the
+Phone card ([phone-panel.md](phone-panel.md)). The BUILDER `padShapeRow` stays
+here beside the other row builders; its callers do not.
+
+**`segRow`** — the shared segmented control (a caption, a strip of mutually
+exclusive buttons, one lit). It was born in quality.js as `qualitySegRow` and
+was lifted here on 2026-08-11 when the Phone card needed the identical row.
+Its `.q-row` / `.q-seg` class names were kept: they are already styled,
+already audited and already photographed, and renaming measured CSS buys
+nothing.
 
 App-shortcut rows are ticked one by one under a master switch — and since
 2026-08-06 they are **counted**: `visibleCount()` includes `appSetReserve()`,
@@ -205,3 +211,44 @@ Both tick handlers now **write, then measure**. They used to disagree — the
 basic row measured before saving with `>=`, the app row after saving with `>`
 — and a rule the code states twice is a rule the code will break once. The
 cap itself moved to [sets.js](sets.md); this module only renders it.
+
+## A capped multicol cannot scroll — it grows sideways (owner 2026-08-10, task 217)
+
+His screenshot: the Dictation language card, held sideways, reflowed into the
+two columns he likes — and then vertical scrolling stopped working entirely,
+with the lower part of the card and its Done button unreachable. Upright the
+same card scrolls perfectly.
+
+**The mechanism is a property of multicol, not a mistake in any one panel.**
+`.sets-card` / `.lay-card` carry `max-height: 92vh` and `overflow-y: auto`,
+which is exactly right for an ordinary block. Add `column-count` and the box
+becomes a FRAGMENTAINER with a DEFINITE height, and a fragmentainer that runs
+out of height has one answer: it makes ANOTHER COLUMN. So the overflow is in
+the INLINE axis, `scrollHeight` never exceeds `clientHeight`, `overflow-y: auto`
+has nothing to do, and the rest of the card is off to the right where no
+vertical gesture can reach it. Measured: with the fix removed, the dictation
+card at 915×412 overflowed **sideways by 742 px**.
+
+This project met the same trap once before, on the Sets picker (2026-08-09), and
+answered it for that ONE card by declaring its columns explicitly (`card-split`).
+Every other reflowing card was left with the trap armed, waiting for its content
+to grow — and the dictation card's content is the phone's own language list,
+which is exactly the content that varies from device to device.
+
+**The fix takes the cap off**, using the same property read the other way: a
+multicol with an AUTO height balances into exactly `column-count` columns and
+grows TALLER. The card stops being height-constrained, keeps its two columns,
+and the scrolling moves out to the panel behind it — a plain fixed box with no
+columns of its own. Rung 4 of the ladder is still last: rungs 1 and 2 are what
+these columns ARE, and a scrollbar only appears once two full columns genuinely
+do not fit. `margin-block: auto` beside `align-items: flex-start` keeps a short
+card centred, where plain `align-items: center` would centre an over-tall card
+and put its TOP out of reach above the scroll origin — the same bug wearing the
+other end of the card.
+
+**Panels checked, all now green in both orientations with content long enough to
+require scrolling** (task 215's standing order — a card that never scrolls
+proves nothing): Dictation card (the reported one), Sets picker, Quality panel,
+Layout list, Creation card, Layout settings sheet, Member chooser, ✕ chooser.
+Gate: the reach checks in `tests/test_phone_chrome.py`, and the dictation
+staging in `tests/_audit_panels.py` now lists fourteen languages instead of six.

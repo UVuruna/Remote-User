@@ -123,6 +123,10 @@ const BUILTINS = {
   // Opens the quality panel (fps / resolution / bitrate + auto-save on
   // mobile data — owner 2026-08-05, replacing the full/reduced cycler)
   quality:  { label: "Quality", icon: "gauge",  kind: "quality" },
+  // The per-device switches, gathered (owner 2026-08-11, tasks 161 + 218a):
+  // layout bar position, what Hide means, the D-pad shape per orientation.
+  // They used to live in three unrelated cards — client/phone-panel.js.
+  phone:    { label: "Phone",  icon: "phone",  kind: "phone" },
 };
 
 // --- Device prefs (owner bug report 2026-08-05) ----------------------------
@@ -488,42 +492,12 @@ wizardEl.addEventListener("pointerdown", (e) => {
 // the install funnel by User-Agent.)
 const IN_APP = typeof window.Android !== "undefined";
 
-// --- In-app update (the PC carries the newer APK) --------------------------
-// The phone never checks the internet for updates: `config.app_version` says
-// what the PC runs, the bridge says what this shell is, and /app.apk on the
-// SAME PC is the newer build (the desktop app updates itself from GitHub).
-
-const updateBanner = document.getElementById("update-banner");
-
-function versionNumbers(v) {
-  return (String(v).match(/\d+/g) || []).slice(0, 3).map(Number);
-}
-
-function isNewer(server, app) {
-  const s = versionNumbers(server);
-  const a = versionNumbers(app);
-  if (!s.length || !a.length) return false;
-  for (let i = 0; i < 3; i++) {
-    const d = (s[i] || 0) - (a[i] || 0);
-    if (d) return d > 0;
-  }
-  return false;
-}
-
-function refreshUpdateBanner(apkVersion) {
-  // Compare against the APK the PC actually SERVES (config.apk_version) —
-  // comparing against the server version offered phantom updates whenever a
-  // release changed only the desktop side (owner bug 2026-08-02).
-  updateBanner.hidden = !(
-    IN_APP && window.Android.appVersion && window.Android.update &&
-    apkVersion && isNewer(apkVersion, window.Android.appVersion())
-  );
-}
-
-keepFocus(updateBanner, () => {
-  window.Android.update(`${location.origin}/app.apk`);
-  showToast("Downloading — open the file to install the update");
-});
+// In-app update (the PC carries the newer APK) lives in its own file,
+// client/update-banner.js — split out here to keep this file under THE
+// STRUCTURE LAW's 1,000-line ceiling (task 207). It reads `IN_APP` (above),
+// `keepFocus` and `showToast` (globals — plain scripts, no module system;
+// see client/layouts.js's own note on the same pattern) and is called from
+// connection.js's `config` handler (`refreshUpdateBanner`).
 
 // --- Phone → PC upload (gallery / camera / any files) ---------------------
 // The server pastes by itself (Ctrl+V injected) — picking was the whole
@@ -746,7 +720,18 @@ function makeActionButton(btn, pos) {
       keepFocus(el, openQualityPanel);
     } else if (b.kind === "dictation") {
       keepFocus(el, openDictationPanel);
+    } else if (b.kind === "phone") {
+      keepFocus(el, openPhonePanel);
     }
+  } else if (btn.panel) {
+    // A command whose panel is WRITTEN, not generated (owner ballot verdict
+    // 2026-08-11): Model, Thinking and Mode each carry live state read off the
+    // PC, capability stars and an honest line about what the command really
+    // changes — none of which a generic options list can say. The field names
+    // the card and client/claude-panels.js builds the button, so this file
+    // knows only that such a kind exists (THE STRUCTURE LAW — it stands at
+    // 990 of its 1,000 lines).
+    el = makeClaudePanelButton(btn);
   } else if (btn.text && btn.options) {
     // A command whose answer is a CHOICE (owner idea 2026-08-05): the phone
     // shows the options itself and sends the finished command, instead of
@@ -763,10 +748,18 @@ function makeActionButton(btn, pos) {
     // menu) and presses Enter when the command asks for it. `enter: false`
     // leaves the line standing — that is the "/" button, which opens the
     // command menu and lets the finger pick from it.
+    // `focus` (owner order 2026-08-11, task 200) names a box the PC must put
+    // the caret in BEFORE typing — `"claude"` is the Claude prompt. Passed
+    // through from the button's own data so the server's field is reachable
+    // at all: it landed the same day with nothing on the phone sending it,
+    // and a field nobody sends is a feature that does not exist (the
+    // actions.json lesson of 2026-08-07). Omitted when the button does not
+    // ask, so every other typed command keeps pasting where focus already is.
     const icon = btn.icon && ICONS[btn.icon] ? btn.icon : null;
     el = makeButton(icon ? "ctl" : "ctl text", icon, btn.label || btn.text);
     keepFocus(el, () => send({
       type: "paste_text", text: btn.text, enter: btn.enter !== false,
+      ...(btn.focus ? { focus: btn.focus } : {}),
     }));
   } else if (btn.chord) {
     // actions.json buttons may name an icon from ICONS (owner-approved icon

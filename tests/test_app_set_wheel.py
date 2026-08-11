@@ -220,14 +220,21 @@ console.log(JSON.stringify({
       { ...real, agents: ["claude"], app_sets: ["VSCode"] })).map((s) => s.name),
 }));
 """
+    # THREE since 2026-08-11 (task 219): `Claude Tools` rides on exactly the
+    # same `agent: "claude"` answer. This asserts MATCHING, not riding — the
+    # new set ships `enabled: false` (the wheel is already full at 8, see
+    # ACTIONS.md), so `appSetOn` keeps it off the ring until he ticks it. A
+    # set that matches and is switched off is the ordinary case and always
+    # was; what this check exists to prove is that the PC's answer, and only
+    # the PC's answer, decides which sets BELONG to this window.
     got = run_js(body, sets, {"apps": True, "appState": {}, "state": {}})
-    assert got["detected"] == ["VSCode", "Claude"], (
-        "the PC says a Claude session is live in this window's project — both "
-        f"sets must ride, with nobody ticking anything: {got['detected']}")
+    assert got["detected"] == ["VSCode", "Claude", "Claude Tools"], (
+        "the PC says a Claude session is live in this window's project — every "
+        f"claude set must match, with nobody ticking anything: {got['detected']}")
     assert got["plain"] == ["VSCode"], (
         "no live claude.exe in that project means plain VSCode — the wheel "
         f"must not carry Claude's slash commands into an editor: {got['plain']}")
-    assert got["stale"] == ["VSCode", "Claude"], (
+    assert got["stale"] == ["VSCode", "Claude", "Claude Tools"], (
         "A LAYOUT MAY NOT CARRY AN ANSWER. This is the owner's bug of "
         "2026-08-07: a list written once at creation outranked a live "
         "detection that was saying 'claude' on every state frame, and his "

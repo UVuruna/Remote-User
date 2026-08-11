@@ -24,6 +24,8 @@
    Same overlay pattern as the wizard. */
 #sets-panel,
 #quality-panel,
+#phone-panel,
+#claude-panel,
 #dictation-panel,
 #notice-panel,
 #choice-panel {
@@ -38,6 +40,8 @@
 }
 #sets-panel[hidden],
 #quality-panel[hidden],
+#phone-panel[hidden],
+#claude-panel[hidden],
 #dictation-panel[hidden],
 #notice-panel[hidden],
 #choice-panel[hidden] { display: none; }
@@ -82,6 +86,97 @@
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
+
+/* ── THE CLAUDE PANELS: MODEL, THINKING, MODE ───────────────────────────────
+   Owner ballot verdict 2026-08-11 (tasks 190 / 191 / 208). Two things here are
+   design DECISIONS rather than dressing, and both come straight from his
+   report:
+
+   1. A CHIP THAT IS A FACT AND A CHIP THAT IS A MEMORY MUST NOT LOOK ALIKE.
+      He read a "Medium" chip as the PC's live state while the PC was running
+      on Max, and reported the command as broken. The chip was this phone's own
+      record of its last tap. So `.cl-fact` is a filled, stated thing and
+      `.cl-memory` is a dashed, unfilled one carrying secondary ink — legible,
+      never authoritative. The difference survives every look because it is
+      CARRIED BY SHAPE (fill + border style), not by colour alone: three of the
+      eight looks paint no colour on a control at all.
+   2. THE CAPABILITY STARS ARE DRAWN. `.cl-stars` is an inline SVG sized in
+      `em` so it scales with the row's text like a glyph would, without being
+      one — the ✥ lesson of 2026-08-05, where a dingbat came out a blunt cross
+      on his own phone. */
+.cl-card { width: min(460px, 100%); }
+
+.cl-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-s);
+  margin-bottom: var(--space-m);
+}
+.cl-chip {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1 1 auto;
+  min-width: 120px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+}
+.cl-chip-cap {
+  color: var(--text-secondary);
+  font: 600 11px system-ui, sans-serif;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.cl-chip b { font: 600 15px system-ui, sans-serif; }
+/* Read off the PC — it may look like state, because it IS state. */
+.cl-fact { background: var(--accent-wash); border-color: var(--accent); }
+.cl-fact b { color: var(--text-primary); }
+/* This phone's own memory. Deliberately NOT a state look: no fill, a dashed
+   edge, secondary ink. It answers "what did I last send" and nothing more. */
+.cl-memory { background: transparent; border-style: dashed; }
+.cl-memory b { color: var(--text-secondary); font-weight: 500; }
+/* Nothing to report. The word "unknown" is the content; the chip must not
+   shout it. */
+.cl-none { background: transparent; border-color: var(--border); }
+.cl-none b { color: var(--text-secondary); font-weight: 500; }
+
+.cl-opt { display: flex; align-items: center; gap: var(--space-s); }
+.cl-opt-name { flex: 0 0 auto; }
+.cl-opt-stars { display: inline-flex; align-items: center; color: var(--accent); }
+.cl-stars { height: 0.85em; width: auto; }
+/* The one-word note under a mode's name — what that mode actually permits.
+   It takes the leftover width, so the marks that follow it stay at the row's
+   far edge whatever the note says. */
+.cl-opt-note {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--text-secondary);
+  font: 400 12px/1.25 system-ui, sans-serif;
+}
+.cl-mark {
+  flex: 0 0 auto;
+  margin-left: auto;
+  padding-left: var(--space-s);
+  font-size: 0.78em;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+/* A mark that follows another one has already lost `margin-left: auto` to it
+   — it simply sits beside its sibling, which is what "now · saved" should
+   read as on the one row that can carry both. */
+.cl-mark ~ .cl-mark { margin-left: 0; }
+.cl-mark-now { color: var(--accent); }
+.cl-mark-saved { color: var(--text-secondary); }
+/* The row the PC says is running. Same accent edge the saved option has worn
+   since 2026-08-08 — one vocabulary for "this one", never two. */
+.sets-row.choice.cl-current {
+  border-color: var(--accent);
+  box-shadow: inset 3px 0 0 0 var(--accent);
+}
+/* The honest line (what the command really changes) sits under the list, above
+   Cancel, and reads as a note rather than as an option. */
+.cl-note { margin-top: var(--space-s); margin-bottom: 0; }
 
 /* Dictation setup card rows (owner round 2, 2026-08-05).
 
@@ -373,11 +468,68 @@
      Do not "simplify" this back into one selector. The two policies are both
      right, for different rows, and which one a card takes is written where
      the card is built. */
+  /* ── A CAPPED MULTICOL CANNOT SCROLL, IT GROWS SIDEWAYS (owner report
+     2026-08-10, task 217) ────────────────────────────────────────────────────
+     His screenshot: the Dictation language card, held sideways, reflowed into
+     the two columns he likes — and then vertical scrolling stopped working
+     entirely, with the lower part of the card and its Done button unreachable.
+     Upright the same card scrolls perfectly.
+
+     THE MECHANISM, and it is a property of multicol rather than a mistake in
+     any one panel. `.sets-card`/`.lay-card` carry `max-height: 92vh` and
+     `overflow-y: auto`, which is exactly right for an ordinary block: content
+     that does not fit makes the box scroll. Add `column-count` and the box
+     becomes a FRAGMENTAINER with a DEFINITE height, and a fragmentainer that
+     runs out of height has only one answer — it makes ANOTHER COLUMN. So the
+     overflow is in the INLINE axis, `scrollHeight` equals `clientHeight`
+     forever, `overflow-y: auto` has nothing to scroll, and the rest of the card
+     is sitting off to the right where a vertical drag can never reach it. This
+     project has met it once before, on the Sets picker (2026-08-09), and
+     answered it for that ONE card by declaring its columns explicitly
+     (`card-split` below). Every other reflowing card was left with the trap
+     armed, waiting for its content to grow — the dictation card's content is
+     the phone's own language list, which is exactly the content that varies
+     from device to device.
+
+     THE FIX IS TO TAKE THE CAP OFF, and it works because of the same property
+     read the other way: a multicol with an AUTO height balances its content
+     into exactly `column-count` columns and grows TALLER as it needs to. So the
+     card stops being height-constrained (nothing to fragment past), keeps its
+     two columns, and the SCROLLING moves out to the panel behind it, which is a
+     plain fixed box with no columns of its own and scrolls the way anything
+     does. Rung 4 of the ladder is still last: rungs 1 and 2 are what these
+     columns ARE, and the scroll only appears once two full columns of content
+     genuinely do not fit the screen.
+
+     `margin-block: auto` beside `align-items: flex-start` is what keeps a SHORT
+     card centred: auto margins take the free space when there is some, and lose
+     to the content when there is none — where plain `align-items: center` would
+     centre an over-tall card and put its TOP out of reach above the scroll
+     origin, which is the same bug wearing the other end of the card. */
+  body #sets-panel,
+  body #quality-panel,
+  body #phone-panel,
+  body #claude-panel,
+  body #dictation-panel,
+  body #notice-panel,
+  body #choice-panel,
+  body #layout-panel {
+    overflow-y: auto;
+    align-items: flex-start;
+  }
   body .sets-card.card-columns,
   body .lay-card.card-columns {
     column-count: 2;
     column-gap: 24px;
+    max-height: none;      /* a CAPPED multicol fragments sideways — see above */
+    overflow: visible;     /* nothing scrolls here; the panel does */
+    margin-block: auto;    /* still centred while it fits */
   }
+  /* The cards that are NOT multicol keep their own cap and their own scroll —
+     they are ordinary blocks and were never caught by the trap — but they still
+     need the auto margins now that their panel aligns to the start. */
+  body .sets-card,
+  body .lay-card { margin-block: auto; }
   /* Only the ROWS are unbreakable. A first attempt made every direct child of
      the card unbreakable, and the card spilled a THIRD column off the right
      edge of the screen (the Cancel button at x=957 on a 915 px screen),
@@ -432,7 +584,14 @@
      screen this short: 16 px of slack, where the rule allows 24. The Done
      button is pinned outside the scroll — a primary action below the fold is
      the same defect as one off the edge, only slower to find. */
-  body #sets-panel { padding: var(--space-s); }
+  /* THREE MORE PANELS TAKE THIS MECHANISM on 2026-08-11 (tasks 190/191/208
+     and 161/218a). The Claude cards and the Phone card were measured on their
+     very first audit run at 915x412 with 71-207 px out of sight and 123 px of
+     width standing idle beside them — BUG A, and the same one the Sets picker
+     answered here. Same class, same rule, one place. */
+  body #sets-panel,
+  body #claude-panel,
+  body #phone-panel { padding: var(--space-s); }
   body .sets-card.card-split {
     width: 100%;
     max-width: 1100px;
@@ -617,4 +776,50 @@ button.sets-row:active { background: var(--accent-glow); border-color: var(--acc
   color: var(--accent);
   background: transparent;
   font: 600 15px system-ui, sans-serif;
+}
+
+/* ── A WIDE SCREEN HELD UPRIGHT GETS THE COLUMNS TOO (task 217's other half,
+   found the same run) ───────────────────────────────────────────────────────
+   The reflow above is keyed to `orientation: landscape`, which was the right
+   question while the only wide screen was a phone lying down. On a 10" tablet
+   held UPRIGHT the dictation card is 420 px of list in 800 px of screen: 348 px
+   of width standing idle beside a card scrolling 70 px, which is BUG A of THE
+   SPACE & LEGIBILITY LAW measured exactly. Rung 1 cannot fix it alone — a
+   single column merely 348 px wider is the same number of rows — and rung 2 is
+   the columns this card already has sideways.
+
+   700 px is the floor because it is the narrowest screen on which two columns
+   of a real row (icon + language name + its status line) each still hold their
+   own text; below it the single column IS the reflow. The same
+   `max-height: none` + panel-scroll pairing as above, and for the same reason:
+   a capped multicol grows sideways instead of scrolling. */
+@media (orientation: portrait) and (min-width: 700px) {
+  body #sets-panel,
+  body #quality-panel,
+  body #phone-panel,
+  body #claude-panel,
+  body #dictation-panel,
+  body #notice-panel,
+  body #choice-panel,
+  body #layout-panel {
+    overflow-y: auto;
+    align-items: flex-start;
+  }
+  body .sets-card.card-columns,
+  body .lay-card.card-columns {
+    width: min(760px, 100%);
+    column-count: 2;
+    column-gap: 24px;
+    max-height: none;
+    overflow: visible;
+    margin-block: auto;
+  }
+  body .sets-card,
+  body .lay-card { margin-block: auto; }
+  body .sets-row,
+  body .lay-row,
+  body .lay-item,
+  body .q-row,
+  body .sets-card button,
+  body .lay-card button { break-inside: avoid; }
 }

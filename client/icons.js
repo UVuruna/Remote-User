@@ -77,6 +77,14 @@ const ICONS = {
   // region inside the screen — the layout aspect-ratio panel
   aspect: '<rect x="2.5" y="4" width="19" height="16" rx="2"/><rect x="7" y="8" width="10" height="8" rx="1"/>',
   desktop: '<rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/>',
+  // THE TWO HIDE MODES (owner 2026-08-09, task 159) — the mini radial the
+  // Hide button opens names its two states with pictures, like every other
+  // button on this page. `hideauto` is the plain eye: the controls come BACK
+  // by themselves the moment anything is touched. `hidestay` is the crossed
+  // eye under a padlock: hidden is hidden until Hide is pressed again. Drawn
+  // geometry, never a font glyph (the ✥ of 2026-08-05).
+  hideauto: '<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="2.6"/>',
+  hidestay: '<path d="M2 12s3.6-7 10-7c1.7 0 3.2.4 4.5 1.1"/><path d="M8.4 18.5A14.6 14.6 0 0 1 2 12"/><line x1="3" y1="3" x2="21" y2="21"/><rect x="13.5" y="15.5" width="8" height="5.5" rx="1.4"/><path d="M15.5 15.5v-1.4a2 2 0 0 1 4 0v1.4"/>',
   // Four-way move (the aspect panel's Move handle). A drawn icon, not the
   // "✥" character: that glyph is whatever the device's font makes of it, and
   // on the owner's phone it came out a blunt cross with no arrowheads
@@ -142,6 +150,20 @@ const ICONS = {
   compact: '<polyline points="8 8.5 12 4.5 16 8.5"/><polyline points="8 15.5 12 19.5 16 15.5"/><line x1="4" y1="12" x2="20" y2="12"/>',
   newchat: '<path d="M21 14.5a2 2 0 0 1-2 2H8.5L4 21V5.5a2 2 0 0 1 2-2h13a2 2 0 0 1 2 2z"/><line x1="12.5" y1="7" x2="12.5" y2="13"/><line x1="9.5" y1="10" x2="15.5" y2="10"/>',
   rewind: '<path d="M3.5 12a8.5 8.5 0 1 1 3 6.5"/><polyline points="3.5 6.8 3.5 12 8.7 12"/><path d="M12 8v4.3l3 1.8"/>',
+  // Claude Tools (owner 2026-08-11, task 219): ONE group holding the built-in
+  // commands, each named for what it DOES because the official names "svima
+  // plivaju i ne ukazuju na to šta rade". # lang-ok: owner quote
+  // The set's face is a wrench; its commands are a magnifier over a file
+  // (Review), a shield with a keyhole (Security), a broom (Clean up), the
+  // existing compact arrows, and a document with a plus (Init CLAUDE).
+  tools: '<path d="M14.6 6.2a4.2 4.2 0 0 0 5.5 5.5l-8.4 8.4a2.6 2.6 0 0 1-3.7-3.7z"/><path d="M20.1 11.7 22 5.9 18.4 9.5"/><path d="m14.6 6.2 3.8-3.6-5.8 1.9"/>',
+  review: '<path d="M19 9.5V20a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h6.5z"/><path d="M13 2v6h6"/><circle cx="11.5" cy="14" r="2.9"/><line x1="13.7" y1="16.2" x2="16" y2="18.5"/>',
+  security: '<path d="M12 2.5 5 5.7v5.4c0 4.2 2.9 7.7 7 8.6 4.1-.9 7-4.4 7-8.6V5.7z"/><circle cx="12" cy="10.6" r="1.9"/><path d="M12 12.5v3.1"/>',
+  simplify: '<path d="M9.5 13.5 3.6 19.4a2 2 0 0 0 2.8 2.8l5.9-5.9z"/><path d="m11.6 11.4 3.4 3.4"/><path d="M17.5 2.5v4M15.5 4.5h4M19.5 13v3M18 14.5h3M6.5 3v3M5 4.5h3"/>',
+  initdoc: '<path d="M19 9.5V20a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h6.5z"/><path d="M13 2v6h6"/><line x1="12" y1="11.5" x2="12" y2="18.5"/><line x1="8.5" y1="15" x2="15.5" y2="15"/>',
+  // The Phone card (owner 2026-08-11, task 161/218a): the per-device switches
+  // that belong to no other subject, gathered behind one Settings button.
+  phone: '<rect x="6" y="2" width="12" height="20" rx="2.6"/><line x1="10.3" y1="5.2" x2="13.7" y2="5.2"/><circle cx="12" cy="18.6" r="1.1" fill="currentColor" stroke="none"/>',
   // The app-aware sets wear their own APP's face (owner 2026-08-05): VSCode,
   // Chrome and Explorer all showed the generic `newwin` window, so the wheel
   // said "some app set" instead of naming the app. Drawn in the same stroke

@@ -101,36 +101,9 @@ const qualityPanel = document.getElementById("quality-panel");
 const qualityOpened = { t: 0 };
 ghostClickArmor(qualityPanel, qualityOpened);
 
-function qualitySegRow(title, values, labels, current, onPick, disabled) {
-  const row = document.createElement("div");
-  row.className = "q-row";
-  const cap = document.createElement("span");
-  cap.className = "q-cap";
-  cap.textContent = title;
-  const seg = document.createElement("div");
-  seg.className = "q-seg";
-  values.forEach((v, i) => {
-    const b = document.createElement("button");
-    b.type = "button";
-    b.textContent = labels[i];
-    b.classList.toggle("on", v === current);
-    if (disabled && disabled(v)) {
-      // Above what the PC allows: visibly out of reach, and inert. The row's
-      // note under the panel says why.
-      b.classList.add("out");
-      b.disabled = true;
-    } else {
-      b.addEventListener("click", () => {
-        seg.querySelectorAll("button").forEach((x) => x.classList.remove("on"));
-        b.classList.add("on");
-        onPick(v);
-      });
-    }
-    seg.appendChild(b);
-  });
-  row.append(cap, seg);
-  return row;
-}
+// The segmented row this panel invented moved to panels.js as `segRow` on
+// 2026-08-11, when the Phone card (task 161) needed the identical control.
+// One builder, three callers — never a second copy to drift from.
 
 function saveQuality(patch) {
   prefSet("qualityPrefs", JSON.stringify({ ...qualityPrefs(), ...patch }));
@@ -165,12 +138,12 @@ function openQualityPanel() {
     <p class="sets-sub">The steps below can only go <b>lower</b> than the PC —
        greyed-out steps are already above what it allows.</p>`;
 
-  card.appendChild(qualitySegRow("FPS", QUALITY_FPS,
+  card.appendChild(segRow("FPS", QUALITY_FPS,
     ["Max", "10", "15", "30", "60"], p.fps, (v) => saveQuality({ fps: v }),
     fpsUnreachable));
-  card.appendChild(qualitySegRow("Resolution", QUALITY_RES,
+  card.appendChild(segRow("Resolution", QUALITY_RES,
     ["Full", "⅔", "½"], p.res, (v) => saveQuality({ res: v })));
-  card.appendChild(qualitySegRow("Bitrate", QUALITY_BR,
+  card.appendChild(segRow("Bitrate", QUALITY_BR,
     b ? [mbpsLabel(b.bitrate), mbpsLabel(b.bitrate_mid), mbpsLabel(b.bitrate_low)]
       : ["High", "Mid", "Low"],
     p.bitrate, (v) => saveQuality({ bitrate: v })));

@@ -202,20 +202,25 @@ def test_a_field_we_retired_stops_lying():
         "the same, for a built-in category")
 
 
-def test_the_nine_option_model_panel_becomes_the_official_five():
-    """Tasks 190/191 (2026-08-10): the phone's Model panel used to offer NINE
-    options nobody official ever offered (opus, sonnet, haiku, fable, best,
-    opusplan, opus[1m], sonnet[1m], default — built from this project's own
-    transcript vocabulary, never checked against the extension's own menu),
-    and Thinking sent a bare `/effort` that only raised Claude's own menu and
-    stopped. A static read of the extension's own binary settled both: the
-    official picker is exactly five entries (Default / Opus 1M / Fable /
-    Sonnet / Haiku, in that order) and `/effort <literal>` commits directly
-    for low/medium/high/xhigh/max, so Thinking gets the same choosing panel
-    Model already had. `buttons` is entirely OURS (`_merge_set` never
-    consults OWNER_SET_KEYS for it), so this must reach his file exactly like
-    `agent` finally did — proven here on his file's OLD nine/zero shape, not
-    on a freshly-derived copy of the shipped file."""
+def test_the_model_and_thinking_buttons_become_written_panels():
+    """Tasks 190/191/208 (owner ballot verdict 2026-08-11) — and the SECOND
+    correction this one button has needed, which is why the check is written
+    around the migration rather than around today's shape.
+
+    Round one (2026-08-10) replaced the nine invented options with the official
+    five and gave Thinking the same `options` chooser. That was right about the
+    LIST and wrong about the CONTROL: an options list can offer choices and
+    cannot say what the PC is running right now, which is task 208 — he read a
+    lit "Medium" as the PC's live state while it ran on Max. So both buttons
+    now carry a `"panel"` field and `client/claude-panels.js` draws a card that
+    states SAVED, NOW and (Thinking) LAST SENT, each in its own clothes.
+
+    What is proven here is the MIGRATION, not the design: `buttons` is entirely
+    OURS (`_merge_set` never consults OWNER_SET_KEYS for it), so the new shape
+    must reach his seeded %LOCALAPPDATA% file exactly like `agent` finally did
+    — and the stale `options` list must be GONE from it, or his phone keeps
+    opening the old chooser forever. Driven from his file's OLD nine-option
+    shape, never from a freshly-derived copy of the shipped file."""
     from gui.controls_data import merge_shipped_pools
     shipped = shipped_actions()
     user = copy(HIS_FILE)
@@ -235,30 +240,73 @@ def test_the_nine_option_model_panel_becomes_the_official_five():
              {"label": "default — your account's own", "value": "default"},
          ]},
         {"label": "Thinking", "icon": "thinking", "text": "/effort", "enter": True},
+        {"label": "Mode", "icon": "cmode", "chord": "shift+tab"},
+        {"label": "Compact", "icon": "compact", "text": "/compact", "enter": True},
     ]
 
     merge_shipped_pools(user, shipped)
 
     claude = named(user["app_sets"], "Claude")
-    model = next(b for b in claude["buttons"] if b["label"] == "Model")
-    thinking = next(b for b in claude["buttons"] if b["label"] == "Thinking")
+    by_label = {b.get("label"): b for b in claude["buttons"]}
+    for label, panel in (("Model", "claude-model"), ("Thinking", "claude-effort"),
+                         ("Mode", "claude-mode")):
+        got = by_label.get(label)
+        assert got is not None, f"the {label} button vanished from his file"
+        assert got.get("panel") == panel, (
+            f"{label} did not become a written panel on HIS file: {got}")
+        assert "options" not in got, (
+            f"the stale options list survived on {label} — his phone would go "
+            f"on opening the old chooser: {got}")
 
-    assert model["options"] == [
-        {"label": "Default (recommended)", "value": "default"},
-        {"label": "Opus (1M context)", "value": "opus[1m]"},
-        {"label": "Fable", "value": "fable"},
-        {"label": "Sonnet", "value": "sonnet"},
-        {"label": "Haiku", "value": "haiku"},
-    ], (f"the Model panel did not become the official five, in the official "
-        f"order: {model.get('options')}")
-    assert thinking.get("options") == [
-        {"label": "Low", "value": "low"},
-        {"label": "Medium", "value": "medium"},
-        {"label": "High", "value": "high"},
-        {"label": "xHigh", "value": "xhigh"},
-        {"label": "Max", "value": "max"},
-    ], (f"Thinking did not gain a committing options panel like Model's: "
-        f"{thinking.get('options')}")
+    # Task 219: Compact MOVED to the Claude Tools group ("neka budu svi u 1
+    # grupi").  # lang-ok: owner quote
+    assert "Compact" not in by_label, (
+        "his Claude set kept /compact after it moved to Claude Tools — two "
+        "buttons for one command, and one of them will drift")
+    tools = named(user["app_sets"], "Claude Tools")
+    assert tools is not None, (
+        "the new Claude Tools set never reached his file — the exact failure "
+        "the `agent` field taught this project about")
+    assert tools.get("agent") == "claude" and tools.get("process") == "code", (
+        f"Claude Tools must ride on the same detection as Claude: {tools}")
+    assert [b.get("text") for b in tools["buttons"]] == [
+        "/code-review", "/security-review", "/simplify", "/compact", "/init",
+    ], f"the group's commands did not arrive intact: {tools['buttons']}"
+
+
+def test_monitor_leaves_his_settings_set():
+    """Task 155 (owner 2026-08-09): Monitor leaves the Settings menu and becomes
+    the layout list's per-monitor rows. His file — quoted above as it really was
+    — has `{"action": "monitor"}` FIRST in that set, so on his PC the button
+    would go on riding the D-pad forever unless the merge takes it out. `buttons`
+    is entirely OURS (`_merge_set` never consults OWNER_SET_KEYS for it), which
+    is exactly the mechanism that finally delivered `agent`; this proves the same
+    mechanism can also RETIRE a command, which is the direction nobody had
+    checked. The other half matters as much: `monitor` must stay in the client's
+    BUILTINS so a custom set can still carry it — that is asserted at the source,
+    because a pool entry deleted from actions.json says nothing about whether the
+    action itself still exists."""
+    from gui.controls_data import merge_shipped_pools
+    shipped = shipped_actions()
+    settings = named(shipped["categories"], "Settings")
+    assert settings and not any(b.get("action") == "monitor"
+                                for b in settings["buttons"]), (
+        "the shipped Settings set still carries the Monitor cycler — task 155 "
+        "moved it to the layout list's per-monitor rows")
+    user = copy(HIS_FILE)
+    his = named(user["categories"], "Settings")
+    assert any(b.get("action") == "monitor" for b in his["buttons"]), "bad fixture"
+
+    merge_shipped_pools(user, shipped)
+
+    his = named(user["categories"], "Settings")
+    assert not any(b.get("action") == "monitor" for b in his["buttons"]), (
+        "the retired Monitor command stayed in the owner's Settings pool — his "
+        f"phone would keep offering the cycler: {his['buttons']}")
+    builtins = (PROJECT / "client" / "controls.js").read_text(encoding="utf-8")
+    assert '  monitor:  { label: "Monitor"' in builtins, (
+        "`monitor` left the client's BUILTINS as well — a custom set could then "
+        "never carry a monitor switch again, which task 155 did not ask for")
 
 
 def test_a_set_he_has_never_had_arrives_whole():
@@ -286,8 +334,9 @@ CHECKS = [
     ("everything he owns survives the migration",
      test_everything_he_owns_survives_the_migration),
     ("a field we retired stops lying", test_a_field_we_retired_stops_lying),
-    ("the nine-option Model panel becomes the official five",
-     test_the_nine_option_model_panel_becomes_the_official_five),
+    ("Model, Thinking and Mode become written panels; Compact moves",
+     test_the_model_and_thinking_buttons_become_written_panels),
+    ("Monitor leaves his Settings set", test_monitor_leaves_his_settings_set),
     ("a set he has never had arrives whole",
      test_a_set_he_has_never_had_arrives_whole),
 ]

@@ -67,3 +67,11 @@ Every entry obeys it, and a new one must too:
   and the desktop set list said "some app set" instead of naming the app.
   Drawn in the same stroke language as everything else — recognisable at
   24 px, never a bitmap logo. `claude` (the asterisk) was already there.
+
+## The two Hide modes (owner 2026-08-09, task 159)
+
+`hideauto` is the plain eye — the controls come BACK by themselves the moment
+anything is touched. `hidestay` is the crossed eye under a padlock — hidden is
+hidden until Hide is pressed again. They name the two states of the mini radial
+the Hide button opens ([Chrome](chrome.md)); drawn geometry like everything
+else here, never a font glyph.

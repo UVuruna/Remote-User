@@ -593,11 +593,16 @@ class ControlsEditor(QDialog):
     # exactly the part `CommandTable.ROWS_SHOWN` plays for the pool: the ladder
     # says RAISE THE MINIMUM before you scroll, and it also says the minimum
     # must fit the declared 1280x1000 frame — so the raise has to stop
-    # somewhere. Fifteen is the shipped file's own fullest list (thirteen sets
-    # plus two section headings); an owner with a dozen custom sets scrolls,
-    # which is the ladder's legitimate last step rather than a shortcut past
-    # its first.
-    ROWS_SHOWN = 15
+    # somewhere. It is the shipped file's own fullest list — FOURTEEN sets
+    # plus two section headings since 2026-08-11, when `Claude Tools` joined
+    # (task 219). That one extra row is why this number is not a constant to
+    # leave alone: at fifteen the list scrolled while the pool table beside it
+    # held 145 px of idle space, and the runtime Qt audit convicted the window
+    # of BUG A the same run the set was added. A set added to actions.json
+    # RAISES this number in the same commit, or the ladder's step 1 is skipped
+    # by arithmetic. An owner with a dozen custom sets still scrolls, which is
+    # the ladder's legitimate last step rather than a shortcut past its first.
+    ROWS_SHOWN = 16
 
     def _fit_set_list(self) -> None:
         """Ladder step 1, BOTH axes.
