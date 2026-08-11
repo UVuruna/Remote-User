@@ -207,3 +207,32 @@ blocks outside the landscape query, so the halves stack in build order. Gate:
 `__scrollInColumns` in `tests/_audit_js.py`, run on the creation-list staging
 at all four audited viewports — a structural rule with no number to tune, which
 catches any future panel that puts a scroller in a columned card.
+
+## The footer stopped eating the column's height (owner 2026-08-10, task 214)
+
+What he saw on a landscape tablet: on the New layout card the "Shape:" pill row
+at the bottom left was CUT — the pills half-visible, with the Cancel/Create row
+sitting across them. Measured at 915×412 before the fix: the left column held
+368 px of content in 282, hiding 86, and the two orientation chips ended at
+y=402 while the column ended at 321 and the actions row began at 336. He read
+that as the footer drawn ON TOP of the content; mechanically it was the column
+scrolling — rung 4 of the ladder — while rungs 1 and 2 still had moves left.
+
+**His own second suggestion is the fix, and it is rung 2**: Cancel and Create go
+into a VERTICAL container at the far right, one under the other, so the row they
+used to occupy is given back to the content. In landscape the card becomes a ROW
+— the two content columns, then the actions column — which costs width, of which
+this card has 660 px standing idle on his tablet and 16 px on the narrowest
+phone, and buys back the footer's whole 51 px of height at every size.
+
+**His first suggestion — make the footer transparent so the pills show through —
+is deliberately not taken**: the pills would still be UNDER two buttons and
+untappable, so it would hide the symptom and keep the defect. An element you can
+see but cannot press is worse than one you can see is missing.
+
+Rung 1 comes first anyway: a card with 22 px of pure air top and bottom, a 52 px
+name field and 6 px row margins is what a 412 px-tall screen cannot afford.
+Trimming that air plus the footer's height takes the left column from 86 px
+hidden to none — the column no longer scrolls at any size this project ships to.
+Nothing readable got smaller. The two actions are also one kin group in one
+column and take the same width (task 156's rule, ALG-5).

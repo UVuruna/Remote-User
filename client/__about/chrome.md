@@ -96,3 +96,64 @@ at all.
   ([Theme](theme.md)): `--on-warning` / `--on-error`. It used to pin
   `--text-primary` over a saturated gradient — 1.97:1 on dark, in the element
   that carries every notice this product gives.
+
+## A two-job button drops its options beside it (owner 2026-08-09, task 158)
+
+His instruction, and the reason behind it, in translation: when one of the
+buttons up there has two or three functions, the central menu does not open —
+those two options simply drop beside it, designed like every other button, with
+a picture and with the words that say what they do. The geometry is his too:
+SOUTH and SOUTH-EAST, chosen for the ANALOG STICK that is coming, so the same
+two directions serve a thumb on a controller later.
+
+- `openMiniRadial(anchorEl, options)` places at most two options around the
+  button that opened them, and `miniRadialPoints` is the geometry alone —
+  PURE, so its gate drives every corner by argument.
+- **An option is a real `.ctl`.** It is built by `makeButton` from
+  [Controls](controls.md) — the same 58 px face, the same icon size, the same
+  label treatment as the D-pad and the corners. There is no second button
+  implementation to drift from them, which is the rule CLAUDE.md constraint 9
+  exists for.
+- **It leans away from the right edge.** Hide sits in the top-RIGHT corner, so
+  a fixed south-east would open off the screen; the pair becomes south /
+  south-WEST on the right half. The two directions stay distinct and diagonal,
+  which is all a stick needs.
+- **It is NOT the category wheel.** No veil, no ring, no centre ✕: the wheel
+  replaces the whole screen with a choice of eight, this is two buttons beside
+  one corner. A tap anywhere else cancels, exactly like the wheel's backdrop.
+- **It blocks auto-hide** (`mini-radial` is in `AUTO_HIDE_BLOCKERS`): it draws
+  outside `.group`, so the rule could not see it, and a set of options that
+  vanishes while he is deciding between them is what the fence exists to stop.
+
+Its first two users are the Layout button's sources ("From a list" / "Tap a
+window", which used to be a full-screen card asking a two-answer question) and
+the Hide button's two modes below.
+
+## Hide has two modes, and he named the trade-off himself (task 159)
+
+- **`auto`** — what has always shipped: the controls go after a quiet spell and
+  ANY contact brings them back. Its cost, in his words: sometimes he wants to
+  move the mouse TO the place the buttons occupy and cannot, because the moment
+  the finger moves they are back.
+- **`sticky`** — hidden stays hidden until Hide is pressed again; nothing brings
+  the controls back by itself, and nothing takes them away by itself either.
+  Its cost, also his: the Hide corner is then permanently covered by whatever he
+  is doing.
+
+Neither is better, which is why both ship and the choice is his, per device
+(`hideMode` through the shell's SharedPreferences bridge, never bare
+localStorage — that is per-ORIGIN and split this device's state across the LAN
+and Tailscale addresses once already).
+
+- **The primary act is never lost.** A tap on Hide hides — the one thing this
+  button has always done. The MODE lives on a HOLD (380 ms, the same hold a
+  layout row is picked up by), so a radial can never swallow the press.
+- **A blocker still brings the controls back in BOTH modes.** A panel, a card
+  or the wheel is something he must READ, and every one of them is reached
+  THROUGH the controls — except the two that open themselves (the notices card
+  on connect, the dictation card on the first Mic tap). Leaving a card on screen
+  with its own controls hidden underneath is not "hidden stays hidden", it is a
+  dialog with no way out.
+
+Gate: `tests/test_phone_chrome.py` — the radial's two directions and its
+edge lean, both modes' real behaviour, and that STICKY never hides by itself.

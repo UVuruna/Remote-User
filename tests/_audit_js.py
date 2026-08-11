@@ -778,3 +778,75 @@ LIVE_CLOCK_DRIFT_JS = """() => [
   ['just past zero -0.05s', liveAction(-0.05, LIVE_MAX_BEHIND_S, LIVE_STARVED_S), 'live'],
   ['starved -0.5s', liveAction(-0.5, LIVE_MAX_BEHIND_S, LIVE_STARVED_S), 'starved'],
 ].filter(([, got, want]) => got !== want)"""
+
+
+# ── WHAT A PANEL CARD MUST SATISFY, measured on the live page ─────────────
+# Moved here from tests/test_layout_audit.py on 2026-08-10: this file owns
+# HOW a truth about pixels is computed, that one owns WHICH screen is opened
+# and what is asserted — the split both files' docstrings already state. It
+# moved when the free-width correction of tasks 215/217 took the audit past
+# THE STRUCTURE LAW's 1,000 lines, and the boundary it moved across was
+# already the right one.
+PANEL_FIT_JS = """(sel) => {
+          const card = document.querySelector(sel);
+          const r = card.getBoundingClientRect();
+          // INSIDE THE VIEWPORT, OR INSIDE A PANEL THAT SCROLLS IT (corrected
+          // 2026-08-10, task 217). Before that fix a card could never be taller
+          // than the screen, because a capped multicol silently fragmented
+          // sideways instead — so "is it in the viewport" and "can he reach all
+          // of it" were the same question. They are not: a genuinely long card
+          // (the dictation list of a phone with fourteen languages) is now
+          // taller than a 412 px screen ON PURPOSE and its panel scrolls. What
+          // must still hold is that no part of it is unreachable, which is
+          // exactly `left/right` inside the viewport and `top/bottom` inside
+          // the panel's own scroll extent.
+          const pan = card.parentElement;
+          const pr = pan.getBoundingClientRect();
+          const scrolls = /(auto|scroll)/.test(getComputedStyle(pan).overflowY);
+          const inView = r.left >= 0 && r.right <= innerWidth + 1 &&
+            (scrolls
+              ? r.top >= pr.top + pan.scrollTop - 1 &&
+                r.height <= pan.scrollHeight + 1
+              : r.top >= 0 && r.bottom <= innerHeight + 1);
+          const noPageScroll =
+            document.scrollingElement.scrollWidth <= innerWidth + 1;
+          // WHICH element, not merely "something": "noClip: False" alone costs
+          // a whole probe run to localise (2026-08-09).
+          const clipped = [];
+          for (const el of card.querySelectorAll('button, .q-row, .sets-row, input')) {
+            if (el.scrollWidth > el.clientWidth + 2) {
+              clipped.push((el.className || el.tagName) + ' ' +
+                           el.scrollWidth + '>' + el.clientWidth);
+            }
+          }
+          const noClip = !clipped.length &&
+                         card.scrollWidth <= card.clientWidth + 1;
+          // BUG A of THE SPACE & LEGIBILITY LAW, measured (2026-08-07): "a
+          // visible scrollbar with unused space in the same window is a bug,
+          // not a style choice". Not "the card never scrolls" — rung 4 is
+          // legal once the screen is full — but "it never scrolls while width
+          // stands idle beside it", which is what landscape did to seven of
+          // these ten panels: 420 px of card in a 915 px screen, by up to
+          // 256 px. Counted over the card AND whatever scrolls INSIDE it
+          // (`__hiddenPx` — a pinned footer must not hide that number).
+          const hidden = __hiddenPx(card);
+          // FREE WIDTH IS WHAT THE CARD COULD STILL TAKE, never what the
+          // SCREEN has left over (corrected 2026-08-10, tasks 215/217): the
+          // old `innerWidth - r.width` counted the panel's own mandatory
+          // gutter (2 x --space-m = 32px, over the 24px tolerance) as idle
+          // space, and convicted every full-width portrait card of BUG A for
+          // having a margin — invisible until a card was finally staged long
+          // enough to SCROLL upright. A card cannot grow into its panel's
+          // padding, so rung 1 really is exhausted there.
+          const ps = getComputedStyle(card.parentElement);
+          const freeW = card.parentElement.getBoundingClientRect().width
+            - parseFloat(ps.paddingLeft || 0) - parseFloat(ps.paddingRight || 0)
+            - r.width;
+          const noScrollWithSlack = !(hidden > 1 && freeW > 24);
+          return { inView, noPageScroll, noClip, noScrollWithSlack, clipped,
+                   hiddenPx: hidden, freeWidthPx: Math.round(freeW),
+                   contrast: __contrast(card),
+                   // …and the cut this file could not see until 2026-08-07:
+                   // a string JavaScript shortened before the DOM existed.
+                   truncated: __truncated(card) };
+        }"""

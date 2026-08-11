@@ -54,6 +54,46 @@ def enumerate_monitors() -> list[dict]:
     return monitors
 
 
+def describe(active_index: int, active_width: int, active_height: int,
+             count: int) -> list[dict]:
+    """The monitor list the PHONE names its Desktop rows after (owner
+    2026-08-09, task 155: "tu ce pisati monitor jedan ta i ta rezolucija,
+    monitor 2 i tako dalje" — lang-ok: owner quote).
+
+    One entry per capturable output, `{index, width, height, primary}`, in the
+    order `stream.switch_to` takes — which is why `count` comes from the
+    capture source and not from this enumeration: DXGI is what decides how many
+    monitors can be STREAMED, and a phone offered a row it cannot open would be
+    a button that does nothing.
+
+    THE ACTIVE MONITOR'S SIZE IS NEVER GUESSED. Its width/height come from the
+    live stream, because that is the one output whose real capture geometry we
+    know; the others are read from `enumerate_monitors`, under the same
+    "enumeration order matches DXGI output order" assumption `rect_for_size`
+    has always made (see the module docstring). A monitor the enumeration
+    cannot name at all is still listed with a zero size rather than dropped —
+    the phone falls back to plain "Monitor N", and a row that exists is the
+    only way to reach that screen.
+    """
+    found = enumerate_monitors()
+    out: list[dict] = []
+    for index in range(max(0, count)):
+        if index == active_index:
+            width, height, primary = active_width, active_height, False
+            if index < len(found):
+                primary = found[index]["primary"]
+        elif index < len(found):
+            width = found[index]["width"]
+            height = found[index]["height"]
+            primary = found[index]["primary"]
+        else:
+            width = height = 0
+            primary = False
+        out.append({"index": index, "width": width, "height": height,
+                    "primary": primary})
+    return out
+
+
 def rect_for_size(width: int, height: int, fallback_index: int) -> tuple[int, int, int, int]:
     """Rect (left, top, width, height) of the monitor matching the given size.
     Ambiguous sizes fall back to enumeration order; a miss falls back to primary."""

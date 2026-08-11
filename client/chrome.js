@@ -1,5 +1,6 @@
-// The page's own FURNITURE, and what it does with itself: the Hide button,
-// the rule that hides the controls after a quiet spell, and the toast.
+// The page's own FURNITURE, and what it does with itself: the Hide button and
+// its two modes, the mini radial a two-job button opens, the rule that hides
+// the controls after a quiet spell, and the toast.
 //
 // Split out of controls.js on 2026-08-08, when auto-hide pushed that file past
 // THE STRUCTURE LAW's 1,000 lines. The boundary is a real one and it is worth
@@ -24,7 +25,201 @@ function setControlsHidden(hidden) {
   hideBtn.classList.toggle("active", hidden);
 }
 
+// ── A BUTTON WITH TWO JOBS OPENS A SMALL RADIAL BESIDE IT (owner 2026-08-09,
+// task 158, with his sketch) ─────────────────────────────────────────────────
+//
+// His geometry, and the reason for it: the two options drop straight below the
+// button and below-diagonal from it — SOUTH and SOUTH-EAST — and that pair was
+// chosen for the ANALOG STICK that is coming, not for the finger:
+//   lang-ok: owner quote, kept verbatim because it names WHY these two angles
+//   "važi za analog koji će na taj način lakše to birati"
+// Two directions a thumb can point at without ambiguity is a gamepad
+// affordance first; the finger simply inherits it. So the angles are fixed and
+// named here rather than spread from the option count — a third job would take
+// SOUTH-WEST, never a re-spread ring.
+//
+// EACH OPTION IS A REAL BUTTON, drawn AND labelled:
+//   lang-ok: owner quote
+//   "isto kao i svi ostali batoni sa slikom i sa tekstom šta oni označavaju"
+// `makeButton` from controls.js is what builds it, so an option wears the same
+// 58 px face, the same icon size and the same label treatment as the D-pad and
+// the corners — one implementation, exactly the rule constraint 9 exists for.
+//
+// MIRRORED ON THE RIGHT HALF OF THE SCREEN, deliberately. Hide sits in the
+// top-RIGHT corner, so a south-east option would open off the screen; the pair
+// becomes south / south-WEST there. The two directions stay distinct and
+// diagonal, which is all the stick needs, and nothing is ever clamped on top of
+// its sibling.
+const MINI_RADIUS = 92;      // px from the anchor's centre to an option's centre
+const MINI_EDGE = 8;         // px an option keeps clear of the screen edge
+const MINI_ANGLES = { south: Math.PI / 2, diagonal: Math.PI / 4 };
+
+const miniEl = document.createElement("div");
+miniEl.id = "mini-radial";
+miniEl.hidden = true;
+document.body.appendChild(miniEl);
+
+// WHICH button this radial belongs to right now — the second press of that same
+// button is what CLOSES it (see openMiniRadial). Kept beside the element rather
+// than on it: it is an element reference, not a string.
+let miniAnchor = null;
+
+function closeMiniRadial() {
+  miniEl.hidden = true;
+  miniEl.innerHTML = "";
+  miniAnchor = null;
+}
+
+// PURE — the geometry alone, so its gate can drive every corner by argument
+// instead of by opening a panel (tests/test_mini_radial.py). Returns the
+// option centres in screen coordinates, already clamped to the viewport.
+function miniRadialPoints(anchor, count, screen) {
+  const cx = anchor.left + anchor.width / 2;
+  const cy = anchor.top + anchor.height / 2;
+  // The anchor's own side decides which way the diagonal leans — measured from
+  // the anchor, never from where the finger happened to land.
+  const lean = cx > screen.width / 2 ? -1 : 1;
+  const angles = [MINI_ANGLES.south, MINI_ANGLES.diagonal];
+  const half = anchor.size / 2 + MINI_EDGE;
+  return angles.slice(0, count).map((a, i) => {
+    const dx = i === 0 ? 0 : lean * MINI_RADIUS * Math.cos(a);
+    const dy = MINI_RADIUS * Math.sin(a);
+    return {
+      x: Math.min(Math.max(cx + dx, half), screen.width - half),
+      y: Math.min(Math.max(cy + dy, half), screen.height - half),
+    };
+  });
+}
+
+// `options` = [{icon, label, onPick}] — at most two today (see the note above).
+//
+// A SECOND PRESS OF THE SAME BUTTON CLOSES IT, and that is not a convenience —
+// it is the only way OUT for the gamepad (found by the input gate, 2026-08-11).
+// A finger cancels on the backdrop, which covers the whole screen and therefore
+// covers the anchor button too; the PAD has no backdrop to tap. L2 is Layout (+)
+// (CLAUDE.md constraint 12), so without this a controller-only session could
+// open the source radial and never dismiss it — it would simply re-open on
+// every press, with a full-screen overlay standing over the picture. The
+// activator is unchanged and still the one a finger runs: what changed is that
+// the activator's own body now toggles, so BOTH input paths get the same door
+// in and the same door out, which is what constraint 12 is for.
+function openMiniRadial(anchorEl, options) {
+  const reopening = !miniEl.hidden && miniAnchor === anchorEl;
+  closeMiniRadial();
+  if (reopening) return;
+  miniAnchor = anchorEl;
+  const r = anchorEl.getBoundingClientRect();
+  const items = options.slice(0, 2);
+  const points = miniRadialPoints(
+    { left: r.left, top: r.top, width: r.width, height: r.height, size: 58 },
+    items.length,
+    { width: window.innerWidth, height: window.innerHeight });
+  items.forEach((opt, i) => {
+    // The SAME maker every other button on this page goes through.
+    const el = makeButton("ctl mini-item", opt.icon, opt.label);
+    el.style.left = `${points[i].x}px`;
+    el.style.top = `${points[i].y}px`;
+    keepFocus(el, () => {
+      closeMiniRadial();
+      opt.onPick();
+    });
+    miniEl.appendChild(el);
+  });
+  miniEl.hidden = false;
+}
+
+// A tap anywhere but on an option cancels — the same contract the category
+// wheel's backdrop has had since it shipped, so there is nothing new to learn.
+miniEl.addEventListener("pointerdown", (e) => {
+  if (e.target === miniEl) {
+    e.preventDefault();
+    closeMiniRadial();
+  }
+});
+
+// ── HIDE HAS TWO MODES, AND HE NAMED THE TRADE-OFF HIMSELF (owner 2026-08-09,
+// task 159) ─────────────────────────────────────────────────────────────────
+//
+// Mode `auto` is what has always shipped: the controls go after a quiet spell
+// and ANY contact brings them back. Its cost, in his words: sometimes he wants
+// to move the mouse TO the place the buttons occupy, and he cannot, because the
+// moment the finger moves they are back.
+// Mode `sticky` is the answer to that: hidden stays hidden until Hide is
+// pressed again — nothing brings the controls back by itself. Its cost, also
+// his: the Hide button's own corner is then permanently covered by whatever he
+// is doing. Neither is better, which is exactly why BOTH ship and the choice is
+// his, per device.
+//
+// A BLOCKER STILL BRINGS THEM BACK IN BOTH MODES, and that is not a loophole.
+// A panel, a card or the wheel is something he must READ, and every one of them
+// is reached THROUGH the controls — except the two that open themselves (the
+// notices card on connect, the dictation card on the first Mic tap). Leaving a
+// card on screen with its own controls hidden underneath is not "hidden stays
+// hidden", it is a dialog with no way out.
+const HIDE_MODES = ["auto", "sticky"];
+
+function hideMode() {
+  const stored = prefGet("hideMode");
+  return HIDE_MODES.includes(stored) ? stored : "auto";
+}
+
+function setHideMode(mode) {
+  prefSet("hideMode", HIDE_MODES.includes(mode) ? mode : "auto");
+}
+
+// THE PRIMARY ACT IS NEVER LOST. A tap on Hide hides — that is the one thing
+// this button has always done, and a radial that swallowed it would be a
+// regression dressed as a feature. The MODE lives on a HOLD, the same 380 ms
+// hold a layout row is picked up by (client/layouts.js), so the two gestures on
+// this page that mean "tell me more about this thing" agree.
+const HIDE_HOLD_MS = 380;
+let hideHoldTimer = null;
+let hideHeld = false;
+
+function openHideModes() {
+  const current = hideMode();
+  openMiniRadial(hideBtn, [
+    { icon: "hideauto", label: "Comes back",
+      onPick: () => {
+        setHideMode("auto");
+        showToast("Hide: the controls come back on any touch");
+      } },
+    { icon: "hidestay", label: "Stays hidden",
+      onPick: () => {
+        setHideMode("sticky");
+        showToast("Hide: they stay hidden until you press Hide again");
+      } },
+  ]);
+  // The one already chosen is lit, so the radial SAYS which state he is in
+  // instead of only offering two.
+  const lit = current === "auto" ? 0 : 1;
+  if (miniEl.children[lit]) miniEl.children[lit].classList.add("active");
+}
+
+hideBtn.addEventListener("pointerdown", () => {
+  hideHeld = false;
+  hideHoldTimer = setTimeout(() => {
+    hideHoldTimer = null;
+    hideHeld = true;
+    openHideModes();
+  }, HIDE_HOLD_MS);
+});
+for (const kind of ["pointerup", "pointercancel", "pointermove"]) {
+  hideBtn.addEventListener(kind, () => {
+    if (hideHoldTimer) {
+      clearTimeout(hideHoldTimer);
+      hideHoldTimer = null;
+    }
+  });
+}
+
 keepFocus(hideBtn, () => {
+  // The hold already answered this press — it opened the mode radial, and the
+  // release that ends a hold must not ALSO hide.
+  if (hideHeld) {
+    hideHeld = false;
+    return;
+  }
   // Safe to read the CURRENT state: `wakeControls` deliberately ignores a
   // press on this button (see there), so nothing has unhidden underneath
   // between pointerdown and this pointerup.
@@ -69,9 +264,13 @@ const AUTO_HIDE_TICK_MS = 250;
 // each panel would have to remember to set: a panel added next month is
 // covered the moment it uses the same #id convention, and a flag someone
 // forgot to clear is exactly how a feature like this earns its reputation.
+// `mini-radial` joins them (task 158): it is two buttons floating beside a
+// corner, drawn OUTSIDE `.group`, so the auto-hide rule could not see it at all
+// — and a set of options that vanishes while he is deciding between them is the
+// exact failure the fence exists to stop.
 const AUTO_HIDE_BLOCKERS = ["sets-panel", "quality-panel", "layout-panel",
                             "dictation-panel", "choice-panel", "notice-panel",
-                            "region-panel"];
+                            "region-panel", "mini-radial"];
 
 function autoHideBlocked() {
   if (document.body.classList.contains("wheel-open")) return true;
@@ -106,6 +305,11 @@ function wakeControls(e) {
   // defect in either walked straight through the gate because the other
   // covered it.
   if (e && hideBtn.contains(e.target)) return;
+  // MODE `sticky` (owner 2026-08-09, task 159): hidden stays hidden until Hide
+  // is pressed again. The wait is still restarted below, so switching back to
+  // `auto` while hidden does not immediately re-arm a stale countdown — the
+  // only thing this mode changes is that contact no longer UNHIDES.
+  if (controlsHidden() && hideMode() === "sticky") return;
   if (controlsHidden()) setControlsHidden(false);
   lastWake = performance.now();
 }
@@ -130,6 +334,10 @@ setInterval(() => {
     lastWake = performance.now();
     return;
   }
+  // `sticky` never hides by itself either (task 159): the mode is "the state
+  // changes ONLY when Hide is pressed", and a timer that took the controls away
+  // would break that promise from the other side.
+  if (hideMode() === "sticky") return;
   if (!controlsHidden() && performance.now() - lastWake >= AUTO_HIDE_MS) {
     setControlsHidden(true);
   }

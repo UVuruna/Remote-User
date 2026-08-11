@@ -378,3 +378,55 @@ TICKS in the rename card. Those were removed on 2026-08-07 — the PC recognises
 what runs in a window by itself (`agents` in every state frame) — and the page
 already said so two bullets above; the section outlived the feature it
 described, which is the drift the Living Docs Rule exists to stop.
+
+## The bar is part of the top row, and it can stand at the bottom (task 160)
+
+Owner 2026-08-09, in translation: this central layout-and-arrows switcher must
+have the SAME style as the other buttons — as Layout and Hide — that height,
+that radius, the whole top row's treatment, not something different of its own.
+And: in the settings there should be two options, one that it appears and
+stands at the top, another that it appears and stands at the bottom.
+
+- Every piece of the bar takes `--corner` for its height and 16 px for its
+  radius — the numbers `.ctl` itself uses, read from the same tokens rather
+  than copied, so a later retune of the corner buttons carries the bar with it
+  instead of leaving it behind again. The arrows became BUTTONS of that row
+  (fill, border, radius) instead of glyphs standing on the bare stream.
+- `layBarPos()` / `setLayBarPos()` hold "top" (the default, and what has always
+  shipped) or "bottom", per device through the shell's prefs bridge. One class
+  says the DECISION — `body.laybar-bottom` — with top as the base rule.
+- **At the bottom it sits ABOVE the D-pad, never on it.** The two groups own the
+  bottom corners and, on a 412 px phone in the cross shape, they meet in the
+  middle. `--group-h` (declared in `client/style.css` beside the grid that
+  decides it) is what the bar clears, plus the same `--kb` and safe-area insets
+  every other bottom-anchored element respects.
+- The Top / Bottom chips **left this card on 2026-08-11** (task 218a). The note
+  that used to stand here said it plainly: they sat on the layout list because
+  the Sets picker next door was the wrong room too, task 161 was the open
+  request to gather the small switches properly, and "guessing at that
+  gathering here would be a second home for the same switch the day it lands".
+  Task 161 landed. They live on the Phone card
+  ([phone-panel.md](phone-panel.md)), and they did not stay here as well — a
+  switch with two doors is two states to keep in step. `layBarPos()` /
+  `setLayBarPos()` are unchanged and still live in this file.
+
+## The desktop is a LIST OF MONITORS (owner 2026-08-09, task 155)
+
+His instruction: Monitor leaves the Settings menu and becomes part of these
+layout panels — where it now says "Desktop" it will say, if there is more than
+one monitor, Monitor 1 and its resolution, Monitor 2, and so on.
+
+- The rows are drawn from `monitorList` / `monitorIndex`, two OPTIONAL fields on
+  the `config` frame the server already sends (`server/monitor_api.py`). A
+  server too old to send them, and a PC with ONE screen, both draw the single
+  "Desktop" row that has always shipped — the same, already-proven path.
+- Tapping the monitor it is ALREADY on is a plain "back to the desktop"
+  (`layout_focus -1`); any other sends `monitor_switch` carrying that index,
+  which the server already answers by leaving the focused layout and showing
+  the bare desktop there. `index` is optional on a message that has always
+  existed, so an older PC still cycles.
+- No loading cube for the switch: the cube is dropped by the `layout_state`
+  that follows a placement, and a switch made from the desktop sends none.
+
+It frees the Settings slot the Monitor cycler was spending — the action itself
+stays in the client's BUILTINS, so a custom set can still carry it.

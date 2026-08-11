@@ -29,7 +29,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "server"))
 # truth about PIXELS is computed (compositing, luminance, WCAG floors). Split
 # out on 2026-08-08 (THE STRUCTURE LAW); what is opened and what is asserted
 # stays here. See tests/_audit_js.py.
-from _audit_js import CONTRAST_JS, LIVE_CLOCK_BLANK_JS, LIVE_CLOCK_DRIFT_JS  # noqa: E402
+from _audit_js import CONTRAST_JS, LIVE_CLOCK_BLANK_JS, LIVE_CLOCK_DRIFT_JS, PANEL_FIT_JS  # noqa: E402
+from _audit_frame import RADIUS_KIN_JS  # noqa: E402
 
 # The panel CATALOGUE — WHICH overlay is opened and in WHAT state. Split out on
 # 2026-08-09 (THE STRUCTURE LAW), when the dictation card's listen control
@@ -248,7 +249,6 @@ def _shoot(page, label, look, results):
         print(f"  DETAIL look drift @ {label}: asked for "
               f"{theme}/{_look_word(colored)}/{fill}, the page was showing "
               f"{got[0]}/{_look_word(got[1] == 'true')}/{got[2]} at the shutter")
-    SHOT_DIR.mkdir(parents=True, exist_ok=True)
     page.screenshot(path=str(shot_path(_shot_name(label)[:-4])))
 
 
@@ -364,42 +364,7 @@ def _check_panel(page, name, open_js, close_js, card_sel, shot=False,
     page.evaluate(open_js)
     page.wait_for_selector(card_sel, state="visible", timeout=4000)
     ok = page.evaluate(
-        """(sel) => {
-          const card = document.querySelector(sel);
-          const r = card.getBoundingClientRect();
-          const inView = r.left >= 0 && r.top >= 0 &&
-                         r.right <= innerWidth + 1 && r.bottom <= innerHeight + 1;
-          const noPageScroll =
-            document.scrollingElement.scrollWidth <= innerWidth + 1;
-          // WHICH element, not merely "something": "noClip: False" alone costs
-          // a whole probe run to localise (2026-08-09).
-          const clipped = [];
-          for (const el of card.querySelectorAll('button, .q-row, .sets-row, input')) {
-            if (el.scrollWidth > el.clientWidth + 2) {
-              clipped.push((el.className || el.tagName) + ' ' +
-                           el.scrollWidth + '>' + el.clientWidth);
-            }
-          }
-          const noClip = !clipped.length &&
-                         card.scrollWidth <= card.clientWidth + 1;
-          // BUG A of THE SPACE & LEGIBILITY LAW, measured (2026-08-07): "a
-          // visible scrollbar with unused space in the same window is a bug,
-          // not a style choice". Not "the card never scrolls" — rung 4 is
-          // legal once the screen is full — but "it never scrolls while width
-          // stands idle beside it", which is what landscape did to seven of
-          // these ten panels: 420 px of card in a 915 px screen, by up to
-          // 256 px. Counted over the card AND whatever scrolls INSIDE it
-          // (`__hiddenPx` — a pinned footer must not hide that number).
-          const hidden = __hiddenPx(card);
-          const freeW = innerWidth - r.width;
-          const noScrollWithSlack = !(hidden > 1 && freeW > 24);
-          return { inView, noPageScroll, noClip, noScrollWithSlack, clipped,
-                   hiddenPx: hidden, freeWidthPx: Math.round(freeW),
-                   contrast: __contrast(card),
-                   // …and the cut this file could not see until 2026-08-07:
-                   // a string JavaScript shortened before the DOM existed.
-                   truncated: __truncated(card) };
-        }""",
+        PANEL_FIT_JS,
         card_sel,
     )
     if shot:
@@ -484,7 +449,7 @@ def main() -> int:
             # that LOOKS like a function as one to call, and the bare
             # assignment below contains an arrow — it was being invoked with
             # no root instead of installed.
-            page.evaluate("() => {" + CONTRAST_JS + "}")
+            page.evaluate("() => {" + CONTRAST_JS + RADIUS_KIN_JS + "}")  # + the FRAME LAW instrument (task 156, _audit_js.py)
             # MEASURED, not read off the label. It was `label.startswith
             # ("portrait")` until 2026-08-08, which was true while every size
             # in this file was a phone — and became a silent lie the moment
@@ -733,7 +698,8 @@ def main() -> int:
             page.wait_for_selector("#layout-panel .lay-card", state="visible",
                                    timeout=4000)
             kin = page.evaluate(
-                "() => __kinRows(document.querySelector('#layout-panel .lay-card'))")
+                "() => { const c = document.querySelector('#layout-panel"
+                " .lay-card'); return __kinRows(c).concat(__radiusAndKin(c)); }")
             results[f"the layout list's rows are one line, all the same "
                     f"height @ {label}"] = not kin
             if kin:
@@ -819,7 +785,8 @@ def main() -> int:
                                    timeout=4000)
             mem = page.evaluate(
                 "() => { const c = document.querySelector('#layout-panel"
-                " .lay-card'); return __kinRows(c).concat(__memberCells(c)); }")
+                " .lay-card'); return __kinRows(c).concat(__memberCells(c))"
+                ".concat(__radiusAndKin(c)); }")
             results[f"the member chooser's rows are one line and each lights "
                     f"its own cell @ {label}"] = not mem
             if mem:
@@ -843,8 +810,8 @@ def main() -> int:
             # nowhere. `__scrollInColumns` in _audit_js.py carries the finding.
             crea = page.evaluate(
                 "() => { const c = document.querySelector('#layout-panel"
-                " .lay-card');"
-                " return __kinRows(c).concat(__scrollInColumns(c)); }")
+                " .lay-card'); return __kinRows(c).concat("
+                "__scrollInColumns(c)).concat(__radiusAndKin(c)); }")
             results[f"the creation list's rows are one line, equal within "
                     f"their own indent, and reachable @ {label}"] = not crea
             if crea:
@@ -981,7 +948,6 @@ def main() -> int:
     for name, ok in results.items():
         print(f"  {'PASS' if ok else 'FAIL'}  {name}")
         failed += 0 if ok else 1
-    print()
     if failed:
         print(f"LAYOUT AUDIT FAILED — {failed} check(s).")
         return 1

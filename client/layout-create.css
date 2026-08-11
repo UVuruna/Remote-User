@@ -180,7 +180,64 @@
      are pure AIR — the 10 px margins a portrait card can afford — so they are
      given back before the column is asked to scroll. Measured, at both
      landscape sizes; portrait keeps the roomier spacing it was tuned for. */
-  body .lay-card.lc-split .lay-row { margin: 6px 0; }
+  /* 6px until task 214, when the last 7 px of the left column were still
+     hiding at 915x412 after the footer moved (measured, both numbers). Air
+     between rows is the cheapest thing on this card and the last rung-1 move
+     available; below this the next step would be shrinking something readable,
+     which the law does not allow. */
+  body .lay-card.lc-split .lay-row { margin: 4px 0; }
   body .lay-card.lc-split .lay-sub { margin-bottom: 6px; }
-  body .lay-card.lc-split .lay-name-in { height: 52px; }
+
+  /* ── THE FOOTER STOPS EATING THE COLUMN'S HEIGHT (owner report 2026-08-10,
+     task 214, with his landscape screenshot) ─────────────────────────────────
+     What he saw: on the New layout card the "Shape:" pill row at the bottom
+     left was CUT — the pills half-visible, with the Cancel/Create row sitting
+     across them. Measured at 915x412 before this rule: the left column held 368
+     px of content in 282, hiding 86, and the two orientation chips ended at
+     y=402 while the column ended at 321 and the actions row began at 336. He
+     read that as the footer drawn ON TOP of the content; mechanically it is the
+     column scrolling — rung 4 of the ladder — while rungs 1 and 2 still had
+     moves left, which is precisely what THE SPACE & LEGIBILITY LAW forbids.
+
+     HIS OWN SECOND SUGGESTION IS THE FIX, and it is the ladder's rung 2: put
+     Cancel and Create in a VERTICAL container at the far right, one under the
+     other, so the row they used to occupy is given back to the content. In
+     landscape the card becomes a ROW — the two content columns, then the
+     actions column — which costs width, of which this card has 660 px standing
+     idle on his tablet and 16 px on the narrowest phone, and buys back the
+     footer's whole 51 px of height at every size.
+
+     HIS FIRST SUGGESTION (make the footer transparent so the pills show
+     through) is deliberately NOT taken: the pills would still be UNDER two
+     buttons and untappable, so it would hide the symptom and keep the defect —
+     and an element you can see but cannot press is worse than one you can see
+     is missing.
+
+     RUNG 1 COMES FIRST ANYWAY, and it is the three lines under this one: a card
+     22 px of pure air at the top and bottom, and a 52 px name field, are what a
+     412 px-tall screen cannot afford. Trimming them plus the footer's height is
+     what takes the left column from 86 px hidden to nothing hidden — the column
+     no longer scrolls at ANY size this project ships to, so rung 4 is not
+     reached at all. Nothing readable got smaller: the air did. */
+  body .lay-card.lc-split {
+    flex-direction: row;
+    align-items: stretch;
+    gap: var(--space-m);
+    padding: 12px 16px;
+  }
+  body .lay-card.lc-split .lc-cols { flex: 1 1 auto; min-width: 0; }
+  body .lay-card.lc-split .lay-actions {
+    flex: none;
+    flex-direction: column;
+    justify-content: flex-end;
+    align-items: stretch;
+    margin-top: 0;
+    gap: var(--space-s);
+  }
+  /* The two buttons are one kin group and one column, so they take the same
+     width — the widest label decides (task 156's own rule, ALG-5). Without it
+     "Create" and "Cancel" would stack at two different widths, which is the
+     ragged edge he photographed on the row above. */
+  body .lay-card.lc-split .lay-actions .lay-chip { width: 100%; text-align: center; }
+  body .lay-card.lc-split .lay-name-in { height: 44px; }
 }

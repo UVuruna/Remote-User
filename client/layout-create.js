@@ -27,6 +27,9 @@ function cancelCreation(silent) {
   creating = null;
   layoutArm = false;
   refreshNewlayButton();
+  // The source radial (task 158) is not inside `layPanel` — it floats beside
+  // the corner button — so closing the panel does not take it with it.
+  closeMiniRadial();
   closeLayoutPanel();
   hideLayLoading();
   if (!silent) showToast("Layout creation cancelled");
@@ -60,43 +63,40 @@ function newCreation(source) {
 // slash commands on the wheel of a plain editor. The owner adds it with one
 // tap on the Claude layout; everything else is right without him.
 
+// THE TWO SOURCES ARE A RADIAL BESIDE THE BUTTON, NOT A CARD OVER THE SCREEN
+// (owner 2026-08-09, task 158, with his sketch). They used to be a full-screen
+// modal with a heading, a question and two big chips — a whole card raised to
+// ask a question with two answers, both of which he already knows. His
+// instruction was that a button carrying two or three jobs simply drops its
+// options beside itself:
+//   lang-ok: owner quote
+//   "kada neki button kao što su ti gornji ima dve tri funkcije … onako pored
+//    njega spuste dve te opcije"
+// SOUTH and SOUTH-EAST, in that order, because the analog stick that is coming
+// picks a direction and not a card (the geometry and its reason live once, in
+// client/chrome.js → openMiniRadial). Each option is a real button with its
+// icon and its words, exactly like every other button on this page — the same
+// `makeButton`, so it can never drift from them.
+//
+// CANCELLING IS THE BUTTON ITSELF, and that is why no Cancel chip came across:
+// the radial's backdrop is the whole screen, a tap anywhere outside the two
+// options closes it, and Layout's own press already cancels an armed session
+// (see the handler above). A modal needed a Cancel; two buttons on the picture
+// do not.
 function openSourceChooser() {
-  layPanel.innerHTML = "";
-  layPanel.hidden = false;
-  const card = document.createElement("div");
-  card.className = "lay-card card-columns";
-  const h = document.createElement("h2");
-  h.textContent = "New layout";
-  const sub = document.createElement("p");
-  sub.className = "lay-sub";
-  sub.textContent = "Where should the windows come from?";
-  const row = document.createElement("div");
-  row.className = "lay-row lay-sources";
-  // The two sources carry the owner's icons (clipboard list / window+plus).
-  function sourceBtn(iconName, label, onTap) {
-    const el = document.createElement("button");
-    el.type = "button";
-    el.className = "lay-chip lay-source";
-    el.innerHTML = svg(iconName) + `<span>${label}</span>`;
-    keepFocus(el, onTap);
-    return el;
-  }
-  row.appendChild(sourceBtn("list", "From a list", () => {
-    creating = newCreation("list");
-    refreshNewlayButton();
-    closeLayoutPanel();
-    showLayLoading("Collecting windows and tabs…");
-    send({ type: "layout_list" });
-  }));
-  row.appendChild(sourceBtn("newwin", "Tap a window", () => {
-    creating = newCreation("tap");
-    armNextTap();
-  }));
-  const actions = document.createElement("div");
-  actions.className = "lay-actions";
-  actions.appendChild(layChip("Cancel", false, () => cancelCreation()));
-  card.append(h, sub, row, actions);
-  layPanel.appendChild(card);
+  openMiniRadial(newlayBtn, [
+    { icon: "list", label: "From a list", onPick: () => {
+        creating = newCreation("list");
+        refreshNewlayButton();
+        closeLayoutPanel();
+        showLayLoading("Collecting windows and tabs…");
+        send({ type: "layout_list" });
+      } },
+    { icon: "newwin", label: "Tap a window", onPick: () => {
+        creating = newCreation("tap");
+        armNextTap();
+      } },
+  ]);
 }
 
 function armNextTap() {

@@ -53,7 +53,24 @@ DICT_STAGE_JS = (
     "  {tag:'de-DE', name:'Deutsch (Deutschland)', status:'online'},"
     "  {tag:'is-IS', name:'Íslenska (Ísland)', status:'online'},"
     "  {tag:'pt-BR', name:'Português (Brasil)', status:'download', extra:true},"
-    "  {tag:'ja-JP', name:'日本語 (日本)', status:'online', extra:true}]),"
+    "  {tag:'ja-JP', name:'日本語 (日本)', status:'online', extra:true},"
+    # A CARD THAT NEVER SCROLLS PROVES NOTHING ABOUT SCROLLING (owner standing
+    # order of 2026-08-10, task 215; the defect it exposed is task 217). Six
+    # rows FIT sideways, so every landscape measurement this card has ever
+    # passed was a measurement of a card with nothing to scroll — while the
+    # list it really draws is the phone's own languages, and his has many. The
+    # rows below are ordinary real locales, added only to make the card longer
+    # than the screen it is judged on; nothing else about the staging changes.
+    "  {tag:'fr-FR', name:'Français (France)', status:'online'},"
+    "  {tag:'es-ES', name:'Español (España)', status:'online'},"
+    "  {tag:'it-IT', name:'Italiano (Italia)', status:'online'},"
+    "  {tag:'nl-NL', name:'Nederlands (Nederland)', status:'online'},"
+    "  {tag:'pl-PL', name:'Polski (Polska)', status:'ready'},"
+    "  {tag:'tr-TR', name:'Türkçe (Türkiye)', status:'online'},"
+    "  {tag:'ru-RU', name:'Русский (Россия)', status:'online'},"
+    "  {tag:'hu-HU', name:'Magyar (Magyarország)', status:'online'},"
+    "  {tag:'ro-RO', name:'Română (România)', status:'online', extra:true},"
+    "  {tag:'cs-CZ', name:'Čeština (Česko)', status:'download', extra:true}]),"
     # The same source the PC's own voice list comes from (`tts_info`), so the
     # card is measured against a REAL shape: Android reports `{name, label,
     # locale}` per voice and `name` is what `speakAs` takes back.
@@ -336,6 +353,44 @@ PANELS = (
      " options:['Default (recommended)','Opus (1M context)','Fable',"
      "'Sonnet','Haiku']})",
      "closeChoicePanel()", "#choice-panel .sets-card"),
+    # ── THE THREE CLAUDE CARDS (owner ballot verdict 2026-08-11) ────────────
+    # Each staged in its FULLEST honest state, which for these three means the
+    # state where the most CLAIMS are on screen at once — the chips are the
+    # feature, and a card measured with empty chips would measure the wrong
+    # card.
+    #
+    # Model: the PC answered, so one row wears "now" AND the saved row wears
+    # "saved" — the widest a row here gets is the longest label ("Opus (1M
+    # context)") plus four drawn stars plus two marks.
+    ("Claude model panel",
+     "claudeSaved = {model:'opus[1m]', effort:'medium'};"
+     "claudeState = {model:'fable', model_id:'claude-fable-5', effort:'max',"
+     " mode:'plan'};"
+     "openClaudePanel({panel:'claude-model'}); renderClaudeModelPanel()",
+     "closeClaudePanel()", "#claude-panel .sets-card"),
+    # Thinking: HIS OWN REPORT staged (task 208) — saved Medium, the live
+    # conversation on Max, and this phone's last tap still Medium. All three
+    # chips populated and DISAGREEING, which is the only state in which the
+    # fact/memory distinction can be looked at and graded.
+    ("Claude thinking panel",
+     "claudeSaved = {model:'opus[1m]', effort:'medium'};"
+     "claudeState = {model:'fable', model_id:null, effort:'max', mode:null};"
+     "prefSet('claudeLastEffort','medium');"
+     "openClaudePanel({panel:'claude-effort'}); renderClaudeEffortPanel()",
+     "closeClaudePanel()", "#claude-panel .sets-card"),
+    # Mode: staged UNKNOWN on purpose. That is what an older PC leaves, it is
+    # the longest this card's rows ever get ("Accept edits — steps one" plus
+    # its note), and it is the state whose whole job is to be honest about
+    # what it cannot do.
+    ("Claude mode panel",
+     "claudeSaved = {}; claudeState = null;"
+     "openClaudePanel({panel:'claude-mode'}); renderClaudeModePanel()",
+     "closeClaudePanel()", "#claude-panel .sets-card"),
+    # ── THE PHONE CARD (owner tasks 161 + 218a) ────────────────────────────
+    # Nothing to stage: every row reads a per-device preference that always has
+    # an answer, and the card has exactly one state.
+    ("Phone card", "openPhonePanel()",
+     "closePhonePanel()", "#phone-panel .sets-card"),
     ("Aspect panel + Move handle",
      "layouts = [{name:'Audit', process:'x', orient:'portrait',"
      " icon:null, ratio:[600,1000], pos:0.5}]; openAspectPanel(0)",
@@ -485,9 +540,14 @@ PANELS = (
 # one reason a picture can settle: its warning is the only text in this app
 # painted in `--warning` on a card, and whether that colour READS on a light
 # surface is not a thing geometry can answer.
+# The three Claude cards joined on 2026-08-11 (tasks 190/191/208): their
+# whole point is a chip that says what the PC is doing NOW and a chip that
+# says only what this phone last sent, and whether those two READ APART is
+# not a thing geometry can answer — it is the question a picture settles.
 COLOUR_SHOTS = {"Sets picker", "Quality panel", "Dictation card",
                 "Layout list with rename", "Creation list with tabs",
-                "Layout settings sheet", "Layout close chooser warned"}
+                "Layout settings sheet", "Layout close chooser warned",
+                "Claude model panel", "Claude thinking panel"}
 
 # The panels SHOT IN LANDSCAPE (2026-08-07). Every phone panel is MEASURED in
 # both orientations and always was; these two are also photographed there,
@@ -507,11 +567,16 @@ COLOUR_SHOTS = {"Sets picker", "Quality panel", "Dictation card",
 # the sheet's chips have half the width, the chooser's two big chips take 46%
 # of a wide card each with a third line under them, and the creation list is
 # the panel this round had to restructure to make its rows whole there at all.
+# The Claude thinking card and the Phone card joined on 2026-08-11: the
+# first carries a three-chip strip that must wrap rather than clip when the
+# card is short and wide, the second is five rows of segmented controls and
+# long sentences, which is exactly the shape landscape squeezes.
 LANDSCAPE_SHOTS = {"Creation panel + Name field", "Grid arrangement choice",
                    "Sets picker", "Quality panel", "Dictation card",
                    "Layout list with rename", "Region grab",
                    "Layout close chooser", "Layout close chooser warned",
-                   "Layout settings sheet", "Creation list with tabs"}
+                   "Layout settings sheet", "Creation list with tabs",
+                   "Claude thinking panel", "Phone card"}
 
 # ONE FOLDER, ONE SUBJECT (owner 2026-08-08, his second word on this): a topic
 # folder per ROUND was still a dump — he asked for sub-folders rather than one

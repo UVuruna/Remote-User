@@ -11,7 +11,19 @@
 /* The bar lives STRICTLY between the two corner buttons (owner 2026-08-03 —
    a long layout name used to push the › arrow and the ✕ off the screen). It
    is bounded on both sides instead of centered-with-a-max-width, so the name
-   is the only thing that can give: it wraps to a second line. */
+   is the only thing that can give: it wraps to a second line.
+
+   ── IT WEARS THE TOP ROW'S OWN STYLE (owner 2026-08-09, task 160) ──────────
+   His instruction, in translation: this central layout-and-arrows switcher
+   must have the SAME style as the other buttons — as the Layout and Hide
+   buttons — that height, that radius, that treatment; the whole top row, not
+   something different of its own. It had been the exception since it shipped:
+   58 px corner squares with a 16 px radius on either side of a 34 px-tall,
+   14 px-radius strip with two bare glyph-sized arrows floating outside it.
+   So every piece of the bar now takes `--corner` for its height and 16px for
+   its radius — the numbers `.ctl` itself uses (client/style.css), read from
+   the same tokens rather than copied, so a later retune of the corner buttons
+   carries the bar with it instead of leaving it behind again. */
 #layout-bar {
   position: fixed;
   top: calc(var(--space-m) + var(--vtop));
@@ -20,7 +32,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 2px;
+  gap: var(--space-s);
   color: var(--text-primary);
   font: 600 13px system-ui, sans-serif;
   z-index: 30;
@@ -33,32 +45,40 @@
   font: 700 20px/1 system-ui, sans-serif;
   padding: 4px 8px;
 }
-/* Big SVG arrows OUTSIDE the name (owner 2026-08-03 — the old ‹ › glyphs sat
-   inside the label and were too small to hit reliably). */
+/* An arrow is now a BUTTON of the top row, not a glyph standing on the stream:
+   the corner square's own size, radius, fill and border. It keeps `flex: none`
+   so the name is still the only thing that gives (owner 2026-08-03). */
 #layout-bar .lay-arrow {
-  padding: 2px 4px;
+  flex: none;
+  width: var(--corner);
+  height: var(--corner);
+  padding: 0;
   display: flex;
   align-items: center;
+  justify-content: center;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: var(--glass-fill);
 }
-/* The arrows stand on the bare stream now (the frame carries the background),
-   so they get the same shadow every control icon has. */
 #layout-bar .lay-arrow svg {
-  width: 32px;
-  height: 32px;
-  filter: drop-shadow(0 1px 3px var(--lbl-shadow));
+  width: 30px;
+  height: 30px;
+  filter: drop-shadow(0 1px 2px var(--ink-shadow));
 }
 /* The frame is the rectangle: name + ✕ together, and it takes whatever width
-   the arrows leave — never more. */
+   the arrows leave — never more. Same height and same radius as the buttons on
+   both sides of it, so the three read as one row. */
 #lay-frame {
   flex: 0 1 auto;
   min-width: 0;
+  height: var(--corner);
   display: flex;
   align-items: center;
   gap: 4px;
-  padding: 6px 8px 6px 12px;
+  padding: 0 8px 0 14px;
   border: 1px solid var(--border);
-  border-radius: 14px;
-  background: var(--bar);
+  border-radius: 16px;
+  background: var(--glass-fill);
 }
 /* Tapping the name opens the full layout list. */
 #layout-bar #lay-pick {
@@ -91,6 +111,29 @@
   justify-content: center;
 }
 #layout-bar #lay-close svg { width: 15px; height: 15px; }
+
+/* ── THE BAR CAN STAND AT THE BOTTOM INSTEAD (owner 2026-08-09, task 160) ────
+   His words, in translation: for it there should be two options in the
+   settings — one that it appears and stands at the top, and another that it
+   appears and stands at the bottom. Top is the default and nothing about a
+   device that has never been asked changes (client/layouts.js → layBarPos).
+
+   IT SITS ABOVE THE D-PAD, NOT ON IT. The two groups own the bottom corners
+   and, on a 412 px phone in the cross shape, they meet in the middle — so a bar
+   pinned to the bottom edge would be drawn straight across them. `--group-h`
+   (client/style.css, declared beside the grid that decides it) is what the bar
+   clears, plus the same `--kb` and safe-area insets every other bottom-anchored
+   element respects. Measured at every size the audit ships to; the tooth that
+   keeps it true is `__barClearance` in tests/_audit_js.py.
+
+   `--vtop` drops out here on purpose: it exists to keep the TOP corners visible
+   when the visual viewport is pushed down by the IME, and at the bottom the
+   keyboard is already accounted for by `--kb`. */
+body.laybar-bottom #layout-bar {
+  top: auto;
+  bottom: calc(var(--space-m) + var(--kb) + env(safe-area-inset-bottom, 0px)
+               + var(--group-h) + var(--space-s));
+}
 
 #layout-panel {
   position: fixed;
@@ -127,6 +170,14 @@
 }
 .lay-chip {
   padding: 9px 15px;
+  /* A PILL IS LEGITIMATE ON A WIDE ELEMENT AND NOWHERE ELSE (task 156). At
+     ~37px tall these chips need AR >= 2 to wear `--radius-pill`, and "Close"
+     alone measured 64px — so the floor is the width that earns the shape, not
+     a smaller radius: the pill is the app's own vocabulary and the chip had
+     idle width beside it either way (ladder rung 1). It also makes Cancel and
+     Create one size, which is the same law read as ALG-5. */
+  min-width: 76px;
+  text-align: center;
   border-radius: var(--radius-pill);
   border: 1px solid var(--border);
   background: var(--chip);
@@ -304,6 +355,13 @@
   background: var(--chip-2);
   color: var(--text-secondary);
   font: 600 12px system-ui, sans-serif;
+  /* 12px until task 156. These are icon-only buttons ~44x46 — AR under 1.4,
+     the shape the frame law calls squarish, where a radius may take 15% of the
+     shorter side. Widening them instead is the wrong rung: every pixel they
+     take comes off the NAME beside them, which `__nameRoom` exists to protect
+     (task 172). Declared here rather than on each variant so the shape and the
+     gear can never disagree. */
+  border-radius: 6px;
   /* The same kin rule as the row itself (owner 2026-08-09, task 163): these
      trailing buttons stretch to the row's height, so a label that wrapped
      ("Screen" on a narrow phone) would make ONE row taller than its siblings
@@ -588,8 +646,50 @@
   box-shadow: 0 0 0 2px var(--accent-glow);
 }
 .lay-item.lay-gap { box-shadow: 0 -3px 0 -1px var(--accent); }
-/* A grid choice is a DRAWING of the grid (his sheet), not its name. */
-.lay-chip.lay-grid { padding: 8px 10px; }
+/* ── THE FRAME LAW, ON THE ELEMENTS THAT PREDATE IT (owner 2026-08-09, task
+   156, with his screenshot of THIS row) ───────────────────────────────────
+   His rule, in translation: an element may not carry a radius so large that it
+   is turned into a circle or an egg — a radius is allowed only when the element
+   is wide enough — and elements of one kin group must all be the same size,
+   "not like here, where Landscape is bigger than Portrait although they belong
+   to the same group".
+
+   Both of those are ALG-6 RADIUS BY ASPECT RATIO and ALG-5 UNIFORM SIBLINGS
+   (rules/GUI.md → Zubi v2), and both were being broken here in the most literal
+   way available:
+
+   * RADIUS. These chips inherit `.lay-chip`, whose `--radius-pill` is 999px —
+     a value that is right for a WIDE pill and turns a 50x46 box holding a 30px
+     drawing into exactly the egg he photographed. The ladder is by ASPECT
+     RATIO: a box at AR >= 2 may go to 50% of its height, 1.4 <= AR < 2 to 30%,
+     and anything squarer to 15% of its shorter side. So each of these two gets
+     a width that earns its radius and a radius its width allows — measured
+     against the box it really draws, never a round number picked by eye.
+   * SIBLINGS. `.lay-chip.lay-shape` sized itself to its own CAPTION, so
+     "Landscape" came out ~12px wider than "Portrait" standing beside it, and
+     the count chips 1/2/3/4 came out narrower than both. A control's size must
+     never depend on the length of its own text: the WIDEST caption decides, and
+     `min-width` gives every one of them that same floor. Nothing shrinks — the
+     widest chip is unchanged and its narrower kin grow to meet it, which is
+     ladder rung 1 (take the free space), not rung 3.
+
+   WHY THIS WAS NOT CAUGHT: the hook and the template that carry those two
+   rules are Qt-only (`rules/templates/layout_checks_qt.py` walks QWidgets and
+   reads QSS), the phone's own audit had NO radius instrument at all, and its
+   one kin instrument (`__kinRows`) watches `.lay-item` ROWS — a different
+   element in a different panel. The tooth that closes it for this surface is
+   `__radiusAndKin` in tests/_audit_js.py. */
+.lay-chip.lay-grid {
+  padding: 8px 10px;
+  /* 70x48 → AR 1.46, which buys 30% of the height. It was 66 for one run and
+     measured AR 1.38 — under the 1.4 the 12px radius needs, by two pixels.
+     Measured, not guessed: the audit prints the box it really drew. */
+  min-width: 70px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
 .lay-grid-ico { width: 30px; height: 30px; display: block; }
 /* A drawing with a tiny caption under it (owner round 2, 2026-08-07 — the
    creation panel's count row and the orientation row): the picture stays the
@@ -599,7 +699,28 @@
   flex-direction: column;
   align-items: center;
   gap: 4px;
+  /* THE FLOOR IS THE WIDEST CAPTION, AND THE ROW STILL HOLDS FOUR (measured,
+     both halves). "Landscape" is the widest caption these chips carry; at the
+     `.lay-chip` 15px side padding its natural box is ~86px, and FOUR of those
+     plus their gaps are 368px in the 340px a portrait card really offers — so
+     the count row wrapped to two lines and the card grew 75px, which the phone
+     audit caught the same run as a scrollbar in portrait. The air inside the
+     chip is what pays: 8px sides instead of 15 (the DRAWING is the content and
+     it is untouched at 30px), which puts the widest caption at ~71px, the floor
+     at 76, and four chips at 328 of 340. At 76x65 the radius the frame law
+     allows is 15% of the shorter side; 9px is under it. Every one of these
+     numbers is re-measured by `__radiusAndKin` on every run, so a font or a
+     caption that changes is reported to us instead of to the owner. */
+  padding: 9px 8px;
+  min-width: 76px;
+  border-radius: 9px;
 }
+/* The layout bar's own Top / Bottom choice moved to the Phone card on
+   2026-08-11 (task 218a) and took its two rules with it — it is a segmented
+   row there (`.q-row` / `.q-seg`, client/panels.css), which is the control
+   every other per-device choice on that card already wears. Nothing styles
+   `.lay-pos` here any more, and an unused rule left behind is the next round's
+   false lead. */
 .lay-chip.lay-shape span {
   font: 600 11px system-ui, sans-serif;
   color: var(--text-secondary);

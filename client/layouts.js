@@ -39,6 +39,34 @@ const layNameEl = document.getElementById("lay-name");
 const layIconEl = document.getElementById("lay-icon");
 const layCloseBtn = document.getElementById("lay-close");
 
+// ── WHERE THE BAR STANDS IS HIS, PER DEVICE (owner 2026-08-09, task 160) ────
+// "top" (the default, and what has always shipped) or "bottom". Read through
+// the shell's SharedPreferences bridge like every other phone-side switch,
+// never bare localStorage — that is per-ORIGIN and split this device's state
+// across the LAN and Tailscale addresses once already (the "picker rotates" bug
+// of 2026-08-05). A value that is neither word means "top", so a pref written
+// by a future version, or a corrupted one, renders today's default rather than
+// an empty top row.
+const LAY_BAR_POSITIONS = ["top", "bottom"];
+
+function layBarPos() {
+  const stored = prefGet("layBarPos");
+  return LAY_BAR_POSITIONS.includes(stored) ? stored : "top";
+}
+
+// ONE class, and it names the DECISION (client/layouts.css): top is the base
+// rule and this class is the page asking for the bottom.
+function applyLayBarPos() {
+  document.body.classList.toggle("laybar-bottom", layBarPos() === "bottom");
+}
+
+function setLayBarPos(pos) {
+  prefSet("layBarPos", LAY_BAR_POSITIONS.includes(pos) ? pos : "top");
+  applyLayBarPos();
+}
+
+applyLayBarPos();
+
 function updateLayoutBar() {
   layoutBar.hidden = layouts.length === 0;
   layCloseBtn.hidden = layoutActive === null;
@@ -149,10 +177,51 @@ function openLayoutPicker() {
   sub.textContent = "Tap one to open it. Hold and drag it onto another to make a grid.";
   card.append(h, sub);
 
-  card.appendChild(layRow("Desktop", null, layoutActive === null, () => {
-    closeLayoutPanel();
-    focusLayout(-1);
-  }));
+  // ── ONE ROW PER MONITOR, NOT ONE "DESKTOP" (owner 2026-08-09, task 155) ──
+  // His instruction, in translation: Monitor leaves the Settings menu and
+  // becomes part of these layout panels — where it now says "Desktop" it will
+  // say, if there is more than one monitor, Monitor 1 and its resolution,
+  // Monitor 2, and so on. The Settings set had a slot spent on a CYCLER that
+  // told you nothing about where you were going; a named row carrying its own
+  // resolution says which screen it opens before it is tapped.
+  //
+  // THE DESKTOP ROW SURVIVES AS THE ONE-MONITOR CASE, and that is not a
+  // fallback bolted on: a PC with one screen has nothing to choose between, and
+  // "Monitor 1 — 3840x2160" would be a list of one pretending to be a choice.
+  // The same row is also what a server too old to send `monitors` draws, so an
+  // old PC and a single-screen PC take the identical, already-proven path.
+  //
+  // TAPPING ONE IS TWO ACTS AND IT SENDS ONLY WHAT IT MUST: the monitor it is
+  // ALREADY on is a plain "back to the desktop" (`layout_focus -1`), and any
+  // other is a `monitor_switch` carrying that index — which the server already
+  // answers by leaving the focused layout and showing the bare desktop there
+  // (server/web.py → _switch_monitor, since 2026-08-05). `index` is an OPTIONAL
+  // field on the message that has always existed: a server that ignores it
+  // still cycles, which on a two-monitor PC lands on the same screen anyway.
+  //
+  // NO LOADING CUBE FOR THE SWITCH, deliberately: the cube is dropped by the
+  // `layout_state` that follows a placement, and a monitor switch made from the
+  // DESKTOP sends none — the overlay would sit there until the settle watchdog
+  // gave up. The server answers this one with its own toast ("Monitor 2/2") and
+  // the picture changes by itself, which is the whole event.
+  if (monitorList.length > 1) {
+    monitorList.forEach((mon) => {
+      const size = mon.width && mon.height ? ` — ${mon.width}×${mon.height}` : "";
+      const here = mon.index === monitorIndex;
+      card.appendChild(layRow(
+        `Monitor ${mon.index + 1}${size}`, null,
+        here && layoutActive === null, () => {
+          closeLayoutPanel();
+          if (here) focusLayout(-1);
+          else send({ type: "monitor_switch", index: mon.index });
+        }));
+    });
+  } else {
+    card.appendChild(layRow("Desktop", null, layoutActive === null, () => {
+      closeLayoutPanel();
+      focusLayout(-1);
+    }));
+  }
 
   // DRAGGING A ROW (owner 2026-08-07, "kao kada u eksploreru držiš fajl i
   // onda ga vučeš u neki drugi folder"): hold a row, and dropping it ON
@@ -389,6 +458,15 @@ function openLayoutPicker() {
     card.appendChild(row);
   });
 
+  // WHERE THIS BAR ITSELF STANDS LEFT THIS CARD on 2026-08-11 (task 218a).
+  // Task 160 put the Top/Bottom chips here with a note saying so in as many
+  // words: this is the panel whose subject is the layout bar, task 161 exists
+  // to gather the small per-device switches properly, and "guessing at that
+  // gathering here would be a second home for the same switch the day it
+  // lands". Task 161 landed — the switch lives on the Phone card
+  // (client/phone-panel.js, Settings wheel → Phone) and it did not stay here
+  // as well, because two doors onto one preference is two states to keep in
+  // step. This card is about LAYOUTS again.
   const actions = document.createElement("div");
   actions.className = "lay-actions";
   actions.appendChild(layChip("Close", false, closeLayoutPanel));
