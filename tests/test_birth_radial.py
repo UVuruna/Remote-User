@@ -3,8 +3,8 @@
 Three owner rulings land on one component and they are only worth anything
 together:
 
-* **186** — the Layout button's radial holds THREE options now (New / List /
-  Tap) and stands CENTERED, the category wheel's own rule ("najbolje da se
+* **186+228** — the Layout button's radial holds FOUR options now (New / List
+  / Tap / Recent) and stands CENTERED, the category wheel's own rule ("najbolje da se
   držimo istog pravila" — lang-ok: owner quote). On the pad it is L2: a TAP
   arms the tap-pick, a HOLD opens this same radial with the stick pointing at
   it and the release confirming — the grammar L1/R1 already speak.
@@ -78,9 +78,9 @@ def _checks(page, label, out):
       const bad = [];
       openSourceChooser();
       const items = [...document.querySelectorAll('#mini-radial .mini-item')];
-      if (items.length !== 3) {
+      if (items.length !== 4) {
         closeMiniRadial();
-        return ['the Layout button offered ' + items.length + ' sources, not 3'];
+        return ['the Layout button offered ' + items.length + ' sources, not 4'];
       }
       const cx = innerWidth / 2, cy = innerHeight / 2;
       const c = items.map((el) => {
@@ -90,7 +90,7 @@ def _checks(page, label, out):
       // Item 0 is straight UP and the rest sweep clockwise — the wheel's own
       // placement, which is what makes the pad's pointing arithmetic reusable.
       const ang = c.map((p) => Math.atan2(p.y - cy, p.x - cx));
-      const want = [0, 1, 2].map((i) => -Math.PI / 2 + i * 2 * Math.PI / 3);
+      const want = [0, 1, 2, 3].map((i) => -Math.PI / 2 + i * 2 * Math.PI / 4);
       ang.forEach((a, i) => {
         // Signed shortest angle between the two, wrapped into (-PI, PI].
         const d = ((a - want[i] + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
@@ -102,7 +102,7 @@ def _checks(page, label, out):
       // Equidistant from the centre, and really centred on the SCREEN.
       const radii = c.map((p) => Math.hypot(p.x - cx, p.y - cy));
       if (Math.max(...radii) - Math.min(...radii) > 2) {
-        bad.push('the three are not on one ring: ' + radii.map(Math.round));
+        bad.push('the four are not on one ring: ' + radii.map(Math.round));
       }
       if (radii[0] < 40) bad.push('the ring has collapsed onto the centre');
       for (const item of items) {
@@ -128,7 +128,7 @@ def _checks(page, label, out):
       closeMiniRadial();
       return bad;
     }""")
-    out[f"the birth radial is three options on the wheel's ring @ {label}"] = not ring
+    out[f"the birth radial is four options on the wheel's ring @ {label}"] = not ring
     if ring:
         print(f"  DETAIL birth radial @ {label}: {ring}")
 
@@ -179,7 +179,7 @@ def _checks(page, label, out):
       const open = () => document.querySelectorAll('#mini-radial .mini-item').length;
       // 1. HOLD opens it.
       window.__padButton('l2', true);
-      if (open() !== 3) bad.push('holding L2 did not open the radial');
+      if (open() !== 4) bad.push('holding L2 did not open the radial');
       // 2. The stick POINTS: straight up is option 0, and it lights.
       window.__padAxis(0, -1, 0, 0);
       const lit = [...document.querySelectorAll('#mini-radial .mini-item')]
@@ -281,7 +281,14 @@ def _checks(page, label, out):
     page.evaluate("""() => {
       const row = [...document.querySelectorAll('#layout-panel .lay-item-main')]
         .find((r) => r.textContent.indexOf('Remote User') >= 0);
-      buttonPress(row, true); buttonPress(row, false);
+      // Task 227b moved row selection to RELEASE under a travel slop, driven
+      // by real pointer events — so the gate presses the way a finger does,
+      // not through the button activator.
+      const b = row.getBoundingClientRect();
+      const ev = (type, x, y) => row.dispatchEvent(new PointerEvent(type, {
+        bubbles: true, isPrimary: true, pointerId: 5, clientX: x, clientY: y}));
+      ev('pointerdown', b.left + 10, b.top + 10);
+      ev('pointerup', b.left + 11, b.top + 10);
     }""")
     page.wait_for_timeout(250)
     seeded = page.evaluate("""() => {
@@ -390,7 +397,7 @@ def main() -> int:
     if failed:
         print(f"\nBIRTH RADIAL GATE FAILED — {failed} check(s).", file=sys.stderr)
         return 1
-    print("\nBIRTH RADIAL GATE PASSED — three sources on one ring, the pad "
+    print("\nBIRTH RADIAL GATE PASSED — four sources on one ring, the pad "
           "speaks the grammar it already knows, and a window that opens can "
           "become a layout.")
     return 0
