@@ -422,6 +422,7 @@ def input_gate() -> None:
     # ROUND 40's OWN GATES (2026-08-11), each fail-closed and planted-defect
     # proven by its builder, re-run by the coordinator before wiring:
     for _name, _title in [
+        ("test_old_name", "no shipped file still carries the pre-rename name (2026-08-12)"),
         ("test_orientation_lock", "the lock survives a resume and the interim desktop (204)"),
         ("test_clipboard_sync", "the PC clipboard reaches the phone, held through an away (182)"),
         ("test_return_timing", "one return, one encoder, started first (203)"),
@@ -628,10 +629,6 @@ def input_gate() -> None:
          "muting all three still leaves the banner as the last resort "
          "(tests/test_notify_prefs.py)")
     run([sys.executable, str(PROJECT_DIR / "tests" / "test_notify_prefs.py")])
-
-    step("0ak/6  FREEZE OFFER GATE — the 4K@60 offer fires once and only "
-         "once, and both answers persist (tests/test_freeze_offer.py)")
-    run([sys.executable, str(PROJECT_DIR / "tests" / "test_freeze_offer.py")])
 
     # ── TASK 227/228 (2026-08-11) ────────────────────────────────────────────
     step("0al/6  LAYOUT HISTORY GATE — a created layout is remembered across "

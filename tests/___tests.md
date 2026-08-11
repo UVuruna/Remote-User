@@ -2197,17 +2197,3 @@ module run whole in a fresh node process, with `prefGet`/`prefSet`/`send`/
 Run: `.venv\Scripts\python tests/test_notify_prefs.py` (needs node) — also a
 fail-closed step in `build.py` (0aj/6).
 
-### `test_freeze_offer.py` — Freeze Offer Gate (task 226, owner ballot verdict)
-Proves the ONE-TIME 4K@60 offer (`server/gui/freeze_offer.py`) fires exactly
-once, only at the freeze recipe named in `config.h264_max_width`'s own
-docstring (task 151 — `h264_max_width >= 3840` AND `target_fps >= 60`), and
-never repeats after either answer. Driven against the real
-`build_freeze_offer_banner` with a fake settings.json file and a fake window
-object standing in for `MainWindow.restart_server`.
-
-| planted defect | check that goes red |
-|---|---|
-| `SETTINGS.offered_2560` check removed from the guard | *never re-offered after Keep 4K* |
-
-Run: `.venv\Scripts\python tests/test_freeze_offer.py` — also a fail-closed
-step in `build.py` (0ak/6).

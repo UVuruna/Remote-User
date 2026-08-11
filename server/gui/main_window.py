@@ -36,7 +36,6 @@ import update_handover
 import updates
 from config import BUNDLE_DIR, FROZEN, PROJECT_ROOT, SETTINGS, app_version, save_user_settings
 from gui.controls_editor import ControlsEditor
-from gui.freeze_offer import build_freeze_offer_banner
 from gui.settings_window import SettingsWindow
 from gui.sizing import settle_minimum
 from gui.switch import TRACK_W as THEME_SWITCH_W, ThemeSwitch, choose_theme
@@ -149,9 +148,6 @@ class MainWindow(QMainWindow):
         root.setContentsMargins(24, 20, 24, 16)
         root.setSpacing(14)
 
-        freeze_offer = build_freeze_offer_banner(self)
-        if freeze_offer is not None:
-            root.addWidget(freeze_offer)
         root.addLayout(self._build_header())
         root.addWidget(self._build_qr_card())
         root.addLayout(self._build_power_row())

@@ -338,12 +338,6 @@ ALGORITHMIC = {
     # as its siblings, and it carries a real flow of its own (grab every
     # window → swap the palette → fade the stale pictures out).
     "server/gui/switch.py",
-    # New 2026-08-11 (task 226, THE STRUCTURE LAW): split out of
-    # main_window.py the day it was written — the one-time 4K@60 freeze offer
-    # crossed the file's 1000-line guard. A self-contained widget builder with
-    # a real decision (the freeze recipe + the never-ask-twice flag), same
-    # tier as its main_window.py sibling.
-    "server/gui/freeze_offer.py",
     "server/gui/controls_editor.py",
     "server/gui/controls_widgets.py",
     # Split out of controls_editor.py / controls_widgets.py on 2026-08-07

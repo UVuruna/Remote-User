@@ -95,8 +95,6 @@ away.
 - [Settings Window](settings_window.md) — built on first open and handed
   `restart_server`, so a stream Apply restarts the server on THIS window's
   worker thread
-- [Freeze Offer](freeze_offer.md) — `build_freeze_offer_banner(self)`, mounted
-  at the top of the window's column in `__init__`
 - [Updates](../../__about/updates.md) — `check()`, the GitHub-release lookup
   behind the Update button (at start and every 15 min)
 - [Update Handover](../../__about/update_handover.md) — `begin()`, everything
