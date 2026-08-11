@@ -72,7 +72,7 @@ function startListSource() {
 
 function newCreation(source) {
   return {
-    source,                 // "list" | "tap" | "new"
+    source,                 // "list" | "tap" | "new" | "recent"
     entries: null,          // list source: [{kind, hwnd, title, process, icon, tab?, x?, y?}]
     slots: [],              // chosen cells, in order — slot 1 names the layout
     name: null,             // owner-typed name; null = follow slot 1's title
@@ -122,11 +122,18 @@ function newCreation(source) {
 // in icons.js. His pick between his three word-triples (tap-point-touch /
 // list-open-current / new-create-start) is the one thing still open here, and
 // changing a word is changing three strings — nothing about the flow.
+// A FOURTH SOURCE (owner report 2026-08-11, task 228): "Recent" — a layout
+// already built before, on this very PC, re-created from the server's own
+// history (client/chrome.js's `openMiniRadial` already draws up to four on
+// its centred ring; adding a fourth item here is the whole change this file
+// makes to that radial). Placed last so New/List/Tap keep the exact ring
+// positions they have always drawn — see `openRecentHistoryPanel` below.
 function openSourceChooser() {
   openMiniRadial(newlayBtn, [
     { icon: "winplus", label: "New", onPick: openRecentsPanel },
     { icon: "listwin", label: "List", onPick: startListSource },
     { icon: "tapwin", label: "Tap", onPick: startTapSource },
+    { icon: "recentwin", label: "Recent", onPick: openRecentHistoryPanel },
   ], { centered: true });
 }
 
@@ -174,13 +181,16 @@ function renderRecentsPanel(list) {
   layPanel.innerHTML = "";
   layPanel.hidden = false;
   const card = document.createElement("div");
-  card.className = "lay-card card-columns";
+  card.className = "lay-card card-columns lc-panel";
+  const scrollWrap = document.createElement("div");
+  scrollWrap.className = "lc-scrollwrap";
+  card.appendChild(scrollWrap);
   const h = document.createElement("h2");
   h.textContent = "Open a window";
   const sub = document.createElement("p");
   sub.className = "lay-sub";
   sub.textContent = "It opens on the PC and becomes part of the layout.";
-  card.append(h, sub);
+  scrollWrap.append(h, sub);
 
   const rows = document.createElement("div");
   rows.className = "lc-rows lc-scroll";
@@ -195,7 +205,7 @@ function renderRecentsPanel(list) {
     }
     rows.appendChild(recentRow(e));
   });
-  card.appendChild(rows);
+  scrollWrap.appendChild(rows);
 
   const actions = document.createElement("div");
   actions.className = "lay-actions";
@@ -225,7 +235,7 @@ function recentRow(e) {
     note.textContent = e.sub;
     main.appendChild(note);
   }
-  keepFocus(main, () => openRecentEntry(e));
+  keepRowTap(main, () => openRecentEntry(e));
   row.appendChild(main);
   return row;
 }
@@ -269,6 +279,104 @@ async function openRecentEntry(e) {
   renderCreationPanel();
 }
 
+// ── RECENT: A LAYOUT ALREADY BUILT BEFORE (owner report 2026-08-11, task
+// 228) ───────────────────────────────────────────────────────────────────
+//
+// Unlike Tap/List/New, nothing here is a slot picked one at a time — the
+// SERVER remembers every layout it has ever created
+// (`server/layout_history.py`, across restarts) and re-creates one whole,
+// matching its remembered members against whatever stands open right now.
+// This file only asks for the list and shows it; the match/create/toast all
+// happen server-side (`layout_api.layout_recent_use`), because the desk can
+// change in the seconds between the ask and the tap and only the server ever
+// sees it fresh — the same reasoning `openRecentsPanel`'s New source lives
+// by, one door further in.
+async function openRecentHistoryPanel() {
+  if (!creating) creating = newCreation("recent");
+  refreshNewlayButton();
+  closeLayoutPanel();
+  showLayLoading("Reading the layout history…");
+  send({ type: "layout_recent" });
+}
+
+// Answered by `layout_recent` (connection.js routes it here). An empty
+// history — a fresh install, or a history file nothing could be read from —
+// is NAMED, never a blank card, the same rule `openRecentsPanel` follows.
+function handleLayoutRecent(msg) {
+  hideLayLoading();
+  if (!creating || creating.source !== "recent") return;
+  const entries = msg.entries || [];
+  if (!entries.length) {
+    cancelCreation(true);
+    showToast("No layout has been created on this PC yet");
+    return;
+  }
+  renderRecentHistoryPanel(entries);
+}
+
+function renderRecentHistoryPanel(entries) {
+  layPanel.innerHTML = "";
+  layPanel.hidden = false;
+  const card = document.createElement("div");
+  card.className = "lay-card card-columns lc-panel";
+  const scrollWrap = document.createElement("div");
+  scrollWrap.className = "lc-scrollwrap";
+  card.appendChild(scrollWrap);
+  const h = document.createElement("h2");
+  h.textContent = "Recent layouts";
+  const sub = document.createElement("p");
+  sub.className = "lay-sub";
+  sub.textContent = "Re-creates it from whatever of its windows is open now.";
+  scrollWrap.append(h, sub);
+
+  const rows = document.createElement("div");
+  rows.className = "lc-rows lc-scroll";
+  entries.forEach((e) => rows.appendChild(recentHistoryRow(e)));
+  scrollWrap.appendChild(rows);
+
+  const actions = document.createElement("div");
+  actions.className = "lay-actions";
+  actions.appendChild(layChip("Cancel", false, () => cancelCreation()));
+  card.appendChild(actions);
+  layPanel.appendChild(card);
+}
+
+// One row per history entry. `keepRowTap` (task 227b), not `keepFocus` — this
+// list scrolls exactly like the other two creation lists and must not steal
+// that scroll either.
+function recentHistoryRow(e) {
+  const row = document.createElement("div");
+  row.className = "lay-item lc-row";
+  const main = document.createElement("button");
+  main.type = "button";
+  main.className = "lay-item-main";
+  main.innerHTML = svg("recentwin");
+  const name = document.createElement("span");
+  name.textContent = e.name;
+  main.appendChild(name);
+  if (e.project) {
+    const note = document.createElement("small");
+    note.className = "lc-note";
+    note.textContent = e.project;
+    main.appendChild(note);
+  }
+  keepRowTap(main, () => useRecentHistory(e));
+  row.appendChild(main);
+  return row;
+}
+
+// The tap. Nothing is built here — `layout_recent_use` on the server does
+// the matching, the creation and the "N of M found" toast; this side only
+// asks and shows the same loading cube every other creation flow shows
+// while the PC works.
+function useRecentHistory(e) {
+  closeLayoutPanel();
+  showLayLoading(`Re-creating ${e.name}…`);
+  send({ type: "layout_recent_use", id: e.id });
+  creating = null;
+  refreshNewlayButton();
+}
+
 function armNextTap() {
   creating.awaitingTap = true;
   layoutArm = true;
@@ -276,6 +384,52 @@ function armNextTap() {
   closeLayoutPanel();
   showToast("Tap a window or tab on the screen…");
 }
+
+// A ROW MUST NOT STEAL THE SCROLL (owner report 2026-08-11, task 227b — "the
+// owner cannot SCROLL over the rows: the moment a finger lands, the row
+// selects"). `keepFocus` (controls.js) is right for every OTHER button on
+// this page, but wrong for a row inside `.lc-rows.lc-scroll`: it calls
+// `e.preventDefault()` on pointerdown to guarantee touch activation, and that
+// same preventDefault is what stops the browser from ever recognising the
+// touch as a scroll — every drag that started on a row became a selection
+// instead of a scroll, tap or not. And its `pointerup` handler fires
+// regardless of travel, so even a drag that DID scroll past the button still
+// fired a select the instant the finger lifted off it.
+//
+// A row's own tap therefore never calls `preventDefault` (the browser is free
+// to start scrolling) and decides on RELEASE, by travel alone, reusing
+// `pressVerdict` from hold-gesture.js rather than re-deriving the rule
+// (constraint 9: one activator, never a second copy that can drift) — a tap
+// that stayed under `ROW_TAP_SLOP` selects; a drag past it, or already past
+// it when it ends, never does. The pointercancel rescue keeps the Android
+// edge-gesture case from constraint 9 alive: a stolen tap under slop still
+// counts.
+// tests/test_row_tap.py extracts exactly the block between these two
+// markers and runs it, whole, in node against `hold-gesture.js`'s real
+// `pressVerdict` — never a re-typed copy of the logic. Move the markers WITH
+// the code if this ever moves; a gate that silently starts extracting stale
+// text is worse than no gate.
+// ROW_TAP_GATE_START
+const ROW_TAP_SLOP = 12; // CSS px — a still finger's own wander, no more
+function keepRowTap(el, onTap) {
+  let down = null; // {id, x, y}
+  el.addEventListener("pointerdown", (e) => {
+    down = { id: e.pointerId, x: e.clientX, y: e.clientY };
+  });
+  el.addEventListener("pointerup", (e) => {
+    if (!down || e.pointerId !== down.id) return;
+    const at = { x: e.clientX, y: e.clientY };
+    if (pressVerdict(down, at, 0, ROW_TAP_SLOP, Infinity) === PRESS_TAP) onTap(e);
+    down = null;
+  });
+  el.addEventListener("pointercancel", (e) => {
+    const at = { x: e.clientX, y: e.clientY };
+    if (down && e.pointerId === down.id &&
+        pressVerdict(down, at, 0, ROW_TAP_SLOP, Infinity) === PRESS_TAP) onTap(e);
+    down = null;
+  });
+}
+// ROW_TAP_GATE_END
 
 function cellsNeeded() {
   return creating.mode === "grid" ? (GRID_CELLS[creating.grid] || 2) : 1;
@@ -374,7 +528,7 @@ function entryRow(opts) {
     note.textContent = opts.note;
     main.appendChild(note);
   }
-  keepFocus(main, opts.onTap);
+  keepRowTap(main, opts.onTap);
   row.appendChild(main);
   return row;
 }
@@ -460,6 +614,21 @@ function renderCreationPanel() {
   layPanel.innerHTML = "";
   layPanel.hidden = false;
   const card = document.createElement("div");
+  // THE FOOTER IS PINNED, THE LIST SCROLLS (owner report 2026-08-11, task 227a
+  // — with a long window list Cancel/Create scrolled off-screen with it,
+  // because `.lay-card` is one block that scrolls as a whole: the list's own
+  // 38vh cap does not stop the CARD'S total content from exceeding 92vh once
+  // a chosen row, the name field, the shape rows and a tall list all stand
+  // above it). Every piece except Cancel/Create now lives in `.lc-scrollwrap`
+  // (`box`/`listInto` point INTO it, never at `card` directly), which is the
+  // one thing that scrolls; `actions` stays a direct child of `card`, appended
+  // last, so it can never be scrolled past. `.lc-panel` makes the card itself
+  // a fixed-height flex column instead of a single scrolling block — see
+  // layout-create.css. The short-landscape multicol reflow (panels.css) turns
+  // the wrap back into `display:contents` there, so the two-column
+  // fragmentation this card also does is untouched.
+  const scrollWrap = document.createElement("div");
+  scrollWrap.className = "lc-scrollwrap";
   // A SCROLLING LIST MAY NOT LIVE INSIDE A COLUMNED CARD (found 2026-08-09 by
   // photographing this panel at 915x412 — the round's own verification). The
   // landscape reflow of task 172 made this card a `column-count: 2`
@@ -488,20 +657,21 @@ function renderCreationPanel() {
   // `card-columns` behaviour exactly — a split there would leave one column
   // empty, which is the opposite defect.
   const split = c.source === "list" && !!c.entries;
-  card.className = split ? "lay-card lc-split" : "lay-card card-columns";
-  // Where the two halves go. Outside the split these are the card itself, so
-  // the order and the markup are byte-for-byte what they were.
+  card.className = (split ? "lay-card lc-split" : "lay-card card-columns") + " lc-panel";
+  card.appendChild(scrollWrap);
+  // Where the two halves go. Outside the split these are the scroll wrap
+  // itself, so the order and the markup are byte-for-byte what they were.
   const cols = document.createElement("div");
   const side = document.createElement("div");
   const listBox = document.createElement("div");
-  const box = split ? side : card;
-  const listInto = split ? listBox : card;
+  const box = split ? side : scrollWrap;
+  const listInto = split ? listBox : scrollWrap;
   if (split) {
     cols.className = "lc-cols";
     side.className = "lc-side";
     listBox.className = "lc-main";
     cols.append(side, listBox);
-    card.appendChild(cols);
+    scrollWrap.appendChild(cols);
   }
 
   const h = document.createElement("h2");

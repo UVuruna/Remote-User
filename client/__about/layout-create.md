@@ -71,6 +71,8 @@ vocabulary, so the phone never has two competing card styles.
 | `renderCreationPanel()` | The slot panel: mode, orientation, the chosen slots, the name field, Create. |
 | `cancelCreation(silent)` | Ends the session and clears `layoutArm` — the + button's second tap, the backdrop tap, and Cancel all land here. |
 | `refreshNewlayButton()` | Lights the + button while a session or an armed tap is live. |
+| `keepRowTap(el, onTap)` | Task 227b's row activator: selects on RELEASE under 12px travel, reusing `pressVerdict`. Never `preventDefault`s on `pointerdown` — that is what let a row's tap steal the list's own scroll. Used by every row of every creation-panel list (`entryRow`, `recentRow`, `recentHistoryRow`), never `keepFocus`. |
+| `openRecentHistoryPanel()` / `handleLayoutRecent(msg)` | Task 228's fourth source: asks the server for `layout_history` (`layout_recent`) and shows it; a tap sends `layout_recent_use {id}` — matching, creating and the found/missing toast all happen server-side. |
 
 ## Design Decisions
 
@@ -266,3 +268,77 @@ There is no second wizard.
 
 Gates: `tests/test_birth_radial.py` (the phone half) and
 `tests/test_layout_birth.py` (the PC half).
+
+## The footer is pinned, the list scrolls (owner report 2026-08-11, task 227a)
+
+A long window list scrolled Cancel/Create off with it — `.lay-card` was one
+block (`max-height: 92vh; overflow-y: auto`) covering EVERYTHING, header
+through footer, so a chosen row, the name field, the shape rows and a tall
+list together could push the footer below the fold with nothing on screen
+suggesting a further scroll would ever reach it.
+
+Both creation renderers (`renderCreationPanel`, `renderRecentsPanel`,
+`renderRecentHistoryPanel`) now wrap everything EXCEPT `.lay-actions` in one
+`.lc-scrollwrap` div; `.lc-panel` (`layout-create.css`) turns the card itself
+into a fixed-height flex COLUMN, so `.lc-scrollwrap` is the one child that
+scrolls and `.lay-actions` — appended to `card` directly, always last — can
+never be scrolled past. This coexists with two pre-existing reflows without
+touching either:
+
+- **The task-214 landscape split** (`.lc-split`, above) still turns the card
+  into a row with its own two-column footer; `.lc-scrollwrap` there just
+  takes `.lc-cols`'s old place as the flex child, and `.lc-cols` is
+  unchanged inside it.
+- **The short-landscape multicol reflow** (`panels.css`, `.card-columns`) —
+  where the whole PANEL scrolls and the card must stay a plain fragmentainer
+  — sets `.lc-scrollwrap { display: contents }` there, which removes the
+  wrapper from the box tree while its children stay exactly where the
+  multicol algorithm expects them.
+
+Gate: `tests/test_creation_footer.py` — a REAL page in a real headless
+Chromium, staged with a twenty-row list, at both target sizes (portrait
+412×915, landscape 915×412); Cancel/Create's own bounding rects must sit
+inside the viewport the instant the panel renders, with no scroll performed.
+
+## A row must not steal the scroll (owner report 2026-08-11, task 227b)
+
+Every row used `keepFocus` (`controls.js`) — the page's ordinary button
+activator, which calls `preventDefault()` on `pointerdown` to guarantee real
+touch activation. That same call is exactly what stops the browser from ever
+recognising the touch as a scroll: the moment a finger landed on a row, the
+row selected, and a drag over it never scrolled the list at all.
+
+`keepRowTap` (above) is the row-only replacement: it never `preventDefault`s,
+so the browser is free to start a scroll, and it decides on RELEASE, by
+travel alone — under `ROW_TAP_SLOP` (12px) selects, past it (a scroll) does
+not — reusing `pressVerdict` from `hold-gesture.js` rather than a second copy
+of that rule (constraint 9). The `pointercancel` rescue still fires under
+slop, so the Android edge-gesture theft (constraint 9) is defended on a row
+exactly as it is on every other button.
+
+Gate: `tests/test_row_tap.py` — extracts the REAL `keepRowTap` source out of
+this file (between `ROW_TAP_GATE_START`/`_END` markers, never a re-typed
+copy) and runs it in node against the real `hold-gesture.js`; caught a real
+bug during its own writing (`pressVerdict` was called with the raw pointer
+event instead of `{x, y}`, so travel was always `NaN` and every drag
+selected regardless).
+
+## A FOURTH source: Recent — a layout already built before (owner report 2026-08-11, task 228)
+
+Tap / List / New all build from what stands on the desk NOW; none of them
+remember what he built YESTERDAY. **Recent** is the radial's fourth option
+(`icons.js` → `recentwin`, a drawn clock, never a font glyph — the ✥ lesson
+of 2026-08-05): it asks the server for its persisted creation log
+(`layout_recent {}`) and shows it (`renderRecentHistoryPanel`, reusing
+`.lay-item` row styling and `keepRowTap`). A tap sends
+`layout_recent_use {id}` and shows the ordinary loading cube — everything
+else (matching the remembered members against what is open now, creating,
+and the "N of M found" toast) happens entirely server-side; see
+[Layout History](../../server/__about/layout_history.md).
+
+`openMiniRadial` (`chrome.js`) already drew up to four options on its
+centred ring — adding a fourth item here is the whole change this file makes
+to that radial; chrome.js itself is untouched.
+
+Gate: `tests/test_layout_history.py` (the server half — dedupe, ranking,
+re-match, each proven by planting its own defect).

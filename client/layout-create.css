@@ -72,6 +72,36 @@
   margin-left: 30px;
 }
 
+/* THE FOOTER IS PINNED, THE LIST SCROLLS (owner report 2026-08-11, task 227a
+   — a long window list pushed Cancel/Create off-screen with it, because a
+   plain `.lay-card` is ONE block that scrolls as a whole: the entries list's
+   own 38vh cap does not stop the CARD's total content from exceeding its
+   92vh ceiling once a chosen row, the name field, the shape rows and a tall
+   list all stand above the footer).
+
+   `.lc-panel` turns the card from "one block that may scroll" into a fixed-
+   height FLEX COLUMN: `.lc-scrollwrap` is the one child that scrolls, and
+   `.lay-actions` — Cancel/Create — is the other, a sibling appended AFTER it
+   and never inside it, so it can never be scrolled past. This is the base
+   (portrait-first) rule; the two places that reflow the card for a short
+   screen — the unconditional landscape split below, and the short-landscape
+   multicol reflow in panels.css — override it for their own reasons and are
+   documented where they do. */
+.lay-card.lc-panel {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.lc-scrollwrap {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+.lc-panel > .lay-actions {
+  flex: none;
+  margin-top: 14px;
+}
+
 /* THE NEW SOURCE'S APP HEADING (owner 2026-08-09, task 184). The list of
    things that can be OPENED is grouped by app, and each group's rows are
    indented under its heading with `.lc-kid` — the same 30px column a tab takes
@@ -154,6 +184,18 @@
        refuse to pass an elision rule nothing exercises). */
     width: 100%;
     max-width: 900px;
+  }
+  /* `.lc-scrollwrap` (task 227a) sits between the card and `.lc-cols` now —
+     it plays `.lc-cols`'s old role as the card's flex-row/flex-column child
+     here, so it takes the space `.lc-cols` used to take directly and simply
+     hands it on; `.lc-cols` is unchanged below it. */
+  body .lay-card.lc-split .lc-scrollwrap {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 0;
+    overflow: visible;   /* the two inner columns scroll themselves */
   }
   body .lay-card.lc-split .lc-cols {
     display: flex;

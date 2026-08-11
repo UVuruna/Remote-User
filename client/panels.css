@@ -530,11 +530,23 @@
   }
   body .sets-card.card-columns,
   body .lay-card.card-columns {
+    display: block;        /* undo .lc-panel's flex column (task 227a) — a
+                               fragmentainer needs block/flow-root, not flex */
     column-count: 2;
     column-gap: 24px;
     max-height: none;      /* a CAPPED multicol fragments sideways — see above */
     overflow: visible;     /* nothing scrolls here; the panel does */
     margin-block: auto;    /* still centred while it fits */
+  }
+  /* `.lc-scrollwrap` (task 227a, layout-create.js) exists to pin a card's
+     footer everywhere ELSE; here the whole PANEL scrolls instead (above) and
+     the card's rows must be free to fragment into the second column, which a
+     real box in between would stop. `display: contents` removes the wrapper
+     from the box tree while keeping its children exactly where the multicol
+     algorithm expects them — the layout-create.js creation card is the only
+     `.lay-card.card-columns` this wraps, so the selector is scoped to it. */
+  body .lay-card.card-columns .lc-scrollwrap {
+    display: contents;
   }
   /* The cards that are NOT multicol keep their own cap and their own scroll —
      they are ordinary blocks and were never caught by the trap — but they still
