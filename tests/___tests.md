@@ -2155,3 +2155,42 @@ nothing about `.cl-memory`.
 
 Run: `.venv\Scripts\python tests/test_claude_panels.py` (needs node) — also a
 fail-closed step in `build.py` (0ae/6).
+
+### `test_notify_prefs.py` — Notify Channels Gate (task 226, owner ballot verdict)
+Proves the two rules `client/notify.js`'s per-device mute switches must hold
+now that the Phone card gives them a real door (`client/phone-panel.js`,
+`saveNotifyPrefs()`):
+
+1. A muted carrier is genuinely SKIPPED — `handleNotify()` never calls it.
+2. **THE LAST-RESORT RULE**: muting banner/speak/tone all at once must never
+   mean silence. `effectiveNotifyPrefs()` answers banner-only in that one
+   case, because the banner is the only carrier that needs no sound and still
+   reaches him with the screen off. The raw stored prefs are never rewritten
+   by the fallback — only the READ path used by `handleNotify()` sees it, so
+   the Phone card's switches keep showing what he actually ticked.
+
+Driven the way `test_voice_dedup.py` drives `client/voice.js`: the REAL
+module run whole in a fresh node process, with `prefGet`/`prefSet`/`send`/
+`Android` stubbed to the minimum surface notify.js reaches for.
+
+| planted defect | check that goes red |
+|---|---|
+| `effectiveNotifyPrefs()` returns the raw prefs with no override | *muting every carrier still answers banner-only* |
+
+Run: `.venv\Scripts\python tests/test_notify_prefs.py` (needs node) — also a
+fail-closed step in `build.py` (0aj/6).
+
+### `test_freeze_offer.py` — Freeze Offer Gate (task 226, owner ballot verdict)
+Proves the ONE-TIME 4K@60 offer (`server/gui/freeze_offer.py`) fires exactly
+once, only at the freeze recipe named in `config.h264_max_width`'s own
+docstring (task 151 — `h264_max_width >= 3840` AND `target_fps >= 60`), and
+never repeats after either answer. Driven against the real
+`build_freeze_offer_banner` with a fake settings.json file and a fake window
+object standing in for `MainWindow.restart_server`.
+
+| planted defect | check that goes red |
+|---|---|
+| `SETTINGS.offered_2560` check removed from the guard | *never re-offered after Keep 4K* |
+
+Run: `.venv\Scripts\python tests/test_freeze_offer.py` — also a fail-closed
+step in `build.py` (0ak/6).

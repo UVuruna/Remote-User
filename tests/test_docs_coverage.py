@@ -54,6 +54,11 @@ STANDARD = {
     # was NOT standing before the launch may be handed back — is a comparison,
     # not a flow, and it is gated in tests/test_layout_birth.py.
     "server/recents.py",
+    # New 2026-08-11 (task 228 — the "Recent" creation source). Standard: a
+    # persisted, capped, deduped log with a dedupe key and a fuzzy re-match —
+    # each promise is a comparison over a member list, not a state machine or
+    # geometry of its own, and every one is gated in tests/test_layout_history.py.
+    "server/layout_history.py",
     # New 2026-08-11 (owner 2026-08-04 order, task 182 — the clipboard lives
     # on both devices). Standard: a Win32 clipboard read, a message-only
     # listener window on focus_hook's proven thread shape, and the held-while-
@@ -333,6 +338,12 @@ ALGORITHMIC = {
     # as its siblings, and it carries a real flow of its own (grab every
     # window → swap the palette → fade the stale pictures out).
     "server/gui/switch.py",
+    # New 2026-08-11 (task 226, THE STRUCTURE LAW): split out of
+    # main_window.py the day it was written — the one-time 4K@60 freeze offer
+    # crossed the file's 1000-line guard. A self-contained widget builder with
+    # a real decision (the freeze recipe + the never-ask-twice flag), same
+    # tier as its main_window.py sibling.
+    "server/gui/freeze_offer.py",
     "server/gui/controls_editor.py",
     "server/gui/controls_widgets.py",
     # Split out of controls_editor.py / controls_widgets.py on 2026-08-07

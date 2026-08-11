@@ -616,6 +616,38 @@ def input_gate() -> None:
          "claim only what it said (tests/test_claude_panels.py)")
     run([sys.executable, str(PROJECT_DIR / "tests" / "test_claude_panels.py")])
 
+    # TASK 226, owner ballot verdict — all three of the settings-inventory
+    # proposals landed in this build: notification-channel switches on the
+    # phone's Phone card, the desktop's ADVANCED settings card, and the
+    # one-time 4K@60 freeze offer. Fail-closed the same way test_voice_dedup.py
+    # is: a rule about the LAST-RESORT fallback (muting all three carriers
+    # must never mean silence) cannot be proven by one call, and needs node —
+    # never skip it silently.
+    step("0aj/6  NOTIFY CHANNELS GATE — a muted carrier is skipped, and "
+         "muting all three still leaves the banner as the last resort "
+         "(tests/test_notify_prefs.py)")
+    run([sys.executable, str(PROJECT_DIR / "tests" / "test_notify_prefs.py")])
+
+    step("0ak/6  FREEZE OFFER GATE — the 4K@60 offer fires once and only "
+         "once, and both answers persist (tests/test_freeze_offer.py)")
+    run([sys.executable, str(PROJECT_DIR / "tests" / "test_freeze_offer.py")])
+
+    # ── TASK 227/228 (2026-08-11) ────────────────────────────────────────────
+    step("0al/6  LAYOUT HISTORY GATE — a created layout is remembered across "
+         "restarts, deduped by member set, and re-matched against what is "
+         "open now (tests/test_layout_history.py)")
+    run([sys.executable, str(PROJECT_DIR / "tests" / "test_layout_history.py")])
+
+    step("0am/6  ROW TAP GATE — a row in the creation panel selects only on "
+         "release under slop; a drag over it scrolls and selects nothing "
+         "(tests/test_row_tap.py)")
+    run([sys.executable, str(PROJECT_DIR / "tests" / "test_row_tap.py")])
+
+    step("0an/6  CREATION FOOTER GATE — Cancel/Create stay inside the "
+         "viewport with a long window list, at both target sizes "
+         "(tests/test_creation_footer.py)")
+    run([sys.executable, str(PROJECT_DIR / "tests" / "test_creation_footer.py")])
+
 
 def generate_icons() -> None:
     step("1/6  Generating ICOs from assets/logo.svg")
