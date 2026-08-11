@@ -235,8 +235,16 @@ def wait_for(pred, timeout=4.0):
 def tap_button(page, selector):
     """Tap the centre of one control button. Builtins are targeted by their
     data-action (labels are ambiguous — a category can share a button's name);
-    chord buttons have no action and are found by label text."""
-    box = page.locator(selector).first.bounding_box()
+    chord buttons have no action and are found by label text.
+
+    The button is WAITED for, never merely asked about: the pad's own tests
+    change the group's category through the wheel, and that re-render is
+    asynchronous — a bare `bounding_box()` returned None often enough to fail
+    a build at random, with a TypeError that named nothing.
+    """
+    button = page.locator(selector).first
+    button.wait_for(state="visible", timeout=5000)
+    box = button.bounding_box()
     page.touchscreen.tap(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
 
 
