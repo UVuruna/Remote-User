@@ -13,7 +13,8 @@
 // screen actually stands still, so the user never watches windows climb out
 // of the taskbar.
 //
-// Loaded BEFORE layouts.js — `showLayLoading`/`hideLayLoading`/
+// Loaded AFTER settle-motion.js (its pure `changedFraction`/`isSettled`,
+// task 194) and BEFORE layouts.js — `showLayLoading`/`hideLayLoading`/
 // `settleLayLoading`/`cubeNext` are called from there and from connection.js.
 "use strict";
 
@@ -85,11 +86,35 @@ function cubeNext() {
 //      frames — the ones with the window rising — arrived right after it.
 //      So sampling only STARTS after SETTLE_CATCHUP_MS, by which time the
 //      finished screen has certainly been decoded here.
+//
+// TASK 194 — "traje predugo ... radi kontra uslugu" (it takes too long, it
+// works against him). Root cause: the OLD metric was a whole-thumbnail MEAN
+// of |Δ| per channel, which required the picture to be near-PERFECTLY still
+// before it counted a hit. A blinking caret is a tiny patch and washes out
+// in a mean over 64x36 samples, but his agents actively typing/scrolling in
+// a member window is real, LOCAL, ongoing motion covering a real share of
+// the thumbnail — enough to keep pushing the mean over the old threshold for
+// the entire watch window, every time. The server has ALREADY verified
+// placement by the time `layout_state` arrives (window_manager.wait_landed,
+// see the block above) — this side is not proving the windows landed, only
+// that watching the raw stream a moment longer would not have looked better.
+// So the metric moved into its own PURE module, client/settle-motion.js (the
+// view-anchor.js/cursor-shapes.js pattern — loaded just before this file so
+// `changedFraction`/`isSettled` are in scope here, and node can run it whole
+// with no DOM for tests/test_loading_settle.py): "how big is the average
+// change" became "what FRACTION of the picture actually changed" — a caret
+// blink or a terminal's own cursor is a few percent of the frame and reads
+// as settled, while a window actually sliding into place changes a large
+// share of it and still does not. And because even a genuinely busy screen
+// (multiple agents producing output at once) can keep the fraction above
+// threshold for a while, SETTLE_MAX_MS is now a REAL "a few seconds", not a
+// five-second last resort — the server already said the desk is done; this
+// side owes him a moment to catch the stream up, not a fight to see the
+// picture stop moving entirely.
 const SETTLE_CATCHUP_MS = 650; // stream latency: never judge before this
 const SETTLE_SAMPLE_MS = 140;
-const SETTLE_DIFF = 2.6;      // mean |Δ| per colour channel that counts as "still"
 const SETTLE_STABLE_HITS = 3; // ~420 ms of stillness — 2 let a paused move through
-const SETTLE_MAX_MS = 4000;   // never wait longer than this after catching up
+const SETTLE_MAX_MS = 2200;   // "a few seconds" after catching up (task 194: was 4000)
 const LOADING_MIN_MS = 700;   // never flash the animation
 const LOADING_MAX_MS = 40000; // absolute backstop (server never answered)
 
@@ -114,16 +139,7 @@ function settleStill() {
   if (!src) return false;
   settleCtx.drawImage(src, 0, 0, settleCanvas.width, settleCanvas.height);
   const data = settleCtx.getImageData(0, 0, settleCanvas.width, settleCanvas.height).data;
-  let still = false;
-  if (settlePrev) {
-    let sum = 0;
-    for (let i = 0; i < data.length; i += 4) {
-      sum += Math.abs(data[i] - settlePrev[i]) +
-             Math.abs(data[i + 1] - settlePrev[i + 1]) +
-             Math.abs(data[i + 2] - settlePrev[i + 2]);
-    }
-    still = sum / (data.length / 4 * 3) < SETTLE_DIFF;
-  }
+  const still = isSettled(changedFraction(data, settlePrev));
   settlePrev = data;
   return still;
 }
