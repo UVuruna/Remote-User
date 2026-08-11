@@ -46,6 +46,7 @@ two reads it first sets `_last_text` for the other.
 """
 
 import asyncio
+import atexit
 import ctypes
 import ctypes.wintypes as wintypes
 import logging
@@ -115,7 +116,11 @@ CLASS_NAME = "RemoteUserClipboardListener"
 
 # ═══════════════════════════ TIMINGS ═══════════════════════════
 START_TIMEOUT_S = 1.0
-STOP_TIMEOUT_S = 0.25
+STOP_TIMEOUT_S = 2.0   # 0.25 lost a race under a loaded test run — the thread
+                       # can sit inside a clipboard read's retry sleeps, and a
+                       # daemon thread still running its ctypes WNDPROC at
+                       # interpreter teardown is a hard crash (0xC000041D),
+                       # so the join must outlast one full retry ladder
 # The app that received our injected Ctrl+C/Ctrl+X needs a beat to actually
 # fill the clipboard — SendInput returns as soon as the keys are queued, not
 # once the target has processed them.
@@ -255,25 +260,38 @@ _thread_lock = threading.RLock()
 _watchers = 0
 
 
-def _wndproc_factory(on_update):
-    def proc(hwnd, msg, wparam, lparam):
-        if msg == WM_CLIPBOARDUPDATE:
+# ONE thunk for the LIFE OF THE PROCESS. RegisterClassW keeps the class —
+# and its WNDPROC pointer — registered process-wide even after the window
+# and the thread are gone; a per-run thunk therefore left the SECOND
+# listener's window dispatching into a garbage-collected callback, which is
+# a hard 0xC000041D the moment any message arrives (measured in the browser
+# gates, where every connection cycles the listener). The thunk is eternal
+# and reads the CURRENT callback through a module slot instead.
+_on_update = None
+
+
+def _eternal_proc(hwnd, msg, wparam, lparam):
+    if msg == WM_CLIPBOARDUPDATE:
+        cb = _on_update
+        if cb is not None:
             try:
-                on_update()
+                cb()
             except Exception:
                 logger.exception("Clipboard listener callback raised")
-            return 0
-        return user32.DefWindowProcW(hwnd, msg, wparam, lparam)
-    return WNDPROCTYPE(proc)
+        return 0
+    return user32.DefWindowProcW(hwnd, msg, wparam, lparam)
+
+
+_WNDPROC = WNDPROCTYPE(_eternal_proc)
 
 
 def _run(on_update) -> None:
-    global _tid, _hwnd
+    global _tid, _hwnd, _on_update
     _tid = kernel32.GetCurrentThreadId()
-    wndproc = _wndproc_factory(on_update)   # local: must outlive the window
+    _on_update = on_update
 
     wc = WNDCLASSW()
-    wc.lpfnWndProc = wndproc
+    wc.lpfnWndProc = _WNDPROC
     wc.hInstance = kernel32.GetModuleHandleW(None)
     wc.lpszClassName = CLASS_NAME
     # A previous run's class can still be registered if the process never
@@ -341,10 +359,20 @@ def _stop() -> None:
                            ctypes.get_last_error())
         thread.join(STOP_TIMEOUT_S)
         if thread.is_alive():
+            # (registered below) — a daemon thread still inside its ctypes
+            # WNDPROC when the interpreter tears down is a hard 0xC000041D
+            # crash, which is why _stop is also an atexit hook.
             logger.error("The clipboard listener thread did not stop within %.2fs",
                          STOP_TIMEOUT_S)
             return   # identity kept, deliberately — mirrors focus_hook
         _thread, _tid = None, 0
+
+
+# The listener MUST be gone before Python tears down: a daemon thread still
+# running its ctypes WNDPROC past interpreter shutdown dies with 0xC000041D
+# (measured in the browser gates, not theorized). atexit runs before the
+# interpreter frees the callback thunks, so the stop is safe there.
+atexit.register(_stop)
 
 
 async def watch(ws, conn: dict) -> None:
