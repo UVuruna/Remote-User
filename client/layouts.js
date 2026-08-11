@@ -499,6 +499,17 @@ function nameField(value, placeholder) {
 // orientation; the full desktop unlocks it (owner 2026-08-02). "" = unlock.
 function applyOrientationLock() {
   if (!IN_APP || !window.Android.lockOrientation) return;
+  // TASK 204: after a reconnect, the server's FIRST layout_state says desktop
+  // — connection.js only sends the layout_focus that restores the real
+  // layout a moment later. Calling lockOrientation("") on that interim frame
+  // unlocked rotation for the seconds the restore takes, and the tablet spun
+  // sideways with blue letterbox bars over a portrait layout. While
+  // orientationRestoring is true the previous lock stands untouched; the
+  // restore's own later layout_state (landing with layoutActive set) clears
+  // the flag and this function runs for real, and a restore that fails to
+  // verify clears it too (connection.js) — so a genuinely stuck restore does
+  // not hold rotation locked forever.
+  if (layoutActive === null && orientationRestoring) return;
   window.Android.lockOrientation(
     layoutActive !== null && layouts[layoutActive] ? layouts[layoutActive].orient : "");
 }
@@ -698,6 +709,21 @@ function openMemberPanel(index) {
     card.append(h, sub);
     const titles = Array.isArray(lay.member_titles) ? lay.member_titles : [];
     for (let k = 0; k < (lay.members || 1); k++) {
+      // EJECT — the twin act beside "take out" (task 197b): the same window,
+      // pulled into its OWN new layout instead of left standing on the desk.
+      // A small trailing icon button, the same `.lay-ratio` treatment the
+      // row's ⚙/shape badges already wear, so it reads as ONE MORE act on
+      // this row rather than a second row style.
+      const eject = document.createElement("button");
+      eject.type = "button";
+      eject.className = "lay-ratio lay-eject";
+      eject.innerHTML = svg("newwin");
+      eject.setAttribute("aria-label", "Move to its own layout");
+      keepFocus(eject, () => {
+        closeLayoutPanel();
+        send({ type: "layout_member_eject", index, member: k });
+        showLayLoading("Moving the window…");
+      });
       card.appendChild(layRow(
         // A server too old to send `member_titles` still gets a usable
         // panel: the CELL is the picture, the title is only the word.
@@ -713,7 +739,7 @@ function openMemberPanel(index) {
           // The survivors are re-placed into the new shape, so real windows
           // move on the PC — the cube covers it, exactly as for a reshape.
           showLayLoading("Rearranging the layout…");
-        }));
+        }, eject));
     }
     if (choices.length) {
       const lbl = document.createElement("p");

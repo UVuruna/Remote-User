@@ -286,6 +286,11 @@ class MainActivity : AppCompatActivity() {
         setContentView(R.layout.activity_main)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         hideSystemBars()
+        // Task 204: re-assert the remembered rotation lock before the page has
+        // even loaded — a fresh Activity instance (process reclaimed during an
+        // excursion, an OEM quirk) otherwise starts unlocked and the page will
+        // not call lockOrientation again unless the layout FOCUS itself changes.
+        applyOrientationLock(Prefs.orientLock(this))
         askNotificationPermission()
         // The waiting channel (owner decree 2026-08-07). Started here and
         // never stopped by us: it outlives this Activity on purpose — the
@@ -691,6 +696,14 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         voice.onForeground()
+        // Task 204: an excursion (picker, permission dialog, the battery
+        // exemption sheet) can return to a RECREATED Activity instance if
+        // Android reclaimed the process while we were away — that instance's
+        // `requestedOrientation` starts at the manifest default, unlocked,
+        // and the page never re-sends lockOrientation on its own unless the
+        // layout FOCUS changes, which it did not. Re-assert every resume;
+        // it is a no-op when nothing was ever locked ("").
+        applyOrientationLock(Prefs.orientLock(this))
         if (!::web.isInitialized) return
         web.onResume()
         val current = web.url
@@ -773,6 +786,19 @@ class MainActivity : AppCompatActivity() {
     // window. What Bridge needs of this Activity is exactly the `internal`
     // members above and the three helpers below; that list IS the shell's
     // capability surface, and making it visible was half the point.
+
+    /** The real work behind `Bridge.lockOrientation` (task 204) — split out so
+     *  `onCreate`/`onResume` can re-assert the REMEMBERED mode (Prefs) as well
+     *  as the bridge reacting to a fresh call from the page. Must run on the
+     *  UI thread; callers on it already (onCreate/onResume) call it directly,
+     *  Bridge posts it via runOnUiThread. */
+    internal fun applyOrientationLock(mode: String) {
+        requestedOrientation = when (mode) {
+            "portrait" -> android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+            "landscape", "wide" -> android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+            else -> android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        }
+    }
 
     /** Mic tap: the recogniser needs a runtime grant, and asking for one
      *  hides the page — which the shell must count as an EXCURSION or the PC

@@ -162,6 +162,14 @@ let layoutArm = false;   // one-shot: the next canvas tap picks a window
 // in). Armed by every layout_state that carries a focus; cleared by a
 // DELIBERATE focus change/removal the user sends (see send() below).
 let layoutRestore = null; // {index, name} or null
+// TASK 204: true from the moment a layoutRestore attempt is SENT until its
+// own reply lands (success or failed verify) — see applyOrientationLock in
+// layouts.js. The server's interim "desktop" layout_state during that
+// window is not a real desktop choice; unlocking rotation on it let the
+// tablet spin sideways with blue letterbox bars for the seconds the restore
+// takes (owner report, task 204). Distinct from layoutRestore itself, which
+// is cleared BEFORE the restore's layout_focus is even sent.
+let orientationRestoring = false;
 // Font-zoom staircase steps already applied per layout index (owner
 // 2026-08-05 — gestures.js sends Ctrl+-/= past the fitted view). Kept here
 // with the rest of the layout state; removal shifts the indices in send().

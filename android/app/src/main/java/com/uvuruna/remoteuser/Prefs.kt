@@ -14,6 +14,7 @@ object Prefs {
     private const val KEY_LAN = "pairing_url"
     private const val KEY_TS = "tailscale_url"
     private const val KEY_DEVICE = "device_id"
+    private const val KEY_ORIENT = "orient_lock"
 
     /** Where the PAGE's own per-device preferences live (the `prefGet`/
      *  `prefSet` bridge). Named here rather than in Bridge.kt because the
@@ -64,5 +65,23 @@ object Prefs {
     fun setTsUrl(context: Context, url: String?) {
         context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
             .edit().putString(KEY_TS, url).apply()
+    }
+
+    /** The page's last `Android.lockOrientation` mode — "portrait" /
+     *  "landscape" / "" (unlocked). Task 204: `requestedOrientation` lives
+     *  only on the LIVE Activity instance and Android never persists it —
+     *  an excursion whose picker got the process killed for memory, or any
+     *  other Activity recreation, comes back with a FRESH instance whose
+     *  `requestedOrientation` is the manifest default (unlocked), even
+     *  though the page's own state still believes a layout is focused and
+     *  never re-sends `lockOrientation` on its own (it only sends it when
+     *  the FOCUS changes). Remembering the mode here lets onCreate/onResume
+     *  re-assert it before the page has even loaded, closing that window. */
+    fun orientLock(context: Context): String =
+        context.getSharedPreferences(FILE, Context.MODE_PRIVATE).getString(KEY_ORIENT, "") ?: ""
+
+    fun setOrientLock(context: Context, mode: String) {
+        context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
+            .edit().putString(KEY_ORIENT, mode).apply()
     }
 }
