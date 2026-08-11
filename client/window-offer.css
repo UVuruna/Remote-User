@@ -1,0 +1,58 @@
+/* The window chip (owner amendment to task 202, 2026-08-11): "something new
+   opened — show it in the layout, or leave it on the desktop?"
+
+   It sits at the TOP CENTRE, under the layout bar's band and above the stream,
+   because that is the one strip of the screen no control group occupies in
+   either orientation — the D-pads own the bottom corners and the wheel opens
+   over the middle. Colours are the shared tokens only (client/theme.css), so
+   it wears every theme and both fills without a rule of its own; the phone
+   audit measures its contrast like every other card. */
+
+#window-offer {
+  position: fixed;
+  top: 64px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 37;               /* above the wheel (35/36), below a modal panel (50) */
+  display: flex;
+  flex-wrap: wrap;           /* the buttons drop to their own row before anything is cut */
+  align-items: center;
+  gap: 10px;
+  max-width: min(92vw, 560px);
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--bar);
+  color: var(--text-primary);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.35);
+  font-size: 15px;
+}
+
+#window-offer[hidden] { display: none; }
+
+/* The name of the window WRAPS — it is never cut and never ellipsed (THE SPACE
+   & LEGIBILITY LAW): the whole point of the chip is that he recognises which
+   window it is talking about, and a title he cannot read makes the two buttons
+   a guess. A very long one takes a second line and pushes nothing off screen,
+   because the buttons wrap with it. */
+#window-offer-text {
+  flex: 1 1 12ch;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+#window-offer button {
+  flex: 0 0 auto;
+  padding: 8px 12px;
+  min-height: 40px;          /* a real touch target, like every other control */
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--chip);
+  color: var(--text-primary);
+  font-size: 14px;
+}
+
+#window-offer-in {
+  border-color: var(--accent);
+  background: var(--accent-wash);
+}

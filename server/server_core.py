@@ -21,6 +21,7 @@ import uvicorn
 import encoders
 import focus_hook
 import foreground_lock
+import layout_popup
 import monitors
 import pairing
 import traffic
@@ -254,6 +255,12 @@ class ServerController:
         )
         app = create_app(stream, hub, injector, token, stats=stats,
                          layouts=self.layouts)
+        # HIS ANSWER TO THE WINDOW CHIP comes back over HTTP (task 202, his
+        # amendment 2026-08-11: a new window is OFFERED, never auto-grabbed).
+        # Registered here, at the composition root, beside the app it belongs
+        # to — the route itself lives with the rest of that feature in
+        # server/layout_popup.py.
+        layout_popup.register(app, token)
         # The traffic meter samples for the life of the PROCESS once started:
         # a stopped server has to read as a line of zeros on the owner's
         # graph, never as a hole where anything could have happened.

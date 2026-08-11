@@ -11,8 +11,8 @@ flowchart TB
     C --> D{"a layout is focused?"}
     D -- yes --> E{"fg is a member?"}
     E -- yes --> F["accept — layout.last_member = fg"]
-    E -- no --> G{"root is a member?<br/>(Save As… of a member)"}
-    G -- yes --> H["accept the dialog — the MEMBER stays the target"]
+    E -- no --> G{"layout_popup.handle: is it the layout's WORK?<br/>(a member's dialog, its new window, a window it started)"}
+    G -- yes --> H["bring it INTO the picture — inside the region,<br/>or full screen if it cannot fit — then accept it<br/>(a dialog keeps the MEMBER as the target)"]
     G -- no --> I["LOG the thief (exe + title)<br/>raise_window(target, topmost=True)"]
     I --> J["target = conn.pin, else layout.last_member, else member[0]"]
     D -- no --> K{"pin stale / missing / dead?"}
@@ -28,6 +28,14 @@ flowchart TB
     L --> P
     O --> P
 ```
+
+The "is it the layout's WORK?" branch arrived with task 202 (owner eruption
+2026-08-11) and it is the ONLY new thing in this diagram: a refusal was right
+for a thief and wrong for a member's own popup, which used to be pushed back
+into a place the phone could see and not touch. Whose window it is, what
+happens to it and what it costs are documented once, in
+[Layout Popup](layout_popup.md); the baseline it needs is taken by `watch`
+when the phone connects.
 
 `topmost=False` on the desktop path is not a detail: that window belongs to no
 layout, and a topmost raise would strand it above the owner's desk for the rest

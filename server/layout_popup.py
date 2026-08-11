@@ -1,0 +1,492 @@
+"""A window the LAYOUT'S OWN WORK opened must stay where the phone can reach it.
+
+WHY THIS MODULE EXISTS (owner report 2026-08-10, and again — furious — on
+2026-08-11, the third time this class of failure reached him): he was watching
+a LAYOUT on the phone when an agent on the PC finished a job and opened its
+HTML report. The report window appeared OUTSIDE the layout's region. He could
+SEE a sliver of it in the letterboxed picture, and he could do nothing with it:
+
+  * it is below the layout members, which are always-on-top while the phone
+    shows them (constraint 10), so it cannot be brought forward from the phone;
+  * choosing Desktop MINIMIZES every layout member (owner rule 2026-08-02) —
+    which loses the place he was working in, and the popup with it.
+
+His rule, and the whole specification of this module (2026-08-11): nothing
+that belongs to the layout's work may open outside the layout's dimensions.
+lang-ok: owner quote — the sentence this module is built from
+    "ako ne može da stane u dimenzije layouta onda ga otvaraš zasebnog preko celog ekrana"
+
+So: **if it fits the region, it is placed INSIDE the region; if it cannot fit,
+it is opened separate, over the FULL screen** — the streamed monitor — so the
+phone both sees and operates it.
+
+**AND HE IS ASKED FIRST** (his amendment to the same task, hours later): a new
+window is not silently grabbed into the layout. The phone shows a two-button
+chip naming it — *Show in layout* / *Leave on desktop* — and his tap decides.
+The prompt is on the PHONE and never on the PC: a PC-side dialog would itself
+be an unreachable popup, which is the disease. Ignoring the chip is a real
+answer, and the answer is the desktop: nothing moves unless he says so, and a
+window he leaves on the desktop is never asked about again.
+
+## What this module may NOT do
+
+It sits inside [Focus Guard](focus_guard.py)'s layout branch, which exists to
+refuse a foreground the phone did not choose. That refusal is CORRECT for a
+thief and must stay exactly as it is: this PC is never quiet, and the windows
+that pop up on it are usually another agent's, not this layout's. Adopting a
+stranger would be a new way to lose his work — his window would be moved,
+resized and nailed above everything by a session it has nothing to do with.
+
+Hence ATTRIBUTION comes first, and it is deliberately narrow:
+
+1. **A dialog of a member is the layout's work.** Ownership is walked up
+   (`GW_OWNER`) exactly as the guard already does it — the "Open this link?"
+   prompt is the case he reported.
+2. **A NEW top-level window of a member's process** is the layout's work.
+   NEW is load-bearing: constraint 11 forbids process identity as an
+   attribution rule on its own, because every VS Code window shares one
+   process and one of those windows is exactly the thief. A window that
+   already existed when the phone connected is therefore never adopted, however
+   well its process matches.
+3. **A NEW window of a process a member STARTED** is the layout's work — the
+   member's own child (or grandchild) process, read from the process table's
+   parent links.
+
+Everything else is a stranger and goes back to the guard's refusal, untouched.
+
+## The honest limits (named, not hidden)
+
+* **An already-running third-party app cannot be attributed.** An agent that
+  opens its report in a Chrome that was already running gets its new window
+  from a process nobody in this layout started, whose parent died long ago.
+  There is no signal left to tie it to the layout, so it is refused like any
+  other stranger. What this module DOES catch is the far more common shape of
+  the same failure: the member's own dialog, its own second window, and the
+  browser or viewer it launches itself.
+* **Parent PIDs can be recycled.** Windows re-uses PIDs, and a parent link is
+  only a number; the newness requirement bounds that to windows created during
+  this phone session, which is the only stretch of time where a wrong answer
+  could act.
+* **Newness is judged against a baseline taken when the phone connected**
+  (`baseline()`, called once from `focus_guard.watch`). Before that baseline
+  exists, nothing is new and nothing is adopted — the guard behaves exactly as
+  it did before this module.
+
+## What "contained" means, and how it is decided
+
+MEASURED, never remembered (constraint 13 — the Move handle cost four rounds
+to that lesson). The region is the union of the members' real frame rects,
+read fresh; the popup's own frame is read fresh; and whether a window that
+could not shrink must go full screen is decided by ASKING it to take the
+region and looking at where it really stands (`place_window` verifies).
+
+The always-on-top band is entered through `place_window`, so the LEDGER
+(constraint 10) owes every adopted window a way back down; the layout carries
+the list (`Layout.adopted`) and [Layout Registry](layout_registry.py) releases
+it on every path where the layout stops being what the phone shows.
+"""
+
+import asyncio
+import ctypes
+import ctypes.wintypes as wintypes
+import json
+import logging
+import time
+
+from fastapi import Request
+from fastapi.responses import JSONResponse
+
+import notify
+import window_manager as wm
+from grids import PLACE_TOLERANCE_PX
+
+logger = logging.getLogger(__name__)
+
+
+# ═══════════════════════════ RULES ═══════════════════════════
+# How many parent hops a window may be from a member's process and still be
+# that member's work. A member starting a launcher that starts a browser is
+# two; beyond a handful the link stops meaning anything.
+ANCESTRY_HOPS = 4
+# How many times we try to contain ONE window before leaving it where it is.
+# A window that refuses every rect we command (a fixed-size tool window, a
+# process at a higher integrity level) must not be fought four times a second
+# for the rest of the session.
+MAX_CONTAIN_TRIES = 3
+
+
+# ═══════════════════════════ WINDOWS FACTS ═══════════════════════════
+TH32CS_SNAPPROCESS = 0x00000002
+_INVALID_HANDLE = -1
+
+
+class _PROCESSENTRY32(ctypes.Structure):
+    _fields_ = [("dwSize", wintypes.DWORD),
+                ("cntUsage", wintypes.DWORD),
+                ("th32ProcessID", wintypes.DWORD),
+                ("th32DefaultHeapID", ctypes.POINTER(ctypes.c_ulong)),
+                ("th32ModuleID", wintypes.DWORD),
+                ("cntThreads", wintypes.DWORD),
+                ("th32ParentProcessID", wintypes.DWORD),
+                ("pcPriClassBase", ctypes.c_long),
+                ("dwFlags", wintypes.DWORD),
+                ("szExeFile", ctypes.c_char * 260)]
+
+
+def _pid(hwnd: int) -> int:
+    """The process a window belongs to (0 = unknown). Its own function because
+    the gate replaces it — nothing here may enumerate the owner's real desk."""
+    pid = wintypes.DWORD()
+    wm.user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+    return int(pid.value)
+
+
+def _parent_pids() -> dict[int, int]:
+    """`{pid: parent pid}` for every process on the machine, from one Toolhelp
+    snapshot (~a millisecond). Read on demand — only a window that is NEW and
+    does not already match a member's process ever costs it — and never
+    cached: a cache would answer about a process table that has since changed,
+    and the whole question here is about something that just started."""
+    snap = wm.kernel32.CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0)
+    if not snap or snap == _INVALID_HANDLE:
+        return {}
+    parents: dict[int, int] = {}
+    try:
+        entry = _PROCESSENTRY32()
+        entry.dwSize = ctypes.sizeof(_PROCESSENTRY32)
+        ok = wm.kernel32.Process32First(snap, ctypes.byref(entry))
+        while ok:
+            parents[int(entry.th32ProcessID)] = int(entry.th32ParentProcessID)
+            ok = wm.kernel32.Process32Next(snap, ctypes.byref(entry))
+    finally:
+        wm.kernel32.CloseHandle(snap)
+    return parents
+
+
+def _descends_from(pid: int, roots: set[int]) -> bool:
+    """Was `pid` started by one of `roots` (child, grandchild, …)? Bounded by
+    `ANCESTRY_HOPS` and by a seen-set, because a process table read from a
+    live machine can contain a cycle after a PID was recycled."""
+    if not pid or not roots:
+        return False
+    parents = _parent_pids()
+    seen = {pid}
+    for _ in range(ANCESTRY_HOPS):
+        pid = parents.get(pid, 0)
+        if not pid or pid in seen:
+            return False
+        if pid in roots:
+            return True
+        seen.add(pid)
+    return False
+
+
+def _top_level_hwnds() -> set[int]:
+    """Every visible top-level window, handles only.
+
+    Deliberately NOT `window_manager.list_windows`: that one also reads a
+    process path and renders an ICON per window, which is right for the
+    creation list the phone draws and far too much for a set of numbers taken
+    once per connection."""
+    found: set[int] = set()
+
+    @wm._EnumWindowsProc
+    def callback(hwnd, _lparam):
+        if wm.user32.IsWindowVisible(hwnd):
+            found.add(int(hwnd))
+        return True
+
+    wm.user32.EnumWindows(callback, 0)
+    return found
+
+
+# ═══════════════════════════ THE BASELINE ═══════════════════════════
+def baseline(conn: dict) -> None:
+    """Write down which windows already existed, so a window that appears
+    LATER can be told apart from the owner's own second VS Code window.
+
+    Called once per connection from `focus_guard.watch`. Blocking (EnumWindows)
+    — the caller runs it on a worker thread. Before it has run, `_is_new`
+    answers False for everything and this whole module does nothing: a guard
+    that adopted windows on a missing baseline would adopt his entire desk."""
+    conn["popup_known"] = _top_level_hwnds()
+
+
+def _is_new(conn: dict, hwnd: int) -> bool:
+    known = conn.get("popup_known")
+    return known is not None and hwnd not in known
+
+
+def _judged(conn: dict, hwnd: int) -> None:
+    """One judgement per window. A stranger that fights for the foreground
+    would otherwise be re-attributed — process table read included — four
+    times a second for as long as it fights."""
+    known = conn.get("popup_known")
+    if known is not None:
+        known.add(hwnd)
+
+
+# ═══════════════════════════ ATTRIBUTION ═══════════════════════════
+def _attribute(lay, hwnd: int, root: int, conn: dict) -> str:
+    """WHY this window is the layout's work — a phrase for the log — or "" for
+    a stranger, which is every window this module is not certain about."""
+    if root and root in lay.members:
+        return "a dialog of a layout window"
+    if not _is_new(conn, hwnd):
+        # Not new = it was standing here before the phone connected. His other
+        # VS Code window is exactly that, and it shares its process with the
+        # member — which is why process identity may never decide alone
+        # (constraint 11).
+        return ""
+    pid = _pid(hwnd)
+    if not pid:
+        return ""
+    member_pids = {p for p in (_pid(h) for h in lay.members) if p}
+    if pid in member_pids:
+        return "a new window of a layout window's own process"
+    if _descends_from(pid, member_pids):
+        return "a window a layout window started"
+    return ""
+
+
+# ═══════════════════════════ CONTAINMENT ═══════════════════════════
+def _region(lay) -> tuple[int, int, int, int] | None:
+    """The rect the phone is really framing: the union of the members' visible
+    frames, MEASURED now. Not the region `focus()` computed — that one is what
+    was COMMANDED, and a note of an intention is exactly what constraint 13
+    was written about."""
+    rects = [wm._frame_rect(h) for h in lay.members
+             if wm.user32.IsWindow(h) and not wm.user32.IsIconic(h)]
+    rects = [r for r in rects if r]
+    if not rects:
+        return None
+    x1 = min(r[0] for r in rects)
+    y1 = min(r[1] for r in rects)
+    x2 = max(r[0] + r[2] for r in rects)
+    y2 = max(r[1] + r[3] for r in rects)
+    if x2 - x1 <= 0 or y2 - y1 <= 0:
+        return None
+    return (x1, y1, x2 - x1, y2 - y1)
+
+
+def _inside(rect, region) -> bool:
+    x, y, w, h = rect
+    rx, ry, rw, rh = region
+    t = PLACE_TOLERANCE_PX
+    return (x >= rx - t and y >= ry - t
+            and x + w <= rx + rw + t and y + h <= ry + rh + t)
+
+
+def _describe(hwnd: int) -> str:
+    return f'{wm._process_name(hwnd) or "?"} "{wm._title(hwnd)[:60]}" ({hwnd:#x})'
+
+
+def _contain(lay, hwnd: int, conn: dict) -> bool:
+    """Put this window where the phone can operate it. Returns whether it
+    ended up inside the streamed picture.
+
+    The two branches are the owner's two sentences, and which one applies is
+    MEASURED, never assumed:
+
+    * it FITS the region — placed inside it, at its own size, centered. A
+      dialog stretched to fill a whole layout would be a worse answer than the
+      one Windows gave.
+    * it does NOT fit — asked to take the region anyway (a resizable window
+      simply obeys, and that is still the first answer), and only when it
+      REFUSES, which is what a minimum size larger than the region looks like
+      from here, does it go full screen over the streamed monitor."""
+    region = _region(lay)
+    rect = wm._frame_rect(hwnd) if wm.user32.IsWindow(hwnd) else None
+    if region is None or rect is None:
+        return False
+    if _inside(rect, region):
+        return True
+
+    tries = conn.setdefault("popup_tries", {})
+    tries[hwnd] = tries.get(hwnd, 0) + 1
+    if tries[hwnd] > MAX_CONTAIN_TRIES:
+        return False
+
+    x, y, w, h = rect
+    rx, ry, rw, rh = region
+    if w <= rw and h <= rh:
+        target = (rx + (rw - w) // 2, ry + (rh - h) // 2, w, h)
+        if wm.place_window(hwnd, target):
+            return True
+    if wm.place_window(hwnd, region):
+        return True
+    # It cannot be made to fit, so it opens separate over the whole screen —
+    # the full work area of the monitor the members stand on, which is the
+    # monitor being streamed.
+    full = wm._work_area(region)
+    if wm.place_window(hwnd, full):
+        logger.info("Popup %s could not fit the layout region %s — opened "
+                    "full screen on %s", _describe(hwnd), region, full)
+        return True
+    logger.error("Popup %s would take NEITHER the layout region %s NOR the "
+                 "full screen %s — it stays where Windows put it",
+                 _describe(hwnd), region, full)
+    return False
+
+
+# ═══════════════════════════ ASKING HIM ═══════════════════════════
+# How long an unanswered offer is kept. He is allowed to ignore the chip —
+# that IS an answer, and the answer is "leave it on the desktop" — so this is
+# only about not growing a dictionary for the life of the process.
+OFFER_TTL_S = 10 * 60
+
+# id -> {hwnd, lay, conn, at}. Module-level rather than per-connection because
+# the answer comes back over HTTP (`register` below), which has no socket and
+# no `conn` — the id is the whole handle. An offer whose connection has since
+# died still resolves safely: the layout is checked, and a window that closed
+# meanwhile is refused.
+_OFFERS: dict[str, dict] = {}
+_NEXT_ID = 0
+
+
+def _expire() -> None:
+    cutoff = time.monotonic() - OFFER_TTL_S
+    for key in [k for k, o in _OFFERS.items() if o["at"] < cutoff]:
+        del _OFFERS[key]
+
+
+def _offer(lay, hwnd: int, conn: dict, reason: str) -> str:
+    """Queue the phone's two-button chip for this window and return its id.
+
+    ONE PROMPT PER WINDOW (`popup_asked`): the watcher runs four times a
+    second, and a chip that reappeared on every tick would be worse than the
+    bug it answers."""
+    global _NEXT_ID
+    _expire()
+    _NEXT_ID += 1
+    key = f"{hwnd:x}-{_NEXT_ID}"
+    _OFFERS[key] = {"hwnd": hwnd, "lay": lay, "conn": conn,
+                    "at": time.monotonic()}
+    conn.setdefault("popup_asked", set()).add(hwnd)
+    conn.setdefault("popup_send", []).append({
+        "type": "window_offer", "id": key,
+        "title": wm._title(hwnd), "process": wm._process_name(hwnd),
+        "layout": lay.name})
+    logger.info("Popup %s offered to the phone as %s (%s)",
+                _describe(hwnd), key, reason)
+    return key
+
+
+async def flush_offers(conn: dict) -> int:
+    """Send whatever the watcher queued, over the page's own socket. Returns
+    how many went out.
+
+    The socket comes from [Notify](notify.py)'s one-device slot — the web
+    layer's own registry, which this project deliberately keeps only one of.
+    A phone that is gone simply drops the chip: an offer is about a window
+    that opened just now, and a chip arriving after the next connection would
+    ask him about something he has long since walked past."""
+    pending = conn.get("popup_send")
+    if not pending:
+        return 0
+    ws = notify.page_socket()
+    if ws is None:
+        pending.clear()
+        return 0
+    sent = 0
+    while pending:
+        payload = pending.pop(0)
+        try:
+            await ws.send_text(json.dumps(payload))
+        except Exception as e:      # noqa: BLE001 — a dead socket must not kill the watcher
+            logger.warning("Window offer not delivered: %s", e)
+            pending.clear()
+            break
+        sent += 1
+    return sent
+
+
+def pick(offer_id: str, act: str) -> bool:
+    """His tap. `act` is "layout" (place it by the rules above) or anything
+    else, which is "leave it on the desktop" — the safe answer, so an act we
+    do not recognise lands on the one that moves nothing.
+
+    Blocking Win32 on the accept path; the route below runs it in a thread."""
+    _expire()
+    offer = _OFFERS.pop(offer_id, None)
+    if offer is None:
+        return False
+    lay, hwnd, conn = offer["lay"], offer["hwnd"], offer["conn"]
+    # The question is answered, so it stops being a question. `popup_asked` is
+    # ONLY "a chip is out for this window": what stops it being offered again
+    # afterwards is his ANSWER — `popup_declined` for the desktop, membership
+    # of `lay.adopted` for the layout. Keeping it here instead would make the
+    # decline record dead code and hide the day it stopped working.
+    conn.get("popup_asked", set()).discard(hwnd)
+    if act != "layout":
+        # Remembered, so the watcher does not ask again and never places it:
+        # he has answered this window.
+        conn.setdefault("popup_declined", set()).add(hwnd)
+        logger.info("Popup %s stays on the desktop — his choice", _describe(hwnd))
+        return True
+    if not wm.user32.IsWindow(hwnd) or hwnd in lay.members:
+        return False
+    if hwnd not in lay.adopted:
+        lay.adopted.append(hwnd)
+    _contain(lay, hwnd, conn)
+    return True
+
+
+def register(app, token: str) -> None:
+    """Add `POST /window_offer` — the phone's answer coming back.
+
+    Over HTTP and not over the WebSocket for one honest reason: the socket's
+    message dispatcher lives in [Web Layer](web.py), and this feature was
+    built while that file was owned by another round. The route is the same
+    shape every other one here has (token-gated, JSON in, `{ok}` out), and
+    the page already speaks it for uploads.
+
+    Registered from `server_core` beside the app, so nothing about it is
+    hidden inside another module's setup."""
+    @app.post("/window_offer")
+    async def window_offer(request: Request):  # noqa: ANN202 — FastAPI route
+        if request.query_params.get("token") != token:
+            return JSONResponse({"ok": False}, status_code=403)
+        try:
+            data = await request.json()
+        except (json.JSONDecodeError, ValueError):
+            return JSONResponse({"ok": False}, status_code=400)
+        ok = await asyncio.to_thread(pick, str(data.get("id") or ""),
+                                     str(data.get("act") or ""))
+        return JSONResponse({"ok": ok})
+
+
+# ═══════════════════════════ THE ENTRY POINT ═══════════════════════════
+def handle(lay, hwnd: int, root: int, conn: dict) -> str:
+    """A foreground window that is NOT a member of the focused layout: is it
+    the layout's own work, and if so, is it now reachable?
+
+    Returns the attribution phrase (truthy) ONLY for a window he has already
+    put in the layout — the guard then leaves the keyboard on it instead of
+    yanking focus away. A window that is merely attributed gets him a CHIP on
+    the phone and nothing else: until he taps it, the window is an ordinary
+    desktop window and the fence treats it as one (his amendment, 2026-08-11
+    — never auto-grab).
+
+    Blocking Win32; called from `focus_guard._decide`, which the web layer
+    always reaches through `asyncio.to_thread`."""
+    if not hwnd or lay is None or not lay.members:
+        return ""
+    if hwnd in lay.adopted:
+        # Already his choice. Re-measured rather than trusted: an app that
+        # re-lays itself out (or a second dialog of the same window) can walk
+        # back out of the region, and a note of a placement is not a placement.
+        _contain(lay, hwnd, conn)
+        return "a window this layout already holds"
+    if hwnd in conn.get("popup_declined", ()) or hwnd in conn.get("popup_asked", ()):
+        # He said desktop, or he has been asked and has not answered. Either
+        # way nothing here may move it — and it must not be re-offered on the
+        # next of four polls a second.
+        return ""
+
+    reason = _attribute(lay, hwnd, root, conn)
+    _judged(conn, hwnd)
+    if not reason:
+        return ""
+    _offer(lay, hwnd, conn, reason)
+    return ""

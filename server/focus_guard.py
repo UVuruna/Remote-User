@@ -70,6 +70,7 @@ import threading
 import time
 
 import focus_hook
+import layout_popup
 import window_manager
 
 logger = logging.getLogger(__name__)
@@ -254,10 +255,28 @@ def _decide(layouts, conn: dict, typing: bool) -> int:
         members = lay.members
         if fg in members:
             return _accept(conn, lay, fg)
-        if root in members:
-            # A dialog of a member window — the owner is typing into it on
-            # purpose. Accepted, and the MEMBER stays the remembered target.
-            _accept(conn, lay, root)
+        # IS THIS THE LAYOUT'S OWN WORK? (owner eruption 2026-08-11, task 202.)
+        # A dialog of a member, a second window the member opened, the viewer
+        # it started — those are not thieves, and refusing them was only half
+        # the failure: they open OUTSIDE the layout's region, where the phone
+        # can see them and not touch them. [Layout Popup](layout_popup.py)
+        # attributes such a window and ASKS HIM on the phone (his amendment
+        # the same day: never auto-grab); it answers truthy only once he has
+        # said "show it in the layout", and "" for a stranger, for a window he
+        # left on the desktop and for one he has not answered yet — all three
+        # of which are the refusal below, exactly as before.
+        adopted = layout_popup.handle(lay, fg, root, conn)
+        if adopted or root in members:
+            if root in members:
+                # A dialog of a member window — the owner is typing into it on
+                # purpose. Accepted, and the MEMBER stays the remembered target.
+                _accept(conn, lay, root)
+            else:
+                # A window of the layout's work that is nobody's member: the
+                # keyboard may sit on it, but `last_member` must keep naming a
+                # real member — `focus()` raises it last and `_layout_target`
+                # falls back to it.
+                conn["pin"], conn["pin_stale"] = fg, False
             return fg
         target = _layout_target(lay, conn)
         _log_steal(conn, fg, target, "the layout the phone is showing")
@@ -296,7 +315,8 @@ def current_target(layouts, conn: dict) -> int:
     fg = _foreground()
     lay = _active_layout(layouts, conn)
     if lay is not None:
-        if fg in lay.members or _owner_root(fg) in lay.members:
+        if (fg in lay.members or _owner_root(fg) in lay.members
+                or fg in lay.adopted):
             return fg
         return _layout_target(lay, conn)
     pin = _armed_pin(conn)
@@ -469,6 +489,13 @@ async def watch(layouts, conn: dict) -> None:
         running on the poll alone."""
         loop.call_soon_threadsafe(woken.set)
 
+    # WHICH WINDOWS ALREADY EXISTED, taken once, here (task 202). A window
+    # that appears LATER is the only kind [Layout Popup](layout_popup.py) may
+    # attribute to a layout by process, because every VS Code window shares
+    # one process and the owner's other one is exactly the thief this module
+    # was written about. Before this line has run nothing is new and nothing
+    # is adopted — the fence behaves exactly as it did.
+    await asyncio.to_thread(layout_popup.baseline, conn)
     hooked = await asyncio.to_thread(focus_hook.listen, _foreground_changed)
     if not hooked:
         logger.warning("No foreground hook — the layout is defended by the "
@@ -480,6 +507,12 @@ async def watch(layouts, conn: dict) -> None:
             if not _defending(conn):
                 continue
             await asyncio.to_thread(_defend, layouts, conn, announced)
+            # …and whatever the pass wants to ASK him goes out on the page's
+            # own socket (task 202): a new window of the layout's work is
+            # offered — "Show in layout" / "Leave on desktop" — never taken.
+            # Sent from here because this loop is the only async context the
+            # guard has, and `_defend` runs on a worker thread.
+            await layout_popup.flush_offers(conn)
     finally:
         # The connection is over: this listener goes, and with the last one the
         # thread and the hook handle go too (nothing of ours outlives us).

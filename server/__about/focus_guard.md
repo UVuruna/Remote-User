@@ -46,6 +46,15 @@ aiming at, and the phone had no way to be told.
    and would fail both tests above, so ownership is walked up (`GW_OWNER`).
    Process identity is deliberately NOT used — every VSCode window shares one
    process, and one of those windows is exactly the thief.
+3b. **But a window the LAYOUT'S WORK opened is not a thief either** (owner
+   eruption 2026-08-11, task 202). Refusing it was only half the failure: it
+   opens OUTSIDE the layout's region, under the members' topmost band, where
+   the phone can see it and not touch it — and Desktop, the only way to it,
+   minimizes his place of work. The layout branch therefore asks
+   [Layout Popup](layout_popup.md) first, which either brings the window into
+   the picture (inside the region, or full screen when it cannot fit) or
+   answers "" — and "" is this rule's refusal, unchanged. `watch` takes that
+   module's baseline once per connection.
 4. **The thief is NAMED in the log** (exe + title + hwnd), every time. Being
    the last to find out is what made this bug cost three reports; a restored
    keystroke that logged nothing would only hide the next cause.

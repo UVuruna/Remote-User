@@ -1,0 +1,502 @@
+"""LAYOUT POPUP GATE — a window the layout's work opens stays reachable.
+
+Owner report 2026-08-10, and again on 2026-08-11 (task 202, escalated — the
+third time this class reached him): he was watching a LAYOUT on the phone when
+an agent on the PC opened its HTML report. The window appeared OUTSIDE the
+layout's region, below the members' always-on-top band, and the only way to
+"reach" it — choosing Desktop — MINIMIZES every member and takes his place of
+work with it. He could see the thing he wanted and could not touch it.
+
+His rule, which this gate holds: nothing belonging to the layout's work may
+live outside the layout's dimensions. If it FITS the region it is placed
+INSIDE it; if it cannot fit, it opens separate, over the FULL screen.
+
+AND HE IS ASKED FIRST (his amendment the same day): a new window is OFFERED to
+the phone — one chip, two buttons, "Show in layout" / "Leave on desktop" — and
+nothing on the PC moves until he taps. Ignoring the chip is a real answer and
+the answer is the desktop; a window he left on the desktop is never asked about
+again, and the chip is sent once per window, not four times a second.
+
+The hard half is NOT the placement — it is knowing WHOSE window it is. This PC
+is never quiet: other agents launch GUI apps all day, and constraint 11 exists
+because they take the foreground mid-dictation. So the checks below are as much
+about what must NOT be adopted (a stranger, and the owner's OTHER VS Code
+window, which shares its process with a member) as about what must.
+
+NOTHING HERE TOUCHES THE OWNER'S DESKTOP: every Win32 call is answered by a
+fake — the desk model is local to this file, the guard/registry/fence machinery
+is the real code, and the ledger is a dict this file can read.
+
+Run:  .venv\\Scripts\\python tests/test_layout_popup.py
+"""
+
+import asyncio
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from _focus_fakes import (  # noqa: E402
+    MEMBER_A, MEMBER_B, Raises, focus_guard, fresh_conn, layout_with,
+    run_checks, window_manager, with_win32,
+)
+
+import layout_popup  # noqa: E402
+
+# The desk: two members side by side, and the windows that appear on top of it.
+DIALOG = 0x30          # "Open this link?" — owned by MEMBER_A
+POPUP = 0x40           # the agent's HTML report: fits the region
+BIG = 0x41             # a window whose MINIMUM size is larger than the region
+STRANGER = 0x50        # another agent's window — a different process, no kin
+OLD_TWIN = 0x51        # his OTHER VS Code window: same process, already open
+CHILD = 0x52           # the viewer a member started
+
+MEMBER_PID, OTHER_PID, CHILD_PID = 1000, 2000, 3000
+PIDS = {MEMBER_A: MEMBER_PID, MEMBER_B: MEMBER_PID, DIALOG: MEMBER_PID,
+        POPUP: MEMBER_PID, BIG: MEMBER_PID, OLD_TWIN: MEMBER_PID,
+        STRANGER: OTHER_PID, CHILD: CHILD_PID}
+PARENTS = {CHILD_PID: MEMBER_PID, OTHER_PID: 4, MEMBER_PID: 4}
+
+MONITOR = (0, 0, 2560, 1400)
+REGION = (100, 100, 1200, 800)          # the union of the two members' frames
+HOME = {MEMBER_A: (100, 100, 600, 800), MEMBER_B: (700, 100, 600, 800),
+        DIALOG: (1900, 1000, 500, 300),
+        POPUP: (1800, 900, 400, 300),   # outside the region, and small
+        BIG: (1700, 40, 1600, 1000),    # outside the region, and too big
+        STRANGER: (1500, 500, 800, 600), OLD_TWIN: (1500, 500, 800, 600),
+        CHILD: (2000, 200, 300, 200)}
+# What a window REFUSES to shrink below — how a minimum size looks from here.
+MINSIZE = {BIG: (1400, 900)}
+
+RECTS: dict = {}
+PLACED: list = []
+LEDGER: dict = {}
+MINIMIZED: list = []
+
+
+def desk(fg, alive=None, owner=None):
+    """One fake desktop, one fake ledger, one fake process table. Returns the
+    (registry, connection) the guard is driven with."""
+    RECTS.clear()
+    RECTS.update(HOME)
+    PLACED.clear()
+    LEDGER.clear()
+    MINIMIZED.clear()
+
+    alive = alive if alive is not None else tuple(HOME)
+    fake = with_win32(fg=fg, alive=alive, owner=owner or {DIALOG: MEMBER_A})
+    fake.ShowWindow = lambda hwnd, cmd: MINIMIZED.append((hwnd, cmd))
+    Raises().install()
+
+    window_manager._frame_rect = lambda hwnd: RECTS.get(hwnd)
+    window_manager._work_area = lambda rect: MONITOR
+    window_manager.place_window = _place
+    window_manager._topmost = LEDGER
+    window_manager.mark_topmost = lambda hwnd: LEDGER.setdefault(hwnd, "exe")
+    window_manager.drop_topmost = lambda hwnd: (LEDGER.pop(hwnd, None), True)[1]
+    window_manager._ledger_save = lambda: None
+    window_manager.wait_minimized = lambda hwnds, timeout_s=0: None
+
+    layout_popup._pid = lambda hwnd: PIDS.get(hwnd, 0)
+    layout_popup._parent_pids = lambda: dict(PARENTS)
+
+    reg = layout_with([MEMBER_A, MEMBER_B], last_member=MEMBER_A)
+    conn = fresh_conn(active=0)
+    # The baseline `focus_guard.watch` takes when the phone connects: what was
+    # already standing. POPUP/BIG/STRANGER/CHILD open AFTER it, OLD_TWIN did not.
+    conn["popup_known"] = {MEMBER_A, MEMBER_B, OLD_TWIN}
+    return reg, conn
+
+
+def _place(hwnd, rect):
+    """The real `place_window`'s contract, faked: the ledger is marked BEFORE
+    the landing is verified (that ordering is a live property — a window that
+    refused its rect is still in the always-on-top band), an app never shrinks
+    below its minimum, and the return value says whether it really landed."""
+    PLACED.append((hwnd, tuple(rect)))
+    LEDGER[hwnd] = "exe"
+    x, y, w, h = rect
+    mw, mh = MINSIZE.get(hwnd, (0, 0))
+    RECTS[hwnd] = (x, y, max(w, mw), max(h, mh))
+    return w >= mw and h >= mh
+
+
+def centered(rect, region=REGION):
+    x, y, w, h = rect
+    rx, ry, rw, rh = region
+    return (rx + (rw - w) // 2, ry + (rh - h) // 2, w, h)
+
+
+def offers(conn):
+    """The chips the watcher wants to send the phone."""
+    return list(conn.get("popup_send") or [])
+
+
+def ask(reg, conn, act=None):
+    """One guard pass — the watcher noticing the window — and, when `act` is
+    given, his TAP coming back through the real `pick()` (which is what the
+    HTTP route calls). Returns the offers that were queued."""
+    focus_guard.guard(reg, conn)
+    queued = offers(conn)
+    if act is not None and queued:
+        layout_popup.pick(queued[-1]["id"], act)
+    return queued
+
+
+# ═══════════════ 1. he is ASKED, and nothing moves before he answers ═══════════
+def check_a_new_window_is_offered_and_not_grabbed() -> bool:
+    """HIS AMENDMENT (2026-08-11): when something new opens, the program ASKS
+    whether to show it in the layout or leave it on the desktop. So the watcher
+    noticing the window must move NOTHING — it must produce one chip, naming
+    the window he is being asked about."""
+    reg, conn = desk(fg=POPUP)
+    queued = ask(reg, conn)
+    if PLACED or LEDGER or reg.layouts[0].adopted:
+        print(f"  DETAIL the window was grabbed without asking: {PLACED}")
+        return False
+    if len(queued) != 1 or queued[0]["type"] != "window_offer":
+        print(f"  DETAIL he was not asked: {queued}")
+        return False
+    offer = queued[0]
+    if not offer.get("id") or offer.get("title") != f"window {POPUP:#x}":
+        print(f"  DETAIL the chip does not name the window: {offer}")
+        return False
+    return offer.get("layout") == "Work"
+
+
+def check_the_chip_is_sent_once_per_window() -> bool:
+    """The watcher runs four times a second. A chip that came back on every
+    tick would be worse than the bug it answers — and it must really reach the
+    phone, over the page's own socket."""
+    reg, conn = desk(fg=DIALOG)
+    for _ in range(5):
+        focus_guard.guard(reg, conn)
+    if len(offers(conn)) != 1:
+        print(f"  DETAIL {len(offers(conn))} chips for one window")
+        return False
+
+    sent: list = []
+    real = layout_popup.notify.page_socket
+
+    class Sock:
+        async def send_text(self, text):
+            sent.append(text)
+
+    layout_popup.notify.page_socket = lambda: Sock()
+    try:
+        asyncio.run(layout_popup.flush_offers(conn))
+    finally:
+        layout_popup.notify.page_socket = real
+    if len(sent) != 1 or "window_offer" not in sent[0]:
+        print(f"  DETAIL the chip never reached the phone: {sent}")
+        return False
+    # …and nothing is left queued to be sent a second time on the next poll.
+    return not offers(conn)
+
+
+def check_leaving_it_on_the_desktop_moves_nothing_ever() -> bool:
+    """His other answer, and the DEFAULT one. Nothing on the PC moves, and the
+    window is never asked about again — a chip that reappeared after he had
+    already answered it would be the same nagging in a new place."""
+    reg, conn = desk(fg=DIALOG)
+    ask(reg, conn, act="desktop")
+    if PLACED or LEDGER or reg.layouts[0].adopted:
+        print(f"  DETAIL a declined window was still moved: {PLACED}")
+        return False
+    conn["popup_send"].clear()
+    for _ in range(5):
+        focus_guard.guard(reg, conn)
+    if offers(conn) or PLACED:
+        print(f"  DETAIL he was asked again: {offers(conn)} / {PLACED}")
+        return False
+    return True
+
+
+# ═══════════════ 2. and when he says YES, the placement rules run ═══════════════
+def check_a_member_dialog_that_fits_is_placed_inside_the_region() -> bool:
+    """HIS CASE, in its commonest shape: a member window raises a prompt and
+    Windows puts it wherever it likes. It fits the region, so his "Show in
+    layout" moves it inside at its own size — and the keyboard stays on it
+    throughout, because it is a dialog he opened on purpose (the rule that
+    predates this round and must survive it)."""
+    reg, conn = desk(fg=DIALOG)
+    target = focus_guard.guard(reg, conn)
+    if target != DIALOG:
+        print(f"  DETAIL focus was yanked to {target:#x} instead of the dialog")
+        return False
+    queued = offers(conn)
+    if len(queued) != 1:
+        print(f"  DETAIL the dialog was not offered: {queued}")
+        return False
+    layout_popup.pick(queued[0]["id"], "layout")
+    if PLACED != [(DIALOG, centered(HOME[DIALOG]))]:
+        print(f"  DETAIL the dialog was placed {PLACED}, expected it centered "
+              f"in the region at {centered(HOME[DIALOG])}")
+        return False
+    if DIALOG not in LEDGER or DIALOG not in reg.layouts[0].adopted:
+        print("  DETAIL the dialog is in the picture but nothing owes it a way "
+              f"back down (ledger={list(LEDGER)}, adopted="
+              f"{reg.layouts[0].adopted})")
+        return False
+    # …and the MEMBER stays the remembered keyboard target, as before.
+    return reg.layouts[0].last_member == MEMBER_A
+
+
+def check_a_new_window_of_a_members_process_is_adopted() -> bool:
+    """The agent's report window: same process as the member (it IS the
+    member's app), opened while he watched. Nothing owns it, so the owner
+    chain says nothing — it is attributed because it is NEW and shares the
+    member's process, and his tap puts it in the picture."""
+    reg, conn = desk(fg=POPUP)
+    ask(reg, conn, act="layout")
+    if PLACED != [(POPUP, centered(HOME[POPUP]))]:
+        print(f"  DETAIL placed={PLACED}")
+        return False
+    # …and from now on the keyboard may sit on it: it is the layout's window.
+    return (POPUP in reg.layouts[0].adopted
+            and focus_guard.guard(reg, conn) == POPUP)
+
+
+def check_a_window_a_member_started_is_adopted() -> bool:
+    """A viewer the member launched: a different process, but its parent is
+    the member's. That link is the only thing tying a third-party window to
+    the layout, and it is read from the process table."""
+    reg, conn = desk(fg=CHILD)
+    ask(reg, conn, act="layout")
+    if not PLACED:
+        print("  DETAIL nothing was placed — it was never attributed")
+        return False
+    return PLACED[0] == (CHILD, centered(HOME[CHILD]))
+
+
+def check_a_popup_too_big_to_fit_goes_full_screen() -> bool:
+    """The second half of his sentence: a window that cannot fit the layout's
+    dimensions opens separate, over the whole screen. Which branch applies is
+    MEASURED — it is ASKED to take the region first, and only its refusal
+    (a minimum size larger than the region) sends it full screen."""
+    reg, conn = desk(fg=BIG)
+    ask(reg, conn, act="layout")
+    if [rect for _, rect in PLACED] != [REGION, MONITOR]:
+        print(f"  DETAIL the big window was placed {PLACED}, expected the "
+              f"region {REGION} first and then the full screen {MONITOR}")
+        return False
+    if RECTS[BIG][:2] != MONITOR[:2]:
+        print(f"  DETAIL it ended up at {RECTS[BIG]}, not on the monitor")
+        return False
+    return BIG in LEDGER and BIG in reg.layouts[0].adopted
+
+
+# ═══════════════ 2. and NOTHING else is touched ═══════════════
+def check_a_foreign_window_is_still_refused_exactly_as_before() -> bool:
+    """THE SAFETY PROPERTY. Another agent's window taking the foreground is
+    the failure constraint 11 exists for: focus goes straight back to the
+    member the phone was typing into, the thief is named, and NOTHING of his
+    is moved, resized or nailed above everything by a session it has nothing
+    to do with."""
+    reg, conn = desk(fg=STRANGER)
+    raises = Raises().install()
+    target = focus_guard.guard(reg, conn)
+    if target != MEMBER_A or raises != [(MEMBER_A, True)]:
+        print(f"  DETAIL target={target:#x} raises={raises} — the fence did "
+              "not hand the keyboard back")
+        return False
+    if PLACED or LEDGER or reg.layouts[0].adopted:
+        print(f"  DETAIL a stranger's window was adopted: placed={PLACED} "
+              f"ledger={list(LEDGER)}")
+        return False
+    if offers(conn):
+        print(f"  DETAIL he was asked about a stranger's window: {offers(conn)}")
+        return False
+    return True
+
+
+def check_the_other_window_of_the_same_app_is_never_adopted() -> bool:
+    """Every VS Code window shares ONE process (constraint 11), and one of
+    them is exactly the thief — his other project's session. Process identity
+    may therefore never decide on its own: a window that was already standing
+    when the phone connected is refused however well its process matches."""
+    reg, conn = desk(fg=OLD_TWIN)
+    raises = Raises().install()
+    target = focus_guard.guard(reg, conn)
+    if target != MEMBER_A or raises != [(MEMBER_A, True)]:
+        print(f"  DETAIL target={target:#x} raises={raises}")
+        return False
+    if PLACED or offers(conn):
+        print(f"  DETAIL his other window was moved or asked about: {PLACED} "
+              f"{offers(conn)}")
+        return False
+    return True
+
+
+def check_nothing_happens_without_a_layout_or_a_watching_phone() -> bool:
+    """Two conditions, both already the fence's: at the DESKTOP there is no
+    region to contain anything in, and while the phone is away those windows
+    belong to the desk again. Neither may move a window."""
+    reg, conn = desk(fg=POPUP)
+    conn["active"] = None
+    focus_guard.guard(reg, conn)              # the desktop: no layout at all
+    if PLACED or offers(conn):
+        print(f"  DETAIL something happened with no layout focused: {PLACED} "
+              f"{offers(conn)}")
+        return False
+
+    reg, conn = desk(fg=POPUP)
+    conn["away"] = True
+    # The raises are the watcher's own footprint: a pass that ran at all would
+    # hand the keyboard back to the member. Read here rather than assumed,
+    # because the offer queue alone cannot tell (the watcher drains it).
+    raises = Raises().install()
+
+    async def run():
+        task = asyncio.ensure_future(focus_guard.watch(reg, conn))
+        await asyncio.sleep(focus_guard.WATCH_POLL_S * 3)
+        task.cancel()
+
+    asyncio.run(run())
+    if PLACED or offers(conn) or raises:
+        print(f"  DETAIL the watcher acted while the phone was away: "
+              f"{PLACED} {offers(conn)} {raises}")
+        return False
+    return True
+
+
+# ═══════════════ 3. the way back down (constraint 10) ═══════════════
+def check_the_ledger_lets_it_go_on_desktop_focus() -> bool:
+    """Nothing we raise may outlive the showing of the layout it belongs to.
+    Desktop is the path he takes when he wants the popup itself — so it leaves
+    the always-on-top band and is NOT minimized with the members, which would
+    be his original complaint in a new place."""
+    reg, conn = desk(fg=POPUP)
+    ask(reg, conn, act="layout")
+    if POPUP not in LEDGER:
+        print("  DETAIL nothing to release — the popup never reached the ledger")
+        return False
+    reg.minimize_members()
+    if POPUP in LEDGER or reg.layouts[0].adopted:
+        print(f"  DETAIL still ours after Desktop: ledger={list(LEDGER)} "
+              f"adopted={reg.layouts[0].adopted}")
+        return False
+    if any(hwnd == POPUP for hwnd, _ in MINIMIZED):
+        print("  DETAIL the popup was minimized away with the members")
+        return False
+    return [hwnd for hwnd, _ in MINIMIZED] == [MEMBER_A, MEMBER_B]
+
+
+def check_the_ledger_lets_it_go_on_disconnect_and_removal() -> bool:
+    """The other two ways the layout stops being shown: the phone hangs up
+    (`clear_topmost`, which walks the LEDGER and not the member lists) and the
+    layout is removed. A popup must survive neither — and must never be closed
+    by either: only the ✕ chooser closes windows, and only what he chose."""
+    reg, conn = desk(fg=POPUP)
+    ask(reg, conn, act="layout")
+    reg.clear_topmost()
+    if POPUP in LEDGER:
+        print(f"  DETAIL the phone hung up and {POPUP:#x} stayed on top")
+        return False
+
+    reg, conn = desk(fg=POPUP)
+    ask(reg, conn, act="layout")
+    reg.remove(0)
+    if POPUP in LEDGER or not window_manager.user32.IsWindow(POPUP):
+        print("  DETAIL removal left the popup topmost, or closed it")
+        return False
+    return True
+
+
+def check_a_dead_popup_leaves_the_list_by_itself() -> bool:
+    """He closed the report at the desk. The layout must stop naming it — and
+    hand its ledger entry back on the way out, because a handle nobody names
+    is exactly the one that used to stay stranded up there."""
+    reg, conn = desk(fg=POPUP)
+    ask(reg, conn, act="layout")
+    window_manager.user32.alive.discard(POPUP)
+    reg.prune()
+    return POPUP not in reg.layouts[0].adopted and POPUP not in LEDGER
+
+
+# ═══════════════ 4. it is MEASURED, not remembered ═══════════════
+def check_a_contained_popup_is_not_re_placed_four_times_a_second() -> bool:
+    """The watcher runs every 0.25 s. A window already inside the picture must
+    cost nothing — and one that walks back OUT (an app re-laying itself out)
+    must be brought back, because a note of a placement is not a placement
+    (constraint 13, the lesson the Move handle cost four rounds)."""
+    reg, conn = desk(fg=POPUP)
+    ask(reg, conn, act="layout")
+    for _ in range(5):
+        focus_guard.guard(reg, conn)
+    if len(PLACED) != 1:
+        print(f"  DETAIL {len(PLACED)} placements for one popup: {PLACED}")
+        return False
+    RECTS[POPUP] = (2000, 1100, 400, 300)     # it wandered off on its own
+    focus_guard.guard(reg, conn)
+    if len(PLACED) != 2 or PLACED[-1][1] != centered((2000, 1100, 400, 300)):
+        print(f"  DETAIL a popup that left the region was not brought back: "
+              f"{PLACED}")
+        return False
+    return True
+
+
+def check_one_window_is_never_fought_forever() -> bool:
+    """A window that refuses every rect we command must not be pushed four
+    times a second for the rest of the session — the desk would be unusable
+    and the log would be written by one app."""
+    reg, conn = desk(fg=POPUP)
+    focus_guard.guard(reg, conn)                  # the chip
+    window_manager.place_window = lambda hwnd, rect: (
+        PLACED.append((hwnd, tuple(rect))), False)[1]
+    layout_popup.pick(offers(conn)[-1]["id"], "layout")   # he said yes
+    for _ in range(10):
+        focus_guard.guard(reg, conn)
+    # Three tries, each of which asks for the region and then the full screen.
+    if len(PLACED) > layout_popup.MAX_CONTAIN_TRIES * 3:
+        print(f"  DETAIL {len(PLACED)} placement attempts — it is being fought")
+        return False
+    return len(PLACED) > 0
+
+
+CHECKS = [
+    ("a new window is OFFERED to the phone, never grabbed",
+     check_a_new_window_is_offered_and_not_grabbed),
+    ("the chip is sent once per window, and really reaches the phone",
+     check_the_chip_is_sent_once_per_window),
+    ("'Leave on desktop' moves nothing, ever, and is not asked twice",
+     check_leaving_it_on_the_desktop_moves_nothing_ever),
+    ("a member's dialog that FITS is placed inside the region",
+     check_a_member_dialog_that_fits_is_placed_inside_the_region),
+    ("a NEW window of a member's own process is adopted",
+     check_a_new_window_of_a_members_process_is_adopted),
+    ("a window a member STARTED is adopted",
+     check_a_window_a_member_started_is_adopted),
+    ("one that cannot fit opens full screen on the streamed monitor",
+     check_a_popup_too_big_to_fit_goes_full_screen),
+    ("a foreign window is still refused EXACTLY as before",
+     check_a_foreign_window_is_still_refused_exactly_as_before),
+    ("his other window of the same app is never adopted",
+     check_the_other_window_of_the_same_app_is_never_adopted),
+    ("nothing happens with no layout focused / the phone away",
+     check_nothing_happens_without_a_layout_or_a_watching_phone),
+    ("Desktop releases it from the topmost band, and does not minimize it",
+     check_the_ledger_lets_it_go_on_desktop_focus),
+    ("a disconnect and a removal release it too, and never close it",
+     check_the_ledger_lets_it_go_on_disconnect_and_removal),
+    ("a popup closed at the desk leaves the layout by itself",
+     check_a_dead_popup_leaves_the_list_by_itself),
+    ("a contained popup is not re-placed on every poll, but a wandering one is",
+     check_a_contained_popup_is_not_re_placed_four_times_a_second),
+    ("one window is never fought forever",
+     check_one_window_is_never_fought_forever),
+]
+
+
+def main() -> int:
+    return run_checks("LAYOUT POPUP GATE", CHECKS,
+                      "a window the layout's work opens stays reachable.")
+
+
+def test_layout_popup():
+    """pytest entry."""
+    assert main() == 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
