@@ -19,6 +19,8 @@ chain-installs Tailscale itself.
 | `svg_to_ico.py` | Algorithmic | SVG → multi-resolution ICO, supersampled Lanczos downscale — [about](__about/svg_to_ico.md) · [flow](__flow/svg_to_ico.md) |
 | `agent_hook.py` | Standard | the Claude Code `Stop` hook: names the agent that finished and POSTs it to the running server, which notifies the phone (ROADMAP Phase H) — [about](__about/agent_hook.md) |
 | `create_cert.py` | Standard | one-time self-signed code-signing certificate generator — [about](__about/create_cert.md) |
+| `rehearse_update.py` | Standard | the update-storm rehearsal — 8 concurrent throwaway installers prove the one-handover mutex (1/8 with the lock, 8/8 without), verdict by PID markers never wall-clock (task 187 closer c) — [about](__about/rehearse_update.md) |
+| `release_hygiene.py` | Standard | refuses a release while the owner's update.json says a handover is in flight — runs at the top of `build.py` (task 187 closer d) — [about](__about/release_hygiene.md) |
 | `installer.nsi` | *(not in this doc pass)* | NSIS installer script — sections Main / Tailscale / Desktop shortcut / Autostart, plus the **unattended `/S` path** the running app drives itself ([Update Handover](../server/__about/update_handover.md)); see Design Decisions below |
 | `app_info.json` | *(data, not code)* | project metadata (version, names, exe/installer filenames) read by every script above |
 

@@ -17,6 +17,10 @@
        tab wears under its window, and putting `touch-action` back so the list
        still scrolls (owner 2026-08-09, task 168). -->
   <link rel="stylesheet" href="/static/layout-create.css">
+  <!-- AFTER panels.css: the set editor reuses .sets-card / .sets-row / .sets-list
+       / .sets-done wholesale and declares only its own arrangement preview and
+       the edit door on a picker row (owner 2026-08-04, task 218b). -->
+  <link rel="stylesheet" href="/static/set-editor.css">
   <!-- The window chip (task 202): tokens only, no rule of its own. -->
   <link rel="stylesheet" href="/static/window-offer.css">
 </head>
@@ -151,6 +155,10 @@
   <!-- Settings → Phone: the per-device switches that belong to no other
        subject, gathered behind one button (owner 2026-08-11, tasks 161/218a) -->
   <div id="phone-panel" hidden></div>
+  <!-- Settings → Wheel sets → one set: which pool commands ride the controls
+       and in which slot — the same job the PC's Controls editor does (owner
+       2026-08-04, task 218b) -->
+  <div id="set-editor-panel" hidden></div>
   <!-- The Claude Code panels — Model, Thinking, Mode (owner ballot verdict
        2026-08-11, tasks 190/191/208). One overlay for all three. -->
   <div id="claude-panel" hidden></div>
@@ -269,8 +277,12 @@
        panels.js, but these two cards are its other callers). -->
   <script src="/static/claude-panels.js"></script>
   <script src="/static/phone-panel.js"></script>
+  <!-- After controls.js (activeButtons / btnId / padColumn / BUILTINS) and
+       panels.js (ghostClickArmor); panels.js calls openSetEditor at runtime. -->
+  <script src="/static/set-editor.js"></script>
   <script src="/static/region.js"></script>
   <script src="/static/notify.js"></script>
+  <script src="/static/clipboard.js"></script>
   <!-- Before layouts.js: it owns the rule that tells a tap from a drag from a
        HOLD, which the layout list's rows ask on every pointer event (pure, so
        its gate runs it whole — owner report 2026-08-09, task 162). -->

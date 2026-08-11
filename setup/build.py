@@ -410,6 +410,41 @@ def input_gate() -> None:
          "window keeps its life (tests/test_layout_member.py)")
     run([sys.executable, str(PROJECT_DIR / "tests" / "test_layout_member.py")])
 
+    # A LAYOUT CAN GROW, TOO (owner request, task 195). The mirror of the gate
+    # above — solo→2, 2→3, 3→4 from the ⚙ sheet's "Add a window" — sharing the
+    # same `_template_for` catalogue so growing and shrinking can never
+    # disagree about what a three is, plus its own duplicate-membership and
+    # topmost-ledger checks.
+    step("0af/6 LAYOUT GROW GATE — a layout can gain one window, up to four "
+         "(tests/test_layout_grow.py)")
+    run([sys.executable, str(PROJECT_DIR / "tests" / "test_layout_grow.py")])
+
+    # ROUND 40's OWN GATES (2026-08-11), each fail-closed and planted-defect
+    # proven by its builder, re-run by the coordinator before wiring:
+    for _name, _title in [
+        ("test_orientation_lock", "the lock survives a resume and the interim desktop (204)"),
+        ("test_clipboard_sync", "the PC clipboard reaches the phone, held through an away (182)"),
+        ("test_return_timing", "one return, one encoder, started first (203)"),
+        ("test_raw_pixel_cost", "half the bytes, the right colours, before the pipe (130)"),
+        ("test_capture_handover", "a restart never inherits a live camera (193)"),
+        ("test_quality_raise", "the PC's card is a default and a raise blinks once (131)"),
+        ("test_layout_birth", "a layout from a window that is not open yet (184/185)"),
+        ("test_birth_radial", "the centered birth radial and the L2 grammar (186)"),
+        ("test_release_hygiene", "no release over an update in flight (187)"),
+        ("test_wheel_dropout", "a placed set leaves the wheel, cap 10 (181)"),
+    ]:
+        step(f"0ai/6 {_title} (tests/{_name}.py)")
+        run([sys.executable, str(PROJECT_DIR / "tests" / f"{_name}.py")])
+
+    # AND A GRID CAN COME APART (owner request, task 197): split into as many
+    # solo layouts as it has members, or eject ONE member into its own new
+    # layout — never to the desktop, the contrast with the member gate above.
+    # Fail-closed on the same class of promise: the ejected window must not be
+    # closed and must not be stranded always-on-top.
+    step("0ag/6 LAYOUT DECOMPOSE GATE — a grid can come apart, whole or one "
+         "window at a time (tests/test_layout_decompose.py)")
+    run([sys.executable, str(PROJECT_DIR / "tests" / "test_layout_decompose.py")])
+
     # AND A LAYOUT CAN BE TURNED (owner 2026-08-09, task 175). Every act on an
     # existing layout moved under one ⚙, and one of them could not be done at
     # all before: a layout built portrait had to be DELETED and made again to
@@ -470,6 +505,20 @@ def input_gate() -> None:
     # seed — a saved choice is translated, never reset. The CSS keys off the
     # DECISION (body.pad-column), never off a media query: the media query WAS
     # the weld this task removes.
+    # THE PHONE EDITS A SET'S INTERIOR (owner 2026-08-04, delivered as task
+    # 218b after a week with no task number of its own). It writes the SAME
+    # actions.json the desktop Controls editor writes, so the gate is fail-
+    # closed here: it proves the edit reaches a USER file of an OLDER shape
+    # (never `copy(shipped)` — that shortcut is what let four releases pass
+    # while a field never reached his %LOCALAPPDATA% copy), that a key outside
+    # the merge's owner-owned set is refused WHOLE, that an id outside the pool
+    # is refused, and that the `actions` re-broadcast really re-draws the live
+    # D-pad — the last one in a real Chromium walking his own path, because a
+    # module nobody calls is a feature that does not exist.
+    step("0ah/6  SET EDITOR GATE — the phone edits a set's buttons and their "
+         "positions, and the PC writes HIS file (tests/test_set_editor.py)")
+    run([sys.executable, str(PROJECT_DIR / "tests" / "test_set_editor.py")])
+
     step("0v/6  PAD SHAPE GATE — the arrangement follows his choice in both "
          "orientations (tests/test_pad_shape.py)")
     run([sys.executable, str(PROJECT_DIR / "tests" / "test_pad_shape.py")])
@@ -822,6 +871,11 @@ def verify_build(exe_path: Path, installer_path: Path) -> None:
 
 def main() -> None:
     reexec_under_venv()  # ensure PyInstaller runs under the complete .venv env
+    # Task 187 closer (d): never build over an update in flight on this
+    # machine — a refusal must cost nothing, so it runs before anything does.
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from release_hygiene import assert_clear_to_release
+    assert_clear_to_release()
     print(f"Building {APP_INFO['display_name']} v{APP_INFO['version']}")
     if not ENTRY_POINT.exists():
         print(f"ERROR: entry point not found: {ENTRY_POINT}")

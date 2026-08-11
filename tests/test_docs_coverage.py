@@ -48,6 +48,32 @@ STANDARD = {
     # transport only — the keystrokes live in content.py and the transcript
     # read in agents.py, each already covered.
     "server/claude_api.py",
+    # New 2026-08-11 (task 184 — a layout from a window that is not open yet).
+    # Standard: three READS of places other apps keep their own recent lists,
+    # plus a launch and a wait. The one rule with teeth — only a handle that
+    # was NOT standing before the launch may be handed back — is a comparison,
+    # not a flow, and it is gated in tests/test_layout_birth.py.
+    "server/recents.py",
+    # New 2026-08-11 (owner 2026-08-04 order, task 182 — the clipboard lives
+    # on both devices). Standard: a Win32 clipboard read, a message-only
+    # listener window on focus_hook's proven thread shape, and the held-while-
+    # away/echo-guard policy — each promise gated in test_clipboard_sync.py.
+    "server/clipboard_sync.py",
+    # New 2026-08-11 (task 182, page half). Standard: one push handler —
+    # Android.setClipboard inside the APK, navigator.clipboard in a browser.
+    "client/clipboard.js",
+    # New 2026-08-11 (task 187 closer c). Standard: the concurrency rehearsal
+    # that proves the installer's one-handover mutex with throwaway NSIS stubs.
+    "setup/rehearse_update.py",
+    # New 2026-08-11 (task 187 closer d). Standard: the release refusal while
+    # his machine's update.json says a handover is in flight.
+    "setup/release_hygiene.py",
+    # New 2026-08-11 (owner 2026-08-04, task 218b). actions.json ON THE WIRE:
+    # the reader and the shipped-pool merge moved off web.py, plus the phone's
+    # own set editor (`actions_update`). Standard: the validation is a handful
+    # of shape checks and the ownership contract it enforces is declared in
+    # gui/controls_data.py, which already carries the rule and its own doc.
+    "server/actions_api.py",
     "server/window_manager.py",
     # Split out of window_manager.py on 2026-08-09 (THE STRUCTURE LAW — the
     # pos-anchor round pushed it past 1,000 lines). The registry holds the
@@ -165,6 +191,16 @@ STANDARD = {
     # that describe THIS device. Standard without argument — five rows over
     # helpers that already exist, and not one decision of its own.
     "client/phone-panel.js",
+    # New 2026-08-11 (owner 2026-08-04, task 218b): one set's own editor on the
+    # phone — which pool commands ride and in which slot. Standard: it draws
+    # rows and a preview and sends ONE message; every rule that decides whether
+    # the edit is legal lives on the PC (server/actions_api.py), which is where
+    # the ownership contract and the gate are.
+    "client/set-editor.js",
+    # Its two surfaces, sharing __about/set-editor.md with the script exactly as
+    # panels.css shares one with panels.js: the arrangement preview and the edit
+    # door on a picker row. Everything else it wears is panels.css's `.sets-*`.
+    "client/set-editor.css",
     "setup/create_cert.py",
     "setup/agent_hook.py",
     "android/app/src/main/java/com/uvuruna/remoteuser/Notifier.kt",

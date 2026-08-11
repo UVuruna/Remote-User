@@ -43,12 +43,15 @@ from fastapi import FastAPI, File, Request, UploadFile, WebSocket, WebSocketDisc
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
+import actions_api
 import caret
 import claude_api
 import clipboard
+import clipboard_sync
 import config
 import cursor_shape
 import focus_guard
+import layout_popup
 import layout_api
 import monitor_api
 import monitors
@@ -297,7 +300,11 @@ def create_app(stream, hub: FrameHub | None, injector: InputInjector, token: str
             ratio = min(w, h) / max(w, h) if w > 0 and h > 0 else 9 / 16
         except (TypeError, ValueError):
             ratio = 9 / 16
-        conn = {"ratio": ratio, "active": None, "region": None, "quality": None,
+        # THE PHONE'S OWN OVERRIDES, KNOWN BEFORE THE FIRST ENCODER EXISTS
+        # (task 203). Carried on `auth` since 2026-08-11; a page that predates
+        # the field says nothing and gets exactly the old behaviour.
+        conn = {"ratio": ratio, "active": None, "region": None,
+                "quality": config.quality_override(first.get("quality") or {}),
                 # presence: when we last heard from the phone, and whether it
                 # announced an excursion on its way out (see presence.py)
                 "seen": time.monotonic(), "away": None, "left": False,
@@ -319,15 +326,24 @@ def create_app(stream, hub: FrameHub | None, injector: InputInjector, token: str
             # switch, and by a resumed transcript — see agents.claude_settings.
             # Calling it active would be a small lie of exactly the kind that
             # has cost this project whole rounds.
-            await ws.send_text(json.dumps({
-                "type": "actions", **_load_actions(),
-                "saved": agents.claude_settings()}))
+            await actions_api.send_actions(ws, agents.claude_settings())
+            # A copy made at the PC while nobody could see the phone (task
+            # 182 — Android can only write its own clipboard while it is the
+            # foreground app, which this connection now is again).
+            await clipboard_sync.flush_pending(ws)
             # Whatever finished while the phone was away (owner 2026-08-06):
             # two agents finished while he was on a call with the app closed
             # and both notices were thrown away. They wait now, briefly, and
             # arrive the moment he comes back — each carrying the time it
             # actually happened.
             await notify.send_pending(ws)
+            # THE PICTURE STARTS FIRST AND RUNS ALONGSIDE THE DESK (task 203):
+            # the ffmpeg spawn used to be queued BEHIND the resume focus, which
+            # blocks on `wait_landed` — his log, 2026-08-11: auth 14,173 →
+            # layout landed 15,306 → encoder 15,586. Independent work, done in
+            # series. JPEG stays below: its `config` precedes the subscribe.
+            if stream.mode != "jpeg":
+                tasks.append(asyncio.create_task(_stream_h264(ws, stream, token, conn)))
             await layout_api.send_layout_state(ws, layouts, conn)
             # Coming back resumes the layout the phone was last working in
             # (owner 2026-08-05) — leaving work mode minimized them, and the
@@ -345,14 +361,16 @@ def create_app(stream, hub: FrameHub | None, injector: InputInjector, token: str
             # round, so a thief that strikes mid-sentence destroys the whole
             # utterance instead of misplacing it.
             tasks.append(asyncio.create_task(focus_guard.watch(layouts, conn)))
+            # THE CLIPBOARD LIVES ON BOTH DEVICES (task 182): a copy made AT
+            # THE PC while this phone is watching reaches it too. One task
+            # per connection, same family as the two lines above.
+            tasks.append(asyncio.create_task(clipboard_sync.watch(ws, conn)))
             if stream.mode == "jpeg":
                 await _send_config(ws, stream, token)
                 queue = hub.subscribe()
                 if hub.subscribers == 1:
                     await asyncio.to_thread(stream.start)  # first watcher
                 tasks.append(asyncio.create_task(_send_frames(ws, queue)))
-            else:
-                tasks.append(asyncio.create_task(_stream_h264(ws, stream, token, conn)))
             await _receive_input(ws, injector, stream, token, layouts, conn)
         except WebSocketDisconnect:
             logger.info("Client disconnected: %s", ws.client)
@@ -570,71 +588,12 @@ async def _send_cursor(ws: WebSocket, injector: InputInjector) -> None:
         await asyncio.sleep(interval)
 
 
-_shipped_pools_merged = False
-
-
-def _merge_shipped_actions() -> None:
-    """Owner round 4 (2026-08-05): the Controls editor merges a NEW version's
-    shipped pools into the owner's %LOCALAPPDATA% actions.json — but only
-    when the editor is OPENED, so a phone-visible default change (Language
-    replacing Anywhere in Settings) never arrived without a desktop click.
-    The same merge runs here, once per server start. FROZEN-only: in a dev
-    checkout the repo file IS the shipped file and there is nothing to merge
-    (which also keeps the PySide6 import below out of the headless CLI)."""
-    global _shipped_pools_merged
-    if _shipped_pools_merged:
-        return
-    _shipped_pools_merged = True
-    from config import BUNDLE_DIR, FROZEN
-    if not FROZEN:
-        return
-    user_path = Path(SETTINGS.actions_path)
-    shipped_path = BUNDLE_DIR / "actions.json"
-    if not user_path.exists() or user_path == shipped_path:
-        return
-    try:
-        from gui.controls_editor import merge_shipped_pools
-        data = json.loads(user_path.read_text(encoding="utf-8"))
-        merge_shipped_pools(data, json.loads(shipped_path.read_text(encoding="utf-8")))
-        user_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
-        logger.info("Shipped action pools merged into the user actions.json")
-    except Exception as e:  # a failed merge must never stop the server
-        logger.warning("Shipped-pools merge skipped: %s", e)
-
-
-def _load_actions() -> dict:
-    """Reads the owner's action categories fresh (edits apply on the next
-    connect). A missing or invalid file is logged and yields no categories —
-    never a crash."""
-    _merge_shipped_actions()
-    empty = {"categories": [], "app_sets": [], "custom_sets": [], "left": 0,
-             "right": 0, "wheel_order": []}
-    try:
-        data = json.loads(SETTINGS.actions_path.read_text(encoding="utf-8"))
-        return {
-            "categories": data.get("categories", []),
-            # App-aware sets (owner 2026-08-04): shown by the client ONLY in
-            # layout focus, when the focused layout's app matches `process`.
-            "app_sets": data.get("app_sets", []),
-            # Owner-made sets from the desktop Controls editor (owner
-            # 2026-08-05): the client shows up to 3 of them after the five
-            # built-ins; `enabled` is the desktop default, the phone's own
-            # Sets picker overrides it per device.
-            "custom_sets": data.get("custom_sets", []),
-            "left": data.get("left", 0),
-            "right": data.get("right", 0),
-            # Where each set sits on the phone's wheel (build round R5, owner
-            # 2026-08-07): position 1 is 12 o'clock, then clockwise. Without
-            # this line the desktop editor saves an order the phone never sees
-            # — the whole feature is a no-op, on a fresh install too.
-            "wheel_order": data.get("wheel_order", []),
-        }
-    except FileNotFoundError:
-        logger.warning("actions.json not found at %s — no action categories", SETTINGS.actions_path)
-        return empty
-    except (json.JSONDecodeError, OSError) as e:
-        logger.error("actions.json could not be loaded: %s", e)
-        return empty
+# The actions.json reader and the shipped-pool merge MOVED to
+# `server/actions_api.py` on 2026-08-11 (THE STRUCTURE LAW - this file stood
+# past the 1,000-line wall). They belong there for a better reason than the
+# count: that module now owns the SHAPE of actions.json on the wire, both when
+# it is first sent and when the phone's own set editor makes it change, and one
+# owner is what stops the two from carrying different fields.
 
 
 async def _send_config(ws: WebSocket, stream, token: str, codec: str | None = None) -> None:
@@ -770,6 +729,12 @@ async def _receive_input(ws: WebSocket, injector: InputInjector, stream, token: 
             await asyncio.to_thread(focus_guard.guard, layouts, conn)
         elif kind in RETARGET_KINDS:
             focus_guard.retarget(conn)
+        if kind in ("click", "press") and msg.get("button", "left") == "left":
+            # Two of these close together are a DOUBLE-CLICK, and a window that
+            # opens just after one is something HE opened — the only evidence
+            # task 185 has, and the reason a background agent's window is never
+            # mistaken for it (server/layout_popup.py).
+            layout_popup.note_click(conn)
         if kind in ("pointer_down", "pointer_up", "click"):
             button = msg.get("button", "left")
             if button not in BUTTON_FLAGS:
@@ -835,12 +800,16 @@ async def _receive_input(ws: WebSocket, injector: InputInjector, stream, token: 
                 )
             # H.264 streams the full frame — a viewport from a stale client is noise
         elif kind == "chord":
-            injector.press_chord(str(msg["chord"]))
+            chord_text = str(msg["chord"])
+            injector.press_chord(chord_text)
             # A chord is guarded on the way IN (Ctrl+V must land in his box)
             # but may itself MOVE the window — Alt+Tab, Win+arrow, Ctrl+W. So
             # the target is re-read on the next key instead of being dragged
             # back to where the chord just left (focus_guard).
             focus_guard.retarget(conn)
+            # THE CLIPBOARD LIVES ON BOTH DEVICES (task 182): Copy/Cut push
+            # what they just filled the PC clipboard with to the phone.
+            await clipboard_sync.after_copy_chord(ws, conn, chord_text)
         elif kind == "monitor_switch":
             # `index` is the monitor the phone's layout list asked for (task
             # 155) and is optional — absent means the cycle this message has
@@ -870,18 +839,22 @@ async def _receive_input(ws: WebSocket, injector: InputInjector, stream, token: 
             # values). H.264: the running session is reset and reopens with
             # the new encoder settings. Legacy `reduced: true` (older client
             # pages) maps to the auto-save profile.
-            if "reduced" in msg and "res" not in msg:
-                quality = ({"fps": SETTINGS.h264_reduced_fps, "res": "1/2",
-                            "bitrate": "low"} if msg.get("reduced") else None)
-            else:
-                quality = {
-                    "fps": int(msg.get("fps") or 0),
-                    "res": str(msg.get("res") or "full"),
-                    "bitrate": str(msg.get("bitrate") or "high"),
-                }
-                if quality == {"fps": 0, "res": "full", "bitrate": "high"}:
-                    quality = None  # pure defaults — same as no override
+            # Parsed in config.quality_override — the SAME function that reads
+            # the `auth` message's copy, so the phone's restatement on connect
+            # compares equal to what the first session already opened with and
+            # cannot force a second encoder (task 203).
+            quality = config.quality_override(msg)
             changed = quality != conn.get("quality")
+            # RAISING past the desktop's own numbers rebuilds capture and the
+            # picture blinks (owner decision, task 131 — the panel says so
+            # before he taps). Lowering never reaches here: it lives inside
+            # this client's ffmpeg. Safe with one client by rule (4409).
+            raise_fps = int(msg.get("raise_fps") or 0) or None
+            raise_width = int(msg.get("raise_width") or 0) or None
+            if (raise_fps or raise_width or conn.get("raised")) and \
+                    hasattr(stream, "raise_limits"):
+                conn["raised"] = bool(raise_fps or raise_width)
+                await asyncio.to_thread(stream.raise_limits, raise_fps, raise_width)
             conn["quality"] = quality
             if changed:
                 # SAID OUT LOUD, because it forces an encoder re-open and a
@@ -906,6 +879,13 @@ async def _receive_input(ws: WebSocket, injector: InputInjector, stream, token: 
             # What the focused layout's conversation is running NOW (task 208)
             # — read from its own transcript, never from a phone-side memory.
             await claude_api.send_state(ws, layouts, conn)
+        elif kind == "actions_update":
+            # THE PHONE EDITS A SET'S INTERIOR (owner 2026-08-04, task 218b):
+            # which pool commands ride the D-pad and in which slots. It writes
+            # the SAME actions.json the desktop Controls editor writes, through
+            # a validator that accepts only the owner-owned keys — the whole
+            # handler lives in actions_api with the file's other reader.
+            await actions_api.actions_update(ws, msg, agents.claude_settings())
         elif kind == "client_log":
             # Silent phone-side diagnostics (owner round 2, 2026-08-05: voice
             # evidence goes to THIS log, never to a panel on the phone).
@@ -962,6 +942,14 @@ async def _receive_input(ws: WebSocket, injector: InputInjector, stream, token: 
             # handler lives in layout_api with the rest of the layout
             # protocol; web.py stands at the 1,000-line wall.
             await layout_api.layout_member_remove(ws, layouts, stream, conn, msg)
+        elif kind == "layout_member_list":  # task 195, "Add a window" list
+            await layout_api.layout_member_list(ws, layouts, stream, msg)
+        elif kind == "layout_member_add":  # task 195, grows a layout by one
+            await layout_api.layout_member_add(ws, layouts, stream, conn, msg)
+        elif kind == "layout_split":  # task 197a, one solo layout per member
+            await layout_api.layout_split(ws, layouts, stream, conn, msg)
+        elif kind == "layout_member_eject":  # task 197b, member -> own layout
+            await layout_api.layout_member_eject(ws, layouts, stream, conn, msg)
         elif kind == "layout_reorder":
             # Dropping BETWEEN two rows — the list's own order, nothing moves
             # on the PC (owner 2026-08-07). In layout_api because it must also

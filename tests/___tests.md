@@ -1344,6 +1344,126 @@ Self-tested by planting each defect separately in the shipped source:
 Run: `.venv\Scripts\python tests/test_quality_reset.py` — also a fail-closed
 step in `build.py`.
 
+### `test_return_timing.py` — Return Gate (task 203)
+Proves that COMING BACK FROM AN EXCURSION COSTS **ONE** ENCODER. Measured in
+his own `server.log.1`, two real returns from a gallery on 2026-08-11:
+
+    10:21:12,553  Phone announced an excursion
+    10:21:14,146  WebSocket /ws [accepted]            1.59 s  phone + shell probe
+    10:21:14,173  Client authenticated
+    10:21:15,306  Layout 1 focused ... landed=True    1.13 s  BLOCKING the encoder
+    10:21:15,586  H.264 session opened                0.28 s  ffmpeg + init segment
+
+    10:08:08,773  H.264 session opened - 1 active
+    10:08:08,864  H.264 session closed - 0 active     0.09 s  torn down at once
+    10:08:10,086  H.264 session opened - 1 active     1.31 s  the SECOND encoder
+
+Two structural costs, neither of them the network: the encoder was started LAST
+in the connection setup (so its 0.28 s queued behind the resume focus's 1.13 s
+of placing windows and waiting for them to land), and the phone's quality
+restatement could only be read after that setup, so the first encoder was
+always built at default quality and thrown away.
+
+Five checks on the REAL `web._stream_h264` loop over the REAL `H264Manager`,
+reusing the stream lifecycle gate's fakes (one harness, never a second copy to
+drift from), plus two source-order assertions — the regression here is an edit
+that moves one line, which no runtime assertion on a fake socket would notice.
+
+| planted defect | check that goes red |
+|---|---|
+| `conn["quality"]` seeded `None` instead of from `auth` | *the connection setup seeds the quality from the auth message* |
+| the `_stream_h264` task moved back below the resume focus | *the encoder is started before the blocking resume focus* |
+| the re-open on a real change deleted | *a genuinely new quality still re-opens the encoder* |
+
+Run: `.venv\Scripts\python tests/test_return_timing.py` — also a fail-closed
+step in `build.py`.
+
+### `test_raw_pixel_cost.py` — Raw Pixel Gate (task 130)
+Pins WHAT THE CPU CARRIES TO THE ENCODER, PER FRAME. The copy — not the
+encoding — is the expensive part: NVENC runs on the GPU, but every pixel is
+carried there by the CPU. It used to carry 3840×2160 bgr24 = 24.88 MB/frame,
+**1.49 GB/s at 60 fps per client**, plus ffmpeg converting bgr24 → yuv420p in
+swscale on the CPU for every frame. That is the pipeline the phone ran out of
+frames behind (task 151: `behind` negative, pinned at −11 s for two minutes at
+60 fps / 20 Mbps).
+
+Two changes, both before the pipe: **I420 on our side** (half the bytes AND it
+deletes ffmpeg's conversion — 4.30 ms vs 5.56 ms per frame, measured on his own
+4K monitor) and the **default encoder width capped at 2560** (5.53 MB/frame,
+0.33 GB/s at 60 — the target; no phone panel resolves more).
+
+Five checks, no dxcam, no ffmpeg, no 4K monitor. The colour check matters
+because a pix_fmt mismatch does not FAIL — it produces a picture in the wrong
+colours. The cost check reads the shipped default off the dataclass field,
+never off the live `SETTINGS` the other checks move around: an earlier draft set
+2560 itself and then congratulated itself on the result.
+
+| planted defect | check that goes red |
+|---|---|
+| `_process` back to `frame.tobytes()` (bgr24) | *the capture side emits I420, exactly* |
+| ffmpeg's INPUT flag back to `bgr24` | *ffmpeg's INPUT is told yuv420p* |
+| `h264_max_width` default back to 3840 | *the delivered cost at 4K60 meets the target* |
+
+Run: `.venv\Scripts\python tests/test_raw_pixel_cost.py` — also a fail-closed
+step in `build.py`.
+
+### `test_capture_handover.py` — Capture Handover Gate (task 193)
+Proves that CHANGING A SETTING CANNOT KILL THE PICTURE. His report was
+"najhitniji bag ... pada cele aplikacije". 0.0.399 fixed the PHONE's half (the
+per-client encoder re-open); this is the DESKTOP's half, a different mechanism
+entirely, dated in `server.log.1`:
+
+    00:32:48,546  User settings saved: {... 'h264_bitrate': '20M' ...}
+    00:32:48,551  uvicorn: Shutting down
+    00:32:58,558  ERROR  Server thread did not stop within 10s
+    00:32:58,817  RawFrameSource ready — monitor 0 (3840x2160)
+    00:32:58,817  WARNING dxcam: DXCamera instance already exists ...
+                          returning existing instance.
+
+`Apply & restart` gives the old thread ten seconds and then builds the new
+server anyway. dxcam's factory is a **singleton per output**, so the new
+`RawFrameSource` inherits the old run's camera — and moments later that run's
+own `finally` reaches `stream.shutdown()` and stops the camera the NEW server is
+already serving from. Nothing in the sequence logs the word "crash", which is
+why it survived so long: the only line telling the truth is a third-party
+warning. Sibling to `test_server_generation.py`, which covers the same
+superseded-run failure from the controller's side.
+
+Six checks over a fake dxcam that reproduces the real factory's semantics
+exactly (one instance per output, released instances dropped).
+
+| planted defect | check that goes red |
+|---|---|
+| `_open` no longer evicts the previous owner | *a restart gets its OWN camera*, *the dying run cannot stop the live one*, *an evicted capture refuses to start* |
+| `shutdown()` calls `stop()` instead of `close()` | *a completed shutdown gives the monitor back* |
+
+Run: `.venv\Scripts\python tests/test_capture_handover.py` — also a
+fail-closed step in `build.py`.
+
+### `test_quality_raise.py` — Quality Raise Gate (task 131)
+Proves that THE PC'S CARD IS A DEFAULT, NOT A WALL. The owner's decision:
+lowering is free (it happens inside this client's own ffmpeg and touches
+nobody), raising must work too, and the cost is stated rather than hidden — the
+shared capture is rebuilt and THE PICTURE BLINKS ONCE, which every raised step
+in the panel says with a ↑ before he taps it. Affordable for one reason, and it
+is a design rule rather than luck: **one device at a time** (4409).
+
+It matters more since task 130 lowered the shipped encoder width to 2560:
+"Native" is how he asks for his 4K monitor back.
+
+Six checks. The important one is the third — without *lowering never touches
+capture*, an "always rebuild" would pass everything else and every quality tap
+would blink the picture, which is worse than no feature.
+
+| planted defect | check that goes red |
+|---|---|
+| the session told `SETTINGS.target_fps` instead of the source's `capture_fps` | *a raise reaches the camera AND the encoder* (an `fps` filter would throw away the very frames the raise asked for) |
+| a raise no longer ends the running sessions | *a raise rebuilds the running encoders* |
+| any fps counts as a raise, not only one above the desktop's | *lowering never touches capture* |
+
+Run: `.venv\Scripts\python tests/test_quality_raise.py` — also a fail-closed
+step in `build.py`.
+
 ### `test_server_generation.py` — Server Generation Gate
 Proves that a SUPERSEDED SERVER RUN OWNS NOTHING. Read out of the owner's own
 `server.log` on 2026-08-09, under a screenshot of the GUI saying **STOPPED**
@@ -1562,6 +1682,44 @@ off the band. Writes the two pictures nobody could see before this round into
 
 Run: `.venv\Scripts\python tests/test_pad_shape.py` (needs playwright +
 chromium; binds its own port 8896).
+
+### `test_set_editor.py` — Set Editor Gate
+
+THE PHONE EDITS A SET'S INTERIOR (owner **2026-08-04 18:27**, delivered as
+**task 218b** — a request so old that when he raised it again on 2026-08-11 he
+said it worried him that nobody had mentioned it; it never received a task
+number, and the list only executes what enters it). From the same panel where
+sets are ticked on and off, he now picks which pool commands ride a set's
+controls and in which slot, and it saves through the PC into the SAME
+actions.json the desktop Controls editor writes.
+
+Four promises, each proven by planting its own defect:
+
+| Promise | Planted defect | Went RED as |
+|---|---|---|
+| (a) the edit lands in the USER's actions.json | `save_update` never writes | 4 checks, incl. the file on disk after the real browser run |
+| (b) a non-owner key is refused, WHOLE | the allowlist dropped | `(b) a non-owner key is refused, whole` |
+| (c) an id outside the pool is refused | the membership check dropped | 3 checks (a refusal that writes is a second bug) |
+| (d) the re-broadcast reaches the page | `send_actions` dropped | `(d) the live controls changed without a reconnect` |
+
+Plus the ownership contract from both sides — `PHONE_EDITABLE` widened past
+`OWNER_SET_KEYS` goes RED, because a key the shipped-pool merge does not
+protect is a choice the NEXT release deletes without a word — and the phone's
+own half: the edit door removed from the picker rows, the swap made a no-op,
+and `send` unwired each go RED on their own checks.
+
+The user file it drives is held as LITERAL TEXT of an OLDER shape, never
+`copy(shipped)`: that shortcut is why four releases passed while a field never
+reached his `%LOCALAPPDATA%` copy (see `test_actions_migration.py`). The last
+block opens the REAL page in a REAL Chromium and walks his own path — Settings
+→ Sets → the edit door → untick, tick, swap two positions → Save — then reads
+the `actions_update` off the wire and measures the LIVE D-pad, because a module
+nobody calls is a feature that does not exist. It also measures the picture: no
+two positions on one square, nothing off the card, no sideways page scroll.
+
+Run: `.venv\Scripts\python tests/test_set_editor.py` (needs playwright +
+chromium; binds its own port 8895 and writes only a temp copy of the fixture —
+never the repo's actions.json, which is the owner's to hand-edit).
 
 ### `test_on_state.py` — ON State Gate
 

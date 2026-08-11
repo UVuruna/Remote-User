@@ -595,22 +595,29 @@ def main():
         # under a full-screen overlay with no way out — and it left one standing
         # over every later check in this file, which is what killed 10e4's tap
         # on the Scroll button downstream.
+        # THE LAST VERSION of the grammar (task 186, superseding 158's
+        # two-option S/SE shape — the 221 lesson): pressing L2 DOWN opens the
+        # CENTERED birth radial with the full source set (New / List / Tap),
+        # each drawn AND labelled; a quick release pointing at nothing is the
+        # TAP (arms tap-pick, today's act); a long release at nothing only
+        # closes. The radial must never linger over later checks.
         results["pad: L2 -> Layout (+)"] = page.evaluate("""() => {
             closeLayoutPanel();
             closeMiniRadial();
             __padButton('l2', true);
-            __padButton('l2', false);
             const items = [...document.querySelectorAll('#mini-radial .mini-item')];
             const opened = !document.getElementById('mini-radial').hidden &&
-                           items.length === 2 &&
+                           items.length === 3 &&
                            items.every((el) => el.querySelector('svg') &&
                                                el.querySelector('.lbl').textContent.trim());
-            __padButton('l2', true);
-            __padButton('l2', false);
+            __padButton('l2', false);   // quick release at nothing = the tap
             const closed = document.getElementById('mini-radial').hidden;
+            const armed = !!(typeof creating !== 'undefined' && creating) ||
+                          !!(typeof layoutArm !== 'undefined' && layoutArm);
+            cancelCreation();
             closeMiniRadial();
             closeLayoutPanel();
-            return opened && closed;
+            return opened && closed && armed;
         }""")
         results["pad: R2 -> Hide"] = page.evaluate("""() => {
             const hidden = () => document.body.classList.contains('hidden-controls');
@@ -775,29 +782,42 @@ def main():
         # single button may fire on the way.
         clear_calls()
         wheel_state = page.evaluate("""() => {
+            // This check pins the POINTING grammar, not the wheel's
+            // composition — task 181's drop-out default sheds the placed
+            // sets and would leave one item to point at, so the grammar is
+            // proven under the fixed mode (test_app_set_wheel's own choice;
+            // composition under drop-out is test_wheel_dropout.py's job).
+            // The no-duplicate rule ships in BOTH modes, so the expected
+            // ring is wheelCats(side), read from the page itself rather
+            // than assumed — the 181 change must move THIS arithmetic too.
+            setWheelMode('fixed');
             groups.left = 0;
             renderGroup('left');
+            const ring = wheelCats('left');
             __padButton('l1', true);
             const open = document.getElementById('wheel').classList.contains('open');
             const items = () => [...document.querySelectorAll('#wheel .wheel-item')];
             const n = items().length;
-            // Item 1 sits a third of the way clockwise from 12 o'clock, i.e.
-            // 30 degrees from the +x axis: (cos 30, sin 30).
-            __padAxis(0.866, 0.5, 0, 0);
+            // Item 1 sits one step clockwise from 12 o'clock — at n items the
+            // step is 2PI/n, so point the stick at that exact angle.
+            const ang = -Math.PI / 2 + (2 * Math.PI / n) * 1;
+            __padAxis(Math.cos(ang), Math.sin(ang), 0, 0);
             const framed = items().findIndex((el) => el.classList.contains('current'));
             __padButton('l1', false);   // released while still pointing — that IS the pick
             __padAxis(0, 0, 0, 0);      // ...and only then does the thumb come back
-            return {open, n, framed, picked: groups.left,
+            return {open, n, ringN: ring.length, framed, picked: groups.left,
+                    expected: allCats().indexOf(ring[1]), expectedName: ring[1].name,
                     closed: !document.getElementById('wheel').classList.contains('open'),
                     shown: document.querySelector('#group-left .ctl.cat .lbl').textContent};
         }""")
         time.sleep(0.3)
         results["pad: L1 held + stick + release picks a set, and fires no button"] = (
-            wheel_state["open"] and wheel_state["n"] == 3 and
-            wheel_state["framed"] == 1 and wheel_state["picked"] == 1 and
-            wheel_state["shown"] == "Input" and wheel_state["closed"] and
-            not snapshot())
-        page.evaluate("() => { groups.left = 0; renderGroup('left'); }")
+            wheel_state["open"] and wheel_state["n"] == wheel_state["ringN"] and
+            wheel_state["n"] >= 2 and wheel_state["framed"] == 1 and
+            wheel_state["picked"] == wheel_state["expected"] and
+            wheel_state["shown"] == wheel_state["expectedName"] and
+            wheel_state["closed"] and not snapshot())
+        page.evaluate("() => { setWheelMode('dropout'); groups.left = 0; renderGroup('left'); }")
 
         # 10g. ...and the SAME shoulder, merely tapped, is the layout bar's
         # ‹ › step. `send` is captured here rather than followed to the server:

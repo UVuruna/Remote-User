@@ -267,7 +267,7 @@ function connect() {
         // finally known, and SAY what had to give way.
         const dropped = enforceWheelCap();
         if (dropped.length) {
-          showToast(`The wheel holds ${WHEEL_MAX} sets — switched off ${dropped.join(", ")}`);
+          showToast(`The wheel holds ${wheelCap()} sets — switched off ${dropped.join(", ")}`);
         }
         refreshCategories();
       } else if (msg.type === "caret") {

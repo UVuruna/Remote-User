@@ -26,6 +26,22 @@ const winOfferOut = document.getElementById("window-offer-out");
 
 let winOfferId = null;
 let winOfferTimer = null;
+// THE SECOND QUESTION THIS CHIP ASKS (owner request 2026-08-09, task 185): he
+// double-clicks an .xlsx through the stream, Excel opens, and the phone asks
+// "layout with it?". It is the SAME chip — one strip of screen, one dismissal
+// rule, one auto-dismiss — because the two questions are the same shape and a
+// second floating prompt would be a second thing to notice, a second thing to
+// ignore and a second thing to get in the way of the controls. Only the words
+// and the answer differ, so only the words and the answer are variables.
+let winOfferAct = "layout";        // "layout" (task 202) | "layout_new" (185)
+let winOfferWindow = null;         // the window a `layout_new` chip is about
+
+const WIN_OFFER_WORDS = {
+  layout: { text: (n) => `${n} opened`,
+            yes: "Show in layout", no: "Leave on desktop" },
+  layout_new: { text: (n) => `${n} opened — a layout with it?`,
+                yes: "Make a layout", no: "No" },
+};
 
 // How long the chip stands. Long enough to notice while he is reading the PC
 // screen through the stream, short enough that it is never in the way of the
@@ -36,6 +52,7 @@ function hideWindowOffer() {
   clearTimeout(winOfferTimer);
   winOfferTimer = null;
   winOfferId = null;
+  winOfferWindow = null;
   winOffer.hidden = true;
 }
 
@@ -45,8 +62,18 @@ function hideWindowOffer() {
 function showWindowOffer(msg) {
   if (!msg || !msg.id) return;
   winOfferId = msg.id;
+  // An `act` this page does not know falls back to the one that was here
+  // first — a chip whose buttons say nothing is worse than a chip that asks
+  // the older question, and a PC newer than the page is a real state.
+  winOfferAct = WIN_OFFER_WORDS[msg.act] ? msg.act : "layout";
+  const words = WIN_OFFER_WORDS[winOfferAct];
+  winOfferWindow = winOfferAct === "layout_new"
+    ? { hwnd: msg.hwnd, title: msg.title, process: msg.process, icon: msg.icon }
+    : null;
   const name = (msg.title || msg.process || "A window").trim();
-  winOfferText.textContent = `${name} opened`;
+  winOfferText.textContent = words.text(name);
+  winOfferIn.textContent = words.yes;
+  winOfferOut.textContent = words.no;
   winOfferText.title = name;
   winOffer.hidden = false;
   clearTimeout(winOfferTimer);
@@ -56,8 +83,18 @@ function showWindowOffer(msg) {
 
 async function answerWindowOffer(act) {
   const id = winOfferId;
+  const win = winOfferWindow;
   hideWindowOffer();
   if (!id) return;
+  // TASK 185's YES LEADS INTO THE PANEL HE ALREADY KNOWS, and it does so
+  // BEFORE the POST rather than after it: the panel is entirely phone-side
+  // (the PC moves nothing either way here), and making him watch a round trip
+  // to open a card would be a wait for nothing. The POST still goes, because
+  // it is what stops the PC asking about this window again.
+  if (act === "layout" && winOfferAct === "layout_new") {
+    startFromWindow(win);
+    act = "layout_new";
+  }
   try {
     await fetch(`/window_offer?token=${encodeURIComponent(token)}`, {
       method: "POST",

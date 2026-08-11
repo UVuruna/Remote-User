@@ -119,8 +119,10 @@ const FILES = [
   // reference this test exists to catch (owner ballot verdict 2026-08-11).
   "claude-panels.js",
   "phone-panel.js",
+  "set-editor.js",
   "region.js",
   "notify.js",
+  "clipboard.js",
   "hold-gesture.js",
   // grids.js reads grid-icons.js AT LOAD (`GRID_THREE`), so the order here is
   // the order index.html loads them in — and both are listed, because a
