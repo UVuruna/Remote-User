@@ -147,9 +147,13 @@ function settleStill() {
 function settleTick() {
   settleHits = settleStill() ? settleHits + 1 : 0;
   const now = performance.now();
-  if (now > settleDeadline ||
-      (settleHits >= SETTLE_STABLE_HITS && now - loadingSince > LOADING_MIN_MS)) {
-    hideLayLoading();
+  const still = settleHits >= SETTLE_STABLE_HITS && now - loadingSince > LOADING_MIN_MS;
+  if (now > settleDeadline || still) {
+    // WHY it left is half the measurement (task 203): "the picture stood
+    // still" and "we ran out of patience" are different bugs, and only one of
+    // them is this module's fault. `hideReason` is read by hideLayLoading and
+    // reported once per return in connection.js.
+    hideLayLoading(still ? "picture settled" : "settle cap");
   }
 }
 
@@ -193,7 +197,7 @@ function showLayLoading(text) {
   }
 }
 
-function hideLayLoading() {
+function hideLayLoading(why) {
   clearTimeout(loadingTimer);
   loadingTimer = null;
   clearInterval(settleTimer);
@@ -203,6 +207,12 @@ function hideLayLoading() {
   settlePrev = null;
   if (!layLoadingOpen) return;
   layLoadingOpen = false;
+  // The overlay leaving is the END of a return from an excursion — the last
+  // hop, and the one he actually watches (task 203). Guarded because this
+  // module is loaded by the audit harness too, with no connection.js in scope.
+  if (typeof noteReturnDone === "function") {
+    noteReturnDone(why || "backstop or an outside hide");
+  }
   layLoading.classList.remove("open"); // CSS cross-fades it away
   // Keep spinning THROUGH the fade — a frozen cube during the fade-out is
   // exactly the stutter the smooth exit is meant to remove.

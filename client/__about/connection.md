@@ -202,3 +202,38 @@ The `||` is gone. What silence MEANS is decided in `theme.js`, beside the look
 and the per-device cache that remembers it — no `ui` changes nothing at all, a
 partial `ui` merges onto the look in force. This file's job is only to deliver
 the server's word, not to invent one. See [theme.css + theme.js](theme.md).
+
+## The return stopwatch (task 203)
+
+"Coming back from the gallery takes about a minute" cannot be fixed by guessing
+which hop is slow, and only one of the hops is visible in the server's log — it
+cannot see the seconds before the socket exists, nor the ones after the last
+byte, which is exactly where the loading overlay lives.
+
+So the page times its own return and reports it ONCE, as a `client_log` line
+into the server log beside everything else — never a panel on the phone (the
+2026-08-05 rule: diagnostics go to the log). The marks, each in milliseconds
+since the return itself:
+
+| mark | meaning |
+|------|---------|
+| `open` | the socket opened |
+| `served` | the PC answered anything at all |
+| `config` | the encoder exists — the first-picture moment (`config` carries the codec parsed from the live init segment) |
+| `cube` | the loading overlay left, with the reason it left |
+
+Only a return **into a layout** is timed: that is the seam he reported, and the
+only one with an overlay to end the measurement. Coming back to the plain
+desktop leaves `RETURN.sent` true, which makes every mark a no-op.
+
+## `auth` carries the quality (task 203)
+
+The `auth` message now includes `quality: effectiveQuality()`. The restatement
+below it still goes — an older PC understands only that one — but a PC that
+reads the field opens its **first** encoder already correct. Sent only in the
+later message, it arrived after the whole connection setup had finished, so
+every return from an excursion built one ffmpeg at default quality, tore it
+down and built a second: his log, 2026-08-11, `10:08:08,773 → 08,864 →
+10,086` — 1.31 s of nothing, on top of everything else. Server side:
+`config.quality_override`, one parser for both messages. Gate:
+[`tests/test_return_timing.py`](../../tests/___tests.md).

@@ -43,6 +43,38 @@ function abandon(sock, why) {
   ensureConnected();
 }
 
+// --- THE RETURN STOPWATCH (task 203) ---------------------------------------
+// "Coming back from the gallery takes about a minute" cannot be fixed by
+// guessing which hop is slow, and only ONE of the hops is visible in the
+// server's log (it cannot see the seconds before the socket exists, nor the
+// ones after the last byte, which is exactly where the overlay lives). So the
+// page times its own return and reports it ONCE per return, as a `client_log`
+// line into the server log beside everything else — never a panel on the
+// phone (the 2026-08-05 rule: diagnostics go to the log, the owner sees a
+// working app or a named failure, never a debug toast).
+//
+// The marks, in order: `hidden` (the page came back), `open` (the socket
+// opened), `served` (the PC answered anything at all), `config` (the encoder
+// exists — this is the first-picture moment, since `config` carries the codec
+// parsed from the live init segment) and `cube` (the loading overlay left,
+// with the reason it left). Each is milliseconds since the return itself.
+const RETURN = { t0: 0, marks: [], sent: true };
+
+function markReturn(name) {
+  if (RETURN.sent) return;
+  RETURN.marks.push(`${name}=${Math.round(performance.now() - RETURN.t0)}ms`);
+}
+
+/** Called by loading.js when the overlay finally leaves — the last hop, and
+ *  the one the owner actually watches. `why` distinguishes "the picture stood
+ *  still" from "we gave up waiting", which are different bugs. */
+function noteReturnDone(why) {
+  if (RETURN.sent) return;
+  markReturn("cube");
+  RETURN.sent = true;
+  send({ type: "client_log", text: `[return] ${RETURN.marks.join(" ")} (${why})` });
+}
+
 function connect() {
   setStatus("connecting", `Connecting to ${location.host}…`);
   // Every handler guards on `sock === ws`: instant reconnect can replace the
@@ -65,6 +97,7 @@ function connect() {
   sock.onopen = () => {
     clearTimeout(openTimer);
     if (sock !== ws) return;
+    markReturn("open");
     // Opened, but not yet SERVED. Everything below is a message into a socket
     // whose other end we have not heard from once.
     servedTimer = setTimeout(
@@ -74,6 +107,14 @@ function connect() {
     sock.send(JSON.stringify({
       type: "auth", token,
       screen: { w: window.screen.width, h: window.screen.height },
+      // THIS DEVICE'S QUALITY OVERRIDES, IN THE FIRST MESSAGE (task 203).
+      // The restatement below still goes — an older PC only understands that
+      // one — but a PC that reads this opens its FIRST encoder already
+      // correct. Sent before, it arrived after the whole connection setup,
+      // so every return from an excursion built one ffmpeg at default
+      // quality, tore it down and built a second (his log 10:08:08,773 →
+      // 08,864 → 10,086 — 1.31 s of nothing, on top of everything else).
+      quality: effectiveQuality(),
     }));
     // The server starts every connection at default quality — restate the
     // saved overrides (a network switch reconnects, so auto-on-mobile-data
@@ -113,10 +154,12 @@ function connect() {
       served = true;
       clearTimeout(servedTimer);
       deadTries = 0;
+      markReturn("served");
     }
     if (typeof e.data === "string") {
       const msg = JSON.parse(e.data);
       if (msg.type === "config") {
+        markReturn("config"); // the encoder exists — the first picture is due
         // Full view reset — sent after auth and after every stream (re)start
         // (monitor switch, H.264 session reset).
         monitor = { w: msg.monitor_width, h: msg.monitor_height };
@@ -199,6 +242,12 @@ function connect() {
         // client/sets.js sorts by it; missing/empty = today's order,
         // unchanged (a user who never opens the new list sees no change).
         wheelOrder = msg.wheel_order || [];
+        // Drop-out vs fixed wheel (owner decree 2026-08-11, task 181): a
+        // set placed on either D-pad group sheds off BOTH wheels while it
+        // rides there, and the wheel cap rises to 10 — the desktop's
+        // "Wheel mode" control, beside "Wheel order…"; default drop-out.
+        // Missing key = an older server or a fresh file — also drop-out.
+        setWheelMode(msg.wheel_mode);
         // What Claude Code is SAVED as — the chooser marks it, and says
         // "saved" rather than "active" because it can be outranked by a
         // project settings file, an env var, a session-only switch or a
@@ -229,6 +278,9 @@ function connect() {
         updateViewport();
       } else if (msg.type === "toast") {
         showToast(msg.text);
+      } else if (msg.type === "clipboard") {
+        // task 182 — hand it to the shell (client/clipboard.js).
+        handleClipboardPush(msg.text);
       } else if (msg.type === "notify") {
         // A job on the PC finished and named itself (ROADMAP Phase H,
         // owner 2026-08-05) — the phone raises a real notification
@@ -247,6 +299,7 @@ function connect() {
         // something the owner just did with his thumb.
         if (applyNoticeJump()) {
           layoutRestore = null;
+          orientationRestoring = false;
         } else if (layoutActive === null && layoutRestore &&
             layouts[layoutRestore.index] &&
             layouts[layoutRestore.index].name === layoutRestore.name) {
@@ -257,6 +310,17 @@ function connect() {
           // 2026-08-04). One shot: the reply's layout_state re-arms it.
           const back = layoutRestore.index;
           layoutRestore = null;
+          // TASK 204: this INTERIM layout_state still says desktop —
+          // applyOrientationLock() runs a few lines below and would read
+          // that as "unlock rotation", clearing the lock for the seconds
+          // this restore takes and letting the tablet spin sideways over a
+          // portrait layout. orientationRestoring holds the lock through
+          // this window; the restore's own later layout_state (landing
+          // below with layoutActive set) clears it again, and a restore
+          // that fails to verify next time falls to the final `else`,
+          // which also clears it — a failed restore must not hold the lock
+          // forever.
+          orientationRestoring = true;
           send({ type: "layout_focus", index: back });
           // TASK 194 (the overlay "misses places it should cover"). This
           // `layout_state` is the INTERIM one — the server still shows
@@ -274,6 +338,16 @@ function connect() {
           showLayLoading("Back to your layout…");
         } else if (layoutActive !== null && layouts[layoutActive]) {
           layoutRestore = { index: layoutActive, name: layouts[layoutActive].name };
+          // A real focus landed (the restore's own reply, or an ordinary
+          // layout_focus) — nothing left to wait for.
+          orientationRestoring = false;
+        } else {
+          // Genuine desktop with no restore in flight, OR a restore that
+          // failed to verify (the remembered layout is gone/renamed) — the
+          // TASK 204 hold has nothing more to wait for either way, so the
+          // lock is free to release on the line below.
+          layoutRestore = null;
+          orientationRestoring = false;
         }
         refreshCategories(); // app-aware sets appear/vanish with layout focus
         updateLayoutBar();
@@ -286,7 +360,17 @@ function connect() {
         // desktop — the server moves nothing until he taps.
         showWindowOffer(msg);
       } else if (msg.type === "layout_offer") {
-        handleLayoutOffer(msg);
+        // TASK 195 — the ⚙ sheet's "Add a window" reuses the same enumeration
+        // (`layout_member_list`) and the same `layout_offer` shape, tagged
+        // with `add_to` so it never falls into the fresh-creation flow
+        // (`handleLayoutOffer`/`creating`) it shares nothing else with.
+        // Routed here, additively, rather than inside handleLayoutOffer
+        // itself — that function belongs to the creation wizard file.
+        if (typeof msg.add_to === "number") {
+          renderAddMemberPanel(msg);
+        } else {
+          handleLayoutOffer(msg);
+        }
       } else if (msg.type === "layout_progress") {
         cubeNext(); // one window created on the PC = one cube turn
       }
@@ -308,6 +392,7 @@ function connect() {
       // server and stomps this message every 2 s. Stop until re-paired.
       authRejected = true;
       layoutRestore = null;   // a dead link decides nothing about the layout
+      orientationRestoring = false; // nothing left for the lock to wait for
       if (IN_APP) {
         // In the APK the fix is one tap — the shell reopens the QR scanner.
         setStatus("disconnected", "Link expired — tap here to scan the new QR");
@@ -328,6 +413,7 @@ function connect() {
       // so it must not silently re-raise "its" layout on some later reconnect
       // and override whatever the other device chose (audit 2026-08-05).
       layoutRestore = null;
+      orientationRestoring = false; // ditto — a takeover decides nothing here either
       setStatus("disconnected", "Another device took over — tap here to use this one");
       statusEl.addEventListener("pointerup", () => {
         takenOver = false;
@@ -431,7 +517,18 @@ document.addEventListener("visibilitychange", () => {
     // desktop has no seam to cover, and a cube over nothing is worse than
     // nothing. `settleLayLoading` drops it when the streamed screen really
     // stands still, exactly as it does for every other layout switch.
-    if (layoutRestore) showLayLoading("Back to your layout…");
+    // The stopwatch starts HERE, at the moment he can see the page again —
+    // not at connect(), which is already a hop in (task 203).
+    // Only a return INTO A LAYOUT is timed: that is the seam the owner
+    // reported, and it is the only one with an overlay to end the measurement.
+    // Coming back to the plain desktop has nothing to cover and nothing to
+    // report — `sent` stays true there, which makes every mark a no-op.
+    if (layoutRestore) {
+      RETURN.t0 = performance.now();
+      RETURN.marks = [];
+      RETURN.sent = false;
+      showLayLoading("Back to your layout…");
+    }
     ensureConnected();
   }
 });

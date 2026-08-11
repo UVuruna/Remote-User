@@ -64,3 +64,13 @@ out, is a feature that does not exist.
 - [Layouts](layouts.md) — every creation, focus, reshape and merge
 - [Connection](connection.md) — `layout_state` → `settleLayLoading()`,
   `layout_progress` → `cubeNext()`
+
+## Why it left, and when (task 203)
+
+`hideLayLoading(why)` now takes a reason and hands it to
+`noteReturnDone(why)` in [Connection](connection.md) — the last hop of the
+return stopwatch, and the one the owner actually watches. `settleTick` passes
+`"picture settled"` or `"settle cap"`, because *"the picture stood still"* and
+*"we ran out of patience"* are different bugs and only one of them is this
+module's fault. The call is guarded on `typeof noteReturnDone === "function"`:
+this module is loaded by the audit harness too, with no connection.js in scope.

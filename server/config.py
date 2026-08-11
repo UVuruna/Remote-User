@@ -96,9 +96,25 @@ class Settings:
     # Preference order tried at startup — first one that actually encodes on THIS machine wins.
     # Covers NVIDIA, Intel iGPU, AMD, then pure-software (works on any CPU, no GPU needed).
     h264_encoder_order: tuple[str, ...] = ("h264_nvenc", "h264_qsv", "h264_amf", "libx264")
-    h264_max_width: int = 3840      # H.264 path cap — native 4K streams fine (inter-frame
-                                    # compression keeps a static screen at a few Mbps) and zoom
-                                    # stays sharp; lower it only for weak decoders/links
+    # H.264 path cap — the width the encoder is FED, applied by
+    # capture.RawFrameSource._stream_size before a single byte reaches the
+    # pipe. It was 3840 (stream the monitor natively) on the argument that
+    # inter-frame compression keeps a static 4K screen cheap in BITRATE. True,
+    # and beside the point: the cost that hurts is not the bits on the wire,
+    # it is the RAW PIXELS the CPU carries to the encoder every frame. At
+    # 3840x2160 I420 that is 12.44 MB per frame — 0.75 GB/s at 60 fps, per
+    # client, on top of the capture itself, and that is the pipeline the
+    # owner's phone ran OUT OF FRAMES behind (task 151: his log's negative
+    # `behind`, frozen for two minutes at 60 fps / 20 Mbps). 2560 costs
+    # 5.53 MB per frame — 0.33 GB/s at 60 — and no phone or tablet panel
+    # resolves more than that anyway.
+    # The honest cost, stated rather than buried: H.264 always streams the
+    # FULL frame, so this is also the ceiling a deep client-side zoom can
+    # resolve. Screenshots are unaffected — `take_screenshot` reads the raw
+    # camera frame at native resolution, before any of this.
+    # A saved setting always wins: this is the default for a PC that has never
+    # been told otherwise, never an override of a choice the owner made.
+    h264_max_width: int = 2560
     h264_bitrate: str = "12M"       # target bitrate cap — reached only on heavy motion; static
                                     # screens use a fraction of it regardless of resolution
     h264_gop: int = 60              # keyframe every N frames (reconnect/seek granularity)
@@ -506,6 +522,46 @@ def bitrate_for_level(level: str | None) -> str:
     if pct is None:
         return SETTINGS.h264_bitrate
     return f"{max(1, bitrate_bps(SETTINGS.h264_bitrate) * pct // 100_000)}k"
+
+
+def quality_override(msg: dict) -> dict | None:
+    """The per-client encoder overrides carried by a `quality` message — or by
+    the `auth` message's own `quality` field (task 203, 2026-08-11).
+
+    ONE parser, two callers, and the second caller is the whole point. The
+    phone restates its saved overrides on every connect, and that used to
+    arrive only in the `quality` message — which `_receive_input` cannot read
+    until the WHOLE connection setup has finished. So the first encoder was
+    opened at DEFAULT quality, the restatement landed a moment later,
+    `changed` was true, and the session that had just started was torn down and
+    rebuilt: a second ffmpeg spawn and a second black gap on every return from
+    an excursion. Measured in the owner's own log, 2026-08-11 10:08:08:
+
+        10:08:08,773  H.264 session opened — 1 active
+        10:08:08,864  H.264 session closed — 0 active      91 ms later
+        10:08:10,086  H.264 session opened — 1 active      1.31 s of nothing
+
+    Reading the same field out of `auth` makes the FIRST session the right one,
+    and the restatement that follows compares equal and does nothing. `None`
+    means "pure defaults" — identical to no override — so the comparison in the
+    handler stays a plain `!=`.
+
+    It lives HERE, beside `bitrate_for_level` and `stream_base`, because it is
+    the same vocabulary and because web.py has no room (THE STRUCTURE LAW).
+
+    Legacy `reduced: true` (pages older than the quality panel) maps to the
+    auto-save profile."""
+    if "reduced" in msg and "res" not in msg:
+        return ({"fps": SETTINGS.h264_reduced_fps, "res": "1/2", "bitrate": "low"}
+                if msg.get("reduced") else None)
+    quality = {
+        "fps": int(msg.get("fps") or 0),
+        "res": str(msg.get("res") or "full"),
+        "bitrate": str(msg.get("bitrate") or "high"),
+    }
+    if quality == {"fps": 0, "res": "full", "bitrate": "high"}:
+        return None  # pure defaults — same as no override
+    return quality
 
 
 def stream_base(stream) -> dict:
