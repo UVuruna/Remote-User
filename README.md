@@ -130,6 +130,7 @@ The CLI prints the pairing URL and a QR (console + image viewer). Dev note: H.26
   📝 ROADMAP.md        ← Development phases and status
   📝 CLAUDE.md         ← AI session guidance
   📝 ACTIONS.md        ← Owner-edited control categories (actions.json)
+  📝 VERIFICATION.md   ← The owner's live checklist: everything delivered, everything he verifies
   ⚙️ requirements.txt
   ⚙️ actions.json
   📁 assets/
@@ -183,6 +184,7 @@ The CLI prints the pairing URL and a QR (console + image viewer). Dev note: H.26
 
 - [Setup Guide](GUIDE.md) — step-by-step install & pairing (the in-app guidance mirrors it)
 - [Roadmap](ROADMAP.md) — development phases, current status, future ideas
+- [Verification](VERIFICATION.md) — the owner's live checklist: everything delivered on 2026-08-11 and every point he verifies
 - [AI Guidance](CLAUDE.md) — architecture constraints and pitfalls for coding sessions
 - [Server (folder)](server/___server.md) — PC-side components (core, GUI, streaming)
 - [Client (folder)](client/___client.md) — tablet-side web client
