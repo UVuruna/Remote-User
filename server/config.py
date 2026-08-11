@@ -323,7 +323,7 @@ class Settings:
     # nobody could reach. The Settings window's "Check for new versions when
     # the app starts" is that switch; turning it off makes updates.check()
     # return None and hides the in-window Update button entirely.
-    update_repo: str = "UVuruna/Vibe-Coder"
+    update_repo: str = "UVuruna/VibeCoder"
     update_check: bool = True
 
     # THE HANDOVER (owner report 2026-08-07). Installing an update KILLED the

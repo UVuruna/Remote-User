@@ -254,7 +254,7 @@ def folder_of(slug_dir: Path) -> str:
 
     Read from the transcript's own `cwd`, never guessed from the directory
     name: the slug flattens BOTH path separators and spaces into dashes, so
-    `u--Coding-UVuruna-Applications-Vibe-Coder` cannot be split back into
+    `u--Coding-UVuruna-Applications-VibeCoder` cannot be split back into
     "Vibe Coder" — the first version of this function returned "user" and
     matched nothing. One line of JSON gives the exact path.
     """
@@ -528,7 +528,7 @@ def newest_transcript(folder: str) -> Path | None:
 
     Matched through `folder_of` and never through the slug's own name: the
     slug flattens separators AND spaces into dashes, so
-    `u--Coding-UVuruna-Applications-Vibe-Coder` cannot be split back into
+    `u--Coding-UVuruna-Applications-VibeCoder` cannot be split back into
     "Vibe Coder" (the bug that made the first `folder_of` return "user")."""
     if not folder:
         return None

@@ -54,9 +54,9 @@ def main() -> int:
     results: dict[str, bool] = {}
 
     # --- 1 + 5: the pure pieces, no server needed --------------------------
-    title, body = notify.compose("Vibe Coder · 3f9c1a", "finished", "12 files")
+    title, body = notify.compose("VibeCoder · 3f9c1a", "finished", "12 files")
     results["the line names the agent first"] = (
-        title == "Vibe Coder · 3f9c1a finished" and body == "12 files")
+        title == "VibeCoder · 3f9c1a finished" and body == "12 files")
     results["an unknown event still speaks"] = (
         notify.compose("A", "compacted", "")[0] == "A compacted")
     results["fields are clamped, never trusted"] = (
@@ -75,7 +75,7 @@ def main() -> int:
     speak_text = notify.speak_summary(
         "U:/Coding/UVuruna/Applications/VibeCoder", "Claude Code (Vibe Coder)")
     results["speak_summary is project — conversation, never the body"] = (
-        speak_text == "Vibe Coder — Claude Code (Vibe Coder)"
+        speak_text == "VibeCoder — Claude Code (Vibe Coder)"
         and body not in speak_text
         and "needs you" not in speak_text)
     results["speak_summary survives a missing project"] = (
@@ -145,7 +145,7 @@ def main() -> int:
     # folder plus enough of the session id to tell two agents in one repo apart.
     results["hook: falls back to project · session"] = agent_hook.agent_name(
         {"cwd": r"U:\Coding\UVuruna\Applications\VibeCoder",
-         "session_id": "3f9c1a77-dead-beef"}) == "Vibe Coder · 3f9c1a"
+         "session_id": "3f9c1a77-dead-beef"}) == "VibeCoder · 3f9c1a"
 
     # --- task 198: name = conversation TITLE, text = last-reply SUMMARY ----
     # (owner 2026-08-10 — the hash-like fallback "6ffb225" irritated him; he
@@ -194,7 +194,7 @@ def main() -> int:
                      "cwd": r"U:\Coding\UVuruna\Applications\VibeCoder",
                      "session_id": "3f9c1a77-dead-beef"}
         results["hook: an absent title falls back to project · session"] = (
-            agent_hook.agent_name(payload_b) == "Vibe Coder · 3f9c1a")
+            agent_hook.agent_name(payload_b) == "VibeCoder · 3f9c1a")
         results["hook: an absent text summary is None, not a crash"] = (
             agent_hook.transcript_summary(payload_b) is None)
 
@@ -285,7 +285,7 @@ def main() -> int:
             self.pruned += 1
             return list(range(len(self.layouts)))
 
-    reg = _Reg(_Lay("Chrome", "notes"), _Lay("Claude", "remote user"))
+    reg = _Reg(_Lay("Chrome", "notes"), _Lay("Claude", "vibecoder"))
     notify._layouts = reg
     # The hook sends a PATH; the registry speaks folder names, lowercased.
     results["the notice finds the layout by the agent's own cwd"] = (
@@ -328,9 +328,9 @@ def main() -> int:
         # 101 = the torn-off Claude tab (conversation title, no folder at all)
         # 100 = the window it came out of, and 102 a plain sibling member.
         titles.update({
-            100: "prompt.txt - Vibe Coder - Visual Studio Code",
+            100: "prompt.txt - VibeCoder - Visual Studio Code",
             101: "Ispravka UI dizajna menija - Visual Studio Code",
-            102: "server.py - Vibe Coder - Visual Studio Code [Administrator]",
+            102: "server.py - VibeCoder - Visual Studio Code [Administrator]",
             103: "Docs - Google Chrome",
         })
         # Cell 0 is a Chrome window that names nothing; the agent's own window
@@ -339,14 +339,14 @@ def main() -> int:
             "Claude", "code.exe", [103, 101], "2-side", "landscape", 1.6,
             sources={101: 100})
         results["a torn-off tab's layout still names its project"] = (
-            grid.project() == "remote user")
+            grid.project() == "vibecoder")
         # ...and specifically NOT because member[0] happened to answer: strip
         # the source and the SIBLING must carry it (the planted defect for the
         # members[0]-only reading is exactly this shape).
         lone = layout_registry.Layout(
             "Claude", "code.exe", [101, 102], "2-side", "landscape", 1.6)
         results["a sibling member answers when cell 0 cannot"] = (
-            lone.project() == "remote user")
+            lone.project() == "vibecoder")
         # A layout of something else must still NOT match — widening the reach
         # must not widen it into a false jump.
         titles[200] = "Downloads"
@@ -355,7 +355,7 @@ def main() -> int:
         results["widening the reach does not invent a match"] = (
             other.project() == "" and other.projects() == [])
         results["a layout reports every project it holds"] = (
-            grid.projects() == ["remote user"])
+            grid.projects() == ["vibecoder"])
 
         # (a) A NOTICE THAT SHIPS WITHOUT A LAYOUT SAYS SO, AT INFO, WITH THE
         # PROJECTS THE LIVE LAYOUTS REALLY HOLD. The silence was half the
@@ -384,7 +384,7 @@ def main() -> int:
         results["a miss is LOGGED at INFO, never silent"] = (
             missed is None and len(info) == 1)
         results["…naming the project it looked for"] = (
-            bool(info) and "remote user" in info[0].lower())
+            bool(info) and "vibecoder" in info[0].lower())
         results["…and what the live layouts really hold"] = (
             bool(info) and "Files" in info[0])
     finally:
@@ -471,7 +471,7 @@ def main() -> int:
           });
         }""")
 
-        post(gate.PORT, {"agent": "Vibe Coder · 3f9c1a", "event": "finished",
+        post(gate.PORT, {"agent": "VibeCoder · 3f9c1a", "event": "finished",
                          "text": "controls round"}, gate.TOKEN)
         post(gate.PORT, {"agent": "ML · 77bb02", "event": "waiting", "text": ""},
              gate.TOKEN)
@@ -488,12 +488,12 @@ def main() -> int:
             all(c[0] == "notify" for c in notifs))
         results["the phone raises a banner per agent"] = (
             len(notifs) == 2
-            and notifs[0][1] == "Vibe Coder · 3f9c1a finished"
-            and notifs[0][3] == "Vibe Coder · 3f9c1a"      # tag = the agent
+            and notifs[0][1] == "VibeCoder · 3f9c1a finished"
+            and notifs[0][3] == "VibeCoder · 3f9c1a"      # tag = the agent
             and notifs[1][1] == "ML · 77bb02 needs you"
             and notifs[1][3] != notifs[0][3])               # ...so they never merge
         results["the phone speaks the agent's name"] = (
-            len(speaks) == 2 and "Vibe Coder" in speaks[0][1])
+            len(speaks) == 2 and "VibeCoder" in speaks[0][1])
 
         # --- THE VOICE NEVER READS THE BODY (owner v0.0.107 screenshots) ---
         # A notify with a genuinely long body must be SHOWN in full (the
@@ -509,7 +509,7 @@ def main() -> int:
         results["a long body is never read aloud"] = (
             len(speaks2) == 3
             and long_body not in speaks2[2][1]
-            and speaks2[2][1] == "Vibe Coder — Claude Code (Vibe Coder)")
+            and speaks2[2][1] == "VibeCoder — Claude Code (Vibe Coder)")
 
         # --- AN OLDER SERVER (no speak_text) still speaks something ---------
         # notify.js's own fallback, proven live rather than by reading the

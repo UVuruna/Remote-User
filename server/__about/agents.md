@@ -88,7 +88,7 @@ Verified on the owner's machine, 2026-08-07: tier 1 alone answered
   known.
 - **The folder name comes from the transcript's `cwd`, never from the slug.**
   The slug flattens both path separators and spaces into dashes, so
-  `u--Coding-UVuruna-Applications-Vibe-Coder` cannot be split back into
+  `u--Coding-UVuruna-Applications-VibeCoder` cannot be split back into
   "Vibe Coder" — the first version of `folder_of` returned "user" and matched
   nothing at all.
 - **Tier 3 is bounded by COUNT, not tightened to seconds.** Recently-written
