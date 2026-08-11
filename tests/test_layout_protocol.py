@@ -857,7 +857,85 @@ def check_a_package_with_no_assets_falls_through() -> bool:
         shutil.rmtree(root, ignore_errors=True)
 
 
+# ═══════════ a refused placement retries ITSELF (task 231) ═══════════
+# Owner report 2026-08-11: a grid whose windows he had moved with the mouse
+# drew only the TOP member, healed only by leaving and reopening the layout —
+# "next focus" was HIS act. These pin the automatic retry.
+def check_a_refused_placement_schedules_the_retry() -> bool:
+    install_fakes()
+    conn, layouts = fresh_conn(), window_manager.LayoutRegistry()
+    ws, conn, layouts = drive([
+        {"type": "layout_create", "mode": "solo", "orient": "portrait",
+         "slots": [{"hwnd": WIN_A, "tab": None, "x": 0.5, "y": 0.5}]},
+    ], conn, layouts)
+    calls: list[int] = []
+    real_retry = layout_api._retry_place
+
+    async def _noop():
+        return None
+
+    def fake_retry(ws_, layouts_, stream_, conn_, index_):
+        calls.append(index_)
+        return _noop()
+
+    layout_api._retry_place = fake_retry
+    try:
+        window_manager.place_window = lambda hwnd, rect: False
+        layouts.layouts[0].place_pending = True
+        ws, conn, layouts = drive(
+            [{"type": "layout_focus", "index": 0}], conn, layouts)
+        if calls != [0]:
+            return False
+        # …and a placement that LANDS schedules nothing.
+        calls.clear()
+        window_manager.place_window = lambda hwnd, rect: True
+        layouts.layouts[0].place_pending = True
+        ws, conn, layouts = drive(
+            [{"type": "layout_focus", "index": 0}], conn, layouts)
+        return calls == []
+    finally:
+        layout_api._retry_place = real_retry
+
+
+def check_the_retry_re_places_and_tells_the_phone() -> bool:
+    install_fakes(track_placement=True)
+    conn, layouts = fresh_conn(), window_manager.LayoutRegistry()
+    ws, conn, layouts = drive([
+        {"type": "layout_create", "mode": "solo", "orient": "portrait",
+         "slots": [{"hwnd": WIN_A, "tab": None, "x": 0.5, "y": 0.5}]},
+    ], conn, layouts)
+    conn["active"] = 0
+    layouts.layouts[0].place_pending = True
+    real_sleep = layout_api.asyncio.sleep
+
+    async def instant(_s):
+        return None
+    layout_api.asyncio.sleep = instant
+    try:
+        PLACED.clear()
+        ws2 = FakeWs([])
+        asyncio.run(layout_api._retry_place(
+            ws2, layouts, FakeStream(), conn, 0))
+        if not PLACED:
+            return False  # the retry never re-placed anything
+        if not any(m.get("type") == "layout_state" for m in ws2.sent):
+            return False  # the phone was never told
+        # A retry for a layout the phone has already LEFT does nothing.
+        PLACED.clear()
+        conn["active"] = None
+        ws3 = FakeWs([])
+        asyncio.run(layout_api._retry_place(
+            ws3, layouts, FakeStream(), conn, 0))
+        return not PLACED and not ws3.sent
+    finally:
+        layout_api.asyncio.sleep = real_sleep
+
+
 CHECKS = [
+    ("a refused placement schedules its own retry (231)",
+     check_a_refused_placement_schedules_the_retry),
+    ("the retry re-places and tells the phone (231)",
+     check_the_retry_re_places_and_tells_the_phone),
     ("create from a LIST answers the phone", check_create_from_a_list_answers),
     ("a window's lone tab is NOT offered beside it",
      check_a_lone_tab_is_not_offered_beside_its_own_window),

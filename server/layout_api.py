@@ -18,6 +18,7 @@ import json
 import logging
 
 import agents
+import layout_history
 import uia
 import window_manager
 from monitors import rect_for_size
@@ -167,6 +168,65 @@ async def layout_member_list(ws, layouts, stream, msg: dict) -> None:
         "add_to": int(msg["index"]),
         "grids": list(window_manager.GRID_TEMPLATES),
     }))
+
+
+async def layout_recent(ws) -> None:
+    """The FOURTH creation source (owner report 2026-08-11, task 228, beside
+    Tap / List / New — client/chrome.js's `openMiniRadial`): every layout
+    previously created on THIS pc, across restarts, from `layout_history`.
+
+    Answered with the list alone — matching against what stands open right
+    now happens only when he TAPS one (`layout_recent_use`), because the desk
+    can change in the seconds between asking and picking."""
+    entries = await asyncio.to_thread(layout_history.list_entries)
+    await ws.send_text(json.dumps({
+        "type": "layout_recent",
+        "entries": [{
+            "id": e["sig"], "name": e.get("name") or "Layout",
+            "project": e.get("project"), "count": e.get("count", 1),
+        } for e in entries],
+    }))
+
+
+async def layout_recent_use(ws, layouts, stream, conn: dict, msg: dict) -> None:
+    """Re-create a HISTORY entry against whatever is open right now (task
+    228). Never a stored handle — `layout_history.match` re-finds each member
+    by process + a fuzzy title match, exactly as `recents.py` re-finds a path.
+    A member with nothing standing for it is NAMED in a toast, never silently
+    dropped; the layout is built from whatever WAS found (one member is
+    enough) and refused only when NOTHING was — never a half-empty layout
+    with silently missing cells. Apps are never launched to fill the gap
+    (owner spec: "Do not auto-open apps in v1")."""
+    entry = await asyncio.to_thread(layout_history.find, str(msg.get("id", "")))
+    if entry is None:
+        await toast(ws, "That layout is no longer in the history")
+        return
+    windows = await asyncio.to_thread(window_manager.list_windows)
+    matched, missing = await asyncio.to_thread(layout_history.match, entry, windows)
+    if not matched:
+        await toast(ws, "None of those windows are open right now")
+        return
+    target = matched[0]["hwnd"]
+    fill = [w["hwnd"] for w in matched[1:]]
+    template, notice = (
+        grid_for(layouts, len(matched), entry.get("grid"))
+        if entry.get("grid") else (None, None))
+    if notice:
+        await toast(ws, notice)
+    created = await asyncio.to_thread(
+        layouts.create, target, "grid" if template else "solo", template,
+        fill, entry.get("orient") or "portrait", conn["ratio"],
+        mon_rect(stream), entry.get("name"), None)
+    if created is None:
+        await toast(ws, "That window is gone — layout not created")
+        return
+    index, placed = created
+    if missing:
+        await toast(ws, f"{len(matched)} of {len(matched) + len(missing)} "
+                        f"found — {', '.join(missing)} not open")
+    if not placed:
+        await toast(ws, "A window would not take its exact spot")
+    await layout_focus(ws, layouts, stream, conn, index)
 
 
 async def resolve_slot(ws, stream, slot: dict) -> tuple[int, str | None, int] | None:
@@ -529,4 +589,35 @@ async def layout_focus(ws, layouts, stream, conn: dict, index: int) -> None:
             conn["active"], conn["region"] = index, region
             if not placed:
                 await toast(ws, "A window would not take its exact spot")
+                # AND THE RETRY IS OURS, NOT HIS (his report 2026-08-11, task
+                # 231: a 2-grid whose windows he had moved with the mouse drew
+                # only the top member, and only REOPENING the layout healed
+                # it). `place_pending` already re-places on the next focus —
+                # but "next focus" meant HIM leaving and coming back. One
+                # automatic retry runs a moment later; if it fails again the
+                # standing order remains for the next manual focus.
+                asyncio.create_task(
+                    _retry_place(ws, layouts, stream, conn, index))
     await send_layout_state(ws, layouts, conn)
+
+
+async def _retry_place(ws, layouts, stream, conn: dict, index: int) -> None:
+    """One automatic re-place after a refused placement (task 231). Runs only
+    while the phone still shows that layout; a failure leaves `place_pending`
+    standing exactly as before, so nothing is lost by trying."""
+    await asyncio.sleep(1.2)
+    if conn.get("active") != index:
+        return
+    focused = await asyncio.to_thread(
+        layouts.focus, index, conn["ratio"], mon_rect(stream))
+    if focused is None:
+        return
+    region, placed = focused
+    conn["region"] = region
+    logger.info("Layout %d automatic re-place: landed=%s", index, placed)
+    try:
+        await send_layout_state(ws, layouts, conn)
+        if placed:
+            await toast(ws, "The layout took its arrangement")
+    except Exception:
+        pass  # the socket died mid-retry; the next connection resumes anyway
