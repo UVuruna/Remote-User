@@ -201,8 +201,67 @@ SectionEnd
 ;      and nsExec -- all silent.
 ; =================================================================
 
+; ---- THE ONE-HANDOVER LOCK (owner 2026-08-09/2026-08-11, task 148/187) ----
+; task 148 armed ONE handover script per running app, guarded from
+; server/update_handover.py -- but that guard lives INSIDE the app being
+; replaced, and the app that launches a real-world handover is, by
+; definition, whatever OLD (possibly broken) build was still running on
+; his machine. His 102->103 storm proved the app-side lock holds once it
+; ships -- but the installer must survive an OLDER build that forked the
+; handover BEFORE 148 ever existed, or a future bug in a 148-shipped
+; build. The installer is the one piece of this hand-off that is ALWAYS
+; the new, fixed code, so the lock belongs here too, independent of
+; whatever state the app that spawned us is in.
+;
+; A named OS mutex is the simplest correct answer: the kernel itself
+; refuses a second holder, a crashed or killed instance releases it for
+; free (no stale-lock arithmetic to get wrong a second time -- see
+; update_handover.py's own LOCK_STALE_S comment for why that arithmetic
+; is worth avoiding when the OS will do it for us), and "Global\" makes
+; it visible across the whole session so a handover running as
+; SYSTEM/another session still collides with one running interactively.
 Function .onInit
     SetRegView 64
+
+    ; CreateMutexA + the inline "?e" flag, NOT CreateMutexW/"w" -- measured,
+    ; not guessed: the wide-string form silently returned a bogus, always-
+    ; "already exists" GetLastError on this NSIS build (ANSI installer, "t"
+    ; is its native TCHAR width), which would have made every install refuse
+    ; itself with the "already installing" message -- the opposite failure
+    ; from the one this lock exists to prevent.
+    System::Call 'kernel32::CreateMutexA(i 0, i 1, t "Global\RemoteUserInstallerRunning") i .r0 ?e'
+    Pop $1  ; GetLastError() -- 183 = ERROR_ALREADY_EXISTS
+    IntCmp $1 183 MutexHeld MutexFree MutexFree
+MutexHeld:
+    ; Somebody else already holds the install -- another forked handover
+    ; racing this one, or a second manual run. Refuse instead of letting
+    ; two installers race the same files on disk (the exact shape of his
+    ; 20-install storm, one level down from where 148 stopped it).
+    IfSilent SilentAbort
+    MessageBox MB_OK|MB_ICONINFORMATION "${APP_DISPLAY} is already being installed by another process. This installer will now close."
+SilentAbort:
+    ; The mutex handle is intentionally never closed -- it lives exactly
+    ; as long as this process does, which is precisely the lifetime the
+    ; lock needs, and Windows reclaims it the instant we exit for any
+    ; reason (clean or crashed). No cleanup code can get that wrong.
+    Quit
+MutexFree:
+
+    ; ---- STRAY HANDOVER-LOCK CLEANUP (task 187b) ----
+    ; server/update_handover.py's own arming lock (handover.lock, beside
+    ; the .cmd script in %LOCALAPPDATA%\RemoteUser) is supposed to go
+    ; stale and get reclaimed by the NEXT arm -- but "the next arm" is
+    ; the very app this installer is about to replace and restart, and a
+    ; storm like his leaves that lock pointing at a pid that is already
+    ; gone. We are the one guaranteed-clean actor in this whole handover:
+    ; wipe it here so the freshly installed app starts with no borrowed
+    ; lock state to reason about, silent or not, whichever way we found
+    ; our way onto the machine. The .cmd script itself is left alone: it
+    ; may still be the very process running us (Windows does not lock a
+    ; batch file while cmd.exe executes it), and it is Python's file to
+    ; rewrite fresh on its next arm regardless.
+    Delete "$LOCALAPPDATA\RemoteUser\handover.lock"
+
     IfSilent 0 InitDone
 
     !insertmacro UnselectSection ${SecTailscale}
