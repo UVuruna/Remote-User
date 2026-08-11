@@ -159,6 +159,13 @@ class FakeSource:
         self.starts = 0
         self.sinks: list = []
 
+    # Task 155 gave `config` a monitors list read off the capture source
+    # (monitor_api.config_fields -> output_count); a fake that models the
+    # interface must model this too, or every config send dies mid-gate.
+    @staticmethod
+    def output_count() -> int:
+        return 1
+
     def start(self) -> None:
         self.running = True
         self.starts += 1
