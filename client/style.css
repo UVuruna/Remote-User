@@ -291,6 +291,19 @@ html, body {
 
 /* --- D-pad groups -------------------------------------------------------- */
 
+/* HOW TALL A GROUP STANDS, as a number anything else can read (task 160). The
+   layout bar can now be asked to sit at the BOTTOM, where these two groups
+   already are, and "above them" has to be expressible in CSS — measuring it in
+   JS would mean re-measuring on every rotation, every set change and every
+   keyboard raise, which is three chances to be one frame wrong.
+   It is DERIVED from the grid below, not guessed: the cross is three rows of
+   `--corner` with two 8 px gaps; the column is four `--corner` rows plus the
+   42 px category button with four gaps. Both are stated here, beside the rules
+   that make them true, so a change to either shape updates the number in the
+   same edit. */
+:root { --group-h: calc(3 * var(--corner) + 16px); }
+body.pad-column { --group-h: calc(4 * var(--corner) + 42px + 32px); }
+
 .group {
   position: fixed;
   /* safe-area inset: when the page runs edge-to-edge under a system bar
@@ -416,6 +429,30 @@ body.wheel-open::before {
 }
 .wheel-x svg { width: 26px; height: 26px; }
 
+/* --- The mini radial of a two-job button (owner 2026-08-09, task 158) ------
+   Two options that drop SOUTH and SOUTH-EAST of the button that opened them —
+   his geometry, chosen for the analog stick that is coming (client/chrome.js).
+   It is NOT the category wheel: no veil, no ring, no centre ✕. Those exist
+   because the wheel replaces the whole screen with a choice of eight; this is
+   two buttons beside one corner, and dimming the PC's picture for it would say
+   "something big is happening" when nothing is.
+   z-index 36 — above the wheel's own layer, so the two can never fight for the
+   same tap, and above the corners (30) it is anchored to. */
+#mini-radial {
+  position: fixed;
+  inset: 0;
+  z-index: 36;
+}
+#mini-radial[hidden] { display: none; }
+/* An option IS a `.ctl` — same face, same icon, same label (see chrome.js).
+   Only its POSITION is this rule's business; every look, every theme and every
+   fill it wears comes from the `.ctl` rules above, so an option can never drift
+   from the buttons it stands beside. */
+#mini-radial .mini-item {
+  position: absolute;
+  transform: translate(-50%, -50%);
+}
+
 /* --- "Access from anywhere" banner + guided wizard ------------------------ */
 
 /* Bounded on BOTH sides, like the Region bar below and for the same reason:
@@ -471,6 +508,34 @@ body.region-open #anywhere-banner { display: none; }
 #update-banner svg { width: 16px; height: 16px; flex: none; }
 #update-banner[hidden] { display: none; }
 body.hidden-controls #update-banner { display: none; }
+
+/* The bar the tap turns the banner into (task 207, owner decree 2026-08-10:
+   "ne znam da li je blokirao ili radi" — a dead ellipsis told him nothing).
+   The download itself runs in Android's own DownloadManager once handed off,
+   so this page can never see real bytes — INDETERMINATE is the one honest
+   shape, a stripe that keeps moving for as long as the banner is up, never a
+   frozen number pretending to track a transfer it cannot see. */
+#update-banner.downloading { pointer-events: none; }
+#update-banner-bar {
+  width: 64px;
+  height: 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  overflow: hidden;
+  flex: none;
+}
+#update-banner-bar[hidden] { display: none; }
+#update-banner-fill {
+  width: 40%;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--accent);
+  animation: update-bar-sweep 1.1s ease-in-out infinite;
+}
+@keyframes update-bar-sweep {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(250%); }
+}
 
 #wizard {
   position: fixed;
@@ -576,6 +641,7 @@ body.hidden-controls .group,
 body.hidden-controls #wheel,
 body.hidden-controls #anywhere-banner,
 body.hidden-controls #layout-bar,
+body.hidden-controls #mini-radial,
 body.hidden-controls .corner-tr,
 body.hidden-controls .corner-tl { display: none; }
 

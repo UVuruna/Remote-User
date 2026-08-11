@@ -423,6 +423,20 @@ def input_gate() -> None:
          "and the windows really move (tests/test_layout_shape.py)")
     run([sys.executable, str(PROJECT_DIR / "tests" / "test_layout_shape.py")])
 
+    # AND A WINDOW THE LAYOUT'S WORK OPENS STAYS REACHABLE (owner eruption
+    # 2026-08-11, task 202 — his third report of this class). An agent's HTML
+    # report opened outside the layout he was watching: under the members'
+    # topmost band, so the phone could not raise it, and the only way to it —
+    # Desktop — minimizes every member and takes his place of work with it.
+    # Fail-closed on the half he cannot undo from the phone: a STRANGER'S
+    # window must never be moved, resized or nailed above everything by this
+    # session, and nothing we do raise may be left stranded up there
+    # (constraint 10).
+    step("0ad/6 LAYOUT POPUP GATE — a window the layout's work opens stays "
+         "reachable, and a stranger's is still refused "
+         "(tests/test_layout_popup.py)")
+    run([sys.executable, str(PROJECT_DIR / "tests" / "test_layout_popup.py")])
+
     # A RENAME SHOWS UP AT ONCE (owner report 2026-08-10, task 199): the Save
     # handler sent layout_rename and closed the sheet, touching nothing the
     # bar/list/header read — so the new name appeared only when the server's
@@ -432,6 +446,21 @@ def input_gate() -> None:
     step("0z/6  LAYOUT RENAME GATE — a rename shows up without a second trip "
          "through Rename (tests/test_layout_rename_live.py)")
     run([sys.executable, str(PROJECT_DIR / "tests" / "test_layout_rename_live.py")])
+
+    # THE CUBE MAY NOT OVERSTAY (owner report, task 194: "traje predugo ...
+    # radi kontra uslugu" — plus "misses places it should cover"). The settle
+    # watcher's metric was a whole-frame MEAN that a busy screen (agents
+    # actively typing/scrolling) kept above threshold for the whole watch
+    # window even after the server had already verified placement; it moved
+    # into a pure module (client/settle-motion.js, run whole in node) as a
+    # changed-pixel FRACTION instead, with the hard cap shortened to a real
+    # "a few seconds". Separately, connection.js's excursion-restore path
+    # armed the watcher against an INTERIM frame and never re-armed it before
+    # sending the real corrective layout_focus, so the overlay could close
+    # before the actual restore was covered — fixed and pinned here too.
+    step("0aa/6  LOADING SETTLE GATE — the cube leaves on real motion, not a "
+         "washed-out mean (tests/test_loading_settle.py)")
+    run([sys.executable, str(PROJECT_DIR / "tests" / "test_loading_settle.py")])
 
     # THE ARRANGEMENT FOLLOWS HIS CHOICE, NOT THE ORIENTATION (owner ruling
     # 2026-08-09, task 177): portrait defaults to the column and landscape to
@@ -490,6 +519,53 @@ def input_gate() -> None:
     step("0y/6  LIVE CLOCK GATE — a starved player is caught, slowed before "
          "it is ever flushed, and never blank (tests/test_live_clock.py)")
     run([sys.executable, str(PROJECT_DIR / "tests" / "test_live_clock.py")])
+
+    # THE COMMAND GOES TO THE PROMPT, OR NOWHERE (owner order 2026-08-11, task
+    # 200: a Claude command fails when the prompt is not selected — put the
+    # caret there first). The delivery is the Command Palette running "Claude
+    # Code: Focus input", and the danger is the delivery itself: Ctrl+Shift+P
+    # is a GLOBAL chord, so firing it at a window that is not VS Code is
+    # exactly the accident constraint 11 exists to prevent. Four things can
+    # break in silence and each is checked — the palette landing AFTER the
+    # command text (which would run whatever the palette filtered to), the
+    # palette chord leaking into every other typed button, a stranger's window
+    # being injected into at all, and an Enter crossing a gap the focus fence
+    # no longer holds.
+    step("0ab/6  CLAUDE FOCUS GATE — the prompt is focused before the command "
+         "is typed (tests/test_claude_focus.py)")
+    run([sys.executable, str(PROJECT_DIR / "tests" / "test_claude_focus.py")])
+
+    # THE PANEL SAYS WHAT IS RUNNING, NOT WHAT WAS TAPPED (his report
+    # 2026-08-11, task 208: the Model panel named nothing as current, and
+    # Thinking lit Medium while his PC was really on Max). The answer is read
+    # from the live conversation's own transcript, and the SHAPE of that file
+    # is the thing that can rot without anyone noticing — task 208's own note
+    # said effort had no trail, which measurement proved false. This drives
+    # the real reader over transcripts built like his: the newest assistant
+    # record wins, a tool-call record still names model AND effort, [1m] is
+    # one family with its id kept whole, the mode is the last record that HAS
+    # permissionMode (a tool result is a `user` record and carries none), and
+    # anything unreadable answers nulls instead of raising.
+    step("0ac/6  CLAUDE STATE GATE — the phone is told what the conversation "
+         "is really running (tests/test_claude_state.py)")
+    run([sys.executable, str(PROJECT_DIR / "tests" / "test_claude_state.py")])
+
+    # AND THE PHONE'S HALF OF THE SAME SENTENCE (owner ballot verdict
+    # 2026-08-11, tasks 190/191/208/219). Three reports, one family of defect:
+    # a panel STATING SOMETHING IT DID NOT KNOW — nine model options nobody
+    # official ever offered, a Thinking button that only raised a menu, and a
+    # "Medium" chip that was this phone's own memory wearing a live-state look
+    # while his PC ran on Max. So the rules live in a PURE module and this
+    # gate runs them whole in node: the five official aliases, the five effort
+    # levels, the Shift+Tab ring (whose honest answer for an unknown start is
+    # no answer at all), and above all what each chip may CLAIM when the PC
+    # has told it nothing. It also holds the wiring — a rule nobody calls is a
+    # feature that does not exist — including `focus: "claude"` reaching the
+    # server field that landed the same day, and the shipped wheel never
+    # ticking past the cap of 8. Needs node; never skip it silently.
+    step("0ae/6  CLAUDE PANELS GATE — the panels offer what the PC has and "
+         "claim only what it said (tests/test_claude_panels.py)")
+    run([sys.executable, str(PROJECT_DIR / "tests" / "test_claude_panels.py")])
 
 
 def generate_icons() -> None:

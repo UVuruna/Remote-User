@@ -36,6 +36,18 @@ STANDARD = {
     "server/bootstrap.py",
     "server/pairing.py",
     "server/monitors.py",
+    # Split out of web.py on 2026-08-09 (THE STRUCTURE LAW — task 155's two
+    # `config` fields arrived while that file sat exactly on 1,000 lines).
+    # Standard, not Algorithmic: two protocol handlers over `monitors`, with
+    # no state machine and no geometry of its own to draw.
+    "server/monitor_api.py",
+    # New 2026-08-11 (THE STRUCTURE LAW — web.py stands at the 1,000-line
+    # wall and neither handler belonged to monitor_api or layout_api). The
+    # Claude Code half of the protocol: focusing its prompt before a typed
+    # command, and answering what the conversation is running now. Standard:
+    # transport only — the keystrokes live in content.py and the transcript
+    # read in agents.py, each already covered.
+    "server/claude_api.py",
     "server/window_manager.py",
     # Split out of window_manager.py on 2026-08-09 (THE STRUCTURE LAW — the
     # pos-anchor round pushed it past 1,000 lines). The registry holds the
@@ -103,6 +115,32 @@ STANDARD = {
     # layout can take") is a sentence in its __about, and the flow it belongs
     # to is the layout list's, documented once in client/__flow/layouts.md.
     "client/layout-settings.js",
+    # New 2026-08-11 (owner report, task 194 — the loading cube overstayed on
+    # a busy screen). The settle-watcher's motion metric, split out of
+    # loading.js into its own pure module so tests/test_loading_settle.py can
+    # run it whole in node (the view-anchor.js pattern) — loading.js still
+    # holds the DOM-touching watcher/cube plumbing and its own timing
+    # constants. Standard, not Algorithmic: one formula (changed-pixel
+    # fraction vs. a threshold), no flow worth a diagram — the WHY lives in
+    # its header and its __about.
+    "client/settle-motion.js",
+    # New 2026-08-10 (owner decree, task 207 — a frozen "Downloading…"
+    # ellipsis told him nothing about whether the app had hung). Split out of
+    # controls.js the same round it crossed 1,000 lines: the in-app APK
+    # update offer — version compare, show/hide, and the tap that swaps the
+    # banner into an indeterminate progress bar. Standard, not Algorithmic:
+    # one comparison and one DOM swap, no flow worth a diagram — the WHY
+    # lives in its header and its __about.
+    "client/update-banner.js",
+    # New 2026-08-11 (owner amendment to task 202): the two-button chip that
+    # asks where a window that just opened on the PC should go — show it in
+    # the layout, or leave it on the desktop. Its own pair of files rather
+    # than a block in controls.js (that file stands at the line ceiling), and
+    # they share one doc the way layouts.css/layouts.js do. Standard: one
+    # message in, one POST out, no rule of its own — the decision it carries
+    # out lives on the server (server/layout_popup.py).
+    "client/window-offer.js",
+    "client/window-offer.css",
     "client/load_test.js",
     "client/state.js",
     "client/panels.js",
@@ -118,6 +156,15 @@ STANDARD = {
     "client/region.js",
     "client/notify.js",
     "client/quality.js",
+    # New 2026-08-11 (owner ballot verdict — tasks 190/191/208): the DOM half
+    # of the three Claude Code cards. Standard: it draws chips and rows and
+    # sends; every rule it obeys lives in claude-state.js below, which is where
+    # the flow is.
+    "client/claude-panels.js",
+    # New 2026-08-11 (owner tasks 161 + 218a): one card gathering the switches
+    # that describe THIS device. Standard without argument — five rows over
+    # helpers that already exist, and not one decision of its own.
+    "client/phone-panel.js",
     "setup/create_cert.py",
     "setup/agent_hook.py",
     "android/app/src/main/java/com/uvuruna/remoteuser/Notifier.kt",
@@ -177,6 +224,13 @@ ALGORITHMIC = {
     # against a realistic drift ramp.
     "client/live-clock.js",
     "client/grids.js",
+    # New 2026-08-11 (owner ballot verdict — tasks 190/191/208). Algorithmic
+    # without argument: it decides what the phone may CLAIM about a PC it may
+    # not have heard from — three different kinds of truth that must never
+    # wear each other's clothes — plus the Shift+Tab ring arithmetic, whose
+    # honest answer for an unknown start is no answer at all. Kept pure so its
+    # gate (tests/test_claude_panels.py) runs it whole.
+    "client/claude-state.js",
     # New 2026-08-07 (build rounds G1/G2 — the game controller): the whole
     # mapping lives here, and it is real algorithm — a deadzone-and-power stick
     # curve, a frame-clock stepper, and the polar arithmetic that turns a stick
@@ -191,6 +245,12 @@ ALGORITHMIC = {
     # lands is a decision with its own rules (the layout fence, the desktop
     # pin, dialogs, what re-arms it) and its own gate — algorithmic.
     "server/focus_guard.py",
+    # New 2026-08-11 (owner eruption, task 202 — an agent's report window
+    # opened outside the layout he was watching, where he could see it and
+    # not touch it). Algorithmic: an ATTRIBUTION chain with three tiers and
+    # named limits (whose window is this?) plus a measured containment
+    # decision (does it fit the region, or must it go full screen).
+    "server/layout_popup.py",
     # New 2026-08-08 (owner report 2026-08-07, screenshots again the next day
     # — the phone's keyboard covers the row he is typing into). Algorithmic:
     # a fallback chain across two Windows APIs, a duty-cycled throttle, a hold

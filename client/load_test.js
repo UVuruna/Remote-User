@@ -52,7 +52,14 @@ global.document = {
   // `dataset`: theme.js writes data-theme / data-fill onto <body> at load
   // (build round R3) — the cached look, applied before the socket says
   // anything, which is the whole point of caching it.
-  body: { classList: { toggle: () => false }, dataset: {} },
+  // `appendChild` because chrome.js now parks the mini-radial's own element on
+  // <body> at load (2026-08-11). The real body has always had it; the stub was
+  // simply narrower than the page, which made this test fail on a file it was
+  // meant to be proving.
+  body: {
+    classList: { toggle: () => false }, dataset: {},
+    appendChild() {}, addEventListener() {},
+  },
   addEventListener() {},
   hidden: false,
   activeElement: null,
@@ -79,6 +86,10 @@ const FILES = [
   "caret.js",
   "view-anchor.js",
   "cursor-shapes.js",
+  // The Claude panels' pure half — the five models, the five thinking levels
+  // and the mode ring (owner ballot verdict 2026-08-11). Loaded early, like
+  // every other pure module, and read by claude-panels.js far below.
+  "claude-state.js",
   // Also before render.js: the live-edge decision table + regulator
   // computeViewHome's neighbour, `applyLiveDecision`, calls (task 151,
   // 2026-08-10).
@@ -95,16 +106,28 @@ const FILES = [
   // listed here, so a load-time error in the creation wizard — the whole point
   // of this test — would have passed green. This file's own header says the
   // order must match index.html EXACTLY; it does again.
+  // This round's new modules, in index.html's own order (2026-08-11): the
+  // update banner split out of controls.js (task 207), and the window-offer
+  // chip (task 202) — both loaded before chrome.js exactly as the page does.
+  "update-banner.js",
+  "window-offer.js",
   "chrome.js",
   "theme.js",
   "panels.js",
   "quality.js",
+  // Both read panels.js's `ghostClickArmor` AT LOAD — exactly the class of
+  // reference this test exists to catch (owner ballot verdict 2026-08-11).
+  "claude-panels.js",
+  "phone-panel.js",
   "region.js",
   "notify.js",
   "hold-gesture.js",
   // grids.js reads grid-icons.js AT LOAD (`GRID_THREE`), so the order here is
   // the order index.html loads them in — and both are listed, because a
   // load-time reference is exactly what this test exists to catch.
+  // settle-motion.js is loading.js's pure stillness metric (task 194) and
+  // the page loads it first — a load-time reference the test must see.
+  "settle-motion.js",
   "loading.js",
   "grid-icons.js",
   "grids.js",

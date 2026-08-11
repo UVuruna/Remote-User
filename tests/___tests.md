@@ -498,7 +498,7 @@ the moment the page hides (project CLAUDE.md constraint 8), so at the exact
 moment a notice mattered there was no channel and the server queued it until
 he opened the app himself.
 
-Eight checks against a REAL server (`web.create_app` with a fake stream,
+Fifteen checks against a REAL server (`web.create_app` with a fake stream,
 registry and injector) and a real HTTP client standing in for the phone's
 foreground service: `/notices` refusing a bad token; a notice arriving whole
 down the waiting channel with the page closed; **a waiting phone never
@@ -511,10 +511,29 @@ notice ALONE, never twice; a page dying mid-notice falling through to the
 channel instead of into the queue; and the queue being the last resort, drained
 oldest-first the moment the phone starts waiting again.
 
+**Task 209 (2026-08-11) added the second half of the contract**, read out of
+his own server log: the waiting channel was a single SLOT, so his tablet and
+his phone kicked each other off it every few seconds — continuously since
+2026-08-09, thousands of log lines a night, both radios woken for nothing, and
+a notice reaching only whichever device held the slot at that instant while the
+other learned about it minutes later out of the queue ("notifications sometimes
+never arrive"). Six further checks: two devices each receiving exactly ONE copy
+with neither kicked; an older APK that sends no `device` id still working alone
+and still being displaced by a second id-less attach (the compatibility
+promise); a re-attach from the same id replacing its OWN channel and no other;
+the page still outranking every waiting device; one waiting device keeping the
+queue empty; and — read from the Kotlin source, the only thing a PC with no
+Android runtime can prove — the shell putting an encoded id on the request and
+backing off after a connection that ended without one beat.
+
 Every check was shown red on a planted defect before being trusted — including
 one plant that revealed a real weakness in the gate itself (the isolation check
 ran after another check's `reset()` and would have scrubbed a live defect out
-from under itself; it runs first now).
+from under itself; it runs first now), and two in task 209's own round: the
+first "legacy" plant keyed the slot by `id("")`, which is the same object twice
+and so proved nothing, and the first source check accepted the string
+`&device=` from a COMMENT — it now demands a line that builds it AND encodes
+the value, which is the difference between a mention and the wire.
 
 The Kotlin half — `NoticeService`, `NoticeLink`, `Bridge` — cannot be exercised
 here: there is no Android runtime on the build machine. What this gate pins is
@@ -975,6 +994,68 @@ Windows model and the real-dispatcher runner are imported.
 
 Run: `.venv\Scripts\python tests/test_layout_shape.py` — also a fail-closed
 step in `build.py` (0u/6).
+
+### `test_layout_popup.py` — Layout Popup Gate
+
+A WINDOW THE LAYOUT'S WORK OPENS MUST STAY REACHABLE (owner report 2026-08-10,
+escalated furiously 2026-08-11 — task 202, the third report of this class). An
+agent on the PC opened its HTML report while he was watching a LAYOUT on the
+phone. The window landed OUTSIDE the layout's region: below the members'
+always-on-top band, so nothing on the phone could raise it, and the one way
+"out" — choosing Desktop — MINIMIZES every member and takes his place of work
+with it. He could see the thing he wanted and could not touch it. His rule is
+the spec: if it fits the layout's dimensions it is placed INSIDE them; if it
+cannot fit, it opens separate, over the whole screen.
+
+AND HE IS ASKED FIRST (his amendment the same day): a new window is OFFERED to
+the phone — one chip, two buttons, *Show in layout* / *Leave on desktop* — and
+nothing on the PC moves until he taps. Ignoring the chip is a real answer and
+the answer is the desktop.
+
+The hard half is not the placement, it is knowing WHOSE window it is — this PC
+is never quiet, and CLAUDE.md constraint 11 exists because other agents take
+the foreground all day. So half the checks are about what must NOT be adopted:
+
+- a new window is OFFERED and never grabbed: nothing is placed, nothing enters
+  the ledger, and the chip NAMES the window and its layout;
+- the chip is sent ONCE per window (the watcher runs four times a second) and
+  really reaches the phone over the page's own socket;
+- "Leave on desktop" moves nothing, ever, and is never asked about again;
+- a member's DIALOG that fits is placed centered inside the region, and the
+  MEMBER stays the remembered keyboard target;
+- a NEW window of a member's own process, and a window a member STARTED
+  (parent links in the process table), are adopted the same way;
+- one that cannot fit — its minimum size refuses the region — goes FULL SCREEN
+  on the streamed monitor, and which branch applies is measured by asking the
+  window to take the region and reading where it really stands;
+- a foreign process's window is refused EXACTLY as before (focus handed back,
+  the thief named, nothing of his moved), and so is his OTHER window of the
+  same app, which shares its process with a member but was already standing
+  when the phone connected;
+- nothing happens with no layout focused or while the phone is away;
+- the ledger lets every adopted window go on Desktop (without minimizing it),
+  on a disconnect, on removal and when it is closed at the desk — and it is
+  never CLOSED with the layout;
+- a contained popup is not re-placed four times a second, a wandering one is
+  brought back, and one that refuses everything is not fought forever.
+
+Fourteen plants, each caught: the offer replaced by an auto-grab (5 checks
+red), the chip re-sent on every poll, the decline forgotten, `pick` ignoring his
+answer, the chip never reaching the phone, containment removed (5 checks red),
+attribution loosened to "any new window" (the stranger check), the newness rule
+dropped (his other window), the full-screen branch removed, the release removed
+(both ledger checks), the prune's clean-up removed, the `_inside` measurement
+removed, the try cap removed, and the watcher made to act while the phone is
+away (caught by the raise it should never have made).
+
+One line is proven INDIRECTLY and is worth saying so: `pick()` clearing
+`popup_asked` cannot be caught on its own, because with it gone the "asked"
+record blocks the window instead of the "declined" one and the behaviour is
+identical. It exists so that the DECLINE record is the thing doing the work —
+which is exactly what the plant of that record proves.
+
+Run: `.venv\Scripts\python tests/test_layout_popup.py` — also a fail-closed
+step in `build.py` (0ad/6).
 
 ### `test_hold_gesture.py` — Hold Gesture Gate
 
@@ -1560,6 +1641,51 @@ Proven by planting both defects on 2026-08-11: dropping `seeking` from the
 table went red on the truth-table check alone; re-inlining the old
 readyState-only condition in `redraw()` went red on the wiring check alone.
 
+EXTENDED AGAIN 2026-08-11 — TASK 216, THE FLASH THAT SURVIVED v0.0.106.
+The hold-frame guard above was already installed on the build he was running
+(update.log: handover 09:16:05) and the flash still got through, so 210's
+theory was INCOMPLETE, not undelivered. Six checks joined this gate, in two
+halves.
+
+**Half 1 — the clear that was never behind the guard.** Assigning
+`canvas.width`/`canvas.height` re-initialises the drawing buffer to
+transparent black, per the HTML spec, EVEN when the value assigned is the one
+already there — and `render.js`'s `updateViewport()` assigned both
+unconditionally on every window resize, every `visualViewport` resize AND
+scroll, and every IME inset the shell pushes: constantly while he dictates.
+The wipe was invisible only while `redraw()` repainted inside the same task.
+`liveHoldFrame` then gave `redraw()` permission to paint NOTHING, and each
+overlap left a transparent canvas standing for one composited frame — which
+shows the page's background colour. **The guard is what made the wipe
+visible.** Checks: the `liveResizePlan` truth table (same size ⇒ do not touch
+the buffer; a real resize ⇒ resize AND preserve; the session's first fit ⇒
+resize and NOT preserve), the wiring check (`updateViewport` must ask
+`liveResizePlan` and every `canvas.width/height` assignment must sit inside
+`if (plan.resize)`), and a check that `render.js` really owns the off-screen
+copy.
+
+**Half 2 — the thrash that made every gap visible.** His 10:11:55 telemetry:
+`jumps=36 starves=2 in 15s`, `jumps=0` in every neighbouring window. `jumps`
+counts the FORWARD catch-up, which had no budget at all. `liveCatchUp` gives
+it hysteresis (`LIVE_JUMP_HOLD_MS`, 400ms of surviving lateness) and spacing
+(`LIVE_JUMP_MIN_GAP_MS`, 1500ms) — ~36 becomes at most 10. Checks: the
+burst-pattern drive (his shape: late 300ms, clear 100ms, for 15 real seconds
+— every gap ≥ 1500ms, at most 10 jumps, and at least a 3× reduction against
+the late samples), the single-sample check, and the episode-reset check.
+**That first check earned its keep immediately**: the rule's first version
+cleared the lateness episode on any healthy sample, and against exactly that
+burst it then never accrued its hold and never caught up AT ALL — a picture
+drifting further behind forever, traded for a flash. It went red and the RULE
+was corrected (the episode now closes on a healthy STRETCH), not the check.
+
+Proven by planting, 2026-08-11, seven defects, each mapped to its own check:
+`resize` forced true → resize-plan table red; the `if (plan.resize)` guard
+removed → `updateViewport` wiring red; the `restoreCanvasPixels` call removed
+→ the same wiring check red on its preserve clause; `gapOk` forced true →
+spacing red; `heldLongEnough` reduced to `lateSince > 0` → single-sample red;
+the forward branch re-gated on `act === "seek_forward"` → the render.js
+wiring check red; the jump's reset of `lateSince` dropped → episode-reset red.
+
 Run: `.venv\Scripts\python tests/test_live_clock.py` (needs node) — also a
 fail-closed step in `build.py` (0y/6).
 
@@ -1601,6 +1727,57 @@ and the reopened sheet header all still read the old name) and green after.
 Run: `.venv\Scripts\python tests/test_layout_rename_live.py` (needs
 playwright + chromium; reuses `test_input_pipeline.py`'s port 8898).
 
+### `test_loading_settle.py` — Loading Settle Gate
+
+THE CUBE MAY NOT OVERSTAY (owner report, task 194: "traje predugo ... radi
+kontra uslugu" — it takes too long, it works against him — plus "misses
+places it should cover"). Two separate root causes:
+
+1. The settle watcher's metric was a whole-thumbnail MEAN of |Δrgb| per
+   sample, which required near-perfect stillness before it counted a hit. A
+   blinking caret washes out in a mean over 2,304 samples, but his agents
+   actively typing/scrolling in a member window is real, LOCAL, ongoing
+   motion that kept the mean above threshold for the whole watch window
+   almost every time — even though the server had already VERIFIED placement
+   (`window_manager.wait_landed`) by the time `layout_state` arrived. Fixed:
+   the metric moved into its own pure module, `client/settle-motion.js` (the
+   view-anchor.js/cursor-shapes.js pattern), and became the FRACTION of
+   pixels that changed past a per-pixel noise floor — a motion threshold, not
+   absolute stillness — and the hard cap `SETTLE_MAX_MS` dropped from 4000 ms
+   to 2200 ms, a real "a few seconds" after the verified `layout_state`.
+2. `client/connection.js`'s excursion-restore branch (a fresh connection
+   after an excursion — gallery pick, permission dialog — restoring the
+   layout the owner was in) sent a corrective `layout_focus` from inside the
+   `layout_state` handler, AFTER `settleLayLoading()` had already armed
+   against that SAME interim (still-desktop) frame — so the watcher could
+   declare the idle picture "settled" and close the cube before the real
+   move even started, and the real move's own later `layout_state` found the
+   overlay already closed (`settleLayLoading()`'s own `!layLoadingOpen`
+   guard makes it a silent no-op). Fixed by calling `showLayLoading()` again
+   right after that `send()`, re-arming a fresh cycle only the real move's
+   layout_state can satisfy.
+
+Eight checks, run against the real `client/settle-motion.js` math in node
+plus static wiring reads of `loading.js`/`connection.js`/`index.html`: a
+caret-sized local patch (2% of the frame) still reads as settled; a
+large-area change (35%) does not; the first sample (no baseline) is never
+settled; `SETTLE_MAX_MS` stays at or under 3000 ms; `settleStill()` really
+calls `changedFraction()`/`isSettled()` rather than a hand-rolled copy; the
+module exports those functions and stays free of DOM/socket/bridge reaches;
+`index.html` loads `settle-motion.js` before `loading.js`; and the
+excursion-restore branch calls `showLayLoading(` again after its own
+`send({ type: "layout_focus"`, with the branch's own explanatory comment
+(which mentions `showLayLoading()` in prose) stripped out first so the check
+proves the real call, not a sentence about it.
+
+Proven by planting each defect in turn: reverting `SETTLE_MAX_MS` to 4000,
+widening `SETTLE_MOTION_FRAC` to 0.9, swapping the two scripts' load order in
+`index.html`, deleting the re-armed `showLayLoading()` call, and replacing
+`settleStill()`'s body with a hand-rolled `true` — each turns exactly its own
+check red and nothing else.
+
+Run: `.venv\Scripts\python tests/test_loading_settle.py` (needs node).
+
 ## Design Decisions
 
 - **Real browser, fake injector.** Unit-testing the JS or the protocol alone
@@ -1615,3 +1792,208 @@ playwright + chromium; reuses `test_input_pipeline.py`'s port 8898).
   filtering AFTER an unpruned walk was measured at 2.3s+ against this
   project's `.venv` (tens of thousands of files), over the guard runner's
   ~2s budget; pruning brought the full run to ~0.3s.
+
+## `test_phone_chrome.py` — the top row and the two-job buttons (round 26)
+
+Tasks 155, 158, 159, 160 and 217 (owner 2026-08-09 / 2026-08-10). Four rulings
+land on the same strip of screen and none of them could be proven by the panel
+audit next door: that sweep opens CARDS and measures their insides, while
+everything here is about the chrome itself — where a button's options appear,
+whether a hidden control comes back, and whether the bar between the two corner
+buttons is built like them or unlike them. Driven against the real page in a
+real headless Chromium at both orientations plus a tablet.
+
+What it holds, and the defect each check catches:
+
+- **The layout bar wears the top row's own style** — reverting `#lay-frame` /
+  `.lay-arrow` to their old 34 px, 14 px-radius, background-less shape.
+- **At the bottom it clears the D-pad** — pinning the bottom position to the
+  screen edge, or dropping `--group-h` from the calc, would draw the bar
+  straight across two control groups that meet in the middle of a 412 px phone.
+  It also asserts the position really MOVED, so a pref nothing reads fails.
+- **The Layout radial drops SOUTH and SOUTH-EAST**, each option carrying its
+  drawing AND its words, both the same size, neither off the screen — his
+  geometry, chosen for the analog stick.
+- **The Hide radial leans away from the right edge** — a fixed south-east would
+  clamp Hide's second option onto its sibling or off the screen — and it SAYS
+  which mode is current instead of only offering two.
+- **The two Hide modes really differ** — `sticky` not being read by
+  `wakeControls` would leave the mode a stored word that does nothing, the
+  `wheel_order` class of bug; and `auto` must survive the change.
+- **STICKY never hides by itself**, driven by moving `lastWake` back past the
+  auto-hide interval rather than by sleeping.
+- **One row per monitor, each naming its resolution**, with the streamed one
+  selected — and tapping another asks for THAT index rather than sending the
+  old bare cycle.
+- **Every reflowing panel's bottom button is reachable after scrolling whatever
+  scrolls** (task 217). The staged content is long enough to REQUIRE scrolling,
+  which is task 215's standing order: a card that never scrolls proves nothing.
+  Proven by removing the two lines it guards in `client/panels.css` — the
+  dictation card then overflowed SIDEWAYS by 742 px at 915×412 and its Done
+  button could not be reached by any vertical gesture, which is his report
+  exactly.
+
+## `_audit_frame.py` — the frame law, measured on the phone (task 156)
+
+Split out of `_audit_js.py` on 2026-08-10, the run that added it: one
+self-contained instrument with a long written reason, beside a file already on
+the 1,000-line limit. `__radiusAndKin(root)` implements ALG-6 RADIUS BY ASPECT
+RATIO and ALG-5 UNIFORM SIBLINGS for HTML, which had existed only in the Qt
+template — the whole reason the owner could say "there is a rulebook and a hook
+for new gui elements, but it cannot check the old ones, because nobody went
+through". The radius it judges is CLAMPED to what the browser really paints, so
+a declared `999px` on a wide box is the legitimate pill it renders as and the
+same declaration on a squarish box is the egg he photographed; the kin half
+judges CONTROLS only, and never a list row's main button (that is `__kinRows`,
+which knows the one legitimate reason two of them differ). Its exemptions are
+named with reasons in one place.
+
+### `test_claude_focus.py` — Claude Focus Gate
+
+THE COMMAND GOES TO THE PROMPT, OR NOWHERE (owner order 2026-08-11, task 200:
+a Claude command "fails when the prompt is not selected" — his instruction was
+that the program must focus it ITSELF before typing). `paste_text` types into
+whatever the focus guard's target is, and inside VS Code that is just as
+easily the editor, the terminal or the file tree, so `/model` arrived as
+literal text in a source file.
+
+This round's investigation found the one delivery that depends on no current
+state: the extension registers **"Claude Code: Focus input"**, and the Command
+Palette runs it from anywhere (Ctrl+Shift+P → paste the name → Enter).
+`Ctrl+Escape` was rejected — it TOGGLES focus, so firing it blind is a coin
+flip.
+
+Five checks over a fake injector that records injections IN ORDER (the subject
+is a sequence, so nothing is summarised into a set): the palette completes
+strictly BEFORE the command text's own Ctrl+V; a `paste_text` with no `focus`
+field is still exactly two injections (every other typed button rides that
+function, and a leaked Ctrl+Shift+P would fire into Chrome, Explorer and his
+editor); a target that is not `Code.exe` — and equally a dead fence or a busy
+clipboard — costs ZERO injections and toasts, because Ctrl+Shift+P is a GLOBAL
+chord and firing it at a stranger is the accident constraint 11 exists to
+prevent; a fence lost mid-sequence withholds the ENTER that would submit; and
+`web.py` really wires the field, with a refusal `continue`-ing past the paste.
+
+Proven by planting, 2026-08-11, six defects, each mapped to its own check: the
+palette's Ctrl+V moved before Ctrl+Shift+P → order red; a Ctrl+Shift+P added
+to plain `paste_text` → old-path red (and order red); the `Code.exe`
+assertion removed → stranger red; `_settled()` forced to `True` → withheld-Enter
+red; the palette given the wrong clipboard payload → order red; the `web.py`
+branch deleted → wiring red.
+
+Run: `.venv\Scripts\python tests/test_claude_focus.py` — also a fail-closed
+step in `build.py` (0ab/6).
+
+### `test_claude_state.py` — Claude State Gate
+
+THE PANEL SAYS WHAT IS RUNNING, NOT WHAT WAS TAPPED (his report 2026-08-11,
+task 208: the Model panel marked nothing as current, and Thinking highlighted
+Medium while his PC was really on Max). Both panels were showing a per-device
+memory of what the phone last SENT, wearing a look that reads as live state —
+and `/model` and `/effort` apply to the RUNNING session only, so the saved
+settings file cannot answer the question either.
+
+The source is the transcript Claude Code writes as it goes, and its SHAPE is
+what can rot without anyone noticing — task 208's own note said effort had no
+trail, which measurement on real transcripts proved FALSE. The three measured
+truths are what this gate encodes: every `assistant` record carries BOTH
+`message.model` and a top-level `effort` (tool-call records included, and in a
+working session those are most of them); `permissionMode` rides only SOME
+`user` records, so "the last user record" — a tool RESULT is one and carries
+none — answers null nearly every time and the rule must be "the last record
+that HAS the field"; and the dedicated `{"type":"mode"}` record read `normal`
+in all 373 of them across every project on this PC, so it cannot distinguish
+plan mode and is deliberately not the source.
+
+Seven checks drive the real reader over transcripts built like his, with
+`~/.claude/projects` faked into a temp dir (nothing on the owner's own machine
+is read — he works on it while these run): newest assistant record wins,
+tool-call records still name model and effort, `[1m]` is one family with its
+raw id kept whole and an unknown id answers nothing rather than the nearest
+match, the mode is the last record HAVING `permissionMode`, anything
+unreadable answers nulls without raising (missing project, empty transcript,
+a torn last line), the newest session of the RIGHT project is read, and the
+handler really answers the phone — driven through `claude_api.send_state` for
+a focused layout, the desktop and a stale index.
+
+Proven by planting, 2026-08-11, seven defects, each mapped to its own check:
+the tail walked forwards → newest-record red; assistant records without a text
+block skipped → tool-call red; the `[1m]` strip removed and the raw id used as
+the family → family red; the mode taken from the last `user` record with its
+absent field accepted → mode red; the `json.loads` guard dropped in
+`_tail_records` → torn-line red (an ERROR, which this runner counts as a
+failure); oldest-transcript/first-slug-wins → newest-session red; the `web.py`
+branch deleted → wiring red.
+
+Run: `.venv\Scripts\python tests/test_claude_state.py` — also a fail-closed
+step in `build.py` (0ac/6).
+
+### `test_claude_panels.py` — Claude Panels Gate
+
+**Task:** owner ballot verdict 2026-08-11 — tasks 190 / 191 / 208 / 219, plus
+the phone's half of task 200 and the Phone card of 161 / 218a.
+
+**Why it exists.** Three reports, one family of defect, and each of them was a
+panel STATING SOMETHING IT DID NOT KNOW: the Model card offered NINE options
+while the extension's own picker offers FIVE (190 — the nine were built from
+CLI-transcript vocabulary an agent measured in its own session and verified
+against that same transcript); Thinking only RAISED a menu instead of choosing
+(191); and worst because it looked right, Thinking lit **Medium** while his PC
+ran on **Max** — what was lit was this PHONE's memory of its own last tap
+wearing a live-state look (208).
+
+**What it holds.** The rules live in `client/claude-state.js`, kept PURE (the
+`grid-icons.js` / `view-anchor.js` / `voice.js` precedent), and this gate runs
+that module WHOLE in node — 23 checks:
+
+- the five models are the official five, in HIS order, with capability stars,
+  and every `value` is a literal proven to commit with one Enter;
+- `/effort` takes low / medium / high / xhigh / max, and the panel finishes the
+  command rather than raising a menu;
+- the stars are DRAWN SVG paths, and no ranking star character appears anywhere
+  in `client/` (the layout selector's ⭐ is a deliberate, documented exception —
+  a colour emoji the owner asked for by name, task 169);
+- with NO answer from the PC every chip says `unknown`, the saved default is
+  never reported as the live state, and a live model FAMILY marks its row while
+  an unknown one marks nothing;
+- this phone's last tap is a `memory` chip and is distinguished BY SHAPE in
+  `panels.css` (a difference carried by colour alone vanishes in three of the
+  eight looks);
+- the Shift+Tab ring is the key's own order, the press count walks it forwards
+  and wraps, and an UNKNOWN current mode buys no computed presses at all —
+  a wrong guess can land him in Accept edits, which edits his files;
+- the presses ride `chord`, which is in the server's `TYPING_KINDS`, so the
+  focus guard fences them exactly like `/usage` beside them;
+- the wiring: the three buttons really carry `panel`, controls.js really
+  branches on it, connection.js really routes the answer, index.html and
+  load_test.js really load both halves, and every Claude command carries
+  `focus: "claude"` — the server field landed the same day with nothing on the
+  phone sending it;
+- task 219's group is his five with descriptive labels, `/compact` moved and did
+  not multiply, and the shipped file never ticks past the wheel cap of 8;
+- task 218a's Phone card gathered the three switches AND their old homes let go.
+
+**Planted-defect proof (2026-08-11, all RED then GREEN):** an extra model
+option returns → catalogue + argument red; `opus[1m]` → `opus1m` → argument +
+family red; `xhigh` dropped → effort red; the stars return a font glyph → stars
++ client-wide red; NOW falling back to `saved` → saved-vs-now red; the sent chip
+becomes a `fact` → memory red; the mode ring reordered → ring + presses red;
+presses by absolute difference → presses red; an unknown mode guessing one press
+→ unknown red; Default made a catch-all → family red; the `panel` field dropped
+from Model → wiring red; `btn.panel && false` in controls.js → wiring red;
+`onClaudeState(msg)` commented out → listener red; a script tag dropped → load
+red; Claude Tools shipped `enabled: true` → cap red; "Clean up" renamed back to
+"Simplify" → group red; `/compact` left in both sets → move red; the Phone
+button off the D-pad → card red; the shape rows left in the sets picker → card
+red; `.cl-memory` losing its dashed edge → memory red; a Thinking row lit from
+memory → 208 red; `chord` removed from `TYPING_KINDS` → fence red.
+
+Four of those were BLIND SPOTS on the first sweep and the checks were corrected
+by them, which is the point of planting: a grep for a token proves the token was
+typed, never that it decides anything (`btn.panel && false` kept both names),
+a commented-out call keeps its own name, and `border-style: dashed` also dresses
+the quality panel's out-of-reach steps, so a file-wide search for it said
+nothing about `.cl-memory`.
+
+Run: `.venv\Scripts\python tests/test_claude_panels.py` (needs node) — also a
+fail-closed step in `build.py` (0ae/6).

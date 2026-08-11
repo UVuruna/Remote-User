@@ -189,3 +189,4 @@ The CLI prints the pairing URL and a QR (console + image viewer). Dev note: H.26
 - [Android (folder)](android/___android.md) — the phone app (shell around the client)
 - [Tests (folder)](tests/___tests.md) — end-to-end input gate (run fail-closed by the build)
 - [Setup (folder)](setup/___setup.md) — build pipeline, installer, APK
+- [Rename handover](RENAME.md) — the approved Remote User ➜ Vibe Coder rename, pending execution

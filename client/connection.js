@@ -120,6 +120,15 @@ function connect() {
         // Full view reset — sent after auth and after every stream (re)start
         // (monitor switch, H.264 session reset).
         monitor = { w: msg.monitor_width, h: msg.monitor_height };
+        // THE MONITORS, AND WHICH ONE THIS IS (owner 2026-08-09, task 155).
+        // Optional fields on a message that already exists: a server that does
+        // not send them leaves the list empty, and the layout list falls back
+        // to the single Desktop row it has always drawn. Read here rather than
+        // asked for, because `config` is re-sent after EVERY stream restart —
+        // a monitor switch included — so the phone's idea of which screen it is
+        // looking at is refreshed by the very event that changes it.
+        monitorList = Array.isArray(msg.monitors) ? msg.monitors : [];
+        monitorIndex = Number.isInteger(msg.monitor) ? msg.monitor : 0;
         const newMode = msg.stream || "jpeg";
         if (newMode !== streamMode) showToast(newMode === "h264" ? "H.264 stream" : "JPEG stream");
         streamMode = newMode;
@@ -173,6 +182,14 @@ function connect() {
         // he drags along the very edge he is trying to grab.
         cursorShapeName = msg.shape;
         if (streamMode !== "h264") redraw(); // h264 redraws every rAF anyway
+      } else if (msg.type === "claude_state") {
+        // What Claude Code is running RIGHT NOW (owner verdict 2026-08-11,
+        // item 3) — asked for by the Model/Thinking/Mode panels and answered
+        // only by a PC new enough to read the live conversation. A server
+        // that never sends this is the ordinary case, not an error: the
+        // panels are drawn with "unknown" chips and simply stay that way
+        // (client/claude-state.js).
+        onClaudeState(msg);
       } else if (msg.type === "actions") {
         categories = msg.categories || [];
         appSets = msg.app_sets || [];
@@ -241,6 +258,20 @@ function connect() {
           const back = layoutRestore.index;
           layoutRestore = null;
           send({ type: "layout_focus", index: back });
+          // TASK 194 (the overlay "misses places it should cover"). This
+          // `layout_state` is the INTERIM one — the server still shows
+          // desktop, and `settleLayLoading()` a few lines above just armed
+          // the watcher against THIS frame. Left alone, the watcher can
+          // declare the (idle, unrelated) current picture "settled" and
+          // hide the cube before the layout_focus above has moved a single
+          // window — the real move's OWN later layout_state then finds
+          // `layLoadingOpen` already false and settleLayLoading() is a no-op
+          // (see its guard), so he watched the actual restore bare. Calling
+          // showLayLoading() again re-arms a fresh cycle (it clears any
+          // settle timer already ticking) that only the real move's
+          // layout_state can satisfy — the same re-arm the visibilitychange
+          // handler below already relies on for the sibling case.
+          showLayLoading("Back to your layout…");
         } else if (layoutActive !== null && layouts[layoutActive]) {
           layoutRestore = { index: layoutActive, name: layouts[layoutActive].name };
         }
@@ -249,6 +280,11 @@ function connect() {
         applyOrientationLock();
         resetViewHome(); // every layout change starts fully zoomed out again
         scheduleViewport();
+      } else if (msg.type === "window_offer") {
+        // Something opened on the PC that belongs to this layout's work
+        // (task 202). HE decides: show it in the layout, or leave it on the
+        // desktop — the server moves nothing until he taps.
+        showWindowOffer(msg);
       } else if (msg.type === "layout_offer") {
         handleLayoutOffer(msg);
       } else if (msg.type === "layout_progress") {

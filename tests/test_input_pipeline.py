@@ -579,13 +579,38 @@ def main():
             not fired_early and wait_for(lambda c: ("press_key", "escape") in c))
 
         # 10c. The triggers are the two corner buttons.
+        # L2 IS STILL LAYOUT (+) — WHAT THE BUTTON OPENS CHANGED (owner
+        # 2026-08-09, task 158). Its two jobs used to be a full-screen card in
+        # `#layout-panel`; they are now the mini radial beside the button, so
+        # asserting `#layout-panel` opened would be asserting the old product.
+        # The INVARIANT this check exists for is untouched and is what is
+        # measured: L2 reaches Layout (+)'s own activator, the same object a
+        # finger's pointerup runs (CLAUDE.md constraint 12) — proven by
+        # requiring the pad's press to produce exactly what the finger's own
+        # `openSourceChooser` produces, two drawn and labelled options.
+        #
+        # AND IT CLOSES AGAIN ON A SECOND PRESS. That half is why this check
+        # went red rather than merely stale: the pad has no backdrop to tap, so
+        # a radial that only ever opened would leave a controller-only session
+        # under a full-screen overlay with no way out — and it left one standing
+        # over every later check in this file, which is what killed 10e4's tap
+        # on the Scroll button downstream.
         results["pad: L2 -> Layout (+)"] = page.evaluate("""() => {
             closeLayoutPanel();
+            closeMiniRadial();
             __padButton('l2', true);
             __padButton('l2', false);
-            const open = !document.getElementById('layout-panel').hidden;
+            const items = [...document.querySelectorAll('#mini-radial .mini-item')];
+            const opened = !document.getElementById('mini-radial').hidden &&
+                           items.length === 2 &&
+                           items.every((el) => el.querySelector('svg') &&
+                                               el.querySelector('.lbl').textContent.trim());
+            __padButton('l2', true);
+            __padButton('l2', false);
+            const closed = document.getElementById('mini-radial').hidden;
+            closeMiniRadial();
             closeLayoutPanel();
-            return open;
+            return opened && closed;
         }""")
         results["pad: R2 -> Hide"] = page.evaluate("""() => {
             const hidden = () => document.body.classList.contains('hidden-controls');

@@ -17,6 +17,8 @@
        tab wears under its window, and putting `touch-action` back so the list
        still scrolls (owner 2026-08-09, task 168). -->
   <link rel="stylesheet" href="/static/layout-create.css">
+  <!-- The window chip (task 202): tokens only, no rule of its own. -->
+  <link rel="stylesheet" href="/static/window-offer.css">
 </head>
 <body>
   <div id="status" class="connecting">Connecting…</div>
@@ -114,13 +116,30 @@
 
   <!-- Shown inside the app when the PC carries a newer app version — one tap
        downloads /app.apk from this same PC (the phone never checks the web).
-       Drawn icon (icons.js "reload"), not the ⬆️ emoji it used to carry. -->
+       Drawn icon (icons.js "reload"), not the ⬆️ emoji it used to carry.
+       After the tap, update-banner.js swaps the icon for an INDETERMINATE bar
+       (task 207, owner decree 2026-08-10): the download runs in Android's
+       own DownloadManager, so this page can never see real bytes — the
+       honest answer is an animated bar plus a sentence telling him where the
+       download actually lives, never a frozen ellipsis pretending to track
+       it. -->
   <button id="update-banner" type="button" hidden>
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <svg id="update-banner-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <path d="M20.5 12a8.5 8.5 0 1 1-2.6-6.1"/><polyline points="20.5 4.2 20.5 9.4 15.3 9.4"/>
     </svg>
-    Update the app — new version is ready
+    <div id="update-banner-bar" hidden><div id="update-banner-fill"></div></div>
+    <span id="update-banner-text">Update the app — new version is ready</span>
   </button>
+
+  <!-- Something opened on the PC while he is watching a layout — HE decides
+       where it goes (owner amendment to task 202, 2026-08-11). Never a PC-side
+       dialog: that would itself be a window he cannot reach, which is the
+       disease. See window-offer.js. -->
+  <div id="window-offer" hidden>
+    <span id="window-offer-text"></span>
+    <button id="window-offer-in" type="button">Show in layout</button>
+    <button id="window-offer-out" type="button">Leave on desktop</button>
+  </div>
 
   <!-- Layout creation offer (filled by controls.js from `layout_offer`) -->
   <div id="layout-panel" hidden></div>
@@ -129,6 +148,12 @@
        (creation is desktop-only — Edit controls on the PC) -->
   <div id="sets-panel" hidden></div>
   <div id="quality-panel" hidden></div>
+  <!-- Settings → Phone: the per-device switches that belong to no other
+       subject, gathered behind one button (owner 2026-08-11, tasks 161/218a) -->
+  <div id="phone-panel" hidden></div>
+  <!-- The Claude Code panels — Model, Thinking, Mode (owner ballot verdict
+       2026-08-11, tasks 190/191/208). One overlay for all three. -->
+  <div id="claude-panel" hidden></div>
   <div id="dictation-panel" hidden></div>
   <!-- "Notices while the app is closed" — the one step Android will not let
        the app take for itself (owner decree 2026-08-07); filled by notify.js -->
@@ -208,6 +233,10 @@
        by the name the server sends (pure, so its gate runs it whole — owner
        request 2026-08-09, task 142). -->
   <script src="/static/cursor-shapes.js"></script>
+  <!-- Before claude-panels.js: the five models, the five thinking levels, the
+       mode ring and every "what may this chip honestly claim" rule (pure, so
+       its gate runs it whole — owner ballot verdict 2026-08-11). -->
+  <script src="/static/claude-state.js"></script>
   <!-- Also before render.js: the live-edge decision table + slow-before-flush
        regulator that recovers a starved player without ever flushing the
        decoder more than once per 4s (pure, so its gate runs it whole — task
@@ -221,12 +250,25 @@
        callbacks call (split out of it 2026-08-08, THE STRUCTURE LAW). -->
   <script src="/static/voice.js"></script>
   <script src="/static/controls.js"></script>
+  <!-- After controls.js: reads its `IN_APP` and `keepFocus` globals at
+       load time. `showToast` (chrome.js, loaded next) is only called from
+       inside a tap handler, by which point every script has run — split
+       out of controls.js, task 207, to keep that file under THE STRUCTURE
+       LAW's line ceiling. -->
+  <script src="/static/update-banner.js"></script>
+  <!-- After controls.js (it reads `token`) and before connection.js, which
+       calls its showWindowOffer() — task 202. -->
+  <script src="/static/window-offer.js"></script>
   <script src="/static/chrome.js"></script>
   <!-- Right after controls.js: it uses prefGet/prefSet and IN_APP from there,
        and it must run before anything paints a control. -->
   <script src="/static/theme.js"></script>
   <script src="/static/panels.js"></script>
   <script src="/static/quality.js"></script>
+  <!-- After panels.js (ghostClickArmor) and quality.js (segRow's home is
+       panels.js, but these two cards are its other callers). -->
+  <script src="/static/claude-panels.js"></script>
+  <script src="/static/phone-panel.js"></script>
   <script src="/static/region.js"></script>
   <script src="/static/notify.js"></script>
   <!-- Before layouts.js: it owns the rule that tells a tap from a drag from a
@@ -237,6 +279,7 @@
        grid-icons.js loads before grids.js, which delegates its drawings to
        it AT LOAD (`GRID_THREE`) — the shapes live in one pure module now
        (owner request 2026-08-09, task 164: the list draws each row's shape). -->
+  <script src="/static/settle-motion.js"></script>
   <script src="/static/loading.js"></script>
   <script src="/static/grid-icons.js"></script>
   <script src="/static/grids.js"></script>
