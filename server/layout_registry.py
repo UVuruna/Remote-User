@@ -132,10 +132,40 @@ class Layout:
         call — an extracted tab's own window can be titled bare `Visual Studio
         Code`, so the window it was torn OUT of is asked next, live. `folder`
         is the last resort (that source closed): a FOLDER is not an answer —
-        what is LIVE in it comes from the process table, every frame."""
-        seen = [h for h in (self.members[0] if self.members else 0, self.source)
-                if h and wm.is_alive(h)]
-        return agents.first_folder(wm._title(h) for h in seen) or self.folder
+        what is LIVE in it comes from the process table, every frame.
+
+        EVERY member is asked, not only the first (task 236, the owner's THIRD
+        report of the notification tap landing on the previous layout). A grid
+        holds up to four windows and the agent's own window is as often cell 2
+        as cell 0; asking `members[0]` alone made a four-window layout answer
+        for a quarter of itself, and a torn-off Claude tab — titled after the
+        CONVERSATION, never after the folder — answered for none of it. The
+        order is still authority-first: each member, then the window it was
+        torn out of, so a member that can name the folder itself outranks a
+        source that only inherited it."""
+        titles = []
+        for hwnd in self.members:
+            for h in (hwnd, self.sources.get(hwnd, 0)):
+                if h and wm.is_alive(h):
+                    titles.append(wm._title(h))
+        return agents.first_folder(titles) or self.folder
+
+    def projects(self) -> list[str]:
+        """Every project folder this layout's members name, in cell order,
+        without duplicates. `project()` answers with the first of these; this
+        is what a MISS is reported against, so the log can say what the live
+        layouts really held instead of leaving him to guess (task 236)."""
+        found: list[str] = []
+        for hwnd in self.members:
+            for h in (hwnd, self.sources.get(hwnd, 0)):
+                if not h or not wm.is_alive(h):
+                    continue
+                folder = agents.title_folder(wm._title(h))
+                if folder and folder not in found:
+                    found.append(folder)
+        if not found and self.folder:
+            found.append(self.folder)
+        return found
 
 
 # The apps whose torn-out content still DEPENDS on the window it came from

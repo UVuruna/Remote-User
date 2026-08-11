@@ -308,6 +308,89 @@ def main() -> int:
         notify.layout_of("Remote User") is None)
     notify._layouts = reg
 
+    # --- THE LIFE HE ACTUALLY LIVES (task 236, his THIRD report) -----------
+    # Everything above stubs `project()` — so two rounds of green gates proved
+    # layout_of's LOOP and never once ran the thing that answers it. His real
+    # layout is a GRID whose Claude member is a torn-off VS Code tab, and such
+    # a tab's own window is titled after the CONVERSATION, never the folder;
+    # the folder is on the window it was torn OUT of, and on the sibling
+    # members. `project()` asked members[0] and its source and nothing else.
+    import window_manager        # the package entry point; layout_registry
+    import layout_registry       # imports IT, so this order is the safe one
+    import logging as _logging
+    assert window_manager.Layout is layout_registry.Layout
+
+    titles = {}
+    real_alive, real_title = layout_registry.wm.is_alive, layout_registry.wm._title
+    layout_registry.wm.is_alive = lambda h: h in titles
+    layout_registry.wm._title = lambda h: titles.get(h, "")
+    try:
+        # 101 = the torn-off Claude tab (conversation title, no folder at all)
+        # 100 = the window it came out of, and 102 a plain sibling member.
+        titles.update({
+            100: "prompt.txt - Remote User - Visual Studio Code",
+            101: "Ispravka UI dizajna menija - Visual Studio Code",
+            102: "server.py - Remote User - Visual Studio Code [Administrator]",
+            103: "Docs - Google Chrome",
+        })
+        # Cell 0 is a Chrome window that names nothing; the agent's own window
+        # is cell 1, and it is the torn-off tab. This is his layout.
+        grid = layout_registry.Layout(
+            "Claude", "code.exe", [103, 101], "2-side", "landscape", 1.6,
+            sources={101: 100})
+        results["a torn-off tab's layout still names its project"] = (
+            grid.project() == "remote user")
+        # ...and specifically NOT because member[0] happened to answer: strip
+        # the source and the SIBLING must carry it (the planted defect for the
+        # members[0]-only reading is exactly this shape).
+        lone = layout_registry.Layout(
+            "Claude", "code.exe", [101, 102], "2-side", "landscape", 1.6)
+        results["a sibling member answers when cell 0 cannot"] = (
+            lone.project() == "remote user")
+        # A layout of something else must still NOT match — widening the reach
+        # must not widen it into a false jump.
+        titles[200] = "Downloads"
+        other = layout_registry.Layout("Files", "explorer.exe", [200], None,
+                                       "landscape", 1.6)
+        results["widening the reach does not invent a match"] = (
+            other.project() == "" and other.projects() == [])
+        results["a layout reports every project it holds"] = (
+            grid.projects() == ["remote user"])
+
+        # (a) A NOTICE THAT SHIPS WITHOUT A LAYOUT SAYS SO, AT INFO, WITH THE
+        # PROJECTS THE LIVE LAYOUTS REALLY HOLD. The silence was half the
+        # repeat: a miss and a hit looked identical in his log.
+        class _Reg2:
+            layouts = [other]
+
+            def prune(self):
+                return [0]
+
+        notify._layouts = _Reg2()
+        seen = []
+
+        class _Sink(_logging.Handler):
+            def emit(self, record):
+                seen.append((record.levelno, record.getMessage()))
+
+        sink = _Sink()
+        notify.logger.addHandler(sink)
+        notify.logger.setLevel(_logging.INFO)
+        try:
+            missed = notify.layout_of(r"U:\Coding\UVuruna\Applications\Remote User")
+        finally:
+            notify.logger.removeHandler(sink)
+        info = [m for lvl, m in seen if lvl >= _logging.INFO]
+        results["a miss is LOGGED at INFO, never silent"] = (
+            missed is None and len(info) == 1)
+        results["…naming the project it looked for"] = (
+            bool(info) and "remote user" in info[0].lower())
+        results["…and what the live layouts really hold"] = (
+            bool(info) and "Files" in info[0])
+    finally:
+        layout_registry.wm.is_alive, layout_registry.wm._title = real_alive, real_title
+        notify._layouts = reg
+
     # --- 2 + 3 + 4: the live path ------------------------------------------
     threading.Thread(target=gate.run_server, daemon=True).start()
     gate.server_ready.wait(15)
@@ -513,6 +596,94 @@ def main() -> int:
           layouts = [];
           return noticeTarget({index: 0, name: 'Claude'}) === -1;
         }""")
+
+        results["no page errors"] = not page.evaluate("window.__pageErrors || []")
+
+        # --- THE RACE HE LIVES IN (task 236) -------------------------------
+        # A SECOND page, because this one must carry the shell bridge from
+        # BEFORE its first line runs: `IN_APP` is a const read at load, and
+        # the tap's whole pull path is gated on it — a bridge injected after
+        # the page is up proves nothing about the phone, where it is always
+        # there first. (Connecting closes the first page with 4409, which is
+        # the rule; every check above is finished by now.)
+        page = ctx.new_page()
+        page.add_init_script("""window.Android = {
+          noticeJump: () => window.__shell || '',
+          prefGet: () => null, prefSet: () => {}, notify: () => {},
+          notifyAt: () => {}, speak: () => {},
+        };""")
+        page.goto(f"http://127.0.0.1:{gate.PORT}/?token={gate.TOKEN}")
+        page.wait_for_function(
+            "document.getElementById('status').textContent.includes('Connected')",
+            timeout=8000)
+
+        # His case, exactly: the app is in the BACKGROUND on another layout,
+        # the notification is tapped, MainActivity.onNewIntent nudges the page
+        # AT ONCE — before onResume, so the page is still hidden and its socket
+        # is closed by rule (constraint 8). The old code pulled the jump out of
+        # the shell there (clearing it), spent it on a `send()` that dies on a
+        # dead socket, and the reconnect a second later resumed the layout the
+        # SERVER remembered: the previous one, every single time.
+        race = page.evaluate("""() => {
+          const out = {};
+          window.__shell = JSON.stringify({index: 1, name: 'Claude'});
+          window.Android.noticeJump = () => {
+            const h = window.__shell; window.__shell = ''; return h; };
+          const live = ws;
+          const real = window.send;
+          const sent = [];
+          const dropped = [];
+          // state.js DROPS a message on a dead socket (the pill says
+          // "Reconnecting…"). The stub must do the same or the gate would
+          // measure a send that never leaves the phone.
+          window.send = (m) => {
+            if (ws && ws.readyState === WebSocket.OPEN) sent.push(m);
+            else dropped.push(m);
+          };
+          const lay = (name) => ({name, title: name, members: 1, grid: null,
+            orient: 'landscape', ratio: null, pos: 0.5, agents: [],
+            member_titles: [name], dependents: [], parent: false, icon: null});
+          try {
+            // 1. the nudge, on a dead socket
+            ws = null;
+            window.__noticeJump();
+            out.parked = window.__shell !== '';  // still in the shell, unread
+            out.sentWhileDead = sent.length + dropped.length;  // nothing spent
+            // 2. the reconnect: the server resumed the PREVIOUS layout (0) and
+            //    layoutRestore points there too — both orderings at once.
+            ws = live;
+            layouts = [lay('Notes'), lay('Claude')];
+            layoutRestore = {index: 0, name: 'Notes'};
+            ws.onmessage({data: JSON.stringify({type: 'layout_state',
+              layouts, active: 0, region: null, orient: 'landscape'})});
+          } catch (e) { out.err = String(e); }
+          out.focus = sent.filter((m) => m.type === 'layout_focus').map((m) => m.index);
+          out.shellEmpty = window.__shell === '';
+          out.dropped = dropped.length;
+          window.send = real;
+          ws = live;
+          return out;
+        }""")
+        results["a tap on a dead socket is left in the shell, not spent"] = (
+            race.get("parked") is True and race.get("sentWhileDead") == 0)
+        results["the tap wins the reconnect, beating the resumed layout"] = (
+            race.get("focus") == [1] and race.get("dropped") == 0)
+        results["…and it is taken exactly once"] = race.get("shellEmpty") is True
+
+        # The other ordering: the page is already up and the socket alive when
+        # the tap lands — the nudge must act immediately, with no layout_state
+        # to wait for.
+        warm = page.evaluate("""() => {
+          window.__shell = JSON.stringify({index: 0, name: 'Notes'});
+          const real = window.send;
+          const sent = [];
+          window.send = (m) => { sent.push(m); };
+          layoutActive = 1;
+          try { window.__noticeJump(); } catch (e) { /* reported below */ }
+          window.send = real;
+          return sent.filter((m) => m.type === 'layout_focus').map((m) => m.index);
+        }""")
+        results["a tap on a LIVE socket acts at once"] = warm == [0]
 
         errors = page.evaluate("window.__pageErrors || []")
         results["no page errors"] = not errors

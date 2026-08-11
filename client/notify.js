@@ -200,9 +200,25 @@ function noticeTarget(jump) {
   return named.length === 1 ? layouts.indexOf(named[0]) : -1;
 }
 
+// A jump can only be ACTED on down a live socket (task 236). This is the
+// exact ordering his THIRD report lives in: the tap arrives while the app is
+// in the background, so the page is hidden and its socket is closed BY RULE
+// (constraint 8), and the shell nudges the page the instant the intent lands
+// (MainActivity.onNewIntent → __noticeJump) — before onResume, before the
+// reconnect. Acting there spent the jump on a `send()` that state.js drops on
+// a dead socket, and the reconnect that followed a second later resumed the
+// layout the server remembered: the previous one, every time. So a jump the
+// page cannot act on is LEFT WHERE IT IS — in the shell, unread, so even a
+// WebView reload cannot lose it — and the first `layout_state` of the new
+// connection is what pulls it.
+function noticeCanJump() {
+  return typeof ws !== "undefined" && ws && ws.readyState === WebSocket.OPEN;
+}
+
 // Returns whether a tap was CONSUMED — connection.js lets that outrank the
 // auto-restore, because only one of the two is something he just did.
 function applyNoticeJump() {
+  if (!noticeCanJump()) return false;
   const jump = noticeJump || takeNoticeJump();
   if (!jump) return false;
   noticeJump = null;
@@ -221,8 +237,14 @@ function applyNoticeJump() {
 // only says LOOK — the answer still comes through the pull above, so there is
 // one path into this and not two.
 window.__noticeJump = () => {
-  noticeJump = takeNoticeJump();
-  if (noticeJump && Array.isArray(layouts) && layouts.length) applyNoticeJump();
+  // Nothing is PULLED here unless it can be acted on right now (task 236):
+  // reading the shell's copy clears it, and a jump cleared but not acted on
+  // is a jump lost. A hidden page with a closed socket, or a page whose
+  // layout list has not arrived yet, simply leaves it parked and lets
+  // `applyNoticeJump` — called from the first `layout_state` of every
+  // connection — do the pull when it can actually land.
+  if (!noticeCanJump() || !Array.isArray(layouts) || !layouts.length) return;
+  applyNoticeJump();
 };
 
 // --- "Notices while the app is closed" (owner decree 2026-08-07) -----------

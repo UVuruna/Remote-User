@@ -81,6 +81,33 @@ A tap OUTRANKS the excursion auto-restore (`layoutRestore`): both want to
 choose a layout on a fresh connection, and only one of them is something he
 just did with his thumb.
 
+### Task 236 — the ordering that spent the tap before it could land
+
+His THIRD report of this feature, and the page's half of it. The app is in the
+BACKGROUND on another layout when the notification is tapped, so
+`MainActivity.onNewIntent` nudges the page **at once** — before `onResume`,
+while the page is still hidden and its socket is closed by rule (project
+CLAUDE.md constraint 8). The old `__noticeJump` pulled the jump out of the
+shell right there (the pull CLEARS it), `applyNoticeJump` called
+`focusLayout`, and `state.js` dropped that message on the dead socket. A second
+later the reconnect landed, the SERVER resumed the layout it remembered, and
+the tap he had just made no longer existed anywhere: the previously open
+layout, every time.
+
+The rule now: **a jump is only ever pulled when it can be acted on.**
+`noticeCanJump()` (the socket is OPEN) guards both `applyNoticeJump` and the
+shell's nudge, so a jump the page cannot act on is left WHERE IT IS — in the
+shell, unread, which also means a WebView reload cannot lose it — and the
+first `layout_state` of the new connection is what pulls it. That call sits
+ahead of the `layoutRestore` branch in `connection.js`, so the tap wins in
+both orderings.
+
+Gated in `tests/test_notify.py`: a second Playwright page carrying the shell
+bridge from BEFORE its first line runs (`IN_APP` is a const read at load, and
+the whole pull path is gated on it — a bridge injected afterwards proves
+nothing), driving a real `layout_state` through the live socket with the server
+resuming the OLD layout and `layoutRestore` pointing at it too.
+
 ## Per-device switches
 
 `notifyPrefs()` / `saveNotifyPrefs()` in the shell's SharedPreferences (via

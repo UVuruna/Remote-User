@@ -123,12 +123,24 @@ def layout_of(project: str) -> dict | None:
     """
     folder = pathlib.Path(str(project or "").strip()).name.lower()
     if not folder or _layouts is None:
+        logger.info("Notify: no layout jump — project=%r registry=%s",
+                    project, "absent" if _layouts is None else "present")
         return None
     try:
         _layouts.prune()
         for index, layout in enumerate(_layouts.layouts):
             if layout.project() == folder:
                 return {"index": index, "name": layout.name}
+        # A MISS IS SAID OUT LOUD (task 236 — his THIRD report of this one
+        # feature). Until now the only line written was the one on SUCCESS, so
+        # a notice that shipped with no `layout` field looked in the log
+        # exactly like a notice that carried one, and two rounds closed this
+        # bug without anyone being able to tell which half had failed. What is
+        # printed is what the match was made of: the folder we were looking
+        # for, and every folder each live layout really names.
+        logger.info("Notify: no layout shows %r — live layouts: %s", folder,
+                    "; ".join(f"{i}:{lay.name}={lay.projects() if hasattr(lay, 'projects') else [lay.project()]}"
+                              for i, lay in enumerate(_layouts.layouts)) or "none")
     except Exception as e:  # noqa: BLE001 — a notice must never fail on this
         logger.warning("Could not match %r to a layout: %s", folder, e)
     return None

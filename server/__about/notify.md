@@ -183,6 +183,28 @@ Three details, each of which would be a bug without it:
 Resolved at SEND time, not at tap time: this is the one moment the agent told
 us its project, and it costs one cheap Win32 read per layout, off the loop.
 
+### Task 236 — his THIRD report, and the two halves that made it possible
+
+*"still takes me to the previously open layout."* Two rounds closed this with
+green gates. Both halves are fixed here and in `client/notify.js`.
+
+**A miss was SILENT.** Only the SUCCESS path wrote a log line, so a notice
+that shipped with no `layout` field looked in his log exactly like one that
+carried it — there was no way to tell which half had failed, and the app was
+the last to know. `layout_of` now logs at **INFO** on every miss, naming the
+project it looked for and every project each live layout really holds
+(`Layout.projects()`).
+
+**`Layout.project()` could not reach the agent's window.** It asked
+`members[0]` and the window THAT member was torn out of, and nothing else. His
+Claude layout is a GRID: the agent's window is as often cell 2 as cell 0, and a
+torn-off Claude tab is titled after the CONVERSATION — never after the folder.
+So a match that was structurally impossible reported as an honest "that project
+is on no layout". Every member is asked now, each followed by its own source,
+authority-first. The gate builds exactly that layout (a Chrome cell 0, a
+torn-off conversation cell 1) instead of stubbing `project()` away, which is
+what let the previous rounds pass while the real function could not answer.
+
 ## Why a push, not a watcher
 
 The alternative was reading the screen (UIA on the Claude panel, or watching
