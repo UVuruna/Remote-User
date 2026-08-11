@@ -384,6 +384,11 @@ async def _wait_for_news(device: str = LEGACY_DEVICE):
     A waiting phone is a phone that is NOT here.
     """
     channel: asyncio.Queue = asyncio.Queue()
+    # The loop every channel lives on — captured here because `close_channels`
+    # (task 234) is called from the GUI thread, and an asyncio.Queue may only
+    # be fed through call_soon_threadsafe from there.
+    global _loop
+    _loop = asyncio.get_running_loop()
     # Only THIS device's own channel is displaced (task 209). A second attach
     # from the same id is the same phone whose service restarted; a different
     # id is a different phone, and taking its channel away is what made his
@@ -422,6 +427,33 @@ async def _wait_for_news(device: str = LEGACY_DEVICE):
             del _waiting[device]
         logger.info("Notice channel gone (device %s) — %d still waiting",
                     device or "no id (older app)", len(_waiting))
+
+
+_loop: asyncio.AbstractEventLoop | None = None
+
+
+def close_channels() -> None:
+    """Ends every waiting `/notices` response NOW (task 234, his blanket GO).
+
+    `force_exit` stops uvicorn from accepting work, but an endless
+    StreamingResponse generator parked on its queue is an open connection the
+    shutdown still waits on — every Apply & restart cost the stop() join its
+    full 10 s and abandoned the old thread. The sentinel is the SAME one a
+    displaced channel receives, so each generator returns through its own
+    normal exit and the finally-block bookkeeping runs unchanged. Safe from
+    any thread (the GUI's stop() is not the server loop): the queue is fed
+    through call_soon_threadsafe on the loop captured at attach time. A loop
+    that is already gone means the generators are gone with it — nothing to
+    end, nothing to raise on the way out."""
+    loop = _loop
+    channels = list(_waiting.values())
+    if not channels or loop is None or loop.is_closed():
+        return
+    for channel in channels:
+        try:
+            loop.call_soon_threadsafe(channel.put_nowait, None)
+        except RuntimeError:
+            return  # the loop closed between the check and the call — done
 
 
 def register(app, token: str, active_client: dict, layouts=None) -> None:

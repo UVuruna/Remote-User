@@ -22,6 +22,7 @@ import encoders
 import focus_hook
 import foreground_lock
 import layout_popup
+import notify
 import recents
 import monitors
 import pairing
@@ -143,6 +144,16 @@ class ServerController:
             focus_hook.stop()
         except Exception:
             logger.exception("Stopping the foreground-hook listener failed")
+        # The endless /notices responses end here too (task 234): force_exit
+        # stops the loop from accepting work, but a generator parked on its
+        # queue is an open connection the shutdown drain still waits on — it
+        # cost every Apply & restart the full join timeout and abandoned the
+        # old thread. Sits in this funnel because every documented way out
+        # already runs it, idempotently.
+        try:
+            notify.close_channels()
+        except Exception:
+            logger.exception("Ending the notice channels failed")
 
     def stop(self, timeout: float = 10.0) -> None:
         """Stops uvicorn and waits for the thread to unwind.

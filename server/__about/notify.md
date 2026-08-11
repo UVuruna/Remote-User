@@ -87,6 +87,16 @@ behaviour of the last-resort store and it is deliberately unchanged here — the
 queue is the path taken when nothing is reachable, and the round's fix is that
 it is now almost never taken at all.
 
+**`close_channels()`** (task 234): ends every waiting response NOW, from any
+thread — `ServerController.stop()`'s exit funnel calls it because `force_exit`
+stops uvicorn from accepting work while an endless generator parked on its
+queue is an open connection the shutdown drain still waits on: every Apply &
+restart used to stall the full 10 s join and abandon the old thread. It feeds
+the SAME `None` sentinel a displaced channel receives, via
+`call_soon_threadsafe` on the loop captured at attach time, so each generator
+returns through its own normal exit. Gated in `tests/test_notice_channel.py`
+(the 234 check, planted-defect proven).
+
 ## `GET /notices` — the waiting channel
 
 A response that never ends. The phone opens it once and blocks on a read; the

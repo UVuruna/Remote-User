@@ -628,6 +628,30 @@ def check_the_shell_sends_an_id_and_backs_off() -> bool:
     return ok
 
 
+def check_close_channels_ends_the_drain() -> bool:
+    """Task 234: `force_exit` stops uvicorn from accepting work, but an
+    endless `/notices` generator parked on its queue held the shutdown drain
+    for its whole join timeout — every Apply & restart stalled 10 s and left
+    the old thread behind. `notify.close_channels()` — called from the GUI
+    thread by `ServerController.stop()`'s exit funnel — must end every
+    waiting response NOW, through the same sentinel a displaced channel gets.
+    This check IS that call: a real attached connection, close_channels from
+    a foreign thread, and the response must END well inside a beat."""
+    chan = Waiting("dev-234").open()
+    if not until(lambda: notify.waiting_devices() == 1, timeout=4):
+        print("    the channel never attached", file=sys.stderr)
+        chan.close()
+        return False
+    notify.close_channels()          # the foreign-thread call under test
+    ended = chan.ended.wait(2.0)     # far under BEAT_S — the sentinel, not a beat
+    chan.close()
+    if not ended:
+        print("    close_channels did not end the waiting response — the "
+              "shutdown drain would wait out its full timeout", file=sys.stderr)
+        return False
+    return until(lambda: notify.waiting_devices() == 0, timeout=2)
+
+
 def main() -> int:
     notify.BEAT_S = TEST_BEAT_S
     threading.Thread(target=run_server, daemon=True).start()
@@ -688,6 +712,8 @@ def main() -> int:
 
     results["the queue is the last resort, and drains oldest first"] = (
         check_the_queue_is_the_last_resort())
+    results["stop() ends every waiting channel at once (234)"] = (
+        check_close_channels_ends_the_drain())
 
     print("\n=== NOTICE CHANNEL GATE ===")
     for name, ok in results.items():
