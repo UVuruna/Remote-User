@@ -21,15 +21,14 @@ import os
 import subprocess
 import tempfile
 import threading
-import urllib.request
 import webbrowser
 from pathlib import Path
 
 from PySide6.QtCore import QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QAction, QFontMetrics, QGuiApplication, QIcon, QPixmap
 from PySide6.QtWidgets import (
-    QApplication, QFrame, QHBoxLayout, QLabel, QMainWindow, QMenu, QPushButton,
-    QSystemTrayIcon, QVBoxLayout, QWidget,
+    QApplication, QFrame, QHBoxLayout, QLabel, QMainWindow, QMenu, QProgressBar,
+    QPushButton, QSystemTrayIcon, QVBoxLayout, QWidget,
 )
 
 import pairing
@@ -69,6 +68,14 @@ ICON_PX = 17   # icon height on the three window buttons, next to 13px text
 # minimum has to MEASURE it (THE SPACE & LEGIBILITY LAW), alongside the three
 # the handover can hand back.
 UPDATE_FAILED_TEXT = "Update download failed — retry"
+
+# What the button says in the moments between "downloaded" and the process
+# actually going down (owner decree 2026-08-10, task 207): a window that
+# vanishes with no explanation reads as a crash to whoever is watching it —
+# plain and complete: what is happening, that we are closing, and that we
+# come back. Module-level (not a class attribute) so `_computed_minimum`
+# can measure it like every other caption this button can wear.
+UPDATE_HANDOVER_TEXT = "Remote User will close to finish updating — it comes back on its own"
 
 PILL_TEXT = {"running": "RUNNING", "starting": "STARTING…",
              "stopped": "STOPPED", "failed": "FAILED"}
@@ -114,6 +121,12 @@ class MainWindow(QMainWindow):
         self._update_state = None
         self._update_path = None
         self._update_error = None    # the SPECIFIC reason a failed state shows
+        # (received, total) bytes for the download bar — total is None when
+        # the response gave no Content-Length, which is what tells
+        # `_show_progress` to fall back to the indeterminate animation
+        # instead of a frozen 0%. Worker-thread writes, UI-thread reads —
+        # same pattern as `_update_state` above.
+        self._update_progress = None
         self._traffic = None         # the Traffic window, built on first open
         self._settings = None        # the Settings window, built on first open
         self._settled_for = None     # content the declared minimum was measured against
@@ -198,6 +211,7 @@ class MainWindow(QMainWindow):
         question this window actually decides: was the button shown or not.
         """
         return (self.update_btn.isHidden(), self.update_btn.text(),
+                self.update_progress.isHidden(),
                 self.reach_label.text(), self.qr_label.text())
 
     def _resettle(self) -> None:
@@ -248,6 +262,7 @@ class MainWindow(QMainWindow):
         # sentence that must not be cut off.
         update_row = widest((f"Update to v{app_version()} — download && install",
                              UPDATE_FAILED_TEXT,
+                             UPDATE_HANDOVER_TEXT,
                              update_handover.DAMAGED_TEXT,
                              update_handover.NOT_ELEVATED_TEXT,
                              update_handover.HANDOVER_FAILED_TEXT)) + button_pad
@@ -272,9 +287,14 @@ class MainWindow(QMainWindow):
                                  int(Qt.TextFlag.TextWordWrap), text).height()
             for text in REACH_TEXT.values())
         rows = metrics.height() + 20
+        # +18 for the update/install progress bar (task 207) — a slim row of
+        # its own under the update button, only ever shown alongside it, but
+        # THE SPACE & LEGIBILITY LAW measures the fullest real content and
+        # this is content the window can genuinely need to show.
         height = (QR_SIZE + guidance          # the QR card's two tall parts
                   + rows * 2                  # url label (wraps) + its buttons
                   + rows * 5                  # header, 2 button rows, update, footer
+                  + 18                        # update/install progress bar
                   + 120)                      # card frames, spacings, margins
         return QSize(width, height)
 
@@ -430,17 +450,38 @@ class MainWindow(QMainWindow):
         window.raise_()
         window.activateWindow()
 
-    def _build_update_button(self) -> QPushButton:
+    def _build_update_button(self) -> QWidget:
         """Hidden until the check finds a newer release. ONE tap is the whole
         update — download, verify, tell the phone, install silently, restart —
         and nothing else is ever asked of anybody, because the person tapping
         it is usually a hundred kilometres away looking at this window through
-        the app that is about to be replaced (`_begin_handover`)."""
+        the app that is about to be replaced (`_begin_handover`).
+
+        Carries a progress bar under the button (owner decree 2026-08-10,
+        task 207 — a frozen "Downloading…"/"Installing" ellipsis told him
+        nothing about whether the app had hung). `_show_progress` drives it:
+        determinate with a real % while the download reports a length,
+        indeterminate (Qt's own animation) when it does not, or during the
+        install hand-over this app cannot see the progress of at all.
+        """
+        container = QWidget()
+        box = QVBoxLayout(container)
+        box.setContentsMargins(0, 0, 0, 0)
+        box.setSpacing(6)
+
         self.update_btn = QPushButton("")
         self.update_btn.setObjectName("primary")
         self.update_btn.clicked.connect(self._install_update)
         self.update_btn.hide()
-        return self.update_btn
+        box.addWidget(self.update_btn)
+
+        self.update_progress = QProgressBar()
+        self.update_progress.setObjectName("updateProgress")
+        self.update_progress.setRange(0, 100)
+        self.update_progress.setTextVisible(True)
+        self.update_progress.hide()
+        box.addWidget(self.update_progress)
+        return container
 
     def _build_footer(self) -> QWidget:
         """The version line — and, beside it, the button that asks whether
@@ -647,12 +688,6 @@ class MainWindow(QMainWindow):
             return
         threading.Thread(target=self._check_updates, daemon=True).start()
 
-    # What the button says in the one second between "downloaded" and gone.
-    # Plain and complete: what is happening, that we are closing, and that we
-    # come back — a window that disappears without those three is a crash to
-    # whoever is watching it.
-    UPDATE_HANDOVER_TEXT = "Installing — Remote User closes and comes back"
-
     def _install_update(self) -> None:
         upd = self._update
         if not upd or self._update_state not in ("found", "failed"):
@@ -662,26 +697,34 @@ class MainWindow(QMainWindow):
             return
         self._update_state = "downloading"
         self._update_error = None    # a retry re-downloads; last time's reason goes
+        self._update_progress = None  # a retry starts its bar from empty, not the last try's %
         self._refresh_update_button()
         threading.Thread(target=self._download_update, args=(upd,), daemon=True).start()
 
     def _download_update(self, upd) -> None:
         """Worker: fetch the installer to %TEMP%; the refresh timer launches
-        it (Qt work stays on the UI thread). Chunked with a socket timeout —
-        urlretrieve has none, and a mid-transfer stall (Wi-Fi drop, CDN hang)
-        would leave the button on "Downloading…" forever with no retry."""
+        it (Qt work stays on the UI thread). `updates.download` does the
+        actual streaming (chunked, with a socket timeout — urlretrieve has
+        none, and a mid-transfer stall would leave the button on
+        "Downloading…" forever with no retry) and reports (received, total)
+        bytes after every chunk — `total` is None whenever the response gave
+        no Content-Length, which `_show_progress` reads as "show the
+        indeterminate bar, never a frozen number" (owner decree 2026-08-10,
+        task 207)."""
+        def report(received: int, total: int | None) -> None:
+            self._update_progress = (received, total)
+
         try:
             path = Path(tempfile.gettempdir()) / f"RemoteUser_Setup_v{upd.version}.exe"
-            with urllib.request.urlopen(upd.installer_url, timeout=30) as response, \
-                    open(path, "wb") as out:
-                while chunk := response.read(256 * 1024):
-                    out.write(chunk)
+            updates.download(upd.installer_url, path, on_progress=report)
         except Exception as e:
             logger.error("Update download failed: %s", e)
             self._update_state = "failed"
+            self._update_progress = None
             return
         self._update_path = path
         self._update_state = "ready"
+        self._update_progress = None
 
     def _begin_handover(self) -> None:
         """The downloaded installer is on disk — hand this PC over to it.
@@ -739,16 +782,37 @@ class MainWindow(QMainWindow):
         # never reach the screen, because the very next line ends the app.
         self.update_btn.setText(UPDATE_HANDOVER_TEXT)
         self.update_btn.setEnabled(False)
-        # === LOADING ANIMATION GOES HERE (owner 2026-08-09) ===
-        # He asked for a marker rather than a guess: "ubaci tu loading
-        # animaciju što imamo — samo kao tekst, jer ću ti objasniti naknadno
-        # odakle ćemo uzimati loading animaciju."
-        # So this is the spot, deliberately left as words: the app is about to
-        # close and come back, and this is the only moment a person is looking
-        # at it. Whatever animation he names goes on this line, over the whole
-        # card, and must survive until the process actually exits.
+        # THE BAR (owner decree 2026-08-10, task 207 — replacing the
+        # 2026-08-09 placeholder marker): the actual install runs in the
+        # handover SCRIPT, after this process is gone (update_handover.py) —
+        # there is nothing left here to measure, so `_show_progress(None)`
+        # is the honest indeterminate animation, never a frozen ellipsis
+        # claiming to know a progress this window cannot see.
+        self._show_progress(None)
         QApplication.processEvents()
         self._quit()  # free our files; the handover takes over from here
+
+    def _show_progress(self, progress: tuple[int, int | None] | None) -> None:
+        """Drive the bar under the update button (owner decree 2026-08-10,
+        task 207 — "ne znam da li je blokirao ili radi"). `progress` is
+        (received, total) with `total` possibly None, or None outright (the
+        install hand-over step, which has no bytes to count at all).
+
+        DETERMINATE — a real, advancing % — whenever a total is known;
+        INDETERMINATE (Qt's own scrolling-chunk animation, engaged by
+        `setRange(0, 0)`) whenever it is not. Never a value frozen mid-way
+        and never a percent text pretending to know a number it does not
+        have — that is exactly the "three static dots" bug this replaces.
+        """
+        received, total = progress if progress else (0, None)
+        if total:
+            self.update_progress.setRange(0, 100)
+            self.update_progress.setValue(min(100, int(received * 100 / total)))
+            self.update_progress.setTextVisible(True)
+        else:
+            self.update_progress.setRange(0, 0)
+            self.update_progress.setTextVisible(False)
+        self.update_progress.show()
 
     def _refresh_update_button(self) -> None:
         state = self._update_state
@@ -760,12 +824,15 @@ class MainWindow(QMainWindow):
         if state == "found":
             self.update_btn.setText(f"Update to v{self._update.version} — download && install")
             self.update_btn.setEnabled(True)
+            self.update_progress.hide()
         elif state == "downloading":
             self.update_btn.setText("Downloading update…")
             self.update_btn.setEnabled(False)
+            self._show_progress(self._update_progress)
         elif state == "failed":
             self.update_btn.setText(self._update_error or UPDATE_FAILED_TEXT)
             self.update_btn.setEnabled(True)
+            self.update_progress.hide()
         self.update_btn.show()
 
     def _refresh_pairing(self) -> None:

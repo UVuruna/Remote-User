@@ -125,6 +125,10 @@ away.
   reason a `failed` state shows: the 1 s tick redraws the caption, so a
   `setText` alone would be replaced a second later by "Update download failed",
   which is a lie when the download finished and it was the FILE that was wrong
+- `_update_progress` — `(received, total)` bytes for the download bar, or
+  `None`; `total` is `None` whenever the response gave no `Content-Length`,
+  which `_show_progress` reads as "go indeterminate" (task 207,
+  2026-08-10). Same worker-writes/UI-reads pattern as the state machine above
 
 #### Key methods
 - `_build_header/_build_qr_card/_build_power_row/_build_window_row/
@@ -149,8 +153,16 @@ away.
   with no restart
 - `_check_updates()` / `_recheck_updates()` / `_install_update()` /
   `_download_update()` / `_refresh_update_button()` — the self-update flow;
-  download runs chunked with a socket timeout (`urlretrieve` has none) so a
-  stalled CDN can't leave the button stuck on "Downloading…" forever
+  `_download_update` delegates the actual streaming to
+  [Updates](../../__about/updates.md) → `download()` (chunked, with a socket
+  timeout `urlretrieve` has none of, so a stalled CDN can't leave the button
+  stuck on "Downloading…" forever) and reports `(received, total)` into
+  `_update_progress` on every chunk
+- `_show_progress(progress)` — drives the `QProgressBar` under the update
+  button (task 207, owner decree 2026-08-10): determinate with a real,
+  advancing % when `total` is known, `setRange(0, 0)` (Qt's own indeterminate
+  scroll) otherwise — including the install hand-over step below, which has
+  no bytes to count at all
 - `_begin_handover()` — what "ready" does, and this window's whole share of the
   2026-08-07 fix. It calls
   [`update_handover.begin()`](../../__about/update_handover.md), which verifies
@@ -254,3 +266,45 @@ row is measured: the header sits OUTSIDE the card, so it competes with the
 card's width, and the pill added roughly 64 px to the widest state (logo +
 subtitle + "STARTING..." + switch). `THEME_SWITCH_W` is imported from the
 widget that DRAWS the pill so the measurement can never drift from the row.
+
+## Progress bar + explicit closing message (owner decree 2026-08-10, task 207)
+
+His report, translated: "Downloading", three static dots, no response at all
+— he could not tell whether the app had hung or was still working. A frozen
+ellipsis said nothing about whether the app had hung. `_build_update_button()`
+now returns a small `QVBoxLayout` container: the existing `update_btn` plus a
+new `QProgressBar` (`update_progress`, `objectName="updateProgress"`,
+[Theme](theme.md) styles it) directly under it, hidden until a download or
+the install hand-over is actually in flight.
+
+`_show_progress(progress)` is the single place that decides the bar's mode:
+DETERMINATE — `setRange(0, 100)` and a real `%` — whenever `(received,
+total)` carries a `total`; INDETERMINATE — `setRange(0, 0)`, Qt's own
+scrolling-chunk animation — whenever it does not. `_refresh_update_button`
+calls it every tick while `_update_state == "downloading"`, reading
+`_update_progress`; `_begin_handover` calls `_show_progress(None)` for the
+install step, because the actual install runs in the handover SCRIPT
+*after this process has quit* ([Update Handover](../../__about/update_handover.md))
+— there is nothing left on this side to measure, so indeterminate is the
+honest answer, never a percentage claiming to know a progress this window
+cannot see.
+
+`UPDATE_HANDOVER_TEXT` moved to a MODULE-level constant (was a class
+attribute) specifically so `_computed_minimum`'s `widest()` call — a bare
+name lookup inside a method — can measure it like every other caption this
+button can wear; it now reads "Remote User will close to finish updating —
+it comes back on its own", replacing the round's own 2026-08-09 placeholder
+comment ("=== LOADING ANIMATION GOES HERE ===") that had been left for
+exactly this task. The bar is shown and `QApplication.processEvents()` is
+called BEFORE `_quit()` — unchanged from the pre-existing rule that a
+`setText` alone never paints before the process ends — so a person watching
+this window sees the closing message and the indeterminate bar for the one
+moment before it goes dark, never a silent disappearance.
+
+Gate: `tests/test_update_progress.py` (not wired into `run_guards.py` — it
+needs the real Qt widget tree, like `test_layout_audit_qt.py`; wired into
+`build.py` alongside the other Qt/e2e gates). It proves `updates.download()`
+reports a real, advancing % with a `Content-Length` and never fabricates a
+total without one, that the bar mirrors both cases, and — captured from
+INSIDE a stubbed `_quit()` — that the closing message and the bar are on
+screen BEFORE the process actually goes.

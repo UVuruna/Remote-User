@@ -15,12 +15,13 @@ The phone is deliberately NOT served from here: its update source is the PC itse
 - [Config](config.md) — `update_repo`, `update_check`, `app_version()`
 
 ### Used by
-- `gui/main_window.py` (see [GUI (subfolder)](../gui/___gui.md)) — the check on a worker thread (at start and every 15 min) → in-window Update button → download
+- `gui/main_window.py` (see [GUI (subfolder)](../gui/___gui.md)) — the check on a worker thread (at start and every 15 min) → in-window Update button → `download()` on a worker thread, reporting into `_update_progress` for the progress bar
 - [Update Handover](update_handover.md) — takes it from there: `Update.size` is what `verify()` compares the download against, and `numbers()` is how it answers "is the version now running the one we installed?"
 
 ## Functions
 - `check()`: compares the latest GitHub release tag against the running version — see below
 - `numbers(version)`: `"v0.0.37"` / `"0.0.037"` → `(0, 0, 37)`; empty tuple when nothing numeric (a dev checkout). Public because the two spellings never match as strings — a tag renders back as `0.0.93` while `app_info.json` says `0.0.093`.
+- `download(url, dest, on_progress=None, timeout=30)`: streams `url` to `dest` in `DOWNLOAD_CHUNK_BYTES`-sized chunks, calling `on_progress(received, total)` once before the first chunk and once after every chunk after (task 207, owner decree 2026-08-10 — "ne znam da li je blokirao ili radi", the frozen "Downloading…" ellipsis). `total` is the response's own `Content-Length` as an `int`, or `None` when the response gave none — that `None` is deliberate: `download()` never fabricates a size from anything else, because a caller showing a percentage against an invented total would be lying just as much as a frozen ellipsis was. The caller decides what `None` means on screen — `gui/main_window.py` reads it as "show the indeterminate bar". Raises whatever `urllib` raises on a network failure; the caller decides what a failed download means for its own state.
 
 `check()` in order: bail to `None` if `update_check` is off or the running version has no digits (dev checkout); `GET` the repo's latest release (10 s timeout) and bail to `None` on any failure (offline, rate-limited, or a 404 from a repo with no releases yet); parse `tag_name` into numbers and bail to `None` if it is not strictly newer than the running version; otherwise return an `Update` built from the first release asset ending in `.exe` (or `None`) and the release page URL as fallback.
 

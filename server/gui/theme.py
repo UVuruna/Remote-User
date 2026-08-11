@@ -351,6 +351,27 @@ QPushButton#danger {{
 }}
 QPushButton#danger:hover {{ background: {dangerFillHover}; color: {error}; }}
 
+/* The update download/install bar (owner 2026-08-10 — a frozen "Downloading…"
+   ellipsis told him nothing about whether the app had hung, or was even still
+   there). Determinate — real bytes-received % — while the download reports a
+   Content-Length; indeterminate (Qt's own scrolling-chunk animation, engaged
+   by MainWindow calling setRange(0, 0)) whenever nothing measurable exists:
+   an asset the download has no length for, or the brief install hand-over
+   this app cannot see the progress of at all because it is about to quit. */
+QProgressBar#updateProgress {{
+    background: {surface2};
+    border: 1px solid {border};
+    border-radius: 4px;
+    height: 10px;
+    text-align: center;
+    color: {text2};
+    font-size: 10px;
+}}
+QProgressBar#updateProgress::chunk {{
+    background: {accent};
+    border-radius: 4px;
+}}
+
 /* min-width is a FLOOR for an empty combo, never a claim on space: at 140px
    two combos in one row held 280px while the shortcut field beside them was
    squeezed to "ift+tab" (owner screenshot 2026-08-05). Qt already sizes a

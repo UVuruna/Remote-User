@@ -91,6 +91,12 @@ Widget inventory per zone (nested-list form, for a quick text scan):
   stream form and the agent-hook switch that used to sit above this row now
   live in the [Settings window](../__about/settings_window.md).
 - `self.update_btn` (`#primary`, hidden by default)
+  - `self.update_progress` (`QProgressBar#updateProgress`, task 207,
+    2026-08-10) — a slim bar directly under it, hidden until a download or
+    the install hand-over is in flight. Determinate with a real % once
+    `Content-Length` is known, indeterminate (`setRange(0, 0)`) otherwise —
+    see [about](../__about/main_window.md) → "Progress bar + explicit
+    closing message"
 - Footer `QLabel#caption`
 - Tray (`QSystemTrayIcon` + `QMenu`)
   - open action, `self.tray_toggle`, separator, quit action

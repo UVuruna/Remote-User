@@ -2,9 +2,13 @@
 
 `check()` compares the latest release tag of SETTINGS.update_repo against the
 running version and returns an Update when a newer one exists, else None.
-Callers own the UX: the desktop GUI shows an in-window Update button (which
-downloads and launches the installer); the phone is NOT served from here —
-its update comes from the PC server itself (`config.app_version` + /app.apk).
+`download()` is the streaming fetch that button's worker thread runs — it
+reports (received, total) bytes after every chunk so the GUI can show a real
+progress bar, `total` being None whenever the response gave no Content-Length
+(task 207, owner decree 2026-08-10). Callers own the UX: the desktop GUI shows
+an in-window Update button (which downloads and launches the installer); the
+phone is NOT served from here — its update comes from the PC server itself
+(`config.app_version` + /app.apk).
 
 A repo with no releases yet and plain network failures are normal outcomes
 (documented: check() returns None then) — logged at info, never raised.
@@ -15,12 +19,15 @@ import logging
 import re
 import urllib.request
 from dataclasses import dataclass
+from pathlib import Path
+from typing import Callable
 
 from config import SETTINGS, app_version
 
 logger = logging.getLogger(__name__)
 
 TIMEOUT_S = 10
+DOWNLOAD_CHUNK_BYTES = 256 * 1024
 
 
 @dataclass(frozen=True)
@@ -82,3 +89,38 @@ def check(force: bool = False) -> Update | None:
                   data.get("html_url") or
                   f"https://github.com/{SETTINGS.update_repo}/releases",
                   asset.get("size") if asset else None)
+
+
+def download(url: str, dest: Path,
+             on_progress: Callable[[int, int | None], None] | None = None,
+             timeout: int = 30) -> None:
+    """Stream `url` to `dest`, reporting bytes as they land.
+
+    `on_progress(received, total)` is called once before the first chunk and
+    once after every chunk that follows. `total` is the response's own
+    Content-Length as an int, or None when it did not send one — that None is
+    the whole point of this function's shape (owner decree 2026-08-10, task
+    207: "ne znam da li je blokirao ili radi" — a frozen "Downloading…" told
+    him nothing about whether the app had hung). The CALLER decides what None
+    means on screen (an indeterminate bar); this function only reports what
+    the response actually said, honestly, never guessing a size it was not
+    given.
+
+    Chunked with a socket timeout — `urllib.request.urlretrieve` has none,
+    and a mid-transfer stall (Wi-Fi drop, CDN hang) would otherwise hang this
+    call forever with no way for the caller to notice and retry. Raises
+    whatever `urllib` raises on a network failure; the caller decides what a
+    failed download means for its own UI state.
+    """
+    with urllib.request.urlopen(url, timeout=timeout) as response, \
+            open(dest, "wb") as out:
+        length = response.headers.get("Content-Length")
+        total = int(length) if length and length.isdigit() else None
+        received = 0
+        if on_progress:
+            on_progress(received, total)
+        while chunk := response.read(DOWNLOAD_CHUNK_BYTES):
+            out.write(chunk)
+            received += len(chunk)
+            if on_progress:
+                on_progress(received, total)
