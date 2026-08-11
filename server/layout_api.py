@@ -78,12 +78,15 @@ async def layout_pick(ws, layouts, stream, msg: dict) -> None:
     }))
 
 
-async def layout_list(ws, layouts, stream) -> None:
-    """The list-based creation source (owner 2026-08-02): every open window
-    PLUS each window's content tabs as separate entries — 'Google Chrome'
-    alone hid its tabs, the exact reported gap. Windows that already belong to
-    a layout are LEFT OUT (owner 2026-08-03): one window cannot be shown in
-    two places, so it stays off the list for as long as it is in a layout."""
+async def _list_entries(layouts, stream) -> list[dict]:
+    """Every open window PLUS each window's content tabs as separate entries
+    — 'Google Chrome' alone hid its tabs, the exact reported gap. Windows
+    that already belong to a layout are LEFT OUT (owner 2026-08-03): one
+    window cannot be shown in two places, so it stays off the list for as
+    long as it is in a layout. Shared by `layout_list` (fresh-creation
+    source) and `layout_member_list` (task 195's "Add a window" — the same
+    exclusion is exactly what a member-add needs: a window already claimed
+    by SOME layout, this one included, cannot be added again)."""
     # NOT `mon_rect = mon_rect(stream)`: that name is this module's own
     # function, and assigning to it makes it a LOCAL for the whole function —
     # so the call on the right-hand side raises UnboundLocalError and the
@@ -135,10 +138,33 @@ async def layout_list(ws, layouts, stream) -> None:
                             "title": tab["name"],
                             "process": w["process"], "icon": w["icon"],
                             "agents": agents.agents_for(w["title"], live)})
+    return entries
+
+
+async def layout_list(ws, layouts, stream) -> None:
+    """The list-based creation source (owner 2026-08-02)."""
+    entries = await _list_entries(layouts, stream)
     await ws.send_text(json.dumps({
         "type": "layout_offer",
         "target": None,
         "entries": entries,
+        "grids": list(window_manager.GRID_TEMPLATES),
+    }))
+
+
+async def layout_member_list(ws, layouts, stream, msg: dict) -> None:
+    """The ⚙ sheet's "Add a window" (task 195): the SAME enumeration
+    `layout_list` uses — windows already in any layout, this one included,
+    are already excluded by `_list_entries`'s `member_hwnds` call, which is
+    exactly the rule an add needs — tagged with `add_to` so the client's
+    `layout_offer` handler routes it to the add flow instead of a fresh
+    creation. No new listing logic: one enumeration, two doors in."""
+    entries = await _list_entries(layouts, stream)
+    await ws.send_text(json.dumps({
+        "type": "layout_offer",
+        "target": None,
+        "entries": entries,
+        "add_to": int(msg["index"]),
         "grids": list(window_manager.GRID_TEMPLATES),
     }))
 
@@ -341,6 +367,99 @@ async def layout_member_remove(ws, layouts, stream, conn: dict,
     else:
         # The survivors must be RE-ARRANGED, not merely re-listed: three
         # windows still standing in a 2x2 is not a three.
+        await layout_focus(ws, layouts, stream, conn, index)
+
+
+async def layout_member_add(ws, layouts, stream, conn: dict, msg: dict) -> None:
+    """Grow a layout by ONE window — solo→2, 2→3, 3→4 (owner request, task
+    195, in translation: "add a member to an existing layout, if there is
+    room ... unless it already has four"). The ⚙ sheet's mirror of
+    `layout_member_remove`.
+
+    `hwnd`/`tab` name the chosen slot exactly like a creation slot — this
+    reuses `resolve_slot`, the SAME tab-extraction path `layout_create` uses,
+    so a tab picked here is torn into its own window exactly as a creation
+    slot would be, never a second implementation of that dance. Only
+    `layouts.add_member` decides how the layout's SHAPE changes, and it is
+    the same `_template_for` `drop_member` shrinks a layout through — growing
+    and shrinking can never disagree about what a three is."""
+    index = int(msg["index"])
+    slot = {"hwnd": msg["hwnd"], "tab": msg.get("tab"),
+            "x": msg.get("x", 0.5), "y": msg.get("y", 0.5)}
+    resolved = await resolve_slot(ws, stream, slot)
+    if resolved is None:
+        await toast(ws, "That window is gone")
+        await send_layout_state(ws, layouts, conn)
+        return
+    hwnd, _tab, source = resolved
+    outcome = await asyncio.to_thread(
+        layouts.add_member, index, hwnd, source, msg.get("grid"))
+    if outcome == "gone":
+        await toast(ws, "That layout is gone")
+        await send_layout_state(ws, layouts, conn)
+    elif outcome == "full":
+        await toast(ws, "That layout already has four windows")
+        await send_layout_state(ws, layouts, conn)
+    elif outcome == "duplicate":
+        await toast(ws, "That window is already in a layout")
+        await send_layout_state(ws, layouts, conn)
+    else:
+        # The new member joins the topmost ledger through the ordinary raise
+        # order `focus()` already walks — never a special case for it — and
+        # the survivors are re-arranged into the new shape alongside it.
+        await layout_focus(ws, layouts, stream, conn, index)
+
+
+async def layout_split(ws, layouts, stream, conn: dict, msg: dict) -> None:
+    """Break a grid into as many SOLO layouts as it has members (owner
+    request, task 197a: "decompose a grid into several individual layouts").
+    Each member keeps its own `Layout.sources` record — task 173's whole
+    reason for keying it per member — so the ⭐/dependents a window carried
+    inside the grid survive the split.
+
+    The source layout's INDEX is replaced by the new layouts, in member
+    order, so `conn["active"]` needs the same care `layout_remove` takes,
+    only shifted by however many layouts now stand where one did: unaffected
+    when it pointed above the split, focused fresh on the first new layout
+    when the split layout WAS the active one, and pushed down by the extra
+    layouts otherwise."""
+    index = int(msg["index"])
+    was_active = conn["active"]
+    made = await asyncio.to_thread(layouts.split, index)
+    if not made:
+        await toast(ws, "Nothing to split — that layout has one window")
+        await send_layout_state(ws, layouts, conn)
+        return
+    if was_active is not None and was_active == index:
+        # The phone was looking at exactly the layout that just split apart —
+        # land it on the first piece, the same spot in the bar/list it stood
+        # in before.
+        await layout_focus(ws, layouts, stream, conn, made[0])
+        return
+    if was_active is not None and was_active > index:
+        conn["active"] = was_active + (len(made) - 1)
+    await send_layout_state(ws, layouts, conn)
+
+
+async def layout_member_eject(ws, layouts, stream, conn: dict,
+                              msg: dict) -> None:
+    """Pull ONE member out of a grid into ITS OWN new layout — never to the
+    desktop (owner request, task 197b, explicitly contrasted with the
+    existing "Take one window out" / `layout_member_remove`, which leaves the
+    window standing as plain desktop material). Lives in the member chooser
+    beside that act, and reads `member` the same way — the cell ordinal, not
+    a handle."""
+    index = int(msg["index"])
+    outcome = await asyncio.to_thread(
+        layouts.eject_member, index, int(msg.get("member", -1)),
+        msg.get("grid"))
+    if outcome == "gone":
+        await toast(ws, "That window is no longer in the layout")
+        await send_layout_state(ws, layouts, conn)
+    else:
+        # The survivors are re-arranged, same as after a plain member remove;
+        # the ejected window's own new layout stays off the topmost band
+        # until the phone focuses it (eject_member already dropped it there).
         await layout_focus(ws, layouts, stream, conn, index)
 
 

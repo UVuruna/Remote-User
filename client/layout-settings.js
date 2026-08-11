@@ -105,6 +105,17 @@ function openLayoutSettings(index) {
   if (members > 1) {
     menuRow("grid", "Take one window out", `${members} windows`,
             () => openMemberPanel(index));
+    // SPLIT a grid into as many solo layouts as it has members (task 197a) —
+    // never offered on a solo, which has nothing to split.
+    menuRow("newwin", "Split into windows", `${members} separate layouts`,
+            () => sendSplit(index));
+  }
+  // ADD a window — solo→2, 2→3, 3→4 (task 195, owner: "if there is room ...
+  // unless it already has four"). A button that cannot act is a promise the
+  // panel cannot keep (the same rule that hides Take one window out on a
+  // solo), so it is simply absent once the layout is already full.
+  if (members < 4) {
+    menuRow("newwin", "Add a window", null, () => openAddMemberPanel(index));
   }
 
   // ORIENTATION — the half of this task the owner could not do at all before
@@ -166,6 +177,164 @@ function sendLayoutShape(index, grid, orient) {
   send({ type: "layout_grid", index, grid: grid || "", orient });
   closeLayoutPanel();
   showLayLoading("Reshaping the layout…");
+}
+
+// --- SPLIT a grid into solo layouts (task 197a) ----------------------------
+// One tap acts (owner rule 2026-08-05, "korisnik odabere a program automatski
+// odradi") — there is nothing to choose here, unlike Add/Eject below, which
+// both need him to point at a window or a cell first.
+function sendSplit(index) {
+  closeLayoutPanel();
+  send({ type: "layout_split", index });
+  showLayLoading("Splitting the layout…");
+}
+
+// --- ADD A WINDOW (task 195) ------------------------------------------------
+// `addingTo` is this file's OWN piece of state, exactly the pattern
+// `aspecting` already sets beside it: one flow in flight, forgotten by
+// `forgetLayoutSettings` when the panel closes under it. The server's answer
+// arrives as an ordinary `layout_offer` tagged with `add_to`, routed here by
+// connection.js (never through layout-create.js's `creating` session — this
+// is not a fresh layout, so it must not share that file's state machine).
+let addingTo = null; // {index, hwnd, tab, x, y, grid} | null
+
+function openAddMemberPanel(index) {
+  const lay = layouts[index];
+  if (!lay || (lay.members || 1) >= 4) return;
+  addingTo = { index };
+  closeLayoutPanel();
+  showLayLoading("Collecting windows and tabs…");
+  send({ type: "layout_member_list", index });
+}
+
+// Called from connection.js's layout_offer dispatch when the reply carries
+// `add_to` — the same enumeration `layout_list` uses (windows already in ANY
+// layout, this one included, are already excluded server-side), drawn with
+// the creation panel's own visual language: real icons, tabs indented under
+// their window. Rows are built locally rather than reaching into
+// layout-create.js's `entryRow` — that file owns the fresh-creation wizard's
+// own state and this flow must not couple to it.
+function renderAddMemberPanel(msg) {
+  hideLayLoading();
+  if (!addingTo || addingTo.index !== msg.add_to) return; // a stale reply
+  const index = addingTo.index;
+  const lay = layouts[index];
+  if (!lay) { addingTo = null; return; }
+  const entries = msg.entries || [];
+  layPanel.innerHTML = "";
+  layPanel.hidden = false;
+  const card = document.createElement("div");
+  card.className = "lay-card card-columns";
+  const h = document.createElement("h2");
+  h.textContent = "Add a window";
+  const sub = document.createElement("p");
+  sub.className = "lay-sub";
+  sub.textContent = `${lay.name} — tap a window or tab to add it.`;
+  card.append(h, sub);
+
+  if (!entries.length) {
+    const none = document.createElement("p");
+    none.className = "lay-sub";
+    none.textContent = "Nothing else is open on the PC right now.";
+    card.appendChild(none);
+  }
+  const list = document.createElement("div");
+  list.className = "lc-rows lc-scroll";
+  entries.forEach((e) => {
+    const row = document.createElement("div");
+    row.className = "lay-item lc-row" + (e.kind === "tab" ? " lc-kid" : "");
+    const main = document.createElement("button");
+    main.type = "button";
+    main.className = "lay-item-main";
+    if (e.kind === "window" && e.icon) {
+      const img = document.createElement("img");
+      img.src = e.icon;
+      img.alt = "";
+      main.appendChild(img);
+    }
+    const name = document.createElement("span");
+    name.textContent = e.title;
+    main.appendChild(name);
+    if (e.tabs_hidden) {
+      const note = document.createElement("small");
+      note.className = "lc-note";
+      note.textContent = "minimized";
+      main.appendChild(note);
+    }
+    keepFocus(main, () => {
+      addingTo.hwnd = e.hwnd;
+      addingTo.tab = e.tab || null;
+      addingTo.x = e.x;
+      addingTo.y = e.y;
+      renderAddMemberGrid();
+    });
+    row.appendChild(main);
+    list.appendChild(row);
+  });
+  card.appendChild(list);
+
+  const actions = document.createElement("div");
+  actions.className = "lay-actions";
+  actions.appendChild(layChip("Cancel", false, () => {
+    addingTo = null;
+    openLayoutSettings(index);
+  }));
+  card.appendChild(actions);
+  layPanel.appendChild(card);
+}
+
+// Step 2 of Add a window — offered ONLY when the RESULT has a real choice (a
+// solo/2 growing to a three has four arrangements; growing to a two or a four
+// has exactly one, so nothing is asked and the add ships straight away). The
+// same asymmetry `openMemberPanel`'s shrink path reads off `gridIconChoices`.
+function renderAddMemberGrid() {
+  const index = addingTo.index;
+  const lay = layouts[index];
+  if (!lay) { addingTo = null; return; }
+  const resultCount = (lay.members || 1) + 1;
+  const choices = gridIconChoices(resultCount, null);
+  if (!choices.length) {
+    sendAddMember();
+    return;
+  }
+  addingTo.grid = choices[0];
+  layPanel.innerHTML = "";
+  layPanel.hidden = false;
+  const card = document.createElement("div");
+  card.className = "lay-card card-columns";
+  const h = document.createElement("h2");
+  h.textContent = "Add a window";
+  const sub = document.createElement("p");
+  sub.className = "lay-sub";
+  sub.textContent = "Where does the single window go?";
+  card.append(h, sub);
+  const row = document.createElement("div");
+  row.className = "lay-row";
+  choices.forEach((g) => row.appendChild(gridChip(
+    g, lay.orient, g === addingTo.grid,
+    () => { addingTo.grid = g; renderAddMemberGrid(); })));
+  card.appendChild(row);
+  const actions = document.createElement("div");
+  actions.className = "lay-actions";
+  actions.appendChild(layChip("Back", false, () => {
+    send({ type: "layout_member_list", index });
+    showLayLoading("Collecting windows and tabs…");
+  }));
+  actions.appendChild(layChip("Add", true, sendAddMember));
+  card.appendChild(actions);
+  layPanel.appendChild(card);
+}
+
+function sendAddMember() {
+  const a = addingTo;
+  if (!a || typeof a.hwnd !== "number") return;
+  const msg = { type: "layout_member_add", index: a.index, hwnd: a.hwnd,
+                tab: a.tab || null, x: a.x, y: a.y };
+  if (a.grid) msg.grid = a.grid;
+  send(msg);
+  addingTo = null;
+  closeLayoutPanel();
+  showLayLoading("Arranging the windows…");
 }
 
 function ratioLabel(lay) {
@@ -281,6 +450,7 @@ let aspecting = null; // {index, portrait, devA, a, pos, els}
 // aspect panel's state never has a second owner.
 function forgetLayoutSettings() {
   aspecting = null;
+  addingTo = null;   // task 195's add-a-window flow is the panel's other guest
 }
 
 function openAspectPanel(index) {

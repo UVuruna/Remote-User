@@ -36,6 +36,7 @@
   color: var(--text-primary);
   font: 600 13px system-ui, sans-serif;
   z-index: 30;
+  touch-action: pan-y;      /* the horizontal drag is ours — see #lay-frame */
 }
 #layout-bar[hidden] { display: none; }
 #layout-bar button {
@@ -45,20 +46,30 @@
   font: 700 20px/1 system-ui, sans-serif;
   padding: 4px 8px;
 }
-/* An arrow is now a BUTTON of the top row, not a glyph standing on the stream:
-   the corner square's own size, radius, fill and border. It keeps `flex: none`
-   so the name is still the only thing that gives (owner 2026-08-03). */
+/* ── THE ARROWS GIVE THE ROW BACK TO THE NAME (owner report 2026-08-11, with
+   his screenshot of v0.0.107) ──────────────────────────────────────────────
+   The rule above — an arrow is a corner-sized BUTTON — shipped, and on his
+   phone the result was a bar in which NOT ONE LETTER of the layout name was
+   visible: two 58 px squares plus the gaps took the row, and `#lay-frame` was
+   `flex: 0 1 auto`, so the only thing that could give was the only thing he
+   reads. His correction, and it is the LAST word on this bar: **the arrows
+   take a very small footprint — big SVG glyphs in little space, not buttons —
+   and the central name element takes all the remaining room.**
+   The glyph stays 30 px: what shrinks is the BOX around it, which is what was
+   eating the row. `flex: none` is kept for the same reason it was written —
+   the name is still the only thing that gives — and now there is something
+   left for it to be given. */
 #layout-bar .lay-arrow {
   flex: none;
-  width: var(--corner);
-  height: var(--corner);
-  padding: 0;
+  width: auto;
+  height: auto;
+  padding: 0 2px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 16px;
-  border: 1px solid var(--border);
-  background: var(--glass-fill);
+  border: none;
+  background: none;
+  border-radius: 0;
 }
 #layout-bar .lay-arrow svg {
   width: 30px;
@@ -69,13 +80,26 @@
    the arrows leave — never more. Same height and same radius as the buttons on
    both sides of it, so the three read as one row. */
 #lay-frame {
-  flex: 0 1 auto;
+  /* ALL THE REMAINING SPACE (owner 2026-08-11, the same report). `0 1 auto`
+     made the frame shrink-to-fit and then be squeezed; `1 1 auto` makes it the
+     element that TAKES the row, which is what he asked for in as many words.
+     The bottom position already did exactly this — it is now simply true in
+     both places, and the override below is kept for the record it carries. */
+  flex: 1 1 auto;
   min-width: 0;
   height: var(--corner);
   display: flex;
   align-items: center;
   gap: 4px;
-  padding: 0 8px 0 14px;
+  /* SMALL INNER PADDING, so the logo sits near the LEFT edge and the ✕ near
+     the RIGHT one (his words). The old `0 8px 0 14px` spent 22 px of a frame
+     that had almost none to spend. */
+  padding: 0 4px 0 6px;
+  /* THE BAR ALSO SWITCHES BY SWIPE (owner 2026-08-11): a horizontal drag
+     anywhere on it steps the layouts, so the arrows are a shortcut and not the
+     only way. `pan-y` keeps every vertical gesture with the page and gives the
+     horizontal one to us (client/chrome.js). */
+  touch-action: pan-y;
   border: 1px solid var(--border);
   border-radius: 16px;
   background: var(--glass-fill);

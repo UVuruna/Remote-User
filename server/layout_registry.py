@@ -518,6 +518,116 @@ class LayoutRegistry:
                     lay.template or "solo")
         return "dropped"
 
+    def add_member(self, index: int, hwnd: int, source: int = 0,
+                  grid: str | None = None) -> str:
+        """Grow a layout by ONE window — solo→2, 2→3, 3→4 (owner request,
+        task 195, in translation: "add a member to an existing layout, if
+        there is room ... unless it already has four"). The mirror of
+        `drop_member`: the same `_template_for` decides the new shape, so
+        growing and shrinking a layout can never disagree about what a three
+        is. `hwnd` has already been resolved by `layout_api.resolve_slot` —
+        a tab slot is torn into its own window there, exactly as a creation
+        slot is — so this only ever files a whole window.
+
+        Returns "gone" (layout or window gone), "full" (already four —
+        nothing to add to), "duplicate" (already a member of THIS or ANY
+        other layout — one window belongs to exactly one layout, the same
+        rule `member_hwnds` enforces on the creation list) or "added". The
+        caller re-places through `focus()`, which is what puts the new
+        member on the topmost ledger — the same path every member joins it
+        through, never a special case here."""
+        if not 0 <= index < len(self.layouts):
+            return "gone"
+        lay = self.layouts[index]
+        if len(lay.members) >= 4:
+            return "full"
+        if not wm.is_alive(hwnd):
+            return "gone"
+        if any(hwnd in other.members for other in self.layouts):
+            return "duplicate"
+        lay.members.append(hwnd)
+        if source:
+            lay.sources[hwnd] = source
+        lay.template = self._template_for(len(lay.members), grid)
+        lay.place_pending = True
+        logger.info("Layout %r gained member %#x: now %d window(s), %s",
+                    lay.name, hwnd, len(lay.members), lay.template or "solo")
+        return "added"
+
+    def split(self, index: int) -> list[int] | None:
+        """Break a grid into as many SOLO layouts as it has members — one
+        per window (owner request, task 197a: "decompose a grid into several
+        individual layouts"). Each new Layout keeps ITS OWN source record
+        (task 173's whole reason for keying `sources` per member rather than
+        once per layout), so the ⭐/dependents a window carried inside the
+        grid survive it splitting apart.
+
+        Replaces the source layout in place, in member order, so the new
+        layouts land where it stood in the list rather than at the end.
+        Returns the new layouts' indices, or None when the layout is gone or
+        already solo (nothing to split)."""
+        if not 0 <= index < len(self.layouts):
+            return None
+        lay = self.layouts[index]
+        if len(lay.members) < 2:
+            return None
+        made: list[Layout] = []
+        for hwnd in lay.members:
+            title = wm._title(hwnd) or ""
+            src = lay.sources.get(hwnd, 0)
+            src_title = wm._title(src) if src else ""
+            made.append(Layout(
+                title or lay.name, wm._process_name(hwnd), [hwnd], None,
+                lay.orient, lay.aspect, wm.icon_data_uri(wm._process_path(hwnd)),
+                {hwnd: src} if src else None,
+                agents.first_folder([title, src_title]) or lay.folder))
+        self.layouts[index:index + 1] = made
+        if self.last_focus and self.last_focus[0] == index:
+            self.last_focus = None   # the layout it named is gone
+        logger.info("Layout %r split into %d solo layouts", lay.name, len(made))
+        return list(range(index, index + len(made)))
+
+    def eject_member(self, index: int, member: int,
+                     grid: str | None = None) -> str:
+        """Pull ONE member out of a grid into ITS OWN new layout — never to
+        the desktop (owner request, task 197b, contrasted with the existing
+        "Take one window out" / `drop_member`, which leaves the window
+        standing as plain desktop material). `member` is the cell ordinal,
+        the same convention `drop_member` and `layout_member_remove` use.
+
+        The survivors are re-shaped by `_template_for` exactly as
+        `drop_member` shapes them — `grid` names the arrangement a four
+        landing on a three should take. The ejected window drops out of the
+        topmost band here (it is no longer part of the FOCUSED layout) but
+        is NOT unfrozen and NOT handed back to the desk: it stays layout
+        material, and the focus that later shows its new layout raises it
+        again exactly like any other member.
+
+        Returns "gone" (nothing matched, or the layout has only one member —
+        there is nothing to eject FROM) or "ejected"."""
+        if not 0 <= index < len(self.layouts):
+            return "gone"
+        lay = self.layouts[index]
+        if not 0 <= member < len(lay.members) or len(lay.members) <= 1:
+            return "gone"
+        hwnd = lay.members.pop(member)
+        src = lay.sources.pop(hwnd, 0)
+        wm.drop_topmost(hwnd)   # no longer part of the layout the phone shows
+        if lay.last_member == hwnd:
+            lay.last_member = lay.members[0]
+        lay.template = self._template_for(len(lay.members), grid)
+        lay.place_pending = True
+        title = wm._title(hwnd) or ""
+        src_title = wm._title(src) if src else ""
+        solo = Layout(title or "Window", wm._process_name(hwnd), [hwnd], None,
+                      lay.orient, lay.aspect, wm.icon_data_uri(wm._process_path(hwnd)),
+                      {hwnd: src} if src else None,
+                      agents.first_folder([title, src_title]) or "")
+        self.layouts.append(solo)
+        logger.info("Layout %r ejected member %d (%#x) into new layout %r",
+                    lay.name, member, hwnd, solo.name)
+        return "ejected"
+
     def merge(self, source: int, target: int, grid: str | None = None) -> bool:
         """Drag one layout's window onto another and they become a GRID (owner
         2026-08-07, "like holding a file in Explorer and dragging it into a
