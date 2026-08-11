@@ -26,9 +26,13 @@ logger = logging.getLogger(__name__)
 DPAD_SLOTS = 4  # a D-pad cross has exactly four positions — the pool may be
                 # longer, the phone still shows four (owner 2026-08-05)
 
-WHEEL_MAX = 8  # sets in the phone's wheel at once; Mouse/Input/Settings are
-               # `required` (never hidden), everything else toggles
-               # (owner 2026-08-05)
+WHEEL_MAX = 8  # sets in the phone's wheel at once, FIXED mode; Mouse/Input/
+               # Settings are `required` (never hidden), everything else
+               # toggles (owner 2026-08-05)
+WHEEL_MAX_DROPOUT = 10  # DROP-OUT mode's cap (task 181, 2026-08-11 — the
+                         # default): a set placed on either D-pad group sheds
+                         # off the wheel while it rides there, which is the
+                         # room the higher cap counts on.
 
 # The file's own sections, in the order a fresh file lists them — this IS
 # "today's order" (build round R5, 2026-08-07): the default `wheel_order`
@@ -69,7 +73,11 @@ SECTION_KEYS = ("categories", "app_sets", "custom_sets")
 # renames are the documented third owner-owned thing and are carried over by
 # command ID inside `_merge_set` (a rename is per-button, not per-set).
 OWNER_SET_KEYS = frozenset({"active", "order_land", "order_port", "enabled"})
-OWNER_TOP_KEYS = frozenset({"wheel_order", "left", "right"})
+# "wheel_mode" (task 181, 2026-08-11): "dropout" (default) or "fixed" — the
+# Controls editor's tucked-away switch beside "Wheel order…". Owner-owned for
+# the same reason wheel_order is: a default he never expressed an opinion
+# about is seeded from shipped, a choice he made is kept exactly as he left it.
+OWNER_TOP_KEYS = frozenset({"wheel_order", "left", "right", "wheel_mode"})
 # Sets that are OURS, merged one by one below; `custom_sets` is his entirely
 # and is never touched by any part of this module.
 MERGED_SECTIONS = ("categories", "app_sets")

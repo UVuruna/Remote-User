@@ -7,7 +7,7 @@
 
 // --- Sets picker (Settings → Sets, owner 2026-08-05) ----------------------
 // Chooses WHICH sets ride in the wheel on THIS phone: the required built-ins
-// are always on; the rest toggle up to WHEEL_MAX total (creation on the
+// are always on; the rest toggle up to wheelCap() total (creation on the
 // desktop — creation never happens here) plus the app-shortcuts toggle.
 // Stored per device via the prefs bridge, overriding the desktop defaults.
 
@@ -53,11 +53,11 @@ function setsRow(s, locked) {
       const was = p.state[s.name];
       p.state[s.name] = cb.checked;
       saveSetsPrefs(p);
-      if (cb.checked && visibleCount() > WHEEL_MAX) {
+      if (cb.checked && visibleCount() > wheelCap()) {
         cb.checked = false;
         if (was === undefined) delete p.state[s.name]; else p.state[s.name] = was;
         saveSetsPrefs(p);
-        showToast(`The wheel holds ${WHEEL_MAX} sets — untick one first`);
+        showToast(`The wheel holds ${wheelCap()} sets — untick one first`);
         return;
       }
       refreshCategories();
@@ -67,8 +67,33 @@ function setsRow(s, locked) {
   const ic = document.createElement("span");
   ic.className = "sets-ic";
   ic.innerHTML = svg(s.icon && ICONS[s.icon] ? s.icon : "grid");
-  row.append(cb, ic, document.createTextNode(s.name + (locked ? " — always on" : "")));
+  row.append(cb, ic, document.createTextNode(s.name + (locked ? " — always on" : "")),
+             setsEditButton(s));
   return row;
+}
+
+// THE DOOR INTO ONE SET'S OWN EDITOR (owner 2026-08-04, task 218b): from the
+// same panel where the sets are ticked on and off, he configures the
+// individual set — which buttons ride and where. A REQUIRED set is locked
+// against the tick and fully editable here: "always on the wheel" says nothing
+// about what is on its D-pad, and Mouse and Input are the two he arranges most.
+//
+// A button inside a <label> would otherwise toggle that label's checkbox on
+// its way past, which would tick a set off every time he opened its editor. The
+// click is swallowed in the capture phase — `keepFocus` acts on pointerup, so
+// the action has already run by the time the click is cancelled.
+function setsEditButton(s) {
+  const b = document.createElement("button");
+  b.type = "button";
+  b.className = "sets-edit";
+  b.innerHTML = svg("edit");
+  b.setAttribute("aria-label", `Edit the ${s.name} buttons`);
+  b.addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); }, true);
+  keepFocus(b, () => {
+    closeSetsPanel();
+    openSetEditor(s);
+  });
+  return b;
 }
 
 // One app-aware set (VSCode, Claude, Chrome, Explorer). It costs a wheel slot
@@ -91,11 +116,11 @@ function appSetRow(s) {
     // VSCode + Claude cost two, because a Claude tab shows both. Refuse the
     // tick that would overflow instead of letting the wheel drop a set the
     // owner already chose, and say why.
-    if (cb.checked && visibleCount() > WHEEL_MAX) {
+    if (cb.checked && visibleCount() > wheelCap()) {
       cb.checked = false;
       if (was === undefined) delete p.appState[s.name]; else p.appState[s.name] = was;
       saveSetsPrefs(p);
-      showToast(`The wheel holds ${WHEEL_MAX} sets — untick one first`);
+      showToast(`The wheel holds ${wheelCap()} sets — untick one first`);
       return;
     }
     refreshCategories();
@@ -108,7 +133,7 @@ function appSetRow(s) {
   badge.className = "sets-live";
   badge.dataset.set = s.name;
   badge.textContent = "on the wheel now";
-  row.append(cb, ic, document.createTextNode(s.name), badge);
+  row.append(cb, ic, document.createTextNode(s.name), badge, setsEditButton(s));
   return row;
 }
 
@@ -119,7 +144,7 @@ function refreshSetsMeta() {
   const count = setsPanel.querySelector(".sets-count");
   if (count) {
     const reserve = appSetReserve();
-    count.textContent = `${visibleCount()} of ${WHEEL_MAX} used`
+    count.textContent = `${visibleCount()} of ${wheelCap()} used`
       + (reserve ? ` — ${reserve} held for app shortcuts` : "");
   }
   const live = new Set(visibleAppSets().map((s) => s.name));
@@ -216,8 +241,8 @@ function openSetsPanel() {
   // has 377 px for ten rows — the cheapest 25 px in the panel, and the title
   // row reads better for it at every size.
   card.innerHTML = `<div class="sets-head"><h2>Wheel sets</h2>
-    <span class="sets-sub sets-count">${visibleCount()} of ${WHEEL_MAX} used${reserve ? ` — ${reserve} held for app shortcuts` : ""}</span></div>
-    <p class="sets-sub">Mouse, Input and Settings are always in the wheel. Pick the rest — up to ${WHEEL_MAX} in total, app shortcuts included. New sets are made on the PC (Remote User window → Controls…).</p>`;
+    <span class="sets-sub sets-count">${visibleCount()} of ${wheelCap()} used${reserve ? ` — ${reserve} held for app shortcuts` : ""}</span></div>
+    <p class="sets-sub">Mouse, Input and Settings are always in the wheel. Pick the rest — up to ${wheelCap()} in total, app shortcuts included. New sets are made on the PC (Remote User window → Controls…).</p>`;
 
   // Everything between the header and Done. In portrait it is a plain block
   // and changes nothing; in landscape it is the part that scrolls.

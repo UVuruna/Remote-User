@@ -62,9 +62,9 @@ from PySide6.QtWidgets import (
 )
 
 from gui.controls_data import (
-    DPAD_SLOTS, WHEEL_MAX, active_buttons, button_id, effective_wheel_order,
-    load_client_builtins, load_client_icons, merge_shipped_pools, natural_order,
-    shipped_actions_path, user_actions_path,
+    DPAD_SLOTS, WHEEL_MAX, WHEEL_MAX_DROPOUT, active_buttons, button_id,
+    effective_wheel_order, load_client_builtins, load_client_icons,
+    merge_shipped_pools, natural_order, shipped_actions_path, user_actions_path,
 )
 from gui.controls_order import LAND_SLOTS, PORT_SLOTS, OrderList, WheelOrderDialog
 from gui.controls_widgets import (
@@ -254,6 +254,25 @@ class ControlsEditor(QDialog):
         wheel_btn.clicked.connect(self._open_wheel_order)
         row.addWidget(wheel_btn)
         left.addLayout(row)
+        # Drop-out vs fixed (task 181, owner decree 2026-08-11, "the
+        # fixed-wheel variant still exists, tucked away in settings"): same
+        # domain as "Wheel order…", set-once, so it rides the same corner
+        # instead of a new box competing for the window's short axis. Default
+        # drop-out — a placed set sheds off the wheel and the cap rises to 10;
+        # fixed keeps a placed set on the wheel too, capped at 8.
+        mode_row = QHBoxLayout()
+        mode_row.addWidget(QLabel("Wheel mode"))
+        self.wheel_mode_combo = QComboBox()
+        self.wheel_mode_combo.addItem(
+            f"Drop-out — placed sets leave the wheel (up to {WHEEL_MAX_DROPOUT})",
+            "dropout")
+        self.wheel_mode_combo.addItem(
+            f"Fixed — every ticked set always shows (up to {WHEEL_MAX})",
+            "fixed")
+        mode = self.data.get("wheel_mode", "dropout")
+        self.wheel_mode_combo.setCurrentIndex(1 if mode == "fixed" else 0)
+        mode_row.addWidget(self.wheel_mode_combo, 1)
+        left.addLayout(mode_row)
 
         # right: the selected set
         right = QVBoxLayout()
@@ -442,7 +461,17 @@ class ControlsEditor(QDialog):
 
         # The set list measures itself (icons, suffixes and all) in
         # _reload_list — reuse that number instead of re-guessing it here.
-        side = self.set_list.minimumWidth() or (widest(names) + 90)
+        # "Wheel mode" (task 181, 2026-08-11) rides the SAME left column as
+        # the list — its combo carries the longest string in the whole
+        # window ("Drop-out — placed sets leave the wheel (up to 10)"), and
+        # the audit caught it clipped (needs 329, had 221) the first time
+        # this ran: the row's real need must compete for `side` too, or the
+        # window settles a width its own combo cannot fit in.
+        mode_texts = [self.wheel_mode_combo.itemText(i)
+                      for i in range(self.wheel_mode_combo.count())]
+        mode_w = (metrics.horizontalAdvance("Wheel mode")
+                  + widest(mode_texts) + 90)
+        side = max(self.set_list.minimumWidth() or (widest(names) + 90), mode_w)
         field = max(widest(shortcuts), widest(names), widest(kinds)) + 60
         caption = widest(("Shortcut", "Text", "Name", "Icon", "Does")) + 16
         # Column 2 holds ONLY the Record button now — "Press Enter afterwards"
@@ -873,6 +902,9 @@ class ControlsEditor(QDialog):
 
     def _save(self) -> None:
         self._store_current()
+        self.data["wheel_mode"] = self.wheel_mode_combo.currentData() or "dropout"
+        wheel_max = (WHEEL_MAX_DROPOUT if self.data["wheel_mode"] == "dropout"
+                     else WHEEL_MAX)
         incomplete = [s.get("name", "?") for s in self.data["custom_sets"]
                       if not active_buttons(s)]
         if incomplete:
@@ -895,14 +927,14 @@ class ControlsEditor(QDialog):
         reserve = max(per_process.values(), default=0)
         shown = [s for kind, _, s in self._entries()
                  if kind != "app_sets" and (s.get("required") or s.get("enabled", True))]
-        if len(shown) + reserve > WHEEL_MAX:
-            room = WHEEL_MAX - reserve
+        if len(shown) + reserve > wheel_max:
+            room = wheel_max - reserve
             extras = [s for s in shown if not s.get("required")][room - len(shown):]
             for s in extras:
                 s["enabled"] = False
             QMessageBox.information(
                 self, "Wheel limit",
-                f"The wheel holds up to {WHEEL_MAX} sets, and {reserve} of "
+                f"The wheel holds up to {wheel_max} sets, and {reserve} of "
                 f"them are held for app shortcuts that can appear together "
                 f"(VSCode and Claude share a window). That leaves {room} — "
                 f"the last {len(extras)} were left OFF by default (the "

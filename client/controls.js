@@ -851,12 +851,16 @@ function openWheel(side) {
   wheelEl.innerHTML = "";
   const cx = window.innerWidth / 2;
   const cy = window.innerHeight / 2;
-  const cats = allCats();
+  // wheelCats(side), not allCats() — task 181's drop-out wheel: no duplicate
+  // of the other side's placed set, and drop-out also sheds this side's own
+  // (sets.js). Renderer unchanged otherwise — it draws whatever list it gets.
+  const cats = wheelCats(side);
+  const currentCat = placedCat(side);
   const n = cats.length;
   cats.forEach((cat, i) => {
     const angle = -Math.PI / 2 + (i * 2 * Math.PI) / Math.max(1, n);
     const item = document.createElement("div");
-    item.className = "wheel-item" + (i === groups[side] ? " current" : "");
+    item.className = "wheel-item" + (cat === currentCat ? " current" : "");
     item.innerHTML = svg(cat.icon) + `<span>${cat.name}</span>`;
     // The wheel is where the colours SAY what they are — and a wheel item is
     // painted with `--glass-strong` (0.85), a different surface from a D-pad
@@ -865,9 +869,8 @@ function openWheel(side) {
     item.style.left = `${cx + WHEEL_RADIUS * Math.cos(angle)}px`;
     item.style.top = `${cy + WHEEL_RADIUS * Math.sin(angle)}px`;
     keepFocus(item, () => {
-      groups[side] = i;
-      // His choice outlives the next excursion (sets.js -> rememberGroup).
-      rememberGroup(side, cat.name);
+      groups[side] = allCats().indexOf(cat); // index into the FULL list
+      rememberGroup(side, cat.name); // outlives the next excursion (sets.js)
       renderGroup(side);
       closeWheel();
     });

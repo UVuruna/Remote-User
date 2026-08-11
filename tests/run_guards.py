@@ -66,6 +66,23 @@ def _app_set_wheel() -> None:
         check()
 
 
+def _wheel_dropout() -> None:
+    """THE WHEEL THAT SHEDS ITS ACTIVE SETS (task 181, 2026-08-11): a set
+    placed on either D-pad group drops off the wheel while it is placed,
+    no set ever rides both sides at once, and the cap rises to 10. The two
+    server-side cases (wheel_mode survives merge_shipped, reaches the phone
+    through _load_actions) run without node and are never skipped; the
+    client-side cases follow the app-set-wheel guard's own skip rule."""
+    import test_wheel_dropout
+    for _, check in test_wheel_dropout.TESTS:
+        if not test_wheel_dropout.shutil.which("node") and check not in (
+            test_wheel_dropout.test_wheel_mode_is_owner_owned,
+            test_wheel_dropout.test_wheel_mode_reaches_the_phone_through_load_actions,
+        ):
+            continue
+        check()
+
+
 def _voice_dedup() -> None:
     """Dictation never retypes across a ROUND BOUNDARY (task 75 REPEAT,
     2026-08-08 — 0.0.293 fixed a round re-typing its own growing partial on
@@ -176,6 +193,7 @@ FULL_ONLY_CHECKS = [
     ("control sets (never silently rewritten)", _control_sets),
     ("actions migration (a new version's fields reach HIS file)", _actions_migration),
     ("app sets (right window, and they pay for their seat)", _app_set_wheel),
+    ("wheel drop-out (a placed set sheds, never on both sides)", _wheel_dropout),
     ("voice dedup (dictation never retypes across a round boundary)", _voice_dedup),
     ("hold gesture (a resting finger picks a layout row up)", _hold_gesture),
     ("layout drag (a row dropped on another makes a grid)", _layout_drag),

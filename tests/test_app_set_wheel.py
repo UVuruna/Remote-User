@@ -68,7 +68,13 @@ def run_js(body: str, app_sets: list, prefs: dict,
            wheel_order: list | None = None) -> object:
     """Runs client/sets.js in node behind the four things it borrows from its
     neighbours — the prefs bridge (state.js) and the focused layout
-    (layouts.js) — and returns the JSON the body prints."""
+    (layouts.js) — and returns the JSON the body prints.
+
+    Pinned to FIXED mode (task 181, 2026-08-11): this whole file's "cap of 8"
+    checks predate the drop-out/fixed split and are written in terms of the
+    ORIGINAL, single cap — fixed mode is exactly that cap, unchanged. The
+    drop-out mode's own cap (10) and its placement-shedding rules are
+    test_wheel_dropout.py's job."""
     module = SETS.read_text(encoding="utf-8")
     for needed in ("function titleMatches", "function appSetMatches",
                    "function appSetReserve", "function enforceWheelCap",
@@ -80,11 +86,13 @@ function prefGet(k) {{ return STORE[k]; }}
 function prefSet(k, v) {{ STORE[k] = v; }}
 let layoutActive = null;
 let layouts = [];
+let groups = {{ left: 0, right: 0 }};
 {module}
 categories = {json.dumps(categories if categories is not None else [])};
 appSets = {json.dumps(app_sets)};
 customSets = {json.dumps(custom if custom is not None else [])};
 wheelOrder = {json.dumps(wheel_order if wheel_order is not None else [])};
+setWheelMode("fixed");
 {body}
 """
     with tempfile.TemporaryDirectory() as tmp:

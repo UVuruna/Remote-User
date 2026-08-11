@@ -150,9 +150,28 @@ function appSetReserve() {
 // and Settings are REQUIRED (`required` in actions.json — never hidden); the
 // other shipped sets (Edit, Attach, Navigate, Cursor, Media, Windows) and
 // the custom sets are toggleable; the app set rides along in layout focus.
-// Hard cap WHEEL_MAX total — over the cap, non-required sets are bumped from
-// the END (they come back when the app set goes away).
-const WHEEL_MAX = 8;
+// Hard cap over the composition total — over the cap, non-required sets are
+// bumped from the END (they come back when the app set goes away).
+//
+// TWO MODES (owner decree 2026-08-11, task 181, "THE WHEEL THAT SHEDS ITS
+// ACTIVE SETS"): drop-out is the DEFAULT — a set placed on either D-pad
+// group disappears off BOTH wheels while it rides there (see wheelCats()
+// below), and that freed-up room is why the cap rises to 10. Fixed keeps
+// today's behaviour (a placed set still offers itself in the wheel, cap 8)
+// as a tucked-away desktop option (Controls editor, beside "Wheel order…").
+// The no-duplicate rule — never the SAME set on both sides — ships in BOTH
+// modes; only the shedding of a side's OWN placed set is drop-out-only.
+const WHEEL_MAX_FIXED = 8;
+const WHEEL_MAX_DROPOUT = 10;
+let wheelMode = "dropout";
+
+function setWheelMode(m) {
+  wheelMode = m === "fixed" ? "fixed" : "dropout";
+}
+
+function wheelCap() {
+  return wheelMode === "fixed" ? WHEEL_MAX_FIXED : WHEEL_MAX_DROPOUT;
+}
 
 function visibleCount() {
   // What the picker charges against the cap. App sets are NOT free (owner
@@ -204,7 +223,7 @@ function capVictim() {
 // "the picker rotates" felt like.
 function enforceWheelCap() {
   const dropped = [];
-  for (let guard = 0; guard < 64 && visibleCount() > WHEEL_MAX; guard++) {
+  for (let guard = 0; guard < 64 && visibleCount() > wheelCap(); guard++) {
     const victim = capVictim();
     if (!victim) break;
     const p = setsPrefs();
@@ -247,10 +266,37 @@ function allCats() {
     .concat(visibleAppSets())
     .concat(customSets.filter(setOn));
   list = sortByWheelOrder(list);
-  for (let i = list.length - 1; list.length > WHEEL_MAX && i >= 0; i--) {
+  for (let i = list.length - 1; list.length > wheelCap() && i >= 0; i--) {
     if (!list[i].required) list.splice(i, 1);
   }
   return list;
+}
+
+// --- Placed sets: the no-duplicate rule and drop-out shedding (task 181) ---
+// `groups` ({left, right} → index into allCats()) is controls.js's own state,
+// declared after this file loads but read only at wheel-open time — by then
+// both scripts have run, same as `layoutActive`/`layouts` above.
+
+// The set currently riding one D-pad group, by REFERENCE into allCats() — or
+// null when that group has nothing yet (first connection, before `actions`
+// picks a default). Comparing by reference (not name) is deliberate: two
+// custom sets can share nothing but a name only by owner mistake, and
+// identity is exactly what allCats().indexOf() below needs back.
+function placedCat(side) {
+  return allCats()[groups[side]] || null;
+}
+
+// Which sets actually populate SIDE's wheel. The other side's placed set
+// never rides — no duplicate of a placed set on both groups at once, in
+// EITHER mode. Drop-out additionally sheds THIS side's own placed set: it
+// is already shown as the group's own center button, so offering it again
+// as a wheel choice is not a real option, and hiding it is the room the
+// cap gains (8 → 10).
+function wheelCats(side) {
+  const other = side === "left" ? "right" : "left";
+  const otherCat = placedCat(other);
+  const thisCat = wheelMode === "dropout" ? placedCat(side) : null;
+  return allCats().filter((c) => c !== otherCat && c !== thisCat);
 }
 
 
