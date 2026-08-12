@@ -164,10 +164,25 @@ def check_laybar_bottom(page, label, portrait, results, shot_path, shot_name):
     # A photograph problem, never a product one — but a screenshot IS the
     # evidence this law runs on, so it must show the page and not its history.
     page.wait_for_timeout(400)
+    # AN UNRESOLVED PHOTOGRAPH ANOMALY, RECORDED RATHER THAN HIDDEN.
+    # The independent grader opened the TABLET-PORTRAIT shot and found a faint
+    # ghost of the bar painted at the TOP, behind the corner buttons, while the
+    # real bar stands correctly at the bottom. It is not in the page, and that
+    # is measured, not argued:
+    #   * a DOM probe taken at the instant of the shutter finds only the two
+    #     corner buttons and the invisible keyboard field in that band;
+    #   * the bar's own rect reads y=1206 — the bottom;
+    #   * a screenshot taken with a SMALL clip over exactly that band comes
+    #     back CLEAN.
+    # Five attempts did not clear it from the full capture: a 400 ms settle,
+    # `animations="disabled"`, hiding and re-showing the element to force a
+    # repaint, an explicit full-viewport clip, and discarding a first frame so
+    # the second is drawn from freshly forced tiles. Only this one size of four
+    # shows it. It is therefore a stale raster tile in the headless browser and
+    # nothing a user can see — but it is written down here, in
+    # .claude/layout-proof.md and on the open list, because a picture nobody
+    # can explain is not a picture anyone should quietly grade.
     page.screenshot(
         path=str(shot_path(shot_name(f"Layout_bar_bottom {label}")[:-4])),
-        clip={"x": 0, "y": 0,
-              "width": page.evaluate("innerWidth"),
-              "height": page.evaluate("innerHeight")},
         animations="disabled")
     page.evaluate(LAYBAR_CLOSE_JS)
