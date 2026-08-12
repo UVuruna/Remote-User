@@ -70,6 +70,7 @@ def _encoder_fps(source) -> tuple[int, bool]:
     session._source = source
     session._encoder = "libx264"
     session._quality = {}
+    session._crop = None  # full frame — the region crop is test_region_stream's job
     session.width, session.height = source.stream_w, source.stream_h
     cmd = session._ffmpeg_cmd()
     return int(cmd[cmd.index("-r") + 1]), any("fps=" in str(a) for a in cmd)

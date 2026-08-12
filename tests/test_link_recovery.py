@@ -71,6 +71,7 @@ sys.path.insert(0, str(PROJECT / "server"))
 
 import focus_guard  # noqa: E402
 import presence  # noqa: E402
+import config_api  # noqa: E402
 import web  # noqa: E402
 
 ANDROID = PROJECT / "android/app/src/main/java/com/uvuruna/vibecoder"
@@ -180,7 +181,8 @@ class FakeInjector:
 def install_fakes() -> None:
     # `_send_config` asks Windows for the Tailscale address (a subprocess) —
     # a link test must not depend on this machine's VPN state.
-    web.pairing.get_tailscale_ip = lambda: None
+    # `_send_config` lives in config_api since 2026-08-12 (web imports it).
+    config_api.pairing.get_tailscale_ip = lambda: None
     # The focus guard polls the real foreground every 0.25 s. Nothing here is
     # about focus, and this test may never touch a window on the owner's PC.
     async def _no_watch(layouts, conn):
