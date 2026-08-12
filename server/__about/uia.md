@@ -92,8 +92,29 @@ creation source (filter: top strip within the window's top 15%, width ≥ 60 px
 — drops VSCode activity-bar/panel icons and Explorer's Home pills).
 Extraction re-finds the tab BY NAME inside the window after raising it (tabs
 shift; a stale point grabs the wrong one) with the pick point as fallback.
-All waits are trimmed to the working minimum — the owner found the visible
-clicking/choosing too slow.
+### There are no waits here any more — only timeouts (owner ruling 2026-08-12)
+
+His ruling, in translation: *estimating how long something needs to load is
+not allowed here or in any other place*. Every fixed sleep on this path was a
+guess at ANOTHER application's speed, and he was right to ask the prior
+question — is there really no signal? There is one for every case, and each
+sleep is now a `_poll()` on the condition it was guessing at, with the old
+number kept only as the give-up point:
+
+| Was | The condition now watched |
+|-----|---------------------------|
+| `MENU_WAIT_S` after the right-click | the menu-item search itself, repeated until it finds "new window" |
+| `0.4 s` after clicking an Explorer tab | the address band reading an EXISTING path, stable across two consecutive reads (evidence, not a clock — a tab already selected legitimately reads the same value) |
+| `0.25 s` before `Ctrl+W` | the source window really being the foreground window; on timeout the close is **skipped and logged**, because closing a tab in a stranger's window is far worse than leaving one open |
+| `0.2 s` after `Ctrl+W` | the source window's tab count really dropping |
+| `1.2 s` after the tear-off drag | **deleted** — `_wait_new_window` on the very next line already polls exactly that; the new window's rect is then watched until two reads agree, since the app may still be finishing its own tear-off |
+| `0.15 s` after raising, before reading tab rects | the same foreground poll (non-fatal: `_find_tab_rect` still re-finds the tab by name) |
+
+The micro-sleeps inside `_click` / `_held_drag` (8–40 ms) are deliberately
+untouched and say so in place: they are the physical pacing of an injected
+mouse gesture — a real held-button drag needs real milliseconds between its
+own synthetic input events to register as a drag at all — not an estimate of
+how fast some other program reacts.
 
 ## Step 3 (owner spec 2026-08-02)
 `focus_next_input(scope_hwnds)` — the `next_input` action: collect Edit +

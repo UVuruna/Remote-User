@@ -8,6 +8,52 @@ windows, and the watcher that decides when it may go. Split out of
 module knows nothing about layouts — only "work is happening" and "the
 streamed picture has stopped moving".
 
+## The two kinds (owner decree 2026-08-12)
+
+He named both himself: *"1. vrsta je loading full screen / 2. vrsta je loading
+samo CUBE bez background"* (lang-ok: owner quote). The split is decided by
+**what is happening behind the overlay, and by nothing else**:
+
+| Kind | Looks like | Used when |
+|------|-----------|-----------|
+| `LOADING_FULL` | opaque veil, full-size cube | the PC's own picture is about to change in a way he must not watch — windows climbing out of the taskbar, a grid being built, a layout torn apart |
+| `LOADING_CUBE` | no veil, cube at 0.6, label in its own bordered pill | we are only WAITING FOR AN ANSWER, or watching something open that is worth seeing open |
+
+His reason for the second kind, in his own example: while Chrome loads, *"na
+taj način će korisnik znati da se dešava učitavanje ali će i vidjeti da se u
+pozadini otvara to jest da nije još gotovo"* (lang-ok: owner quote). There is
+nothing ugly to cover there — only time to account for — and covering it would
+hide the only progress there is.
+
+**Both kinds are the FRONT and gate nothing behind them** (his rule, restated
+the same day: *"loading animacija je uvek FRONT i nikada ne treba da zavisi od
+nje ono što se dešava iza"* — lang-ok: owner quote). No server path waits on
+the overlay; the work runs to completion whether it is up, bare or absent.
+Both still BLOCK taps: bare is transparent, not inert, and a second tap
+through it would fire a second action against a PC already working on the
+first.
+
+Every call site passes its kind explicitly AND carries a matching
+`// LOADING: FULL|CUBE — why` comment. Both halves are gated by
+`tests/test_loading_kind.py`, which also exists so the eventual move to the
+shared **Loading Cube** gadget has the whole inventory in one grep. Today:
+14 full-screen sites, 6 cube-only.
+
+### What staging it for the audit found
+The overlay had never been photographed in this project's life — the same
+blindness that let the bottom layout bar sit mid-screen through two rounds.
+Two real defects in the shape that had shipped all along fell out on the
+first shot:
+
+- the label sat **on** the cube. `.cube-scene` is a 110 px box but the cube
+  inside it is rotated, so its silhouette stands ~155 px tall and overflows
+  its own box by ~22 px — the 40 px gap was really 18. Now 64 px (40 px for
+  the smaller cube-only variant).
+- the truncation tooth had never met a **progress ellipsis**. "Arranging the
+  windows…" is a complete sentence about unfinished work, not a cut string;
+  it declares itself with `data-in-progress` (beside the existing
+  `data-opens-more`) rather than being quietly allow-listed in the test.
+
 ## The rule it exists for (owner 2026-08-03, said more than once)
 **The animation lasts as long as the WORK does — not until the server
 answers.** `layout_state` only ARMS the watcher (`settleLayLoading`); the
