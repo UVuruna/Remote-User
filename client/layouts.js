@@ -155,7 +155,8 @@ function updateLayoutBar() {
 // climbing out of the taskbar.
 function focusLayout(index) {
   send({ type: "layout_focus", index });
-  showLayLoading(index < 0 ? "Back to the desktop…" : "Opening the layout…");
+  // LOADING: FULL — focus raises or minimizes every member
+  showLayLoading(index < 0 ? "Back to the desktop…" : "Opening the layout…", LOADING_FULL);
 }
 
 // The bar cycles positions [Desktop, layout 0, layout 1, …]; index -1 on the
@@ -796,7 +797,8 @@ function openMemberPanel(index) {
       keepFocus(eject, () => {
         closeLayoutPanel();
         send({ type: "layout_member_eject", index, member: k });
-        showLayLoading("Moving the window…");
+        // LOADING: FULL — a member is being thrown out and the rest re-placed
+        showLayLoading("Moving the window…", LOADING_FULL);
       });
       card.appendChild(layRow(
         // A server too old to send `member_titles` still gets a usable
@@ -812,7 +814,8 @@ function openMemberPanel(index) {
           send(msg);
           // The survivors are re-placed into the new shape, so real windows
           // move on the PC — the cube covers it, exactly as for a reshape.
-          showLayLoading("Rearranging the layout…");
+          // LOADING: FULL — the survivors are re-arranged on the PC
+          showLayLoading("Rearranging the layout…", LOADING_FULL);
         }, eject));
     }
     if (choices.length) {

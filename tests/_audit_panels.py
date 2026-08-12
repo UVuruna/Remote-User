@@ -342,6 +342,31 @@ LAYBAR_CLOSE_JS = (
 APPEARANCE_STAGE_JS = "openAppearancePanel()"
 APPEARANCE_CLOSE_JS = "closeAppearancePanel()"
 
+# THE LOADING OVERLAY HAD NEVER BEEN PHOTOGRAPHED (2026-08-12). It is the
+# single largest thing the page can put on screen and the audit had no stage
+# for it — the same blindness that let the bottom layout bar sit mid-screen
+# through two rounds. Both of the owner's kinds are staged, because they are
+# two different pictures and only one of them was ever designed:
+#
+#   FULL — the opaque veil; the shape that has always shipped.
+#   CUBE — "samo CUBE bez background" (owner 2026-08-12): the veil is gone,
+#          the cube is a badge over live content and the label needs its own
+#          pill to stay readable over an unknown picture. That pill is a NEW
+#          surface over unknown pixels, which is exactly what the contrast
+#          tooth exists to measure.
+#
+# The transition is killed for the shot: the overlay cross-fades over 500 ms
+# and a screenshot taken mid-fade measures an opacity, not a design.
+LOADING_FULL_JS = (
+    "document.getElementById('lay-loading').style.transition='none';"
+    "showLayLoading('Arranging the windows…', LOADING_FULL)")
+LOADING_CUBE_JS = (
+    "document.getElementById('lay-loading').style.transition='none';"
+    "showLayLoading('Opening Google Chrome…', LOADING_CUBE)")
+LOADING_CLOSE_JS = (
+    "hideLayLoading('audit');"
+    "document.getElementById('lay-loading').style.transition=''")
+
 # Every overlay panel the phone shows, each opened in its FULLEST real
 # state. Hoisted out of `main()` in build round R3 so the same list can be
 # swept once per LOOK (three themes x two fills) instead of once per run.
@@ -437,6 +462,10 @@ PANELS = (
     # an answer, and the card has exactly one state.
     ("Phone card", "openPhonePanel()",
      "closePhonePanel()", "#phone-panel .sets-card"),
+    ("Loading full screen", LOADING_FULL_JS,
+     LOADING_CLOSE_JS, "#lay-loading"),
+    ("Loading cube only", LOADING_CUBE_JS,
+     LOADING_CLOSE_JS, "#lay-loading"),
     ("Appearance panel", APPEARANCE_STAGE_JS,
      APPEARANCE_CLOSE_JS, "#appearance-panel .sets-card"),
     ("Aspect panel + Move handle",

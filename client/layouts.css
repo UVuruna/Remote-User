@@ -767,7 +767,14 @@ body.laybar-overflow:not(.laybar-bottom) {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 40px;
+  /* THE GAP IS NOT WHAT IT LOOKS LIKE (measured 2026-08-12, on the overlay's
+     first screenshot in this project's life). `.cube-scene` is a 110px box,
+     but the cube inside it is ROTATED — its projected silhouette stands about
+     155px tall, so it overflows its own box by ~22px on each side and eats
+     that much of the gap below it. At 40px the label was left with 18px and
+     sat visibly ON the cube's lower corner. 64px is the ~42px this was always
+     meant to be. `.cube-only` re-states it for its own smaller cube. */
+  gap: 64px;
   color: var(--text-primary);
   font: 600 15px system-ui, sans-serif;
   opacity: 0;
@@ -791,6 +798,36 @@ body.laybar-overflow:not(.laybar-bottom) {
   pointer-events: auto;
   transition: opacity 500ms cubic-bezier(0.4, 0, 0.2, 1), visibility 0s;
 }
+/* THE SECOND KIND: CUBE ONLY, NO BACKGROUND (owner decree 2026-08-12 —
+   "2. vrsta je loading samo CUBE bez background"; lang-ok: owner quote).
+   Used where nothing ugly is happening behind and he should SEE the work —
+   his own example is Chrome opening. The veil goes, the cube shrinks so it
+   reads as a badge over live content rather than a curtain, and the label
+   takes a pill of its own because it now sits over an unknown picture and
+   plain text on plain text is unreadable. It still blocks taps (the
+   operation IS in flight) — see the LOADING_CUBE comment in loading.js.
+   The scale rides `--cube-scale` because the bob keyframe owns `transform`
+   and a second transform on the same element would simply be overridden. */
+#lay-loading.cube-only {
+  background: transparent;
+  /* 0.6 x 110px = 66px, whose rotated silhouette overflows by ~13px — so the
+     same arithmetic as above, at this cube's size. */
+  gap: 40px;
+  --cube-scale: 0.6;
+}
+#lay-loading.cube-only span {
+  background: var(--surface-2);
+  color: var(--text-primary);
+  padding: 8px 16px;
+  border-radius: var(--radius-m);
+  /* The border is not decoration: this pill is the only thing standing
+     between the label and an UNKNOWN picture (whatever the PC is showing
+     through the transparent overlay). A surface with no edge dissolves into
+     a busy frame; the shadow alone cannot draw one on light content. */
+  border: 1px solid var(--border-strong);
+  box-shadow: 0 4px 20px var(--scrim-strong);
+}
+
 /* NOTE: the fade is opacity-only on purpose — `.cube-scene`'s transform is
    owned by the cube-bob animation AND by the JS spin, so a transition on it
    would simply be overridden (and a scale on #lay-loading itself would expose
@@ -826,9 +863,13 @@ body.laybar-overflow:not(.laybar-bottom) {
 .cf-right  { background: #F97316; transform: rotateY(90deg)   translateZ(55px); }
 .cf-top    { background: #FFD700; transform: rotateX(90deg)   translateZ(55px); }
 .cf-bottom { background: #7E6B8F; transform: rotateX(-90deg)  translateZ(55px); }
+/* `--cube-scale` defaults to 1 (the full-screen kind) and is set to a
+   fraction by `.cube-only` above. It lives in the keyframe rather than in a
+   second rule because an animation on `transform` wins over any static
+   `transform` on the same element. */
 @keyframes cube-bob {
-  0%, 100% { transform: translateY(-6px); }
-  50% { transform: translateY(6px); }
+  0%, 100% { transform: translateY(-6px) scale(var(--cube-scale, 1)); }
+  50% { transform: translateY(6px) scale(var(--cube-scale, 1)); }
 }
 
 

@@ -203,7 +203,17 @@ window.__truncated = (root) => {
     const t = (n.nodeValue || '').replace(/\\s+$/, '');
     if (!/(\\u2026|\\.\\.\\.)$/.test(t)) continue;
     const el = n.parentElement;
-    if (!el || el.closest('[data-opens-more]')) continue;
+    // TWO KINDS OF DELIBERATE ELLIPSIS, each declared on the element
+    // itself rather than allow-listed here where no one editing the
+    // product would ever see it:
+    //   data-opens-more  — "there is more behind me" (More languages…)
+    //   data-in-progress — "this is still happening" (2026-08-12). The
+    //     loading overlay's label reads "Arranging the windows…", and its
+    //     ellipsis is the whole message: the sentence is COMPLETE and the
+    //     work is not. Found the day the overlay was first photographed —
+    //     it had never been in the sweep at all, which is why this tooth
+    //     had never met a progress ellipsis before.
+    if (!el || el.closest('[data-opens-more], [data-in-progress]')) continue;
     const st = getComputedStyle(el);
     if (st.display === 'none' || st.visibility === 'hidden') continue;
     const range = document.createRange();

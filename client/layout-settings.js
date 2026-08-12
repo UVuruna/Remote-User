@@ -176,7 +176,8 @@ function sendLayoutShape(index, grid, orient) {
   }
   send({ type: "layout_grid", index, grid: grid || "", orient });
   closeLayoutPanel();
-  showLayLoading("Reshaping the layout…");
+  // LOADING: FULL — re-placing every member into a new arrangement
+  showLayLoading("Reshaping the layout…", LOADING_FULL);
 }
 
 // --- SPLIT a grid into solo layouts (task 197a) ----------------------------
@@ -186,7 +187,8 @@ function sendLayoutShape(index, grid, orient) {
 function sendSplit(index) {
   closeLayoutPanel();
   send({ type: "layout_split", index });
-  showLayLoading("Splitting the layout…");
+  // LOADING: FULL — the grid comes apart into solo layouts — windows move
+  showLayLoading("Splitting the layout…", LOADING_FULL);
 }
 
 // --- ADD A WINDOW (task 195) ------------------------------------------------
@@ -203,7 +205,8 @@ function openAddMemberPanel(index) {
   if (!lay || (lay.members || 1) >= 4) return;
   addingTo = { index };
   closeLayoutPanel();
-  showLayLoading("Collecting windows and tabs…");
+  // LOADING: CUBE — a pure enumeration — nothing on the PC moves
+  showLayLoading("Collecting windows and tabs…", LOADING_CUBE);
   send({ type: "layout_member_list", index });
 }
 
@@ -318,7 +321,8 @@ function renderAddMemberGrid() {
   actions.className = "lay-actions";
   actions.appendChild(layChip("Back", false, () => {
     send({ type: "layout_member_list", index });
-    showLayLoading("Collecting windows and tabs…");
+    // LOADING: CUBE — a pure enumeration — nothing on the PC moves
+    showLayLoading("Collecting windows and tabs…", LOADING_CUBE);
   }));
   actions.appendChild(layChip("Add", true, sendAddMember));
   card.appendChild(actions);
@@ -334,7 +338,8 @@ function sendAddMember() {
   send(msg);
   addingTo = null;
   closeLayoutPanel();
-  showLayLoading("Arranging the windows…");
+  // LOADING: FULL — adding a member re-places the whole layout
+  showLayLoading("Arranging the windows…", LOADING_FULL);
 }
 
 function ratioLabel(lay) {
@@ -586,7 +591,8 @@ function renderAspectPanel() {
     });
     aspecting = null;
     closeLayoutPanel();
-    showLayLoading("Reshaping the layout…");
+    // LOADING: FULL — re-placing every member into a new arrangement
+    showLayLoading("Reshaping the layout…", LOADING_FULL);
   }));
   card.appendChild(actions);
   layPanel.appendChild(card);

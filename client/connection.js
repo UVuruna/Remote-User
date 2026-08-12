@@ -355,7 +355,8 @@ function connect() {
           // server's resume finds the window gone, its own next frame carries
           // neither `active` nor `resuming` and the final `else` clears it.
           orientationRestoring = true;
-          showLayLoading("Back to your layout…");
+          // LOADING: FULL — the PC is re-focusing the layout — windows move
+          showLayLoading("Back to your layout…", LOADING_FULL);
         } else if (layoutActive === null && layoutRestore &&
             layouts[layoutRestore.index] &&
             layouts[layoutRestore.index].name === layoutRestore.name) {
@@ -391,7 +392,8 @@ function connect() {
           // settle timer already ticking) that only the real move's
           // layout_state can satisfy — the same re-arm the visibilitychange
           // handler below already relies on for the sibling case.
-          showLayLoading("Back to your layout…");
+          // LOADING: FULL — same re-focus, the retry arm — windows move
+          showLayLoading("Back to your layout…", LOADING_FULL);
         } else if (layoutActive !== null && layouts[layoutActive]) {
           layoutRestore = { index: layoutActive, name: layouts[layoutActive].name };
           // A real focus landed (the restore's own reply, or an ordinary
@@ -588,7 +590,8 @@ document.addEventListener("visibilitychange", () => {
       RETURN.t0 = performance.now();
       RETURN.marks = [];
       RETURN.sent = false;
-      showLayLoading("Back to your layout…");
+      // LOADING: FULL — returning from an excursion re-focuses the layout
+      showLayLoading("Back to your layout…", LOADING_FULL);
     }
     ensureConnected();
   }

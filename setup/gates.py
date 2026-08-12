@@ -334,6 +334,19 @@ def input_gate(step, run) -> None:
          "washed-out mean (tests/test_loading_settle.py)")
     run([sys.executable, str(PROJECT_DIR / "tests" / "test_loading_settle.py")])
 
+    # AND IT MAY NOT COVER WHAT HE ASKED TO SEE (owner decree 2026-08-12). He
+    # named two kinds — full screen, and "samo CUBE bez background" — and the
+    # split is decided by what is happening BEHIND: windows really moving must
+    # be covered, while an app opening is the only progress there is to watch
+    # and covering it hides everything. Every call site declares its kind in
+    # the code AND in a comment, and the gate holds the two to each other,
+    # because a stale inventory comment is worse than none (this repo has met
+    # that failure before). The inventory is also what the move to the shared
+    # Loading Cube gadget will be read off.
+    step("0ab/6  LOADING KIND GATE — every animation declares full-screen or "
+         "cube-only, in code and comment (tests/test_loading_kind.py)")
+    run([sys.executable, str(PROJECT_DIR / "tests" / "test_loading_kind.py")])
+
     # THE ARRANGEMENT FOLLOWS HIS CHOICE, NOT THE ORIENTATION (owner ruling
     # 2026-08-09, task 177): portrait defaults to the column and landscape to
     # the cross exactly as before, but an explicit per-orientation choice

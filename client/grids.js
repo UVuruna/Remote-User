@@ -106,7 +106,8 @@ function mergeLayouts(source, target) {
   if (size !== 3) {
     send({ type: "layout_merge", source, target });
     closeLayoutPanel();
-    showLayLoading("Building the grid…");
+    // LOADING: FULL — the server is merging windows into a grid
+    showLayLoading("Building the grid…", LOADING_FULL);
     return;
   }
   const orient = dst.orient === "portrait" ? "portrait" : "landscape";
@@ -124,7 +125,8 @@ function mergeLayouts(source, target) {
   GRID_THREE.forEach((g) => row.appendChild(gridChip(g, orient, false, () => {
     send({ type: "layout_merge", source, target, grid: g });
     closeLayoutPanel();
-    showLayLoading("Building the grid…");
+    // LOADING: FULL — the server is merging windows into a grid
+    showLayLoading("Building the grid…", LOADING_FULL);
   })));
   const actions = document.createElement("div");
   actions.className = "lay-actions";

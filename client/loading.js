@@ -258,7 +258,44 @@ function settleStreamReset() {
   }, SETTLE_SAMPLE_MS);
 }
 
-function showLayLoading(text) {
+// THE TWO KINDS OF LOADING (owner decree 2026-08-12, and he named them
+// himself: "1. vrsta je loading full screen / 2. vrsta je loading samo CUBE
+// bez background" — lang-ok: owner quote).
+//
+// The distinction is about WHAT IS HAPPENING BEHIND, and nothing else:
+//
+//   LOADING_FULL — the PC's own picture is about to change in a way he must
+//     not watch: windows climbing out of the taskbar, a grid being built, a
+//     layout being torn apart. The overlay is opaque and the whole screen
+//     becomes the animation. This is what the module was born for.
+//
+//   LOADING_CUBE — we are only WAITING FOR AN ANSWER, or watching something
+//     open that is worth seeing open. His own example: while Chrome loads,
+//     the cube spins over a transparent page, "so the user will know loading
+//     is happening but will also SEE it opening in the background, that is,
+//     that it is not finished yet". Hiding that would be a lie of omission —
+//     there is nothing ugly to cover, only time to account for.
+//
+// The overlay is the FRONT in BOTH kinds and gates nothing behind it (his
+// rule, restated 2026-08-12: "loading animacija je uvek FRONT i nikada ne
+// treba da zavisi od nje ono što se dešava iza" — lang-ok: owner quote).
+// Neither kind is on any code path the server waits for; the work runs to
+// completion whether the overlay is up, bare, or absent.
+//
+// Both kinds still BLOCK taps. Bare is transparent, not inert: the operation
+// really is in flight, and a second tap through it would fire a second
+// action against a PC already working on the first.
+//
+// Every call site declares its kind EXPLICITLY and carries the matching
+// `// LOADING: FULL|CUBE — why` comment, so the classification can be read
+// off the code rather than inferred. Both halves are gated by
+// tests/test_loading_kind.py, which also exists so the eventual move to the
+// shared Loading Cube gadget has the full inventory in one grep.
+const LOADING_FULL = "full";
+const LOADING_CUBE = "cube";
+
+function showLayLoading(text, kind) {
+  layLoading.classList.toggle("cube-only", kind === LOADING_CUBE);
   layLoading.querySelector("span").textContent = text || "Working…";
   // A new operation — stop judging the old one; watch again when it answers.
   clearInterval(settleTimer);

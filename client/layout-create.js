@@ -65,7 +65,8 @@ function startListSource() {
   creating = newCreation("list");
   refreshNewlayButton();
   closeLayoutPanel();
-  showLayLoading("Collecting windows and tabs…");
+  // LOADING: CUBE — a pure enumeration — nothing on the PC moves
+  showLayLoading("Collecting windows and tabs…", LOADING_CUBE);
   send({ type: "layout_list" });
 }
 
@@ -159,7 +160,8 @@ async function openRecentsPanel() {
   if (!creating) creating = newCreation("new");
   refreshNewlayButton();
   closeLayoutPanel();
-  showLayLoading("Asking the PC what it can open…");
+  // LOADING: CUBE — a pure query of what the PC could open
+  showLayLoading("Asking the PC what it can open…", LOADING_CUBE);
   let list = [];
   try {
     const res = await fetch(`/recents?token=${encodeURIComponent(token)}`);
@@ -255,7 +257,8 @@ function recentRow(e) {
 // window's arrival and not a reply about an intention.
 async function openRecentEntry(e) {
   closeLayoutPanel();
-  showLayLoading(`Opening ${e.label}…`);
+  // LOADING: CUBE — his own example: he should SEE the app opening behind
+  showLayLoading(`Opening ${e.label}…`, LOADING_CUBE);
   let data = {};
   try {
     const res = await fetch(`/recents/open?token=${encodeURIComponent(token)}`, {
@@ -304,7 +307,8 @@ async function openRecentHistoryPanel() {
   if (!creating) creating = newCreation("recent");
   refreshNewlayButton();
   closeLayoutPanel();
-  showLayLoading("Reading the layout history…");
+  // LOADING: CUBE — a pure read of the creation log
+  showLayLoading("Reading the layout history…", LOADING_CUBE);
   send({ type: "layout_recent" });
 }
 
@@ -385,7 +389,8 @@ function recentHistoryRow(e) {
 // while the PC works.
 function useRecentHistory(e) {
   closeLayoutPanel();
-  showLayLoading(`Re-creating ${e.name}…`);
+  // LOADING: FULL — re-creating a layout really places windows
+  showLayLoading(`Re-creating ${e.name}…`, LOADING_FULL);
   send({ type: "layout_recent_use", id: e.id });
   creating = null;
   refreshNewlayButton();
@@ -922,7 +927,8 @@ function renderCreationPanel() {
     closeLayoutPanel();
     // Tab extraction takes a few seconds of visible work on the PC — the
     // overlay says so instead of a frozen-looking phone (owner 2026-08-02).
-    showLayLoading("Arranging the windows…");
+    // LOADING: FULL — the server is extracting tabs and placing windows
+    showLayLoading("Arranging the windows…", LOADING_FULL);
   });
   if (!ready) {
     create.classList.add("lc-off");
