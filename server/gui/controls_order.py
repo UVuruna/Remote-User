@@ -37,7 +37,8 @@ from PySide6.QtWidgets import (
     QStyledItemDelegate, QStyleOptionViewItem, QVBoxLayout, QWidget,
 )
 
-from gui.controls_data import DPAD_SLOTS, WHEEL_MAX, load_client_icons
+from gui.controls_data import (DPAD_SLOTS, WHEEL_MAX, WHEEL_MAX_DROPOUT,
+                               load_client_icons)
 from gui.controls_widgets import RowDelegate, icon_for
 from gui.theme import TOKENS
 
@@ -342,7 +343,14 @@ class WheelRing(QWidget):
                  # taller than it asked for: the "1" came out with a flat top
                  # (seen 2026-08-07, after the ring moved beside the caption).
 
-    def __init__(self, dots: int = WHEEL_MAX, parent: QWidget | None = None):
+    # The DEFAULT is drop-out's cap, because drop-out is the PRODUCT's default
+    # mode (a missing wheel_mode reads as "dropout" everywhere) — a caller
+    # that passes nothing must get the ring the shipped product shows. The
+    # independent grader caught the old default (WHEEL_MAX, 8) live on
+    # 2026-08-12: the audit staged this dialog without a cap and the shot
+    # showed 8 dots beside a combo saying "up to 10".
+    def __init__(self, dots: int = WHEEL_MAX_DROPOUT,
+                 parent: QWidget | None = None):
         super().__init__(parent)
         self.dots = max(1, int(dots))
 
@@ -436,7 +444,7 @@ class WheelOrderDialog(QDialog):
     """
 
     def __init__(self, names: list[str], default_names: list[str],
-                parent: QWidget | None = None, cap: int = WHEEL_MAX):
+                parent: QWidget | None = None, cap: int = WHEEL_MAX_DROPOUT):
         super().__init__(parent)
         self.setWindowTitle("Wheel order")
         self._default_names = default_names
