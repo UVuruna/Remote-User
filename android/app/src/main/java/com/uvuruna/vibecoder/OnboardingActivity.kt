@@ -45,9 +45,13 @@ class OnboardingActivity : AppCompatActivity() {
                 setDesiredBarcodeFormats(ScanOptions.QR_CODE)
                 setPrompt(getString(R.string.scan_qr))
                 setBeepEnabled(false)
-                // false = follow the phone's orientation (portrait when held
-                // upright); the default (true) forced the scanner to landscape.
-                setOrientationLocked(false)
+                // true = CaptureManager reads the device's CURRENT orientation
+                // at open and pins the scanner to it — portrait when held
+                // upright. false did the opposite of what it sounds like
+                // (owner report 2026-08-12, scanner opened sideways): it only
+                // SKIPS the lock call, leaving the library's own manifest
+                // default in charge, and that default is sensorLandscape.
+                setOrientationLocked(true)
             })
         }
         findViewById<Button>(R.id.btn_connect).setOnClickListener {

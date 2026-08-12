@@ -796,7 +796,15 @@ class MainActivity : AppCompatActivity() {
         requestedOrientation = when (mode) {
             "portrait" -> android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
             "landscape", "wide" -> android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
-            else -> android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+            // FULL_SENSOR, not UNSPECIFIED (owner report 2026-08-12, the
+            // tablet never rotated at full desktop): UNSPECIFIED means "no
+            // preference", which bows to the SYSTEM auto-rotate switch — on a
+            // tablet with rotation lock engaged that is a permanent pin, and
+            // the app hides the system bars so the switch is not even in
+            // reach. Free rotation here is an app decision, like a video
+            // player's: follow the sensor in all four directions regardless
+            // of the system toggle.
+            else -> android.content.pm.ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR
         }
     }
 
