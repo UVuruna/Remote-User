@@ -400,6 +400,9 @@
         },
         {
           "action": "appearance"
+        },
+        {
+          "action": "notices"
         }
       ]
     }

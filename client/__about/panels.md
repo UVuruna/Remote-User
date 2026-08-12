@@ -35,7 +35,8 @@ standing between that file and THE STRUCTURE LAW's 1,000-line ceiling by the
 time Settings → **Voice** needed a seventh (2026-08-12).
 
 `sets` · `region` · `quality` · `dictation` · `phone` · `notifyvoice` ·
-`appearance` ([Appearance Panel](appearance-panel.md), owner ballot
+`notices` ([Notify](notify.md) — WHEN this phone listens: only while the app
+is open in the background, the default, or always) · `appearance` ([Appearance Panel](appearance-panel.md), owner ballot
 2026-08-12 — how THIS device looks; it left the PC's Settings window for the
 same reason **Voice** did) · `anywhere` — every kind whose whole action is
 "open that card". Each entry is

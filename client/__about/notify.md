@@ -110,6 +110,55 @@ bug of 2026-08-11.
 sends `false`, and the banner is raised regardless — a server-side mute is a
 separate, higher-priority rule from the phone's own per-device switches below.
 
+## Settings → Notices: WHEN this phone listens (owner 2026-08-12)
+
+`openNoticeModePanel()` — reached from the Settings set's **Notices** button
+(`notices` in controls.js's `BUILTINS`, wired through panels.js's
+`PANEL_KINDS`, element `#notice-mode-panel` created here and registered in
+panels.css's overlay selector lists like the Voice panel above).
+
+His report, in translation: *"You keep swinging between two extremes — one is
+that notifications arrive even when my app is closed, the other that they do
+not arrive even when my phone is locked. … I want an OPTION in settings where
+the user chooses."*
+
+**Naming the two states apart IS the feature**, because they are what kept
+being confused:
+
+- the app **running in the background** — behind other apps, or with the phone
+  locked and the screen off. A notice arrives here under BOTH choices, always.
+  Locking removes no task, so Android never calls `onTaskRemoved` and the
+  channel simply lives on. This is the case he reported as broken.
+- the app **closed** — swiped out of recents. This, and only this, is what the
+  setting is about.
+
+Two rows, each a sentence rather than a segmented label:
+
+- *"Only while the app is open in the background"* — the DEFAULT, and exactly
+  what 0.0.127 shipped that morning under his own rule: the channel stops on a
+  swipe and the PC's queue holds what finishes for up to 30 minutes / 20
+  notices.
+- *"Always, even after I close the app"* — the service is not stopped on the
+  swipe, so a notice still reaches a shut app.
+
+Stored per device as `noticeWhen` through the prefs bridge (`noticeMode()` /
+`setNoticeMode()`) — never bare localStorage, which is keyed by ORIGIN and
+split this app's state across its LAN and Tailscale addresses once already
+(2026-08-05). Nothing about it rides the `config` frame: it is a fact about ONE
+handset's service, like the voice above. The service reads the SAME store while
+no page exists (`Prefs.noticeAlways` → `NoticeService.onTaskRemoved`), and
+anything that is not the literal `"always"` reads as the shipped default, so a
+device that never opens this card cannot be widened by accident.
+
+**The honest limit is on the card, not in a footnote**: after a phone restart
+notices resume only once Vibe Coder has been opened one time — true of both
+choices, and the word "Always" must not be allowed to promise otherwise.
+
+Gates: `tests/test_notice_channel.py` (default, the "always" branch, the locked
+phone under either choice, the per-device store, and the four links that make
+the card reachable) and `tests/test_notify_prefs.py`, which EXECUTES the page's
+default rule in node.
+
 ## THE LAST-RESORT RULE (task 226, owner ballot verdict)
 
 `notifyPrefs()` reads what the switches below are set to; `handleNotify()`

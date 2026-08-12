@@ -591,3 +591,160 @@ function closeNotifyVoicePanel() {
 voicePanel.addEventListener("pointerdown", (e) => {
   if (e.target === voicePanel) closeNotifyVoicePanel();   // backdrop tap = done
 });
+
+// --- Settings → Notices: WHEN this phone listens (owner 2026-08-12) --------
+//
+// His words, in translation: *"You keep swinging between two extremes — one is
+// that notifications arrive even when my app is closed, the other that they do
+// not arrive even when my phone is locked. … I want an OPTION in settings
+// where the user chooses whether notifications arrive ALWAYS, even when the
+// app is shut down, or ONLY while the app is running in the background."*
+//
+// TWO STATES THAT KEPT BEING CONFUSED, and naming them apart IS the feature:
+//   • the app RUNNING in the background — behind other apps, or with the phone
+//     locked and the screen off. A notice must arrive in this state under BOTH
+//     choices, always, and that is the case he actually reported as broken.
+//   • the app CLOSED — swiped out of recents. This choice, and only this
+//     choice, is about that state.
+//
+// The default is what 0.0.127 shipped this morning (his own rule of the same
+// day): closing the app stops the channel, and the PC's queue holds whatever
+// finishes for up to 30 minutes. A device that never opens this card behaves
+// exactly as it did then — the pref is absent and `noticeMode()` answers
+// "background".
+//
+// PER DEVICE, through the SharedPreferences bridge, never bare localStorage
+// (keyed by ORIGIN, and the shell alternates between the LAN and Tailscale
+// addresses — the "picker rotates" bug of 2026-08-05). Nothing about this rides
+// the `config` frame: it is a fact about ONE handset's service, exactly like
+// the voice above, and the service itself reads the same store this card writes
+// (NoticeService.onTaskRemoved → Prefs.noticeAlways).
+
+const noticeModePanel = document.createElement("div");
+noticeModePanel.id = "notice-mode-panel";
+noticeModePanel.hidden = true;
+document.body.appendChild(noticeModePanel);
+const noticeModeOpened = { t: 0 };
+ghostClickArmor(noticeModePanel, noticeModeOpened);   // panels.js
+
+const NOTICE_MODE_BACKGROUND = "background";
+const NOTICE_MODE_ALWAYS = "always";
+
+/** This device's answer. Anything that is not the explicit "always" — an
+ *  unset pref, a corrupted one, an older store — is the safe, shipped
+ *  behaviour, so the choice can only ever be widened by a deliberate tap. */
+function noticeMode() {
+  return prefGet("noticeWhen") === NOTICE_MODE_ALWAYS
+    ? NOTICE_MODE_ALWAYS : NOTICE_MODE_BACKGROUND;
+}
+
+function setNoticeMode(mode) {
+  prefSet("noticeWhen",
+          mode === NOTICE_MODE_ALWAYS ? NOTICE_MODE_ALWAYS : NOTICE_MODE_BACKGROUND);
+}
+
+// The two choices, each a full row: a title he can act on and one plain line
+// saying what it costs. A segmented strip could not hold either — these are
+// sentences, not labels, and the whole complaint was that the short names for
+// these two states read alike.
+const NOTICE_MODES = [
+  {
+    value: NOTICE_MODE_BACKGROUND,
+    title: "Only while the app is open in the background",
+    detail: "Notices arrive while Vibe Coder is running behind other apps, "
+      + "and while the phone is locked with the screen off. If you swipe the "
+      + "app away out of recents they stop, and your PC holds them for up to "
+      + "30 minutes — you get them the next time you open the app.",
+  },
+  {
+    value: NOTICE_MODE_ALWAYS,
+    title: "Always, even after I close the app",
+    detail: "The phone keeps listening after you swipe Vibe Coder out of "
+      + "recents, so a notice still reaches you with the app shut.",
+  },
+];
+
+function noticeModeRow(mode, chosen) {
+  const label = document.createElement("label");
+  label.className = "sets-row dict" + (mode.value === chosen ? " sel" : "");
+  const rb = document.createElement("input");
+  rb.type = "radio";
+  rb.name = "notice-mode";
+  rb.checked = mode.value === chosen;
+  rb.addEventListener("change", () => {
+    setNoticeMode(mode.value);
+    renderNoticeModeCard();          // the row re-lights, and the note follows
+  });
+  const txt = document.createElement("span");
+  txt.className = "dict-name";
+  txt.textContent = mode.title;
+  const note = document.createElement("span");
+  note.className = "dict-note";
+  note.textContent = mode.detail;
+  label.append(rb, txt, note);
+  return label;
+}
+
+function renderNoticeModeCard() {
+  const chosen = noticeMode();
+  noticeModePanel.innerHTML = "";
+  const card = document.createElement("div");
+  card.className = "sets-card card-split";
+  card.innerHTML = `<h2>Notices</h2>
+    <p class="sets-sub">When this phone listens for your PC. Locking the phone
+       is not closing the app — with Vibe Coder still running, a locked phone
+       gets its notices either way. This choice is only about the app being
+       swiped away.</p>`;
+
+  const body = document.createElement("div");
+  body.className = "sets-body";
+  card.appendChild(body);
+
+  const list = document.createElement("div");
+  list.className = "sets-list";
+  NOTICE_MODES.forEach((mode) => list.appendChild(noticeModeRow(mode, chosen)));
+  body.appendChild(list);
+
+  // THE HONEST LIMIT, in the card rather than in a comment nobody reads: the
+  // waiting service does not come back by itself after the phone restarts, and
+  // the word "Always" must not be allowed to promise that it does.
+  const limit = document.createElement("p");
+  limit.className = "sets-sub dict-note";
+  limit.textContent = "After you restart the phone, notices start again only "
+    + "once you have opened Vibe Coder one time — that is true of both "
+    + "choices. Everything here is for this device alone; your other phone or "
+    + "tablet keeps its own answer.";
+  body.appendChild(limit);
+
+  if (!IN_APP) {
+    const browser = document.createElement("p");
+    browser.className = "sets-sub dict-note";
+    browser.textContent = "This page is open somewhere without the Vibe Coder "
+      + "app, so there is no listening service here to set.";
+    body.appendChild(browser);
+  }
+
+  const done = document.createElement("button");
+  done.type = "button";
+  done.className = "sets-done";
+  done.textContent = "Done";
+  keepFocus(done, closeNoticeModePanel);
+  card.appendChild(done);
+
+  noticeModePanel.appendChild(card);
+  noticeModePanel.hidden = false;
+}
+
+function openNoticeModePanel() {
+  renderNoticeModeCard();
+  noticeModeOpened.t = performance.now();
+}
+
+function closeNoticeModePanel() {
+  noticeModePanel.hidden = true;
+  noticeModePanel.innerHTML = "";
+}
+
+noticeModePanel.addEventListener("pointerdown", (e) => {
+  if (e.target === noticeModePanel) closeNoticeModePanel();  // backdrop = done
+});

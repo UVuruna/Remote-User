@@ -35,13 +35,18 @@
    of the notification voice onto the phone). Its element is created by
    client/notify.js rather than declared in index.html — the overlay is still a
    property of the ELEMENT, so it needs all three lists exactly the same way,
-   and forgetting one is the set-editor bug above. */
+   and forgetting one is the set-editor bug above.
+
+   `#notice-mode-panel` joined the same day (Settings → Notices: whether the
+   waiting channel survives the app being closed). Same file, same mechanism,
+   same lists — it is created by client/notify.js too. */
 #sets-panel,
 #quality-panel,
 #phone-panel,
 #claude-panel,
 #dictation-panel,
 #notice-panel,
+#notice-mode-panel,
 #notify-voice-panel,
 #appearance-panel,
 #set-editor-panel,
@@ -61,6 +66,7 @@
 #claude-panel[hidden],
 #dictation-panel[hidden],
 #notice-panel[hidden],
+#notice-mode-panel[hidden],
 #notify-voice-panel[hidden],
 #appearance-panel[hidden],
 #set-editor-panel[hidden],
@@ -532,6 +538,7 @@
   body #claude-panel,
   body #dictation-panel,
   body #notice-panel,
+  body #notice-mode-panel,
   body #notify-voice-panel,
   body #appearance-panel,
   body #set-editor-panel,
@@ -626,6 +633,7 @@
      answered here. Same class, same rule, one place. */
   body #sets-panel,
   body #claude-panel,
+  body #notice-mode-panel,
   body #notify-voice-panel,
   body #appearance-panel,
   body #phone-panel { padding: var(--space-s); }
@@ -837,6 +845,7 @@ button.sets-row:active { background: var(--accent-glow); border-color: var(--acc
   body #claude-panel,
   body #dictation-panel,
   body #notice-panel,
+  body #notice-mode-panel,
   body #notify-voice-panel,
   body #appearance-panel,
   body #set-editor-panel,

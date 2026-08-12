@@ -200,6 +200,9 @@ const ICONS = {
   // The Phone card (owner 2026-08-11, task 161/218a): the per-device switches
   // that belong to no other subject, gathered behind one Settings button.
   phone: '<rect x="6" y="2" width="12" height="20" rx="2.6"/><line x1="10.3" y1="5.2" x2="13.7" y2="5.2"/><circle cx="12" cy="18.6" r="1.1" fill="currentColor" stroke="none"/>',
+  // The Notices card (owner 2026-08-12): whether the waiting channel survives
+  // the app being closed. A bell, in the same stroke language as the rest.
+  bell: '<path d="M18 9.2a6 6 0 1 0-12 0c0 5-2 6.5-2 6.5h16s-2-1.5-2-6.5z"/><path d="M13.7 19a2 2 0 0 1-3.4 0"/>',
   // The app-aware sets wear their own APP's face (owner 2026-08-05): VSCode,
   // Chrome and Explorer all showed the generic `newwin` window, so the wheel
   // said "some app set" instead of naming the app. Drawn in the same stroke

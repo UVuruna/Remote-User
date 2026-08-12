@@ -65,7 +65,8 @@ def _module() -> str:
     for needed in ("function notifyPrefs", "function saveNotifyPrefs",
                    "function effectiveNotifyPrefs", "function handleNotify",
                    "function notifyVoicePref", "function notifyRatePref",
-                   "function voicePreview", "function openNotifyVoicePanel"):
+                   "function voicePreview", "function openNotifyVoicePanel",
+                   "function noticeMode", "function setNoticeMode"):
         if needed not in text:
             fail(f"{needed!r} left client/notify.js — the gate cannot find "
                  "what it must test")
@@ -297,6 +298,47 @@ console.log(JSON.stringify(__calls));
         fail(f"the preview ignored the chosen pace: {said}")
 
 
+# ── WHEN THIS PHONE LISTENS (owner 2026-08-12) ─────────────────────────────
+# The shell's half is read from source in tests/test_notice_channel.py (there
+# is no Android runtime here). This is the PAGE's half, EXECUTED: the rule that
+# an app which has never been asked behaves exactly as 0.0.127 shipped.
+
+def check_the_notice_mode_defaults_to_background_only() -> None:
+    """PLANTED DEFECT: default to "always". Every phone in the world would
+    silently start keeping its channel open after a deliberate close — the
+    behaviour he had explicitly ruled out that same morning, arriving without
+    anyone choosing it."""
+    out = _run("""
+console.log(JSON.stringify({
+  unset: noticeMode(),
+  junk: (prefSet("noticeWhen", "yes please"), noticeMode()),
+}));
+""")
+    if out["unset"] != "background":
+        fail(f"an unasked device did not default to background-only: {out}")
+    if out["junk"] != "background":
+        fail("anything that is not the literal \"always\" must read as the "
+             f"shipped default: {out}")
+
+
+def check_choosing_always_is_stored_for_this_device() -> None:
+    """And it must be stored where the SERVICE can find it — the prefs bridge,
+    under the key the shell reads (`p_noticeWhen`), never a page variable that
+    dies with the WebView. PLANTED DEFECT: keep the mode in a module-level
+    `let` — the card would look right and the service would never see it."""
+    out = _run("""
+setNoticeMode("always");
+const stored = prefGet("noticeWhen");
+setNoticeMode("background");
+console.log(JSON.stringify({ stored, back: prefGet("noticeWhen"),
+                             mode: noticeMode() }));
+""")
+    if out["stored"] != "always":
+        fail(f'choosing "always" did not reach the prefs store: {out}')
+    if out["back"] != "background" or out["mode"] != "background":
+        fail(f"choosing background again did not stick: {out}")
+
+
 CHECKS = [
     check_default_prefs_are_all_notice_carriers_on_except_tone,
     check_a_muted_carrier_is_really_skipped,
@@ -307,6 +349,8 @@ CHECKS = [
     check_no_choice_here_falls_back_to_the_frame,
     check_the_preview_speaks_one_sample_at_a_time,
     check_the_preview_speaks_at_the_pace_he_chose,
+    check_the_notice_mode_defaults_to_background_only,
+    check_choosing_always_is_stored_for_this_device,
 ]
 
 

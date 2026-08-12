@@ -36,6 +36,9 @@ const PANEL_KINDS = {
   // plain controls, outlined or filled. It left the PC's Settings window
   // because he uses a tablet AND a phone: client/appearance-panel.js.
   appearance: () => openAppearancePanel(),
+  // WHEN this phone listens for notices (owner 2026-08-12) — only while the
+  // app is open in the background, or always: client/notify.js.
+  notices: () => openNoticeModePanel(),
   // The "anywhere access" banner appears once per device (owner 2026-07-26) —
   // this button is the permanent way back into the wizard.
   anywhere: () => openWizard(),

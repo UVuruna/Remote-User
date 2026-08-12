@@ -22,6 +22,24 @@ object Prefs {
      *  switches — while no page exists to ask (owner 2026-08-07). */
     const val CLIENT_FILE = "client_prefs"
 
+    /** WHEN this device listens for notices (owner 2026-08-12).
+     *
+     *  His complaint was that two states kept being confused: the app RUNNING
+     *  in the background — behind other apps, or with the phone locked and the
+     *  screen off — and the app CLOSED, swiped out of recents. A locked phone
+     *  with the app alive keeps its channel whatever this answers; this is
+     *  only about the swipe.
+     *
+     *  Written by the page's Notices card (client/notify.js) through the
+     *  `prefSet` bridge, so it lands in CLIENT_FILE under the bridge's own
+     *  `p_` prefix — and this is read while NO page exists, exactly like the
+     *  notice voice beside it. Anything that is not the literal "always" is
+     *  the shipped default: a device that never opened the card behaves
+     *  exactly as 0.0.127 did, and only a deliberate tap widens it. */
+    fun noticeAlways(context: Context): Boolean =
+        context.getSharedPreferences(CLIENT_FILE, Context.MODE_PRIVATE)
+            .getString("p_noticeWhen", "") == "always"
+
     /** Both stored page URLs, LAN first: the notice service probes them in
      *  this order exactly as MainActivity's resolver does. */
     fun addresses(context: Context): List<String> =

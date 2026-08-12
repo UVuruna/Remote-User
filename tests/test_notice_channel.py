@@ -658,6 +658,179 @@ def check_a_closed_app_stops_the_channel() -> bool:
     return True
 
 
+# ═══════ OWNER 2026-08-12 — "ALWAYS" OR "ONLY IN THE BACKGROUND" ═══════════
+# His report, in translation: *"You keep swinging between two extremes — one is
+# that notifications arrive even when my app is closed, the other that they do
+# not arrive even when my phone is locked."* The rule of the SAME MORNING (the
+# closed-app check above) becomes the DEFAULT of a two-way choice, and the two
+# states he says kept being confused are named apart:
+#
+#   • the app RUNNING in the background — behind other apps, or with the phone
+#     locked and the screen off. A notice arrives here under BOTH choices.
+#   • the app CLOSED — swiped out of recents. This is the only state the
+#     setting is about.
+#
+# Read from the source, like every other shell check in this file: there is no
+# Android runtime on this machine. The page's own half — that `noticeMode()`
+# really answers "background" when nothing was ever chosen — is executed for
+# real in tests/test_notify_prefs.py, which runs client/notify.js in node.
+SRC = PROJECT / "android/app/src/main/java/com/uvuruna/vibecoder"
+
+
+def _task_removed_body(service: str) -> str:
+    m = re.search(r"override fun onTaskRemoved\((?:.|\n)*?\n    }", service)
+    return m.group(0) if m else ""
+
+
+def check_the_default_is_background_only() -> bool:
+    """An app that has never been asked must behave EXACTLY as 0.0.127 shipped.
+    So the shell's question is an equality against the one literal the page
+    writes for "always" — never a truthiness test, never a default-true
+    `getBoolean`, either of which would silently widen every phone in the
+    world the moment this round lands."""
+    prefs = (SRC / "Prefs.kt").read_text(encoding="utf-8")
+    ok = True
+    if "fun noticeAlways" not in prefs:
+        print("    Prefs has no noticeAlways — the shell cannot read the "
+              "owner's choice at all", file=sys.stderr)
+        return False
+    body = prefs.split("fun noticeAlways", 1)[1].split("\n    /**", 1)[0]
+    if '== "always"' not in body:
+        print("    noticeAlways does not compare against the literal "
+              '"always" — an unset or corrupted pref must read as the shipped '
+              "background-only default", file=sys.stderr)
+        ok = False
+    if "getBoolean" in body or "true" in body:
+        print("    noticeAlways defaults to TRUE — a phone that never opened "
+              "the card would silently keep its channel after a close",
+              file=sys.stderr)
+        ok = False
+    return ok
+
+
+def check_always_keeps_the_channel_open() -> bool:
+    """With "always" chosen, a swipe out of recents must NOT stop the service.
+    The guard has to sit BEFORE the stop and return — a check written after
+    `stopSelf()` reads the same in a diff and does nothing at all."""
+    service = (SRC / "NoticeService.kt").read_text(encoding="utf-8")
+    body = _task_removed_body(service)
+    if not body:
+        print("    NoticeService has no onTaskRemoved", file=sys.stderr)
+        return False
+    if "noticeAlways" not in body:
+        print("    onTaskRemoved never asks the owner's choice — 'always' "
+              "cannot work, the channel stops on every close", file=sys.stderr)
+        return False
+    if body.index("noticeAlways") > body.index("stopSelf()"):
+        print("    the choice is read AFTER the service already stopped itself",
+              file=sys.stderr)
+        return False
+    guard = body[body.index("noticeAlways"):body.index("stopSelf()")]
+    if "return" not in guard:
+        print("    the 'always' branch does not RETURN — execution falls "
+              "through into the stop and the choice does nothing",
+              file=sys.stderr)
+        return False
+    return True
+
+
+def check_a_locked_phone_keeps_its_channel_either_way() -> bool:
+    """THE CASE HE ACTUALLY REPORTED. Locking the phone removes no task, so
+    Android never calls onTaskRemoved — the channel survives a lock under both
+    answers, and it may only do so as long as nothing ELSE in the shell stops
+    the service on a pause, a screen-off or a keyguard. The page's own rule
+    that the STREAMING socket dies when the page hides (constraint 8) is a
+    different socket and stays exactly as it is.
+
+    Two teeth: nobody outside the service stops it, and the service's own
+    stops are the two known ones (a refused startForeground, and the
+    background-only close)."""
+    ok = True
+    service = (SRC / "NoticeService.kt").read_text(encoding="utf-8")
+    for name in ("MainActivity.kt", "Bridge.kt", "NoticeLink.kt"):
+        text = (SRC / name).read_text(encoding="utf-8")
+        if "NoticeService.stop" in text:
+            print(f"    {name} stops the notice service — a pause or a lock "
+                  "must never take the channel down", file=sys.stderr)
+            ok = False
+    for hook in ("override fun onPause", "ACTION_SCREEN_OFF", "KeyguardManager",
+                 "isDeviceLocked", "isKeyguardLocked"):
+        if hook in service:
+            print(f"    NoticeService reacts to {hook} — a locked phone would "
+                  "lose its channel, which is the bug he reported",
+                  file=sys.stderr)
+            ok = False
+    if service.count("stopSelf()") != 2:
+        print("    NoticeService has an unexpected number of stopSelf() calls "
+              "— the only two are a refused startForeground and the "
+              "background-only close", file=sys.stderr)
+        ok = False
+    return ok
+
+
+def check_the_choice_is_read_from_the_device_store() -> bool:
+    """It is a fact about ONE handset's service, so it lives where every other
+    per-device switch lives: the `prefGet`/`prefSet` SharedPreferences bridge,
+    which the service reads directly (there is no page when a notice lands).
+    NOT the `config` frame — that is one PC's answer broadcast to every device,
+    and it is what this round's Appearance and Voice moves were correcting."""
+    ok = True
+    prefs = (SRC / "Prefs.kt").read_text(encoding="utf-8")
+    body = prefs.split("fun noticeAlways", 1)[1].split("\n    /**", 1)[0] \
+        if "fun noticeAlways" in prefs else ""
+    if "CLIENT_FILE" not in body or "p_noticeWhen" not in body:
+        print("    the shell does not read the page's own per-device store "
+              "(CLIENT_FILE / p_noticeWhen)", file=sys.stderr)
+        ok = False
+    page = (PROJECT / "client/notify.js").read_text(encoding="utf-8")
+    if 'prefGet("noticeWhen")' not in page or 'prefSet("noticeWhen"' not in page:
+        print("    the page does not write the choice through the prefs "
+              "bridge — bare localStorage is keyed by ORIGIN and splits state "
+              "between the LAN and Tailscale addresses (2026-08-05)",
+              file=sys.stderr)
+        ok = False
+    for name in ("server/config.py", "server/notify.py", "server/web.py"):
+        if "noticeWhen" in (PROJECT / name).read_text(encoding="utf-8"):
+            print(f"    {name} carries the choice — it must not ride the "
+                  "config frame or any wire", file=sys.stderr)
+            ok = False
+    return ok
+
+
+def check_the_card_is_reachable_from_the_settings_set() -> bool:
+    """A card nobody can open is a feature that does not exist (the actions.json
+    lesson of 2026-08-07). Four links, and the last one is the one this repo
+    has broken three times: a panel element missing from panels.css's overlay
+    selector lists ships INVISIBLE."""
+    ok = True
+    actions = json.loads((PROJECT / "actions.json").read_text(encoding="utf-8"))
+    settings = next((c for c in actions["categories"]
+                     if c["name"] == "Settings"), None)
+    if not settings or not any(b.get("action") == "notices"
+                               for b in settings["buttons"]):
+        print("    the Settings set's pool does not offer the Notices button",
+              file=sys.stderr)
+        ok = False
+    controls = (PROJECT / "client/controls.js").read_text(encoding="utf-8")
+    if 'kind: "notices"' not in controls:
+        print("    controls.js has no `notices` action", file=sys.stderr)
+        ok = False
+    panels = (PROJECT / "client/panels.js").read_text(encoding="utf-8")
+    if "notices: () => openNoticeModePanel()" not in panels:
+        print("    PANEL_KINDS does not open the card", file=sys.stderr)
+        ok = False
+    css = (PROJECT / "client/panels.css").read_text(encoding="utf-8")
+    voice_lists = css.count("#notify-voice-panel")
+    mine = css.count("#notice-mode-panel")
+    if mine < voice_lists:
+        print(f"    #notice-mode-panel is in {mine} of panels.css's "
+              f"{voice_lists} overlay selector lists — an unregistered panel "
+              "renders in normal flow under the controls, invisible",
+              file=sys.stderr)
+        ok = False
+    return ok
+
+
 def check_close_channels_ends_the_drain() -> bool:
     """Task 234: `force_exit` stops uvicorn from accepting work, but an
     endless `/notices` generator parked on its queue held the shutdown drain
@@ -731,6 +904,16 @@ def main() -> int:
         check_the_shell_sends_an_id_and_backs_off())
     results["a closed app stops the channel (background keeps it)"] = (
         check_a_closed_app_stops_the_channel())
+    results["the default is background-only, exactly as 0.0.127 shipped"] = (
+        check_the_default_is_background_only())
+    results["'always' keeps the channel when the app is closed"] = (
+        check_always_keeps_the_channel_open())
+    results["a LOCKED phone keeps its channel under either choice"] = (
+        check_a_locked_phone_keeps_its_channel_either_way())
+    results["the choice is read from the per-device store, not the frame"] = (
+        check_the_choice_is_read_from_the_device_store())
+    results["the Notices card is reachable from the Settings set"] = (
+        check_the_card_is_reachable_from_the_settings_set())
     results["two devices each get ONE copy, neither kicked"] = (
         check_two_devices_each_get_one_copy())
     results["an older APK (no device id) behaves exactly as before"] = (

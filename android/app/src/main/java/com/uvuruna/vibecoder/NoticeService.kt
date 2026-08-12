@@ -188,8 +188,21 @@ class NoticeService : Service() {
      *  opened again. Without this, START_STICKY kept the channel alive after
      *  a deliberate close — a notification from an app the owner had just
      *  shut. (`running = false` first, so a sticky restart racing this stop
-     *  returns START_NOT_STICKY instead of re-arming the link.) */
+     *  returns START_NOT_STICKY instead of re-arming the link.)
+     *
+     *  THAT RULE IS NOW THE DEFAULT OF A CHOICE, not the only behaviour (owner
+     *  the same day, after the two extremes kept being confused): the Notices
+     *  card on the phone offers "only while the app is open in the background"
+     *  — this branch — and "always, even after I close the app", which simply
+     *  does not stop. Nothing here concerns a LOCKED phone: locking removes no
+     *  task, Android never calls this, and the channel lives on under both
+     *  answers. That is the case he actually reported. */
     override fun onTaskRemoved(rootIntent: Intent?) {
+        if (Prefs.noticeAlways(applicationContext)) {
+            Log.i(TAG, "App closed — 'always' is chosen, the channel stays")
+            super.onTaskRemoved(rootIntent)
+            return
+        }
         Log.i(TAG, "App closed — the notice channel stops with it")
         running = false
         stopSelf()

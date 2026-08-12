@@ -136,6 +136,9 @@ const BUILTINS = {
   // same reason Voice did — he uses a tablet AND a phone, and one desktop
   // dropdown could only ever describe one of them.
   appearance: { label: "Look", icon: "palette", kind: "appearance" },
+  // WHEN this phone listens for notices (owner 2026-08-12): background-only
+  // (the default) or always — client/notify.js holds the card and the reason.
+  notices:  { label: "Notices", icon: "bell", kind: "notices" },
 };
 
 // --- Device prefs (owner bug report 2026-08-05) ----------------------------
