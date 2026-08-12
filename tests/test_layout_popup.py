@@ -624,6 +624,43 @@ def check_a_stranger_is_never_offered_by_the_sweep_either() -> bool:
     return ok
 
 
+def check_a_members_dialog_is_swept_however_old_it_is() -> bool:
+    """THE OWNER'S OWN REASONING, 2026-08-12: "if the desktop minimizes it WITH
+    the layout, does it know that window belongs to it?" It does — Windows
+    takes an OWNED window down with its owner, and `minimize_members` touches
+    only real members.
+
+    So the owner chain is evidence that does not need the baseline, and
+    `_attribute` has always agreed: its FIRST rule is the owner root,
+    deliberately ahead of the newness test. But `sweep` threw such a window
+    away one line earlier, so that rule could never run for a dialog raised
+    while the phone was away — which is precisely the window he reported.
+
+    Both halves are checked, because only the pair is the rule: an OLD dialog
+    of a member is offered, and his OLD second window of the same app — same
+    process, no owner chain — is still refused. Losing the second half would
+    be the fence gone.
+
+    Defect planted: restoring the bare `if not _is_new(...): continue` fails
+    this and nothing else."""
+    reg, conn = desk(fg=MEMBER_A,
+                     alive=(MEMBER_A, MEMBER_B, DIALOG, OLD_TWIN))
+    # It was ALREADY STANDING when the phone connected — the locked-phone
+    # shape, where nothing was watching at the moment it opened.
+    conn["popup_known"] = {MEMBER_A, MEMBER_B, DIALOG, OLD_TWIN}
+    layout_popup.sweep(reg, conn)
+    got = {m.get("id", "").split("-")[0] for m in offers(conn)}
+    offered = {int(h, 16) for h in got if h}
+    if DIALOG not in offered:
+        print("  DETAIL a member's own dialog was skipped for being old")
+        return False
+    if OLD_TWIN in offered:
+        print("  DETAIL his OTHER window of the same app was adopted — the "
+              "fence is gone")
+        return False
+    return True
+
+
 # ═══ 6. THE CLICK CORRELATION (task 240) ═══
 # His shape: an ALREADY-RUNNING third-party app (old Chrome, parent long dead)
 # opens a new window because he clicked something through the stream. Rules 2
@@ -723,6 +760,8 @@ CHECKS = [
      check_the_sweep_is_silent_at_the_desktop_and_while_he_is_away),
     ("the sweep refuses a stranger, but not before it could identify itself",
      check_a_stranger_is_never_offered_by_the_sweep_either),
+    ("a member's own dialog is swept however old it is, his twin still is not",
+     check_a_members_dialog_is_swept_however_old_it_is),
     ("a window after his click is offered with no process tie (task 240)",
      check_a_window_after_his_click_is_offered_with_no_process_tie),
     ("the same window with no recent click is still refused",

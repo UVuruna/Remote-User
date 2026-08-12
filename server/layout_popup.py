@@ -836,7 +836,17 @@ def sweep(layouts, conn: dict) -> None:
     asked = conn.get("popup_asked", ())
     declined = conn.get("popup_declined", ())
     for hwnd in _top_level_hwnds():
-        if not _is_new(conn, hwnd):
+        # A WINDOW OWNED BY A MEMBER IS THE LAYOUT'S WORK WHATEVER ITS AGE
+        # (owner reasoning 2026-08-12, and he was right): "if the desktop
+        # minimizes it WITH the layout, does it know that window belongs to
+        # it?" It does — Windows takes an OWNED window down with its owner,
+        # and `LayoutRegistry.minimize_members` touches only real members. So
+        # the owner chain is real evidence, and `_attribute` has always known
+        # that: its FIRST rule is the owner root, deliberately ahead of the
+        # newness test. This loop was throwing such a window away before that
+        # rule could ever run — which is why a dialog raised while the phone
+        # was away was never offered, however plainly it belonged.
+        if not _is_new(conn, hwnd) and _owner_root(hwnd) not in lay.members:
             continue
         if hwnd in lay.members or hwnd in lay.adopted:
             continue
