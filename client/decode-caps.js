@@ -111,6 +111,40 @@ function bitrateBits(text) {
   return unit === "m" ? number * 1e6 : unit === "k" ? number * 1e3 : number;
 }
 
+// THE PANEL IS A SECOND, DIFFERENT WALL (owner order 2026-08-12: "what is the
+// point of the PC sending 4K if the Android device cannot receive it — a Redmi
+// Pad is 1920x1200"). The decode ceiling above is about how FAST this SoC can
+// turn bytes into frames; this is about how many pixels the glass can light up
+// at all. They compose — neither replaces the other — and the SERVER is what
+// applies this one (server/h264_streamer.py `_scale_size`, the same
+// arithmetic). It is mirrored here for one reason: the decode ceiling must
+// judge the size that is REALLY encoded, or a cap earned by a full 4K desktop
+// would go on holding a small, already-downscaled stream at the capped fps.
+
+/** This device's real panel pixels — CSS px x devicePixelRatio — or null when
+ *  they cannot be read. Never guessed: null means "cap nothing". */
+function devicePanel() {
+  if (typeof window === "undefined" || !window.screen) return null;
+  const dpr = window.devicePixelRatio || 1;
+  const w = Math.round((window.screen.width || 0) * dpr);
+  const h = Math.round((window.screen.height || 0) * dpr);
+  return w > 1 && h > 1 ? { w, h } : null;
+}
+
+/** The width a w x h crop is really encoded at once the panel caps it — the
+ *  mirror of the server's `_scale_size`: long side against long side, short
+ *  against short (the phone's rotation is locked to the layout's orientation),
+ *  never above 1 (a crop smaller than the panel is sent at its own size), and
+ *  even for yuv420p. An unknown panel or an unknown crop caps nothing. */
+function panelScaledWidth(w, h, panel) {
+  if (!panel || !panel.w || !panel.h || !w || !h) return w;
+  const factor = Math.min(1,
+    Math.max(panel.w, panel.h) / Math.max(w, h),
+    Math.min(panel.w, panel.h) / Math.min(w, h));
+  if (factor >= 1) return w;
+  return Math.max(2, Math.floor(Math.round(w * factor) / 2) * 2);
+}
+
 /** Ask the device's own decoder: {fps: smooth} for each step at w×h.
  *  Browser-only wrapper — a device without the API answers null and nothing
  *  is ever capped (no behaviour change), and a call that throws marks that
@@ -140,6 +174,6 @@ if (typeof module !== "undefined" && module.exports) {
   module.exports = {
     DECODE_FPS_STEPS, DECODE_BAD_JUMPS, DECODE_BAD_WINDOWS,
     h264Codec, stepWidth, smoothCeiling, capFps, struggleCeiling,
-    combinedCeiling, bitrateBits,
+    combinedCeiling, bitrateBits, devicePanel, panelScaledWidth,
   };
 }

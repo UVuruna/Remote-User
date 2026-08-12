@@ -127,7 +127,14 @@ cannot enumerate them and the desktop Settings window's Voice dropdown has
 no other source.
 
 `auth` now carries `screen {w, h}` — the device's aspect drives layout window
-sizing on the server (tablet vs phone). New handlers: `layout_state` (mirror
+sizing on the server (tablet vs phone). It also carries **`panel {w, h}`** —
+this device's REAL pixels (CSS px x `devicePixelRatio`), the CEILING on what
+the PC's encoder may send (owner order 2026-08-12: "what is the point of the
+PC sending 4K if the Android device cannot receive it"). A NEW field, never a
+new meaning for `screen`: those stay CSS px and an older PC reads them as an
+aspect. A PC that does not know `panel` ignores it and streams exactly as
+before. See [Decode Caps](decode-caps.md) -> `devicePanel()` and
+`server/__about/h264_streamer.md` -> The panel cap. New handlers: `layout_state` (mirror
 the list, update the bar, lock/unlock rotation, apply or reset the locked
 view) and `layout_offer` (opens the creation panel). Close code **4409** =
 another device took over (one device at a time): no auto-reconnect — a

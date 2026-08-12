@@ -93,6 +93,7 @@ def check_ffmpeg_is_told_the_same_format() -> bool:
     session._encoder = "libx264"
     session._quality = {}
     session._crop = None  # full frame — the region crop is test_region_stream's job
+    session._scale = None  # no panel cap — the device scale is test_panel_scale's job
     session.width, session.height = 1920, 1080
     cmd = session._ffmpeg_cmd()
     # The INPUT pix_fmt is the one that must match capture.py: the flag that

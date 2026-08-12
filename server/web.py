@@ -303,7 +303,15 @@ def create_app(stream, hub: FrameHub | None, injector: InputInjector, token: str
         # THE PHONE'S OWN OVERRIDES, KNOWN BEFORE THE FIRST ENCODER EXISTS
         # (task 203). Carried on `auth` since 2026-08-11; a page that predates
         # the field says nothing and gets exactly the old behaviour.
-        conn = {"ratio": ratio, "active": None, "region": None,
+        # THE DEVICE'S PANEL IS A CEILING ON THE ENCODED SIZE (owner order
+        # 2026-08-12: "what is the point of the PC sending 4K if the Android
+        # device cannot receive it"). A SEPARATE field from `screen` above —
+        # that one is CSS px and means an aspect for layout placement, this one
+        # is real panel pixels (CSS px x devicePixelRatio) and means a pixel
+        # budget. Changing the meaning of `screen` would have made an older
+        # page's message unreadable; an auth with no `panel` caps nothing.
+        conn = {"panel": first.get("panel") or None,
+                "ratio": ratio, "active": None, "region": None,
                 "quality": config.quality_override(first.get("quality") or {}),
                 # presence: when we last heard from the phone, and whether it
                 # announced an excursion on its way out (see presence.py)
@@ -503,6 +511,7 @@ async def _h264_loop(ws: WebSocket, manager, token: str, conn: dict,
                 conn.get("quality"),
                 owner,
                 req_region,
+                conn.get("panel"),
             )
         except (RuntimeError, OSError) as e:
             owner.release()

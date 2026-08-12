@@ -99,6 +99,10 @@ live in the pure module `client/decode-caps.js` (gate:
 - `noteDecodeStruggle()` is the runtime backstop, fed by render.js with each
   15 s live window's jump count: two drowning windows in a row lower this
   SESSION's ceiling one step — spec sheets flatter, the live pipeline does not.
+- `effectiveWidth()` is REGION- and PANEL-aware: the step's width narrowed
+  by `stream_region` and then run through `panelScaledWidth` — the ceiling
+  must judge the width the server really encodes (owner order 2026-08-12,
+  the panel cap; see [Decode Caps](decode-caps.md)).
 
 `raiseRequest()` puts `raise_fps` / `raise_width` on the existing `quality`
 message as OPTIONAL fields (the cursor-shape pattern): a PC that predates this

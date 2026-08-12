@@ -107,6 +107,14 @@ function connect() {
     sock.send(JSON.stringify({
       type: "auth", token,
       screen: { w: window.screen.width, h: window.screen.height },
+      // …and `panel` is the pixel BUDGET (owner order 2026-08-12): the real
+      // panel pixels, CSS px x devicePixelRatio, which is what the PC's
+      // encoder may never exceed. A NEW field rather than a new meaning for
+      // `screen` — those are CSS px and an older PC reads them as an aspect;
+      // silently changing what they say would be unreadable in both
+      // directions. A PC that does not know the field ignores it and streams
+      // exactly as before. Null (no screen object) sends nothing at all.
+      panel: devicePanel(),
       // THIS DEVICE'S QUALITY OVERRIDES, IN THE FIRST MESSAGE (task 203).
       // The restatement below still goes — an older PC only understands that
       // one — but a PC that reads this opens its FIRST encoder already

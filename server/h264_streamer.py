@@ -70,7 +70,8 @@ class H264Session:
     reacts by opening a fresh session."""
 
     def __init__(self, source: RawFrameSource, encoder: str, on_data, on_end,
-                 quality: dict | None = None, region: dict | None = None):
+                 quality: dict | None = None, region: dict | None = None,
+                 panel: dict | None = None):
         """on_data(bytes) / on_end() are called from the read thread and must
         be cheap and thread-safe (the web layer bridges them to asyncio).
         quality = this client's overrides from the phone's quality panel
@@ -82,7 +83,12 @@ class H264Session:
         show) — this encoder crops to it; None/full-frame means no crop.
         `self.region` afterwards holds the EFFECTIVE normalized rect of the
         even-rounded pixel crop (what `config.stream_region` tells the page),
-        or None when nothing is cropped."""
+        or None when nothing is cropped.
+        panel = this device's REAL panel pixels, {"w": int, "h": int}, from
+        the `auth` message (owner order 2026-08-12: "what is the point of the
+        PC sending 4K if the Android device cannot receive it"). It is a
+        CEILING on the encoded size — see `_scale_size`. None (an older page,
+        a browser that sends no panel) means exactly the old behaviour."""
         self._source = source
         self._encoder = encoder
         self._on_data = on_data
@@ -102,6 +108,7 @@ class H264Session:
                         "w": self._crop[0] / self.width,
                         "h": self._crop[1] / self.height}
                        if self._crop else None)
+        self._scale = self._scale_size(panel)
 
     def _crop_rect(self, region: dict | None) -> tuple[int, int, int, int] | None:
         """(w, h, x, y) of the pixel crop on the encoded frame, or None for a
@@ -120,6 +127,61 @@ class H264Session:
             return None  # the whole frame — nothing to crop
         return (w, h, x, y)
 
+    @staticmethod
+    def _panel_size(panel: dict | None) -> tuple[int, int]:
+        """The device's real panel pixels, or (0, 0) — which caps nothing.
+        Never invent: a page that says nothing, a browser with no such field,
+        or a nonsense value must land in exactly the old behaviour."""
+        if not panel:
+            return (0, 0)
+        try:
+            w, h = int(panel.get("w") or 0), int(panel.get("h") or 0)
+        except (TypeError, ValueError):
+            return (0, 0)
+        return (w, h) if w > 1 and h > 1 else (0, 0)
+
+    def _scale_size(self, panel: dict | None) -> tuple[int, int] | None:
+        """(w, h) the encoder must OUTPUT, or None to leave the crop at its own
+        size.
+
+        THE PANEL IS A CEILING (owner order 2026-08-12): "what is the point of
+        the PC sending 4K if the Android device cannot receive it — a Redmi Pad
+        is 1920x1200 and we send it 4K". Sending more pixels than the panel can
+        light up is bitrate spent on detail that is thrown away in the phone's
+        own downscale, on top of a decode the SoC may not manage at all.
+
+        Three rules, and the SMALLEST factor wins:
+
+        - the phone's own resolution step (2/3, 1/2) — unchanged, it composes
+          here instead of being a second, competing scale filter;
+        - the panel's LONG side against the crop's long side, and its SHORT
+          against the crop's short. Long-to-long rather than width-to-width
+          because the phone's rotation is locked to the layout's orientation
+          (a tall quarter-width layout is watched on a tall phone), so the
+          picture's long side really does land on the panel's long side. For
+          his own case — a full 3840x2160 desktop on a 1920x1200 tablet — this
+          is exactly his `min(crop width, panel width)`: 1920 wide;
+        - NEVER above 1. A crop narrower than the panel is sent at its OWN
+          size: upscaling here would spend bitrate to invent nothing, and it is
+          why a focused layout now comes out SHARPER at the same bitrate.
+
+        The aspect ratio of the crop is preserved (the height is derived from
+        the chosen width), and both dimensions are even — yuv420p subsamples
+        chroma 2x2, exactly as in `_crop_rect`."""
+        src_w, src_h = self._crop[:2] if self._crop else (self.width, self.height)
+        num, den = {"2/3": (2, 3), "1/2": (1, 2)}.get(self._quality.get("res"), (1, 1))
+        factor = num / den
+        pw, ph = self._panel_size(panel)
+        if pw and ph:
+            factor = min(factor,
+                         max(pw, ph) / max(src_w, src_h),
+                         min(pw, ph) / min(src_w, src_h))
+        if factor >= 1:
+            return None
+        w = max(2, int(round(src_w * factor)) // 2 * 2)
+        h = max(2, int(round(src_h * w / src_w)) // 2 * 2)
+        return None if (w, h) == (src_w, src_h) else (w, h)
+
     def _ffmpeg_cmd(self) -> list[str]:
         # Quality overrides downscale / drop fps INSIDE this client's own
         # ffmpeg (capture and other clients stay untouched); dimensions must
@@ -134,10 +196,13 @@ class H264Session:
         if self._crop:
             w, h, x, y = self._crop
             chain.append(f"crop={w}:{h}:{x}:{y}")
-        num, den = {"2/3": (2, 3), "1/2": (1, 2)}.get(
-            self._quality.get("res"), (1, 1))
-        if den != num:
-            chain.append(f"scale=trunc(iw*{num}/{den}/2)*2:trunc(ih*{num}/{den}/2)*2")
+        # ONE scale, right after the crop: the phone's resolution step and the
+        # device-panel ceiling are already reconciled into a single size by
+        # `_scale_size` (the smallest wins), so there is never a second filter
+        # competing with the first. Numeric, not an `iw`/`ih` expression: we
+        # know the crop exactly, and the real numbers can then be logged.
+        if self._scale:
+            chain.append("scale=%d:%d" % self._scale)
         # The rate frames really ARRIVE at — the desktop's, or the higher one
         # this client raised the capture to (task 131). Comparing against
         # SETTINGS.target_fps instead would insert an `fps` filter that THROWS
@@ -380,7 +445,8 @@ class H264Manager:
 
     def open_session(self, on_data, on_end, quality: dict | None = None,
                      owner: SessionOwner | None = None,
-                     region: dict | None = None) -> H264Session:
+                     region: dict | None = None,
+                     panel: dict | None = None) -> H264Session:
         """Starts capture with the first client. Blocking (ffmpeg spawn + init
         segment wait). Raises RuntimeError when the encoder fails to start, or
         when the manager is already shut down.
@@ -398,7 +464,7 @@ class H264Manager:
                 self._source.start()
                 self._source_running = True
             session = H264Session(self._source, self.encoder, on_data, on_end,
-                                  quality=quality, region=region)
+                                  quality=quality, region=region, panel=panel)
             try:
                 session.start()
             except Exception:  # RuntimeError (no head) or OSError (Popen) — same cleanup
@@ -410,9 +476,13 @@ class H264Manager:
                 return self._abandon(session, "its client was already gone")
             self._sessions.add(session)
             crop = (" crop %dx%d+%d+%d" % session._crop) if session._crop else ""
-            logger.info("H.264 session opened — %d active, codec %s, %dx%d%s",
+            # The chosen scale, once per session, beside the crop: his own
+            # server.log must show the REAL numbers the encoder was built with
+            # (owner order 2026-08-12), not a claim that a cap exists.
+            scale = (" scale %dx%d" % session._scale) if session._scale else " scale none"
+            logger.info("H.264 session opened — %d active, codec %s, %dx%d%s%s",
                         len(self._sessions), session.codec, session.width,
-                        session.height, crop)
+                        session.height, crop, scale)
             return session
 
     def close_session(self, session: H264Session) -> None:

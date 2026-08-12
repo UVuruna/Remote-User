@@ -57,7 +57,7 @@ So the claim is created on the CALLER's thread, before the encoder exists, and a
 What the [Web Layer](web.md) talks to (duck interface shared with `JpegStreamer`; `mode = "h264"`):
 
 - `new_owner()`: a fresh `SessionOwner` for the caller to hand to `open_session`. Must be created on the caller's own thread — that timing IS the defence
-- `open_session(on_data, on_end, quality, owner, region)` / `close_session(session)`: session registry; capture starts with the first client and stops with the last — nothing runs while nobody is watching. A session whose claim is already released, or one that finished starting after `shutdown()`, is closed and never registered. `region` is the focused layout's monitor-normalized rect — the session CROPS to it (below)
+- `open_session(on_data, on_end, quality, owner, region, panel)` / `close_session(session)`: session registry; capture starts with the first client and stops with the last — nothing runs while nobody is watching. A session whose claim is already released, or one that finished starting after `shutdown()`, is closed and never registered. `region` is the focused layout's monitor-normalized rect — the session CROPS to it (below); `panel` is the device's real panel pixels from `auth` — a CEILING on the encoded size (the panel cap, below)
 - `hold_source(hold)` / `release_source(hold)`: "I am between sessions and I am opening another one right now" — capture keeps running even though `_sessions` is momentarily empty. It exists because a quality change can only be applied by a NEW ffmpeg (a bitrate lives inside the running one's flags), and with one client — "one device at a time" is a hard rule — closing the old session emptied `_sessions`, so dxcam was torn down and rebuilt for a change that never touched capture. The new encoder then had NO FRAMES, and ffmpeg cannot write an init segment before it has encoded one: past `h264_head_timeout` the open raised and the whole socket died (owner report 2026-08-10; his log at 20:30:21 shows the close and the `Frame buffer build(start)` on the same millisecond, and the failure 21 s later). Idempotent by construction — a SET of tokens, not a count, so no caller can leak or double-release one — and `release_source` attempts the stop **without waiting for `_lock`**, because it runs on the event loop, sometimes mid-cancellation, while `open_session` can hold that lock for as long as an encoder takes to start. Skipping is safe: every exit of `open_session` either registers a session (capture must run) or calls `_stop_source_if_idle` itself. A hold is NEVER a substitute for a session — only a live stream loop may take one, and `_stream_h264` gives it back on every way that loop can end
 - `switch_to(index)`: ends every session (owners reopen automatically and resend `config`) and swaps the capture monitor. Stops the source DIRECTLY, so a hold cannot delay a monitor switch or `shutdown()`; only `_stop_source_if_idle` consults holds
 - `take_screenshot()`, `width` / `height` / `monitor_index`, `output_count()`: delegated to the source
@@ -89,6 +89,42 @@ resolves to the whole frame is no crop and no field — an old server's world.
 The re-open on region change lives in the web layer (the quality-change
 mechanism, reused): `layout_api.send_layout_state` is the choke point. Gate:
 `tests/test_region_stream.py`, fail-closed in build.py (0ap/6).
+
+## The panel cap (owner order 2026-08-12, approved on a ballot)
+
+His words: "what is the point of the PC sending 4K if the Android device
+cannot receive it? A Redmi Pad is 1920×1200 and we send it 4K in desktop mode.
+It should be downscaled ON THE PC to the resolution the Android device can
+accept. And when Android zooms, that is a crop again."
+
+`H264Session(panel={"w":…, "h":…})` — the device's REAL panel pixels, taken
+from the `auth` message (`client/connection.js` sends `panel`, CSS px ×
+`devicePixelRatio`; a SEPARATE field from `screen`, which stays CSS px and
+means an aspect for layout placement — changing that meaning would have made
+an older page's message unreadable). `_scale_size` reconciles it with the
+phone's own resolution step into ONE size, and the smallest factor wins:
+
+- the resolution step (2/3, 1/2) — unchanged, it just composes here instead
+  of emitting a second, competing `scale=` filter;
+- the panel's LONG side against the crop's long side, its SHORT against the
+  short. Long-to-long because phone rotation is locked to the layout's
+  orientation, so the picture's long side really does land on the panel's. For
+  his own case — a full 3840×2160 desktop on a 1920×1200 tablet — this IS his
+  `min(crop width, panel width)`: 1920 wide;
+- **never above 1.** A crop narrower than the panel is sent at its own size:
+  upscaling would spend bitrate inventing nothing, and not doing it is why a
+  focused layout now comes out SHARPER at the same bitrate.
+
+The height is derived from the chosen width (the crop's aspect is preserved)
+and both dimensions are even, for the same yuv420p reason as the crop. The
+chosen size is logged once per session beside the crop, so his own server.log
+carries the real numbers. No panel field, or a nonsense one, caps nothing —
+byte for byte the old command. The page mirrors the same arithmetic in
+`client/decode-caps.js` (`panelScaledWidth`) for ONE reason: the decode
+ceiling must judge the size that is really encoded. Nothing else on the page
+needs it — `render.js` maps the video onto `stream_region` and reads the
+video's own intrinsic pixels, so a smaller encode simply arrives smaller.
+Gate: `tests/test_panel_scale.py`, fail-closed in build.py (0aq/6).
 
 ## Notes
 - The zoomed-viewport request (`viewport`) stays JPEG-only — H.264's crop is

@@ -199,7 +199,10 @@ function redraw() {
       // A region stream carries ONLY the focused layout's rect (owner order
       // 2026-08-12) — draw it onto that rect of the monitor space, never
       // stretched over the whole desktop. Null = full-frame stream, the
-      // whole D as always.
+      // whole D as always. The ENCODED size needs nothing here: the video's
+      // own intrinsic pixels are the source rect drawImage reads, so the
+      // panel-capped downscale (owner order 2026-08-12) simply arrives as a
+      // smaller video mapped onto the same rect — verified, not assumed.
       const R = streamRegion
         ? { x: D.x + streamRegion.x * D.w, y: D.y + streamRegion.y * D.h,
             w: streamRegion.w * D.w, h: streamRegion.h * D.h }

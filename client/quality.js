@@ -115,7 +115,15 @@ function ceilingFor(width) {
 function effectiveWidth(p) {
   if (!streamBase) return 0;
   const w = stepWidth(p.res, streamBase.width, monitor ? monitor.w : 0);
-  return streamRegion && streamRegion.w > 0 ? Math.round(w * streamRegion.w) : w;
+  const h = monitor && monitor.w ? Math.round((w * monitor.h) / monitor.w) : 0;
+  const cropW = streamRegion && streamRegion.w > 0 ? Math.round(w * streamRegion.w) : w;
+  const cropH = streamRegion && streamRegion.h > 0 ? Math.round(h * streamRegion.h) : h;
+  // …and the PANEL caps it too (owner order 2026-08-12): the server never
+  // encodes more pixels than this glass can light up, so the ceiling must
+  // judge the SCALED size — the same arithmetic, in decode-caps.js. Without
+  // this a cap earned by a full 4K desktop would go on holding a stream that
+  // is already only 1920 wide.
+  return panelScaledWidth(cropW, cropH, devicePanel());
 }
 
 /** The cap decision for the current prefs — one source for the wire, the

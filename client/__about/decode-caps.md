@@ -47,6 +47,13 @@ with the cap said out loud instead of discovered as a frozen picture.
   `navigator.mediaCapabilities.decodingInfo` per step, `null` on a device
   without the API (nothing is ever capped there), and a step whose call
   throws is marked smooth — an API that errors must never lower anything.
+- `devicePanel()` — this device's REAL panel pixels (CSS px x
+  `devicePixelRatio`), or `null` when they cannot be read. `connection.js`
+  sends it on `auth` as the NEW `panel` field.
+- `panelScaledWidth(w, h, panel)` — the width a `w`x`h` crop is really
+  encoded at once the panel caps it: the MIRROR of the server's
+  `h264_streamer._scale_size` (long side against long side, short against
+  short, never above 1, even for yuv420p). An unknown panel caps nothing.
 
 ## Design Decisions
 
@@ -59,6 +66,15 @@ with the cap said out loud instead of discovered as a frozen picture.
   the live backstop exists — but one bad evening on hotel Wi-Fi must not
   permanently dull the stream, so its verdicts die with the session and
   re-arrive within a minute wherever they were true.
+- **The panel cap is a SECOND, different wall** (owner order 2026-08-12:
+  "what is the point of the PC sending 4K if the Android device cannot
+  receive it — a Redmi Pad is 1920x1200"). The decode ceiling is about how
+  FAST the SoC turns bytes into frames; the panel is about how many pixels
+  the glass can light up at all. They compose, and the SERVER applies the
+  panel one — this module mirrors the arithmetic only so the decode ceiling
+  judges the size that is really encoded, or a cap earned by a full 4K
+  desktop would go on holding an already-downscaled stream at the capped
+  fps. Gate: `tests/test_panel_scale.py`, fail-closed in build.py (0aq/6).
 - **The cap is never silent** — a toast the first time each distinct decision
   acts, a line in the quality panel while it bites ([Quality](quality.md)).
 
