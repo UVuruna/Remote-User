@@ -230,7 +230,54 @@ function miniRadialPoints(anchor, count, screen) {
 // size and count by argument, the same discipline `miniRadialPoints` keeps.
 const WHEEL_RADIUS = 118;
 const WHEEL_ITEM_SIZE = 74;  // px — matches .wheel-item in style.css
+// A MULTI-WORD set name wraps onto two lines instead of running edge-to-edge
+// (owner screenshot 2026-08-12: "Claude Tools" on one line touched the rim at
+// both ends). Wrapping needs more vertical room for the extra line, so a
+// wheel carrying ANY multi-word name grows every one of its circles to this
+// size together — never just the one that needs it, or the ring reads as
+// uneven (owner: "every circle must stay the same size as its siblings").
+// Chosen so a two-line label's own bounding box still clears the rim by
+// WHEEL_LABEL_GAP on every side: content (22px icon + 4px gap + two ~15px
+// text lines = 56px) sits centred, so the text block's farthest point from
+// the circle's centre is 28px down; at this size (R=45) the chord there is
+// 2*sqrt(45^2-28^2) ~= 70px, leaving ~54px after the gap on both sides — real
+// clearance for two short words at the wheel's 12px font. See
+// tests/_audit_panels.py -> WHEEL_STAGE_JS, which measures this on the live
+// page rather than trusting the arithmetic above.
+const WHEEL_ITEM_SIZE_WRAP = 90;
+// px an item's TEXT keeps clear of its own circle's rim, each side — reusing
+// WHEEL_EDGE's own value (8px keeps an item clear of the SCREEN edge; this is
+// the same idea one layer in, so the same number).
+const WHEEL_LABEL_GAP = 8;
 const WHEEL_EDGE = 8;        // px an item keeps clear of the screen edge
+
+// A name of two or more words gets two lines instead of one — never fewer,
+// never a smaller font (owner: he asked for the wrap specifically; shrinking
+// type made the wheel read unevenly). Split as evenly as possible by WORD
+// COUNT, never by character, so a line never cuts a word in half. A
+// single-word name is untouched — returned as its own one-element array so
+// the caller can render both shapes through the same code path.
+function wheelLabelLines(name) {
+  const words = String(name || "").trim().split(/\s+/).filter(Boolean);
+  if (words.length < 2) return [words.join(" ")];
+  const mid = Math.ceil(words.length / 2);
+  return [words.slice(0, mid).join(" "), words.slice(mid).join(" ")];
+}
+
+// The two small pieces `openWheel` (controls.js) needs from the above — kept
+// here rather than inline there, since controls.js was already at THE
+// STRUCTURE LAW's line cap and this is pure geometry with no PC-facing side
+// effect, exactly what this file is for.
+function wheelLabelHtml(name) {
+  const lines = wheelLabelLines(name);
+  return lines.length > 1
+    ? `<span class="wheel-label two-line">${lines.map((l) => `<span>${l}</span>`).join("")}</span>`
+    : `<span class="wheel-label">${name}</span>`;
+}
+function wheelItemSize(cats) {
+  return cats.some((cat) => wheelLabelLines(cat.name).length > 1)
+    ? WHEEL_ITEM_SIZE_WRAP : WHEEL_ITEM_SIZE;
+}
 
 function wheelPoints(count, screen, size) {
   const half = (size || WHEEL_ITEM_SIZE) / 2 + WHEEL_EDGE;

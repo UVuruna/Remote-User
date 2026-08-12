@@ -863,11 +863,11 @@ function openWheel(side) {
   // (sets.js). Renderer unchanged otherwise — it draws whatever list it gets.
   const cats = wheelCats(side);
   const currentCat = placedCat(side);
-  const points = wheelPoints(cats.length, screen);
+  const points = (wheelEl.style.setProperty("--wheel-item-size", `${wheelItemSize(cats)}px`), wheelPoints(cats.length, screen, wheelItemSize(cats))); // wheelItemSize/wheelLabelHtml: chrome.js, owner 2026-08-12
   cats.forEach((cat, i) => {
     const item = document.createElement("div");
     item.className = "wheel-item" + (cat === currentCat ? " current" : "");
-    item.innerHTML = svg(cat.icon) + `<span>${cat.name}</span>`;
+    item.innerHTML = svg(cat.icon) + wheelLabelHtml(cat.name);
     // The wheel is where the colours SAY what they are — and a wheel item is
     // painted with `--glass-strong` (0.85), a different surface from a D-pad
     // button's 0.20 tint, so it gets its own ink.

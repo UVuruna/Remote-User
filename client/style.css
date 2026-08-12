@@ -431,8 +431,13 @@ body.wheel-open::before {
 .wheel-item {
   position: absolute;
   transform: translate(-50%, -50%);
-  width: 74px;
-  height: 74px;
+  /* Set on #wheel itself (controls.js -> openWheel), inherited by every item
+     — the whole ring stays ONE size, never one grown circle among siblings
+     its own size (owner 2026-08-12). 74px is the plain one-line size; a wheel
+     carrying a multi-word set name grows every circle to
+     chrome.js's WHEEL_ITEM_SIZE_WRAP instead. */
+  width: var(--wheel-item-size, 74px);
+  height: var(--wheel-item-size, 74px);
   border-radius: 50%;
   background: var(--glass-strong);
   border: 1px solid var(--wheel-border, var(--border));
@@ -449,6 +454,21 @@ body.wheel-open::before {
   border-color: var(--accent);
   box-shadow: 0 0 0 2px var(--accent-glow), 0 0 22px var(--accent-glow);
   color: var(--accent);
+}
+/* A one-line label keeps the label centred, unchanged from before. A
+   two-line label (chrome.js -> wheelLabelHtml, a multi-word set name) is
+   drawn as two EXPLICIT lines — never a browser word-wrap left to guess at a
+   width — each its own <span>, stacked and centred, with tight line-height
+   so the pair reads as one block instead of drifting toward the rim. */
+.wheel-item .wheel-label {
+  white-space: nowrap;
+  text-align: center;
+}
+.wheel-item .wheel-label.two-line {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1.2;
 }
 
 .wheel-x {

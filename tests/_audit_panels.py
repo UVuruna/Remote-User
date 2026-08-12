@@ -659,4 +659,90 @@ SHOT_SUBJECTS = (
     ("SettingsWindow", "desktop-windows"),
     ("TrafficWindow", "desktop-traffic"),
     ("WheelOrderDialog", "desktop-windows"),
+    ("Wheel_wrap", "controls-and-wheel"),
 )
+
+# THE CATEGORY WHEEL'S TWO-WORD LABEL (owner screenshot 2026-08-12): "Claude
+# Tools" ran edge to edge on one line, the C and the final s at the circle's
+# own rim. `required:true` so it rides the wheel regardless of which sets are
+# on — the point is the LABEL, not the set — and it stays pushed in for the
+# whole per-size context (test_layout_audit.py), so every "Controls and
+# wheel" shot that context takes already shows the wrap the owner asked for,
+# with no separate staging path to fall out of step with the real one.
+WHEEL_WRAP_STAGE_JS = (
+    "categories.push({name:'Claude Tools', icon:'claude', required:true,"
+    " buttons:[]}); openWheel('left');"
+)
+WHEEL_WRAP_CLOSE_JS = (
+    "closeWheel();"
+    " categories = categories.filter((c) => c.name !== 'Claude Tools');"
+)
+
+# MEASURED, not eyeballed (owner instruction, same report). A wheel item's
+# label bounding box must clear its OWN circle's rim by WHEEL_LABEL_GAP on
+# every side — checked by the CORNERS of the label's box, so a pass proves
+# clearance in every direction at once rather than only top/bottom or only
+# left/right. Three independent claims, so a planted defect in any one of
+# them still fails the whole check: (a) the two-word label really rendered as
+# two stacked lines, not one wide line CSS happened to wrap; (b) that block
+# clears the rim; (c) every circle on the wheel — the two-line one included —
+# is the same size as its siblings, not just individually big enough.
+WHEEL_WRAP_MEASURE_JS = (
+    "() => {"
+    " const bad = [];"
+    " const items = [...document.querySelectorAll('#wheel .wheel-item')];"
+    " if (!items.length) { bad.push('no wheel items rendered'); return bad; }"
+    " const sizes = items.map((it) => it.getBoundingClientRect().width);"
+    " if (Math.max(...sizes) - Math.min(...sizes) > 0.5) {"
+    "   bad.push('circles are not all the same size: ' + JSON.stringify(sizes));"
+    " }"
+    " const wide = items.find((it) => it.querySelector('.wheel-label.two-line'));"
+    " const single = items.find((it) => !it.querySelector('.wheel-label.two-line'));"
+    " if (!wide) { bad.push('no two-word label rendered on two lines'); return bad; }"
+    " if (!single) bad.push('every label wrapped - a single-word name should stay one line');"
+    " const label = wide.querySelector('.wheel-label');"
+    " const lines = [...label.children];"
+    " if (lines.length !== 2) {"
+    "   bad.push('the two-word label is not two line elements: ' + lines.length);"
+    " } else if (lines[1].getBoundingClientRect().top <= lines[0].getBoundingClientRect().top + 2) {"
+    "   bad.push('the two lines do not stack - they overlap');"
+    " }"
+    " const r = wide.getBoundingClientRect();"
+    " const cx = r.left + r.width / 2, cy = r.top + r.height / 2, R = r.width / 2;"
+    " const gap = (typeof WHEEL_LABEL_GAP === 'number') ? WHEEL_LABEL_GAP : 8;"
+    " const lr = label.getBoundingClientRect();"
+    " const corners = [[lr.left, lr.top], [lr.right, lr.top],"
+    "                   [lr.left, lr.bottom], [lr.right, lr.bottom]];"
+    " const maxDist = Math.max(...corners.map(([x, y]) => Math.hypot(x - cx, y - cy)));"
+    " if (maxDist > R - gap) {"
+    "   bad.push('the two-word label crowds the rim: ' + Math.round(maxDist) +"
+    "     'px from centre, radius ' + Math.round(R) + ', declared gap ' + gap);"
+    " }"
+    " return bad;"
+    "}"
+)
+
+
+def check_wheel_wrap(page, label, results, shot_path_fn=None):
+    """Open the category wheel with a two-word set name on it, measure the
+    wrap, and close it again — the whole staging cycle for
+    WHEEL_WRAP_MEASURE_JS's three claims, kept out of test_layout_audit.py
+    because that file sits at THE STRUCTURE LAW's own line cap and this is a
+    self-contained staging step with nothing else in that file needing to
+    read its middle.
+
+    `shot_path_fn` is `shot_path` itself (from test_layout_audit.py) or
+    `None` — passed rather than imported, since importing it back would be a
+    circular import (that file imports THIS one). Written only once, at the
+    caller's chosen size, so the picture the owner grades is not overwritten
+    by every other viewport this audit also opens the wheel at."""
+    page.evaluate(WHEEL_WRAP_STAGE_JS)
+    page.wait_for_selector("#wheel.open .wheel-item .wheel-label.two-line",
+                           state="visible", timeout=4000)
+    bad = page.evaluate(WHEEL_WRAP_MEASURE_JS)
+    results[f"the wheel wraps a two-word label with real clearance @ {label}"] = not bad
+    if bad:
+        print(f"  DETAIL wheel wrap @ {label}: {bad}")
+    if shot_path_fn:
+        page.screenshot(path=str(shot_path_fn("Wheel_wrap")))
+    page.evaluate(WHEEL_WRAP_CLOSE_JS)

@@ -39,7 +39,7 @@ from _audit_panels import (  # noqa: E402
     CLOSE_WARN_STAGE_JS, COLOUR_SHOTS, CREATION_CLOSE_JS,
     CREATION_LIST_STAGE_JS, DICT_STAGE_JS, LANDSCAPE_SHOTS,
     LAYOUT_LIST_CLOSE_JS, LAYOUT_LIST_STAGE_JS, LAYOUT_SETTINGS_STAGE_JS,
-    PANELS, SHOT_SUBJECTS, UA_MODEL,
+    PANELS, SHOT_SUBJECTS, UA_MODEL, check_wheel_wrap,
 )
 from _audit_laybar import check_laybar_bottom  # the bottom bar's own module — noqa: E402
 # THE TABLET WAS NEVER MEASURED (owner report 2026-08-08: "do sad nikad nisam
@@ -491,11 +491,11 @@ def main() -> int:
             results[f"a gap in the stream never blanks the screen @ {label}"] = not page.evaluate(LIVE_CLOCK_BLANK_JS)
             results[f"a starved player is caught, not only a late one @ {label}"] = not page.evaluate(LIVE_CLOCK_DRIFT_JS)
             results[f"a catch-up lands with headroom, not on the edge @ {label}"] = page.evaluate("LIVE_TARGET_BEHIND_S") >= 0.3
-            # AUTO-HIDE — once per SIZE, not per look: it is a behaviour, and
-            # a colour cannot change it. Run before the look sweep so the
-            # controls are in a known state for everything that follows.
+            # AUTO-HIDE, then the WHEEL LABEL WRAP (owner screenshot 2026-08-12)
+            # — both once per SIZE, not per look: behaviour/geometry, not colour.
             for name, ok in _check_auto_hide(page).items():
                 results[f"{name} @ {label}"] = ok
+            check_wheel_wrap(page, label, results, shot_path if label == SIZES[0][0] else None)
 
             # THE D-PAD SHAPE IS A CHOICE IN PORTRAIT TOO (owner 2026-08-08,
             # task 121). On a TABLET held upright this is the whole point of
