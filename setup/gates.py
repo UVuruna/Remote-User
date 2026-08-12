@@ -343,6 +343,18 @@ def input_gate(step, run) -> None:
     # because a stale inventory comment is worse than none (this repo has met
     # that failure before). The inventory is also what the move to the shared
     # Loading Cube gadget will be read off.
+    # THE APP DOES ITS OWN RETRYING (owner report 2026-08-12, with his
+    # screenshot of "Update download failed — retry"): "ovo mi se u zadnje
+    # vreme dešava pa treba par puta da se klikne button". Two defects sat
+    # behind it — the download never retried, and every click threw away the
+    # ~113 MB already fetched (`open(dest, "wb")`). It now retries four times
+    # with a Range resume, and the gate also pins the truncation case the gate
+    # itself discovered: a CDN that drops mid-transfer ends the stream
+    # CLEANLY, so a short file used to be reported as a finished download.
+    step("0ac/6  UPDATE DOWNLOAD GATE — it retries and resumes by itself, and "
+         "names the failure (tests/test_update_download.py)")
+    run([sys.executable, str(PROJECT_DIR / "tests" / "test_update_download.py")])
+
     step("0ab/6  LOADING KIND GATE — every animation declares full-screen or "
          "cube-only, in code and comment (tests/test_loading_kind.py)")
     run([sys.executable, str(PROJECT_DIR / "tests" / "test_loading_kind.py")])

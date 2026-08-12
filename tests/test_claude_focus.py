@@ -205,6 +205,63 @@ def check_the_palette_runs_before_the_command_text() -> bool:
         < len(ops) - 1
 
 
+def check_the_focus_command_is_marked_as_ours_before_it_is_copied() -> bool:
+    """OUR MACHINERY MUST NEVER LAND ON HIS PHONE'S CLIPBOARD (owner 2026-08-12).
+
+    "Claude Code: Focus input" is the name of a VS Code command we run through
+    the palette — it is plumbing, not content. But task 182 put a live
+    `AddClipboardFormatListener` on the PC, so ANY change to the PC clipboard
+    while a session watches is pushed to the phone. Without the echo guard,
+    every tap of a Claude button silently replaced whatever he had copied on
+    his phone with that internal string.
+
+    The guard already existed and the paste path had always called it; this
+    path simply never did. So the check is not "does note_written exist" but
+    "was this exact text marked BEFORE it was written" — order is the whole
+    thing, since a mark that lands after the listener has already read the
+    clipboard guards nothing.
+    """
+    marked: list[tuple[str, int]] = []
+    order = [0]
+
+    def note(text):
+        order[0] += 1
+        marked.append((text, order[0]))
+
+    saved = content.clipboard_sync.note_written
+    content.clipboard_sync.note_written = note
+    try:
+        with Stage() as stage:
+            written: list[tuple[str, int]] = []
+            real_copy = stage.clipboard.copy_text
+
+            def copy(text):
+                order[0] += 1
+                written.append((text, order[0]))
+                return real_copy(text)
+
+            stage.clipboard.copy_text = copy
+            problem = stage.focus(FakeGuard())
+    finally:
+        content.clipboard_sync.note_written = saved
+    if problem:
+        print(f"    focus refused a legitimate VS Code target: {problem}")
+        return False
+    hit = [n for text, n in marked if text == content.CLAUDE_FOCUS_COMMAND]
+    if not hit:
+        print(f"    the focus command was never marked as ours; marked={marked}")
+        return False
+    put = [n for text, n in written if text == content.CLAUDE_FOCUS_COMMAND]
+    if not put:
+        print("    the focus command was never written to the clipboard")
+        return False
+    if min(hit) > min(put):
+        print(f"    marked at step {min(hit)} but written at step {min(put)} — "
+              f"the listener can read it before the guard is armed")
+        return False
+    return True
+
+
 def check_a_plain_paste_text_is_still_two_injections() -> bool:
     """No `focus` field = exactly the behaviour every other typed button has
     had since 2026-08-05. Enter is still separable."""
@@ -371,6 +428,8 @@ def check_the_server_really_wires_the_field() -> bool:
 CHECKS = [
     ("the palette runs before the command text",
      check_the_palette_runs_before_the_command_text),
+    ("the focus command is marked as ours before it is copied",
+     check_the_focus_command_is_marked_as_ours_before_it_is_copied),
     ("a plain paste_text is still exactly two injections",
      check_a_plain_paste_text_is_still_two_injections),
     ("a window that is not VS Code costs zero injections",

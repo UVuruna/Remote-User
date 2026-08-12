@@ -719,14 +719,11 @@ class MainWindow(QMainWindow):
 
     def _download_update(self, upd) -> None:
         """Worker: fetch the installer to %TEMP%; the refresh timer launches
-        it (Qt work stays on the UI thread). `updates.download` does the
-        actual streaming (chunked, with a socket timeout — urlretrieve has
-        none, and a mid-transfer stall would leave the button on
-        "Downloading…" forever with no retry) and reports (received, total)
-        bytes after every chunk — `total` is None whenever the response gave
-        no Content-Length, which `_show_progress` reads as "show the
-        indeterminate bar, never a frozen number" (owner decree 2026-08-10,
-        task 207)."""
+        it (Qt work stays on the UI thread). `updates.download` owns the
+        transfer itself — chunked, socket timeout, its own four retries with
+        Range resume, and (received, total) after every chunk, `total` being
+        None when the response gave no Content-Length, which `_show_progress`
+        reads as the indeterminate bar (task 207)."""
         def report(received: int, total: int | None) -> None:
             self._update_progress = (received, total)
 
@@ -735,6 +732,11 @@ class MainWindow(QMainWindow):
             updates.download(upd.installer_url, path, on_progress=report)
         except Exception as e:
             logger.error("Update download failed: %s", e)
+            # THE REASON GOES ON THE BUTTON (owner 2026-08-12): by the time
+            # this runs, updates.download has already retried four times by
+            # itself, so a surviving failure is worth naming. `_update_error`
+            # is the handover path's own field; download simply never set it.
+            self._update_error = updates.failure_reason(e)
             self._update_state = "failed"
             self._update_progress = None
             return

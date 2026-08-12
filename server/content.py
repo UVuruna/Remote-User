@@ -229,6 +229,14 @@ def focus_claude_prompt(injector: InputInjector, guard=None,
                      name or "nothing readable", CLAUDE_FOCUS_PROCESS)
         return ("The command was NOT sent — VS Code is not the window in "
                 "front. Open the Claude conversation first.")
+    # OURS, NOT HIS (owner 2026-08-12, task 200's loose end). This string is
+    # machinery — the name of a VS Code command we are about to run through
+    # the palette — and without this line the task-182 listener sees the PC
+    # clipboard change and pushes "Claude Code: Focus input" to his PHONE's
+    # clipboard on EVERY tap of a Claude button, silently replacing whatever
+    # he had there. `note_written` is the existing echo guard; the paste path
+    # ten lines below has always called it and this path simply never did.
+    clipboard_sync.note_written(CLAUDE_FOCUS_COMMAND)
     if not clipboard.copy_text(CLAUDE_FOCUS_COMMAND):
         # No typed fallback: the command name would go into the palette
         # character by character while it re-filters, and a MIS-filtered

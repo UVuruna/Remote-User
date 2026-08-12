@@ -17,6 +17,8 @@ A repo with no releases yet and plain network failures are normal outcomes
 import json
 import logging
 import re
+import time
+import urllib.error
 import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
@@ -28,6 +30,15 @@ logger = logging.getLogger(__name__)
 
 TIMEOUT_S = 10
 DOWNLOAD_CHUNK_BYTES = 256 * 1024
+# THE APP DOES ITS OWN RETRYING (owner report 2026-08-12, with his screenshot
+# of the button reading "Update download failed — retry": *"ovo mi se u zadnje
+# vreme dešava pa treba par puta da se klikne button"* — lang-ok: owner quote).
+# Four attempts with a short backoff, and the backoff RESETS whenever an
+# attempt actually moved bytes — a transfer that stalled at 80 MB is a
+# different animal from a link that never opened, and treating them the same
+# either gives up on the first or hammers a dead host.
+DOWNLOAD_ATTEMPTS = 4
+DOWNLOAD_BACKOFF_S = (1.0, 3.0, 6.0)
 
 
 @dataclass(frozen=True)
@@ -112,11 +123,70 @@ def download(url: str, dest: Path,
     whatever `urllib` raises on a network failure; the caller decides what a
     failed download means for its own UI state.
     """
-    with urllib.request.urlopen(url, timeout=timeout) as response, \
-            open(dest, "wb") as out:
+    last: Exception | None = None
+    for attempt in range(DOWNLOAD_ATTEMPTS):
+        have = dest.stat().st_size if dest.exists() else 0
+        try:
+            _download_once(url, dest, have, on_progress, timeout)
+            return
+        except _AlreadyComplete:
+            # The file on disk is the whole asset: a previous attempt finished
+            # and only the caller's bookkeeping was lost. The server answers
+            # 416 to a Range that starts at the end, and treating that as a
+            # failure would make a COMPLETE download look broken forever.
+            if on_progress:
+                size = dest.stat().st_size
+                on_progress(size, size)
+            return
+        except Exception as e:  # noqa: BLE001 — every network failure retries
+            last = e
+            moved = (dest.stat().st_size if dest.exists() else 0) > have
+            logger.warning("Update download attempt %d/%d failed after %s: %s",
+                           attempt + 1, DOWNLOAD_ATTEMPTS,
+                           "progress" if moved else "no progress", e)
+            if attempt == DOWNLOAD_ATTEMPTS - 1:
+                break
+            # A stall that still moved bytes gets the shortest pause: the link
+            # is alive and the next attempt resumes where this one stopped.
+            delay = DOWNLOAD_BACKOFF_S[0] if moved else DOWNLOAD_BACKOFF_S[
+                min(attempt, len(DOWNLOAD_BACKOFF_S) - 1)]
+            time.sleep(delay)
+    raise last if last is not None else RuntimeError("download failed")
+
+
+class _AlreadyComplete(Exception):
+    """The bytes on disk ARE the asset — a 416 to our own resume request."""
+
+
+def _download_once(url: str, dest: Path, have: int,
+                   on_progress: Callable[[int, int | None], None] | None,
+                   timeout: int) -> None:
+    """One attempt, RESUMING from `have` bytes already on disk.
+
+    Resuming is the half of this that the owner actually feels. The installer
+    is ~113 MB; before this, one hiccup at 90% discarded all of it and his
+    next click started from zero — which is exactly why several clicks were
+    needed and why each one took as long as the first.
+    """
+    request = urllib.request.Request(url)
+    if have:
+        request.add_header("Range", f"bytes={have}-")
+    try:
+        response = urllib.request.urlopen(request, timeout=timeout)
+    except urllib.error.HTTPError as e:
+        if have and e.code == 416:
+            raise _AlreadyComplete from e
+        raise
+    with response, open(dest, "ab" if _is_partial(response, have) else "wb") as out:
+        if not _is_partial(response, have):
+            # The server IGNORED the Range (200, not 206) — it is sending the
+            # whole file, so the bytes on disk are about to be replaced and
+            # nothing may be counted twice.
+            have = 0
         length = response.headers.get("Content-Length")
-        total = int(length) if length and length.isdigit() else None
-        received = 0
+        remaining = int(length) if length and length.isdigit() else None
+        total = have + remaining if remaining is not None else None
+        received = have
         if on_progress:
             on_progress(received, total)
         while chunk := response.read(DOWNLOAD_CHUNK_BYTES):
@@ -124,3 +194,46 @@ def download(url: str, dest: Path,
             received += len(chunk)
             if on_progress:
                 on_progress(received, total)
+    # A STREAM THAT ENDS EARLY ENDS CLEANLY (found by this function's own gate,
+    # 2026-08-12). A CDN that drops the connection mid-transfer does not raise:
+    # `read` simply returns b"" and the loop exits, so a truncated file would
+    # be reported as a finished download and the button would go to "ready".
+    # The response told us how much it was sending; short of that is a failure,
+    # and raising here is what lets the retry above resume the rest. The
+    # handover's own size check would eventually refuse the file — but only
+    # after telling him it was ready, which is the wrong place to find out.
+    if total is not None and received < total:
+        raise IncompleteDownload(
+            f"the stream ended at {received} of {total} bytes")
+
+
+class IncompleteDownload(OSError):
+    """The response ended before it delivered the length it announced."""
+
+
+def _is_partial(response, have: int) -> bool:
+    return bool(have) and getattr(response, "status", None) == 206
+
+
+# Human-readable failure names for the desktop Update button. Kept HERE and
+# not in the GUI: this module owns the transfer, so it owns what its own
+# failures mean; the window only puts the sentence on the button. Every arm
+# ends in "retry" because the button IS the retry, and a reason with no next
+# step is just bad news (owner 2026-08-12 — the generic message told him
+# nothing, and by the time he sees it the app has already tried four times).
+_REASONS = (
+    (urllib.error.HTTPError, "GitHub refused the download — retry"),
+    (urllib.error.URLError, "No connection to GitHub — retry"),
+    (TimeoutError, "The download timed out — retry"),
+    (OSError, "Could not write the installer to disk — retry"),
+)
+
+
+def failure_reason(error: Exception) -> str:
+    """One short sentence naming WHY, for the button."""
+    if isinstance(error, urllib.error.HTTPError):
+        return f"GitHub refused the download ({error.code}) — retry"
+    for kind, text in _REASONS:
+        if isinstance(error, kind):
+            return text
+    return "Update download failed — retry"
