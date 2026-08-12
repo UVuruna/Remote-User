@@ -41,7 +41,7 @@ from _audit_panels import (  # noqa: E402
     LAYOUT_LIST_CLOSE_JS, LAYOUT_LIST_STAGE_JS, LAYOUT_SETTINGS_STAGE_JS,
     PANELS, SHOT_SUBJECTS, UA_MODEL,
 )
-
+from _audit_laybar import check_laybar_bottom  # the bottom bar's own module — noqa: E402
 # THE TABLET WAS NEVER MEASURED (owner report 2026-08-08: "do sad nikad nisam
 # probao preko tableta, sad sam probao … naišao sam na taj bag da Touch ne radi
 # preko tableta"). Every size in this list was a PHONE, so every geometry
@@ -59,7 +59,6 @@ SIZES = [("portrait 412x915", 412, 915), ("landscape 915x412", 915, 412),
 # every panel — and the CONTRAST check below is the only thing standing
 # between a coloured look and a set whose own name is unreadable on its own
 # colour. A look audited in one combination is not audited.
-#
 # `colored` is not a fourth THEME (the 2026-08-07 model this replaces): it is
 # its own axis, orthogonal to `theme`. A coloured look on `light` is a
 # DIFFERENT page wearing the SAME palette as a coloured look on `dark`
@@ -68,7 +67,6 @@ SIZES = [("portrait 412x915", 412, 915), ("landscape 915x412", 915, 412),
 # surfaces, and the whole reason the sweep exists is that a colour which reads
 # on one surface can be invisible on the other — restructuring the axes changes NOTHING about that
 # fact, only how it is spelled.
-#
 # The full panel sweep runs in every combination at PORTRAIT (where the cards
 # are narrowest and a row starves first); landscape keeps the default look,
 # because what landscape tests is GEOMETRY and geometry does not change with
@@ -549,6 +547,8 @@ def main() -> int:
                     page.screenshot(path=str(shot_path("Pad_cross_upright")))
             page.evaluate("setPadShape(padOrientation(), 'auto')")
             page.wait_for_timeout(120)
+
+            check_laybar_bottom(page, label, portrait, results, shot_path, _shot_name)
 
             for look in LOOKS:
                 theme, colored, fill = look

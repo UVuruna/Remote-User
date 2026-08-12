@@ -1,0 +1,121 @@
+"""THE BOTTOM LAYOUT BAR — measured, finally (owner report 2026-08-12, twice:
+"floats in the middle" both times, and each round shipped a fix nobody staged).
+
+Root cause named in the CLAUDE.md task brief: `body.laybar-bottom` never
+appeared in ANY audit stage — grep proves `laybar-bottom` lives only in
+client/layouts.js and client/layouts.css, in no test. Every screenshot this
+project ever took of the layout bar was of the TOP position. That is how a
+CSS regression (the bar's `bottom` offset carrying `--group-h`, floating it a
+third of the way up the phone) shipped, was reported, "fixed", and shipped
+broken again — nobody ever put the bottom bar on screen to check.
+
+Split into its own module (THE STRUCTURE LAW: tests/test_layout_audit.py sits
+at the 1,000-line ceiling) rather than folded into tests/_audit_panels.py —
+that file is the panel CATALOGUE (what opens, in what state); this is a
+CHECK, with its own measuring instrument, in the shape of
+tests/_audit_frame.py / tests/_audit_js.py.
+
+Drives the pref the same way the phone's own Settings row does
+(`setLayBarPos`, client/layouts.js — called from client/phone-panel.js), so a
+broken switch would fail this check even if the CSS were flawless, and stages
+one real layout first (`updateLayoutBar()` hides the bar with none).
+"""
+
+# Stage constants live in _audit_panels.py (LAYBAR_STAGE_JS / LAYBAR_BOTTOM_JS
+# / LAYBAR_CLOSE_JS) — imported here rather than duplicated so the panel
+# catalogue keeps ONE copy of what state each screen is put in.
+from _audit_panels import LAYBAR_CLOSE_JS, LAYBAR_STAGE_JS
+
+# THE MEASURING INSTRUMENT. Reads the bar, both `.group`s, the viewport and
+# the live `--space-m` token (never a hardcoded pixel guess — a retuned
+# spacing scale must not silently widen this check's tolerance out from under
+# it). `overflow` is read from the class `layBarFit()` itself sets, so the
+# check asks the SAME question the page just answered rather than
+# re-deriving it from the viewport width a second, possibly-drifting way.
+_LAYBAR_MEASURE_JS = """() => {
+  const bar = document.getElementById('layout-bar');
+  const gl = document.querySelector('.group.left');
+  const gr = document.querySelector('.group.right');
+  const b = bar.getBoundingClientRect();
+  const rect = (el) => el && {top: el.top, bottom: el.bottom,
+                               left: el.left, right: el.right};
+  const cs = getComputedStyle(document.documentElement);
+  const spaceM = parseFloat(cs.getPropertyValue('--space-m')) || 16;
+  return {
+    bar: rect(b), groupL: rect(gl && gl.getBoundingClientRect()),
+    groupR: rect(gr && gr.getBoundingClientRect()),
+    innerHeight, spaceM,
+    overflow: document.body.classList.contains('laybar-overflow'),
+  };
+}"""
+
+
+def _overlaps(a, b) -> bool:
+    if not a or not b:
+        return False
+    return (a["left"] < b["right"] and b["left"] < a["right"] and
+            a["top"] < b["bottom"] and b["top"] < a["bottom"])
+
+
+def check_laybar_bottom(page, label, portrait, results, shot_path, shot_name):
+    """Stages the bottom bar with a real layout present, measures it, writes
+    a shot, then restores "top" for everything the audit does afterward.
+
+    FOUR CHECKS, each aimed at one shape of the reported bug:
+
+    - hugs the bottom edge: the gap between the bar's bottom and the
+      viewport's bottom must not exceed one row's worth of margin — a bar
+      floating 300+ px up (the reported defect, `--group-h` in the offset)
+      fails this outright.
+    - never overlaps a `.group`: the bar and the D-pad columns must not
+      paint over each other in EITHER layout.
+    - overflow case (narrow phone, no room in the row): the groups sit
+      ABOVE the bar, never straddling it.
+    - with-room case (wide tablet, fits in the row): the bar shares the
+      groups' own baseline and sits horizontally BETWEEN the two columns —
+      "IN the row", his own words, not floating above it.
+    """
+    page.evaluate(LAYBAR_STAGE_JS)
+    page.evaluate("setLayBarPos('bottom')")
+    page.wait_for_timeout(120)
+    geo = page.evaluate(_LAYBAR_MEASURE_JS)
+    bar, gl, gr = geo["bar"], geo["groupL"], geo["groupR"]
+
+    tol = geo["spaceM"] + 40   # a row's margin + slack for kb/safe-area rounding
+    gap = geo["innerHeight"] - bar["bottom"]
+    hugs = 0 <= gap <= tol
+    results[f"the bottom layout bar hugs the bottom edge @ {label}"] = hugs
+    if not hugs:
+        print(f"  DETAIL laybar bottom offset @ {label}: gap={gap:.1f}px"
+              f" (allowed 0-{tol:.1f}px)")
+
+    no_overlap = not _overlaps(bar, gl) and not _overlaps(bar, gr)
+    results[f"the bottom layout bar never overlaps a control group "
+            f"@ {label}"] = no_overlap
+    if not no_overlap:
+        print(f"  DETAIL laybar/group overlap @ {label}: bar={bar} "
+              f"groupL={gl} groupR={gr}")
+
+    if portrait and geo["overflow"]:
+        above = ((gl is None or gl["bottom"] <= bar["top"] + 1) and
+                  (gr is None or gr["bottom"] <= bar["top"] + 1))
+        results[f"in overflow the groups sit above the bottom bar "
+                f"@ {label}"] = above
+        if not above:
+            print(f"  DETAIL overflow order @ {label}: bar.top="
+                  f"{bar['top']:.1f} groupL.bottom="
+                  f"{gl['bottom'] if gl else None} groupR.bottom="
+                  f"{gr['bottom'] if gr else None}")
+    elif gl and gr:
+        baseline = (abs(bar["bottom"] - gl["bottom"]) <= 4 and
+                    abs(bar["bottom"] - gr["bottom"]) <= 4)
+        between = bar["left"] >= gl["right"] - 1 and bar["right"] <= gr["left"] + 1
+        results[f"the bottom bar shares the groups' baseline "
+                f"@ {label}"] = baseline
+        results[f"the bottom bar sits between the columns @ {label}"] = between
+        if not baseline or not between:
+            print(f"  DETAIL laybar in-row geometry @ {label}: bar={bar} "
+                  f"groupL={gl} groupR={gr}")
+
+    page.screenshot(path=str(shot_path(shot_name(f"Layout_bar_bottom {label}")[:-4])))
+    page.evaluate(LAYBAR_CLOSE_JS)

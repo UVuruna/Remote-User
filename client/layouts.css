@@ -233,22 +233,44 @@ body.laybar-bottom:not(.laybar-overflow) #layout-bar {
    there without a specificity fight. */
 @media (orientation: portrait) {
 
-/* THE NO-ROOM FALLBACK — the shape this position always drew before task 237,
-   kept now as the OVERFLOW case his ballot approved ("slika 2 ok"): its own
-   strip, above the D-pad, spending the whole edge because nothing narrower
-   fits a usable name in. */
+/* THE NO-ROOM FALLBACK — a full-width strip, because nothing narrower fits a
+   usable name in when the two pad columns leave under `LAY_BAR_MIN_GAP`
+   between them.
+
+   ── AND THE STRIP IS AT THE BOTTOM, NOT ABOVE THE PADS (owner report
+   2026-08-12, his phone, the SECOND report of "bottom bar in the middle") ──
+   Until this fix the strip cleared the groups' whole height — `--group-h`,
+   which is 306 px once the pads are a COLUMN — so on a ~480 css-px-wide phone
+   (his S25 Ultra: gap 316 px, under the 356 px minimum, so ALWAYS this branch)
+   the bar floated 330 px off the bottom edge: a third of the way up the
+   screen. The in-row fix of 2026-08-12 corrected the WITH-ROOM branch and left
+   this one drawing the old wrong picture, and no audit stage has ever set
+   `laybar-bottom` at all — every screenshot this project has taken was of the
+   TOP position, which is why two rounds closed this while it was broken.
+   A strip that crosses both columns genuinely cannot share their row, so the
+   ROW moves instead of the bar: the bar takes the groups' own baseline and the
+   groups are lifted by exactly one bar above it. That is the mirror of the TOP
+   overflow case below, where the corner buttons drop BELOW the bar for the
+   same reason — one shape, read from whichever edge the bar stands on. */
 body.laybar-bottom.laybar-overflow #layout-bar {
   top: auto;
-  /* The ONE placement that still CLEARS the groups' full height, and it must:
-     a full-width strip crosses both columns, so it cannot share their row. */
-  bottom: calc(var(--space-m) + var(--kb) + env(safe-area-inset-bottom, 0px)
-               + var(--group-h) + var(--space-s));
+  bottom: calc(var(--space-m) + var(--kb) + env(safe-area-inset-bottom, 0px));
   /* Undoing the base rule's centred cap: this shape's whole point is the full
      row. `width: auto` with both edges pinned is what spends it. */
   left: var(--space-m);
   right: var(--space-m);
   width: auto;
   transform: none;
+}
+/* THE PADS MOVE UP BY EXACTLY ONE BAR. `--corner` is the bar's real height —
+   `#lay-frame` is declared `height: var(--corner)` above and the arrows are
+   shorter than it — so this is read from the bar rather than guessed, and a
+   later retune of the corner size carries both the bar and this clearance.
+   The rest of the `.group` rule (client/style.css) is untouched: same edge
+   inset, same keyboard shift, same safe area, just one row higher. */
+body.laybar-bottom.laybar-overflow .group {
+  bottom: calc(var(--space-m) + var(--kb) + env(safe-area-inset-bottom, 0px)
+               + var(--corner) + var(--space-s));
 }
 body.laybar-bottom.laybar-overflow #lay-frame { flex: 1 1 auto; }
 /* ONE LINE, THEN THE ELLIPSIS in the overflow strip — never wrap-then-ellipse.

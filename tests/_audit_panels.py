@@ -296,6 +296,41 @@ CREATION_CLOSE_JS = "cancelCreation(true)"
 # fallback wording being present is not enough: the real path is measured.
 UA_MODEL = "Pixel 8"
 
+# THE BOTTOM LAYOUT BAR (owner report 2026-08-12, twice — "floats in the
+# middle" both times, and each round shipped a fix nobody staged). Root cause:
+# `body.laybar-bottom` never appeared in ANY audit stage, top or bottom — grep
+# proves `laybar-bottom` lives only in client/layouts.js and client/layouts.css.
+# This is the fixture that finally puts it on screen: one real layout (so
+# `updateLayoutBar()` does not hide the bar) plus the pref flipped through the
+# SAME `setLayBarPos()` the phone's own Settings row calls (client/phone-panel.js
+# → layBarPos/setLayBarPos), never a bare class toggle that could pass while
+# the real switch is broken.
+LAYBAR_STAGE_JS = (
+    "layouts = [{name:'Claude Code - Vibe Coder - Visual Studio Code"
+    " [Administrator]', process:'code.exe', orient:'portrait', icon:null,"
+    " ratio:null, pos:0.5}];"
+    "layoutActive = 0; updateLayoutBar();"
+)
+LAYBAR_BOTTOM_JS = "setLayBarPos('bottom')"
+LAYBAR_CLOSE_JS = (
+    "layoutActive = null; layouts = []; setLayBarPos('top'); updateLayoutBar();"
+)
+
+# THE APPEARANCE CARD (owner ballot 2026-08-12, task above dated the same day)
+# — Settings -> Look, three rows (Theme / Controls / Buttons). Staged with ONE
+# axis already overridden (`colored` set to Plain) so the card is caught in
+# its most informative state: the "PC (Coloured)" bracket on that row still
+# names the live look while the row's own highlight sits on "Plain" — the
+# state that PROVES a device override reads apart from the PC's own value,
+# which is the entire point of a per-device choice. The other two rows stay on
+# "PC (...)" so both the override state and the follow state are on screen at
+# once. THIS is also the one panel whose whole job is to CHANGE the look, so
+# it rides in COLOUR_SHOTS below rather than only the default combination — a
+# picture of it in one palette is weak evidence that it renders correctly in
+# the other seven.
+APPEARANCE_STAGE_JS = "setUiAxis('colored', false); openAppearancePanel()"
+APPEARANCE_CLOSE_JS = "clearUiAxis('colored'); closeAppearancePanel()"
+
 # Every overlay panel the phone shows, each opened in its FULLEST real
 # state. Hoisted out of `main()` in build round R3 so the same list can be
 # swept once per LOOK (three themes x two fills) instead of once per run.
@@ -391,6 +426,8 @@ PANELS = (
     # an answer, and the card has exactly one state.
     ("Phone card", "openPhonePanel()",
      "closePhonePanel()", "#phone-panel .sets-card"),
+    ("Appearance panel", APPEARANCE_STAGE_JS,
+     APPEARANCE_CLOSE_JS, "#appearance-panel .sets-card"),
     ("Aspect panel + Move handle",
      "layouts = [{name:'Audit', process:'x', orient:'portrait',"
      " icon:null, ratio:[600,1000], pos:0.5}]; openAspectPanel(0)",
@@ -547,7 +584,8 @@ PANELS = (
 COLOUR_SHOTS = {"Sets picker", "Quality panel", "Dictation card",
                 "Layout list with rename", "Creation list with tabs",
                 "Layout settings sheet", "Layout close chooser warned",
-                "Claude model panel", "Claude thinking panel"}
+                "Claude model panel", "Claude thinking panel",
+                "Appearance panel"}
 
 # The panels SHOT IN LANDSCAPE (2026-08-07). Every phone panel is MEASURED in
 # both orientations and always was; these two are also photographed there,
@@ -590,11 +628,13 @@ SHOT_SUBJECTS = (
     ("ControlsEditor", "desktop-controls-editor"),
     ("Sets_picker", "sets-picker"),
     ("Quality_panel", "quality-panel"),
+    ("Appearance_panel", "appearance-panel"),
     ("Dictation_card", "dictation-card"),
     ("Region_grab", "region-grab"),
     ("Command_chooser", "command-chooser"),
     ("Notices_card", "notices-card"),
     ("Pad_cross_upright", "controls"),
+    ("Layout_bar_bottom", "layouts"),
     ("Layout_close_chooser", "layouts"),
     ("Layout_member_chooser", "layouts"),
     ("Layout_settings_sheet", "layouts"),
