@@ -50,11 +50,28 @@ logger = logging.getLogger(__name__)
 
 user32 = ctypes.windll.user32
 
-MENU_WAIT_S = 0.55        # owner 2026-08-02: extraction was visibly sluggish —
+MENU_WAIT_S = 0.55        # TIMEOUT, not a wait (owner 2026-08-12 — estimating
+                          # another app's load time is never allowed): the
+                          # context-menu scan below is POLLED until it finds
+                          # the "new window" item, and this is only the
+                          # give-up point if the menu never renders one.
 NEW_WINDOW_TIMEOUT_S = 6.0  # every wait here is trimmed to the working minimum
 DRAG_GRAB_STEP_S = 0.02
 DRAG_MOVE_STEP_S = 0.008
 NEW_WINDOW_POLL_S = 0.12
+POLL_STEP_S = 0.03        # default spacing between _poll() re-checks
+ADDRESS_TIMEOUT_S = 0.8   # give-up point for the Explorer address-band poll
+                          # (_try_explorer_path) — generous costs nothing
+                          # since the poll returns the moment the band settles
+FOREGROUND_TIMEOUT_S = 0.6  # give-up point waiting for the source window to
+                            # really become the foreground window before the
+                            # original tab's Ctrl+W is sent (_try_explorer_path)
+TAB_CLOSE_TIMEOUT_S = 0.6   # give-up point waiting for the source window's
+                            # tab count to actually drop after Ctrl+W
+RECT_STABLE_TIMEOUT_S = 1.2  # give-up point waiting for a torn-off window's
+                             # rect to stop changing (its own tear-off
+                             # animation / re-layout, not our estimate of it)
+RECT_STABLE_STEP_S = 0.06   # spacing between the two rect reads compared
 TAB_MIN_WIDTH = 60        # px — narrower TabItems are activity-bar icons, not tabs
 TAB_TOP_FRACTION = 0.15   # real tab strips live in the window's top 15%
 
@@ -110,6 +127,12 @@ def _mouse(flags: int, x: int = 0, y: int = 0) -> None:
     user32.SendInput(1, ctypes.byref(inp), ctypes.sizeof(_INPUT))
 
 
+# These are the PHYSICAL PACING of an injected mouse gesture (grab, travel,
+# release) — not an estimate of how long some OTHER application needs to
+# react. THE RULE (owner 2026-08-12: "estimating how long something needs to
+# load is not allowed anywhere") governs waits for another app's state; a
+# real held-button drag still needs real milliseconds between its own
+# synthetic input events to register as a drag at all. Leave these alone.
 def _click(x: int, y: int, button: str = "left") -> None:
     down, up = (0x0002, 0x0004) if button == "left" else (0x0008, 0x0010)
     _mouse(0x0001 | 0x8000, x, y)
@@ -142,6 +165,21 @@ def _held_drag(x1: int, y1: int, x2: int, y2: int) -> None:
 
 # ---------------------------------------------------------------------------
 # UIA access (lazy, per-thread COM)
+
+def _poll(check, timeout_s: float, step_s: float = POLL_STEP_S):
+    """Wait for `check()` to return a truthy value; return it, or None on
+    timeout. THE RULE (owner 2026-08-12): we never estimate how long
+    another application needs — we watch for the condition itself and the
+    number is only the give-up point."""
+    deadline = time.monotonic() + timeout_s
+    while True:
+        result = check()
+        if result:
+            return result
+        if time.monotonic() >= deadline:
+            return None
+        time.sleep(step_s)
+
 
 _uia_broken = False
 
@@ -518,22 +556,25 @@ def _try_context_menu(auto, tab_rect, target: dict, before: set[int]) -> int | N
     root_before = {c.NativeWindowHandle for c in auto.GetRootControl().GetChildren()}
     cx, cy = tab_rect[0] + tab_rect[2] // 2, tab_rect[1] + tab_rect[3] // 2
     _click(cx, cy, "right")
-    time.sleep(MENU_WAIT_S)
-    sources = []
-    for c in auto.GetRootControl().GetChildren():
-        if c.NativeWindowHandle == target["hwnd"] or c.NativeWindowHandle not in root_before:
-            sources.append(c)
-    item = None
-    for src in sources:
-        try:
-            for mi in _find_all(auto, src, auto.ControlType.MenuItemControl):
-                if "new window" in (mi.Name or "").lower() and not mi.IsOffscreen:
-                    item = mi
-                    break
-        except Exception:  # noqa: BLE001 — try the next source
-            continue
-        if item:
-            break
+
+    def _find_menu_item():
+        # THE CONDITION (owner 2026-08-12 — never estimate a load time): the
+        # context menu is UP and holds an item whose name contains "new
+        # window". MENU_WAIT_S is only the give-up point if it never does.
+        sources = []
+        for c in auto.GetRootControl().GetChildren():
+            if c.NativeWindowHandle == target["hwnd"] or c.NativeWindowHandle not in root_before:
+                sources.append(c)
+        for src in sources:
+            try:
+                for mi in _find_all(auto, src, auto.ControlType.MenuItemControl):
+                    if "new window" in (mi.Name or "").lower() and not mi.IsOffscreen:
+                        return mi
+            except Exception:  # noqa: BLE001 — try the next source
+                continue
+        return None
+
+    item = _poll(_find_menu_item, MENU_WAIT_S)
     if item is None:
         auto.SendKeys("{Esc}")
         return None
@@ -546,20 +587,40 @@ def _try_explorer_path(auto, tab_rect, target: dict, before: set[int]) -> int | 
     """Strategy 2 (Explorer only — it has no menu command and its address
     band knows the truth): select the tab, read the path, open a new window
     there, close the original tab."""
+    def _read_address():
+        try:
+            win = auto.ControlFromHandle(target["hwnd"])
+            for tb in _find_all(auto, win, auto.ControlType.ToolBarControl):
+                name = tb.Name or ""
+                if name.startswith("Address"):
+                    return name.split(":", 1)[1].strip() if ":" in name else None
+        except Exception as e:  # noqa: BLE001
+            logger.warning("Explorer address read failed: %s", e)
+        return None
+
     cx, cy = tab_rect[0] + tab_rect[2] // 2, tab_rect[1] + tab_rect[3] // 2
+    pre_click_path = _read_address()  # seeds the stability check below — if
+                                       # the clicked tab was ALREADY selected,
+                                       # the address never changes and the
+                                       # very first post-click read is stable
     _click(cx, cy)  # select the picked tab so the address band shows ITS path
-    time.sleep(0.4)
+
+    # THE CONDITION (owner 2026-08-12): the address band reads a real,
+    # existing path for the TAB WE JUST CLICKED — not a clock tick. A single
+    # read is not evidence (the band can report a stale value mid-repaint),
+    # so we require it to read the SAME path on two consecutive polls before
+    # trusting it; ADDRESS_TIMEOUT_S is only the give-up point.
     path = None
-    try:
-        win = auto.ControlFromHandle(target["hwnd"])
-        for tb in _find_all(auto, win, auto.ControlType.ToolBarControl):
-            name = tb.Name or ""
-            if name.startswith("Address"):
-                path = name.split(":", 1)[1].strip() if ":" in name else None
-                break
-    except Exception as e:  # noqa: BLE001
-        logger.warning("Explorer address read failed: %s", e)
-    if not path or not os.path.exists(path):
+    last = pre_click_path
+    deadline = time.monotonic() + ADDRESS_TIMEOUT_S
+    while time.monotonic() < deadline:
+        cur = _read_address()
+        if cur and cur == last and os.path.exists(cur):
+            path = cur
+            break
+        last = cur
+        time.sleep(POLL_STEP_S)
+    if not path:
         return None
     subprocess.Popen(["explorer.exe", path])
     hwnd = _wait_new_window(target["process"], before)
@@ -571,9 +632,30 @@ def _try_explorer_path(auto, tab_rect, target: dict, before: set[int]) -> int | 
     # window keeps its other tabs and the new window is not registered yet.
     # A topmost raise here stranded them both (audit 2026-08-05).
     window_manager.raise_window(target["hwnd"], topmost=False)
-    time.sleep(0.25)
+
+    # THE CONDITION (owner 2026-08-12): the raise above is asynchronous — we
+    # must not send Ctrl+W until the SOURCE window has really become the
+    # foreground window, or the keystroke closes a tab in whatever window
+    # happened to be foreground instead (worse than leaving the original tab
+    # open). FOREGROUND_TIMEOUT_S is only the give-up point; on timeout we
+    # skip the close outright rather than guess.
+    became_foreground = _poll(
+        lambda: user32.GetForegroundWindow() == target["hwnd"] or None,
+        FOREGROUND_TIMEOUT_S)
+    if not became_foreground:
+        logger.warning(
+            "Explorer tab close skipped — source window %#x never became "
+            "foreground; leaving the original tab open rather than risk "
+            "closing the wrong window's tab", target["hwnd"])
+        window_manager.raise_window(hwnd, topmost=False)
+        return hwnd
+
+    tabs_before_close = len(_real_tabs(auto, target["hwnd"]))
     auto.SendKeys("{Ctrl}w")
-    time.sleep(0.2)
+    # THE CONDITION: the source window's tab COUNT actually dropped — not a
+    # clock tick guessing when Explorer finished closing it.
+    _poll(lambda: len(_real_tabs(auto, target["hwnd"])) < tabs_before_close or None,
+          TAB_CLOSE_TIMEOUT_S)
     window_manager.raise_window(hwnd, topmost=False)
     return hwnd
 
@@ -588,8 +670,27 @@ def _try_drag(tab_rect, target: dict, before: set[int],
     drop_x = ml + mw - 400
     drop_y = min(wt + wh + 25, mt + mh - 5)
     _held_drag(cx, cy, drop_x, drop_y)
-    time.sleep(1.2)
-    return _wait_new_window(target["process"], before)
+    # No fixed wait here: _wait_new_window (below) already polls for exactly
+    # the condition a sleep would have guessed at — the new window existing.
+    hwnd = _wait_new_window(target["process"], before)
+    if hwnd is not None:
+        # THE CONDITION (owner 2026-08-12): the torn-off window's rect has
+        # stopped changing. The app may run its own tear-off animation or
+        # re-layout after the window first appears, so "it exists" is not
+        # "it is done moving" — measuring/placing against a still-moving
+        # rect would place it wrong. RECT_STABLE_TIMEOUT_S is only the
+        # give-up point; on timeout we proceed with whatever the last read
+        # was rather than block extraction forever on an app that never
+        # settles.
+        last = window_manager._frame_rect(hwnd)
+        deadline = time.monotonic() + RECT_STABLE_TIMEOUT_S
+        while time.monotonic() < deadline:
+            time.sleep(RECT_STABLE_STEP_S)
+            cur = window_manager._frame_rect(hwnd)
+            if cur is not None and cur == last:
+                break
+            last = cur
+    return hwnd
 
 
 def extract_tab(mon_rect: tuple[int, int, int, int], nx: float, ny: float,
@@ -606,7 +707,15 @@ def extract_tab(mon_rect: tuple[int, int, int, int], nx: float, ny: float,
             # and never becomes a layout member, so it must never be left in
             # the always-on-top band (audit 2026-08-05).
             window_manager.raise_window(target["hwnd"], topmost=False)
-            time.sleep(0.15)
+            # THE FIFTH GUESS, AND THE SAME RULE (owner 2026-08-12). This was
+            # 0.15 s of "the raise has probably taken by now". The raise is
+            # asynchronous and its completion is directly observable, so we
+            # watch for it: the tab rects read below belong to a window that
+            # is not yet on top, and a stale rect grabs the wrong tab. Not
+            # fatal on timeout — _find_tab_rect still re-finds the tab by
+            # NAME — so we go on rather than refuse the whole extraction.
+            _poll(lambda: user32.GetForegroundWindow() == target["hwnd"] or None,
+                  FOREGROUND_TIMEOUT_S)
             tab_rect = _find_tab_rect(auto, mon_rect, nx, ny,
                                       target["hwnd"], tab_name)
             if tab_rect is None:
