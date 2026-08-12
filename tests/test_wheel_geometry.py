@@ -32,10 +32,11 @@ Run standalone or from build.py (fail-closed). node runs the pure module whole
 tests/test_grid_icons.py and tests/test_loading_settle.py use.
 
 Each check is proven by planting its own defect:
-  * WHEEL_GAP = 0                     -> "8 items ... gap -0.3px"
-  * a flat `radius = WHEEL_RADIUS`    -> "10 items ... gap -17.1px"
   * drop the room() clamp             -> "a circle leaves the screen"
-  * shrink first instead of last      -> "shrank to 70px with room to spare"
+  * drop `- WHEEL_GAP` from the face  -> "8 items ... gap 0.0px — they touch"
+  * shrink with slack to spare        -> "shrank 86->56px although ... slack"
+  * derive the radius from the gap    -> "radius 0 puts a 86px circle over the
+                                         60px cancel button" (the live defect)
 """
 
 import json
@@ -55,8 +56,18 @@ SCREENS = [
     (800, 1280, "tablet portrait"),
     (1280, 800, "tablet landscape"),
 ]
-# 1 is a wheel with one set; 10 is task 181's raised cap.
-COUNTS = list(range(1, 11))
+# 1 is a wheel with one set. EIGHT is the ceiling, and ten is an impossible
+# scenario — the owner's own correction of 2026-08-13: task 181's drop-out
+# raised the CATALOGUE to ten, but the two sets riding the D-pad groups always
+# drop off the ring, so the ring itself can never hold more than eight. Sizing
+# for a case that cannot happen was making every real ring wider than it needed
+# to be.
+COUNTS = list(range(1, 9))
+# The ✕ that cancels the wheel sits at the exact centre (client/style.css).
+WHEEL_X_SIZE = 60
+# The least daylight that reads as daylight. He asked for "a little space,
+# not much"; anything under this is the touching he reported.
+MIN_VISIBLE_GAP = 2
 
 DRIVER = r"""
 const fs = require("fs");
@@ -127,10 +138,15 @@ def check_no_two_circles_ever_touch(problems: list[str], results) -> None:
         if n < 2:
             continue
         gap = 2 * r["radius"] * math.sin(math.pi / n) - r["face"]
-        if gap < 0:
+        # NOT `< 0`. His complaint was that they TOUCH, and touching measures
+        # exactly zero — a check that only catches overlap would have passed
+        # the shipped ring at eight items (90.3 spacing, 90 face, -0.3) by a
+        # third of a pixel and passed a gapless one outright.
+        if gap < MIN_VISIBLE_GAP:
             problems.append(
-                f"{n} items @ {r['label']}: gap {gap:.1f}px — the circles "
-                f"overlap (radius {r['radius']:.1f}, face {r['face']:.1f})")
+                f"{n} items @ {r['label']}: gap {gap:.1f}px — they touch "
+                f"(radius {r['radius']:.1f}, face {r['face']:.1f}, "
+                f"{MIN_VISIBLE_GAP}px is the least that reads as space)")
 
 
 def check_no_circle_ever_leaves_the_screen(problems: list[str], results) -> None:
@@ -163,35 +179,51 @@ def check_the_ring_is_centred(problems: list[str], results) -> None:
                 f"({r['width'] / 2:.0f},{r['height'] / 2:.0f})")
 
 
-def check_the_shrink_is_the_last_resort(problems: list[str], results) -> None:
-    """THE LADDER, and the reason this check exists at all: he asked for
-    smaller circles, and an implementation that simply made them smaller would
-    satisfy the request while breaking the rule. Circles may only give up
-    pixels when the RADIUS cannot grow any further — never while the screen
-    still has room."""
+def check_the_face_only_shrinks_when_the_ring_cannot_hold_it(problems, results) -> None:
+    """THE LADDER. He asked for smaller circles, and an implementation that
+    simply made them smaller would satisfy the request while breaking the rule:
+    the ring keeps its familiar radius, and a circle gives up pixels ONLY when
+    the spacing at that radius cannot hold its full face plus the gap. A one-
+    or two-item wheel must therefore come out at the FULL size."""
     for r in results:
-        asked = r["size"]
-        got = r["face"]
-        n = r["count"]
-        if n < 2:
-            continue
-        # Would the asked-for face have fitted at some radius the screen allows?
-        room = min(r["width"], r["height"]) / 2 - asked / 2 - 8
-        needed = (asked + 8) / (2 * math.sin(math.pi / n))
-        if got < asked - 0.01 and needed <= room + 0.01:
+        asked, got, n = r["size"], r["face"], r["count"]
+        if got >= asked - 0.01:
+            continue                      # nothing gave way — nothing to justify
+        spacing = 2 * r["radius"] * math.sin(math.pi / n) if n >= 2 else float("inf")
+        if spacing - asked >= 6 - 0.01:
             problems.append(
-                f"{n} items @ {r['label']}: shrank to {got:.0f}px with room to "
-                f"spare (needed radius {needed:.0f}, screen allows {room:.0f})")
+                f"{n} items @ {r['label']}: shrank {asked:.0f}->{got:.0f}px "
+                f"although the ring had {spacing - asked:.0f}px of slack")
+
+
+def check_a_lone_circle_is_never_under_the_cancel_button(problems, results) -> None:
+    """THE DEFECT THIS GATE DID NOT HAVE, AND THE INPUT GATE FOUND (2026-08-13).
+
+    The first version of `wheelLayout` derived the radius purely from the gap,
+    which is ZERO at one item: the lone circle landed dead centre, underneath
+    the ✕ that cancels the wheel — and the ✕ is appended last, so it won the
+    tap. From the outside it read as "the pick does nothing"; the build's input
+    gate reported it as `Copy` never appearing after choosing Edit, and only
+    probing the live page showed one circle sitting at the screen's centre.
+
+    The centre belongs to the ✕. Every item, at every count, must clear it."""
+    for r in results:
+        need = (r["face"] + WHEEL_X_SIZE) / 2
+        if r["radius"] + 0.01 < need:
+            problems.append(
+                f"{r['count']} items @ {r['label']}: radius {r['radius']:.0f} "
+                f"puts a {r['face']:.0f}px circle over the {WHEEL_X_SIZE}px "
+                f"cancel button (needs {need:.0f}) — the ✕ would eat the tap")
 
 
 def check_a_screen_too_small_shrinks_rather_than_overlapping(problems) -> None:
     """And the other end of the same ladder: when the room really is gone, the
     circles MUST give way — an implementation that only ever grew the radius
     would push them off the edge instead."""
-    tiny = [{"count": 10, "width": 320, "height": 480, "label": "tiny", "size": 86}]
+    tiny = [{"count": 8, "width": 320, "height": 480, "label": "tiny", "size": 86}]
     r = _run(tiny)[0]
-    gap = 2 * r["radius"] * math.sin(math.pi / 10) - r["face"]
-    if gap < 0:
+    gap = 2 * r["radius"] * math.sin(math.pi / 8) - r["face"]
+    if gap < MIN_VISIBLE_GAP:
         problems.append(f"on a 320x480 screen ten circles still overlap by {-gap:.0f}px")
     if r["face"] >= 86:
         problems.append(
@@ -228,6 +260,27 @@ def check_the_page_really_uses_the_returned_size(problems: list[str]) -> None:
                 f"a rotation, which is the bug this gate is named for")
 
 
+def check_an_oversized_face_is_brought_back_to_the_ring(problems) -> None:
+    """The gap rule only BITES when the asked face is wider than the spacing —
+    at today's 86 px and eight items the ring already has 4.3 px of daylight,
+    so the shrink branch is idle. That makes it exactly the kind of code that
+    rots unnoticed until someone raises the face again, which is how the 90 px
+    face he photographed came to touch in the first place. So it is exercised
+    on purpose: a deliberately oversized face must come back to the ring with
+    the gap intact, at every count."""
+    cases = [{"count": n, "width": w, "height": h, "label": label, "size": 120}
+             for n in COUNTS for (w, h, label) in SCREENS]
+    for r in _run(cases):
+        n = r["count"]
+        if n < 2:
+            continue
+        gap = 2 * r["radius"] * math.sin(math.pi / n) - r["face"]
+        if gap < MIN_VISIBLE_GAP:
+            problems.append(
+                f"{n} items @ {r['label']}: a 120px face came out {r['face']:.0f}px "
+                f"with a gap of {gap:.1f}px — the ladder did not bring it back")
+
+
 def main() -> int:
     print("=== WHEEL GEOMETRY GATE ===")
     try:
@@ -239,8 +292,10 @@ def main() -> int:
         ("no two circles ever touch", check_no_two_circles_ever_touch),
         ("no circle ever leaves the screen", check_no_circle_ever_leaves_the_screen),
         ("the ring is centred on the screen it is drawn for", check_the_ring_is_centred),
-        ("the shrink is the last resort, never the first move",
-         check_the_shrink_is_the_last_resort),
+        ("the face only shrinks when the ring cannot hold it",
+         check_the_face_only_shrinks_when_the_ring_cannot_hold_it),
+        ("a lone circle is never under the cancel button",
+         check_a_lone_circle_is_never_under_the_cancel_button),
     ]
     failed = 0
     for name, fn in checks:
@@ -253,7 +308,9 @@ def main() -> int:
         for problem in problems[:6]:
             print(f"        {problem}")
         failed += bool(problems)
-    for name, fn in (("a screen too small shrinks rather than overlapping",
+    for name, fn in (("an oversized face is brought back to the ring",
+                      check_an_oversized_face_is_brought_back_to_the_ring),
+                     ("a screen too small shrinks rather than overlapping",
                       check_a_screen_too_small_shrinks_rather_than_overlapping),
                      ("the page really uses the size the ladder settled on",
                       check_the_page_really_uses_the_returned_size)):

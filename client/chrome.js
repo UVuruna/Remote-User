@@ -286,21 +286,31 @@ function wheelItemSize(cats) {
 // the bigger circles, "but shrink them a few pixels so a little space is left
 // between them — not much, but some").
 //
-// The ring's radius was a flat 118 px that knew nothing about how many items
-// it was arranging or how big they were, so the spacing fell out by accident:
-// neighbouring centres sit 2·r·sin(π/n) apart, which at 8 items and 90 px
-// circles is 90.3 px — touching exactly — and at TEN items (task 181's
-// drop-out wheel raised the cap to 10) is 72.9 px, a 17 px OVERLAP. The
-// mini radial has always sized its radius from its own face and gap
-// (MINI_RADIUS above); the wheel simply never did.
+// EIGHT IS THE MAXIMUM, AND TEN IS AN IMPOSSIBLE SCENARIO — his correction the
+// same day, and it is the fact the whole arithmetic turns on: "ni u jednom
+// trenutku ne može da se prikaže više od osam krugova zato što dva seta su
+// uvek vidljiva" (lang-ok: owner quote). Task 181's drop-out raised the
+// CATALOGUE to ten, but the two sets riding the D-pad groups always drop OFF
+// the ring, so the ring itself never holds more than eight. Sizing for ten was
+// sizing for a case that cannot happen, and it was making every real ring
+// wider than it needed to be.
 //
-// So the radius is DERIVED, exactly as the mini radial's is, and the shrink he
-// asked for is the last resort rather than the first move — the ladder this
-// project uses everywhere else (free space → reflow → smaller): open the ring
-// out until the gap fits, and only when the SCREEN will not allow that radius
-// do the circles give up pixels. Both sizes above lost 4 px as he asked, which
-// is what makes the ring's own gap affordable at 10 items on a phone.
-const WHEEL_GAP = 8;          // px of daylight between neighbouring circles
+// So the ring KEEPS its familiar radius and the circles give up the pixels:
+// at eight items neighbouring centres sit 2·118·sin(π/8) = 90.3 px apart, so a
+// 6 px gap puts the face at 84 — which is the number he reached himself
+// ("recimo 84 da im bude ili 88"). What was actually broken before is that the
+// radius was a flat 118 that knew nothing about the face, so the gap fell out
+// by accident and at eight items came to −0.3 px: touching, exactly as his
+// screenshot shows.
+//
+// A RING OF ONE MUST STILL BE A RING (found by probing the live page, 2026-08-13,
+// after the first version of this function shipped a derived radius). Deriving
+// the radius purely from the gap makes it ZERO at one item — the lone circle
+// lands dead centre, underneath the ✕ that cancels the wheel, and the ✕ is
+// appended last so it wins the tap. The input gate caught it as "Copy never
+// appeared": the pick was never made, the wheel just closed. The centre belongs
+// to the ✕; items live on the ring, always.
+const WHEEL_GAP = 6;          // px of daylight between neighbouring circles
 const WHEEL_ITEM_MIN = 56;    // px — below this a two-line label cannot fit
 
 function wheelPoints(count, screen, size) {
@@ -313,21 +323,19 @@ function wheelPoints(count, screen, size) {
 function wheelLayout(count, screen, size) {
   const n = Math.max(1, count);
   let face = size || WHEEL_ITEM_SIZE;
-  // What the screen can afford: the outermost edge of a circle must stay
-  // WHEEL_EDGE inside the shorter side.
+  // The ring is WHEEL_RADIUS unless the screen is too small to hold it — the
+  // familiar size, and never zero (see the ring-of-one note above).
   const room = (f) => Math.min(screen.width, screen.height) / 2 - f / 2 - WHEEL_EDGE;
-  // What the gap needs. One item has no neighbour, two sit opposite each
-  // other — sin(π/n) handles both without a special case.
-  const needed = (f) => (n < 2 ? 0 : (f + WHEEL_GAP) / (2 * Math.sin(Math.PI / n)));
-  let radius = Math.min(needed(face), Math.max(0, room(face)));
-  if (n >= 2 && radius < needed(face)) {
-    // The ring is already as wide as the screen allows and the circles still
-    // touch — now, and only now, they shrink. Solve for the face that fits
-    // this radius with the gap intact, then re-derive the radius from it
-    // (a smaller face also buys a little more room).
-    const fit = 2 * radius * Math.sin(Math.PI / n) - WHEEL_GAP;
-    face = Math.max(WHEEL_ITEM_MIN, Math.min(face, fit));
-    radius = Math.min(needed(face), Math.max(0, room(face)));
+  let radius = Math.max(0, Math.min(WHEEL_RADIUS, room(face)));
+  // Then the circles are sized to fit ON that ring with the gap intact. One
+  // item has no neighbour and keeps its full face; two sit opposite each other,
+  // which sin(π/n) handles without a special case.
+  if (n >= 2) {
+    const spacing = 2 * radius * Math.sin(Math.PI / n);
+    face = Math.max(WHEEL_ITEM_MIN, Math.min(face, spacing - WHEEL_GAP));
+    // A smaller face frees a little room, so the ring may sit back out at its
+    // preferred radius on a screen that could not hold it at the full size.
+    radius = Math.max(0, Math.min(WHEEL_RADIUS, room(face)));
   }
   const cx = screen.width / 2;
   const cy = screen.height / 2;
