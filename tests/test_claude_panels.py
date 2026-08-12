@@ -692,7 +692,49 @@ def check_the_phone_card_gathered_the_switches() -> None:
             "task 160's own comment promised they would move when 161 landed")
 
 
+def check_every_overlay_panel_is_registered_in_the_stylesheet() -> None:
+    """A panel outside panels.css's selector lists is INVISIBLE, not ugly.
+
+    THIS HAS NOW HAPPENED THREE TIMES — `#set-editor-panel`, then
+    `#notify-voice-panel`, then `#appearance-panel` on 2026-08-12, which shipped
+    as an element sitting in normal document flow at the bottom of <body> with
+    no `position: fixed`, no scrim and no centring: the audit's screenshot of it
+    was BARE WORKING SCREEN. The container is declared in index.html and the
+    opener works perfectly; only the stylesheet never heard of it, and a
+    hand-maintained list of ids in a CSS file has no way to notice that.
+    Three times is a mechanism, not bad luck, so the list is checked instead of
+    trusted: every overlay container index.html declares must appear in BOTH
+    the positioning list and the `[hidden]` list.
+    """
+    html = (PROJECT / "client" / "index.html").read_text(encoding="utf-8")
+    # EVERY client stylesheet, not just panels.css. A panel may legitimately be
+    # positioned by the sheet that owns its feature — `#layout-panel` lives in
+    # layouts.css and `#region-panel` in style.css — and a check that knew only
+    # one file would demand they move, which is a rule about filing rather than
+    # about the defect. What matters is that SOME sheet positions it and SOME
+    # sheet hides it; where is the feature owner's business.
+    css = "\n".join(p.read_text(encoding="utf-8")
+                    for p in sorted((PROJECT / "client").glob("*.css")))
+    ids = re.findall(r'<div\s+id="([a-z0-9-]*panel)"[^>]*\bhidden\b', html)
+    if len(ids) < 5:
+        raise AssertionError(
+            f"only {len(ids)} overlay panels found in index.html — the pattern "
+            "this check reads has changed and the check has gone blind")
+    for pid in ids:
+        listed = f"#{pid}," in css or f"#{pid} {{" in css
+        if not listed:
+            raise AssertionError(
+                f"#{pid} is declared in index.html but never positioned in "
+                "panels.css — it would render in document flow, invisible")
+        if f"#{pid}[hidden]" not in css:
+            raise AssertionError(
+                f"#{pid} has no [hidden] rule in panels.css — it would be "
+                "drawn even while closed")
+
+
 CHECKS = [
+    ("every overlay panel is registered in the stylesheet",
+     check_every_overlay_panel_is_registered_in_the_stylesheet),
     ("the Model panel is the PC's own five, by strength, with stars",
      check_the_five_models_in_his_order),
     ("every model argument is a literal proven to commit",

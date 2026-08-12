@@ -6,11 +6,35 @@
 // client/theme.css; this file only decides WHICH of them are in force and
 // hands each set its own. See client/__about/theme.md.
 //
-// THE DESKTOP DECIDES, THE PHONE OBEYS (owner answer P4). Every `config`
-// frame carries `ui = {theme, colored, fill, colors}` and that is the only
-// input: no menu on the phone, no auto-detection, and the device's own
-// dark/light preference is deliberately ignored. One source of truth means
-// the owner never has to wonder which of two places is winning.
+// THE DESKTOP SETS THE DEFAULT, THE DEVICE MAY CHOOSE (owner ballot
+// 2026-08-12: "appearance is also per device, not global, so it belongs on
+// the phone / tablet"). Every `config` frame still carries
+// `ui = {theme, colored, fill, colors}` — that is the FRAME, and it is what a
+// handset wears until it has an opinion of its own. Settings → Appearance
+// (client/appearance-panel.js) writes that opinion into THIS DEVICE'S prefs,
+// and it is laid over the frame axis by axis.
+//
+// The 2026-08-07 answer to P4 — one source of truth, no menu on the phone —
+// was right that there must be ONE answer and wrong about where it lives: he
+// uses a tablet AND a phone, and one desktop dropdown could only ever describe
+// one of them. There is still exactly one answer PER DEVICE, and it is still
+// never guessed: the device's own dark/light preference stays deliberately
+// ignored, because a look he chose must not change when the sun goes down.
+//
+// TWO STORES, NOT ONE, and the distinction is the feature:
+//   `uiLook`   — the last FRAME the PC sent. A cache, so the page does not
+//                paint the previous look for the third of a second the socket
+//                takes to answer. Overwritten by every `config`.
+//   `uiChoice` — the axes THIS DEVICE picked, and only those. Never written by
+//                a `config` frame, so a PC that changes its default can never
+//                overwrite a choice he made on the handset, and an axis he has
+//                not touched is absent rather than pinned — it keeps following
+//                the PC for as long as he leaves it alone.
+// Both go through `prefGet`/`prefSet` — the shell's SharedPreferences bridge,
+// the sets-picker's mechanism. NOT bare localStorage: that is keyed by ORIGIN
+// and the shell alternates between the LAN and Tailscale addresses, which is
+// exactly how the sets picker came to "rotate" between two states on
+// 2026-08-05.
 //
 // THREE AXES, NOT A FOURTH THEME NAME (owner correction 2026-08-08). His own
 // words: "teme postoje samo dve, svetla i tamna … a ove komande … on može da
@@ -35,6 +59,12 @@
 "use strict";
 
 const UI_PREF = "uiLook";
+// This device's own answer — a PARTIAL look, holding only the axes it chose.
+const UI_CHOICE_PREF = "uiChoice";
+// The axes a device may claim. `colors` is deliberately not one of them: a
+// set's colour is its identity (owner 2026-08-08) and the palette is resolved
+// once, on the desktop.
+const UI_AXES = ["theme", "colored", "fill"];
 // The SEED, not a fallback. It is what a device that has never been told
 // anything wears, and nothing else: `applyUi` merges onto the look in force
 // and never onto this (see its own comment — a `config` with no `ui` used to
@@ -126,6 +156,11 @@ const CAT_OPACITY = 0.85;
 // clears, which is the whole point of returning the first step that does.
 const LIFT_STEPS = 40;
 
+// The PC's word — the last `config.ui`, or the cache of it before the socket
+// has spoken. `uiPick` is this device's own answer, laid over it; `ui` is what
+// the page actually renders and is never assigned directly (composeUi does it).
+let uiFrame = { ...UI_DEFAULT };
+let uiPick = {};
 let ui = { ...UI_DEFAULT };
 let setColorCache = null;
 
@@ -440,6 +475,88 @@ function mergedUi(base, rawNext) {
   };
 }
 
+// ── THIS DEVICE'S OWN ANSWER (owner ballot 2026-08-12) ─────────────────────
+// A PARTIAL look: only the axes he actually picked here. An axis he never
+// touched must stay ABSENT rather than be pinned to whatever the PC happened
+// to say the day he opened the panel — otherwise "follow the PC" would quietly
+// stop working the first time the card was opened and closed again.
+
+/** The stored choice, sanitised. Unknown keys and impossible values are
+ *  dropped rather than rejected — a stale pref must never blank the page. */
+function readUiChoice() {
+  let raw = {};
+  try {
+    raw = JSON.parse(prefGet(UI_CHOICE_PREF) || "{}") || {};
+  } catch (e) {
+    return {};
+  }
+  // A choice written by an older page can carry the four-value theme too —
+  // the same translation the frame gets, at the same single point.
+  raw = legacyTheme(raw) || {};
+  const out = {};
+  if (raw.theme === "dark" || raw.theme === "light") out.theme = raw.theme;
+  if (typeof raw.colored === "boolean") out.colored = raw.colored;
+  if (raw.fill === "full" || raw.fill === "transparent") out.fill = raw.fill;
+  return out;
+}
+
+/** What is rendered: the PC's frame with this device's picks laid over it. */
+function composeUi() {
+  ui = mergedUi(uiFrame, uiPick);
+}
+
+/** The look in force — read by the Appearance panel so it can light the step
+ *  that is really showing, whether it came from here or from the PC. */
+function uiLook() {
+  return { ...ui };
+}
+
+/** True while this axis still follows the PC — nothing chosen here. */
+function uiFollowsPc(axis) {
+  return !(axis in uiPick);
+}
+
+/** The PC's own value for one axis, so the panel can name what "follow the
+ *  PC" would give him right now instead of asking him to guess. */
+function uiPcValue(axis) {
+  return uiFrame[axis];
+}
+
+function saveUiChoice() {
+  try {
+    prefSet(UI_CHOICE_PREF, JSON.stringify(uiPick));
+  } catch (e) {
+    // A device that will not store a preference still obeys for this session.
+  }
+  repaintLook();
+}
+
+/** Everything a look change has to touch, once. The controls' per-set colours
+ *  are inline styles and the canvas is painted by JS, so neither follows a CSS
+ *  variable on its own — the same two calls `applyUi` has always made. */
+function repaintLook() {
+  composeUi();
+  resetSetColors();
+  writeLook();
+  if (typeof refreshCategories === "function") refreshCategories();
+  if (typeof redraw === "function") redraw();
+}
+
+/** Claim one axis for this device (Settings → Appearance). */
+function setUiAxis(axis, value) {
+  if (!UI_AXES.includes(axis)) return;
+  uiPick = { ...uiPick, [axis]: value };
+  saveUiChoice();
+}
+
+/** Hand one axis — or all of them — back to the PC's default. */
+function clearUiAxis(axis) {
+  const next = { ...uiPick };
+  if (axis) delete next[axis];
+  uiPick = axis ? next : {};
+  saveUiChoice();
+}
+
 // The server's word, from `config.ui`.
 //
 // SILENCE IS NOT AN INSTRUCTION (independent grader, 2026-08-07 — the finding
@@ -468,36 +585,35 @@ function mergedUi(base, rawNext) {
 // The cache is the phone's memory of the last thing the DESKTOP said; that is
 // a far better answer to "what look does this owner want" than a constant
 // compiled into the page.
+// It lands on the FRAME, never on the rendered look (owner ballot
+// 2026-08-12): a `config` is the PC restating its DEFAULT, and a default that
+// could overwrite a choice made on the handset would undo that choice on every
+// single reconnect. The device's picks are laid back over it by `repaintLook`,
+// so an axis he claimed survives every frame and an axis he left alone follows
+// the PC exactly as it always did — including the "byte for byte" case, which
+// is simply an empty `uiPick`.
 function applyUi(next) {
   if (!next || typeof next !== "object") return;
-  ui = mergedUi(ui, next);
-  resetSetColors();
-  writeLook();
+  uiFrame = mergedUi(uiFrame, next);
   try {
-    prefSet(UI_PREF, JSON.stringify(ui));
+    prefSet(UI_PREF, JSON.stringify(uiFrame));
   } catch (e) {
     // A device that will not store a preference still gets the right look
     // for this session; it only pays the first-paint flash on the next one.
   }
-  // The controls are already on screen when a `config` arrives on a
-  // reconnect, and their per-set colours are inline styles — re-render so a
-  // theme change reaches them without waiting for the next set switch.
-  if (typeof refreshCategories === "function") refreshCategories();
-  // …and the canvas is painted by JS, so it keeps the previous backdrop until
-  // something draws again. That is every frame while a stream runs, but the
-  // letterbox around a layout region and the screen before the first frame
-  // would otherwise wear the old theme until one arrives.
-  if (typeof redraw === "function") redraw();
+  repaintLook();
 }
 
-// The cached look, applied before the socket has said anything. This is the
-// whole reason the choice is stored on the device at all.
+// The cached frame plus this device's own answer, applied before the socket
+// has said anything. This is the whole reason either is stored on the device.
 (function restoreUi() {
   try {
     const raw = prefGet(UI_PREF);
-    if (raw) ui = mergedUi(UI_DEFAULT, JSON.parse(raw));
+    uiFrame = raw ? mergedUi(UI_DEFAULT, JSON.parse(raw)) : { ...UI_DEFAULT };
   } catch (e) {
-    ui = { ...UI_DEFAULT };
+    uiFrame = { ...UI_DEFAULT };
   }
+  uiPick = readUiChoice();
+  composeUi();
   writeLook();
 })();

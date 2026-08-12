@@ -328,8 +328,19 @@ LAYBAR_CLOSE_JS = (
 # it rides in COLOUR_SHOTS below rather than only the default combination — a
 # picture of it in one palette is weak evidence that it renders correctly in
 # the other seven.
-APPEARANCE_STAGE_JS = "setUiAxis('colored', false); openAppearancePanel()"
-APPEARANCE_CLOSE_JS = "clearUiAxis('colored'); closeAppearancePanel()"
+# THE STAGE SETS NO AXIS, AND THAT IS THE POINT. The first version opened the
+# panel with `setUiAxis('colored', false)` to photograph a device override in
+# effect — and that is precisely what this panel DOES, so it fought the sweep:
+# the colour sweep applies a look, the override contradicts it, and the audit's
+# own "the shot shows the look it is named for" check correctly reported four
+# mismatches. It was right both times. A panel whose job is to change the look
+# must be photographed FOLLOWING the look, or the sweep is measuring the
+# stage's opinion instead of the page's. The override path is not left
+# unproven: tests/test_appearance_device.py runs the real theme.js and renders
+# ONE frame two ways for two simulated devices, which is the claim a screenshot
+# could never make anyway.
+APPEARANCE_STAGE_JS = "openAppearancePanel()"
+APPEARANCE_CLOSE_JS = "closeAppearancePanel()"
 
 # Every overlay panel the phone shows, each opened in its FULLEST real
 # state. Hoisted out of `main()` in build round R3 so the same list can be

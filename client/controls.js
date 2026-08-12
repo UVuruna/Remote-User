@@ -131,6 +131,11 @@ const BUILTINS = {
   // It left the desktop because he has two devices with two different voice
   // lists — client/notify.js holds the card and the reason.
   notifyvoice: { label: "Voice", icon: "listen", kind: "notifyvoice" },
+  // HOW THIS DEVICE LOOKS (owner ballot 2026-08-12): theme, coloured or plain
+  // controls, outlined or filled. It left the PC's Settings window for the
+  // same reason Voice did — he uses a tablet AND a phone, and one desktop
+  // dropdown could only ever describe one of them.
+  appearance: { label: "Look", icon: "palette", kind: "appearance" },
 };
 
 // --- Device prefs (owner bug report 2026-08-05) ----------------------------

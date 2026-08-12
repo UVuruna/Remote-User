@@ -59,13 +59,38 @@ look is spelled (three fields, not four theme names); this one fixes WHAT the
 
 ## The one rule everything else follows
 
-**The desktop decides; the phone obeys.** The look arrives in every `config`
-frame as `ui = {theme, colored, fill, colors}` and that is the only input.
-There is no theme menu on the phone, nothing is auto-detected, and the
-device's own dark/light preference is deliberately ignored — one source of
-truth means the owner never has to work out which of two places is winning.
-It is set in the desktop **Settings → APPEARANCE** card
-(`server/gui/settings_window.py`) and built by `config.ui_config()`.
+**The desktop sets the DEFAULT; the device may choose** (owner ballot
+2026-08-12: *"appearance is also per device, not global, so it belongs on the
+phone / tablet"*). The look still arrives in every `config` frame as
+`ui = {theme, colored, fill, colors}`, built by `config.ui_config()` from the
+desktop's own values — that is the FRAME, and it is what a handset wears until
+it has an opinion of its own. Settings → **Look**
+([Appearance Panel](appearance-panel.md)) writes that opinion into THIS
+DEVICE's prefs, and it is laid over the frame axis by axis.
+
+The 2026-08-07 rule — one source of truth, no menu on the phone — was right
+that there must be ONE answer and wrong about where it lives: he uses a tablet
+AND a phone, and one desktop dropdown could only ever describe one of them.
+There is still exactly one answer PER DEVICE, and it is still never guessed:
+the device's own dark/light preference stays deliberately ignored, because a
+look he chose must not change when the sun goes down.
+
+### Two stores, and the distinction is the feature
+
+| Key | Holds | Written by |
+|---|---|---|
+| `uiLook` | the last FRAME the PC sent — a cache against the first-paint flash | every `config` |
+| `uiChoice` | **only** the axes THIS DEVICE picked | the Appearance panel |
+
+`applyUi` lands on the FRAME, never on the rendered look: a `config` is the PC
+restating its default, and a default that could overwrite a choice made on the
+handset would undo that choice on every single reconnect. The choice is
+PARTIAL on purpose — an axis he never touched is absent rather than pinned, so
+it keeps following the PC for as long as he leaves it alone, and the panel's
+first step (`PC (…)`, naming the PC's current value) deletes an axis to hand it
+back. Both go through `prefGet`/`prefSet`, the shell's SharedPreferences
+bridge; bare localStorage is keyed by ORIGIN and the shell alternates between
+the LAN and Tailscale addresses — the "picker rotates" bug of 2026-08-05.
 
 ## The three axes
 
@@ -352,6 +377,15 @@ decides" rule; what changed is only that saying nothing is no longer a way of
 saying "dark, outlined".
 
 ## What proves it
+
+`tests/test_appearance_device.py` (fail-closed in `setup/gates.py`, 0as/6)
+runs this file WHOLE in node, one fresh module per simulated device, and reads
+the attributes the page really writes onto `<body>`: a device that never chose
+renders the frame byte for byte, two devices with different stored choices
+render ONE frame differently, a reconnect never overwrites a choice, handing an
+axis back really hands it back, and the legacy four-value theme still migrates
+from the frame AND from a device store written by an older page. Every check
+was proven by planting the defect it exists to catch.
 
 `tests/test_layout_audit.py` sweeps **all eight looks**. Its CONTRAST check
 composites every translucent layer down to the page floor — read from the

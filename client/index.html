@@ -162,6 +162,9 @@
   <!-- Settings → Phone: the per-device switches that belong to no other
        subject, gathered behind one button (owner 2026-08-11, tasks 161/218a) -->
   <div id="phone-panel" hidden></div>
+  <!-- Settings → Appearance: how THIS device looks — theme, coloured or plain
+       controls, outlined or filled (owner ballot 2026-08-12, per device) -->
+  <div id="appearance-panel" hidden></div>
   <!-- Settings → Wheel sets → one set: which pool commands ride the controls
        and in which slot — the same job the PC's Controls editor does (owner
        2026-08-04, task 218b) -->
@@ -286,6 +289,8 @@
        panels.js, but these two cards are its other callers). -->
   <script src="/static/claude-panels.js"></script>
   <script src="/static/phone-panel.js"></script>
+  <!-- After panels.js (segRow, ghostClickArmor) and theme.js (the axis store) -->
+  <script src="/static/appearance-panel.js"></script>
   <!-- After controls.js (activeButtons / btnId / padColumn / BUILTINS) and
        panels.js (ghostClickArmor); panels.js calls openSetEditor at runtime. -->
   <script src="/static/set-editor.js"></script>

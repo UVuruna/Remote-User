@@ -35,7 +35,10 @@ standing between that file and THE STRUCTURE LAW's 1,000-line ceiling by the
 time Settings → **Voice** needed a seventh (2026-08-12).
 
 `sets` · `region` · `quality` · `dictation` · `phone` · `notifyvoice` ·
-`anywhere` — every kind whose whole action is "open that card". Each entry is
+`appearance` ([Appearance Panel](appearance-panel.md), owner ballot
+2026-08-12 — how THIS device looks; it left the PC's Settings window for the
+same reason **Voice** did) · `anywhere` — every kind whose whole action is
+"open that card". Each entry is
 WRAPPED in an arrow rather than named directly: the openers live in five
 different modules (this one, `quality.js`, `phone-panel.js`, `region.js`,
 `notify.js`, `chrome.js`) and several load AFTER this file, so a bare

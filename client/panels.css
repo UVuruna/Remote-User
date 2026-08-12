@@ -43,6 +43,7 @@
 #dictation-panel,
 #notice-panel,
 #notify-voice-panel,
+#appearance-panel,
 #set-editor-panel,
 #choice-panel {
   position: fixed;
@@ -61,6 +62,7 @@
 #dictation-panel[hidden],
 #notice-panel[hidden],
 #notify-voice-panel[hidden],
+#appearance-panel[hidden],
 #set-editor-panel[hidden],
 #choice-panel[hidden] { display: none; }
 
@@ -531,6 +533,7 @@
   body #dictation-panel,
   body #notice-panel,
   body #notify-voice-panel,
+  body #appearance-panel,
   body #set-editor-panel,
   body #choice-panel,
   body #layout-panel {
@@ -624,6 +627,7 @@
   body #sets-panel,
   body #claude-panel,
   body #notify-voice-panel,
+  body #appearance-panel,
   body #phone-panel { padding: var(--space-s); }
   body .sets-card.card-split {
     width: 100%;
@@ -834,6 +838,7 @@ button.sets-row:active { background: var(--accent-glow); border-color: var(--acc
   body #dictation-panel,
   body #notice-panel,
   body #notify-voice-panel,
+  body #appearance-panel,
   body #set-editor-panel,
   body #choice-panel,
   body #layout-panel {
