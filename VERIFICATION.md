@@ -1,100 +1,82 @@
-# VERIFICATION — everything delivered on 2026-08-11, and every point the owner checks
+# VERIFICATION — Round 46 (2026-08-12): your 14 problems, and what to check
 
-One big list, as ordered ("implementiraj sve pa cu ja posle da testiram sve
-... ostavi neku listu sta je sve uradjeno i sta ja sve treba da proverim" —
-lang-ok: owner quote). Four releases: **v0.0.108, v0.0.109, v0.0.110,
-v0.0.112** — install the newest ([Releases](https://github.com/UVuruna/VibeCoder/releases))
-on the PC and BOTH phones, then walk the checklist. Every item names the task
-it closes; a broken item is a repeat — report it with what you saw.
+You reported 14 problems off your live test of v0.0.116 ("Ispravi 15
+kritičnih problema" session — lang-ok: owner's session title). Install the
+newest release ([Releases](https://github.com/UVuruna/VibeCoder/releases))
+on the PC and BOTH devices — the APK changed too, so update the app from the
+banner (or reinstall) on the tablet AND the phone. Per FIXED = VERIFIED,
+only your eyes close these boxes; anything broken is a repeat — report it
+with what you saw.
 
-## A. Layouts
+## The stream (your #13 — the big one)
 
-- [ ] **Creation panel** (227): open Layout (+) → List with many windows —
-  Cancel/Create are ALWAYS visible; a finger drag over the rows SCROLLS the
-  list, only a real tap selects.
-- [ ] **Four sources** (186/184/228): the Layout button opens a centered ring
-  with Tap / List / New / Recent. New opens something not yet running
-  (Explorer Quick Access, VS Code recents). Recent re-creates a layout you
-  made before in one tap and NAMES any window that is not open.
-- [ ] **Bar geometry** (223/237): TOP — the name takes the row, slim arrows
-  tight against the frame; BOTTOM on the TABLET (portrait) — the bar sits in
-  the bottom row BETWEEN the button columns, same size as at top; BOTTOM on
-  the PHONE — the bar takes its own row (too narrow between the columns);
-  LANDSCAPE — Bottom is honored and the bar is centered, never full-width.
-  Swipe on the bar steps layouts.
-- [ ] **Grid self-heals** (231): move a member window with the mouse at the
-  desk, enter the grid — if a placement is refused you get a toast and the
-  grid snaps right within ~1.5 s, without leaving and re-entering.
-- [ ] **⚙ sheet** (195/197/233): Add a window / Split into windows / Take one
-  window out — each with its OWN icon; grow works to four, split leaves one
-  solo layout per member.
-- [ ] **List reorder** (196 — still unconfirmed on your device): drag a row
-  BETWEEN two others; report whether the drop takes.
+- [ ] **A layout streams only ITS OWN pixels now.** Focus a layout on the 4K
+  monitor at 60 fps — the picture must MOVE, sharp, with no jumping and no
+  seconds of lag, on the tablet AND the S25. The server log will say
+  `H.264 session opened … crop 968x2096+…` — the phone now decodes a
+  quarter-width stream instead of the whole 4K desktop it never showed.
+- [ ] **Full desktop at Native/60 on the tablet**: if the tablet's decoder
+  genuinely cannot do full 4K@60 (it is the one screen where you really
+  watch all 3840×2160), the app now SAYS so — a toast names the fps it
+  drops to instead of freezing silently. On the S25 it should just run.
+- [ ] **Quality panel** states the PC's live values; "Native ↑" is greyed
+  when the PC card already streams full size (they are the same picture —
+  that is the whole difference between Native and Full).
 
-## B. The window that opens while you work
+## Layouts & view (your #11)
 
-- [ ] **New process** (239): from a focused layout, open something that
-  launches a NEW app — the "layout with it?" / "Show in layout" chip appears
-  within ~1–4 s WITHOUT leaving the layout.
-- [ ] **Already-running browser** (240): click a link that opens a NEW WINDOW
-  of an already-open Chrome — the chip appears too (within ~5 s of your
-  click). A new TAB in an existing window stays invisible — that is a known,
-  recorded limit, not a bug.
-- [ ] **Notification tap** (236): while a DIFFERENT layout is focused, tap an
-  agent-finished notification — it takes you to THAT agent's layout. If it
-  ever does not, the server log now names the exact reason.
+- [ ] **Aspect ratio + Move handle**: shrink a layout's aspect, drag the
+  picture off-center, Apply — the picture must land WHOLE (nothing cut at
+  the bottom), immediately, without locking/unlocking the app.
 
-## C. Controls, wheel, Hide
+## Controls & chrome (your #2, #3, #9, #10, #14)
 
-- [ ] **Wheel modes** (181 — you already confirmed): drop-out default, cap 10,
-  picker says N of 10; Fixed in the desktop Controls editor.
-- [ ] **Landscape wheel** (238): sideways, the wheel shows EVERY riding set.
-- [ ] **Hide hold** (229): hold Hide ~0.4 s with a normal finger — the two
-  modes (Comes back / Stays hidden) appear; a swipe across the button does
-  nothing.
-- [ ] **Set editor on the phone** (218b — you already found it): Settings →
-  Sets → pencil.
+- [ ] **Hide → Stays hidden**: everything vanishes EXCEPT the Hide button;
+  tapping it brings everything back. "Comes back" behaves as before.
+- [ ] **No layouts yet**: Layout(+) and Hide sit in the very top row — no
+  empty reserved strip above them.
+- [ ] **Layout bar, top**: centered, never wider than ~420 px on the tablet;
+  on the phone (too narrow between the corners) it takes its own full row.
+- [ ] **Layout bar, bottom**: sits DOWN in the bottom row, level with the
+  button groups, between them — never mid-screen, in both orientations.
+- [ ] **Layout(+) tap**: three small buttons fan out AROUND the button —
+  New (right), Tap (diagonal), List (down) — no centered ring, no veil.
+  Recent is gone from the fan (history still exists server-side).
+- [ ] **Gamepad**: L2 hold opens the same fan, stick points E/SE/S, release
+  confirms, release at nothing cancels, short L2 tap still arms tap-pick.
 
-## D. Notifications and channels
+## Android shell (your #1, #8) — needs the new APK
 
-- [ ] **Channels** (226a): Settings → This phone — three switches (banner /
-  speak / tone) per device; muting all three still leaves the banner.
-- [ ] **The voice** (224): a notice speaks only "project — title", the banner
-  keeps the full text.
-- [ ] **Both devices** (209): tablet and phone each get every notice once,
-  with the app closed.
+- [ ] **QR scan opens in the orientation you HOLD the device** — portrait
+  stays portrait.
+- [ ] **Full desktop rotates freely on the tablet** — even with the system
+  auto-rotate toggle off. A focused layout still locks to its orientation
+  (your 204 rule, unchanged).
 
-## E. Desktop
+## Desktop (your #4)
 
-- [ ] **Advanced card** (226b): Settings — port, H.264 on/off, JPEG quality,
-  QR image toggle, at the bottom.
-- [ ] **2560 offer** (226c): with your saved 3840/60, the next start shows a
-  ONE-TIME banner offering 2560; either answer sticks and it never returns.
-- [ ] **Apply & restart** (234): no ~10 s hang on restart.
-- [ ] **Controls editor** (232): fits a 1280-wide screen — three columns,
-  nothing cut, the full command pool visible.
+- [ ] **Settings / Controls / Traffic windows** always open fully on-screen,
+  even when the main window sits at the very top or bottom edge.
 
-## F. Performance (from v0.0.108, still on your list)
+## Notifications voice (your #5) — per device now
 
-- [ ] **60 fps without freezing** (130/131/151): lower Resolution once or take
-  the phone's ↑ Native — the picture must move at 60 fps.
-- [ ] **Excursion return** (203): gallery and back — seconds, not a minute.
-- [ ] **Bitrate Apply** (193): change bitrate + Apply — nothing dies.
-- [ ] **Orientation lock** (204): portrait layout, turn the tablet, leave and
-  return — never rotates.
-- [ ] **Clipboard both ways** (182), **quality raise panel** (131), **quality
-  edits through the phone** (218b) — as listed in the v0.0.108 report.
+- [ ] **Settings → Voice on the PHONE**: lists this device's own voices,
+  every row has a speaker button that SPEAKS a sample before you choose,
+  plus the speaking pace. Tablet and phone each keep their own choice.
+- [ ] **Desktop Settings** keeps only the two master switches ("Tell my
+  phone…", "Say it out loud") — the voice rows moved to the phone.
 
-## G. Open questions that are YOURS
+## Wheel (your #6, #7)
 
-- **Rotation** (176): my critique stands — the lock is a consequence of the
-  region's shape on the PC; a tablet rotating a portrait layout would only
-  letterbox it. One word from you overrules it.
-- **New-tab chip** (240 limit): covering a new TAB of an existing browser
-  window is not possible by window identity; if you want it, that is a
-  different investigation (browser-side signals), say so.
+- [ ] **Drop-out mode really holds 10**: tick up to 10 sets in the phone's
+  picker / desktop editor with drop-out mode on; the ring legend follows.
+- [ ] **Claude set → Agents** has an icon everywhere (phone + desktop
+  editor). What it does: `/agents` opens Claude Code's subagent manager —
+  a config surface, so it stays in the pool unticked until you want it.
 
 ---
 Everything above shipped through the full gate chain (fail-closed build
-gates, phone + Qt audits in both palettes, independent visual grading) —
-but per FIXED = VERIFIED, only your eyes close these boxes.
+gates incl. the two new ones — REGION STREAM and DECODE CAPS, both driven
+with data from YOUR server log — phone + Qt audits in both palettes,
+independent visual grading). Per THE REPEAT LAW's ledger these are all [~]
+until you confirm them from your devices.
