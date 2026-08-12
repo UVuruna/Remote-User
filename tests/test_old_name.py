@@ -76,9 +76,34 @@ def find_survivors() -> list[str]:
             rel = path.relative_to(PROJECT).as_posix()
             if path.resolve() == Path(__file__).resolve():
                 continue                     # this gate's whole job is to spell it
-            for number, line in enumerate(text.splitlines(), 1):
+            lines = text.splitlines()
+            for number, line in enumerate(lines, 1):
                 if OLD_NAME.search(line) and not _allowed(rel, line):
                     survivors.append(f"{rel}:{number}: {line.strip()[:120]}")
+            # A NAME BROKEN OVER TWO LINES IS STILL THE NAME (found 2026-08-12,
+            # by OPENING a screenshot rather than by any check here). The
+            # notices card on the phone read "switched off for Remote" with
+            # "User right now" on the NEXT source line, and then said "Vibe
+            # Coder" two lines further on — one sentence contradicting
+            # itself, in text the OWNER reads. It survived this gate through
+            # four releases because the scan above walks LINE BY LINE and the
+            # regex tolerates a space but not a newline plus the next line's
+            # indent. So every ADJACENT PAIR of lines is joined with their
+            # whitespace flattened and searched again — a name can only wrap
+            # once, so a pair is enough, and the pair is reported at the FIRST
+            # of the two lines. A hit already reported by the single-line pass
+            # is skipped, so nothing is counted twice, and the allowance is
+            # honoured on either line of the pair. Wrapping is not a spelling:
+            # a gate a text editor's right margin can defeat is not a gate.
+            for number, (first, second) in enumerate(zip(lines, lines[1:]), 1):
+                if OLD_NAME.search(first) or OLD_NAME.search(second):
+                    continue                 # the single-line pass owns these
+                joined = " ".join((first + " " + second).split())
+                if OLD_NAME.search(joined) and not (
+                        _allowed(rel, first) or _allowed(rel, second)):
+                    survivors.append(
+                        f"{rel}:{number}: (wrapped over two lines) "
+                        f"{joined.strip()[:120]}")
     return survivors
 
 

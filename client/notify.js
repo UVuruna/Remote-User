@@ -317,8 +317,8 @@ function renderNoticeCard(state) {
     sleep, so it has to be told to leave this one alone. One tap, one system
     dialog, and it is done for good.</p>` +
     (state && state.notifications === false
-      ? `<p class="sets-sub">Notifications are also switched off for Remote
-         User right now. Android Settings → Apps → Vibe Coder →
+      ? `<p class="sets-sub">Notifications are also switched off for Vibe
+         Coder right now. Android Settings → Apps → Vibe Coder →
          Notifications turns them back on — without that, notices can only be
          spoken.</p>`
       : "");
