@@ -79,6 +79,12 @@ STANDARD = {
     # of shape checks and the ownership contract it enforces is declared in
     # gui/controls_data.py, which already carries the rule and its own doc.
     "server/actions_api.py",
+    # New 2026-08-12 (THE STRUCTURE LAW — web.py stood at the 1,000-line wall
+    # again): the `config` frame's wire shape, the actions_api precedent (one
+    # module owns one message's fields). Standard: it assembles fields other
+    # modules build and adds two optional ones (codec, stream_region); the
+    # region-crop decision it ships lives in h264_streamer/layout_api.
+    "server/config_api.py",
     "server/window_manager.py",
     # Split out of window_manager.py on 2026-08-09 (THE STRUCTURE LAW — the
     # pos-anchor round pushed it past 1,000 lines). The registry holds the

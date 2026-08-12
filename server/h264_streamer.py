@@ -70,14 +70,19 @@ class H264Session:
     reacts by opening a fresh session."""
 
     def __init__(self, source: RawFrameSource, encoder: str, on_data, on_end,
-                 quality: dict | None = None):
+                 quality: dict | None = None, region: dict | None = None):
         """on_data(bytes) / on_end() are called from the read thread and must
         be cheap and thread-safe (the web layer bridges them to asyncio).
         quality = this client's overrides from the phone's quality panel
         (owner spec 2026-08-05): {"fps": int, "res": "full"|"2/3"|"1/2",
         "bitrate": "high"|"mid"|"low"}. fps 0 / "full" / "high" mean "no
-        override" — the desktop Settings defaults apply. None = all
-        defaults."""
+        override" — the desktop Settings defaults apply. None = all defaults.
+        region = the monitor-normalized rect of the focused layout (owner
+        order 2026-08-12: the phone must never decode pixels it does not
+        show) — this encoder crops to it; None/full-frame means no crop.
+        `self.region` afterwards holds the EFFECTIVE normalized rect of the
+        even-rounded pixel crop (what `config.stream_region` tells the page),
+        or None when nothing is cropped."""
         self._source = source
         self._encoder = encoder
         self._on_data = on_data
@@ -91,12 +96,44 @@ class H264Session:
         self._head_error: str | None = None
         self.codec: str | None = None
         self.width, self.height = source.stream_w, source.stream_h
+        self._crop = self._crop_rect(region)
+        self.region = ({"x": self._crop[2] / self.width,
+                        "y": self._crop[3] / self.height,
+                        "w": self._crop[0] / self.width,
+                        "h": self._crop[1] / self.height}
+                       if self._crop else None)
+
+    def _crop_rect(self, region: dict | None) -> tuple[int, int, int, int] | None:
+        """(w, h, x, y) of the pixel crop on the encoded frame, or None for a
+        full frame. Everything even-aligned: yuv420p subsamples chroma 2x2, so
+        an odd size fails the encoder and an odd OFFSET shears the colours."""
+        if not region:
+            return None
+        even = lambda v: int(v) // 2 * 2
+        x = min(even(region.get("x", 0) * self.width), self.width - 2)
+        y = min(even(region.get("y", 0) * self.height), self.height - 2)
+        w = max(2, even(region.get("w", 1) * self.width))
+        h = max(2, even(region.get("h", 1) * self.height))
+        w = min(w, self.width - x)
+        h = min(h, self.height - y)
+        if x <= 0 and y <= 0 and w >= self.width and h >= self.height:
+            return None  # the whole frame — nothing to crop
+        return (w, h, x, y)
 
     def _ffmpeg_cmd(self) -> list[str]:
         # Quality overrides downscale / drop fps INSIDE this client's own
         # ffmpeg (capture and other clients stay untouched); dimensions must
         # stay even for yuv420p.
         chain = []
+        # The crop comes FIRST (owner order 2026-08-12): the encoder never
+        # sees the pixels outside the focused layout's region, so the phone
+        # never decodes them — a quarter-width layout costs a quarter-width
+        # decode, and every bit of the bitrate lands on what is watched. The
+        # res/fps overrides below then apply to the CROP, exactly as the
+        # phone's quality panel reads relative to what it is shown.
+        if self._crop:
+            w, h, x, y = self._crop
+            chain.append(f"crop={w}:{h}:{x}:{y}")
         num, den = {"2/3": (2, 3), "1/2": (1, 2)}.get(
             self._quality.get("res"), (1, 1))
         if den != num:
@@ -342,7 +379,8 @@ class H264Manager:
         return SessionOwner()
 
     def open_session(self, on_data, on_end, quality: dict | None = None,
-                     owner: SessionOwner | None = None) -> H264Session:
+                     owner: SessionOwner | None = None,
+                     region: dict | None = None) -> H264Session:
         """Starts capture with the first client. Blocking (ffmpeg spawn + init
         segment wait). Raises RuntimeError when the encoder fails to start, or
         when the manager is already shut down.
@@ -360,7 +398,7 @@ class H264Manager:
                 self._source.start()
                 self._source_running = True
             session = H264Session(self._source, self.encoder, on_data, on_end,
-                                  quality=quality)
+                                  quality=quality, region=region)
             try:
                 session.start()
             except Exception:  # RuntimeError (no head) or OSError (Popen) — same cleanup
@@ -371,8 +409,10 @@ class H264Manager:
             if owner is not None and not owner.take(self, session):
                 return self._abandon(session, "its client was already gone")
             self._sessions.add(session)
-            logger.info("H.264 session opened — %d active, codec %s, %dx%d",
-                        len(self._sessions), session.codec, session.width, session.height)
+            crop = (" crop %dx%d+%d+%d" % session._crop) if session._crop else ""
+            logger.info("H.264 session opened — %d active, codec %s, %dx%d%s",
+                        len(self._sessions), session.codec, session.width,
+                        session.height, crop)
             return session
 
     def close_session(self, session: H264Session) -> None:

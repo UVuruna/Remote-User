@@ -121,11 +121,15 @@ Pseudocode:
                         put_nowait; ON QueueFull -> drain queue, put None
                         (a full queue means the client cannot keep up -- the WHOLE
                         session resets; H.264 bytes cannot be dropped individually)
+            req_region = conn["region"]      # the focused layout's rect, read ONCE
             TRY: session = manager.open_session(on_data=push, on_end=lambda: push(None),
                                                 quality=conn["quality"],  # phone panel overrides
-                                                owner=owner)
+                                                owner=owner,
+                                                region=req_region)  # encoder CROPS to it
                  # (a changed `quality` message resets the session via conn["reset_stream"];
-                 #  the loop reopens here with the new fps/res/bitrate)
+                 #  a changed REGION does too — layout_api.send_layout_state compares the
+                 #  live conn["region"] against conn["stream_region"], the intention copy
+                 #  recorded below; the loop reopens with the new fps/res/bitrate/crop)
             EXCEPT (RuntimeError, OSError):
                  owner.release(); failures += 1
                  IF first OR failures >= h264_reopen_tries:
@@ -134,7 +138,9 @@ Pseudocode:
             EXCEPT BaseException:            # cancelled -- socket death, 4409, server stop
                  owner.release(); re-raise   # to_thread cannot cancel the thread it started
             first, failures = False, 0
-            send config (with the session's parsed codec)
+            conn["stream_region"] = req_region   # intention copy for the choke point
+            send config (with the session's parsed codec + stream_region, the
+                         even-rounded crop the page maps the video onto)
             WHILE (chunk := queue.get()) is not None:
                 ws.send_bytes(chunk)
             FINALLY: manager.hold_source(hold)   # the gap to the next session --

@@ -56,14 +56,14 @@ import layout_api
 import monitor_api
 import monitors
 import notify
-import pairing
 import presence
 import agents
 import content
 import traffic
 import uia
 import window_manager
-from config import SETTINGS, apk_version, app_version, ui_config
+from config import SETTINGS
+from config_api import send_config as _send_config
 from input_injector import BUTTON_FLAGS, InputInjector
 from layout_api import toast as _toast
 
@@ -487,6 +487,11 @@ async def _h264_loop(ws: WebSocket, manager, token: str, conn: dict,
         # the loop then reopens with the new reduced/full encoder settings.
         conn["reset_stream"] = lambda p=push: loop.call_soon_threadsafe(p, None)
         started = loop.time()
+        # The region THIS session encodes (owner order 2026-08-12: the encoder
+        # crops to the focused layout — the phone never decodes pixels it does
+        # not show). Read ONCE: layout_api compares the live conn["region"]
+        # against the copy recorded after open; a second read would race a focus.
+        req_region = conn.get("region")
         try:
             # Default args bind THIS iteration's push — `push` itself rebinds
             # next iteration, and a late callback from a dying session must
@@ -497,6 +502,7 @@ async def _h264_loop(ws: WebSocket, manager, token: str, conn: dict,
                 lambda p=push: loop.call_soon_threadsafe(p, None),
                 conn.get("quality"),
                 owner,
+                req_region,
             )
         except (RuntimeError, OSError) as e:
             owner.release()
@@ -521,8 +527,12 @@ async def _h264_loop(ws: WebSocket, manager, token: str, conn: dict,
             owner.release()
             raise
         first, failures = False, 0
+        # Intention-valued: layout_api compares two reads of ONE source
+        # (session.region is the even-rounded crop — other decimals).
+        conn["stream_region"] = req_region
         try:
-            await _send_config(ws, manager, token, codec=session.codec)
+            await _send_config(ws, manager, token, codec=session.codec,
+                               region=session.region)
             while (chunk := await queue.get()) is not None:
                 await ws.send_bytes(chunk)
         except (WebSocketDisconnect, RuntimeError):
@@ -588,49 +598,11 @@ async def _send_cursor(ws: WebSocket, injector: InputInjector) -> None:
         await asyncio.sleep(interval)
 
 
-# The actions.json reader and the shipped-pool merge MOVED to
-# `server/actions_api.py` on 2026-08-11 (THE STRUCTURE LAW - this file stood
-# past the 1,000-line wall). They belong there for a better reason than the
-# count: that module now owns the SHAPE of actions.json on the wire, both when
-# it is first sent and when the phone's own set editor makes it change, and one
-# owner is what stops the two from carrying different fields.
-
-
-async def _send_config(ws: WebSocket, stream, token: str, codec: str | None = None) -> None:
-    # tailscale_url feeds the client's guided "access from anywhere" wizard:
-    # null when the PC has no Tailscale yet (the desktop window guides that
-    # side); checked fresh per config so a login mid-run shows on reconnect.
-    ts_ip = await asyncio.to_thread(pairing.get_tailscale_ip)
-    payload = {
-        "type": "config",
-        "monitor_width": stream.width,
-        "monitor_height": stream.height,
-        # `monitor` + `monitors` — every screen the PC can stream and which
-        # one this is (owner 2026-08-09, task 155). Built in
-        # monitor_api.config_fields; this file only ships it, like `base`.
-        **monitor_api.config_fields(stream),
-        "stream": stream.mode,
-        "tailscale_url": f"http://{ts_ip}:{SETTINGS.port}/?token={token}" if ts_ip else None,
-        # The phone's update source is THIS PC, never the internet. The
-        # banner compares against apk_version — the version of the APK this
-        # server actually serves (app_version nagged forever on desktop-only
-        # releases); app_version stays for display/diagnostics.
-        "app_version": app_version(),
-        "apk_version": apk_version(),
-        # What the PC ITSELF is set to (desktop Settings card) — the phone's
-        # quality panel is a set of overrides that may only go BELOW this, so
-        # it has to be able to SAY what "Max / Full / High" currently mean and
-        # to grey out the steps that can never take effect (owner 2026-08-05:
-        # picking 30 fps under a 10 fps PC changed nothing and said nothing).
-        "base": config.stream_base(stream),
-        # How the phone should LOOK (build round R3, owner 2026-08-07) —
-        # theme, fill and the per-set colours, decided on the DESKTOP and
-        # nowhere else. Built in config.ui_config(); this file only ships it.
-        "ui": ui_config(),
-    }
-    if codec:
-        payload["codec"] = codec
-    await ws.send_text(json.dumps(payload))
+# The actions.json reader and shipped-pool merge live in `server/actions_api.py`
+# (moved 2026-08-11), and the `config` frame in `server/config_api.py` (moved
+# 2026-08-12) — THE STRUCTURE LAW both times: this file stood at the 1,000-line
+# wall, and the module that owns a message's wire SHAPE is one module, so no
+# second sender can ever carry different fields.
 
 
 async def _screenshot(ws: WebSocket, stream, injector: InputInjector, msg: dict) -> None:

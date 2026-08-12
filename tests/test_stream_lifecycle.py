@@ -43,6 +43,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "server"))
 
+import config_api  # noqa: E402
 import h264_streamer  # noqa: E402
 import web  # noqa: E402
 from config import SETTINGS  # noqa: E402
@@ -253,8 +254,9 @@ def install_fakes() -> None:
     h264_streamer.subprocess.Popen = FakeFfmpeg
     h264_streamer.RawFrameSource = FakeSource
     # `_send_config` asks Windows for the Tailscale address (a subprocess) --
-    # a stream test must not depend on the machine's VPN state.
-    web.pairing.get_tailscale_ip = lambda: None
+    # a stream test must not depend on the machine's VPN state. It lives in
+    # config_api since 2026-08-12 (web.py imports the function from there).
+    config_api.pairing.get_tailscale_ip = lambda: None
     # A short queue makes an overflow reachable in a test's lifetime; the
     # shipped 256 is ~4 s of full-bitrate video. SETTINGS is frozen (THE CONFIG
     # SECTION LAW) — object.__setattr__ is the documented way past it, and only

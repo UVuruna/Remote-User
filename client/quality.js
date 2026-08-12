@@ -106,11 +106,16 @@ function ceilingFor(width) {
                          decodeSessionCeilings[String(width)] || 0);
 }
 
-/** The width the CURRENT prefs would have the server encode. 0 before the
- *  first config — nothing can be capped before the base is known. */
+/** The width the CURRENT prefs would have the server encode — REGION-AWARE
+ *  (owner order 2026-08-12): a stream cropped to a layout is a fraction of
+ *  the step's width, and the ceiling must judge what is actually decoded,
+ *  or a cap earned by the full 4K desktop would hold an easy layout crop at
+ *  the capped fps. 0 before the first config — nothing capped before the
+ *  base is known. */
 function effectiveWidth(p) {
   if (!streamBase) return 0;
-  return stepWidth(p.res, streamBase.width, monitor ? monitor.w : 0);
+  const w = stepWidth(p.res, streamBase.width, monitor ? monitor.w : 0);
+  return streamRegion && streamRegion.w > 0 ? Math.round(w * streamRegion.w) : w;
 }
 
 /** The cap decision for the current prefs — one source for the wire, the
@@ -229,7 +234,19 @@ function sendQuality() {
       showToast(`This device decodes that resolution up to ${cap.fps} fps — using ${cap.fps}.`);
     }
   }
+  lastQualitySent = JSON.stringify({ ...effectiveQuality(), ...raiseRequest() });
   send({ type: "quality", ...effectiveQuality(), ...raiseRequest() });
+}
+
+// The server re-applies this connection's STORED quality to every new
+// session, so a value computed under one stream region outlives the region
+// unless restated. Called by connection.js on every `config` (the frame that
+// changes the region): a no-op whenever nothing effective moved.
+let lastQualitySent = "";
+
+function restateQualityIfChanged() {
+  const now = JSON.stringify({ ...effectiveQuality(), ...raiseRequest() });
+  if (now !== lastQualitySent && (qualityOverridden() || lastQualitySent)) sendQuality();
 }
 
 function refreshQualityButtons() {

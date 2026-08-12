@@ -117,6 +117,12 @@ let monitor = { w: 0, h: 0 };
 // wire had to become required for a feature the phone can live without.
 let monitorList = [];      // [{index, width, height, primary}]
 let monitorIndex = 0;      // which of them the stream is showing
+// The monitor-normalized rect the H.264 stream COVERS (owner order
+// 2026-08-12: the per-client encoder crops to the focused layout, so the
+// phone never decodes pixels it does not show). From `config.stream_region`;
+// null = the stream is the full monitor, exactly the old world. render.js
+// maps the video onto this rect; quality.js sizes the decode ceiling by it.
+let streamRegion = null;
 let baseRect = { x: 0, y: 0, w: 1, h: 1 };
 let view = { scale: 1, tx: 0, ty: 0 };
 

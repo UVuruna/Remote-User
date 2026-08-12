@@ -196,7 +196,15 @@ function redraw() {
   }
   if (streamMode === "h264") {
     if (video.readyState >= 2) {
-      ctx.drawImage(video, D.x, D.y, D.w, D.h);
+      // A region stream carries ONLY the focused layout's rect (owner order
+      // 2026-08-12) — draw it onto that rect of the monitor space, never
+      // stretched over the whole desktop. Null = full-frame stream, the
+      // whole D as always.
+      const R = streamRegion
+        ? { x: D.x + streamRegion.x * D.w, y: D.y + streamRegion.y * D.h,
+            w: streamRegion.w * D.w, h: streamRegion.h * D.h }
+        : D;
+      ctx.drawImage(video, R.x, R.y, R.w, R.h);
       everDrew = true;
     }
   } else {

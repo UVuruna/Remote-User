@@ -662,6 +662,20 @@ def input_gate() -> None:
          "own decoder cannot drink (tests/test_decode_caps.py)")
     run([sys.executable, str(PROJECT_DIR / "tests" / "test_decode_caps.py")])
 
+    # THE PHONE NEVER DECODES PIXELS IT DOES NOT SHOW (owner order
+    # 2026-08-12, his own words — lang-ok: owner quote: "zašto bi telefon
+    # dekodirao nešto što ne vidi"). H.264 used to stream the FULL monitor
+    # always: a quarter-width layout still cost a full 4K@60 decode with
+    # three quarters cropped away on the canvas. The per-client ffmpeg now
+    # crops to the focused layout's region, `config.stream_region` tells the
+    # page what the video covers, and a region change ends the mismatched
+    # session at the layout choke point. Driven with the REAL session and
+    # the REAL choke point, and the crop case is his own live layout from
+    # his own log.
+    step("0ap/6  REGION STREAM GATE — the encoder crops to the focused "
+         "layout, and the page maps it back (tests/test_region_stream.py)")
+    run([sys.executable, str(PROJECT_DIR / "tests" / "test_region_stream.py")])
+
 
 def generate_icons() -> None:
     step("1/6  Generating ICOs from assets/logo.svg")

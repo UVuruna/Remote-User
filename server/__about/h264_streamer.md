@@ -57,7 +57,7 @@ So the claim is created on the CALLER's thread, before the encoder exists, and a
 What the [Web Layer](web.md) talks to (duck interface shared with `JpegStreamer`; `mode = "h264"`):
 
 - `new_owner()`: a fresh `SessionOwner` for the caller to hand to `open_session`. Must be created on the caller's own thread — that timing IS the defence
-- `open_session(on_data, on_end, quality, owner)` / `close_session(session)`: session registry; capture starts with the first client and stops with the last — nothing runs while nobody is watching. A session whose claim is already released, or one that finished starting after `shutdown()`, is closed and never registered
+- `open_session(on_data, on_end, quality, owner, region)` / `close_session(session)`: session registry; capture starts with the first client and stops with the last — nothing runs while nobody is watching. A session whose claim is already released, or one that finished starting after `shutdown()`, is closed and never registered. `region` is the focused layout's monitor-normalized rect — the session CROPS to it (below)
 - `hold_source(hold)` / `release_source(hold)`: "I am between sessions and I am opening another one right now" — capture keeps running even though `_sessions` is momentarily empty. It exists because a quality change can only be applied by a NEW ffmpeg (a bitrate lives inside the running one's flags), and with one client — "one device at a time" is a hard rule — closing the old session emptied `_sessions`, so dxcam was torn down and rebuilt for a change that never touched capture. The new encoder then had NO FRAMES, and ffmpeg cannot write an init segment before it has encoded one: past `h264_head_timeout` the open raised and the whole socket died (owner report 2026-08-10; his log at 20:30:21 shows the close and the `Frame buffer build(start)` on the same millisecond, and the failure 21 s later). Idempotent by construction — a SET of tokens, not a count, so no caller can leak or double-release one — and `release_source` attempts the stop **without waiting for `_lock`**, because it runs on the event loop, sometimes mid-cancellation, while `open_session` can hold that lock for as long as an encoder takes to start. Skipping is safe: every exit of `open_session` either registers a session (capture must run) or calls `_stop_source_if_idle` itself. A hold is NEVER a substitute for a session — only a live stream loop may take one, and `_stream_h264` gives it back on every way that loop can end
 - `switch_to(index)`: ends every session (owners reopen automatically and resend `config`) and swaps the capture monitor. Stops the source DIRECTLY, so a hold cannot delay a monitor switch or `shutdown()`; only `_stop_source_if_idle` consults holds
 - `take_screenshot()`, `width` / `height` / `monitor_index`, `output_count()`: delegated to the source
@@ -72,8 +72,28 @@ Gates: [`tests/test_stream_lifecycle.py`](../../tests/___tests.md), fail-closed 
 - `_moov_end(buf)`: byte length of the complete init segment (through `moov`) if fully buffered, else 0 — walks top-level MP4 boxes; raises on a malformed box
 - `_codec_string(head)`: the MSE `avc1.PPCCLL` string read from the `avcC` box inside `moov` — parsed from the actual stream, never guessed, so it matches whatever profile/level the chosen encoder produced
 
+## The region crop (owner order 2026-08-12)
+
+The "full frame always" rule this path shipped with is GONE — his words:
+"zašto bi telefon dekodirao nešto što ne vidi" (lang-ok: owner quote). The
+full-frame stream was cheap on the WIRE (inter-frame compression), but the
+DECODE it cost the phone was the full monitor's: a quarter-width layout on a
+4K desktop still made the device decode 3840×2160@60, which is exactly what
+drowned his tablet. `H264Session(region=...)` turns the focused layout's
+monitor-normalized rect into a `crop=w:h:x:y` FIRST in this client's own
+`-vf` chain (even-aligned by `_crop_rect` — yuv420p subsamples chroma 2×2, so
+an odd size fails the encoder and an odd offset shears colours); `session
+.region` afterwards holds the even-rounded crop's OWN normalization, which is
+what `config.stream_region` tells the page to map the video onto. A crop that
+resolves to the whole frame is no crop and no field — an old server's world.
+The re-open on region change lives in the web layer (the quality-change
+mechanism, reused): `layout_api.send_layout_state` is the choke point. Gate:
+`tests/test_region_stream.py`, fail-closed in build.py (0ap/6).
+
 ## Notes
-- Region-of-interest streaming (send only the zoomed area) is intentionally dropped on this path — inter-frame compression already makes the full-frame stream cheap, so the crop/re-init complexity isn't worth it. The JPEG fallback keeps it.
+- The zoomed-viewport request (`viewport`) stays JPEG-only — H.264's crop is
+  decided server-side by the focused layout, never by pinch zoom (a zoom is
+  transient; a layout region is a state worth a session rebuild).
 - Frames the sink drops (encoder slower than capture) compress the video timeline slightly; the client chases the live edge, so this never accumulates as latency.
 
 ## Per-client quality overrides (owner 2026-08-05, growing the 2026-08-02 full/reduced pair)

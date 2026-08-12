@@ -47,6 +47,18 @@ async def send_layout_state(ws, layouts, conn: dict) -> None:
     if state["active"] is None:
         conn["region"] = None
     await ws.send_text(json.dumps(state))
+    # THE ENCODER FOLLOWS THE REGION (owner order 2026-08-12: "why would the
+    # phone decode something it does not see"). In H.264 the per-client ffmpeg
+    # crops to the focused layout's region, and a crop lives inside a running
+    # ffmpeg's filters — so a region that no longer matches what the current
+    # session encodes ends that session here, at the one choke point every
+    # layout change already passes through; the stream loop reopens with the
+    # fresh region and announces it in `config`. conn["stream_region"] is
+    # written by the loop with what the session REALLY crops (web._h264_loop),
+    # so this compares two truths, never two intentions. JPEG connections
+    # never set the hook and are untouched.
+    if conn.get("reset_stream") and conn.get("region") != conn.get("stream_region"):
+        conn["reset_stream"]()
 
 
 async def layout_pick(ws, layouts, stream, msg: dict) -> None:

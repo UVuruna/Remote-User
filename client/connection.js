@@ -175,6 +175,10 @@ function connect() {
         const newMode = msg.stream || "jpeg";
         if (newMode !== streamMode) showToast(newMode === "h264" ? "H.264 stream" : "JPEG stream");
         streamMode = newMode;
+        // What this stream COVERS (owner order 2026-08-12): the encoder crops
+        // to the focused layout, and this rect is where the video lands on
+        // the monitor space. Absent/old server = full frame, unchanged.
+        streamRegion = msg.stream_region || null;
         tailscaleUrl = msg.tailscale_url || null;
         if (IN_APP && window.Android.setTailscaleUrl) {
           // The shell stores the works-anywhere address (fresh token included)
@@ -192,6 +196,13 @@ function connect() {
         // and self-de-duplicating per PC shape; restates quality by itself if
         // the running stream turns out to be above the device's ceiling.
         if (streamMode === "h264") refreshDecodeCeilings();
+        // A region change moves the decode ceiling's goalposts (a cropped
+        // stream is a fraction of the width): if the effective quality now
+        // differs from what the server holds for this connection, restate it
+        // — the server re-applies the STORED value to every new session, so
+        // a cap computed for the full desktop would otherwise outlive the
+        // desktop and hold a small, easy layout stream at the capped fps.
+        restateQualityIfChanged();
         // How this phone should LOOK, decided on the DESKTOP (build round R3,
         // owner answer P4). Applied straight to CSS variables — the page
         // never asks the device and offers no menu of its own.
