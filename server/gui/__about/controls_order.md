@@ -31,8 +31,12 @@ that together:
   second list-widget implementation. `ordinal()` itself is new and also
   generates `PORT_SLOTS` now, so the D-pad's four ordinals and the wheel's
   N ordinals come from one function.
-- **`WheelRing`** is the part text alone cannot say: a drawn circle, eight
-  decorative dot positions (the wheel's own cap), "1" bold over the
+- **`WheelRing`** is the part text alone cannot say: a drawn circle, one
+  decorative dot position per wheel slot — the CURRENT mode's cap, 8 under
+  fixed and 10 under drop-out, passed in by the editor since 2026-08-12
+  (it drew eight whatever the mode said, so the picture contradicted the
+  "up to 10" the checkbox one line above it already stated: ONE screen may
+  state ONE cap) — "1" bold over the
   highlighted dot at 12 o'clock, and a curved accent-coloured arrow sweeping
   clockwise. It never reflects the LIVE order — the ladder beside it does
   that in text — it only answers "why is this list drawn beside a clock

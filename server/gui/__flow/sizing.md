@@ -38,6 +38,34 @@ short by 48 px
       └─ the pairing link is drawn across the QR    → the owner's screenshot
 ```
 
+## …and the other half: back onto the screen
+
+```
+clamp_to_screen(window)                    called where the geometry is FINAL
+ │
+ ├─ geo    := window.frameGeometry()       the TITLE BAR counts — it is what
+ │                                         goes missing off the top edge
+ ├─ screen := QGuiApplication.screenAt(geo.centre())  ← never QWidget.screen():
+ │            or primaryScreen()              that binding crashes the Qt audit
+ │            or return                       (dangling QScreen, access
+ │                                             violation in the NEXT window)
+ ├─ avail  := screen.availableGeometry()   not geometry — the taskbar is not
+ │                                         readable screen
+ ├─ x := min( max(geo.x, avail.x),  max(avail.x, avail.right - geo.w) )
+ └─ y := min( max(geo.y, avail.y),  max(avail.y, avail.bottom - geo.h) )
+       └─ the inner max is the tie-break for a window BIGGER than the screen:
+          the TOP-LEFT stays reachable, because that is where the title bar
+          and the first card are
+```
+
+```
+why it is needed at all
+ ├─ Qt places a child from the size it had BEFORE the show
+ ├─ settle_minimum then GROWS it in place  → all growth on bottom + right
+ └─ a parent sitting high on the screen    → the dialog's TOP is off-screen
+                                              (owner's screenshot 2026-08-12)
+```
+
 ## Who calls it, and when
 
 ```
@@ -48,6 +76,10 @@ MainWindow      __init__ (floor, keep = 0x0)     window is born
                                                  appeared, notify caption grew
                                                  (skipped while in the tray:
                                                  a hidden window measures small)
-ControlsEditor  showEvent (once)                 after the parent's QSS lands
-TrafficWindow   showEvent (once)                 same, then resize to 760x520
+                                                 NOT clamped — the owner placed
+                                                 this window himself
+ControlsEditor  showEvent (once)      settle → clamp_to_screen
+TrafficWindow   showEvent (once)      settle → resize 760x560 → clamp_to_screen
+SettingsWindow  showEvent (once)      settle, then singleShot _resettle
+                _resettle()           settle → clamp_to_screen   ← geometry final
 ```

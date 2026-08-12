@@ -65,16 +65,21 @@ ACTIONS = PROJECT / "actions.json"
 
 def run_js(body: str, app_sets: list, prefs: dict,
            categories: list | None = None, custom: list | None = None,
-           wheel_order: list | None = None) -> object:
+           wheel_order: list | None = None, wheel_mode: str = "fixed") -> object:
     """Runs client/sets.js in node behind the four things it borrows from its
     neighbours — the prefs bridge (state.js) and the focused layout
     (layouts.js) — and returns the JSON the body prints.
 
-    Pinned to FIXED mode (task 181, 2026-08-11): this whole file's "cap of 8"
-    checks predate the drop-out/fixed split and are written in terms of the
+    DEFAULTS to FIXED mode (task 181, 2026-08-11): this whole file's "cap of
+    8" checks predate the drop-out/fixed split and are written in terms of the
     ORIGINAL, single cap — fixed mode is exactly that cap, unchanged. The
     drop-out mode's own cap (10) and its placement-shedding rules are
-    test_wheel_dropout.py's job."""
+    test_wheel_dropout.py's job.
+
+    `wheel_mode` is a parameter and not a constant (2026-08-12) for the one
+    check below that measures the SHIPPED FILE rather than an arithmetic case:
+    that file carries its own mode, and asking it a question in a mode it does
+    not run in is how a guard comes to state a cap the product does not have."""
     module = SETS.read_text(encoding="utf-8")
     for needed in ("function titleMatches", "function appSetMatches",
                    "function appSetReserve", "function enforceWheelCap",
@@ -92,7 +97,7 @@ categories = {json.dumps(categories if categories is not None else [])};
 appSets = {json.dumps(app_sets)};
 customSets = {json.dumps(custom if custom is not None else [])};
 wheelOrder = {json.dumps(wheel_order if wheel_order is not None else [])};
-setWheelMode("fixed");
+setWheelMode({json.dumps(wheel_mode)});
 {body}
 """
     with tempfile.TemporaryDirectory() as tmp:
@@ -172,21 +177,29 @@ def test_the_reserve_is_the_largest_group_that_can_appear_at_once():
     sets = shipped_app_sets()
     body = "console.log(JSON.stringify(appSetReserve()));"
 
+    # THE GROUP GREW TO THREE on 2026-08-12: Claude Tools ships ticked now that
+    # drop-out's real cap of 10 has room for it, and it shares the `code`
+    # process with VSCode and Claude. The RULE is untouched — the reserve is
+    # the largest group that can appear TOGETHER — only the group's size moved.
+    code_group = sum(1 for s in sets
+                     if s.get("process") == "code" and s.get("enabled", True))
     all_on = {"apps": True, "appState": {}, "state": {}}
-    assert run_js(body, sets, all_on) == 2, (
-        "VSCode + Claude share one process and appear together — that is two "
-        "wheel slots (owner 2026-08-06)")
+    assert run_js(body, sets, all_on) == code_group, (
+        f"the {code_group} shipped `code` sets share one process and appear "
+        "together — that is that many wheel slots (owner 2026-08-06)")
 
     # Chrome and Explorer can never be on screen with VSCode: three ticked
     # sets of three different processes still cost ONE slot.
     only_others = {"apps": True, "state": {},
-                   "appState": {"VSCode": False, "Claude": False}}
+                   "appState": {"VSCode": False, "Claude": False,
+                                "Claude Tools": False}}
     assert run_js(body, sets, only_others) == 1, (
         "sets of different processes cannot appear together — they cost one slot")
 
-    one_of_the_pair = {"apps": True, "state": {}, "appState": {"Claude": False}}
-    assert run_js(body, sets, one_of_the_pair) == 1, (
-        "untick Claude and the pair costs one slot again")
+    one_of_the_group = {"apps": True, "state": {},
+                        "appState": {"Claude": False, "Claude Tools": False}}
+    assert run_js(body, sets, one_of_the_group) == 1, (
+        "untick the rest of the group and it costs one slot again")
 
     master_off = {"apps": False, "appState": {}, "state": {}}
     assert run_js(body, sets, master_off) == 0, (
@@ -255,15 +268,26 @@ def test_the_shipped_defaults_cannot_tick_more_than_the_cap():
     """What the owner actually caught: "sam vidio da je po difoltu štiklirano
     9 a ne sme da bude". The shipped actions.json had SEVEN categories on by
     default and the two `code` app sets reserve two more — nine under a cap of
-    eight. The file itself must obey the law, or every phone inherits it."""
+    eight. The file itself must obey the law, or every phone inherits it.
+
+    IN ITS OWN MODE (2026-08-12). This is the only check in this file that
+    measures the SHIPPED FILE, and it used to measure it in fixed mode like
+    every arithmetic case around it — so it enforced a cap of 8 on a file that
+    ships with no `wheel_mode` at all, which every load site in the product
+    reads as drop-out, cap 10. The law is unchanged: a shipped default may not
+    break the cap the phone will really apply to it. Only the number stopped
+    being a constant."""
     data = shipped()
+    mode = data.get("wheel_mode") or "dropout"
+    cap = 8 if mode == "fixed" else 10
     body = "console.log(JSON.stringify(visibleCount()));"
     count = run_js(body, data["app_sets"], {"apps": True, "appState": {}, "state": {}},
-                   categories=data["categories"], custom=data.get("custom_sets", []))
-    assert count <= 8, (
-        f"the shipped actions.json ticks {count} sets by default — the wheel "
-        "holds 8, and a default that breaks the cap is what put NINE on the "
-        "owner's phone (owner 2026-08-06)")
+                   categories=data["categories"], custom=data.get("custom_sets", []),
+                   wheel_mode=mode)
+    assert count <= cap, (
+        f"the shipped actions.json ticks {count} sets by default — its wheel "
+        f"({mode}) holds {cap}, and a default that breaks the cap is what put "
+        "NINE on the owner's phone (owner 2026-08-06)")
 
 
 def test_a_stored_state_over_the_cap_is_brought_back_to_it():
@@ -282,7 +306,13 @@ const dropped = enforceWheelCap();
 console.log(JSON.stringify({ before, dropped, after: visibleCount(),
   apps: appSets.filter(appSetOn).map((s) => s.name) }));
 """
-    got = run_js(body, sets, {"apps": True, "appState": {}, "state": {}}, categories=cats)
+    # Claude Tools is held OFF for this case (2026-08-12). The rule under test
+    # is "a stored state one over the cap is brought back to it, and the app
+    # set gives way first" — that needs a state exactly ONE over, and since
+    # Claude Tools began shipping ticked the shipped roster is two over. The
+    # fixture states the case; the shipped defaults have their own check above.
+    got = run_js(body, sets, {"apps": True, "appState": {"Claude Tools": False},
+                              "state": {}}, categories=cats)
     assert got["before"] == 9, f"the case must start over the cap: {got['before']}"
     assert got["after"] == 8, f"the cap was not restored: {got}"
     assert got["dropped"] == ["Claude"], (
@@ -575,6 +605,20 @@ def wheel_of(entry: dict) -> list:
                   {"apps": True, "appState": {}, "state": {}})
 
 
+def code_wheel_sets(with_claude: bool) -> list[str]:
+    """The shipped `code` app sets that may ride the wheel, in file order.
+
+    DERIVED, never typed out (2026-08-12). These assertions used to spell
+    `["VSCode", "Claude"]` in four places, so the day Claude Tools started
+    shipping ticked — drop-out's real cap of 10 having made the room — four
+    checks failed for a reason that had nothing to do with what any of them
+    tests. `with_claude=False` is the other half: a window whose project has
+    no live conversation keeps only the sets that ask for no agent."""
+    return [s["name"] for s in shipped_app_sets()
+            if s.get("process") == "code" and s.get("enabled", True)
+            and (with_claude or not s.get("agent"))]
+
+
 def test_an_extracted_tab_keeps_the_claude_set():
     """His report, end to end. Whatever title the torn-off window carries at
     the moment we look, the layout must still find the project — because the
@@ -582,7 +626,7 @@ def test_an_extracted_tab_keeps_the_claude_set():
     remembered."""
     for why, title in EXTRACTED_TITLES.items():
         got = wheel_of(layout_entry(title, LIVE_HERE))
-        assert got == ["VSCode", "Claude"], (
+        assert got == code_wheel_sets(True), (
             f"extracted window titled {title!r} ({why}) → wheel {got}. A live "
             "Claude conversation in this window's project must put the Claude "
             "set on the wheel beside VSCode (owner 2026-08-08).")
@@ -592,9 +636,9 @@ def test_a_whole_window_and_a_FAILED_extraction_keep_it_too():
     """The two paths that were never broken must not break now: a plain
     window slot, and a tab whose extraction failed and fell back to the whole
     window (that fallback is why his OTHER layouts kept working)."""
-    assert wheel_of(layout_entry("", LIVE_HERE, tab=False)) == ["VSCode", "Claude"]
+    assert wheel_of(layout_entry("", LIVE_HERE, tab=False)) == code_wheel_sets(True)
     got = wheel_of(layout_entry("", LIVE_HERE, extraction_works=False))
-    assert got == ["VSCode", "Claude"], f"the whole-window fallback lost it: {got}"
+    assert got == code_wheel_sets(True), f"the whole-window fallback lost it: {got}"
 
 
 def test_no_live_conversation_there_means_no_claude_set():
@@ -603,7 +647,7 @@ def test_no_live_conversation_there_means_no_claude_set():
     for the extracted title that DOES carry a folder."""
     for title in ("Visual Studio Code", SOURCE_TITLE):
         got = wheel_of(layout_entry(title, LIVE_ELSEWHERE))
-        assert got == ["VSCode"], (
+        assert got == code_wheel_sets(False), (
             f"{title!r} with the conversation live elsewhere → {got}; the "
             "Claude commands must not be carried into a plain editor")
 
@@ -615,10 +659,12 @@ def test_the_source_window_may_die_and_the_project_survives():
     process table, so the same layout goes plain the moment nothing runs
     there."""
     got = wheel_of(layout_entry("Visual Studio Code", LIVE_HERE, close_source=True))
-    assert got == ["VSCode", "Claude"], f"the project was lost with the window: {got}"
+    assert got == code_wheel_sets(True), (
+        f"the project was lost with the window: {got}")
     got = wheel_of(layout_entry("Visual Studio Code", LIVE_ELSEWHERE,
                                 close_source=True))
-    assert got == ["VSCode"], f"a remembered FOLDER became a remembered ANSWER: {got}"
+    assert got == code_wheel_sets(False), (
+        f"a remembered FOLDER became a remembered ANSWER: {got}")
 
 
 

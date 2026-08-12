@@ -37,10 +37,11 @@ The two D-pad groups on the tablet are defined entirely by [actions.json](action
   DO charge against the count (owner 2026-08-06): what they hold is the
   largest group that can appear together, so VSCode + Claude reserve two
   slots and leave six for the rest — and VSCode + Claude + Claude Tools
-  reserve three, which is why Claude Tools ships unticked. See App-aware
-  sets below.
-- Hard cap **8** in the wheel: over the cap, non-required sets are bumped
-  from the END (they return when the app set goes away).
+  reserve three. See App-aware sets below.
+- Hard cap **10 in drop-out mode** (the default) or **8 in fixed mode**:
+  over the cap, non-required sets are bumped from the END (they return when
+  the app set goes away). The mode is `wheel_mode` (task 181), set in the
+  desktop Controls editor.
 - **The ORDER the sets ride in is the owner's choice** (build round R5,
   2026-08-07 — "he chooses the ORDER of the sets around the phone's category
   wheel"): a top-level `"wheel_order"` array in this file, a list of set
@@ -113,7 +114,7 @@ Shipped reserves, off until you tick them:
 | Cursor | Undo · ← · → · Redo | Up · Down · Word ← · Word → · Home · End |
 | Media | Play · Vol− · Vol+ · Mute | Next · Prev · Stop |
 | Windows | Alt+Tab · Win · Desktop · Tasks | Close · Max · Min · Snap ← · Snap → · Explorer · Run |
-| Settings | Sets · Quality · Language · **Phone** | Anywhere (owner 2026-08-05: Next box and Snap left this pool — Next box lives in Input, Snap in Attach; Monitor left it 2026-08-09 for the layout panels, task 155, and **Phone** took the freed slot 2026-08-11, tasks 161/218a) |
+| Settings | Sets · Quality · Language · **Phone** | **Voice** · Anywhere (owner 2026-08-05: Next box and Snap left this pool — Next box lives in Input, Snap in Attach; Monitor left it 2026-08-09 for the layout panels, task 155, and **Phone** took the freed slot 2026-08-11, tasks 161/218a. **Voice** joined the POOL on 2026-08-12 when the notification voice moved off the desktop — a pool entry, not a riding one: which four ride is his tick, never ours) |
 | **VSCode** | Sidebar · Palette · Terminal · Find | **Preview (ctrl+shift+v)** · **Next tab** · **Prev tab** · Save · Go to file · Comment |
 | **Chrome** | New tab · Close · Next tab · Address | **Prev tab** · Reopen · Reload · Back · Forward · Find |
 | **Explorer** | Rename · New dir · Delete · Up | **Next tab** · **Prev tab** · New tab · Back · Forward · Copy path · Details · Search |
@@ -269,20 +270,34 @@ Explorer and VSCode can never be on screen at the same moment. So:
 | VSCode + Claude + Claude Tools | 3 | **5** |
 | none (or the master switch off) | 0 | 8 |
 
-The picker states it — `N of 8 used — M held for app shortcuts` — and refuses
+The picker states it — `N of <cap> used — M held for app shortcuts`, the cap
+being the live mode's (10 drop-out / 8 fixed) — and refuses
 the tick that would overflow instead of letting the wheel drop a set you
 already chose.
 
-**Why Claude Tools ships `"enabled": false`** (2026-08-11, task 219). All
-three `code`-process sets can be on the wheel at once, so ticking the new one
-raises the reserve from 2 to 3. The shipped defaults already stand at exactly
-8 — Mouse, Input, Settings (required) + Attach, Edit, Navigate + a reserve of
-2 — so a set that arrived ticked would make 9, and the very first connection
-would greet him by switching one of them off with a toast
-(`enforceWheelCap`). A set he turns on himself, after unticking one he chose,
-is honest; a set that evicts one of his is not. `tests/test_claude_panels.py`
-→ `check_the_wheel_cost_is_stated_honestly` computes the shipped total and
-fails if it ever passes 8.
+**Claude Tools ships `"enabled": true` since 2026-08-12** — and the round
+that turned it on is worth recording, because the reason it was OFF was a
+GUARD and not a decision.
+
+It shipped `false` on 2026-08-11 (task 219) with this argument: all three
+`code`-process sets can be on the wheel at once, so ticking the new one raises
+the reserve from 2 to 3; the shipped defaults stood at exactly 8 — Mouse,
+Input, Settings (required) + Attach, Edit, Navigate + a reserve of 2 — so a
+set arriving ticked would make 9, and the first connection would greet him by
+switching one of them off with a toast (`enforceWheelCap`). Every number there
+was right about FIXED mode, and wrong about the mode the product actually
+runs: drop-out has been the default since task 181, and its cap is **10**.
+
+`check_the_wheel_cost_is_stated_honestly` hardcoded `8` and never read
+`wheel_mode`, while every load site in the product defaults to drop-out
+(`server/actions_api.py` twice, `client/sets.js` `wheelCap()`,
+`controls_data.OWNER_TOP_KEYS`). Because a shipped default has to satisfy the
+guard, the guard is what kept the defaults pre-capped at 8 — the owner's
+report was "drop-out mode refuses more than 8, it must be 10". The guard is
+mode-aware now, exactly as `controls_editor._save` already was, and the
+shipped total of 9 sits comfortably under the drop-out cap of 10. A gate that
+states a number the code does not hold is not protecting the owner from the
+code; it is protecting the code from the owner's decision.
 
 ### The cap is a LAW over the stored state (owner 2026-08-06)
 
@@ -377,6 +392,7 @@ A button is one of:
   - `quality` — open the stream-quality panel (fps / resolution / bitrate + auto-save on mobile data — owner 2026-08-05, replacing the old cycle). Shipped in **Settings**.
   - `dictation` — open the dictation-language card (choose the language you speak; model download guided). Shipped in **Settings** (owner 2026-08-05).
   - `phone` — open the **Phone** card: the per-device switches that describe THIS handset and change nothing on the PC — layout bar Top/Bottom, what Hide means (comes back / stays hidden), and the D-pad shape per orientation. Shipped in **Settings** (owner 2026-08-11, tasks 161 + 218a). Each of those three switches previously sat in a card named for another subject (the Wheel sets picker, the layout list, a hold on Hide) and was MOVED here, never copied.
+  - `notifyvoice` — open the **Voice** card: WHICH text-to-speech voice this device reads an agent notice in, and how fast (0.8 / 1 / 1.25 / 1.5). Every voice carries a speaker button that speaks one short sample before you choose — a list of engine names like `en-us-x-tpf-local` tells nobody anything, the sound does. In the POOL of **Settings** since 2026-08-12, when the owner moved this off the desktop: he uses a tablet AND a phone whose engines carry different voices, so one PC dropdown could only ever name a voice one of them has. The desktop keeps the two master switches ("Tell my phone when an agent finishes", "Say it out loud"); a device that has never chosen still follows the PC's saved voice, so nothing changed for a phone that never opens this card.
   - `anywhere` — open the "use from anywhere" wizard (Tailscale setup). NOT in the defaults since 2026-08-05 (the first-contact banner still guides new phones); stays in the pool for custom sets.
 - **A written panel** — `{ "id": "model", "label": "Model", "icon": "model", "panel": "claude-model" }` (owner ballot verdict 2026-08-11). The button opens a card the PRODUCT wrote, not one generated from a list: `claude-model`, `claude-effort` and `claude-mode` are drawn by `client/claude-panels.js` and carry live state read off the PC, capability stars and an honest line about what the command really changes — none of which a generic `options` list can say. Prefer `options` for an ordinary command that only needs its argument picked; a `panel` is for the ones that must also TELL THE TRUTH about the state they are changing.
 - **Chord** — `{ "label": "Copy", "chord": "ctrl+c" }` — fires a key combination (see below). An optional `"icon"` from the list above gives it an icon face.

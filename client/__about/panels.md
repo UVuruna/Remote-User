@@ -10,7 +10,7 @@ full-screen card overlays those actions open. Loads right after `controls.js`
 2026-08-09 when the dictation card's listen control pushed that file past
 1,000 lines. It holds every overlay card's shape and the `.sets-card` /
 `.sets-row` / `.sets-list` / `.sets-done` vocabulary the Quality panel
-(`quality.js`), the notices card (`notify.js`) and the command chooser share,
+(`quality.js`), the notices card and the notification-voice card (`notify.js`) and the command chooser share,
 plus the landscape rules that name `.lay-card` too — one rule about what a
 panel card does with a landscape screen's spare width, written once. It loads
 after `style.css` and before `layouts.css`; the `body` prefix on those rules is
@@ -24,6 +24,28 @@ for a card of short items and ruinous for one whose rows carry names — see
 `style.md` for the measurements and for which cards ask. A card that declares
 nothing keeps the whole width in one column, because that is the failure mode
 the audit can already see.
+
+## `PANEL_KINDS` — which built-in opens which card
+
+One table, and it lives here because this module owns the overlay cards:
+`controls.js` builds the D-pad button and knows only that a `kind` may name a
+card (`makeActionButton` → `PANEL_KINDS[b.kind]()`). It was one `else if` per
+kind in controls.js, which was fine while there were two and was the thing
+standing between that file and THE STRUCTURE LAW's 1,000-line ceiling by the
+time Settings → **Voice** needed a seventh (2026-08-12).
+
+`sets` · `region` · `quality` · `dictation` · `phone` · `notifyvoice` ·
+`anywhere` — every kind whose whole action is "open that card". Each entry is
+WRAPPED in an arrow rather than named directly: the openers live in five
+different modules (this one, `quality.js`, `phone-panel.js`, `region.js`,
+`notify.js`, `chrome.js`) and several load AFTER this file, so a bare
+reference would be read at load time and throw. The arrow is read at tap time,
+by which point every script is in.
+
+A `kind` with no entry falls through to nothing, exactly as an unknown kind
+always did. `tests/test_claude_panels.py` checks both halves of one such door
+— the built-in in controls.js AND the wiring here — because a button that is
+drawn and does nothing is the failure this table could hide.
 
 ## Sets picker (`openSetsPanel`)
 

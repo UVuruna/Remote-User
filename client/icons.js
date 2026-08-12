@@ -178,6 +178,14 @@ const ICONS = {
   compact: '<polyline points="8 8.5 12 4.5 16 8.5"/><polyline points="8 15.5 12 19.5 16 15.5"/><line x1="4" y1="12" x2="20" y2="12"/>',
   newchat: '<path d="M21 14.5a2 2 0 0 1-2 2H8.5L4 21V5.5a2 2 0 0 1 2-2h13a2 2 0 0 1 2 2z"/><line x1="12.5" y1="7" x2="12.5" y2="13"/><line x1="9.5" y1="10" x2="15.5" y2="10"/>',
   rewind: '<path d="M3.5 12a8.5 8.5 0 1 1 3 6.5"/><polyline points="3.5 6.8 3.5 12 8.7 12"/><path d="M12 8v4.3l3 1.8"/>',
+  // `/agents` (fixed 2026-08-12): this button shipped asking for an icon
+  // called "target", which has never existed in this table — and a name that
+  // misses is drawn as NOTHING, silently, on the phone (controls.js `svg()`)
+  // and in the desktop editor (controls_widgets.py `fill()`). The subject is
+  // one agent handing work to two more, so the drawing is a node branching
+  // into two: the same shape the product's own delegation has, and legible at
+  // the 20 px a pool row renders it at.
+  agents: '<circle cx="12" cy="4.8" r="2.8"/><circle cx="6.2" cy="18.4" r="2.8"/><circle cx="17.8" cy="18.4" r="2.8"/><path d="M12 7.6v3"/><path d="M6.2 15.6v-5h11.6v5"/>',
   // Claude Tools (owner 2026-08-11, task 219): ONE group holding the built-in
   // commands, each named for what it DOES because the official names "svima
   // plivaju i ne ukazuju na to šta rade". # lang-ok: owner quote

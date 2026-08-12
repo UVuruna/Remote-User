@@ -18,8 +18,16 @@ Five cards, in the order the owner reads them:
                    The only card with an Apply: these shape the encoder, so
                    they need the server restarted, exactly as before.
   NOTIFICATIONS  — the agent hook switch (moved here from the main window),
-                   and HOW the phone says a notice: aloud or not, in which of
-                   the PHONE's voices, at which pace.
+                   and WHETHER the phone reads a notice out loud. WHICH voice
+                   and how fast is no longer here: that moved onto the phone
+                   itself on 2026-08-12, because the owner uses a tablet AND a
+                   phone whose engines carry different voices, and one dropdown
+                   on one PC could only ever name a voice that exists on one of
+                   them — pick the tablet's and the phone falls silently back
+                   to its own default while this window still shows a name.
+                   Two master switches (decisions about the JOB) stayed; the
+                   device-specific choice went to the device, where it can also
+                   be HEARD before it is picked (client/notify.js).
   FOCUS          — the desktop half of the focus work: Windows' own
                    foreground lock, raised for this session only.
   STARTUP        — the update check (which existed in code with no UI at all)
@@ -68,10 +76,11 @@ import threading
 
 import autostart
 import foreground_lock
-import notify
 import updates
+# `import notify` left with the Voice dropdown on 2026-08-12 — `notify.voices()`
+# was its only caller here. The three names below are still imported by name.
 from config import SETTINGS, save_user_settings
-from gui.sizing import settle_minimum
+from gui.sizing import clamp_to_screen, settle_minimum
 from gui.switch import TRACK_W as THEME_SWITCH_W, ThemeSwitch, choose_theme
 from gui.theme import card, repolish
 from notify import HOOK_CHANGE_FAILED_TEXT, agent_hook_installed, set_agent_hook
@@ -86,11 +95,6 @@ RESOLUTIONS = [("Native (up to 4K)", 3840), ("2560 — QHD", 2560),
 BITRATES = [("6 Mbps — slow links", "6M"), ("12 Mbps — default", "12M"),
             ("20 Mbps — max quality", "20M")]
 FPS_CHOICES = [("10 fps — light", 10), ("30 fps", 30), ("60 fps", 60)]
-
-# How fast the phone speaks a notice. Android's TextToSpeech rate, where 1.0
-# is the engine's own normal pace; the labels are what the owner reads.
-SPEECH_RATES = [("0.8× — slower", 0.8), ("1× — normal", 1.0),
-                ("1.25× — faster", 1.25), ("1.5× — fastest", 1.5)]
 
 # The phone's look (round R3, corrected to three axes 2026-08-08). SHORT
 # labels on purpose: a combo is sized by its longest entry, and one
@@ -116,12 +120,7 @@ PHONE_FILLS = [("Outlined", "transparent"), ("Filled", "full")]
 # from the widest of them ALL so the cards' fields line up in one straight
 # edge instead of each card finding its own.
 FORM_LABELS = ("The phone", "Monitor", "Resolution", "Bitrate", "Frame rate",
-               "Voice", "Speaking pace", "Port", "JPEG quality")
-
-# The Voice dropdown's first entry: no choice at all, which is the honest
-# default — the phone then uses whatever its own engine considers best for
-# its locale.
-DEFAULT_VOICE_LABEL = "The phone's own default"
+               "Port", "JPEG quality")
 
 # The search the computed minimum runs over its own width (see
 # `_computed_minimum`): width is spent only while it buys height, in steps of
@@ -154,13 +153,14 @@ NOTIFY_ON_TEXT = ("Claude Code will call this PC when a turn ends, and the PC "
 NOTIFY_OFF_TEXT = "Off — the phone stays quiet when a job on this PC finishes."
 SPEAK_OFF_TEXT = ("Off — the phone still shows the notification, it just does "
                   "not read it out loud.")
-NO_VOICES_TEXT = ("The list of voices comes from the phone itself — connect it "
-                  "once and reopen this window to choose one.")
-VOICES_TEXT = "The voices are the phone's own — this PC cannot install one for it."
-VOICE_ABSENT_TEXT = ("The voice chosen here is not on the phone that is "
-                     "connected now, so it will speak in that phone's own "
-                     "default. The choice is kept — it works again on the "
-                     "phone that has it.")
+# What used to be a Voice dropdown and a Speaking pace dropdown (owner
+# 2026-08-12). The card says where they went instead of leaving a gap: a
+# setting that moves without a forwarding note reads as a setting that was
+# taken away.
+PHONE_VOICE_TEXT = ("The voice and pace are chosen on each phone — Settings → "
+                    "Voice in the app, where every voice can be heard before "
+                    "it is picked. Two devices carry two different voice "
+                    "lists, so each keeps its own answer.")
 FOCUS_TEXT = ("While this is on, Windows stops other programs from jumping in "
               "front of whatever you are using. It is switched back off when "
               "Vibe Coder closes, and it is never written into the registry.")
@@ -451,20 +451,13 @@ class SettingsWindow(QDialog):
         self.speak_check.toggled.connect(self._toggle_speak)
         box.addWidget(self.speak_check)
 
-        form = self._form()
-        self.voice_combo = QComboBox()
-        self._populate_voices()
-        self.voice_combo.currentIndexChanged.connect(self._save_voice)
-        self.rate_combo = QComboBox()
-        for label, value in SPEECH_RATES:
-            self.rate_combo.addItem(label, value)
-        index = self.rate_combo.findData(SETTINGS.notify_rate)
-        self.rate_combo.setCurrentIndex(index if index >= 0 else 1)
-        self.rate_combo.currentIndexChanged.connect(self._save_rate)
-        self._row(form, "Voice", self.voice_combo)
-        self._row(form, "Speaking pace", self.rate_combo)
-        box.addLayout(form)
-
+        # TWO SWITCHES AND NOTHING ELSE (owner 2026-08-12). The Voice and
+        # Speaking pace rows that stood here are gone to the phone; what is
+        # left in this card is the pair of decisions that belong to the JOB
+        # rather than to a handset — whether the PC calls at all, and whether
+        # the call is spoken. `notify_voice` / `notify_rate` are still SENT on
+        # every frame (server/notify.py) so a phone that has never chosen keeps
+        # behaving exactly as it did; they simply have no dial here any more.
         self.speak_caption = self._caption(box, "")
         self._show_notify_state()
         self._show_speak_state()
@@ -593,38 +586,6 @@ class SettingsWindow(QDialog):
 
     # -- notifications ------------------------------------------------------
 
-    def _populate_voices(self) -> None:
-        """The phone's voices, plus a saved one the phone did not report.
-
-        That last part is the whole care in this method: opening Settings with
-        no phone connected must never quietly drop the owner's choice, so a
-        stored voice that is not in the live list is offered anyway, marked as
-        remembered. Nothing here writes to the settings file.
-        """
-        self.voice_combo.blockSignals(True)
-        self.voice_combo.clear()
-        self.voice_combo.addItem(DEFAULT_VOICE_LABEL, "")
-        names = set()
-        for voice in notify.voices():
-            names.add(voice["name"])
-            locale = voice.get("locale") or ""
-            label = voice.get("label") or voice["name"]
-            self.voice_combo.addItem(f"{label} ({locale})" if locale else label,
-                                     voice["name"])
-        saved = SETTINGS.notify_voice
-        self._voice_absent = bool(saved) and saved not in names
-        if self._voice_absent:
-            # SHORT on purpose (ladder step 2 — reflow before width). The
-            # marker used to spell the whole situation out inside the item
-            # ("— remembered, phone not connected"), and a combo is sized by
-            # its longest entry, so one worst-case row was setting the width
-            # of the entire window. The sentence belongs in the caption, which
-            # WRAPS; the row only has to be recognisable.
-            self.voice_combo.addItem(f"{saved} (not on this phone)", saved)
-        index = self.voice_combo.findData(saved)
-        self.voice_combo.setCurrentIndex(index if index >= 0 else 0)
-        self.voice_combo.blockSignals(False)
-
     def _show_notify_state(self) -> None:
         self._set_caption(self.notify_caption,
                           NOTIFY_ON_TEXT if self.notify_check.isChecked()
@@ -632,18 +593,12 @@ class SettingsWindow(QDialog):
         self._resettle()  # a longer caption gets its room NOW, not on the next open
 
     def _show_speak_state(self) -> None:
-        speaking = self.speak_check.isChecked()
-        self.voice_combo.setEnabled(speaking)
-        self.rate_combo.setEnabled(speaking)
-        if not speaking:
-            text = SPEAK_OFF_TEXT
-        elif not notify.voices():
-            text = NO_VOICES_TEXT
-        elif self._voice_absent:
-            text = VOICE_ABSENT_TEXT
-        else:
-            text = VOICES_TEXT
-        self.speak_caption.setText(text)
+        """One caption slot, two alternatives — off says what still happens,
+        on says where the voice itself is chosen (owner 2026-08-12). It used
+        to have four, three of which described a dropdown that no longer
+        exists on this window."""
+        self.speak_caption.setText(
+            PHONE_VOICE_TEXT if self.speak_check.isChecked() else SPEAK_OFF_TEXT)
         self._resettle()
 
     def _toggle_agent_hook(self, on: bool) -> None:
@@ -698,12 +653,6 @@ class SettingsWindow(QDialog):
         save_user_settings({"notify_speak": bool(on)})
         self._show_speak_state()
 
-    def _save_voice(self) -> None:
-        save_user_settings({"notify_voice": str(self.voice_combo.currentData() or "")})
-
-    def _save_rate(self) -> None:
-        save_user_settings({"notify_rate": float(self.rate_combo.currentData() or 1.0)})
-
     # -- focus + startup ----------------------------------------------------
 
     def _toggle_focus_lock(self, on: bool) -> None:
@@ -746,9 +695,9 @@ class SettingsWindow(QDialog):
         under-shoots every string by roughly a tenth (the 2026-08-05 lesson
         that cost the Controls editor a second release).
 
-        The live state is re-read on EVERY show: a phone may have connected
-        since the last one (new voices) and the autostart task may have been
-        changed by an installer run.
+        The live state is re-read on EVERY show: the autostart task and the
+        agent hook may both have been changed from outside this window (an
+        installer run, `agent_hook.py --install`) since the last one.
         """
         super().showEvent(event)
         self._refresh_live_state()
@@ -769,7 +718,6 @@ class SettingsWindow(QDialog):
         QTimer.singleShot(0, self._resettle)
 
     def _refresh_live_state(self) -> None:
-        self._populate_voices()
         self.autostart_check.blockSignals(True)
         self.autostart_check.setChecked(autostart.installed())
         self.autostart_check.blockSignals(False)
@@ -786,16 +734,25 @@ class SettingsWindow(QDialog):
         if not self._settled or not self.isVisible():
             return
         settle_minimum(self, self._computed_minimum())
+        # …and then back onto the screen (owner report 2026-08-12). This is the
+        # point at which this window's geometry is FINAL — every growth above
+        # spends itself on the bottom and right edges, and the top of the first
+        # card was what he found missing. gui/sizing.py holds the one copy.
+        clamp_to_screen(self)
 
     def _computed_minimum(self) -> QSize:
         """MEASURED, never guessed (THE SPACE & LEGIBILITY LAW, rules/GUI.md).
 
         Width = the widest row that CANNOT wrap: a form label plus the longest
-        entry of the combo beside it (the voice names come from the phone, so
-        the real ones are measured, not a guess at their length) — then WIDENED
-        until the guidance under the switches stops becoming a paragraph.
-        Height = every row, plus what those captions need once wrapped at that
-        width.
+        entry of the combo beside it — then WIDENED until the guidance under
+        the switches stops becoming a paragraph. Height = every row, plus what
+        those captions need once wrapped at that width.
+
+        Two form rows and one combo left this measurement on 2026-08-12 with
+        the Voice and Speaking pace rows themselves. The voice names were the
+        one input here that came from ANOTHER DEVICE, which is why they had to
+        be measured rather than guessed; with them gone every string this
+        window can show is one this file owns.
 
         The widening is not decoration, it is which axis is scarce. A desktop
         has 1280 px of width to spare and 720 px of height to obey, so a window
@@ -818,9 +775,8 @@ class SettingsWindow(QDialog):
         label_col = widest(FORM_LABELS) + 16
         combo_col = widest(
             [label for label, _ in RESOLUTIONS + BITRATES + FPS_CHOICES
-             + SPEECH_RATES + PHONE_THEMES + PHONE_COLORED + PHONE_FILLS]
-            + [f"Monitor {self.monitor_combo.count()}", DEFAULT_VOICE_LABEL]
-            + [self.voice_combo.itemText(i) for i in range(self.voice_combo.count())]
+             + PHONE_THEMES + PHONE_COLORED + PHONE_FILLS]
+            + [f"Monitor {self.monitor_combo.count()}"]
         ) + 56
         checkbox_col = widest(("Tell my phone when an agent finishes",
                                "Don't let applications steal focus",
@@ -870,13 +826,13 @@ class SettingsWindow(QDialog):
                        # wrap in than every other caption in this window
                        + tallest(width - CAPTION_INDENT_LEFT,
                                  NOTIFY_ON_TEXT, NOTIFY_OFF_TEXT)
-                       + tallest(width, SPEAK_OFF_TEXT, NO_VOICES_TEXT,
-                                 VOICES_TEXT, VOICE_ABSENT_TEXT)
+                       + tallest(width, SPEAK_OFF_TEXT, PHONE_VOICE_TEXT)
                        + max(tallest(half, FOCUS_TEXT) + rows,      # + 1 tick
                              tallest(half, STARTUP_TEXT) + rows * 2))
             return (rows * 5      # the five section headings (one row shared)
-                    + rows * 7    # seven form rows (the phone's trio + four
-                                  #                  stream + voice + pace)
+                    + rows * 5    # five form rows: the phone's trio (one row)
+                                  # + the four stream combos. Voice and pace
+                                  # left with the phone on 2026-08-12.
                     + rows * 2    # the two checkboxes above the paired row
                     + rows * 1    # the Apply row
                     + wrapped

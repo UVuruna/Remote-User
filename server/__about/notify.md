@@ -135,9 +135,17 @@ exactly as before. Proven by
 One channel per DEVICE since task 209 (above): a second attach displaces only
 the channel of the device it came from.
 
-## HOW it is said is the desktop's decision (round R2, owner 2026-08-07)
+## HOW it is said: two switches here, the voice on the phone
 
-The Settings window's NOTIFICATIONS card owns three values, and all three ride
+Round R2 (owner 2026-08-07) put all three values on the desktop. On 2026-08-12
+the owner took two of them back to the device: he uses a tablet AND a phone,
+their TextToSpeech engines carry different voices, and one PC-side dropdown
+could only ever name a voice that exists on one of them — pick the tablet's
+and the phone falls silently back to its own default while the Settings window
+still shows a name. The card keeps the two MASTER switches, which are
+decisions about the JOB rather than about a handset.
+
+**Nothing on the wire changed.** All three fields still ride
 on **every** `notify` frame rather than being pushed to the phone once — there
 is then no state on the phone to go stale, and a reconnect cannot leave it
 speaking in last week's voice:
@@ -145,16 +153,22 @@ speaking in last week's voice:
 | Frame field | From | Meaning |
 |-------------|------|---------|
 | `speak` | the caller's own `speak`, **and** `SETTINGS.notify_speak` | "Say it out loud" off sends `false` and nothing more: the Android banner still appears, so muting one carrier never loses a notice |
-| `voice` | `SETTINGS.notify_voice` | a `Voice.name` exactly as this phone reported it; a device that does not have it falls back to its own default |
-| `rate` | `SETTINGS.notify_rate` | TextToSpeech's speech rate (1.0 = the engine's normal pace) |
+| `voice` | `SETTINGS.notify_voice` | a `Voice.name`. Since 2026-08-12 it is the FALLBACK: a phone with its own choice ignores it, a phone that has never chosen still obeys it, so no device changed behaviour when the dropdown moved. No UI writes it any more |
+| `rate` | `SETTINGS.notify_rate` | TextToSpeech's speech rate (1.0 = the engine's normal pace). Same fallback rule, and falls back INDEPENDENTLY of `voice` |
 
 **The list of voices can only come from the phone.** A TextToSpeech engine's
 voices differ per device, per installed language pack, per Android version, and
 the PC can see none of it — so the page sends `tts_info {voices:[{name, label,
-locale}…]}` once per connection and `set_voices()` holds it HERE, in memory,
-beside the feature that uses it. It is never persisted: a list read from a
-phone that is no longer connected would offer the owner voices he cannot hear.
-The stored CHOICE is a plain name, never an index, for the same reason.
+locale}…]}` once per connection and `set_voices()` holds it HERE, in memory. It
+is never persisted: a list read from a phone that is no longer connected
+describes nothing currently true. That per-device truth is exactly why the
+choice itself belongs on the device.
+
+Since 2026-08-12 **nothing on the desktop chooses from this list** — it is the
+PC's diagnostic record of what the connected device could speak with (the log
+line in `set_voices`). The phone's own card is
+[client/notify.js](../../client/__about/notify.md) → `openNotifyVoicePanel()`,
+where every voice can also be HEARD before it is picked.
 
 ## Where the tap leads (owner 2026-08-08, task 110)
 
@@ -239,14 +253,15 @@ that does it.
 - [tests/test_notify.py](../../tests/___tests.md) and
   [tests/test_notice_channel.py](../../tests/___tests.md) — the gates
 - `gui/settings_window.py` (see [GUI (subfolder)](../gui/___gui.md)) — the
-  agent-hook switch, and `voices()` for the Voice dropdown
+  agent-hook switch and the two master switches. It no longer reads
+  `voices()`: the Voice dropdown moved to the phone on 2026-08-12
 
 ## Functions
 
 - `set_voices(reported) -> int` / `voices() -> list` — the phone's own
   text-to-speech voices, held for this run only. Anything unusable in the
-  reported list is dropped rather than trusted: it is drawn in a dropdown on
-  the PC.
+  reported list is dropped rather than trusted: a name that reaches the log
+  must be a real one. Diagnostic since 2026-08-12 — no desktop UI reads it.
 - `clean(value, limit, fallback)` — one incoming field: string, trimmed,
   length-capped. Nothing from a POST body reaches a notification unclamped.
 - `compose(agent, event, text) -> (title, body)` — the AGENT leads, the event

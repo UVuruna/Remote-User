@@ -11,7 +11,7 @@ It exists because the [Main Window](main_window.md) had become two things at onc
 
 ### Uses
 - [Config](../../__about/config.md) — `SETTINGS` (every value shown) and `save_user_settings()` (the only writer)
-- [Notify](../../__about/notify.md) — `agent_hook_installed()` / `set_agent_hook()` for the hook switch, and `voices()` for the Voice dropdown
+- [Notify](../../__about/notify.md) — `agent_hook_installed()` / `set_agent_hook()` for the hook switch. `voices()` is NO LONGER read here: the Voice dropdown left this window on 2026-08-12 (below), and the module is now imported by name only
 - [Autostart](../../__about/autostart.md) — the real Task Scheduler logon task
 - [Foreground Lock](../../__about/foreground_lock.md) — Windows' own "no program may steal the foreground" setting
 - [Sizing](sizing.md) — `settle_minimum()`, THE SPACE & LEGIBILITY LAW's measured minimum
@@ -25,7 +25,7 @@ It exists because the [Main Window](main_window.md) had become two things at onc
 | Card | Rows | When it takes effect |
 |------|------|----------------------|
 | **STREAM** | Monitor · Resolution · Bitrate · Frame rate, then **Apply & restart** | on Apply — these shape the encoder, so the server restarts, exactly as before the move |
-| **NOTIFICATIONS** | "Tell my phone when an agent finishes" (the ROADMAP H2 hook switch, moved from the main window) · "Say it out loud" · Voice · Speaking pace | at once |
+| **NOTIFICATIONS** | "Tell my phone when an agent finishes" (the ROADMAP H2 hook switch, moved from the main window) · "Say it out loud" — and a caption saying where the voice itself is chosen | at once |
 | **FOCUS** | "Don't let applications steal focus" — default OFF | at once |
 | **STARTUP** | "Check for new versions when the app starts" (`update_check`, which had existed in code with no UI at all) · "Start with Windows" | at once |
 | **ADVANCED** (task 226, owner ballot verdict) | Port, then **Apply & restart** · "H.264 streaming" checkbox · JPEG quality (1-100, only spent while H.264 is off) · "Also open the QR as an image file" | Port on Apply (reshapes the listening socket); the other three at once |
@@ -35,17 +35,20 @@ A window where some switches act and others wait for a button is a window nobody
 **APPEARANCE is deliberately ABSENT, not stubbed.** Theme switching is round R3's work, and a card that promises a theme it cannot give is worse than no card. The seam is one line: build the card and insert it first in `_build_cards()`.
 
 ## Two things this window is careful about
-- **A saved voice is never silently dropped.** The Voice list comes from the phone (`tts_info`), so opening Settings with no phone connected would offer only the default. `_populate_voices()` therefore re-offers a stored voice the phone did not report, marked "remembered, phone not connected", and nothing in that method writes to the settings file.
+- **The voice is NOT chosen here** (owner decision 2026-08-12). A Voice dropdown and a Speaking pace dropdown stood in the NOTIFICATIONS card until he pointed out what they could not do: he uses a tablet AND a phone, their text-to-speech engines carry different voices, and one PC-side choice can only ever name a voice that exists on one of them — pick the tablet's and the phone falls back to its own engine default, silently, while this window still shows a name. So the two MASTER switches stayed (they are decisions about the job: whether the PC calls at all, and whether the call is spoken) and the device-specific choice went to the device, where it can also be HEARD before it is picked — `openNotifyVoicePanel()` in [client/notify.js](../../../client/__about/notify.md), reached from the phone's Settings wheel.
+
+  Nothing was deleted underneath it: `notify_voice` / `notify_rate` are still in the settings file and still ride every `notify` frame, so a phone that has never made its own choice behaves exactly as it did before, and an older APK is unaffected. They simply have no dial on this window. The card says so in one caption rather than leaving a gap — a setting that moves without a forwarding note reads as a setting that was taken away.
 - **The label column is aligned across cards, ON SHOW.** Two `QFormLayout`s in two cards each size their own label column, so STREAM's combos started at one x and NOTIFICATIONS' at another. `_align_label_column()` gives every label the same measured minimum — and it runs in `showEvent`, because the theme's font only resolves when Qt polishes the widget (measuring in the constructor came out ~15 px short and both columns stepped apart again — the same lesson the [Traffic Window](traffic_window.md)'s span combo learned).
 
 ## Methods (beyond the builders)
 - `_apply_settings()`: saves the four stream keys and calls the `restart` callable the main window handed in
 - `_toggle_agent_hook(on)`: installs/removes the Claude Code `Stop` hook; a failure re-reads the real state and prints what happened, in the Error tone (see below)
-- `_toggle_speak` / `_save_voice` / `_save_rate`: persist `notify_speak` / `notify_voice` / `notify_rate` — all three ride in every `notify` frame
+- `_toggle_speak`: persists `notify_speak`, which rides every `notify` frame. `_save_voice` / `_save_rate` are GONE with their rows (2026-08-12) — the keys they wrote are untouched and still sent
 - `_toggle_focus_lock(on)`: `foreground_lock.apply()`; a machine that refuses gets the tick put back and a sentence, in the Error tone
 - `_toggle_update_check(on)` / `_toggle_autostart(on)`: `update_check`, and the real logon task; an autostart failure is shown in the Error tone
-- `_refresh_live_state()`: on EVERY show — a phone may have connected since the last one (new voices), and an installer run may have changed the task
-- `_computed_minimum()`: the law's measured floor — the label column plus the longest real combo entry (the voice names are measured, not guessed), and the height every wrapping caption needs at that width
+- `_refresh_live_state()`: on EVERY show — the autostart task and the agent hook can both be changed from outside this window (an installer run, `agent_hook.py --install`). It no longer re-reads the phone's voices: nothing on this window draws them
+- `_computed_minimum()`: the law's measured floor — the label column plus the longest real combo entry, and the height every wrapping caption needs at that width. Since 2026-08-12 every string it measures is one this file owns; the voice names were the single input that came from another device, which is why they had to be measured rather than guessed
+- `_resettle()`: the second-pass settle, and the point at which this window's geometry is FINAL — so it is also where [`clamp_to_screen`](sizing.md) runs. A settle only ever GROWS a window where Qt already placed it, and Qt placed it from its pre-show size, which is how his Settings window came up with its top edge off the screen (owner report 2026-08-12)
 - `_set_caption(label, text, error=False)`: the ONE place any of the three failure captions (notify / focus / startup) sets its text — never a bare `label.setText(...)` for a failure. Colours the label with the live `gui.theme.TOKENS["error"]` when `error=True`, clears back to the ordinary `#caption` grey otherwise; read live (never cached), the same pattern `gui/switch.py`'s `_token_color` uses for its own paint calls.
 
 ## A raw exception is never the caption (round R2's SECOND independent grader, 2026-08-07)

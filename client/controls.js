@@ -127,6 +127,10 @@ const BUILTINS = {
   // layout bar position, what Hide means, the D-pad shape per orientation.
   // They used to live in three unrelated cards — client/phone-panel.js.
   phone:    { label: "Phone",  icon: "phone",  kind: "phone" },
+  // WHICH VOICE reads a notice out loud, and how fast (owner 2026-08-12).
+  // It left the desktop because he has two devices with two different voice
+  // lists — client/notify.js holds the card and the reason.
+  notifyvoice: { label: "Voice", icon: "listen", kind: "notifyvoice" },
 };
 
 // --- Device prefs (owner bug report 2026-08-05) ----------------------------
@@ -697,8 +701,6 @@ function makeActionButton(btn, pos) {
       keepFocus(el, toggleMic);
     } else if (b.kind === "shot") {
       keepFocus(el, () => send({ type: "screenshot", paste: true, ...shotRegion() }));
-    } else if (b.kind === "region") {
-      keepFocus(el, openRegionPanel);
     } else if (b.kind === "pick") {
       // The picker/camera hides the page — an EXCURSION, not the end of work:
       // the PC must keep the layout standing while the owner picks (owner
@@ -707,8 +709,6 @@ function makeActionButton(btn, pos) {
         markExcursion();
         document.getElementById(b.input).click();
       });
-    } else if (b.kind === "sets") {
-      keepFocus(el, openSetsPanel);
     } else if (b.kind === "send") {
       keepFocus(el, () => send(b.msg));
     } else if (b.kind === "upload") {
@@ -716,14 +716,8 @@ function makeActionButton(btn, pos) {
         markExcursion();
         filePick.click();
       });
-    } else if (b.kind === "anywhere") {
-      keepFocus(el, openWizard); // the banner shows only once — this is the permanent way in
-    } else if (b.kind === "quality") {
-      keepFocus(el, openQualityPanel);
-    } else if (b.kind === "dictation") {
-      keepFocus(el, openDictationPanel);
-    } else if (b.kind === "phone") {
-      keepFocus(el, openPhonePanel);
+    } else if (PANEL_KINDS[b.kind]) {
+      keepFocus(el, () => PANEL_KINDS[b.kind]());   // panels.js owns the table
     }
   } else if (btn.panel) {
     // A command whose panel is WRITTEN, not generated (owner ballot verdict

@@ -69,8 +69,10 @@ function notifyTone() {
 
 // What this device can SPEAK with — reported once per connection (owner round
 // R2). Only the shell can ask Android's TextToSpeech engine, and only the
-// phone has one at all, so the desktop Settings window's Voice dropdown is fed
-// from here or it is empty. A dev browser simply sends nothing.
+// phone has one at all. Since 2026-08-12 the desktop no longer offers a voice
+// dropdown (the choice moved onto the phone, below), so this list is the PC's
+// diagnostic record of what the connected device can do — nothing on the
+// desktop chooses from it any more. A dev browser simply sends nothing.
 function sendTtsInfo() {
   if (!IN_APP || !window.Android.ttsVoices) return;
   try {
@@ -103,6 +105,33 @@ function effectiveNotifyPrefs() {
   const p = notifyPrefs();
   if (!p.banner && !p.speak && !p.tone) return { banner: true, speak: false, tone: false };
   return p;
+}
+
+// ── WHICH VOICE, AND HOW FAST — THIS DEVICE'S OWN ANSWER (owner 2026-08-12)
+// Round R2 put both on the DESKTOP, and his report is what that cost: he uses
+// a tablet AND a phone, their engines carry different voices, and one dropdown
+// on one PC cannot name a voice that exists on both. So the choice is per
+// DEVICE, through the same SharedPreferences bridge every other per-device
+// switch uses — never bare localStorage, which is keyed by ORIGIN and split
+// this app's state across its LAN and Tailscale addresses once already
+// (2026-08-05).
+//
+// THE FRAME'S VALUES REMAIN THE FALLBACK rather than being ignored, which is
+// what keeps this a safe change in both directions: a device that has never
+// opened the card behaves exactly as it did yesterday, and a PC that still
+// carries a desktop choice is still obeyed by it. So an empty pref means "no
+// opinion HERE", not "the engine default" — and the card says that in words
+// (`renderNotifyVoiceCard`) instead of leaving him to infer it from silence.
+// A rate is read as a NUMBER and only a positive one counts: an unset pref
+// reads back as null, and a corrupted one must not silence the notice by
+// handing TextToSpeech a NaN.
+function notifyVoicePref() {
+  return String(prefGet("notifyVoice") || "");
+}
+
+function notifyRatePref() {
+  const saved = parseFloat(prefGet("notifyRate"));
+  return saved > 0 ? saved : 0;
 }
 
 function handleNotify(msg) {
@@ -143,13 +172,16 @@ function handleNotify(msg) {
     // something.
     const spoken = msg.speak_text || (body ? `${title}. ${body}` : title);
     try {
-      // HOW it is said is the PC's decision and rides on every frame (owner
-      // round R2) — nothing about the voice is stored on this phone, so a
-      // reconnect can never leave it speaking in a voice the desktop no
-      // longer selects. `speakAs` is the newer shell; an older one still has
-      // plain `speak`, and a notice must never be lost to a shell version.
-      if (Android.speakAs) Android.speakAs(spoken, String(msg.voice || ""), Number(msg.rate) || 1);
-      else Android.speak(spoken);
+      // HOW it is said is THIS PHONE's own answer since 2026-08-12, with the
+      // frame's values as the fallback — `notifyVoicePref` below says why.
+      // `speakAs` is the newer shell; an older one still has plain `speak`,
+      // and a notice must never be lost to a shell version.
+      if (Android.speakAs) {
+        Android.speakAs(spoken, notifyVoicePref() || String(msg.voice || ""),
+                        notifyRatePref() || Number(msg.rate) || 1);
+      } else {
+        Android.speak(spoken);
+      }
     } catch (err) {
       send({ type: "client_log", text: `[notify] speech failed: ${err.message}` });
     }
@@ -350,4 +382,212 @@ window.__noticeStateChanged = () => {
 
 noticePanel.addEventListener("pointerdown", (e) => {
   if (e.target === noticePanel) closeNoticeCard();   // backdrop tap = later
+});
+
+// --- Settings → Voice: WHICH voice, on THIS device (owner 2026-08-12) ------
+//
+// His decision, and the reason he gave for it: he uses a tablet AND a phone,
+// their text-to-speech engines carry different voices, and the desktop's one
+// dropdown could not name a voice that exists on both — pick the tablet's and
+// the phone falls back to its engine default, silently, with the Settings
+// window still showing a name. So the two master switches stay on the PC
+// ("Tell my phone when an agent finishes" and "Say it out loud", which are
+// decisions about the JOB) and WHICH VOICE moved to the device that owns it.
+//
+// AND EVERY VOICE IS HEARABLE BEFORE IT IS CHOSEN, which is the same rule the
+// dictation card already obeys (owner 2026-08-09: "treba da mogu da CUJEM da
+// bih odabrao"). # lang-ok: owner quote  A list of engine voice names —
+// "en-us-x-tpf-local", "sr-rs-x-ser-network" — tells nobody anything; the
+// sound does.
+//
+// The panel's element is BUILT HERE rather than declared in index.html: the
+// page's markup is served by the PC and this file is what owns the feature,
+// so one file carries the whole thing. It joins panels.css's overlay selector
+// lists like every other panel.
+
+const voicePanel = document.createElement("div");
+voicePanel.id = "notify-voice-panel";
+voicePanel.hidden = true;
+document.body.appendChild(voicePanel);
+const voiceOpened = { t: 0 };
+ghostClickArmor(voicePanel, voiceOpened);   // panels.js
+
+// ONE short line, in English, and always the SAME one. The dictation card's
+// samples are per-language because what it is choosing IS the language; here
+// the language is fixed and the only thing that varies between two taps is
+// the voice, so a changing sentence would be noise between the two things he
+// is comparing. It says what a notice says, so he judges the voice on the job
+// it will actually do.
+const NOTIFY_SAMPLE = "An agent has finished — this is how notices will sound.";
+
+// The paces the desktop used to offer, unchanged (Android's TextToSpeech rate,
+// 1.0 being the engine's own normal pace).
+const NOTIFY_RATES = [0.8, 1, 1.25, 1.5];
+const NOTIFY_RATE_LABELS = ["0.8×", "1×", "1.25×", "1.5×"];
+
+// ONE SAMPLE AT A TIME, NEVER A QUEUE — the dictation card's rule and the same
+// reason (panels.js `dictListen`): the shell hands text to TextToSpeech with
+// QUEUE_ADD and exposes no stop, and the voice is set per CALL but applies to
+// the whole queue, so a second tap during a sample would speak BOTH in the
+// second voice. The guard is local to this card rather than shared with the
+// dictation one because only one full-screen panel can be reached at a time —
+// each covers the controls that would open the other.
+let voiceSpeakingName = null;
+let voiceSpeakingTimer = null;
+
+function voicePreview(voice, btn) {
+  if (voiceSpeakingName) return;
+  try {
+    // At the pace he has chosen HERE: a voice at 1.5× is a different thing to
+    // listen to than the same voice at 0.8×, and it is the pair he will hear.
+    window.Android.speakAs(NOTIFY_SAMPLE, voice.name || "",
+                           notifyRatePref() || 1);
+  } catch {
+    showToast("This device could not play the sample");
+    return;
+  }
+  voiceSpeakingName = voice.name;
+  btn.classList.add("busy");
+  clearTimeout(voiceSpeakingTimer);
+  voiceSpeakingTimer = setTimeout(() => {
+    voiceSpeakingName = null;
+    btn.classList.remove("busy");   // harmless if the card was re-rendered
+  }, dictSampleMs(NOTIFY_SAMPLE));  // panels.js — one estimate, one copy
+}
+
+/** The label a voice wears: its own name, and the locale beside it when the
+ *  engine gave one. The same shape the desktop dropdown used, so a screenshot
+ *  of the old window and a screenshot of this card name the same voice. */
+function voiceLabel(voice) {
+  const locale = String(voice.locale || "");
+  const label = String(voice.label || voice.name || "");
+  return locale ? `${label} (${locale})` : label;
+}
+
+/** One row: the choice on the left, the speaker on the right.
+ *
+ *  The button is a SIBLING of the <label>, never a child — a click anywhere
+ *  inside a label activates the control that label owns, so a speaker nested
+ *  in the row would also CHOOSE that voice, and the tap meaning "let me hear
+ *  it first" would have decided (the dictation card's own lesson). */
+function voiceRow(voice, chosen) {
+  const row = document.createElement("div");
+  row.className = "dict-row";
+  const label = document.createElement("label");
+  const name = String(voice.name || "");
+  label.className = "sets-row dict" + (name === chosen ? " sel" : "");
+  const rb = document.createElement("input");
+  rb.type = "radio";
+  rb.name = "notify-voice";
+  rb.checked = name === chosen;
+  rb.addEventListener("change", () => {
+    prefSet("notifyVoice", name);
+    renderNotifyVoiceCard();      // the row re-lights, and the caption follows
+  });
+  const txt = document.createElement("span");
+  txt.className = "dict-name";
+  txt.textContent = voiceLabel(voice);
+  label.append(rb, txt);
+  row.appendChild(label);
+
+  if (name) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "dict-listen" + (name === voiceSpeakingName ? " busy" : "");
+    btn.innerHTML = svg("listen");
+    // Named for the VOICE, not "play": a screen reader saying "button" over a
+    // speaker glyph says nothing about which row it belongs to.
+    btn.setAttribute("aria-label", `Listen to ${voiceLabel(voice)}`);
+    btn.title = `Listen to ${voiceLabel(voice)}`;
+    keepFocus(btn, () => voicePreview(voice, btn));
+    row.appendChild(btn);
+  }
+  return row;
+}
+
+function renderNotifyVoiceCard() {
+  const voices = dictVoices();   // panels.js — the SAME source, never a second
+  const chosen = notifyVoicePref();
+  voicePanel.innerHTML = "";
+  const card = document.createElement("div");
+  // `card-split`, not `card-columns`: a voice list is as long as the engine
+  // makes it, and a capped multicol answers "I do not fit" by growing a column
+  // off the side of the screen instead of scrolling (task 217, panels.css).
+  card.className = "sets-card card-split";
+  card.innerHTML = `<h2>Notification voice</h2>
+    <p class="sets-sub">How THIS device reads a notice out loud. Your other
+       phone or tablet keeps its own answer — the PC only decides whether a
+       notice is spoken at all.</p>`;
+
+  const body = document.createElement("div");
+  body.className = "sets-body";
+  card.appendChild(body);
+
+  // The pace first: it applies to every row below it, and to the previews.
+  body.appendChild(segRow("Speaking pace", NOTIFY_RATES, NOTIFY_RATE_LABELS,
+    notifyRatePref() || 1, (v) => {
+      prefSet("notifyRate", String(v));
+      renderNotifyVoiceCard();
+    }));
+
+  const list = document.createElement("div");
+  list.className = "sets-list";
+  // The no-choice row, first and always present. Its label is what it really
+  // means — this device has no opinion — and the caption under the list spells
+  // out the consequence rather than leaving him to guess it.
+  list.appendChild(voiceRow({ name: "", label: "The phone's own default" },
+                            chosen));
+  for (const v of (voices || [])) {
+    if (v && v.name) list.appendChild(voiceRow(v, chosen));
+  }
+  body.appendChild(list);
+
+  // THE HONEST LIMIT, said once and only when it is true — never a footnote
+  // and never a per-row repetition (the dictation card's rule).
+  const note = document.createElement("p");
+  note.className = "sets-sub dict-note";
+  if (!voices) {
+    note.textContent = "The voices live on the phone itself, and this page is "
+      + "open somewhere that has none to offer — open Vibe Coder on the phone "
+      + "to choose one. Notices are still spoken there.";
+  } else if (!voices.length) {
+    note.textContent = "This device has no text-to-speech voice installed, so "
+      + "there is nothing to choose between yet. A notice is still shown and "
+      + "still tones.";
+  } else if (!chosen) {
+    note.textContent = "With no voice picked here, this device speaks in "
+      + "whatever the PC last chose, and in its own engine default when the PC "
+      + "chose nothing.";
+  } else {
+    note.textContent = "Chosen on this device. If it is ever missing — a "
+      + "system update, a different engine — the phone falls back to its own "
+      + "default rather than going quiet.";
+  }
+  body.appendChild(note);
+
+  const done = document.createElement("button");
+  done.type = "button";
+  done.className = "sets-done";
+  done.textContent = "Done";
+  keepFocus(done, closeNotifyVoicePanel);
+  card.appendChild(done);
+
+  voicePanel.appendChild(card);
+  voicePanel.hidden = false;
+}
+
+function openNotifyVoicePanel() {
+  renderNotifyVoiceCard();
+  voiceOpened.t = performance.now();
+}
+
+function closeNotifyVoicePanel() {
+  voicePanel.hidden = true;
+  voicePanel.innerHTML = "";
+  clearTimeout(voiceSpeakingTimer);
+  voiceSpeakingName = null;
+}
+
+voicePanel.addEventListener("pointerdown", (e) => {
+  if (e.target === voicePanel) closeNotifyVoicePanel();   // backdrop tap = done
 });

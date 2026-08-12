@@ -11,6 +11,32 @@
 // desktop — creation never happens here) plus the app-shortcuts toggle.
 // Stored per device via the prefs bridge, overriding the desktop defaults.
 
+// ── WHICH BUILT-IN OPENS WHICH CARD ────────────────────────────────────────
+// One table, and it lives HERE because this module is the one that owns the
+// full-screen overlays (module docstring above): controls.js builds the D-pad
+// button and knows only that a `kind` may name a card. It used to be one
+// `else if` per kind in `makeActionButton`, which was fine while there were
+// two and was the thing standing between controls.js and THE STRUCTURE LAW's
+// 1,000-line ceiling by the time Settings → Voice needed a seventh
+// (2026-08-12).
+//
+// Every entry is WRAPPED in an arrow rather than named directly: the openers
+// live in five different modules — this one, quality.js, phone-panel.js,
+// region.js, notify.js, chrome.js — and several of those load AFTER this file.
+// A bare reference would be read at load time and throw; the arrow is read at
+// tap time, by which point every script is in.
+const PANEL_KINDS = {
+  sets: () => openSetsPanel(),
+  region: () => openRegionPanel(),
+  quality: () => openQualityPanel(),
+  dictation: () => openDictationPanel(),
+  phone: () => openPhonePanel(),
+  notifyvoice: () => openNotifyVoicePanel(),
+  // The "anywhere access" banner appears once per device (owner 2026-07-26) —
+  // this button is the permanent way back into the wizard.
+  anywhere: () => openWizard(),
+};
+
 const setsPanel = document.getElementById("sets-panel");
 
 // Ghost-click armor (owner bug report 2026-08-05 — "the picker rotates"):

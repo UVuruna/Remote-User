@@ -393,6 +393,9 @@
           "action": "phone"
         },
         {
+          "action": "notifyvoice"
+        },
+        {
           "action": "anywhere"
         }
       ]
@@ -526,7 +529,7 @@
         },
         {
           "label": "Agents",
-          "icon": "target",
+          "icon": "agents",
           "text": "/agents",
           "enter": true,
           "focus": "claude"
@@ -550,7 +553,7 @@
       "process": "code",
       "name": "Claude Tools",
       "icon": "tools",
-      "enabled": false,
+      "enabled": true,
       "active": [
         "review",
         "security",

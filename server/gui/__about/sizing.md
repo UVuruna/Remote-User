@@ -33,17 +33,54 @@ Two further rules learned the same day and encoded here:
   parent's stylesheet, and Qt resolves QSS fonts only when a widget is
   polished, which happens on show.
 
+## …and on the screen (owner report 2026-08-12)
+
+A window that is the right SIZE is still unreadable when part of it is off the
+display, and the settle above is exactly what puts it there. Qt places a child
+window from the size it has BEFORE the show; the settle then GROWS it where it
+stands, so all the growth lands on the bottom and right edges. Open Settings
+from a parent sitting high on the screen and the grown dialog's own top edge —
+title bar and first card — ends up above the desktop. That is the screenshot he
+sent.
+
+`clamp_to_screen(window)` pulls it back, and is called at the point each
+window's geometry is FINAL (the second-pass `_resettle`, or the settle in
+`showEvent` for the two windows that have no second pass). Three details are
+load-bearing:
+
+- **`availableGeometry`, not `geometry`** — the taskbar is not screen anybody
+  can read a card in.
+- **`frameGeometry`, not `geometry`** — the title bar is part of what must stay
+  reachable, and it is precisely the part that goes missing.
+- **The TOP-LEFT wins.** A window taller than the screen cannot satisfy both
+  edges; the inner `max` decides, and it decides for the corner where the title
+  bar and the first card are. Forcing the bottom edge into view on such a
+  window would post its top off the top — the same defect in a mirror.
+
+**Never `QWidget.screen()`.** It is the obvious call and it CRASHES the Qt
+audit: a hard access violation a few windows later, reported inside whatever
+unrelated native call ran next (`BaseCapture.output_count()`, in the run that
+found it — which is why the traceback pointed at monitor enumeration and not at
+this file). The binding hands back a QScreen that Python then owns, and the
+second window to ask leaves Qt holding a dangling one. `QGuiApplication
+.screenAt(centre)` asks the question this function actually means — which
+display is this window ON — and returns a screen the application keeps.
+
 ## Connections
 
 ### Uses
-- Nothing project-internal (leaf module) — only `PySide6.QtCore.QSize` and
-  `PySide6.QtWidgets.QWidget`
+- Nothing project-internal (leaf module) — only `PySide6.QtCore.QSize`,
+  `PySide6.QtGui.QGuiApplication` and `PySide6.QtWidgets.QWidget`
 
 ### Used by
 - [Main Window](main_window.md) — `_settle_minimum()`, re-run on every content
-  change and on `showEvent`
-- [Controls Editor](controls_editor.md) — once, on first show
-- [Traffic Window](traffic_window.md) — once, on first show
+  change and on `showEvent`. Not clamped: it is the window the OWNER placed,
+  and moving it under him is a different kind of surprise
+- [Controls Editor](controls_editor.md) — settle + `clamp_to_screen`, on first show
+- [Traffic Window](traffic_window.md) — settle + `clamp_to_screen`, on first show
+- [Settings Window](settings_window.md) — settle on show, then `_resettle` +
+  `clamp_to_screen` once the real geometry is in place (and on every later
+  content change)
 
 ## Contents
 
@@ -59,6 +96,8 @@ Two further rules learned the same day and encoded here:
   own measured-strings estimate (`_computed_minimum()`), `keep` the size never
   to shrink below — the owner's current window size at runtime, an empty size
   at construction. A maximized or full-screen window is never resized
+- `clamp_to_screen(window)` — and then put it back ON the screen it opened on
+  (see above). Idempotent, and a no-op on a window that already fits
 
 ## Guarded by
 

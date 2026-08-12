@@ -603,13 +603,27 @@ def check_compact_moved_and_did_not_multiply() -> None:
 def check_the_wheel_cost_is_stated_honestly() -> None:
     """THE PICKER MUST NOT LIE (the cap is a LAW over the stored state, owner
     2026-08-06). Three sets share the `code` process, so the app-shortcut
-    reserve is now THREE — and the shipped file must not tick past the cap of
-    8 on a fresh install.
+    reserve is THREE — and the shipped file must not tick past the cap on a
+    fresh install.
 
-    PLANTED DEFECT: ship Claude Tools `enabled: true`. Required 3 + the three
-    optional basics + a reserve of 3 is 9, and the very first connection would
-    greet him by switching one of them off with a toast."""
+    THE CAP IS THE FILE'S OWN (fixed 2026-08-12, owner report "drop-out mode
+    refuses more than 8, it must be 10"). This check hardcoded 8 and never
+    read `wheel_mode`, while every load site in the product defaults to
+    drop-out — `server/actions_api.py` twice, `controls_data.OWNER_TOP_KEYS`,
+    `client/sets.js` `wheelCap()`. So the ONE place that disagreed with the
+    product was the guard, and because a guard is what a shipped default has
+    to satisfy, it is what kept the shipped defaults pre-capped at 8 and
+    Claude Tools switched off. A gate that states a number the code does not
+    hold is not protecting the owner from the code — it is protecting the
+    code from the owner's own decision.
+
+    PLANTED DEFECT: tick a fourth optional basic. Required 3 + four optional +
+    a reserve of 3 is 11, and the very first connection would greet him by
+    switching one of them off with a toast."""
     data = actions_data()
+    # Same arithmetic as `server/gui/controls_editor.py` `_save` and
+    # `client/sets.js` `wheelCap()`: absent means drop-out, and drop-out is 10.
+    cap = 8 if data.get("wheel_mode") == "fixed" else 10
     required = sum(1 for c in data["categories"] if c.get("required"))
     optional_on = sum(1 for c in data["categories"]
                       if not c.get("required") and c.get("enabled") is not False)
@@ -621,18 +635,12 @@ def check_the_wheel_cost_is_stated_honestly() -> None:
         per_process[key] = per_process.get(key, 0) + 1
     reserve = max(per_process.values()) if per_process else 0
     total = required + optional_on + reserve
-    if total > 8:
+    if total > cap:
         raise AssertionError(
-            f"the shipped file ticks {total} of 8 wheel slots "
+            f"the shipped file ticks {total} of {cap} wheel slots "
             f"({required} required + {optional_on} optional + {reserve} held "
             "for app shortcuts) — a fresh install would drop one on the first "
             "connection")
-    tools = app_set("Claude Tools")
-    if tools.get("enabled") is not False:
-        raise AssertionError(
-            "Claude Tools must ship UNTICKED: the wheel is already full at 8, "
-            "and a set that arrives by evicting one he chose is worse than a "
-            "set he turns on himself")
 
 
 # ═══════════════ 8. THE PHONE CARD (tasks 161 / 218a) ═══════════════════════
@@ -653,9 +661,21 @@ def check_the_phone_card_gathered_the_switches() -> None:
         raise AssertionError(
             "the Phone button does not ride the D-pad — a pool entry nobody "
             "sees is not a delivered card")
+    # THE DOOR IS TWO HALVES, and both are checked (2026-08-12). controls.js
+    # still owns the BUILT-IN — the button's label, icon and kind — but the
+    # kind→opener wiring moved into panels.js's `PANEL_KINDS` when Settings →
+    # Voice needed a seventh entry and controls.js stood two lines under THE
+    # STRUCTURE LAW's ceiling. panels.js is the module that owns the overlay
+    # cards, so that is where it belongs; what must not change is that a
+    # `phone` built-in really reaches `openPhonePanel`.
     controls = CONTROLS_JS.read_text(encoding="utf-8")
-    if "openPhonePanel" not in controls or "phone:" not in controls:
+    if "phone:" not in controls or 'kind: "phone"' not in controls:
         raise AssertionError("controls.js has no built-in for the Phone card")
+    panels = (PROJECT / "client" / "panels.js").read_text(encoding="utf-8")
+    if "openPhonePanel()" not in panels or "PANEL_KINDS" not in panels:
+        raise AssertionError(
+            "nothing wires the `phone` built-in to openPhonePanel — the "
+            "button would be drawn and do nothing")
     phone = (PROJECT / "client" / "phone-panel.js").read_text(encoding="utf-8")
     for needed in ("layBarPos()", "hideMode()", "padShapeRow("):
         if needed not in phone:
@@ -717,7 +737,7 @@ CHECKS = [
      check_the_claude_tools_group),
     ("Compact moved into the group and did not multiply",
      check_compact_moved_and_did_not_multiply),
-    ("the shipped wheel does not tick past the cap of 8",
+    ("the shipped wheel does not tick past its own mode's cap",
      check_the_wheel_cost_is_stated_honestly),
     ("the Phone card gathered the switches, and their old homes let go",
      check_the_phone_card_gathered_the_switches),

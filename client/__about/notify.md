@@ -20,21 +20,91 @@ replaces its own notification line while four agents keep four lines. That is
 the owner's requirement in one detail: *"da izbaci notifikaciju koja opisuje
 koji agent je završio"*.
 
-## HOW it speaks is the PC's decision (round R2, owner 2026-08-07)
+## HOW it speaks is THIS DEVICE's decision (owner 2026-08-12)
 
-Nothing about the voice is stored on this phone. The desktop Settings window
-picks a voice and a speaking pace, and both ride on **every** `notify` frame
-(`msg.voice`, `msg.rate`) — so a reconnect can never leave the phone speaking
-in a voice the desktop no longer selects. `speakAs` is preferred and plain
-`speak` is the fallback: the page is served by the PC while the shell is
-installed separately, so the two versions drift, and a notice must never be
-lost to a shell version.
+Round R2 (2026-08-07) put the voice and the speaking pace on the DESKTOP, and
+his report is what that cost: he uses a tablet **and** a phone, their
+TextToSpeech engines carry different voices, and one dropdown on one PC can
+only ever name a voice that exists on one of them. Pick the tablet's, and the
+phone falls back to its own engine default — silently, with the Settings
+window still showing a name.
 
-`sendTtsInfo()` is the other half. On every connection it asks
-`Android.ttsVoices()` and sends `tts_info {voices:[{name, label, locale}…]}`
-— the ONLY source the desktop's Voice dropdown can have, because a
-TextToSpeech engine's voices differ per device, per language pack, per
-Android version. A dev browser has no bridge and simply sends nothing.
+So the choice moved to the device that owns it. `notifyVoicePref()` /
+`notifyRatePref()` read it through the SharedPreferences bridge
+(`prefGet`/`prefSet`, never bare localStorage — that is keyed by ORIGIN and
+split this app's state across its LAN and Tailscale addresses once already),
+and **the frame's `msg.voice` / `msg.rate` remain the FALLBACK**:
+
+| this device | the frame | what is spoken |
+|-------------|-----------|----------------|
+| chosen | anything | the device's choice — the pref outranks the PC |
+| not chosen | carries a voice/rate | the frame's, exactly as before this change |
+| not chosen | carries neither | the engine default, at 1× |
+
+That fallback is what makes the move safe in both directions: a device that
+has never opened the card behaves exactly as it did yesterday, and a PC still
+carrying a desktop choice is still obeyed by it. Read the other way, it is
+also why an empty pref means "no opinion HERE" rather than "the engine
+default" — and the card says that in words instead of leaving him to infer it.
+Voice and pace fall back **independently**: choosing a voice must not silently
+reset the pace.
+
+`speakAs` is preferred and plain `speak` is the fallback: the page is served
+by the PC while the shell is installed separately, so the two versions drift,
+and a notice must never be lost to a shell version.
+
+`sendTtsInfo()` still runs on every connection — `Android.ttsVoices()` →
+`tts_info {voices:[{name, label, locale}…]}`. Nothing on the desktop chooses
+from that list any more; it is the PC's diagnostic record of what the
+connected device could speak with ([server Notify](../../server/__about/notify.md)).
+A dev browser has no bridge and simply sends nothing.
+
+## Settings → Voice: the card, with a preview (owner 2026-08-12)
+
+`openNotifyVoicePanel()` — reached from the Settings set's **Voice** button
+(`notifyvoice` in controls.js's `BUILTINS`, wired through panels.js's
+`PANEL_KINDS`). It lists this device's own voices from `Android.ttsVoices()`,
+the same source `sendTtsInfo` uses and never a second one, plus a first row
+that means *no opinion here*. A **Speaking pace** segmented row (0.8 / 1 /
+1.25 / 1.5, `segRow` from panels.js) sits above the list, because the pace
+applies to every row below it and to the previews.
+
+**Every voice can be heard before it is chosen** — the same rule the dictation
+card obeys (owner 2026-08-09: *"treba da mogu da CUJEM da bih odabrao"*).
+A list of engine names like `en-us-x-tpf-local` tells nobody anything; the
+sound does. One short English sample, always the SAME one — the language here
+is fixed, so the only thing that varies between two taps is the voice, and a
+changing sentence would be noise between the two things being compared. It
+says what a notice says, so he judges a voice on the job it will actually do,
+and it is spoken at the pace he has chosen, because a voice at 1.5× is a
+different thing to listen to than the same voice at 0.8×.
+
+**One sample at a time, and never a queue** (`voicePreview`, guarded by
+`voiceSpeakingName` + a timer from panels.js's `dictSampleMs`). The shell hands
+text to TextToSpeech with `QUEUE_ADD` and exposes no stop, and the voice is set
+per CALL but applies to the whole QUEUE — so a second tap during a sample would
+not replace the first, it would make BOTH speak in the second voice, destroying
+the one comparison the control exists to give him. The guard is local to this
+card rather than shared with the dictation one because only one full-screen
+panel is reachable at a time: each covers the controls that would open the
+other.
+
+The preview button is a **sibling** of the row's `<label>`, never a child — a
+click anywhere inside a label activates the control that label owns, so a
+speaker nested in the row would also CHOOSE that voice, and the tap meaning
+"let me hear it first" would have decided (the dictation card's own lesson).
+
+**The honest limit is said once, and only when it is true**: a dev browser with
+no bridge is told the voices live on the phone; a device whose engine has none
+is told that; a device with no choice made is told what it falls back to. Never
+a per-row repetition, never a footnote.
+
+The panel's element is CREATED by this module (`#notify-voice-panel`, appended
+to `document.body`) rather than declared in index.html — one file carries the
+whole feature. It joins panels.css's three overlay selector lists exactly like
+every declared panel, because the scrim, the fixed position and the centring
+are properties of the ELEMENT; forgetting one of the three is the set-editor
+bug of 2026-08-11.
 
 `msg.speak` still wins over everything: the desktop's "Say it out loud" off
 sends `false`, and the banner is raised regardless — a server-side mute is a

@@ -146,22 +146,32 @@ def layout_of(project: str) -> dict | None:
     return None
 
 # --- The phone's own voices (round R2, owner 2026-08-07) ---------------------
-# The desktop Settings window offers a "Voice" dropdown, and the only machine
-# that knows which voices exist is the PHONE: TextToSpeech engines differ per
-# device, per installed language pack, per Android version. So the phone lists
-# them once per connection (`tts_info`) and the list is held HERE, beside the
-# feature that uses it — never persisted, because a list read from a phone that
-# is no longer connected would offer the owner voices he cannot hear.
+# Only the PHONE knows which voices exist on it: TextToSpeech engines differ
+# per device, per installed language pack, per Android version. So the phone
+# lists them once per connection (`tts_info`) and the list is held HERE —
+# never persisted, because a list read from a device that is no longer
+# connected describes nothing that is currently true.
 #
-# The stored CHOICE is a plain name in the settings file, not an index: a
-# device that no longer has that voice simply falls back to its default rather
-# than speaking in whichever voice happens to sit at that position now.
+# NOTHING ON THE DESKTOP CHOOSES FROM IT ANY MORE (owner 2026-08-12). It fed a
+# "Voice" dropdown in the Settings window until that dropdown moved onto the
+# phone, and the reason it moved is exactly the reason this list is per-device:
+# he uses a tablet AND a phone with different engines, so one PC-side choice
+# could only ever name a voice that exists on one of them — and the other
+# device would fall silently back to its own default while the window still
+# showed a name. What remains here is DIAGNOSTIC: the log line below is how a
+# session's transcript records what the connected device could speak with, and
+# `voices()` is what a future diagnostic surface would read.
+#
+# `notify_voice` in the settings file is untouched and still rides every frame
+# (`_frame`): a phone that has never made its own choice keeps obeying it, so
+# the move costs no device its current behaviour. A phone WITH a choice ignores
+# it (client/notify.js -> notifyVoicePref).
 _voices: list[dict] = []
 
 
 def set_voices(reported) -> int:
     """Remember what the phone can speak with. Anything unusable is dropped
-    rather than trusted — this list is drawn in a dropdown on the PC."""
+    rather than trusted — a name that reaches the log must be a real one."""
     global _voices
     clean_list = []
     for item in reported if isinstance(reported, list) else []:
@@ -179,8 +189,9 @@ def set_voices(reported) -> int:
 
 
 def voices() -> list[dict]:
-    """What the Settings window draws in its Voice dropdown. Empty until a
-    phone has connected at least once this run — the window says so."""
+    """What the last connected phone reported it can speak with. Empty until a
+    phone has connected at least once this run. Diagnostic since 2026-08-12 —
+    the choice itself is made on the device (see the note above)."""
     return list(_voices)
 
 

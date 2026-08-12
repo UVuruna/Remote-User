@@ -56,7 +56,7 @@ import traffic
 import traffic_history
 from config import SETTINGS
 from gui.theme import TOKENS, card_shadow
-from gui.sizing import settle_minimum
+from gui.sizing import clamp_to_screen, settle_minimum
 
 logger = logging.getLogger(__name__)
 
@@ -670,6 +670,10 @@ class TrafficWindow(QDialog):
         # OVERLAPPING: the chart was drawn across the caption underneath it.
         size = settle_minimum(self, self._computed_minimum(), QSize(760, 560))
         self.resize(max(size.width(), 760), max(size.height(), 560))
+        # LAST, after the resize — this is where the geometry is final, and
+        # this window grows the most of the three (owner report 2026-08-12:
+        # a child grown in place hangs off whichever edge it opened near).
+        clamp_to_screen(self)
 
     def _computed_minimum(self) -> QSize:
         """MEASURED, never guessed (THE SPACE & LEGIBILITY LAW).

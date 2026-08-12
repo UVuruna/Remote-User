@@ -42,7 +42,7 @@ Every entry obeys it, and a new one must too:
 | Media | `play` `volup` `voldown` `mute` `stop` |
 | Windows | `grid` `desktop` `switchwin` `tasks` `maxwin` `minwin` `snapl` `snapr` `run` `x` `newwin` |
 | Apps | `sidebar` `palette` `terminal` `preview` `gotofile` `comment` `newtab` `closetab` `address` `reopen` `reload` `newdir` `folderup` `copypath` `details` |
-| Claude | `claude` `usage` `model` `thinking` `cmode` `compact` `newchat` `rewind` |
+| Claude | `claude` `usage` `model` `thinking` `cmode` `compact` `newchat` `rewind` `agents` |
 | App faces | `vscode` `chrome` `explorer` |
 | System / panels | `settings` `monitor` `monitor2` `gauge` `globe` `list` `aspect` `move` |
 | Layout birth (task 233) | `addwin` (grow by one member) `splitwin` (a grid splits into solos) `ejectwin` (one member leaves into its own layout) |
@@ -68,6 +68,19 @@ Every entry obeys it, and a new one must too:
   and the desktop set list said "some app set" instead of naming the app.
   Drawn in the same stroke language as everything else — recognisable at
   24 px, never a bitmap logo. `claude` (the asterisk) was already there.
+
+## A name that misses is drawn as NOTHING (fixed 2026-08-12)
+
+The Claude set's `/agents` button shipped asking for an icon called `target`,
+which has never existed in this table. Neither renderer says so: the phone's
+`svg()` in controls.js and the desktop editor's `fill()` in
+`controls_widgets.py` both look the name up and quietly draw an empty box. So
+the button wore no face on either side, and nothing failed.
+
+`agents` is that drawing — one node branching into two, in the same stroke
+language as its neighbours and legible at the 20 px a pool row renders. Every
+`"icon"` in `actions.json` was checked against this table in the same round;
+it was the only miss.
 
 ## One drawing per act (grader flag a, task 233)
 

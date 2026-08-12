@@ -29,13 +29,20 @@
    panel was never added to these three selector lists. Without them it has no
    `position: fixed`, no scrim and no centring: it rendered in normal document
    flow under the fixed controls, so the whole set editor was invisible on the
-   real page and its Save button sat off the bottom of the screen. */
+   real page and its Save button sat off the bottom of the screen.
+
+   `#notify-voice-panel` joined on 2026-08-12 (Settings → Voice, owner's move
+   of the notification voice onto the phone). Its element is created by
+   client/notify.js rather than declared in index.html — the overlay is still a
+   property of the ELEMENT, so it needs all three lists exactly the same way,
+   and forgetting one is the set-editor bug above. */
 #sets-panel,
 #quality-panel,
 #phone-panel,
 #claude-panel,
 #dictation-panel,
 #notice-panel,
+#notify-voice-panel,
 #set-editor-panel,
 #choice-panel {
   position: fixed;
@@ -53,6 +60,7 @@
 #claude-panel[hidden],
 #dictation-panel[hidden],
 #notice-panel[hidden],
+#notify-voice-panel[hidden],
 #set-editor-panel[hidden],
 #choice-panel[hidden] { display: none; }
 
@@ -522,6 +530,7 @@
   body #claude-panel,
   body #dictation-panel,
   body #notice-panel,
+  body #notify-voice-panel,
   body #set-editor-panel,
   body #choice-panel,
   body #layout-panel {
@@ -614,6 +623,7 @@
      answered here. Same class, same rule, one place. */
   body #sets-panel,
   body #claude-panel,
+  body #notify-voice-panel,
   body #phone-panel { padding: var(--space-s); }
   body .sets-card.card-split {
     width: 100%;
@@ -823,6 +833,7 @@ button.sets-row:active { background: var(--accent-glow); border-color: var(--acc
   body #claude-panel,
   body #dictation-panel,
   body #notice-panel,
+  body #notify-voice-panel,
   body #set-editor-panel,
   body #choice-panel,
   body #layout-panel {

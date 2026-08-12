@@ -37,7 +37,7 @@ from PySide6.QtWidgets import (
     QStyledItemDelegate, QStyleOptionViewItem, QVBoxLayout, QWidget,
 )
 
-from gui.controls_data import DPAD_SLOTS, load_client_icons
+from gui.controls_data import DPAD_SLOTS, WHEEL_MAX, load_client_icons
 from gui.controls_widgets import RowDelegate, icon_for
 from gui.theme import TOKENS
 
@@ -324,8 +324,14 @@ class WheelRing(QWidget):
     order (the ladder beside it does that, in text); it only answers "why is
     this a list with a clock face next to it".
 
-    The eight decorative dots are the wheel's own cap (`controls_data.WHEEL_MAX`)
-    — a fixed, familiar shape, not a live count of anything.
+    The decorative dots are the wheel's own cap — and since task 181 that cap
+    depends on the MODE the dialog was opened in: 8 under fixed, 10 under
+    drop-out (`controls_data.WHEEL_MAX` / `WHEEL_MAX_DROPOUT`). Drawing eight
+    of them whatever the mode said (fixed 2026-08-12) was the same defect the
+    caption line above the ladder already had corrected: ONE screen may state
+    ONE cap, and a ring of 8 beside a checkbox reading "up to 10" is the
+    picture contradicting the words. Still not a live count of the sets — it
+    is the shape of the ring they ride in.
     """
 
     SIZE = 108
@@ -335,6 +341,10 @@ class WheelRing(QWidget):
                  # rect at y = -6 the moment the widget stopped being stretched
                  # taller than it asked for: the "1" came out with a flat top
                  # (seen 2026-08-07, after the ring moved beside the caption).
+
+    def __init__(self, dots: int = WHEEL_MAX, parent: QWidget | None = None):
+        super().__init__(parent)
+        self.dots = max(1, int(dots))
 
     def sizeHint(self) -> QSize:  # noqa: N802 — Qt override
         return QSize(self.SIZE, self.SIZE)
@@ -365,11 +375,11 @@ class WheelRing(QWidget):
         painter.setBrush(Qt.BrushStyle.NoBrush)
         painter.drawEllipse(QPointF(cx, cy), r, r)
 
-        # Eight positions around the ring — decorative, matching the wheel's
-        # own cap; position 0 (12 o'clock = "1") is highlighted.
+        # One dot per wheel slot — decorative, matching the CURRENT mode's cap
+        # (8 fixed / 10 drop-out); position 0 (12 o'clock = "1") is highlighted.
         painter.setPen(Qt.PenStyle.NoPen)
-        for i in range(8):
-            angle = -math.pi / 2 + i * 2 * math.pi / 8
+        for i in range(self.dots):
+            angle = -math.pi / 2 + i * 2 * math.pi / self.dots
             dot = self._pt(angle, r)
             painter.setBrush(QColor(TOKENS["accent"] if i == 0 else TOKENS["text2"]))
             radius = 4.0 if i == 0 else 2.2
@@ -426,7 +436,7 @@ class WheelOrderDialog(QDialog):
     """
 
     def __init__(self, names: list[str], default_names: list[str],
-                parent: QWidget | None = None):
+                parent: QWidget | None = None, cap: int = WHEEL_MAX):
         super().__init__(parent)
         self.setWindowTitle("Wheel order")
         self._default_names = default_names
@@ -440,7 +450,9 @@ class WheelOrderDialog(QDialog):
         # one row; the ladder then takes the dialog's whole width and the hole
         # is not filled, it is gone.
         head = QHBoxLayout()
-        self.ring = WheelRing()
+        # The ring draws the CALLER's cap (2026-08-12) — the editor knows
+        # which wheel mode is selected right now, this dialog does not.
+        self.ring = WheelRing(cap)
         head.addWidget(self.ring, 0, Qt.AlignmentFlag.AlignTop)
         caption = QLabel(
             "Position 1 sits at 12 o'clock on the phone's wheel — the rest "

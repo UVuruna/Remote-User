@@ -70,7 +70,7 @@ from gui.controls_order import LAND_SLOTS, PORT_SLOTS, OrderList, WheelOrderDial
 from gui.controls_widgets import (
     CommandDetail, CommandTable, RowDelegate, icon_for, paint_check,
 )
-from gui.sizing import settle_minimum
+from gui.sizing import clamp_to_screen, settle_minimum
 
 logger = logging.getLogger(__name__)
 
@@ -411,6 +411,11 @@ class ControlsEditor(QDialog):
         # live here trusted `minimumSizeHint`, and this dialog's wrapping
         # captions made it quote 59 px less than the dialog needs.
         settle_minimum(self, self._computed_minimum(), QSize(0, 0))
+        # The geometry is final here, and a settle only ever GROWS a window
+        # where Qt already put it — so a dialog opened from a parent near an
+        # edge ends up hanging over it (owner report 2026-08-12). One helper,
+        # every window: gui/sizing.py.
+        clamp_to_screen(self)
 
     def _computed_minimum(self) -> QSize:
         """MEASURED, never guessed (THE SPACE & LEGIBILITY LAW).
@@ -924,7 +929,13 @@ class ControlsEditor(QDialog):
         self._store_current()
         current = effective_wheel_order(self.data)
         default = natural_order(self._shipped) or current
-        dlg = WheelOrderDialog(current, default, self)
+        # The ring's dots are the cap, and the cap is the MODE's (2026-08-12,
+        # the same "one screen states one cap" rule `_refresh_enabled_label`
+        # already follows). Read from the live combo, not from `self.data` —
+        # the mode is only written into the file on Save.
+        cap = WHEEL_MAX if self.wheel_mode_combo.currentData() == "fixed" \
+            else WHEEL_MAX_DROPOUT
+        dlg = WheelOrderDialog(current, default, self, cap)
         if dlg.exec():
             self.data["wheel_order"] = dlg.order_names()
 
