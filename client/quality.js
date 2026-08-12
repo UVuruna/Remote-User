@@ -18,11 +18,41 @@
 const QUALITY_FPS = [0, 10, 15, 30, 60]; // 0 = follow the PC (its own max)
 // "native" is ABOVE the PC's own encoder width — see RAISING below.
 const QUALITY_RES = ["native", "full", "2/3", "1/2"];
-const QUALITY_BR = ["high", "mid", "low"];
+
+// THE OWNER'S FOUR LEVELS, AS ABSOLUTE NUMBERS (his ticked verdict
+// 2026-08-12). The phone offers the SAME four the desktop STREAM card offers
+// and may pick any one AT OR BELOW what the PC is set to — never above.
+//
+// They used to be PERCENTAGES of the desktop bitrate ("high"/"mid"/"low",
+// recorded as his decision of 2026-08-05). It was never his (his correction,
+// 2026-08-12), and the cost is exactly why he struck it: the desktop's Data
+// saver step and this panel's own cellular level stopped agreeing whenever
+// the PC's base moved, a mismatch that got written up as unavoidable instead
+// of fixed. As absolute rungs they are the same numbers by construction.
+//
+// THIS IS A MIRROR OF `config.QUALITY_LADDER` AND IT IS GATED AS ONE —
+// tests/test_stream_card.py parses this literal and compares it rung for rung
+// against the server's table, the same technique that keeps the cellular
+// profile honest across the two languages. Keep it JSON-shaped so the gate
+// can read it whole; a rung changed on one side alone fails the build.
+const QUALITY_LEVELS = [
+  { "id": "max",    "label": "Max",        "fps": 60, "bitrate": "20M" },
+  { "id": "smooth", "label": "Smooth",     "fps": 30, "bitrate": "12M" },
+  { "id": "sharp",  "label": "Sharp",      "fps": 10, "bitrate": "6M" },
+  { "id": "saver",  "label": "Data saver", "fps": 10, "bitrate": "2M" }
+];
+// "high" is the FOLLOW-THE-PC sentinel the wire has always carried, and it
+// stays: it is what makes "no override" compare equal to "no override" on
+// every reconnect (config.quality_override), and it is what an old server
+// understands. A saved rung id means "below the PC, at this level".
+const QUALITY_BR = ["high", ...QUALITY_LEVELS.map((l) => l.id)];
+// A pref saved before the ladder said "mid"/"low" — translated onto rungs, so
+// nobody's saved choice silently becomes something else.
+const LEGACY_BR = { mid: "sharp", low: "saver" };
 const QUALITY_DEFAULTS = { fps: 0, res: "full", bitrate: "high", auto: false };
 
 // The PC's Settings card, refreshed by every `config` message.
-// { fps, width, height, bitrate, bitrate_mid, bitrate_low } or null before
+// { fps, width, height, bitrate, level, bitrate_mid, bitrate_low } or null before
 // the first config.
 let streamBase = null;
 
@@ -47,8 +77,10 @@ function setStreamBase(base) {
 // Two axes can be raised, and they are the two the PC's own defaults take
 // away: the frame rate, and the encoder width (task 130 lowered the shipped
 // default to 2560, so "Native" is how he gets his 4K monitor back). The
-// bitrate cannot: its steps are PERCENTAGES of the PC's own choice by the
-// owner's 2026-08-05 rule, so there is no number above "High" to ask for.
+// bitrate cannot, and now for a reason he stated himself (2026-08-12): the
+// phone may pick any of the four levels AT OR BELOW the PC's, and nothing
+// above it. Rungs above the PC's own are greyed out rather than clamped in
+// silence.
 
 /** True when this fps step is ABOVE what the PC is set to — reachable, but
  *  only by rebuilding capture. Replaces the old `fpsUnreachable`, which greyed
@@ -179,13 +211,55 @@ function noteDecodeStruggle(jumps) {
   sendQuality();
 }
 
+// --- THE LADDER, READ (owner verdict 2026-08-12) ---------------------------
+
+const DATA_SAVER_LEVEL = QUALITY_LEVELS[QUALITY_LEVELS.length - 1];
+
+/** The bottom rung as a `quality` override — the ONE definition of "save
+ *  data" on this side, and the exact mirror of `config.DATA_SAVER`. Derived
+ *  from the ladder rather than typed out, so moving the bottom rung moves the
+ *  cellular profile with it and the two can never be two numbers. */
+function dataSaverQuality() {
+  return { fps: DATA_SAVER_LEVEL.fps, res: "1/2", bitrate: DATA_SAVER_LEVEL.id };
+}
+
+/** The rung the PC itself is on — the highest at or below its own bitrate
+ *  (`config.level_for_bitrate`, mirrored). The server SENDS it as
+ *  `base.level`; computing it here too is the fallback for a PC older than
+ *  the ladder, never a second opinion. Null before the first config. */
+function pcLevel() {
+  if (!streamBase) return null;
+  if (streamBase.level && QUALITY_LEVELS.some((l) => l.id === streamBase.level)) {
+    return streamBase.level;
+  }
+  const bps = bitrateBits(streamBase.bitrate);
+  const rung = QUALITY_LEVELS.find((l) => bitrateBits(l.bitrate) <= bps);
+  return (rung || DATA_SAVER_LEVEL).id;
+}
+
+/** True when this rung is ABOVE what the PC is set to — the one thing the
+ *  panel may not ask for. */
+function levelAbovePc(id) {
+  const pc = pcLevel();
+  if (!pc) return false;
+  return QUALITY_LEVELS.findIndex((l) => l.id === id) <
+         QUALITY_LEVELS.findIndex((l) => l.id === pc);
+}
+
+/** Which rung is lit right now: "high" means "follow the PC", so the lit rung
+ *  is the PC's own. */
+function selectedLevel(p) {
+  return p.bitrate === "high" ? pcLevel() : p.bitrate;
+}
+
 function rawQualityPrefs() {
   try {
     const p = JSON.parse(prefGet("qualityPrefs") || "{}");
+    const bitrate = LEGACY_BR[p.bitrate] || p.bitrate;
     return {
       fps: QUALITY_FPS.includes(p.fps) ? p.fps : 0,
       res: QUALITY_RES.includes(p.res) ? p.res : "full",
-      bitrate: QUALITY_BR.includes(p.bitrate) ? p.bitrate : "high",
+      bitrate: QUALITY_BR.includes(bitrate) ? bitrate : "high",
       auto: p.auto === true,
     };
   } catch {
@@ -213,7 +287,7 @@ function transportCellular() {
 // switch reconnects by rule).
 function effectiveQuality() {
   const p = qualityPrefs();
-  if (p.auto && transportCellular()) return { fps: 10, res: "1/2", bitrate: "low" };
+  if (p.auto && transportCellular()) return dataSaverQuality();
   // The device's decoder ceiling caps what we ask for (owner report
   // 2026-08-12): a 60 fps request at a width this SoC decodes at 30 goes out
   // as 30 — lowering is per-client and free, and a capped stream that PLAYS
@@ -335,10 +409,16 @@ function openQualityPanel() {
     // "Native" with nothing above the PC's width is the same picture as
     // "Full" — greyed rather than offered as a phantom upgrade.
     (v) => v === "native" && !resRaises("native")));
-  card.appendChild(segRow("Bitrate", QUALITY_BR,
-    b ? [mbpsLabel(b.bitrate), mbpsLabel(b.bitrate_mid), mbpsLabel(b.bitrate_low)]
-      : ["High", "Mid", "Low"],
-    p.bitrate, (v) => saveQuality({ bitrate: v })));
+  // THE FOUR LEVELS, AS THE NUMBERS THEY ARE (owner verdict 2026-08-12).
+  // Every rung says its own bitrate, the rungs above the PC's own are greyed
+  // out rather than clamped in silence, and picking the PC's own rung saves
+  // the "follow the PC" sentinel — so a PC that later moves takes this phone
+  // with it instead of pinning it to a number the owner never chose.
+  card.appendChild(segRow("Quality", QUALITY_LEVELS.map((l) => l.id),
+    QUALITY_LEVELS.map((l) => `${l.label} · ${mbpsLabel(l.bitrate)}`),
+    selectedLevel(p),
+    (v) => saveQuality({ bitrate: v === pcLevel() ? "high" : v }),
+    levelAbovePc));
 
   const autoRow = document.createElement("label");
   autoRow.className = "sets-row apps";
@@ -347,7 +427,9 @@ function openQualityPanel() {
   autoCb.checked = p.auto;
   autoCb.addEventListener("change", () => saveQuality({ auto: autoCb.checked }));
   autoRow.append(autoCb, document.createTextNode(
-    "Save data on mobile networks (10 fps, ½ resolution, low bitrate)"));
+    `Save data on mobile networks (the ${DATA_SAVER_LEVEL.label} level — ` +
+    `${DATA_SAVER_LEVEL.fps} fps, ½ resolution, ` +
+    `${mbpsLabel(DATA_SAVER_LEVEL.bitrate)})`));
   card.appendChild(autoRow);
 
   const done = document.createElement("button");

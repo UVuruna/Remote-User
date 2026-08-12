@@ -47,11 +47,13 @@ flowchart TB
 
 ```mermaid
 flowchart LR
-    A["config.DATA_SAVER<br/>{fps 10, res ½, bitrate low}<br/>+ DATA_SAVER_BITRATE 1200k"]
-    A --> B["this card's 'Data saver' step<br/>(sets the PC's own base)"]
-    A --> C["SETTINGS.h264_reduced_* <br/>(the capture-side halving)"]
-    A --> D["config.quality_override({reduced:true})<br/>(a page older than the quality panel)"]
-    A -. "gated, not imported" .-> E["client/quality.js — auto on cellular<br/>via Android.transport()"]
+    A["config.QUALITY_LADDER<br/>Max 60/20M · Smooth 30/12M<br/>Sharp 10/6M · Data saver 10/2M"]
+    A --> A2["DATA_SAVER = the bottom rung<br/>{fps 10, res ½, bitrate saver}<br/>+ DATA_SAVER_BITRATE 2M"]
+    A --> B["this card's four steps<br/>(set the PC's own base)"]
+    A -. "gated, not imported" .-> F["client/quality.js QUALITY_LEVELS<br/>the phone's identical four"]
+    A2 --> C["SETTINGS.h264_reduced_* <br/>(the capture-side halving)"]
+    A2 --> D["config.quality_override({reduced:true})<br/>(a page older than the quality panel)"]
+    A2 -. "gated, not imported" .-> E["client/quality.js dataSaverQuality()<br/>auto on cellular via Android.transport()"]
 ```
 
-Four doors, one table. The dotted edge is the one that cannot be an import — it is another language — so `tests/test_stream_card.py` reads the literal out of `client/quality.js` and asserts it against `DATA_SAVER`. That is what makes the owner's condition ("connect Data saver to mobile data, the mechanic we already have") a mechanical fact instead of a promise.
+One table, both ends. The dotted edges are the ones that cannot be imports — that side is another language — so `tests/test_stream_card.py` parses `QUALITY_LEVELS` and `dataSaverQuality()` out of the real `client/quality.js` and asserts them rung for rung against `QUALITY_LADDER` and `DATA_SAVER`. That is what makes the owner's condition ("connect Data saver to mobile data, the mechanic we already have") a mechanical fact instead of a promise — and what dissolves the desktop/phone mismatch that used to be documented as unavoidable, since the phone's levels are the same ABSOLUTE numbers now and not percentages of a base that can move.

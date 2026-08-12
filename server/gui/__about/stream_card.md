@@ -10,7 +10,7 @@ It was split out of `settings_window.py` on 2026-08-12 (THE STRUCTURE LAW). That
 ## Connections
 
 ### Uses
-- [Config](../../__about/config.md) — `SETTINGS` (every value shown), `save_user_settings()` (the one writer), `bitrate_bps()` (label arithmetic) and **`DATA_SAVER` / `DATA_SAVER_BITRATE`**, the one definition of the saving profile
+- [Config](../../__about/config.md) — `SETTINGS` (every value shown), `save_user_settings()` (the one writer), `bitrate_bps()` (label arithmetic) and **`QUALITY_LADDER`**, the ONE table of the owner's four levels (whose bottom rung is `DATA_SAVER`)
 - [Settings Window](settings_window.md) — its `card()` / `section()` / `form()` / `row()` / `caption()` / `resettle()` helpers, so the card's rows line up with every other card's
 
 ### Used by
@@ -27,40 +27,41 @@ It was split out of `settings_window.py` on 2026-08-12 (THE STRUCTURE LAW). That
 
 It used to be four combos, three of which asked the owner to compose a stream out of parts. His verdict picked the descriptive shape, so what he reads is what he gets.
 
-### The five steps — a LADDER, not a list of presets
+### His four levels — a LADDER, not a list of presets
 
 | Step | Frame rate | Bitrate | bits/frame |
 |------|-----------|---------|-----------|
 | Max | 60 fps | 20 Mbps | 333k |
-| High | 60 fps | 12 Mbps | 200k |
-| **Balanced** | 30 fps | 6 Mbps | 200k |
-| Light | 20 fps | 3 Mbps | 150k |
-| Data saver | 10 fps | 1.2 Mbps | 120k |
+| **Smooth** | 30 fps | 12 Mbps | 400k |
+| Sharp | 10 fps | 6 Mbps | 600k |
+| Data saver | 10 fps | 2 Mbps | 200k |
 
-**The first draft had four steps and the owner rejected it** (2026-08-12), correctly, for two defects — and both are now rules with teeth:
+**These are the owner's own numbers** (his ticked verdict, 2026-08-12), and the table itself lives in [`config.QUALITY_LADDER`](../../__about/config.md) so the phone's quality panel offers the identical four. This module only writes the numbers into labels.
 
-1. **AN INVERTED LADDER.** High was 60 fps / 12 Mbps and Balanced 30 fps / 12 Mbps: the same bitrate at half the frame rate is TWICE the bits per frame, so "Balanced" would have rendered a SHARPER picture than "High". Both axes were non-rising, which is exactly why a third rule is needed — going DOWN the list, **bits per frame may not rise either**. A step below another must be worse in every way a person can perceive, or its name is a lie.
-2. **A CLIFF.** 12 Mbps straight to 1.2 Mbps is a factor of ten with nothing in between, so a link that could not hold Balanced had only the saving profile left. **Light** fills it, and no adjacent bitrate drop now exceeds 2.5x (gated at `MAX_BITRATE_JUMP`, 3x — a ceiling against a future retune, not a description of today's table).
+**Bits per frame rise in the middle and that is the point.** An earlier round made *"bits per frame never rises"* a rule and gated it. That rule was OURS, not his, and his ladder breaks it deliberately and correctly: his instruction was to sort the levels so the PICTURE stays decently good everywhere, so going down the ladder SMOOTHNESS is what is spent (60 → 30 → 10) and the picture itself only at the bottom. Trading a little of both at every step — which our rule would have forced — is the worse ladder for the person watching. The retraction is written out where the deleted check stood, in `tests/test_stream_card.py`, so nobody reinstates it.
 
-Balanced now means something that is actually true of it: **half the data and half the frames of High, at the same sharpness per frame.**
+Two invariants survive, and they are the ones his rejected table really broke:
 
-**Balanced is also the shipped default read out** (`target_fps` 30, `h264_bitrate` 6M) — deliberately, so a PC nobody has configured opens on a NAMED step instead of on the Custom entry. The default moved 12M → 6M in the same round, and it is defensible now in a way it would not have been a week ago: this round also added the region CROP and the device-panel SCALE, so the encoder is typically working at ~1920 wide instead of 3840, and 6 Mbps at that width is a better picture than 12 Mbps at 4K ever was — the bits are no longer spread over four times the pixels.
+1. **THE BITRATE FALLS STRICTLY.** The rejected draft had High and Balanced BOTH at 12 Mbps, so the lower step rendered strictly sharper while wearing the humbler name. Equal is not good enough — it has to fall. (`check_the_bitrate_falls_strictly`; "fps never rises" stands beside it.)
+2. **NO CLIFF.** 12 Mbps straight to 1.2 Mbps was a factor of ten with nothing in between. `MAX_BITRATE_JUMP` is 3.0 and the comparison must **admit exactly 3x** — his own bottom step, 6 → 2 Mbps, is 3.0 on the nose, so a strict `<` would fail his ladder for sitting precisely on a ceiling rather than past it. Both sides come from `bitrate_bps`, which returns exact integers, so there is no float fuzz for the boundary to fall through.
+
+**Smooth is the shipped default read out** (`target_fps` 30, `h264_bitrate` 12M) — deliberately, so a PC nobody has configured opens on a NAMED step instead of on the Custom entry. The default had briefly moved to 6M earlier the same day; his ladder pairs 6 Mbps with 10 fps and has no 30 fps / 6 Mbps rung at all, so the pair had to land on one of his.
 
 Every label is BUILT from its own values (`_step`), never typed beside them, so a step cannot advertise a number it does not set. And every value a step sets is offered by the Custom combos it writes into: `_select` falls back to index 0 for a value it cannot find, so a missing entry would make the dropdown say one thing and the encoder do another.
 
 A PC whose saved values match no step (a hand-edited `settings.json`, an older release) gets an extra entry that STATES those numbers — `Custom — 30 fps, 12 Mbps` — rather than lighting a step that would be a lie.
 
-## Data saver is not a fourth set of numbers
+## Data saver is simply the bottom rung
 
 The owner attached one condition to this shape: *"just make sure you connect Data saver to mobile data, the mechanic we already have."*
 
-Three doors reach that profile and there is ONE definition behind all three — [`config.DATA_SAVER`](../../__about/config.md):
+Three doors reach that profile and there is ONE definition behind all three — the last rung of `QUALITY_LADDER`, read out as [`config.DATA_SAVER`](../../__about/config.md):
 
-1. **Automatically** — the phone's "save data on mobile networks" tick plus the `Android.transport()` bridge (`client/quality.js`).
+1. **Automatically** — the phone's "save data on mobile networks" tick plus the `Android.transport()` bridge (`client/quality.js` → `dataSaverQuality()`, itself derived from that side's bottom rung).
 2. **By hand** — this card's Data saver step.
 3. **Legacy** — a page older than the quality panel sending `quality {reduced:true}`, mapped by `config.quality_override`.
 
-`DATA_SAVER` is the per-client override shape; `DATA_SAVER_BITRATE` is the absolute number the `"low"` level resolves to at the shipped base, and it is what this card writes into `h264_bitrate` — because a base cannot be a percentage of itself.
+`DATA_SAVER` is the per-client override shape (`{fps 10, res "1/2", bitrate "saver"}`) and `DATA_SAVER_BITRATE` (`2M`) the absolute number this card writes into `h264_bitrate`. **The desktop step and the phone's cellular level are the same numbers by construction now** — they used to drift whenever the base moved, because the phone's steps were percentages of it; that percentage rule was never the owner's (his correction, 2026-08-12) and it is gone.
 
 ## Resolution left the front of the card, not the product
 
@@ -74,4 +75,4 @@ Ladder step 2, REFLOW ([GUI Rules](../../../../../rules/GUI.md) → Space & Legi
 `settle()` pins those three combos to the widest of their own polished size hints, on first show. A QComboBox's *minimum* size hint is far smaller than its size hint, so three sharing a row are squeezed to a third of whatever the row has and the longest entry is clipped — the audit measured exactly that the first time this row was written (*"has 175x34, needs at least 181x34"*). And the hint is only correct after Qt has polished the widget, which is the same lesson `_align_label_column` carries and the reason both run from the same show.
 
 ## Gate
-`tests/test_stream_card.py`, fail-closed in `setup/gates.py` (0at/6). It measures every Data-saver door against `config.DATA_SAVER` — including by READING the literal out of `client/quality.js`, so the two languages cannot drift — proves each step's label states the numbers it sets, enforces the LADDER (both axes non-rising, bits per frame non-rising, no adjacent drop past 3x, the shipped default on a NAMED step, every step selectable in Custom), and proves that removing Resolution from the card left the wire alone. Every check was proven by planting the defect it exists to catch.
+`tests/test_stream_card.py`, fail-closed in `setup/gates.py` (0at/6). It measures every door against the one table — including by READING the phone's own `QUALITY_LEVELS` and `dataSaverQuality()` out of `client/quality.js`, so the two languages cannot drift — proves each step's label states the numbers it sets, enforces the LADDER (fps non-rising, **bitrate strictly falling**, no adjacent drop past 3x with 3x itself admitted, the shipped default on a NAMED step, every step selectable in Custom), proves the phone's four ARE the PC's four and may never out-bid it, proves a page still speaking `high`/`mid`/`low` or `reduced:true` keeps working, and proves that removing Resolution from the card left the wire alone. Every check was proven by planting the defect it exists to catch.

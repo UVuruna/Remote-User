@@ -17,12 +17,30 @@ desktop settings do nothing" (owner 2026-08-05).
 
 Two fixes, one on each side:
 
-- The server sends `config.base` — `{fps, width, height, bitrate,
+- The server sends `config.base` — `{fps, width, height, bitrate, level,
   bitrate_mid, bitrate_low}` — after auth and on every stream restart
-  (`_stream_base` in server/web.py).
-- `h264_bitrate_mid_pct` / `h264_bitrate_low_pct` replaced the absolute
-  `"5M"` / `"1200k"`: Mid and Low are now percentages of the PC's own bitrate
-  (`config.bitrate_for_level`), so lowering the PC lowers all three steps.
+  (`config.stream_base`). `level` is the ladder rung the PC is on.
+- The bitrate steps are **the owner's four levels as ABSOLUTE numbers**
+  (`QUALITY_LEVELS`, his ticked verdict 2026-08-12) — Max 20 / Smooth 12 /
+  Sharp 6 / Data saver 2 Mbps, the same four the desktop STREAM card offers.
+  This phone may pick any rung **at or below** the PC's; rungs above it are
+  greyed out rather than clamped in silence.
+
+`QUALITY_LEVELS` is a MIRROR of `config.QUALITY_LADDER` and is gated as one:
+`tests/test_stream_card.py` parses this literal out of the real page source
+and compares it rung for rung with the server's table, so a rung retuned on
+one side alone fails the build. It is written JSON-shaped for that reason.
+
+**The percentages are gone.** `h264_bitrate_mid_pct` / `_low_pct` made Mid
+and Low fractions of the PC's bitrate; that rule was written into the record
+as the owner's decision of 2026-08-05 and it was never his (his correction,
+2026-08-12). What it cost: the desktop's Data saver step and this panel's own
+cellular level stopped agreeing whenever the base moved, which got documented
+as unavoidable instead of fixed. As absolute rungs they are the same numbers
+by construction. A saved pref still saying `"mid"`/`"low"` is TRANSLATED onto
+a rung (`LEGACY_BR`), never dropped to a default he never picked; `"high"`
+survives as the **follow-the-PC** sentinel, which is what keeps a reconnect's
+restatement comparing equal.
 
 ## What the panel shows (`openQualityPanel`)
 
@@ -36,11 +54,15 @@ to panels.js as the one builder both call:
 |-----|-------|------------|
 | FPS | Max / 10 / 15 / 30 / 60 | steps above the PC's rate wear **↑** (raises, task 131); the device's own decode ceiling caps what is actually requested (below) |
 | Resolution | Native / Full / ⅔ / ½ | **Full** = the width the PC's own card encodes (`h264_max_width`); **Native** = the monitor's real pixels — a raise (↑) when the card is set lower, greyed when they are the same picture; ⅔ and ½ scale Full; half PER AXIS is quarter pixels, so the middle step is ⅔ (owner) |
-| Bitrate | labelled with the real Mbps the PC's choice yields | every step is reachable by construction (percentages ≤ 100 %) |
+| Quality | Max · 20 Mbps / Smooth · 12 / Sharp · 6 / Data saver · 2 | the four absolute levels; rungs above the PC's own (`pcLevel()`) are greyed out. Picking the PC's own rung saves the `"high"` follow-the-PC sentinel, so a PC that later moves takes this phone with it instead of pinning it to a number he never chose |
 
 Plus "save data on mobile networks" — while `Android.transport()` reports
-cellular, `effectiveQuality()` overrides the saved choices with 10 fps / ½ /
-low, re-evaluated on every (re)connect (a network switch reconnects by rule).
+cellular, `effectiveQuality()` overrides the saved choices with
+`dataSaverQuality()`, re-evaluated on every (re)connect (a network switch
+reconnects by rule). That function is DERIVED from the ladder's bottom rung
+rather than typed out, so it is `config.DATA_SAVER` exactly — 10 fps, ½
+resolution, the 2 Mbps Data saver level — and moving the bottom rung moves
+the cellular profile with it. Gated in `tests/test_stream_card.py`.
 
 Every tap saves and sends immediately; the server resets this client's
 encoder within a second. Done just closes.

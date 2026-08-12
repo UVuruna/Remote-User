@@ -38,10 +38,11 @@ Frozen dataclass — the module-level `SETTINGS` instance is the only one. See t
 - `save_user_settings(changes)`: the GUI's only write path — merges `changes` over the existing file (rejects keys outside `USER_ADJUSTABLE` with `ValueError`), writes it, and applies them to the running `SETTINGS`
 - `_coerced(key, value)`: validates one override against the dataclass field's declared type (bool checked before int — bool is an int subclass); returns `None` (logged) for an unusable value
 - `bitrate_bps(text)`: `"12M"` / `"1200k"` / `"900000"` → bits per second; unparsable text logs and falls back to 12 Mbps rather than killing a stream
-- `stream_base(stream)` (moved here from web.py 2026-08-10, THE STRUCTURE LAW — every number in it is a reading of SETTINGS): the desktop Settings card as the phone must read it, `{fps, width, height, bitrate, bitrate_mid, bitrate_low}`, shipped to the page as `config.base`. The phone's quality panel may only go BELOW it, so the panel has to be able to SAY what "Max / Full / High" currently mean
+- `stream_base(stream)` (moved here from web.py 2026-08-10, THE STRUCTURE LAW — every number in it is a reading of SETTINGS): the desktop Settings card as the phone must read it, `{fps, width, height, bitrate, level, bitrate_mid, bitrate_low}`, shipped to the page as `config.base` — `level` is the ladder rung this PC is on, so the phone can grey out everything above it without doing the arithmetic; `bitrate_mid`/`bitrate_low` remain for a page older than the ladder and are now readings of rungs, not percentages. The phone's quality panel may only go BELOW it, so the panel has to be able to SAY what "Max / Full / High" currently mean
 - `h264_reopen_tries` / `h264_reopen_pause_s` (new 2026-08-10, owner's #1 report): how many consecutive **re-open** failures a live connection tolerates before the socket is given up, and the breath between them. A quality change can only be applied by a new encoder, and until this existed one slow ffmpeg restart closed the whole socket — see [H.264 Streamer](h264_streamer.md) and [Web Layer](web.md) → `_h264_loop`
 - `quality_override(msg)` (task 203): the per-client encoder overrides carried by a `quality` message — **or by the `auth` message's own `quality` field**. ONE parser, two callers, and the second caller is the point: the phone restates its saved overrides on every connect, and that used to be readable only after the whole connection setup had finished, so the first encoder was built at DEFAULT quality and immediately thrown away (his log 2026-08-11 10:08:08,773 → 08,864 → 10,086 — 1.31 s of nothing on every return from an excursion). Reading it off `auth` makes the FIRST session the right one and the restatement compare equal. `None` = pure defaults; legacy `reduced: true` maps to **`DATA_SAVER`**, the one saving profile (below)
-- `bitrate_for_level(level)`: the phone's bitrate step resolved against the DESKTOP choice — `"high"` is `h264_bitrate` itself, `"mid"`/`"low"` are `h264_bitrate_mid_pct` / `_low_pct` percent of it. Percentages replaced the absolute `"5M"`/`"1200k"` on 2026-08-05: fixed numbers meant the desktop Bitrate combo applied only while the phone sat on "High", so the PC's choice was silently discarded the moment the phone picked Mid
+- `bitrate_for_level(level)`: the phone's bitrate step resolved to a real number. `None` and `"high"` are the **follow-the-PC** sentinel the wire has always carried (`h264_bitrate` itself); a rung id (`max`/`smooth`/`sharp`/`saver`) resolves to that rung's own ABSOLUTE bitrate, **clamped to the PC's** — the phone may pick any level at or below what the PC is set to and nothing above. Legacy `"mid"`/`"low"` from a page older than the ladder are translated onto rungs via `LEGACY_BITRATE_LEVELS`, never given numbers of their own. **The percentages are gone** (owner verdict 2026-08-12) — see The quality ladder, below
+- `level_for_bitrate(text)`: which rung a bitrate IS — the highest rung at or below it, so a hand-set base between two rungs counts as the lower one
 
 ## Settings trim (owner 2026-08-02); `hand` removed for good (owner 2026-08-07)
 "Phone hand" left the Settings form on 2026-08-02 (the cursor-offset system it
@@ -104,7 +105,44 @@ tablet AND a phone, and one desktop dropdown could only ever describe one of
 them. Nothing on the wire changed, and the desktop Settings window's three
 combos are gone rather than emptied.
 
-## `DATA_SAVER` — the one saving profile
+## The quality ladder — one table, both ends
+
+**The owner's own four levels and his own numbers** (his ticked verdict,
+2026-08-12). `QUALITY_LADDER` is the single table; the desktop STREAM card
+and the phone's quality panel offer exactly these four, and there is no
+second table in either language.
+
+| Level | id | fps | bitrate | bits/frame |
+|---|---|---|---|---|
+| Max | `max` | 60 | 20 Mbps | 333k |
+| Smooth | `smooth` | 30 | 12 Mbps | 400k |
+| Sharp | `sharp` | 10 | 6 Mbps | 600k |
+| Data saver | `saver` | 10 | 2 Mbps | 200k |
+
+**Bits per frame rise in the middle and that is the point.** An earlier round
+made "bits per frame never rises" a rule and gated it; the rule was ours, not
+his, and his ladder breaks it deliberately. His instruction was to sort the
+levels so the PICTURE stays decently good everywhere: going down, SMOOTHNESS
+is spent first (60 → 30 → 10) and the picture itself only at the bottom. The
+retraction is written out where the deleted check stood
+(`tests/test_stream_card.py`). What survives is the narrower invariant his
+rejected table really broke — **the bitrate falls STRICTLY at every step**,
+so a lower rung can never render sharper while wearing a humbler name — plus
+"fps never rises" and the cliff ceiling (`MAX_BITRATE_JUMP` 3.0, which must
+ADMIT exactly 3x: his bottom step, 6 → 2 Mbps, is 3.0 on the nose).
+
+**The phone gets the same four, as absolute numbers** (his verdict, same
+day). They used to be PERCENTAGES of the desktop bitrate
+(`h264_bitrate_mid_pct` / `_low_pct`, both now DELETED). That rule was
+recorded as his decision of 2026-08-05 and it was never his (his correction,
+2026-08-12), and what it cost is on the record: the desktop's Data saver step
+and the phone's own cellular level stopped agreeing whenever the base moved,
+a mismatch that was documented as unavoidable instead of simply fixed. The
+hierarchy he really wanted is unharmed and is now plain: **at or below the
+PC's rung, never above** (`bitrate_for_level` clamps; the panel greys the
+rest out rather than clamping in silence).
+
+## `DATA_SAVER` — the bottom rung, and the one saving profile
 
 Three doors reach "save data" and there must never be two sets of numbers
 behind them (owner ballot 2026-08-12: *"just make sure you connect Data saver
@@ -112,27 +150,25 @@ to mobile data, the mechanic we already have"*):
 
 | Door | Where |
 |---|---|
-| automatic, on cellular | the phone's "save data on mobile networks" tick + the `Android.transport()` bridge (`client/quality.js`) |
+| automatic, on cellular | the phone's "save data on mobile networks" tick + the `Android.transport()` bridge (`client/quality.js` → `dataSaverQuality()`, derived from ITS ladder's bottom rung) |
 | by hand | the desktop STREAM card's **Data saver** quality step (`server/gui/stream_card.py`) |
 | legacy | `quality {reduced: true}` from a page older than the quality panel — `quality_override` maps it here |
 
-`DATA_SAVER` is the per-client OVERRIDE shape (`{fps 10, res "1/2", bitrate
-"low"}`); `DATA_SAVER_BITRATE` (`1200k`) is the ABSOLUTE number the desktop
-step writes into `h264_bitrate`, because a base cannot be a percentage of
-itself; `DATA_SAVER_SCALE` is the capture-side halving. The three
-`h264_reduced_*` settings READ these rather than restating them.
+`DATA_SAVER_LEVEL` is `QUALITY_LADDER[-1]`, and everything else is read out of
+it: `DATA_SAVER` is the per-client OVERRIDE shape (`{fps 10, res "1/2",
+bitrate "saver"}`), `DATA_SAVER_BITRATE` (`2M`) the absolute number the
+desktop step writes into `h264_bitrate`, `DATA_SAVER_SCALE` the capture-side
+halving. The three `h264_reduced_*` settings READ these rather than restating
+them.
 
-**The two halves are deliberately not derived from one another**, and the
-difference is the owner's own hierarchy rule of 2026-08-05: the phone's
-automatic switch asks for a LEVEL (`"low"` = `h264_bitrate_low_pct` of
-whatever the PC is set to, so it falls WITH the PC's choice and can never
-out-bid it), while the desktop step must name a NUMBER. They coincide exactly
-when the base is 12M; under the 6M default shipped on 2026-08-12 the automatic
-profile asks for 600k where the manual step sets 1.2M. That is the hierarchy
-working, not a drift — but it is worth knowing that "Data saver" means the same
-SHAPE on both doors, not always the same bits.
+**The desktop step and the cellular level are now the same numbers BY
+CONSTRUCTION** — the mismatch above dissolved with the percentages, and the
+claim is kept in a gate rather than in this paragraph:
+`tests/test_stream_card.py` parses the phone's own `QUALITY_LEVELS` table and
+its `dataSaverQuality()` out of `client/quality.js` and compares them rung for
+rung with `QUALITY_LADDER`, so retuning one side alone fails the build.
 
-**The shipped `h264_bitrate` default moved 12M → 6M on 2026-08-12**, with the
+**The shipped `h264_bitrate` default is 12M — the SMOOTH rung** (it briefly moved 12M → 6M earlier on 2026-08-12, before his four-level ladder, which pairs 6 Mbps with 10 fps and has no 30 fps / 6 Mbps rung at all; the card must open on a NAMED step or a fresh install reads "Custom"). The original reasoning for lowering stands and is why 12 Mbps is generous rather than wasteful now, with the
 desktop card's five-step ladder, so a fresh install lands on the named
 **Balanced** step (30 fps, 6 Mbps) rather than on the Custom entry. Defensible
 because the same round added the region crop and the device-panel scale: the

@@ -2267,40 +2267,154 @@ Run: `.venv\Scripts\python tests/test_appearance_device.py` (needs node) — als
 a fail-closed step in `build.py` (0as/6).
 
 ### `test_stream_card.py` — Stream Card Gate
-Proves the desktop STREAM card's five named quality steps ARE A LADDER, and
-the one thing the owner attached a condition to (ballot 2026-08-12, option A):
-*"just make sure you connect Data saver to mobile data, the mechanic we
-already have."*
+Proves the desktop STREAM card's four named quality steps ARE THE OWNER'S
+LADDER (his ticked verdict 2026-08-12 — Max 60/20M, Smooth 30/12M, Sharp
+10/6M, Data saver 10/2M), that THE PHONE OFFERS THE SAME FOUR as absolute
+numbers, and the one thing he attached a condition to: *"just make sure you
+connect Data saver to mobile data, the mechanic we already have."*
 
-**The four-step draft was REJECTED** (2026-08-12) for two defects, and both
-became checks. High at 60 fps / 12 Mbps over Balanced at 30 fps / 12 Mbps has
-both axes falling and yet gives the LOWER step twice the bits per frame — a
-"Balanced" sharper than "High" — which only the bits-per-frame rule can see;
-and 12 Mbps straight to 1.2 Mbps is a tenfold cliff with nothing in between.
+**A RULE OF OURS WAS DELETED HERE.** `check_bits_per_frame_never_rises` used
+to require that a lower step never spend more bits per frame than the step
+above it. His ladder breaks it on purpose (333k → 400k → 600k → 200k) and he
+is right: going down, SMOOTHNESS is spent first and the picture itself only
+at the bottom, which keeps the picture decently good everywhere instead of
+trading a little of both at every step. The retraction is written out in the
+deleted check's place so nobody reinstates it, and the narrower invariant
+that actually catches his original complaint replaced it — **the bitrate must
+fall STRICTLY at every step**. His rejected table (High and Balanced BOTH at
+12 Mbps) fails that; his own ladder passes it. The cliff ceiling stands at
+3.0x and must ADMIT exactly 3x, since his own 6 → 2 Mbps step is 3.0 on the
+nose.
 
-"Data saver" is reachable by three doors — the desktop step, the phone's
-auto-on-cellular switch, and a legacy `quality {reduced:true}` — and there must
-be ONE definition behind all three (`config.DATA_SAVER` +
-`DATA_SAVER_BITRATE`). Every check measures a door against THAT table, never
-against a fixture written to match it; the cellular one is proven by READING
-the literal out of `client/quality.js`, because the two live in different
-languages and cannot share an import.
+**The phone's percentages are gone.** `h264_bitrate_mid_pct` / `_low_pct`
+made the phone's steps fractions of the desktop bitrate; that was recorded as
+his decision of 2026-08-05 and it was never his (his correction, 2026-08-12).
+It is why the desktop's Data saver step and the phone's cellular level
+stopped agreeing when the base moved — a mismatch written up as unavoidable
+instead of fixed. Now both ends read ONE table (`config.QUALITY_LADDER`,
+whose bottom rung is `DATA_SAVER` / `DATA_SAVER_BITRATE`), and the phone's
+side is proven by PARSING `QUALITY_LEVELS` and `dataSaverQuality()` out of
+the real `client/quality.js`, because the two live in different languages and
+cannot share an import.
 
 | planted defect | check that goes red |
 |---|---|
-| High becomes 30 fps / 12 Mbps under a 60 fps / 20 Mbps Max (everything else legal) | *bits per frame never RISES going down the ladder* — alone |
-| THE EXACT REJECTED PAIR (Balanced 30 fps / 12 Mbps under High 60 fps / 12 Mbps) | *bits per frame never RISES* (+ the cliff and default checks, since removing 6M moves both) |
-| THE EXACT REJECTED CLIFF (Light removed, 6 Mbps → 1.2 Mbps) | *no adjacent bitrate step is a cliff* |
-| Light runs at 60 fps, faster than the Balanced above it | *the ladder falls on BOTH axes* |
+| THE EXACT REJECTED PAIR — two rungs at the same 12 Mbps | *the bitrate falls STRICTLY at every step* |
+| one rung's bitrate moved on the PHONE only (6M → 5M in `client/quality.js`) | *the phone offers the SAME four levels, as absolute numbers* — alone |
+| the phone types its own cellular numbers instead of reading its bottom rung | *auto-on-cellular IS the bottom rung, on both sides of the wire* — alone |
+| the `bitrate_for_level` clamp removed | *the phone may never out-bid the PC* — alone |
+| `LEGACY_BITRATE_LEVELS` emptied (an old page's high/mid/low) | *an old page's high/mid/low and reduced:true still work* — alone |
+| the bottom rung dropped to 1.2 Mbps (a 4x fall past the ceiling) | *no adjacent bitrate step is a cliff* |
+| a step runs faster than the step above it | *the ladder falls on BOTH axes* |
 | the shipped default set to 9M, matching no step | *the shipped default lands on a NAMED step* |
 | a step's bitrate dropped from the Custom combos | *every step's numbers exist in the Custom combos* (`_select` falls back to index 0, so the card would silently set a different bitrate) |
 | the Data saver step given its own numbers | *Data saver IS config.DATA_SAVER, the one profile* |
-| `client/quality.js` sends 15 fps on cellular | *the phone's auto-on-cellular switch uses that same profile* |
 | `quality_override({reduced:true})` returns its own dict | *the legacy reduced:true door maps to that same profile* |
-| a step's label stops stating its numbers | *four named steps, each carrying its own numbers* |
+| a step's label stops stating its numbers | *four named steps, HIS numbers, each carrying its own* |
 | Apply stops saving `h264_max_width` | *resolution left the card, not the wire* |
 | picking a step also moves the resolution combo | *a quality step never moves the resolution* |
 | `h264_reduced_fps` hardcoded again | *the h264_reduced_\* settings derive from it* |
 
 Run: `.venv\Scripts\python tests/test_stream_card.py` — also a fail-closed step
 in `build.py` (0at/6).
+
+---
+
+### `test_return_speed.py` — Return Speed Gate
+
+The layout return waits for the WORK and for nothing else. Measured from his
+own instrumented `server.log` of 2026-08-12, ten layout returns: median 3,443
+ms of loading overlay, median 466 ms to `config`, and a median **1,800 ms of
+overlay after the server had already logged that the windows landed**. Three
+of the waits in that gap were the app's own:
+
+1. the encoder rebuild ran AFTER `layout_state` — the frame that arms the
+   phone's settle watcher — so the watcher spent the whole ffmpeg spawn unable
+   to score a sample. It now ends the session first and the two overlap;
+2. a DELIBERATE session end paid the error-loop brake (`_h264_loop`'s 1 s
+   pace for a session younger than two seconds), which is right for the
+   2026-07-29 storm and wrong for a layout change;
+3. one user switch was performed TWICE — the interim `layout_state` says
+   `active: null`, which is the phone's own restore trigger, so it asked for
+   the resume the server had already begun (11 of 60 "Layout N focused" lines
+   inside one second of the previous; 17 of 57 encoder opens discarded inside
+   five seconds).
+
+Driven with the REAL choke point and the REAL `web._stream_h264` loop over the
+real manager (fake ffmpeg, fake frame source), plus the recents open-poll.
+
+| planted defect | check that goes red |
+|---|---|
+| the reset put back below `send_text` | *the encoder is rebuilt before the phone is told* |
+| the `planned_close` mark ignored by the brake | *a planned close skips the brake* (1.02 s measured) |
+| the brake removed altogether | *an unplanned death storm is still paced* (1,776 opens in 2.5 s) |
+| the interim frame stops naming the resume | *the interim frame carries the resume* |
+| the page's stand-down branch deleted | *…and the page stands down on it* |
+| the per-layout retry mark removed | *one automatic re-place per layout* |
+| `recents` sleeps before it looks | *an instant window is returned in ~0 ms* |
+
+Run: `.venv\Scripts\python tests/test_return_speed.py` — also a fail-closed
+step in `build.py` (0au/6).
+
+---
+
+### `test_picture_hold.py` — Picture Hold Gate
+
+The screen never goes away, and the cube never lies. Two halves that pull
+against each other, which is why they are gated together.
+
+**The picture.** A quality change and a layout region change end one encoder
+and open another on the same monitor; that rebuild is 1.2–2.3 s and the canvas
+blanked to the theme colour for all of it — no overlay, no pill change, no
+toast. `initMse(codec, keepPicture)` now keeps the last frame across a
+same-monitor swap.
+
+**The cube.** Holding that frame removes the accident that used to stop the
+settle watcher scoring on a stale picture: through a rebuild nothing arrives,
+so the picture is frozen BY DEFINITION and three identical samples is exactly
+what `settleTick` calls settled. `settleStreamReset()` re-arms on evidence —
+the new session's own first painted frame (`sessionDrew`), never `readyState`,
+which a torn-down element can still answer 2 to.
+
+**And the floor is gone** (owner ruling 2026-08-12, by name): `LOADING_MIN_MS`
+is 0 and the 500 ms fade carries what it bought — allowed where a floor is not,
+because it runs over the picture it uncovers and releases pointer events at its
+START.
+
+Driven in node against the REAL `client/loading.js` and `settle-motion.js`,
+with a DOM shim and a scripted video element.
+
+| planted defect | check that goes red |
+|---|---|
+| `settleStreamReset` disabled | *a frozen rebuild holds the cube* |
+| the re-arm waits on `readyState` instead of the painted flag | *the re-arm's condition is a decoded frame* |
+| `everDrew` cleared unconditionally in `initMse` | *the last frame holds across a same-monitor swap* |
+| `samePicture` computed after `monitor` is overwritten | *…and only there* |
+| `LOADING_MIN_MS` back to 700 | *there is no floor* |
+| `pointer-events` moved off the closed rule | *…and it stops eating taps when the fade STARTS* |
+
+Run: `.venv\Scripts\python tests/test_picture_hold.py` — also a fail-closed
+step in `build.py` (0av/6). Needs node.
+
+---
+
+### `test_gui_nonblocking.py` — GUI Non-Blocking Gate
+
+`main_window.py`'s own header says "the window never blocks". On 2026-08-12 it
+was measured and it was false twice: `pairing.pairing_urls()` (a 1 s UDP
+timeout plus a 3 s Tailscale CLI call) ran on the 1 s refresh tick for as long
+as Tailscale was unsigned — the exact state a first-time user sits in — and the
+tray's Quit joined the server thread inline for up to 10 s. Both moved to
+`server/gui/offthread.py`. What is measured is TIME ON THE GUI THREAD, against
+calls that deliberately take seconds; the methods are driven UNBOUND against a
+stub, because it is the scheduling under test, not Qt.
+
+| planted defect | check that goes red |
+|---|---|
+| the pairing probe back inline | *the pairing probe returns in ~0 ms* (1.50 s measured) |
+| Quit joins the stop inline | *Quit returns in ~0 ms* (1.50 s measured) |
+| the desk released after the stop instead of before | *the windows were not released before the stop* |
+| the QUIT_WAIT_S deadline removed | *a wedged stop still gives up, on time* |
+
+Run: `.venv\Scripts\python tests/test_gui_nonblocking.py` — also a fail-closed
+step in `build.py` (0aw/6).

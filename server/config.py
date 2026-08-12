@@ -100,42 +100,69 @@ def _default_ffmpeg() -> str:
     return "ffmpeg"  # dev: on PATH
 
 
-# ═══════════════════════════ DATA SAVER — THE ONE PROFILE ═══════════════════════════
-# ONE definition of "save data", used by BOTH doors into it (owner ballot
-# 2026-08-12: "just make sure you connect Data saver to mobile data, the
-# mechanic we already have").
+# ═══════════════════════════ THE QUALITY LADDER — ONE TABLE, BOTH ENDS ═══════════════
+# THE OWNER'S OWN FOUR LEVELS AND HIS OWN NUMBERS (his ticked verdict,
+# 2026-08-12). One rung is one (frame rate, bitrate) pair, and the SAME four
+# rungs are what the desktop STREAM card offers and what the phone's quality
+# panel offers. There is no second table anywhere, in either language.
 #
-# There are two ways this profile is reached and there must never be two sets
-# of numbers behind them:
+#   Level        fps   bitrate   bits/frame
+#   Max           60   20 Mbps      333k
+#   Smooth        30   12 Mbps      400k
+#   Sharp         10    6 Mbps      600k
+#   Data saver    10    2 Mbps      200k
+#
+# THE LADDER DELIBERATELY RAISES BITS PER FRAME IN THE MIDDLE, and the rule
+# that used to forbid that is retired (see tests/test_stream_card.py, where
+# the retraction is written out). His instruction was to sort the levels so
+# the PICTURE stays decently good everywhere: going down, SMOOTHNESS is spent
+# first (60 → 30 → 10) and the picture itself only at the bottom. The
+# invariant that survives — and the one his rejected table actually broke — is
+# that the BITRATE falls STRICTLY at every step, so a lower rung can never
+# render sharper than the rung above it while wearing a humbler name.
+#
+# ── DATA SAVER IS SIMPLY THE BOTTOM RUNG ────────────────────────────────────
+# Three doors reach it and there must never be two sets of numbers behind
+# them (owner ballot 2026-08-12: "just make sure you connect Data saver to
+# mobile data, the mechanic we already have"):
 #   * AUTOMATICALLY — the phone's "save data on mobile networks" tick plus the
 #     `Android.transport()` bridge: while the handset is on cellular,
 #     client/quality.js sends exactly this override instead of the saved one.
-#   * BY HAND — the desktop STREAM card's "Data saver" quality step
-#     (gui/stream_card.py), which sets the PC's own base to the same numbers.
-#   * …and the LEGACY door, a page older than the quality panel sending
+#   * BY HAND — the desktop STREAM card's "Data saver" step (gui/stream_card.py),
+#     which writes this rung's numbers into the PC's own base.
+#   * LEGACY — a page older than the quality panel sending
 #     `quality {reduced: true}` — `quality_override` below maps it here.
 #
 # DATA_SAVER is the per-client OVERRIDE shape (what a `quality` message
-# carries): 10 fps, half resolution, the "low" bitrate LEVEL. DATA_SAVER_BITRATE
-# is the ABSOLUTE number the desktop card writes into `h264_bitrate` when the
-# owner picks the Data saver step by hand — because a base cannot be a
-# percentage of itself, and `"low"` is `h264_bitrate_low_pct` OF that base.
-#
-# The two are the same profile stated for the two different jobs, and they are
-# deliberately not derived from one another: the phone's automatic switch asks
-# for a LEVEL (so it falls with the PC's own choice, the owner's 2026-08-05
-# hierarchy), while the desktop step must name a NUMBER. 1.2 Mbps is that
-# number, and it is the bottom rung of the desktop ladder for the same reason
-# it is the saving profile's — it is the point below which the picture stops
-# being worth sending. DATA_SAVER_SCALE is the capture-side halving.
+# carries) and DATA_SAVER_BITRATE the absolute number the desktop step writes;
+# both are READ OUT of the bottom rung rather than restated, so the desktop's
+# Data saver step and the phone's cellular level are the same numbers BY
+# CONSTRUCTION. That mismatch was previously documented as unavoidable,
+# because the phone's steps were percentages of a base that could move; the
+# percentage rule was never the owner's (his correction, 2026-08-12) and it is
+# gone. DATA_SAVER_SCALE is the capture-side halving.
 #
 # The three `h264_reduced_*` settings below READ these rather than restating
-# them, and tests/test_stream_card.py asserts the desktop step, the legacy
-# mapping and client/quality.js's own literal all against this one table — so
-# the manual pick and the automatic switch can never drift apart.
-DATA_SAVER = {"fps": 10, "res": "1/2", "bitrate": "low"}
-DATA_SAVER_BITRATE = "1200k"
+# them, and tests/test_stream_card.py asserts the desktop step, the phone's
+# own ladder literal, the cellular switch and the legacy mapping all against
+# this one table.
+QUALITY_LADDER = (
+    {"id": "max",    "label": "Max",        "fps": 60, "bitrate": "20M"},
+    {"id": "smooth", "label": "Smooth",     "fps": 30, "bitrate": "12M"},
+    {"id": "sharp",  "label": "Sharp",      "fps": 10, "bitrate": "6M"},
+    {"id": "saver",  "label": "Data saver", "fps": 10, "bitrate": "2M"},
+)
+# The bottom rung, named once so the saving profile has somewhere to point.
+DATA_SAVER_LEVEL = QUALITY_LADDER[-1]
+DATA_SAVER = {"fps": DATA_SAVER_LEVEL["fps"], "res": "1/2",
+              "bitrate": DATA_SAVER_LEVEL["id"]}
+DATA_SAVER_BITRATE = DATA_SAVER_LEVEL["bitrate"]
 DATA_SAVER_SCALE = 2
+# A page built before the ladder still says "mid"/"low" on the wire. They are
+# TRANSLATED onto rungs, never given numbers of their own — an old phone gets
+# a real level, and there is still exactly one table. ("high" is not here: it
+# is the "follow the PC" sentinel and always was, and it still is.)
+LEGACY_BITRATE_LEVELS = {"mid": "sharp", "low": "saver"}
 
 
 def _default_actions() -> Path:
@@ -191,22 +218,19 @@ class Settings:
     # Target bitrate cap — reached only on heavy motion; a static screen uses a
     # fraction of it regardless of resolution.
     #
-    # LOWERED 12M -> 6M on 2026-08-12, with the desktop card's five-step
-    # ladder, so the shipped default lands on a NAMED step (Balanced: 30 fps,
-    # 6 Mbps) instead of on the Custom entry. It is defensible now in a way it
-    # would not have been a week ago, and the reason is the two other changes
-    # of this same round: the encoder CROPS to the focused layout's region and
-    # SCALES to the watching device's panel, so it is typically working at
-    # ~1920 wide rather than 3840. 6 Mbps at that width is a better picture
-    # than 12 Mbps at 4K ever was — the bits are no longer spread over four
-    # times the pixels.
+    # THE SHIPPED DEFAULT IS A RUNG OF THE OWNER'S LADDER, and it has to be:
+    # the desktop card would otherwise open on its Custom entry on every fresh
+    # install, telling a new owner his PC is set to something the product has
+    # no word for. With `target_fps` at 30 the only rung that fits is SMOOTH
+    # (30 fps, 12 Mbps) — his ladder pairs 6 Mbps with 10 fps and has no
+    # (30 fps, 6 Mbps) rung at all, which is why the 6M default of earlier the
+    # same day could not survive his table.
     #
-    # It is a DEFAULT, never an override: a saved settings.json wins, and the
-    # phone's own steps are percentages of whatever this holds
-    # (`bitrate_for_level`), so lowering it lowers all three of the phone's
-    # steps with it — which is the hierarchy the owner asked for on
-    # 2026-08-05, working as intended rather than a side effect.
-    h264_bitrate: str = "6M"
+    # It is a DEFAULT, never an override: a saved settings.json wins. The
+    # phone's own bitrate steps are the ladder's ABSOLUTE numbers now, capped
+    # at whatever this holds (`bitrate_for_level`) — the phone may pick any
+    # level at or below the PC's, and nothing above it.
+    h264_bitrate: str = "12M"
     h264_gop: int = 60              # keyframe every N frames (reconnect/seek granularity)
     h264_fragment_us: int = 16000   # fMP4 fragment target (µs) — below one frame interval,
                                     # so every encoded frame ships in its own fragment
@@ -219,14 +243,17 @@ class Settings:
     # fps / resolution (full, 2/3, 1/2 — half PER AXIS is quarter pixels,
     # so the middle step is 2/3) / bitrate level, or auto-reduces on mobile
     # data; the desktop Settings combos stay the DEFAULTS every level maps
-    # against). "mid"/"low" are PERCENTAGES of the desktop bitrate, not fixed
-    # numbers (owner 2026-08-05): absolute constants meant the desktop combo
-    # applied only while the phone sat on "High" — picking "Mid" silently
-    # threw the PC's own choice away, which is exactly the "the desktop
-    # setting does nothing" report. As fractions the hierarchy holds on all
-    # three steps: the phone can only ever go BELOW what the PC allows.
-    h264_bitrate_mid_pct: int = 40
-    h264_bitrate_low_pct: int = 10
+    # against).
+    #
+    # THE BITRATE STEPS ARE THE LADDER'S OWN ABSOLUTE NUMBERS (owner verdict
+    # 2026-08-12). `h264_bitrate_mid_pct` / `h264_bitrate_low_pct` are GONE
+    # with the percentage rule they served: that rule was written into the
+    # record as his decision of 2026-08-05 and it was never his (his
+    # correction, 2026-08-12), and what it cost was the desktop's Data saver
+    # step and the phone's cellular level drifting apart every time the base
+    # moved. The hierarchy he really wanted is unharmed and is now plain: the
+    # phone may pick any rung AT OR BELOW the PC's own, and nothing above it
+    # (`bitrate_for_level` clamps).
     # Re-opening this client's encoder after a quality change (owner report
     # 2026-08-10 — "changing the bitrate kills the whole app"). A quality
     # override lives inside one ffmpeg flag, so the only way to apply it is a
@@ -623,16 +650,38 @@ def bitrate_bps(text: str) -> int:
         return 12_000_000
 
 
+def level_for_bitrate(text: str) -> dict:
+    """Which rung of QUALITY_LADDER a bitrate IS — the highest rung at or
+    below it. A PC set by hand to something between two rungs counts as the
+    lower one, so "at or below the PC" can never be read as permission to
+    exceed it."""
+    bps = bitrate_bps(text)
+    for level in QUALITY_LADDER:
+        if bitrate_bps(level["bitrate"]) <= bps:
+            return level
+    return DATA_SAVER_LEVEL
+
+
 def bitrate_for_level(level: str | None) -> str:
-    """The phone's bitrate step resolved against the DESKTOP choice (owner
-    2026-08-05). "high" is the PC's own value; "mid"/"low" are percentages of
-    it — so lowering the PC's bitrate lowers all three steps and the phone can
-    never out-bid the PC's ceiling."""
-    pct = {"mid": SETTINGS.h264_bitrate_mid_pct,
-           "low": SETTINGS.h264_bitrate_low_pct}.get(str(level or ""))
-    if pct is None:
+    """The phone's bitrate step resolved to a real number (owner verdict
+    2026-08-12: the phone gets the SAME four levels the desktop card offers,
+    as ABSOLUTE numbers, and may pick any level at or below what the PC is set
+    to).
+
+    `None` and `"high"` are the "follow the PC" sentinel the wire has always
+    carried — the PC's own value, unchanged. A rung's id resolves to that
+    rung's own bitrate, CLAMPED to the PC's: the hierarchy the owner asked for
+    on 2026-08-05 survives the percentages that never did. Legacy `"mid"` /
+    `"low"` from an older page are translated onto rungs (LEGACY_BITRATE_LEVELS)
+    rather than given numbers of their own."""
+    name = str(level or "")
+    name = LEGACY_BITRATE_LEVELS.get(name, name)
+    rung = next((rung for rung in QUALITY_LADDER if rung["id"] == name), None)
+    if rung is None:
         return SETTINGS.h264_bitrate
-    return f"{max(1, bitrate_bps(SETTINGS.h264_bitrate) * pct // 100_000)}k"
+    if bitrate_bps(rung["bitrate"]) > bitrate_bps(SETTINGS.h264_bitrate):
+        return SETTINGS.h264_bitrate       # never above the PC's own choice
+    return rung["bitrate"]
 
 
 def quality_override(msg: dict) -> dict | None:
@@ -682,13 +731,19 @@ def stream_base(stream) -> dict:
     monitor size.
 
     It lives HERE, beside `bitrate_for_level`, because every number in it is a
-    reading of SETTINGS (moved out of web.py 2026-08-10, THE STRUCTURE LAW)."""
+    reading of SETTINGS (moved out of web.py 2026-08-10, THE STRUCTURE LAW).
+
+    `level` is the ladder rung this PC is really on, so the phone can grey out
+    every rung above it without doing the arithmetic itself. `bitrate_mid` /
+    `bitrate_low` stay on the wire for a page older than the ladder — they are
+    now readings of rungs, not percentages of anything."""
     width, height = getattr(stream, "stream_size", (stream.width, stream.height))
     return {
         "fps": SETTINGS.target_fps,
         "width": width,
         "height": height,
         "bitrate": SETTINGS.h264_bitrate,
+        "level": level_for_bitrate(SETTINGS.h264_bitrate)["id"],
         "bitrate_mid": bitrate_for_level("mid"),
         "bitrate_low": bitrate_for_level("low"),
     }

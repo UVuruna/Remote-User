@@ -16,10 +16,11 @@ DESCRIPTIVE shape: one Quality dropdown of named steps, each carrying its own
 numbers in its label, so the thing he reads is the thing he gets.
 
   Monitor    — unchanged; it is a different question and it always was.
-  Quality    — Max / High / Balanced / Data saver, each a fixed
-               (frame rate, bitrate) pair with the real numbers written into
-               the label. Not a slider and not three dials: the point of the
-               shape is that "High — 60 fps, 12 Mbps" cannot be misread.
+  Quality    — the OWNER'S OWN FOUR LEVELS (his ticked verdict 2026-08-12),
+               each a fixed (frame rate, bitrate) pair with the real numbers
+               written into the label. Not a slider and not three dials: the
+               point of the shape is that "Smooth — 30 fps, 12 Mbps" cannot be
+               misread.
   Custom…    — the exact numbers, hidden until asked for. The capability was
                never removed, only the requirement to use it.
 
@@ -31,18 +32,19 @@ against (`config.stream_base`), and still editable behind Custom…. Removing th
 dial and removing the capability are different acts, and only the first was
 asked for.
 
-DATA SAVER IS NOT A FOURTH SET OF NUMBERS. It is `config.DATA_SAVER`, the same
-profile the phone's "save data on mobile networks" tick applies automatically
-over cellular and the same one a legacy `quality {reduced:true}` maps to. His
-instruction was exactly this — "just make sure you connect Data saver to mobile
-data, the mechanic we already have" — so this module IMPORTS the profile rather
-than restating it, and tests/test_stream_card.py asserts the step against that
-one definition so the manual pick and the automatic switch can never drift.
+DATA SAVER IS NOT A FOURTH SET OF NUMBERS. It is the bottom rung of
+`config.QUALITY_LADDER`, the same profile the phone's "save data on mobile
+networks" tick applies automatically over cellular and the same one a legacy
+`quality {reduced:true}` maps to. His instruction was exactly this — "just make
+sure you connect Data saver to mobile data, the mechanic we already have" — so
+this module reads the LADDER rather than restating any of it, and
+tests/test_stream_card.py asserts every door against that one table so the
+manual pick and the automatic switch can never drift.
 """
 
 from PySide6.QtWidgets import QCheckBox, QComboBox, QHBoxLayout, QPushButton, QWidget
 
-from config import DATA_SAVER, DATA_SAVER_BITRATE, SETTINGS, bitrate_bps, save_user_settings
+from config import QUALITY_LADDER, SETTINGS, bitrate_bps, save_user_settings
 
 # The exact-number choices, behind Custom…. They are the ones this card has
 # always offered; what changed is that reaching them is now deliberate.
@@ -55,11 +57,11 @@ RESOLUTIONS = [("Native (up to 4K)", 3840), ("2560 — QHD", 2560),
 # defect this card can have: the dropdown would say one thing and the encoder
 # do another. Gated (`check_every_step_is_selectable`), because the two lists
 # are edited in different rounds for different reasons.
-BITRATES = [("1.2 Mbps — data saver", "1200k"), ("3 Mbps — light", "3M"),
-            ("6 Mbps — default", "6M"), ("12 Mbps — sharp", "12M"),
-            ("20 Mbps — max quality", "20M")]
-FPS_CHOICES = [("10 fps — light", 10), ("20 fps", 20), ("30 fps", 30),
-               ("60 fps", 60)]
+BITRATES = [("1.2 Mbps — minimum", "1200k"), ("2 Mbps — data saver", "2M"),
+            ("3 Mbps", "3M"), ("6 Mbps — sharp", "6M"),
+            ("12 Mbps — smooth", "12M"), ("20 Mbps — max", "20M")]
+FPS_CHOICES = [("10 fps — light", 10), ("15 fps", 15), ("20 fps", 20),
+               ("30 fps", 30), ("60 fps", 60)]
 
 
 def mbps_label(text: str) -> str:
@@ -81,59 +83,43 @@ def _step(name: str, fps: int, bitrate: str) -> tuple[str, int, str]:
     return (f"{name} — {fps} fps, {mbps_label(bitrate)}", fps, bitrate)
 
 
-# THE FIVE STEPS — A LADDER, not a list of presets (owner rejection
-# 2026-08-12, and he was right about both defects in the four-step draft).
+# THE OWNER'S FOUR LEVELS, HIS OWN NUMBERS (his ticked verdict 2026-08-12).
+# The table itself lives in `config.QUALITY_LADDER` — one definition, read by
+# BOTH ends, so the phone's panel and this card cannot offer different things
+# by the same names. This module only writes the numbers into labels.
 #
-# DEFECT 1, AN INVERTED LADDER. The draft had High at 60 fps / 12 Mbps and
-# Balanced at 30 fps / 12 Mbps — the same bitrate at half the frame rate,
-# which is TWICE the bits per frame. "Balanced" would have rendered a SHARPER
-# picture than "High", so the ladder contradicted its own naming. The rule
-# that comes out of it, and the one the gate now enforces: going DOWN the
-# list, neither axis may rise AND bits per frame may not rise either. A step
-# below another must be worse in every way a person can perceive, or its name
-# is a lie.
+#   Step         fps   bitrate   bits/frame
+#   Max           60   20 Mbps      333k
+#   Smooth        30   12 Mbps      400k     <- the shipped default
+#   Sharp         10    6 Mbps      600k
+#   Data saver    10    2 Mbps      200k
 #
-# DEFECT 2, A CLIFF. 12 Mbps straight to 1.2 Mbps is a factor of ten with
-# nothing in between, so a link that could not hold Balanced had only the
-# saving profile left. **Light** fills it, and no adjacent bitrate step is now
-# more than a 2.5x drop (gated at 3x).
+# BITS PER FRAME RISE IN THE MIDDLE AND THAT IS THE POINT. An earlier round
+# (mine, not his) made "bits per frame never rises" a rule and gated it; his
+# ladder breaks it deliberately and correctly — going down, SMOOTHNESS is
+# spent first and the picture itself only at the bottom, which keeps the
+# picture decently good at every level instead of trading a little of both at
+# every step. The retraction is written out in tests/test_stream_card.py so
+# nobody reinstates it. What survives is the narrower rule his rejected table
+# really broke: the BITRATE falls STRICTLY at every step.
 #
-#   Step        fps   bitrate    bits/frame
-#   Max          60   20 Mbps        333k
-#   High         60   12 Mbps        200k
-#   Balanced     30    6 Mbps        200k     <- the shipped default
-#   Light        20    3 Mbps        150k
-#   Data saver   10   1.2 Mbps       120k
-#
-# Balanced now means something that is actually TRUE of it: half the data and
-# half the frames of High, at the same sharpness per frame.
-#
-# Frame rates and bitrates are the ones this PC really has — the same values
-# the Custom combos offer, so a step is a shortcut through the exact numbers
-# and never a second vocabulary. Data saver is `config.DATA_SAVER` read out,
-# never a copy of it (see the module docstring).
-QUALITY_STEPS = [
-    _step("Max", 60, "20M"),
-    _step("High", 60, "12M"),
-    # Balanced is the SHIPPED DEFAULT read out (target_fps 30, h264_bitrate
-    # 6M) — deliberately, so a PC nobody has configured opens this window on a
-    # NAMED step instead of on the Custom entry. A step's numbers must be
-    # true; a fresh install reading "Custom" would have been true and useless.
-    _step("Balanced", 30, "6M"),
-    _step("Light", 20, "3M"),
-    _step("Data saver", DATA_SAVER["fps"], DATA_SAVER_BITRATE),
-]
+# Frame rates and bitrates are the ones this PC really has — every one of them
+# is in the Custom combos above, so a step is a shortcut through the exact
+# numbers and never a second vocabulary. Data saver is the ladder's bottom
+# rung, which is also `config.DATA_SAVER` (see the module docstring).
+QUALITY_STEPS = [_step(rung["label"], rung["fps"], rung["bitrate"])
+                 for rung in QUALITY_LADDER]
 
 # The ladder's own rules, stated as numbers so the gate reads them from here
-# rather than restating them (tests/test_stream_card.py). MAX_BITRATE_JUMP is
-# 3.0 and the real ladder's worst step is 2.5x — the ceiling is what stops a
-# future retune re-opening the cliff, not a description of today's table.
+# rather than restating them (tests/test_stream_card.py). His bottom step is
+# 6 -> 2 Mbps, EXACTLY 3x, so the ceiling must ADMIT 3x and refuse anything
+# above it — the gate compares with `<=` for that reason and the bitrates are
+# exact integers, so there is no float fuzz to swallow the boundary.
 MAX_BITRATE_JUMP = 3.0
 
-STREAM_TEXT = ("These are the PC's own limits — the phone's quality panel goes "
-               "below them freely and may raise only where it says so. Data "
-               "saver is the same profile a phone switches to by itself on "
-               "mobile data.")
+STREAM_TEXT = ("These are the PC's own limits. The phone offers the same four "
+               "levels and may pick any one at or below this. Data saver is "
+               "the level a phone switches to by itself on mobile data.")
 CUSTOM_TEXT = ("The exact numbers behind the steps above. Resolution is a "
                "ceiling — the PC already scales down to whatever screen is "
                "watching, so there is normally nothing to set here.")

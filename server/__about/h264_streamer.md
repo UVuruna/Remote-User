@@ -138,12 +138,13 @@ bitrate INSIDE that client's own ffmpeg — capture and other clients untouched:
 `res` `"2/3"`/`"1/2"` scales both axes (`trunc(iw*n/d/2)*2` keeps dimensions
 even for yuv420p; half per axis = quarter pixels, hence ⅔ as the middle
 step), `fps` < `target_fps` appends an `fps=` filter, and `bitrate` goes
-through `config.bitrate_for_level` — `"high"` is the desktop's own bitrate,
-`"mid"`/`"low"` are PERCENTAGES of it (`h264_bitrate_mid_pct` /
-`_low_pct`). Percentages, not the old absolute `"5M"`/`"1200k"`: fixed
-numbers meant the desktop Bitrate combo applied only while the phone sat on
-"High", so picking "Mid" silently discarded the PC's choice — half of the
-owner's 2026-08-05 "the desktop settings do nothing" report. `"high"`/`0`/
+through `config.bitrate_for_level` — `"high"` (and `None`) is the desktop's
+own bitrate, a ladder rung id is that rung's ABSOLUTE bitrate clamped to the
+desktop's, and legacy `"mid"`/`"low"` are translated onto rungs (the
+percentages `h264_bitrate_mid_pct` /
+`_low_pct` are GONE). The phone offers the SAME four levels the desktop card
+does and may pick any one AT OR BELOW the PC's (owner verdict 2026-08-12) —
+see [Config](config.md) → The quality ladder. `"high"`/`0`/
 `"full"` all mean "no override — the desktop Settings defaults". The base the
 phone displays is published as `config.base` (`config.stream_base`, fed
 by `H264Manager.stream_size`). The web layer resets the running session
