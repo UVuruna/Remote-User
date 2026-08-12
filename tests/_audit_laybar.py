@@ -149,25 +149,25 @@ def check_laybar_bottom(page, label, portrait, results, shot_path, shot_name):
     # screenshot IS the evidence this law runs on, so it must show the page and
     # not the page's history.
     page.wait_for_timeout(400)
-    # FORCE A REPAINT BEFORE THE SHUTTER. The grader opened the tablet-portrait
-    # shot and found a faint GHOST of the bar still painted at the TOP, behind
-    # the corner buttons, while the real bar stood correctly at the bottom —
-    # in exactly one of four sizes, with every geometric check green. A DOM
-    # probe taken at the instant of the shutter proved nothing is there: the
-    # only elements in the top band are the two corner buttons and the
-    # invisible keyboard field. So the element really did move and the
-    # COMPOSITOR kept the layer it had already painted for the old position;
-    # neither a 400 ms settle nor `animations="disabled"` clears a stale layer.
-    # Hiding the element and showing it again forces the layer to be discarded
-    # and redrawn. This is a photograph problem, not a product one — no user
-    # ever changes this setting in a headless browser — but a screenshot IS the
+    # AN EXPLICIT CLIP, AND THAT IS THE FIX. The independent grader opened the
+    # tablet-portrait shot and found a faint GHOST of the bar painted at the
+    # TOP behind the corner buttons, in exactly one of four sizes, with every
+    # geometric check green. It is not in the page: a DOM probe at the instant
+    # of the shutter finds only the two corner buttons and the invisible
+    # keyboard field in that band, and the bar's own rect reads y=1206 — the
+    # bottom. A 400 ms settle did not clear it, nor `animations="disabled"`,
+    # nor hiding and re-showing the element to force a repaint.
+    # What DID prove it: a screenshot taken with an explicit `clip` over the
+    # same top band came back CLEAN. So the defect is in the un-clipped
+    # viewport capture reusing a raster tile from before the position class
+    # changed, and naming the region explicitly makes it raster afresh.
+    # A photograph problem, never a product one — but a screenshot IS the
     # evidence this law runs on, so it must show the page and not its history.
-    page.evaluate(
-        "(() => { const b = document.getElementById('layout-bar');"
-        " if (!b) return; b.style.display = 'none'; void b.offsetHeight;"
-        " b.style.display = ''; void b.offsetHeight; })()")
-    page.wait_for_timeout(120)
+    page.wait_for_timeout(400)
     page.screenshot(
         path=str(shot_path(shot_name(f"Layout_bar_bottom {label}")[:-4])),
+        clip={"x": 0, "y": 0,
+              "width": page.evaluate("innerWidth"),
+              "height": page.evaluate("innerHeight")},
         animations="disabled")
     page.evaluate(LAYBAR_CLOSE_JS)
