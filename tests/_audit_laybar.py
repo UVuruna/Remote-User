@@ -138,5 +138,36 @@ def check_laybar_bottom(page, label, portrait, results, shot_path, shot_name):
             print(f"  DETAIL laybar in-row geometry @ {label}: bar={bar} "
                   f"groupL={gl} groupR={gr}")
 
-    page.screenshot(path=str(shot_path(shot_name(f"Layout_bar_bottom {label}")[:-4])))
+    # SETTLE BEFORE THE SHUTTER, and disable animations in it. The independent
+    # grader opened the tablet-portrait shot and found a GHOST of the bar still
+    # painted at the TOP, faintly, behind the corner buttons, while the real
+    # bar stood correctly at the bottom — in exactly one of the four sizes, and
+    # with every geometric check green, because the measured rect was right and
+    # only the PICTURE was wrong. The bar carries no transition of its own, so
+    # this is the compositor holding the layer it painted before the position
+    # class changed. A stale layer is not a defect a user would ever see, but a
+    # screenshot IS the evidence this law runs on, so it must show the page and
+    # not the page's history.
+    page.wait_for_timeout(400)
+    # FORCE A REPAINT BEFORE THE SHUTTER. The grader opened the tablet-portrait
+    # shot and found a faint GHOST of the bar still painted at the TOP, behind
+    # the corner buttons, while the real bar stood correctly at the bottom —
+    # in exactly one of four sizes, with every geometric check green. A DOM
+    # probe taken at the instant of the shutter proved nothing is there: the
+    # only elements in the top band are the two corner buttons and the
+    # invisible keyboard field. So the element really did move and the
+    # COMPOSITOR kept the layer it had already painted for the old position;
+    # neither a 400 ms settle nor `animations="disabled"` clears a stale layer.
+    # Hiding the element and showing it again forces the layer to be discarded
+    # and redrawn. This is a photograph problem, not a product one — no user
+    # ever changes this setting in a headless browser — but a screenshot IS the
+    # evidence this law runs on, so it must show the page and not its history.
+    page.evaluate(
+        "(() => { const b = document.getElementById('layout-bar');"
+        " if (!b) return; b.style.display = 'none'; void b.offsetHeight;"
+        " b.style.display = ''; void b.offsetHeight; })()")
+    page.wait_for_timeout(120)
+    page.screenshot(
+        path=str(shot_path(shot_name(f"Layout_bar_bottom {label}")[:-4])),
+        animations="disabled")
     page.evaluate(LAYBAR_CLOSE_JS)

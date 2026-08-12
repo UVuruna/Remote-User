@@ -120,8 +120,55 @@ keystrokes at all instead of half a command. A `paste_text` without
 `focus: "claude"` never reaches this path and behaves exactly as it has since
 2026-08-05.
 
+### The hand-off after the Enter (his report 2026-08-12, task 272)
+
+He reported the new **Claude Tools** set landing only when text was SELECTED —
+the same complaint task 200 answered, in a case that answer did not cover. The
+field was not the problem: the shipped `actions.json`, his own
+`%LOCALAPPDATA%\VibeCoder\actions.json`, `actions_api.load_actions` and
+`client/controls.js` all carry `focus: "claude"`, and his server log dates the
+sequence running (`Text (24 chars) copied` — the command name — then
+`Text (12 chars) copied` — `/code-review` — 566 ms later, which is exactly
+three `FOCUS_STEP_DELAY`s plus the injections).
+
+The palette's Enter does not focus anything; it asks two other processes to,
+and the extension's own bundle says how. `claude-vscode.focus` builds an
+@-mention out of the editor selection — the empty string when there is none —
+and hands it to one function whose FIRST branch,
+`deliverAtMention`, is taken whenever a Claude chat surface is visible (in a
+layout, always): it posts the mention to the webview and returns, and **never
+calls `reveal()`**, so the extension host moves no focus at all. The webview's
+handler is then the only thing left, and it reads
+`else if (a.current?.focus(), Lt) a.current?.insertAtMention(Lt, !1)` — with a
+selection the prompt is focused twice, the second time after the DOM write;
+with none it is focused once, in the same tick the Command Palette is
+synchronously restoring focus to whatever it took it from. That asymmetry is
+the whole report, and neither half of it is ours.
+
+Ours was the clock: the old tail gave that cross-process round trip one
+`FOCUS_STEP_DELAY` (180 ms) and then pasted. `CLAUDE_HANDOFF_DELAY` (0.6 s) is
+now its own budget, spent by `_handed_off()` in `CLAUDE_HANDOFF_SLICE` pieces
+with the fence re-read between them — 600 ms of injecting nothing is still the
+window constraint 11 was written about, and the very next act is a paste. A
+fence lost in there refuses like every other stage: nothing more is injected
+and the command is simply not sent. Success is also LOGGED now, by target: the
+old path was silent unless it refused, which is why this report could only be
+diagnosed from two clipboard writes and a timestamp.
+
+Honest limit: VS Code hides webview content from accessibility (measured
+2026-08-07, the `agents` round), so the caret's arrival cannot be OBSERVED —
+0.6 s is a budget, not a confirmation. If a future report survives it, the next
+step is a larger budget, not a different mechanism.
+
 ### Gate
 [`tests/test_claude_focus.py`](../../tests/test_claude_focus.py) — fail-closed
 in `build.py` (0ab/6): the palette completes strictly before the command's own
 Ctrl+V, a plain `paste_text` is still exactly two injections, a non-VS-Code
 target injects nothing, and a fence lost mid-sequence withholds the Enter.
+Since task 272 it also holds the CLOCK — `the caret hand-off is waited out with
+no selection` times the real gap between the palette's Enter and the command's
+Ctrl+V against `CLAUDE_HANDOFF_DELAY` and proves the wait is fence-checked.
+That check was proven by planting its own defect: restoring the old
+`time.sleep(FOCUS_STEP_DELAY)` tail turns it red (`the command was pasted 0 ms
+after the palette Enter`) and leaves the other five green — which is the point,
+because those five measure the SEQUENCE and the sequence was never wrong.

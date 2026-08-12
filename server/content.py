@@ -127,6 +127,53 @@ CLAUDE_FOCUS_PROCESS = "code.exe"
 # to the list as it was.
 FOCUS_STEP_DELAY = 0.18
 
+# THE HAND-OFF AFTER THE ENTER IS NOT AN INJECTION GAP — IT IS ANOTHER
+# PROCESS'S WORK (his report 2026-08-12, task 272: the Claude Tools commands
+# "only work if text is SELECTED"). The palette's Enter is where OUR sequence
+# ends and VS Code's begins, and what follows is measurable in the extension's
+# own bundle. `claude-vscode.focus` builds an @-mention out of the editor
+# selection — empty when there is none — and hands it to one function:
+#
+#   async function r(n){ if(t.deliverAtMention(n)) return;
+#                        if(t.revealAndDeliverAtMention(n)) return; ... }
+#
+# `deliverAtMention` is the branch taken whenever a Claude chat surface is
+# VISIBLE, which in a layout it always is. It posts the mention to the webview
+# and returns true — it never calls `reveal()`, so the EXTENSION HOST moves no
+# focus at all. Everything rests on the webview, in another process again:
+#
+#   else if (a.current?.focus(), Lt) a.current?.insertAtMention(Lt, !1)
+#
+# With a selection the prompt is focused TWICE — the bare `focus()` and then
+# the caret the insert leaves behind, after the DOM write. With no selection
+# `Lt` is `""` and there is exactly ONE focus, fired in the same tick the
+# Command Palette is synchronously restoring focus to whatever it took it
+# from. That is the whole asymmetry he reported, and neither half of it is
+# ours to change.
+#
+# What IS ours is the wait. The old code gave the round trip
+# palette-accept → extension host → webview → focus() one FOCUS_STEP_DELAY,
+# 180 ms, and then pasted. His own log dates the sequence exactly — the two
+# clipboard writes of one Claude button, the command name and then the
+# command:
+#
+#   15:33:47,902 INFO clipboard: Text (24 chars) copied to clipboard
+#   15:33:48,468 INFO clipboard: Text (12 chars) copied to clipboard
+#
+# 24 characters is `CLAUDE_FOCUS_COMMAND` and 12 is `/code-review`; 566 ms
+# apart is three FOCUS_STEP_DELAYs plus the injections, so the palette really
+# ran and the paste really followed 180 ms behind the Enter. A cross-process
+# hand-off through an extension host that is itself running Claude Code does
+# not reliably finish in 180 ms, and when it does not, the paste lands in
+# whatever the palette restored focus to — the editor.
+#
+# So the hand-off gets its own, longer budget, spent in fence-checked slices
+# rather than one blind sleep: 600 ms of nothing is exactly the window
+# constraint 11 was written about, and the rule everywhere else in this file
+# is that no gap goes unguarded.
+CLAUDE_HANDOFF_DELAY = 0.6
+CLAUDE_HANDOFF_SLICE = 0.15
+
 
 def _target_process(hwnd: int) -> str:
     """The executable behind a window, lowercased. Imported where it is used
@@ -142,6 +189,25 @@ def _settled(guard) -> bool:
     applied to every gap in the palette chord instead of only the last one."""
     time.sleep(FOCUS_STEP_DELAY)
     return guard is None or bool(guard())
+
+
+def _handed_off(guard) -> bool:
+    """The wait AFTER the palette's Enter, while VS Code's own two processes
+    put the caret in the prompt (see CLAUDE_HANDOFF_DELAY above).
+
+    Spent in slices with the fence re-read between them, for the reason every
+    other gap here is: 600 ms in which we inject nothing is still 600 ms in
+    which a thief can take the foreground, and the very next act is a paste.
+    A lost fence answers False and the caller refuses — nothing further is
+    injected, so the command is simply not sent."""
+    waited = 0.0
+    while waited < CLAUDE_HANDOFF_DELAY:
+        slice_ = min(CLAUDE_HANDOFF_SLICE, CLAUDE_HANDOFF_DELAY - waited)
+        time.sleep(slice_)
+        waited += slice_
+        if guard is not None and not guard():
+            return False
+    return True
 
 
 def focus_claude_prompt(injector: InputInjector, guard=None,
@@ -183,7 +249,18 @@ def focus_claude_prompt(injector: InputInjector, guard=None,
                      "entry could be run; nothing was submitted")
         return "The command was NOT sent — another window took the keyboard"
     injector.press_key("enter")
-    time.sleep(FOCUS_STEP_DELAY)
+    if not _handed_off(guard):
+        logger.error("Claude focus abandoned — focus left while VS Code was "
+                     "still handing the caret to the prompt; nothing was typed")
+        return "The command was NOT sent — another window took the keyboard"
+    # Logged on SUCCESS too, and named. His 2026-08-12 report could not be
+    # diagnosed from the log because this path was silent unless it refused:
+    # the only trace a working sequence left was two clipboard writes 566 ms
+    # apart, which says the palette ran and says nothing about where the caret
+    # ended up. One line here is what makes the next report a read, not a hunt.
+    logger.info("Claude prompt focused via the Command Palette (target 0x%x) "
+                "— %.2fs hand-off honoured before the command is typed",
+                target, CLAUDE_HANDOFF_DELAY)
     return ""
 
 
