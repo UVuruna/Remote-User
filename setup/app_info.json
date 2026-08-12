@@ -1,8 +1,8 @@
 {
-    "version": "0.0.129",
+    "version": "0.0.135",
     "name": "VibeCoder",
     "display_name": "Vibe Coder",
-    "description": "Control this PC from your phone — screen, mouse, keyboard",
+    "description": "Control this PC from your phone \u2014 screen, mouse, keyboard",
     "exe_name": "VibeCoder.exe",
     "installer_name": "VibeCoder_Setup.exe"
 }
