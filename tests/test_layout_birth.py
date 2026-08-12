@@ -221,13 +221,23 @@ def check_the_two_questions_do_not_eat_each_other() -> bool:
     and sharing the JUDGED set would have made one blind: a window this scan
     has looked at would stop being "new" for the attribution next door, so a
     member's own popup would never be offered again. Separate bookkeeping,
-    proven by doing both in one connection."""
-    reg, conn, _ = desk([MEMBER_A, MEMBER_B, OLD, NEWWIN], active=0)
+    proven by doing both in one connection.
+
+    STAGED AT THE DESKTOP since 2026-08-13, and the reason is a rule and not a
+    convenience. This check used to focus a layout, which now means the
+    window's question belongs to the SWEEP: his report of 2026-08-12 was one
+    window wearing BOTH chips inside one tick, the phone replacing the first
+    with the second unseen, and his tap landing on the one whose yes MOVES the
+    window (CLAUDE.md constraint 18). In a focused layout the layout's
+    question wins; at the desktop, where nothing can claim it, task 185 owns
+    the window outright — which is where the bookkeeping property this check
+    exists for is measured, unchanged."""
+    reg, conn, _ = desk([MEMBER_A, MEMBER_B, OLD, NEWWIN], active=None)
     layout_popup.scan(reg, conn)
     if not chips(conn):
         return False
-    # The layout branch must still see NEWWIN as new (it is the same window
-    # taking the foreground, and it belongs to a member's process here).
+    # The layout branch must still see NEWWIN as new — that is the whole
+    # point: one feature's look may never make a window old for the other.
     return layout_popup._is_new(conn, NEWWIN)
 
 
