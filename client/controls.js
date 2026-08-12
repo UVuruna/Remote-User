@@ -846,69 +846,12 @@ function renderGroup(side) {
   }
 }
 
-// --- Category wheel (tap to open, tap an item, X to cancel) ---------------
-
-const wheelEl = document.getElementById("wheel");
-// The ring's own point geometry lives in client/chrome.js (`wheelPoints`,
-// beside `miniRingPoints` — the sibling it copies the clamp pattern from);
-// this file only calls it. THE STRUCTURE LAW: geometry with no PC-facing
-// side effect belongs with the rest of the chrome's own furniture, and
-// controls.js was already at the line cap.
-
-function openWheel(side) {
-  wheelEl.innerHTML = "";
-  const screen = { width: window.innerWidth, height: window.innerHeight };
-  // wheelCats(side), not allCats() — task 181's drop-out wheel: no duplicate
-  // of the other side's placed set, and drop-out also sheds this side's own
-  // (sets.js). Renderer unchanged otherwise — it draws whatever list it gets.
-  const cats = wheelCats(side);
-  const currentCat = placedCat(side);
-  const points = (wheelEl.style.setProperty("--wheel-item-size", `${wheelItemSize(cats)}px`), wheelPoints(cats.length, screen, wheelItemSize(cats))); // wheelItemSize/wheelLabelHtml: chrome.js, owner 2026-08-12
-  cats.forEach((cat, i) => {
-    const item = document.createElement("div");
-    item.className = "wheel-item" + (cat === currentCat ? " current" : "");
-    item.innerHTML = svg(cat.icon) + wheelLabelHtml(cat.name);
-    // The wheel is where the colours SAY what they are — and a wheel item is
-    // painted with `--glass-strong` (0.85), a different surface from a D-pad
-    // button's 0.20 tint, so it gets its own ink.
-    paintSet(item, cat.name, "--glass-strong");
-    item.style.left = `${points[i].x}px`;
-    item.style.top = `${points[i].y}px`;
-    keepFocus(item, () => {
-      groups[side] = allCats().indexOf(cat); // index into the FULL list
-      rememberGroup(side, cat.name); // outlives the next excursion (sets.js)
-      renderGroup(side);
-      closeWheel();
-    });
-    wheelEl.appendChild(item);
-  });
-
-  const x = document.createElement("div");
-  x.className = "wheel-x";
-  x.innerHTML = svg("x");
-  keepFocus(x, closeWheel);
-  wheelEl.appendChild(x);
-
-  wheelEl.addEventListener("pointerdown", backdropCancel);
-  wheelEl.classList.add("open");
-  // The dimming veil is a layer of its own, under our chrome and over the
-  // stream (client/style.css → body.wheel-open::before) — see the note there.
-  document.body.classList.add("wheel-open");
-}
-
-function backdropCancel(e) {
-  if (e.target === wheelEl) {
-    e.preventDefault();
-    closeWheel();
-  }
-}
-
-function closeWheel() {
-  wheelEl.classList.remove("open");
-  document.body.classList.remove("wheel-open");
-  wheelEl.removeEventListener("pointerdown", backdropCancel);
-  wheelEl.innerHTML = "";
-}
+// --- Category wheel ------------------------------------------------------
+// The whole ring — open, fill, close, and the geometry that follows the screen
+// — moved to client/wheel.js on 2026-08-13 (THE STRUCTURE LAW: this file was
+// at its 1,000-line cap and the wheel is one coherent responsibility, not a
+// paragraph of this one). `renderGroup` below still calls `openWheel`; the
+// call resolves at RUNTIME, by which point every script has loaded.
 
 // The Sets picker and Quality panel overlays live in panels.js (split out
 // 2026-08-05, THE STRUCTURE LAW) — openSetsPanel/openQualityPanel are called

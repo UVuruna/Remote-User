@@ -351,6 +351,19 @@ def input_gate(step, run) -> None:
     # with a Range resume, and the gate also pins the truncation case the gate
     # itself discovered: a CDN that drops mid-transfer ends the stream
     # CLEANLY, so a short file used to be reported as a finished download.
+    # THE RING FOLLOWS THE SCREEN, AND ITS CIRCLES DO NOT TOUCH (two owner
+    # reports 2026-08-13). With a set open, rotating the desktop slid the wheel
+    # half off the edge — `wheelPoints` returns ABSOLUTE pixels and nothing
+    # recomputed them. And the radius was a flat 118 px that knew nothing about
+    # how many items it arranged: at task 181's ten-item cap the circles
+    # overlapped by 17 px. The gate drives every count on every screen in both
+    # orientations through the pure module, and pins the LADDER rather than the
+    # shrink he asked for — a check that only asked "did they get smaller"
+    # would pass an implementation that shrinks on a tablet with room to spare.
+    step("0ad/6  WHEEL GEOMETRY GATE — the ring follows the screen and its "
+         "circles keep their gap (tests/test_wheel_geometry.py)")
+    run([sys.executable, str(PROJECT_DIR / "tests" / "test_wheel_geometry.py")])
+
     step("0ac/6  UPDATE DOWNLOAD GATE — it retries and resumes by itself, and "
          "names the failure (tests/test_update_download.py)")
     run([sys.executable, str(PROJECT_DIR / "tests" / "test_update_download.py")])

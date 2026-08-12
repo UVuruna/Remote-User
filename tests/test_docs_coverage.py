@@ -206,6 +206,12 @@ STANDARD = {
     "client/region.js",
     "client/notify.js",
     "client/quality.js",
+    # New 2026-08-13: the CATEGORY WHEEL, split off controls.js when the
+    # rotation fix pushed that file past 1,000 lines. Standard, not
+    # Algorithmic: the ring's real arithmetic (the derived radius and the
+    # shrink ladder) lives in chrome.js, which already carries a flow page —
+    # this module opens, fills, closes, and re-lays-out.
+    "client/wheel.js",
     # New 2026-08-11 (owner ballot verdict — tasks 190/191/208): the DOM half
     # of the three Claude Code cards. Standard: it draws chips and rows and
     # sends; every rule it obeys lives in claude-state.js below, which is where

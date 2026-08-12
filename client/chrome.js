@@ -229,7 +229,10 @@ function miniRadialPoints(anchor, count, screen) {
 // what this function exists to NOT do. PURE, so its gate can drive every
 // size and count by argument, the same discipline `miniRadialPoints` keeps.
 const WHEEL_RADIUS = 118;
-const WHEEL_ITEM_SIZE = 74;  // px — matches .wheel-item in style.css
+// Both faces lost 4 px on 2026-08-13 at his request ("blago ih smanji za po
+// koji piksel" — lang-ok: owner quote). The daylight between them is bought by
+// WHEEL_GAP and the derived radius below, not by the shrink alone.
+const WHEEL_ITEM_SIZE = 70;  // px — matches .wheel-item in style.css
 // A MULTI-WORD set name wraps onto two lines instead of running edge-to-edge
 // (owner screenshot 2026-08-12: "Claude Tools" on one line touched the rim at
 // both ends). Wrapping needs more vertical room for the extra line, so a
@@ -244,7 +247,7 @@ const WHEEL_ITEM_SIZE = 74;  // px — matches .wheel-item in style.css
 // clearance for two short words at the wheel's 12px font. See
 // tests/_audit_panels.py -> WHEEL_STAGE_JS, which measures this on the live
 // page rather than trusting the arithmetic above.
-const WHEEL_ITEM_SIZE_WRAP = 90;
+const WHEEL_ITEM_SIZE_WRAP = 86;
 // px an item's TEXT keeps clear of its own circle's rim, each side — reusing
 // WHEEL_EDGE's own value (8px keeps an item clear of the SCREEN edge; this is
 // the same idea one layer in, so the same number).
@@ -279,15 +282,60 @@ function wheelItemSize(cats) {
     ? WHEEL_ITEM_SIZE_WRAP : WHEEL_ITEM_SIZE;
 }
 
+// THE CIRCLES MUST NOT TOUCH (owner 2026-08-13, with his screenshot: he likes
+// the bigger circles, "but shrink them a few pixels so a little space is left
+// between them — not much, but some").
+//
+// The ring's radius was a flat 118 px that knew nothing about how many items
+// it was arranging or how big they were, so the spacing fell out by accident:
+// neighbouring centres sit 2·r·sin(π/n) apart, which at 8 items and 90 px
+// circles is 90.3 px — touching exactly — and at TEN items (task 181's
+// drop-out wheel raised the cap to 10) is 72.9 px, a 17 px OVERLAP. The
+// mini radial has always sized its radius from its own face and gap
+// (MINI_RADIUS above); the wheel simply never did.
+//
+// So the radius is DERIVED, exactly as the mini radial's is, and the shrink he
+// asked for is the last resort rather than the first move — the ladder this
+// project uses everywhere else (free space → reflow → smaller): open the ring
+// out until the gap fits, and only when the SCREEN will not allow that radius
+// do the circles give up pixels. Both sizes above lost 4 px as he asked, which
+// is what makes the ring's own gap affordable at 10 items on a phone.
+const WHEEL_GAP = 8;          // px of daylight between neighbouring circles
+const WHEEL_ITEM_MIN = 56;    // px — below this a two-line label cannot fit
+
 function wheelPoints(count, screen, size) {
-  const half = (size || WHEEL_ITEM_SIZE) / 2 + WHEEL_EDGE;
-  const r = Math.max(0, Math.min(WHEEL_RADIUS, Math.min(screen.width, screen.height) / 2 - half));
+  return wheelLayout(count, screen, size).points;
+}
+
+// Returns {radius, size, points} — `size` is what the circles must ACTUALLY be
+// after the ladder, which the caller writes into `--wheel-item-size`. Pure, so
+// tests/test_wheel_geometry.py can drive every count and screen by argument.
+function wheelLayout(count, screen, size) {
+  const n = Math.max(1, count);
+  let face = size || WHEEL_ITEM_SIZE;
+  // What the screen can afford: the outermost edge of a circle must stay
+  // WHEEL_EDGE inside the shorter side.
+  const room = (f) => Math.min(screen.width, screen.height) / 2 - f / 2 - WHEEL_EDGE;
+  // What the gap needs. One item has no neighbour, two sit opposite each
+  // other — sin(π/n) handles both without a special case.
+  const needed = (f) => (n < 2 ? 0 : (f + WHEEL_GAP) / (2 * Math.sin(Math.PI / n)));
+  let radius = Math.min(needed(face), Math.max(0, room(face)));
+  if (n >= 2 && radius < needed(face)) {
+    // The ring is already as wide as the screen allows and the circles still
+    // touch — now, and only now, they shrink. Solve for the face that fits
+    // this radius with the gap intact, then re-derive the radius from it
+    // (a smaller face also buys a little more room).
+    const fit = 2 * radius * Math.sin(Math.PI / n) - WHEEL_GAP;
+    face = Math.max(WHEEL_ITEM_MIN, Math.min(face, fit));
+    radius = Math.min(needed(face), Math.max(0, room(face)));
+  }
   const cx = screen.width / 2;
   const cy = screen.height / 2;
-  return Array.from({ length: count }, (_, i) => {
-    const angle = -Math.PI / 2 + (i * 2 * Math.PI) / Math.max(1, count);
-    return { x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle) };
+  const points = Array.from({ length: count }, (_, i) => {
+    const angle = -Math.PI / 2 + (i * 2 * Math.PI) / n;
+    return { x: cx + radius * Math.cos(angle), y: cy + radius * Math.sin(angle) };
   });
+  return { radius, size: face, points };
 }
 
 // `options` = [{icon, label, onPick}] — at most `MINI_MAX`, anchored beside
@@ -640,4 +688,52 @@ function showToast(text) {
     statusEl.classList.add("fade");
     toastFadeTimer = setTimeout(() => setStatus("connected", "Connected"), 450);
   }, 2500);
+}
+
+// WHICH side is open right now, so the ring can be re-laid out when the screen
+// changes shape under it. `null` = closed.
+let wheelSide = null;
+
+function setWheelSide(side) {
+  wheelSide = side;
+}
+
+// THE RING FOLLOWS THE SCREEN (owner report 2026-08-13, with his two
+// screenshots: with a set open he rotated the desktop from portrait to
+// landscape and the wheel slid half off the edge, "a little of it left
+// visible").
+//
+// The cause is in one word: ABSOLUTE. `wheelPoints` returns pixel coordinates
+// measured against the viewport of the moment, and `openWheel` wrote them into
+// each item's `left`/`top` once. Nothing recomputed them, so after a rotation
+// every circle was still sitting where the OLD screen's centre used to be —
+// and on a screen that swapped its axes, that centre is off to one side.
+//
+// So the layout is a function that can be RE-RUN, and it is re-run on the two
+// events that can change the viewport's shape while the ring stands open. Only
+// the positions and the face size are rewritten; the items themselves are left
+// alone, because rebuilding them would drop the press a finger already had on
+// one of them. `visualViewport` is included for the same reason the layout bar
+// and the renderer listen to it: on Android the soft keyboard and the system
+// bars move that viewport without ever firing a window resize.
+function layoutWheel() {
+  if (wheelSide === null) return;
+  const wheelEl = document.getElementById("wheel");
+  if (!wheelEl) return;
+  const cats = wheelCats(wheelSide);
+  const screen = { width: window.innerWidth, height: window.innerHeight };
+  const { size, points } = wheelLayout(cats.length, screen, wheelItemSize(cats));
+  wheelEl.style.setProperty("--wheel-item-size", `${size}px`);
+  const items = wheelEl.querySelectorAll(".wheel-item");
+  points.forEach((p, i) => {
+    if (!items[i]) return;
+    items[i].style.left = `${p.x}px`;
+    items[i].style.top = `${p.y}px`;
+  });
+}
+
+window.addEventListener("resize", layoutWheel);
+window.addEventListener("orientationchange", layoutWheel);
+if (window.visualViewport) {
+  window.visualViewport.addEventListener("resize", layoutWheel);
 }

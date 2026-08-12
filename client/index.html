@@ -283,6 +283,11 @@
        calls its showWindowOffer() — task 202. -->
   <script src="/static/window-offer.js"></script>
   <script src="/static/chrome.js"></script>
+  <!-- After chrome.js (wheelLayout/wheelItemSize/wheelLabelHtml) and after
+       controls.js (keepFocus/svg/renderGroup): the category wheel, split out
+       on 2026-08-13 when the rotation fix pushed controls.js past THE
+       STRUCTURE LAW's line ceiling. -->
+  <script src="/static/wheel.js"></script>
   <!-- Right after controls.js: it uses prefGet/prefSet and IN_APP from there,
        and it must run before anything paints a control. -->
   <script src="/static/theme.js"></script>
