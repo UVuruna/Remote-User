@@ -263,9 +263,35 @@ def check_the_server_still_feeds_the_anchor_and_centres_the_windows() -> None:
             "caller and gate imports it through window_manager")
 
 
+def check_the_reanchor_validates_the_base_rect_itself() -> None:
+    """Owner report 2026-08-12 (the aspect panel's bottom-cut picture):
+    viewBounds() reads baseRect, and the `layout_state` handler re-anchored
+    against a baseRect the current canvas size had never validated — only the
+    `config` path paired computeBaseRect() with the re-anchor, which is why a
+    lock/unlock drew the same state correctly. The pairing now lives INSIDE
+    resetViewHome(), where no caller can skip it; this check keeps it there."""
+    render = RENDER.read_text(encoding="utf-8")
+    m = re.search(r"function resetViewHome\(\)\s*{([^}]*)}", render)
+    if not m:
+        raise AssertionError("render.js lost resetViewHome()")
+    body = m.group(1)
+    if "computeBaseRect()" not in body:
+        raise AssertionError(
+            "resetViewHome() no longer re-derives baseRect first — a "
+            "layout_state arriving without a config re-anchors against a "
+            "stale canvas and the letterboxed picture can clip again "
+            "(owner report 2026-08-12)")
+    if body.index("computeBaseRect()") > body.index("computeViewHome()"):
+        raise AssertionError(
+            "resetViewHome() derives the home view BEFORE validating "
+            "baseRect — the order is the whole fix")
+
+
 CHECKS = [
     ("pos 0 is flush to the near edge (his gesture: app at the TOP)",
      check_pos_zero_is_flush_to_the_near_edge),
+    ("the re-anchor validates baseRect itself (no caller can skip it)",
+     check_the_reanchor_validates_the_base_rect_itself),
     ("pos 1 is flush to the far edge", check_pos_one_is_flush_to_the_far_edge),
     ("pos 0.5 is centred", check_pos_half_is_centred),
     ("the pinned axis never moves and the size never changes",

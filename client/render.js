@@ -63,7 +63,16 @@ function computeViewHome() {
 }
 
 // Snap all the way back out (layout switch, monitor switch, stream reset).
+// Re-derives baseRect FIRST (owner report 2026-08-12, the aspect panel's
+// bottom-cut picture): viewBounds() reads baseRect, and the `layout_state`
+// handler used to re-anchor against a baseRect the current canvas size had
+// never validated — invisible centred on a near-full region, but a narrower
+// aspect anchored off-centre landed its bottom edge past the letterbox. Only
+// a lock/unlock drew it right, because `config` is the one path that paired
+// computeBaseRect() with the re-anchor. Self-sufficient here, no caller can
+// skip the pairing again; the re-derivation is pure and idempotent.
 function resetViewHome() {
+  computeBaseRect();
   computeViewHome();
   view = { ...viewHome };
   redraw();
@@ -585,6 +594,11 @@ function reportLiveDrift(behind) {
     `[live] behind=${behind.toFixed(2)}s peak=${liveDriftMax.toFixed(2)}s ` +
     `low=${liveDriftMin.toFixed(2)}s jumps=${liveSeeks} ` +
     `starves=${liveStarves} in ${Math.round((now - liveReportAt) / 1000)}s` });
+  // The decoder backstop reads the same window this report just closed
+  // (owner report 2026-08-12): windows of jumps=10 in a row are a decoder
+  // that cannot drink what it accepted on paper — quality.js lowers this
+  // session's fps ceiling and says so, instead of jumping forever.
+  noteDecodeStruggle(liveSeeks);
   liveReportAt = now;
   liveSeeks = 0;
   liveStarves = 0;
