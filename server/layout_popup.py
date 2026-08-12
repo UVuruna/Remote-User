@@ -609,9 +609,15 @@ def scan(layouts, conn: dict) -> None:
     if not _double_clicked(conn):
         return
     members: set[int] = set()
-    for lay in getattr(layouts, "layouts", []):
-        members.update(lay.members)
-        members.update(getattr(lay, "adopted", ()))
+    for other in getattr(layouts, "layouts", []):
+        members.update(other.members)
+        members.update(getattr(other, "adopted", ()))
+    # The layout the phone is SHOWING — the only one whose work can claim a
+    # window out from under this pass (see the one-window-one-question rule
+    # below). Named here rather than in the loop above, because a loop
+    # variable that leaks its last value is how a rule about the FOCUSED
+    # layout would quietly become a rule about the last one in the list.
+    focused = _focused(layouts, conn)
     for win in wm.list_windows():
         hwnd = win["hwnd"]
         if hwnd in seen:
@@ -620,6 +626,28 @@ def scan(layouts, conn: dict) -> None:
         if wm.user32.GetWindow(hwnd, GW_OWNER):
             continue            # a dialog of something else, never a member
         if hwnd in members or hwnd in conn.get("birth_asked", ()):
+            continue
+        # ONE WINDOW, ONE QUESTION (owner report 2026-08-12, and his own log
+        # dated it to the millisecond). This pass and the sweep below are two
+        # features that never knew about each other, and at 20:29:58 they both
+        # fired on the SAME window inside one tick:
+        #
+        #   New window python.exe "Controls …" offered as a layout (task 185)
+        #   Popup     python.exe "Controls …" offered to the phone as 570a0a-3
+        #
+        # The phone has ONE chip strip and ONE live offer id, so the second
+        # message silently replaced the first — and four more birth chips
+        # followed within 400 ms. His single tap therefore answered a question
+        # he had never read: the "Show in layout" one, whose yes runs
+        # `_contain` and PLACES the window into the layout's region. That is
+        # his report exactly — "it made the dimensions as if for the phone,
+        # but there is no layout".
+        #
+        # So a window the focused layout can claim is the SWEEP's question,
+        # never this one. A new layout from a window that already belongs to
+        # the layout's own work was never a sensible offer anyway.
+        if focused is not None and _attribute(focused, hwnd,
+                                              _owner_root(hwnd), conn):
             continue
         _offer_birth(conn, win)
 

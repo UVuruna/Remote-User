@@ -67,8 +67,38 @@ function hideWindowOffer() {
 // The server names the window (title + process). The title is what he
 // recognises, so it gets an element of its own that WRAPS rather than being
 // cut — a title he cannot read makes the two buttons a guess.
-function showWindowOffer(msg) {
+// A CHIP MAY NOT CHANGE ITS QUESTION UNDER HIS FINGER (owner report
+// 2026-08-12, and his own server log dated it: FIVE offers arrived in 400 ms,
+// each one silently replacing the last, so the tap he made answered a question
+// he had never read — and that question's yes MOVED a window). The server no
+// longer asks two things about one window, but several windows can still open
+// at once, and one strip can only ask about one of them.
+//
+// So a chip that has been standing for less than this is not replaced: the
+// newcomer WAITS, and goes up when the current one is answered or fades. A
+// queue and not a second strip, because a second floating prompt is a second
+// thing to notice and a second thing in the way of the controls.
+const WIN_OFFER_SETTLE_MS = 2500;
+
+let winOfferShownAt = 0;
+const winOfferQueue = [];
+
+function nextWindowOffer() {
+  const msg = winOfferQueue.shift();
+  if (msg) showWindowOffer(msg, true);
+}
+
+function showWindowOffer(msg, dequeued) {
   if (!msg || !msg.id) return;
+  if (!dequeued && winOfferId && !winOffer.hidden
+      && Date.now() - winOfferShownAt < WIN_OFFER_SETTLE_MS) {
+    // Bounded: he cannot be asked about a hundred windows, and an offer that
+    // waited past the server's own TTL would be a question about a window he
+    // walked past long ago.
+    if (winOfferQueue.length < 4) winOfferQueue.push(msg);
+    return;
+  }
+  winOfferShownAt = Date.now();
   winOfferId = msg.id;
   // An `act` this page does not know falls back to the one that was here
   // first — a chip whose buttons say nothing is worse than a chip that asks
@@ -85,8 +115,12 @@ function showWindowOffer(msg) {
   winOfferText.title = name;
   winOffer.hidden = false;
   clearTimeout(winOfferTimer);
-  // No answer is the desktop answer — the chip simply goes.
-  winOfferTimer = setTimeout(hideWindowOffer, WINDOW_OFFER_MS);
+  // No answer is the desktop answer — the chip simply goes, and whatever was
+  // waiting behind it gets its turn.
+  winOfferTimer = setTimeout(() => {
+    hideWindowOffer();
+    nextWindowOffer();
+  }, WINDOW_OFFER_MS);
 }
 
 async function answerWindowOffer(act) {
@@ -117,6 +151,7 @@ async function answerWindowOffer(act) {
   } catch (err) {
     showToast(`Could not answer: ${err.message}`);
   }
+  nextWindowOffer();
 }
 
 winOfferIn.addEventListener("click", () => answerWindowOffer("layout"));

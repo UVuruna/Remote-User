@@ -77,3 +77,47 @@ nothing else.
    now wrapped in `#window-offer-actions`, a CSS `grid-template-columns: 1fr
    1fr` — width by construction, independent of either label's length, so no
    future wording of either variant can land unequal again.
+
+## The chip may not change its question under his finger (2026-08-12)
+
+His report, with a screenshot: he clicked around on the PC desktop, the phone
+offered *"a layout with it?"*, he tapped yes — and the window was **resized to
+the phone's aspect while no layout was created**.
+
+**His own server log settles it**, and the creation path was never involved —
+`LayoutRegistry.create` did not run at all after that tap:
+
+```
+20:29:58,356  New window python.exe "Controls …" offered as a layout (185)
+20:29:58,373  Popup     python.exe "Controls …" offered as 570a0a-3 (240)
+20:29:58,403  New window python.exe "Record a shortcut" offered … (185)
+20:29:58,569  New window python.exe "Wheel order" offered … (185)
+20:29:58,752  New window python.exe "Traffic …" offered … (185)
+20:30:03,565  POST /window_offer  200        <- his ONE tap
+```
+
+Two defects, and it took both:
+
+1. **One window, two questions.** [Layout Popup](../../server/__about/layout_popup.md)'s
+   `scan` (task 185) and its popup sweep (202/240) are two features that never
+   knew about each other, and they fired on the same window in one tick. The
+   server now refuses that: a window the FOCUSED layout can claim is the
+   sweep's question — "show it in this layout?" — never the birth question.
+2. **One chip slot.** This module had a single strip and a single live offer
+   id, so every arriving `window_offer` silently replaced the last. Four
+   questions vanished and the one his finger landed on was not the one he had
+   read — and its yes runs `_contain`, which PLACES the window into the
+   layout's region. Window resized to the phone's shape, no layout. His
+   sentence exactly.
+
+A chip standing for less than `WIN_OFFER_SETTLE_MS` is therefore **not
+replaced**: the newcomer waits in a short bounded queue and goes up when the
+current one is answered or fades. A queue and not a second strip, because a
+second floating prompt is a second thing to notice and a second thing in the
+way of the controls.
+
+Gate: `tests/test_window_offer_queue.py`, fail-closed in `build.py` (0ay/6),
+four checks each proven by planting its own defect — the server plant
+reproduces his log line verbatim (`one window, 2 chips: ['layout_new',
+'layout']`). The phone half runs this REAL module in node against a DOM shim,
+since a rule about *which question a tap answers* cannot be proven in Python.

@@ -644,3 +644,15 @@ def input_gate(step, run) -> None:
     step("0ax/6  LOST WINDOW GATE — an unreachable window always has a way "
          "back, whoever opened it (tests/test_lost_windows.py)")
     run([sys.executable, str(PROJECT_DIR / "tests" / "test_lost_windows.py")])
+
+    # AND ONE WINDOW ASKS ONE QUESTION (his report 2026-08-12: "make a layout
+    # with it" resized the window to the phone's shape and created no layout).
+    # His own log dated it: `scan` (185) and the popup sweep (202/240) fired on
+    # the SAME window inside one tick, five chips landed in 400 ms, and the
+    # phone's single strip replaced each with the next — so his one tap
+    # answered the sweep's question, whose yes runs `_contain` and PLACES the
+    # window. Both halves gated; the phone half runs the REAL
+    # client/window-offer.js in node.
+    step("0ay/6  WINDOW OFFER GATE — one window asks one question, and the "
+         "chip waits for his tap (tests/test_window_offer_queue.py)")
+    run([sys.executable, str(PROJECT_DIR / "tests" / "test_window_offer_queue.py")])
