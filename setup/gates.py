@@ -630,3 +630,17 @@ def input_gate(step, run) -> None:
     step("0aw/6  GUI NON-BLOCKING GATE — the pairing probe and the quit are "
          "off the window's thread (tests/test_gui_nonblocking.py)")
     run([sys.executable, str(PROJECT_DIR / "tests" / "test_gui_nonblocking.py")])
+
+    # AND THERE IS ALWAYS A WAY BACK (owner report 2026-08-12, his FIFTH on
+    # one failure). A window that opened while his phone was LOCKED stands off
+    # every screen and no phone can ever show it again: there is no taskbar
+    # there, and until this round nothing in this codebase could move a window
+    # it had not itself placed. Four earlier rounds could not even SEE the
+    # case, because every rule in layout_popup.py is built on the baseline
+    # taken when the phone connects — and a window born while nothing was
+    # connected is filed by that baseline as already-known. server/
+    # lost_windows.py therefore asks GEOMETRY (can he reach it) instead of
+    # HISTORY (who opened it), which needs no connection to have existed.
+    step("0ax/6  LOST WINDOW GATE — an unreachable window always has a way "
+         "back, whoever opened it (tests/test_lost_windows.py)")
+    run([sys.executable, str(PROJECT_DIR / "tests" / "test_lost_windows.py")])

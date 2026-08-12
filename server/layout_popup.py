@@ -116,6 +116,7 @@ import time
 from fastapi import Request
 from fastapi.responses import JSONResponse
 
+import lost_windows
 import notify
 import window_manager as wm
 from grids import PLACE_TOLERANCE_PX
@@ -524,6 +525,77 @@ def _offer_birth(conn: dict, win: dict) -> None:
                 _describe(hwnd))
 
 
+# ═══════════════════ AND THE WINDOW NOBODY CAN REACH ═══════════════════
+# Owner report 2026-08-12, the FIFTH on one failure: a window that opened while
+# his phone was LOCKED sits off every screen and can never be shown again.
+#
+# Everything above this line asks WHO opened a window, and every one of those
+# rules is built on `baseline` — which is exactly why none of them could ever
+# see his case: a window born while no phone was connected is filed as KNOWN by
+# the next connection's baseline and is never new again. See
+# [Lost Windows](lost_windows.py) for the whole diagnosis.
+#
+# So this pass asks a different question — CAN HE REACH IT — which is geometry,
+# measured now, and needs no history at all. It therefore answers for a window
+# opened by an agent, by Windows, or hours before the phone ever connected.
+#
+# It rides the SAME chip as everything else here (one strip of screen, one
+# dismissal rule) and, unlike every other pass in this module, it runs at the
+# DESKTOP as well as inside a layout: a lost window is lost either way.
+LOST_EVERY_S = 4.0
+
+
+def _offer_lost(conn: dict, win: dict) -> None:
+    """Queue the "bring it back?" chip for a window nobody can reach."""
+    global _NEXT_ID
+    _expire()
+    _NEXT_ID += 1
+    hwnd = win["hwnd"]
+    key = f"l{hwnd:x}-{_NEXT_ID}"
+    _OFFERS[key] = {"hwnd": hwnd, "lay": None, "conn": conn, "lost": True,
+                    "at": time.monotonic()}
+    conn.setdefault("lost_asked", set()).add(hwnd)
+    conn.setdefault("popup_send", []).append({
+        "type": "window_offer", "id": key, "act": "rescue",
+        "title": win.get("title", ""), "process": win.get("process", ""),
+        "hwnd": hwnd, "icon": win.get("icon")})
+    logger.warning("Window %s is off every screen (%s%s) — rescue offered",
+                   _describe(hwnd), win.get("rect"),
+                   ", minimized" if win.get("minimized") else "")
+
+
+def sweep_lost(layouts, conn: dict) -> None:
+    """One pass over the unreachable. Blocking Win32 — the watcher runs it on
+    a worker thread, on its own slow cadence.
+
+    ONE CHIP PER WINDOW PER CONNECTION (`lost_asked`), and ignoring it is an
+    answer — but a DELIBERATE decline is remembered separately (`lost_left`),
+    because the two mean different things: an unanswered chip may simply have
+    been missed while he was reading the PC screen, and the next connection
+    asking again is the behaviour that makes this a guarantee rather than a
+    lottery. A window he actually said "leave it" about is never raised again
+    on this connection."""
+    if conn.get("away") or conn.get("left"):
+        return
+    now = time.monotonic()
+    if now - conn.get("lost_swept", 0.0) < LOST_EVERY_S:
+        return
+    conn["lost_swept"] = now
+    # A layout's own windows are where the layout put them and the layout can
+    # move them; offering a rescue there would fight it.
+    held: set[int] = set()
+    for lay in getattr(layouts, "layouts", []) if layouts is not None else []:
+        held.update(lay.members)
+        held.update(getattr(lay, "adopted", ()))
+    asked = conn.get("lost_asked", ())
+    left = conn.get("lost_left", ())
+    for win in lost_windows.lost(held):
+        hwnd = win["hwnd"]
+        if hwnd in asked or hwnd in left:
+            continue
+        _offer_lost(conn, win)
+
+
 def scan(layouts, conn: dict) -> None:
     """One pass: did a window HE opened appear? Blocking Win32 — the watcher
     runs it on a worker thread.
@@ -563,6 +635,27 @@ def pick(offer_id: str, act: str) -> bool:
     if offer is None:
         return False
     lay, hwnd, conn = offer["lay"], offer["hwnd"], offer["conn"]
+    if offer.get("lost"):
+        # THE RESCUE (owner report 2026-08-12). `act` is "rescue" or anything
+        # else, which is "leave it" — the safe answer, so an act we do not
+        # recognise lands on the one that moves nothing, exactly as below.
+        conn.get("lost_asked", set()).discard(hwnd)
+        if act != "rescue":
+            conn.setdefault("lost_left", set()).add(hwnd)
+            logger.info("Lost window %s left where it is — his choice",
+                        _describe(hwnd))
+            return True
+        # THE MONITOR IS ASKED FOR, NEVER REMEMBERED (constraint 13): `mon_rect`
+        # is a callable the web layer put here, so a monitor switch between the
+        # chip going out and his tap cannot land the rescue on a screen he
+        # stopped watching.
+        getter = conn.get("mon_rect")
+        mon = getter() if callable(getter) else None
+        # Either way the window leaves `lost_asked` (above) and NOT
+        # `lost_left`: a rescue that failed is still a window he cannot reach,
+        # so the next sweep asks again — and a rescue that worked simply is not
+        # lost any more, which the sweep measures rather than remembers.
+        return lost_windows.rescue(hwnd, mon)
     if offer.get("birth"):
         # Task 185's chip. NOTHING on the PC moves either way — a yes opens the
         # creation panel on the phone, seeded with this window, and every step

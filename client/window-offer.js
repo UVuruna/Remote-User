@@ -41,6 +41,14 @@ const WIN_OFFER_WORDS = {
             yes: "Show in layout", no: "Leave on desktop" },
   layout_new: { text: (n) => `${n} opened — a layout with it?`,
                 yes: "Make a layout", no: "No" },
+  // THE THIRD QUESTION, and the one that is a way OUT rather than a way in
+  // (owner report 2026-08-12, his fifth on one failure): a window is off
+  // every screen and there is no taskbar on a phone, so without this chip
+  // there is no path to it from here at all. The words say WHERE it is and
+  // not what opened it — the PC does not know what opened it, and pretending
+  // otherwise is what four earlier rounds did.
+  rescue: { text: (n) => `${n} is off the screen`,
+            yes: "Bring it back", no: "Leave it" },
 };
 
 // How long the chip stands. Long enough to notice while he is reading the PC
@@ -94,6 +102,11 @@ async function answerWindowOffer(act) {
   if (act === "layout" && winOfferAct === "layout_new") {
     startFromWindow(win);
     act = "layout_new";
+  } else if (act === "layout" && winOfferAct === "rescue") {
+    // The yes of a rescue chip is the rescue itself — nothing opens here, the
+    // PC moves the window. The server treats any act it does not recognise as
+    // "leave it", so the word has to be the exact one it is waiting for.
+    act = "rescue";
   }
   try {
     await fetch(`/window_offer?token=${encodeURIComponent(token)}`, {

@@ -376,7 +376,7 @@ def create_app(stream, hub: FrameHub | None, injector: InputInjector, token: str
             # only when a key arrives: dictation delivers at the END of a
             # round, so a thief that strikes mid-sentence destroys the whole
             # utterance instead of misplacing it.
-            tasks.append(asyncio.create_task(focus_guard.watch(layouts, conn)))
+            tasks.append(asyncio.create_task(focus_guard.watch(layouts, conn, injector)))
             # THE CLIPBOARD LIVES ON BOTH DEVICES (task 182): a copy made AT
             # THE PC while this phone is watching reaches it too. One task
             # per connection, same family as the two lines above.

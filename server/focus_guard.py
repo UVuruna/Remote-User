@@ -452,7 +452,7 @@ def _defending(conn: dict) -> bool:
             and not conn.get("away") and not conn.get("left"))
 
 
-async def watch(layouts, conn: dict) -> None:
+async def watch(layouts, conn: dict, injector=None) -> None:
     """While the phone is showing a layout, NOTHING may take the keyboard out
     of it (owner decree 2026-08-06). One task per connection, cancelled with
     it.
@@ -496,6 +496,12 @@ async def watch(layouts, conn: dict) -> None:
     # was written about. Before this line has run nothing is new and nothing
     # is adopted — the fence behaves exactly as it did.
     await asyncio.to_thread(layout_popup.baseline, conn)
+    # WHICH MONITOR THE PHONE IS WATCHING, as a CALLABLE and never a value:
+    # a note of it is stale the instant he switches monitors, and rescuing an
+    # off-screen window onto a screen he stopped watching would be the same
+    # bug wearing a different hat (constraint 13; server/lost_windows.py).
+    if injector is not None:
+        conn["mon_rect"] = lambda: injector.monitor_rect
     hooked = await asyncio.to_thread(focus_hook.listen, _foreground_changed)
     if not hooked:
         logger.warning("No foreground hook — the layout is defended by the "
@@ -512,6 +518,15 @@ async def watch(layouts, conn: dict) -> None:
             # whether there is anything to ask (server/layout_popup.py).
             if not conn.get("away") and not conn.get("left"):
                 await asyncio.to_thread(layout_popup.scan, layouts, conn)
+                # IS THERE A WINDOW HE CANNOT REACH AT ALL? (owner report
+                # 2026-08-12, his fifth on one bug.) Beside `scan` and not
+                # inside the `_defending` gate below, for the same reason and
+                # a stronger one: a window that is off every screen is lost
+                # at the desktop exactly as it is inside a layout, and the
+                # case he reported HAPPENED while nothing was connected —
+                # which is why no rule built on the baseline could see it
+                # (server/lost_windows.py).
+                await asyncio.to_thread(layout_popup.sweep_lost, layouts, conn)
                 await layout_popup.flush_offers(conn)
             if not _defending(conn):
                 continue

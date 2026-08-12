@@ -323,6 +323,13 @@ ALGORITHMIC = {
     # named limits (whose window is this?) plus a measured containment
     # decision (does it fit the region, or must it go full screen).
     "server/layout_popup.py",
+    # New 2026-08-13 (owner report 2026-08-12 — the FIFTH on one failure: a
+    # window that opened while his phone was locked stands off every screen
+    # and can never be shown again). Algorithmic: a REACHABILITY test that is
+    # deliberately about a title bar rather than about visible pixels, a
+    # minimized window judged by where it would restore to, and the first
+    # code here that moves a window it did not place.
+    "server/lost_windows.py",
     # New 2026-08-08 (owner report 2026-08-07, screenshots again the next day
     # — the phone's keyboard covers the row he is typing into). Algorithmic:
     # a fallback chain across two Windows APIs, a duty-cycled throttle, a hold
