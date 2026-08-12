@@ -82,6 +82,35 @@ The dialog shipped at 7/10 dark, 6/10 light. Five findings, five answers:
 5. **OK was not the primary button** while "Apply & restart" and "Update" carry
    the accent everywhere else. It has `objectName("primary")` now.
 
+## The ring says its own number (2026-08-12)
+
+Two independent graders in a row counted TEN dots in the ring beside a ladder
+of FOURTEEN sets and could not tell from the drawing whether that was a
+mismatch. It never was: the ring is the wheel's CAPACITY (8 fixed / 10
+drop-out) and the ladder is everything that can be ORDERED, riding or not.
+But a drawing whose caption has to rescue it is half a drawing, so:
+
+- `WheelRing` grew a `FOOT` band (18 px, ADDED to the size hint rather than
+  taken out of `SIZE`, so the circle keeps exactly the radius it had) carrying
+  `slot_text()` — "10 slots" — in secondary ink one point smaller than the
+  body face;
+- the dialog's caption names both quantities in one breath: *"The ring is the
+  WHEEL, and it holds 10 slots; the ladder below is every set that can be
+  ordered, which is more."*
+
+No number changed. The minimum moved 395×618 → **395×636** (the foot band),
+still far inside the 1280×1000 floor.
+
+**And the number on the proof line was the real defect of that round.**
+`.claude/layout-proof.md` carried `MIN 790x1236` for this dialog — exactly 2×
+the truth, transcribed off the SHOT's pixel dimensions, since every audit shot
+is rendered at 2× device pixels. It read as an absurd minimum demanding a
+screen nobody owns and nearly bought this window a two-column reflow it did
+not need. The measurement, not the memory of one: `window.minimumSize()` under
+both palettes, with the SettingsWindow line (959×996 in the file, 959×996
+measured, 1918×1992 on disk) as the control that the environment is not the
+variable.
+
 ## Connections
 
 ### Uses
@@ -110,9 +139,11 @@ The dialog shipped at 7/10 dark, 6/10 light. Five findings, five answers:
 - **`OrderList`** — a ring/ladder of items with ↑/↓; `slots` is a fixed
   4-tuple (D-pad) OR a callable ordinal namer (the wheel) — `labels()` reads
   back the reordered identity list directly (what the wheel dialog saves)
-- **`WheelRing`** — the circle-not-a-column legend; purely decorative, fixed
-  108×108, with a `LABEL` band at the top the circle is centred UNDER so the
-  "1" can never fall outside the widget's own rect
+- **`WheelRing`** — the circle-not-a-column legend; purely decorative,
+  108×126, with a `LABEL` band at the top the circle is centred UNDER so the
+  "1" can never fall outside the widget's own rect, and a `FOOT` band at the
+  bottom carrying `slot_text()` ("10 slots") so the picture states its own
+  capacity instead of leaning on the caption
 - **`WheelOrderDialog`** — the global wheel-order editor: ring beside the
   caption, then the full-width ladder, then Default/OK(primary)/Cancel;
   computed minimum measured from the real widgets

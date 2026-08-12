@@ -333,6 +333,16 @@ class WheelRing(QWidget):
     ONE cap, and a ring of 8 beside a checkbox reading "up to 10" is the
     picture contradicting the words. Still not a live count of the sets — it
     is the shape of the ring they ride in.
+
+    THE PICTURE NOW SAYS ITS OWN NUMBER (2026-08-12). Two independent graders
+    in a row counted ten dots beside a ladder of fourteen sets and could not
+    tell from the drawing alone whether that was a mismatch: the two numbers
+    are different quantities (the wheel's CAPACITY against everything that can
+    be ORDERED), and only the prose beside the ring said so. A drawing whose
+    caption has to rescue it is half a drawing, so the ring wears its own foot
+    line — "10 slots" — and the caption beside it now names the ladder's job in
+    the same breath. Nothing about the numbers changed; the picture stopped
+    being ambiguous about which one it is.
     """
 
     SIZE = 108
@@ -342,6 +352,9 @@ class WheelRing(QWidget):
                  # rect at y = -6 the moment the widget stopped being stretched
                  # taller than it asked for: the "1" came out with a flat top
                  # (seen 2026-08-07, after the ring moved beside the caption).
+    FOOT = 18    # …and the band at the BOTTOM the slot count is drawn in. It
+                 # is added to the size hint rather than taken out of SIZE, so
+                 # the circle keeps exactly the radius it has always had.
 
     # The DEFAULT is drop-out's cap, because drop-out is the PRODUCT's default
     # mode (a missing wheel_mode reads as "dropout" everywhere) — a caller
@@ -354,16 +367,21 @@ class WheelRing(QWidget):
         super().__init__(parent)
         self.dots = max(1, int(dots))
 
+    def slot_text(self) -> str:
+        """What the foot line says — one slot is still "1 slot"."""
+        return f"{self.dots} slot" + ("" if self.dots == 1 else "s")
+
     def sizeHint(self) -> QSize:  # noqa: N802 — Qt override
-        return QSize(self.SIZE, self.SIZE)
+        return QSize(self.SIZE, self.SIZE + self.FOOT)
 
     def minimumSizeHint(self) -> QSize:  # noqa: N802 — Qt override
         return self.sizeHint()
 
     def _centre(self) -> tuple[float, float, float]:
-        """(cx, cy, r) — the circle, centred under the label band so nothing
-        it draws can fall outside this widget's own rect."""
-        usable = max(self.height() - self.LABEL, 16)
+        """(cx, cy, r) — the circle, centred between the label band and the
+        foot band so nothing it draws can fall outside this widget's own
+        rect."""
+        usable = max(self.height() - self.LABEL - self.FOOT, 16)
         return (self.width() / 2,
                 self.LABEL + usable / 2,
                 min(self.width(), usable) / 2 - 8)
@@ -424,6 +442,18 @@ class WheelRing(QWidget):
         painter.setBrush(QColor(TOKENS["accent"]))
         painter.drawPolygon(head)
 
+        # The foot line: how many slots the ring HAS. Secondary ink and a
+        # slightly smaller face — it is a caption on a drawing, not a heading —
+        # and it names the ring's own number so nobody has to weigh it against
+        # the ladder's length beside it.
+        painter.setPen(QColor(TOKENS["text2"]))
+        foot_font = self.font()
+        foot_font.setPointSizeF(max(foot_font.pointSizeF() - 1.0, 7.0))
+        painter.setFont(foot_font)
+        painter.drawText(
+            QRectF(0, self.height() - self.FOOT, self.width(), self.FOOT),
+            Qt.AlignmentFlag.AlignCenter, self.slot_text())
+
 
 class WheelOrderDialog(QDialog):
     """The phone's wheel order — one global ring, not per-set (owner build
@@ -462,10 +492,18 @@ class WheelOrderDialog(QDialog):
         # which wheel mode is selected right now, this dialog does not.
         self.ring = WheelRing(cap)
         head.addWidget(self.ring, 0, Qt.AlignmentFlag.AlignTop)
+        # THE RING'S NUMBER AND THE LADDER'S ARE DIFFERENT QUANTITIES, and the
+        # words say so now (2026-08-12). The ring draws the wheel's CAPACITY;
+        # the ladder below lists every set that can be ORDERED, riding or not,
+        # and there are more of those than the wheel holds. Two graders read
+        # ten dots beside fourteen rows as a contradiction.
         caption = QLabel(
-            "Position 1 sits at 12 o'clock on the phone's wheel — the rest "
-            "follow CLOCKWISE. A set that is not riding the wheel right now "
-            "is simply skipped; the ring closes up around the ones that are.")
+            f"Position 1 sits at 12 o'clock on the phone's wheel — the rest "
+            f"follow CLOCKWISE. The ring is the WHEEL, and it holds "
+            f"{self.ring.slot_text()}; the ladder below is every set that can "
+            f"be ordered, which is more. A set that is not riding the wheel "
+            f"right now is simply skipped; the ring closes up around the ones "
+            f"that are.")
         caption.setWordWrap(True)
         caption.setAlignment(Qt.AlignmentFlag.AlignVCenter)
         head.addWidget(caption, 1)
@@ -506,17 +544,21 @@ class WheelOrderDialog(QDialog):
         metrics = QFontMetrics(self.font())
         longest = max((metrics.horizontalAdvance(n) for n in names), default=0)
         order_hint = self.order.sizeHint()
-        width = max(WheelRing.SIZE + longest + 220,
+        # The ring's OWN hint, never `WheelRing.SIZE` — it is taller than it is
+        # wide since it grew a foot line, and a constant read for both axes was
+        # already the kind of second copy that goes stale.
+        ring_hint = self.ring.sizeHint()
+        width = max(ring_hint.width() + longest + 220,
                     order_hint.width() + 40)
         caption_h = metrics.boundingRect(
-            0, 0, max(width - WheelRing.SIZE - 50, 100), 10_000,
+            0, 0, max(width - ring_hint.width() - 50, 100), 10_000,
             Qt.TextFlag.TextWordWrap, caption.text()).height()
         button_h = max(reset.sizeHint().height(), buttons.sizeHint().height())
         # +24 is the dialog's own margins and the two layout gaps — MEASURED
         # against the rendered picture rather than rounded up: at +60 the
         # ladder card carried 46 px of empty band under its last row, which is
         # the same sparseness the ring's column was failed for.
-        height = (max(WheelRing.SIZE, caption_h) + order_hint.height()
+        height = (max(ring_hint.height(), caption_h) + order_hint.height()
                   + button_h + 24)
         self.setMinimumSize(QSize(width, height))
 

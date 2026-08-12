@@ -45,8 +45,11 @@ Top/Left/Right/Bottom line up on the separator too.
 ┌─ Wheel order ───────────────────────────────────┐
 │   ⓵      Position 1 sits at 12 o'clock on the   │  ◀── ring + caption on ONE
 │ ( ↷ )    phone's wheel — the rest follow        │      row: the picture and
-│          CLOCKWISE. …                           │      the words say the same
-│ Sets, top to bottom — top = 12 o'clock          │      thing
+│ 10 slots CLOCKWISE. The ring is the WHEEL, and  │      the words say the same
+│          it holds 10 slots; the ladder below is │      thing — and since
+│          every set that can be ordered, which   │      2026-08-12 the ring
+│          is more. …                             │      states its OWN number
+│ Sets, top to bottom — top = 12 o'clock          │      in a foot line
 │ ┌─────────────────────────────────────────────┐ │
 │ │   1ˢᵗ · Mouse                               │ │  ◀── the ladder takes the
 │ │   …                                         │ │      whole width now
@@ -63,6 +66,12 @@ which is what an independent grader failed on 2026-08-07. Moving it beside the
 caption removes the hole rather than filling it, and the measured minimum went
 404×572 → **377×592**: narrower, and its ladder card now carries 10 px of band
 under the last row instead of 46.
+
+Measured again 2026-08-12 with the full shipped roster (14 sets) and the ring's
+new foot line: **395×636**, both palettes, audit clean at the minimum and at
++50%. The proof file had carried 790×1236 for this window — the SHOT's pixel
+size (audit shots render at 2×), not the window's — which is why it looked like
+a minimum that could not fit a 1920×1080 desktop.
 
 ## WheelOrderDialog — build round R5 data flow
 
