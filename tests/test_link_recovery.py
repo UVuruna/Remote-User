@@ -185,7 +185,10 @@ def install_fakes() -> None:
     config_api.pairing.get_tailscale_ip = lambda: None
     # The focus guard polls the real foreground every 0.25 s. Nothing here is
     # about focus, and this test may never touch a window on the owner's PC.
-    async def _no_watch(layouts, conn):
+    # `*_` so a new argument on the real `watch` (the injector joined it on
+    # 2026-08-13, for the off-screen-window rescue's monitor) cannot break a
+    # fake that does not care what it is handed.
+    async def _no_watch(layouts, conn, *_):
         await asyncio.Event().wait()
     focus_guard.watch = _no_watch
 

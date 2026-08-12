@@ -340,6 +340,13 @@ LAYBAR_CLOSE_JS = (
 # ONE frame two ways for two simulated devices, which is the claim a screenshot
 # could never make anyway.
 APPEARANCE_STAGE_JS = "openAppearancePanel()"
+
+# The chip's WORST case for width: the rescue words plus a real, long window
+# title — the sentence he actually has to read before deciding whether a
+# window he cannot see should be moved.
+WIN_OFFER_STAGE_JS = (
+    "showWindowOffer({id:'audit', act:'rescue', hwnd:1, process:'chrome.exe',"
+    " title:'Plan Android i desktop aplikacije - Google Chrome'})")
 APPEARANCE_CLOSE_JS = "closeAppearancePanel()"
 
 # THE LOADING OVERLAY HAD NEVER BEEN PHOTOGRAPHED (2026-08-12). It is the
@@ -462,6 +469,13 @@ PANELS = (
     # an answer, and the card has exactly one state.
     ("Phone card", "openPhonePanel()",
      "closePhonePanel()", "#phone-panel .sets-card"),
+    # ── THE WINDOW-OFFER CHIP (tasks 185/202/240, and the rescue of 2026-08-13)
+    # NEVER PHOTOGRAPHED in this project's life until now — the same gap the
+    # loading overlay had, and staging that one immediately found two defects
+    # that had shipped all along. Staged in its LONGEST state: the rescue words
+    # over a real window title, which is the strip's worst case for width.
+    ("Window offer chip, rescue", WIN_OFFER_STAGE_JS,
+     "hideWindowOffer()", "#window-offer"),
     ("Loading full screen", LOADING_FULL_JS,
      LOADING_CLOSE_JS, "#lay-loading"),
     ("Loading cube only", LOADING_CUBE_JS,
