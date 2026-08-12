@@ -496,29 +496,23 @@ body.wheel-open::before {
 /* An option IS a `.ctl` — same face, same icon, same label (see chrome.js).
    Only its POSITION is this rule's business; every look, every theme and every
    fill it wears comes from the `.ctl` rules above, so an option can never drift
-   from the buttons it stands beside. */
+   from the buttons it stands beside.
+
+   THE FACE IS THE PARENT'S OWN SQUARE (owner report 2026-08-12, with two
+   screenshots of his own tablet): "their DIMENSIONS must be THE SAME AS THE
+   PARENT, i.e. SQUARE". Between 2026-08-11 and this date the face widened to
+   74px to fit "From a list" / "Tap a window" without clipping — but those
+   two-line labels are gone with the centered-ring source chooser (2026-08-12
+   supersedes both), and every label left on a fan is one short word ("New",
+   "Tap", "List") or a two-word pair that already wraps two rows inside a
+   plain 58px `.ctl` on every other button on this page (the D-pad's own pool
+   commands, e.g. "Find next"). So no size override survives here at all —
+   `.mini-item` takes NOTHING beyond `.ctl`'s own `width`/`height`, which is
+   `var(--corner)`, so a retune of that token resizes the corners and the fan
+   in the same edit and the two can never drift apart again. */
 #mini-radial .mini-item {
   position: absolute;
   transform: translate(-50%, -50%);
-  /* ── THE FACE IS WIDER THAN A CORNER SQUARE (ALG-6, grader 2026-08-11) ─────
-     A `.ctl` is 58 px with a 16 px radius and a label capped at 54 px, which
-     leaves 2 px of inset — and a 16 px corner geometrically eats 0.3 * 16 =
-     4.8 px. On the D-pad that never showed, because those labels are one short
-     word; these two are "From a list" and "Tap a window", the longest strings
-     any face on this page carries, and they ran rim to rim.
-     THE ANSWER IS ROOM, NOT SMALLER WORDS (the resolution ladder's rung 1 —
-     the screen around these two buttons is empty): the face takes 74 px and
-     spends the extra 16 on padding, so the same 54 px label now sits 10 px
-     clear of every edge. 74 is not a taste — it is the WIDEST face that still
-     opens straight below the Layout (+) button without being pushed sideways
-     by the screen-edge clamp: that corner's centre is 16 + 58/2 = 45 px in,
-     and 74/2 + MINI_EDGE = 45. A wider face would shift the SOUTH option off
-     the anchor's axis, which is the geometry the owner chose for the analog
-     stick (chrome.js) and which tests/test_phone_chrome.py holds to 2 px.
-     Height stays `--corner`, so AR is 1.28 and the 16 px radius is still
-     inside ALG-6's 30%-of-the-shorter-side tier. */
-  width: 74px;
-  padding-inline: 10px;
 }
 
 /* --- "Access from anywhere" banner + guided wizard ------------------------ */

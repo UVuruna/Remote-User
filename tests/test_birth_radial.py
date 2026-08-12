@@ -157,6 +157,112 @@ def _checks(page, label, out):
     if fan:
         print(f"  DETAIL birth radial @ {label}: {fan}")
 
+    # ── owner report 2026-08-12 (two tablet screenshots): SQUARE, EQUIDISTANT,
+    # EXACT ANGLES, ONE TABLE ─────────────────────────────────────────────────
+    # His words, in translation: "their DIMENSIONS must be THE SAME AS THE
+    # PARENT, i.e. SQUARE, and their positions evenly spaced — right now it is
+    # a bit chaotic ... exact angle." Checked on BOTH fans: the Layout button's
+    # three-option fan (E/SE/S) and the Hide button's two-option, mirrored fan
+    # (S/SW on the right half).
+    # Catches (proven by planting): an item wider than the parent (a label
+    # that widens its own box again), a radius that drifts between items (one
+    # item nudged off its arc), the declared angle table disagreeing with
+    # where an item is actually drawn, and the right-hand fan failing to
+    # mirror (an un-mirrored SE surviving on Hide, which would open off the
+    # right edge of the screen).
+    square = page.evaluate("""() => {
+      const bad = [];
+      const corner = parseFloat(getComputedStyle(document.documentElement)
+        .getPropertyValue('--corner'));
+
+      function measure(anchorId, opener, wantAngles) {
+        const btn = document.getElementById(anchorId);
+        const b = btn.getBoundingClientRect();
+        if (Math.abs(b.width - b.height) > 0.5) {
+          bad.push(anchorId + ' itself is not square: ' + b.width + 'x' + b.height);
+        }
+        opener();
+        const items = [...document.querySelectorAll('#mini-radial .mini-item')];
+        const cx = b.left + b.width / 2, cy = b.top + b.height / 2;
+        const radii = [];
+        items.forEach((el, i) => {
+          const r = el.getBoundingClientRect();
+          // 1. EVERY ITEM IS THE PARENT'S OWN SQUARE.
+          if (Math.abs(r.width - b.width) > 0.5 || Math.abs(r.height - b.height) > 0.5) {
+            bad.push(anchorId + ' item ' + i + ' is ' + r.width + 'x' + r.height +
+                      ', not the parent\\'s ' + b.width + 'x' + b.height);
+          }
+          if (Math.abs(r.width - r.height) > 0.5) {
+            bad.push(anchorId + ' item ' + i + ' is not square: ' + r.width + 'x' + r.height);
+          }
+          const icx = r.left + r.width / 2, icy = r.top + r.height / 2;
+          radii.push(Math.hypot(icx - cx, icy - cy));
+          // 2. THE DECLARED ANGLE TABLE IS WHERE THE ITEM IS REALLY DRAWN.
+          const a = Math.atan2(icy - cy, icx - cx);
+          const want = wantAngles[i];
+          const d = ((a - want + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
+          if (Math.abs(d) > 0.08) {
+            bad.push(anchorId + ' item ' + i + ' sits at ' + a.toFixed(2) +
+                      ' rad, not the declared ' + want.toFixed(2));
+          }
+        });
+        // 3. EQUIDISTANT — every item the SAME radius from the parent centre.
+        if (radii.length > 1) {
+          const spread = Math.max(...radii) - Math.min(...radii);
+          if (spread > 1) {
+            bad.push(anchorId + ' items are not equidistant: radii ' +
+                      radii.map((r) => r.toFixed(1)).join(', '));
+          }
+        }
+        closeMiniRadial();
+      }
+
+      // Layout (top-left): E / SE / S.
+      measure('btn-newlay', openSourceChooser, [0, Math.PI / 4, Math.PI / 2]);
+      // Hide (top-right): mirrored — S / SW, never S / SE off the right edge.
+      measure('btn-hide', openHideModes, [Math.PI / 2, Math.PI * 3 / 4]);
+
+      return bad;
+    }""")
+    out[f"every fan item is the parent's square, equidistant, on the declared angles @ {label}"] = not square
+    if square:
+        print(f"  DETAIL square/equidistant/angle @ {label}: {square}")
+
+    # ── THE GAMEPAD POINTS AT WHERE THE ITEM IS REALLY DRAWN ─────────────────
+    # `miniRadialAngles()` is what `padAimRadial` (client/gamepad.js) reads —
+    # this proves it equals the angles the items were actually placed at,
+    # which is the single-source-of-truth guarantee constraint 9 requires.
+    # Catches: a gamepad table that drifted from the drawing table (e.g. the
+    # pad still assuming the pre-mirror E/SE/S set on the right-hand fan).
+    table = page.evaluate("""() => {
+      const bad = [];
+      openSourceChooser();
+      const items = [...document.querySelectorAll('#mini-radial .mini-item')];
+      const b = document.getElementById('btn-newlay').getBoundingClientRect();
+      const cx = b.left + b.width / 2, cy = b.top + b.height / 2;
+      const drawn = items.map((el) => {
+        const r = el.getBoundingClientRect();
+        return Math.atan2(r.top + r.height / 2 - cy, r.left + r.width / 2 - cx);
+      });
+      const padTable = miniRadialAngles();
+      if (padTable.length !== drawn.length) {
+        bad.push('the gamepad table has ' + padTable.length +
+                  ' angles, the drawing has ' + drawn.length);
+      } else {
+        drawn.forEach((a, i) => {
+          if (Math.abs(a - padTable[i]) > 0.001) {
+            bad.push('gamepad angle ' + i + ' (' + padTable[i].toFixed(3) +
+                      ') != drawn angle (' + a.toFixed(3) + ')');
+          }
+        });
+      }
+      closeMiniRadial();
+      return bad;
+    }""")
+    out[f"the gamepad's pointing table equals the drawing table @ {label}"] = not table
+    if table:
+        print(f"  DETAIL gamepad/drawing table @ {label}: {table}")
+
     # ── 186 (2026-08-12): IT IS THE HIDE CHOOSER'S CONTRACT, NOT THE WHEEL'S ─
     # The centered variant borrowed the category wheel's veil and its centre ✕
     # because it took the whole screen. The fan does not take the whole screen,

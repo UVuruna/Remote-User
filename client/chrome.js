@@ -79,21 +79,37 @@ function setControlsHidden(hidden) {
 // becomes south / south-WEST there. The two directions stay distinct and
 // diagonal, which is all the stick needs, and nothing is ever clamped on top of
 // its sibling.
-// px from the anchor's centre to an option's centre. GROWS WITH THE FACE:
-// 92 was the radius for 58 px faces; when the faces widened to 74 px (ALG-6
-// label insets, 0.0.421) the radius stayed and the south and diagonal options
-// overlapped by 9 px — the re-grade of 2026-08-11 caught it. The separator is
-// the HORIZONTAL gap (the two options always share vertical range):
-// dx = R·cos45 must clear the face width plus daylight — 114·0.707 ≈ 80.6 px
-// against 74 px faces leaves the same ~7 px the original pairing had. The
-// three-option fan is the SAME arithmetic read the other way round: EAST and
-// SOUTH-EAST share horizontal range, so what has to clear is their vertical
-// distance, dy = R·sin45 ≈ 80.6 px against a 58 px face (`--corner`) — 22 px
-// of daylight, more than the pair below it has.
-const MINI_RADIUS = 114;
+// EVERY OPTION IS THE PARENT'S OWN SQUARE, EVENLY SPACED ON ONE ARC (owner
+// report 2026-08-12, with two screenshots of his own tablet). Round trip:
+// the fan used to widen its faces to fit the longest label ("From a list")
+// and grow its radius to the widest face, so a two-word option ("Stays
+// hidden") sat in a visibly bigger box than "New" and the whole fan read as
+// eyeballed rather than measured. His words, in translation: "their
+// DIMENSIONS must be THE SAME AS THE PARENT, i.e. SQUARE, and their
+// positions evenly spaced — exact angle." So the face is now exactly
+// `--corner` (58px) — the SAME `.ctl` square the D-pad and the corners wear —
+// and the radius is DERIVED from the tokens rather than a retuned constant:
+// two neighbours sit 45° apart, and the chord between two circle points R
+// apart in angle θ is 2R·sin(θ/2); requiring that chord to clear a face's own
+// width plus one `--space-s` of daylight (the same gap `--space-s` names
+// everywhere else on this page) gives R = (corner + gap) / (2·sin(22.5°)).
+// Read from the CSS tokens at load, once — a later retune of `--corner` or
+// `--space-s` carries straight through with no second number to remember.
+function miniToken(name, fallback) {
+  const v = getComputedStyle(document.documentElement).getPropertyValue(name);
+  const n = parseFloat(v);
+  return Number.isFinite(n) ? n : fallback;
+}
+const MINI_FACE = miniToken("--corner", 58);
+const MINI_GAP = miniToken("--space-s", 8);
+const MINI_RADIUS = (MINI_FACE + MINI_GAP) / (2 * Math.sin(Math.PI / 8));
 
 const MINI_EDGE = 8;         // px an option keeps clear of the screen edge
 const MINI_MAX = 3;          // directions this quadrant holds — see above
+// THE ONE DECLARED TABLE both the drawing and the gamepad's pointing read —
+// `miniAngleSet` places the options by it and `miniRadialAngles()` (below)
+// hands the gamepad exactly what was placed, clamp included, so there is no
+// second copy of these three numbers anywhere to drift from this one.
 const MINI_ANGLES = { east: 0, diagonal: Math.PI / 4, south: Math.PI / 2 };
 
 // WHICH directions a radial of N options takes, in the order its options were
@@ -249,13 +265,10 @@ function openMiniRadial(anchorEl, options) {
   const r = anchorEl.getBoundingClientRect();
   const items = options.slice(0, MINI_MAX);
   const points = miniRadialPoints(
-    // `size` is the OPTION's own face, not the anchor's: the clamp exists to
-    // keep an option on screen, so it must be told how big an option is. It is
-    // the face's WIDTH (74 px — client/style.css, widened for ALG-6's content
-    // inset on 2026-08-11) and the same number governs both axes, which is
-    // conservative on the vertical one and can therefore only ever keep an
-    // option further from an edge, never closer.
-    { left: r.left, top: r.top, width: r.width, height: r.height, size: 74 },
+    // `size` is the OPTION's own face — now the SAME square as the parent
+    // corner button (`--corner`, owner report 2026-08-12), so this is exactly
+    // `anchorEl`'s own measured size and never a wider, label-fitted face.
+    { left: r.left, top: r.top, width: r.width, height: r.height, size: MINI_FACE },
     items.length, screen);
   // The direction the CONTROLLER has to point along, per option, measured from
   // what was actually placed — lean and edge clamp already in it.
