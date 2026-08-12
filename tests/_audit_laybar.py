@@ -44,6 +44,10 @@ _LAYBAR_MEASURE_JS = """() => {
   return {
     bar: rect(b), groupL: rect(gl && gl.getBoundingClientRect()),
     groupR: rect(gr && gr.getBoundingClientRect()),
+    banner: (() => {
+      const el = document.getElementById('anywhere-banner');
+      return (el && !el.hidden) ? rect(el.getBoundingClientRect()) : null;
+    })(),
     innerHeight, spaceM,
     overflow: document.body.classList.contains('laybar-overflow'),
   };
@@ -74,6 +78,15 @@ def check_laybar_bottom(page, label, portrait, results, shot_path, shot_name):
     - with-room case (wide tablet, fits in the row): the bar shares the
       groups' own baseline and sits horizontally BETWEEN the two columns —
       "IN the row", his own words, not floating above it.
+    - never overlaps the "Use from anywhere" BANNER. This one was written
+      because the very FIRST screenshot of the corrected bar showed the
+      banner's pill drawn straight across the layout's name: the banner is
+      pinned to the same bottom baseline, which was safe only while nothing
+      else stood on that line. The four checks above all passed on that
+      picture — they compared the bar against the D-pad columns, which are at
+      the far edges, and the collision was in the middle where nobody was
+      looking. A check aimed at the neighbours you thought of is not a check
+      on the row.
     """
     page.evaluate(LAYBAR_STAGE_JS)
     page.evaluate("setLayBarPos('bottom')")
@@ -95,6 +108,14 @@ def check_laybar_bottom(page, label, portrait, results, shot_path, shot_name):
     if not no_overlap:
         print(f"  DETAIL laybar/group overlap @ {label}: bar={bar} "
               f"groupL={gl} groupR={gr}")
+
+    banner = geo["banner"]
+    clear_banner = not _overlaps(bar, banner)
+    results[f"the bottom layout bar never overlaps the anywhere banner "
+            f"@ {label}"] = clear_banner
+    if not clear_banner:
+        print(f"  DETAIL laybar/banner overlap @ {label}: bar={bar} "
+              f"banner={banner}")
 
     if portrait and geo["overflow"]:
         above = ((gl is None or gl["bottom"] <= bar["top"] + 1) and

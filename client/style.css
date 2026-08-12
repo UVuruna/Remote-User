@@ -540,6 +540,22 @@ body.wheel-open::before {
   align-items: center;
   gap: 8px;
 }
+/* ── THE BANNER YIELDS TO A BOTTOM BAR (2026-08-12) ─────────────────────────
+   The banner is pinned to the same bottom baseline the `.group` columns use,
+   which was safe for as long as the only thing on that line was two columns at
+   the far edges. The layout bar's BOTTOM position now stands on that baseline
+   too — between the columns, exactly where the banner is centred — and the
+   first screenshot of the fixed bar caught the two drawn on top of each other,
+   the banner's pill straight across the layout's name.
+   One row up, and only while a bottom bar exists: `--corner` is the bar's own
+   height (`#lay-frame` is declared at it in layouts.css), the same clearance
+   the pad columns take in the overflow branch, so the three stack rather than
+   collide whichever branch is standing. Nothing changes for the default TOP
+   position, where the baseline was never contested. */
+body.laybar-bottom #anywhere-banner {
+  bottom: calc(var(--space-m) + var(--kb) + env(safe-area-inset-bottom, 0px)
+               + var(--corner) + var(--space-s));
+}
 #anywhere-banner svg { width: 16px; height: 16px; flex: none; }
 #anywhere-banner[hidden] { display: none; }
 /* The Region grab's own bar takes the bottom centre while the frame is up —
