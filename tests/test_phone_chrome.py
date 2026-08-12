@@ -348,49 +348,61 @@ def _checks(page, label, out):
     if clear:
         print(f"  DETAIL bar bottom @ {label}: {clear}")
 
-    # ── 186 SUPERSEDES 158 FOR THE LAYOUT BUTTON: CENTERED, THREE OPTIONS ────
-    # His own words on seeing v0.0.107, which still shipped the two-option
-    # south/south-east radial here: the LAST version is the only one that may
-    # ship. Task 186 answered that this radial stands CENTERED, with New / List
-    # / Tap around a ✕ ("najbolje da se držimo istog pravila" — lang-ok: owner
-    # quote), so the anchored two-option geometry may leave NO TRACE on this
-    # button. It survives on HIDE, whose two modes are still a pair beside a
-    # corner — the check below this one.
-    # Catches: the old two-option call coming back, or the `centered` flag
-    # being dropped (the options fall beside the corner again).
-    # The ring's own geometry and the pad's grammar are proven in full by
-    # tests/test_birth_radial.py; what is held HERE is that this button's
-    # radial is the new one at all.
+    # ── 158 GOVERNS THE LAYOUT BUTTON AGAIN: AN ANCHORED FAN OF THREE ────────
+    # The history matters, because this button has now worn three shapes and
+    # only the last one may ship. Task 158 gave it two anchored options; task
+    # 186 (with 228's fourth) moved it to a CENTERED ring behind the category
+    # wheel's veil, four faces around a ✕; and on 2026-08-12 the owner reversed
+    # that after living with it — the options belong BESIDE the button, like
+    # Hide's two modes, and Recent leaves the radial altogether. So the
+    # centered ring may now leave NO TRACE on this button, and the distinction
+    # this check used to draw against Hide is inverted: BOTH radials are
+    # anchored now, and what separates them is the COUNT and the directions
+    # (Hide: two, S + SE-leaning-away; Layout: three, E / SE / S).
+    # Catches: the centered ring coming back, a fourth option returning, and a
+    # fan that is not really tied to the button it came out of.
+    # The fan's exact angles, its no-overlap rule and the pad's grammar are
+    # proven in full by tests/test_birth_radial.py; what is held HERE is that
+    # this button's radial is the anchored one at all.
     radial = page.evaluate("""() => {
       const bad = [];
       const btn = document.getElementById('btn-newlay');
       const b = btn.getBoundingClientRect();
       openSourceChooser();
       const items = [...document.querySelectorAll('#mini-radial .mini-item')];
-      if (items.length !== 4) {
+      if (items.length !== 3) {
         closeMiniRadial();
         return ['the Layout button offered ' + items.length + ' sources, not ' +
-                'the four of tasks 186+228 (New / List / Tap / Recent)'];
+                'the three of 2026-08-12 (New / Tap / List)'];
       }
       const words = items.map((el) => el.querySelector('.lbl').textContent.trim());
-      for (const want of ['New', 'List', 'Tap', 'Recent']) {
+      for (const want of ['New', 'Tap', 'List']) {
         if (words.indexOf(want) < 0) bad.push('no "' + want + '" option: ' + words);
+      }
+      if (words.indexOf('Recent') >= 0) {
+        bad.push('Recent is back on the radial — he took it off on 2026-08-12');
       }
       const c = items.map((el) => {
         const r = el.getBoundingClientRect();
         return {x: r.left + r.width / 2, y: r.top + r.height / 2, r};
       });
-      const cx = innerWidth / 2, cy = innerHeight / 2;
-      const radii = c.map((p) => Math.hypot(p.x - cx, p.y - cy));
-      if (Math.max(...radii) - Math.min(...radii) > 2) {
-        bad.push('the options are not on one ring around the screen centre');
-      }
-      // And NOT the superseded geometry: nothing may sit anchored below the
-      // Layout button the way the two-option variant did.
+      // ANCHORED: every option is in the button's own quadrant — right of it
+      // and no higher than it — and none of them is on a ring around the
+      // SCREEN's centre, which is the superseded task-186 shape.
       const bx = b.left + b.width / 2, by = b.top + b.height / 2;
-      if (c.every((p) => p.y > by) && c.every((p) => Math.abs(p.x - bx) < 140)) {
-        bad.push('the options still hang under the Layout button — the ' +
-                 'superseded task-158 shape');
+      if (!c.every((p) => p.x >= bx - 1 && p.y >= by - 1)) {
+        bad.push('an option opened outside the Layout button\\'s own quadrant: ' +
+                 JSON.stringify(c.map((p) => [Math.round(p.x), Math.round(p.y)])));
+      }
+      const sx = innerWidth / 2, sy = innerHeight / 2;
+      const ringR = c.map((p) => Math.hypot(p.x - sx, p.y - sy));
+      if (Math.max(...ringR) - Math.min(...ringR) < 2) {
+        bad.push('the options sit on one ring around the SCREEN centre — the ' +
+                 'superseded task-186 shape');
+      }
+      if (document.querySelector('#mini-radial .wheel-x') ||
+          document.body.classList.contains('mini-open')) {
+        bad.push('the wheel\\'s ✕ / veil came back with it');
       }
       for (const item of items) {
         const r = item.getBoundingClientRect();
@@ -406,7 +418,7 @@ def _checks(page, label, out):
       closeMiniRadial();
       return bad;
     }""")
-    out[f"the Layout radial is centered with all three sources @ {label}"] = not radial
+    out[f"the Layout radial is an anchored fan of three @ {label}"] = not radial
     if radial:
         print(f"  DETAIL layout radial @ {label}: {radial}")
 
@@ -523,6 +535,48 @@ def _checks(page, label, out):
     if modes:
         print(f"  DETAIL hide modes @ {label}: {modes}")
 
+    # ── 2026-08-12: STICKY LEAVES ITS OWN DOOR ON SCREEN ─────────────────────
+    # His report: pressing Hide made everything vanish for good. In `sticky`
+    # nothing brings the controls back by itself — that is the mode — so hiding
+    # the Hide button with the rest left the page unrecoverable, and his own
+    # spec for the mode had already excepted it. `auto` is unchanged: any touch
+    # brings everything back, so there the corner may go with the rest.
+    # Catches (each half proven by planting): dropping the `hide-sticky` class
+    # in `setControlsHidden` (the CSS `:not()` then hides the button in both
+    # modes — the bug), and letting the LAYOUT corner ride out with it (hidden
+    # means hidden; the one exception is the way out, not a second button).
+    door = page.evaluate("""() => {
+      const bad = [];
+      const gone = (id) => {
+        const el = document.getElementById(id);
+        const r = el.getBoundingClientRect();
+        return getComputedStyle(el).display === 'none' || !r.width || !r.height;
+      };
+      setHideMode('sticky');
+      setControlsHidden(true);
+      if (gone('btn-hide')) {
+        bad.push('in STICKY the Hide button went with the rest — there is no ' +
+                 'way back at all');
+      }
+      if (!gone('btn-newlay')) {
+        bad.push('in STICKY the Layout corner stayed on screen too — hidden ' +
+                 'means hidden apart from the one door out');
+      }
+      setHideMode('auto');
+      setControlsHidden(true);
+      if (!gone('btn-hide') || !gone('btn-newlay')) {
+        bad.push('in AUTO the corners no longer hide — any touch brings them ' +
+                 'back there, so nothing may be left standing over the picture');
+      }
+      setHideMode('auto');
+      setControlsHidden(false);
+      wakeControls();
+      return bad;
+    }""")
+    out[f"STICKY keeps the Hide button, and only that @ {label}"] = not door
+    if door:
+        print(f"  DETAIL sticky door @ {label}: {door}")
+
     sticky = page.evaluate("""() => {
       setHideMode('sticky');
       setControlsHidden(false);
@@ -609,7 +663,22 @@ def _bar_geometry_checks(page, label, out):
     if label.startswith("tablet portrait"):
         # Catches: dropping `--group-w` (or the whole in-row rule) — the bar
         # would either overflow on a device with plenty of room, or draw at
-        # some width that does not match the top row's own reservation.
+        # some width that does not match the bottom row's own reservation.
+        #
+        # THE BASELINE CLAIM IS NEW (owner report 2026-08-12, his tablet): the
+        # in-row bar used to be centred on the groups' HEIGHT BAND
+        # (`(--group-h - --corner) / 2`), which floated it ABOVE their bottom
+        # edge — a third of the way up the screen once the pads were a column.
+        # Riding IN the row means sharing the row's baseline, so the two bottom
+        # edges are measured against each other here.
+        # THE SIZE CLAIM CHANGED WITH THE CAP (owner 2026-08-12, task P10): the
+        # old assertion was "the same WIDTH as the top bar", which was only
+        # ever true while both were stretched to their own reservations. There
+        # is ONE cap now (`--laybar-max`, 420 px) and the D-pad columns reserve
+        # more of the row than the corner buttons do, so on an 800-class tablet
+        # the top bar reaches the cap and the bottom bar is bounded by the
+        # columns instead. What must still hold is the HEIGHT (the row's own
+        # style), the CAP (neither may exceed it) and the CENTRING.
         bad = page.evaluate("""() => {
           const out = [];
           setLayBarPos('bottom');
@@ -627,18 +696,37 @@ def _bar_geometry_checks(page, label, out):
               JSON.stringify({barLeft: Math.round(bar.left), barRight: Math.round(bar.right),
                                leftColRight: Math.round(gl.right), rightColLeft: Math.round(gr.left)}));
           }
-          setLayBarPos('top');
-          const barTop = document.getElementById('layout-bar').getBoundingClientRect();
-          setLayBarPos('bottom');
-          if (Math.abs(bar.width - barTop.width) > 1 || Math.abs(bar.height - barTop.height) > 1) {
-            out.push('the in-row bottom bar is not the SAME size as the top bar: ' +
-              JSON.stringify({bottom: {w: Math.round(bar.width), h: Math.round(bar.height)},
-                               top: {w: Math.round(barTop.width), h: Math.round(barTop.height)}}));
+          if (Math.abs(bar.bottom - gl.bottom) > 1) {
+            out.push('the in-row bar does not share the bottom row\\'s baseline: ' +
+              JSON.stringify({bar: Math.round(bar.bottom), group: Math.round(gl.bottom)}));
+          }
+          if (bar.width > 421) {
+            out.push('the bottom bar is ' + Math.round(bar.width) +
+                     'px wide — over the 420px cap');
+          }
+          const bcx = (bar.left + bar.right) / 2;
+          if (Math.abs(bcx - innerWidth / 2) > 2) {
+            out.push('the bottom bar is not centered: ' + Math.round(bcx) +
+                     ' vs ' + Math.round(innerWidth / 2));
           }
           setLayBarPos('top');
+          const barTop = document.getElementById('layout-bar').getBoundingClientRect();
+          if (barTop.width > 421) {
+            out.push('the top bar is ' + Math.round(barTop.width) +
+                     'px wide — over the 420px cap');
+          }
+          const tcx = (barTop.left + barTop.right) / 2;
+          if (Math.abs(tcx - innerWidth / 2) > 2) {
+            out.push('the top bar is not centered: ' + Math.round(tcx));
+          }
+          if (Math.abs(bar.height - barTop.height) > 1) {
+            out.push('the in-row bottom bar is not the same HEIGHT as the top ' +
+              'bar: ' + JSON.stringify({bottom: Math.round(bar.height),
+                                        top: Math.round(barTop.height)}));
+          }
           return out;
         }""")
-        out[f"tablet (800-class): the bottom bar fits IN the row, between the columns @ {label}"] = not bad
+        out[f"tablet (800-class): the bottom bar rides IN the row, capped and centered @ {label}"] = not bad
         if bad:
             print(f"  DETAIL tablet in-row @ {label}: {bad}")
 
@@ -676,7 +764,13 @@ def _bar_geometry_checks(page, label, out):
 
     if label.startswith("landscape"):
         # Catches: the pre-237 bug (Bottom ignored in landscape, bar always at
-        # the same top y) coming back, or the ~560px cap / centering breaking.
+        # the same top y) coming back, or the cap / centering breaking.
+        # UPDATED 2026-08-12: the cap is 420 px everywhere (his "the maximum
+        # width is too large"), and landscape no longer has a geometry of its
+        # own — the bottom position rides IN the bottom row here too, sharing
+        # the D-pad's baseline, which is the half of his report that named
+        # BOTH orientations. Clearing the whole group height is now the
+        # overflow shape alone, and overflow never happens in landscape.
         bad = page.evaluate("""() => {
           const out = [];
           setLayBarPos('top');
@@ -691,23 +785,85 @@ def _bar_geometry_checks(page, label, out):
           if (barBottomPos.top <= barTopPos.top) {
             out.push('the "bottom" bar is not below the "top" bar in landscape');
           }
-          if (barBottomPos.width > 561) {
-            out.push('the landscape bar exceeds the 560px max width: ' +
-                     Math.round(barBottomPos.width));
+          if (barBottomPos.width > 421 || barTopPos.width > 421) {
+            out.push('the landscape bar exceeds the 420px max width: ' +
+                     JSON.stringify({top: Math.round(barTopPos.width),
+                                     bottom: Math.round(barBottomPos.width)}));
           }
-          const cx = (barBottomPos.left + barBottomPos.right) / 2;
-          if (Math.abs(cx - innerWidth / 2) > 2) {
-            out.push('the landscape bar is not centered: ' + Math.round(cx) +
-                     ' vs ' + Math.round(innerWidth / 2));
+          for (const [name, r] of [['top', barTopPos], ['bottom', barBottomPos]]) {
+            const cx = (r.left + r.right) / 2;
+            if (Math.abs(cx - innerWidth / 2) > 2) {
+              out.push('the landscape ' + name + ' bar is not centered: ' +
+                       Math.round(cx) + ' vs ' + Math.round(innerWidth / 2));
+            }
+          }
+          // IN the bottom row, not above it: same baseline as the D-pad, and
+          // between the two columns rather than across them.
+          const groups = [...document.querySelectorAll('.group')]
+            .map((g) => g.getBoundingClientRect())
+            .sort((a, b) => a.left - b.left);
+          const [gl, gr] = groups;
+          if (Math.abs(barBottomPos.bottom - gl.bottom) > 1) {
+            out.push('the landscape bottom bar does not share the row\\'s ' +
+              'baseline: ' + JSON.stringify({bar: Math.round(barBottomPos.bottom),
+                                             group: Math.round(gl.bottom)}));
+          }
+          if (barBottomPos.left < gl.right - 1 || barBottomPos.right > gr.left + 1) {
+            out.push('the landscape bottom bar is not between the D-pad ' +
+              'columns: ' + JSON.stringify(
+                {barLeft: Math.round(barBottomPos.left),
+                 barRight: Math.round(barBottomPos.right),
+                 leftColRight: Math.round(gl.right),
+                 rightColLeft: Math.round(gr.left)}));
           }
           setLayBarPos('top');
           return out;
         }""")
-        out[f"landscape: Bottom is honored, bar centered under the max width @ {label}"] = not bad
+        out[f"landscape: Bottom is honored, bar in the row, capped and centered @ {label}"] = not bad
         if bad:
             print(f"  DETAIL landscape bar @ {label}: {bad}")
 
     page.evaluate("closeLayoutPanel(); layouts = []; layoutActive = null; updateLayoutBar()")
+    page.wait_for_timeout(60)
+
+    # ── NO BAR, NO INSET ROW (owner report 2026-08-12) ───────────────────────
+    # With no layout created there IS no bar — and the corner buttons were
+    # still being pushed a whole row down on any phone-width screen, over an
+    # empty strip, because `layBarFit()` measured the corner-to-corner gap
+    # whatever stood between them and set `laybar-overflow` from it alone.
+    # Catches: exactly that — the `layoutBar.hidden` bail being removed. It is
+    # driven at BOTH bar positions, because the bottom position measures the
+    # D-pad columns instead and on a phone that gap is zero, which would set
+    # the class just as certainly.
+    bad = page.evaluate("""() => {
+      const out = [];
+      const top0 = calcTop();
+      for (const pos of ['top', 'bottom']) {
+        setLayBarPos(pos);
+        if (document.body.classList.contains('laybar-overflow')) {
+          out.push('with NO layouts and the bar at ' + pos + ', the page still ' +
+                   'reserved the overflow row');
+        }
+        const c = document.getElementById('btn-newlay').getBoundingClientRect();
+        const h = document.getElementById('btn-hide').getBoundingClientRect();
+        if (c.top > top0 + 1 || h.top > top0 + 1) {
+          out.push('with NO layouts the corner buttons sit ' +
+                   Math.round(Math.max(c.top, h.top) - top0) + 'px below the ' +
+                   'top row (bar at ' + pos + ')');
+        }
+      }
+      setLayBarPos('top');
+      return out;
+      function calcTop() {
+        // The undisturbed top row: --space-m + --vtop, the `.corner` rule's own.
+        const s = getComputedStyle(document.documentElement);
+        return parseFloat(s.getPropertyValue('--space-m')) +
+               parseFloat(s.getPropertyValue('--vtop'));
+      }
+    }""")
+    out[f"with no layouts the corners keep the top row @ {label}"] = not bad
+    if bad:
+        print(f"  DETAIL empty top row @ {label}: {bad}")
 
 
 def main() -> int:

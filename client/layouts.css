@@ -8,10 +8,26 @@
 
 /* --- Layout bar + creation panel (Phase F+ step 1) ------------------------ */
 
-/* The bar lives STRICTLY between the two corner buttons (owner 2026-08-03 —
-   a long layout name used to push the › arrow and the ✕ off the screen). It
-   is bounded on both sides instead of centered-with-a-max-width, so the name
-   is the only thing that can give: it wraps to a second line.
+/* ── ONE MAXIMUM WIDTH, EVERYWHERE THE BAR RIDES IN A ROW (owner 2026-08-12) ─
+   His words on the shipped bar: the maximum width is too large. It had two
+   different answers depending on where it stood — landscape capped it at
+   560 px while portrait stretched it edge to edge between whatever stood
+   beside it — so the same bar was three different widths on one device.
+   420 px is the single cap now, and it applies to EVERY in-row placement: top
+   and bottom, portrait and landscape. Only the OVERFLOW shape (no room in the
+   row at all, so the bar takes a whole row of its own) spends the full width,
+   because there the width is the entire point.
+   Declared here rather than in style.css's `:root`: the bar is this file's
+   feature, and the number belongs beside the rules that spend it. */
+:root { --laybar-max: 420px; }
+
+/* The bar is CENTERED and CAPPED (owner 2026-08-12, superseding the
+   bounded-both-sides rule of 2026-08-03 — his "the bar rides IN the row,
+   capped, and centered horizontally; never stretched edge to edge between the
+   corner buttons"). What the 2026-08-03 rule was protecting still holds and is
+   now the `width` calc's job: the band the bar may take is the row MINUS its
+   neighbours' own reservation, so a long name can still never push the › arrow
+   or the ✕ under a corner button — it wraps to a second line instead.
 
    ── IT WEARS THE TOP ROW'S OWN STYLE (owner 2026-08-09, task 160) ──────────
    His instruction, in translation: this central layout-and-arrows switcher
@@ -27,8 +43,16 @@
 #layout-bar {
   position: fixed;
   top: calc(var(--space-m) + var(--vtop));
-  left: calc(var(--space-m) + var(--corner) + var(--space-s));
-  right: calc(var(--space-m) + var(--corner) + var(--space-s));
+  /* CENTERED, and never wider than the cap or than the room the corner buttons
+     leave. `100%` is the viewport here (a fixed box's containing block), and
+     the subtraction is the top row's own reservation — `space-m` of edge, a
+     `--corner` button, `space-s` of daylight — taken on BOTH sides so the bar
+     stays symmetrical whatever the name in it does. */
+  left: 50%;
+  right: auto;
+  transform: translateX(-50%);
+  width: min(var(--laybar-max),
+             calc(100% - 2 * (var(--space-m) + var(--corner) + var(--space-s))));
   display: flex;
   align-items: center;
   justify-content: center;
@@ -36,8 +60,8 @@
      VERDICT, task 237, 2026-08-11): "the two arrows are slim glyphs TIGHT
      against the frame (~2px gap) ... spacing falls between the bar and its
      neighbours" — so the flex gap between arrow/frame/arrow shrinks to that,
-     and the real breathing room stays where it always was, in the `left`/
-     `right` reservations above (top) and their bottom-position twin below. */
+     and the real breathing room stays where it always was, in the `width`
+     reservation above (top) and its bottom-position twin below. */
   gap: 2px;
   color: var(--text-primary);
   font: 600 13px system-ui, sans-serif;
@@ -152,8 +176,11 @@
    HIS 237 CORRECTION, superseding the "own strip above the pads" shape this
    block shipped with: the bottom position is IDENTICAL to the top drawing,
    only at the bottom — WHEN THERE IS ROOM the bar sits IN the bottom controls
-   row, BETWEEN the left and right D-pad columns, same width/height/style as
-   the top row, same edge gap from the bottom the top row has from the top.
+   row, BETWEEN the left and right D-pad columns, same height/style as the top
+   row and under the same width cap (the two rows reach the same WIDTH only on
+   a device wide enough for both to hit that cap — the D-pad columns reserve
+   more of the row than the corner buttons do), same edge gap from the bottom
+   the top row has from the top.
    It is NEVER on its own strip above the pads while there is room in the row
    — that strip is now the OVERFLOW fallback only, further down, which his
    ballot approved as its own separate state ("slika 2 ok").
@@ -162,33 +189,49 @@
    measures the REAL gap between the two `.group` elements against his sizing
    rule — see the long comment beside it for the chosen number and why.
 
-   EVERYTHING BELOW IS WRAPPED IN `orientation: portrait` ON PURPOSE: without
+   ── AND IT SITS IN THE BOTTOM ROW, NOT ABOVE IT (owner report 2026-08-12, his
+   tablet, BOTH orientations: "with the bar at the bottom it draws above or
+   among the button groups, never down in the bottom row where it belongs") ──
+   The clearance this rule used to carry was `(--group-h - --corner) / 2`,
+   which centres the bar on the groups' HEIGHT BAND — and that band is 190 px
+   in the cross shape but 306 px when the pads are a COLUMN, so the bar climbed
+   to a third of the way up a 800-tall tablet and more than half of a phone.
+   A bar that "rides IN the row" shares the row's BASELINE, so the clearance is
+   gone: the bottom edge is `space-m + kb + safe-area`, byte for byte the
+   `.group` rule's own bottom (client/style.css), and the two rest on one line
+   whatever shape the pads are wearing.
+
+   IT IS NOT SCOPED TO AN ORIENTATION, and that is deliberate (same report:
+   the tablet was wrong in landscape too). Landscape used to clear the whole
+   D-pad here for want of room — with the 420 px cap there IS room between the
+   columns at every size this project ships to (915 px landscape phone: 487 px
+   of band; 1280 px tablet: 852 px), so both orientations now draw the one
+   shape he asked for. The OVERFLOW rules below stay portrait-scoped, because
+   `layBarFit()` never sets that class in landscape. */
+body.laybar-bottom:not(.laybar-overflow) #layout-bar {
+  top: auto;
+  bottom: calc(var(--space-m) + var(--kb) + env(safe-area-inset-bottom, 0px));
+  /* THE ROOM IS MEASURED BETWEEN THE GROUPS, NOT THE CORNERS. `--group-w`
+     (client/style.css, declared beside `--group-h`) is the real rendered width
+     of a `.group` — the same role `--corner` plays for the corner buttons at
+     the top — so this is the base rule's own reservation with the bar's real
+     neighbours substituted in, at whichever shape (cross or column) is
+     standing. The cap and the centring come from the base rule untouched. */
+  width: min(var(--laybar-max),
+             calc(100% - 2 * (var(--space-m) + var(--group-w) + var(--space-s))));
+}
+/* At this shape the frame takes the whole capped band exactly like the top
+   row's own base rule (`#lay-frame { flex: 1 1 auto }` above) — no override
+   needed, and the two-line name clamp stays the top position's own. */
+
+/* EVERYTHING BELOW IS WRAPPED IN `orientation: portrait` ON PURPOSE: without
    it, these class-selector rules (specificity 1,2,1) outrank the plain
    `#layout-bar` landscape rules (1,0,0) regardless of which orientation is
    actually live — a media query changes WHEN a rule is eligible, never its
    specificity, so an unscoped class rule still wins the cascade in landscape
-   too. Scoping both sides to their own orientation is what lets the simpler
-   selector govern there without a specificity fight. */
+   too. Scoping them to portrait is what lets the simpler selector govern
+   there without a specificity fight. */
 @media (orientation: portrait) {
-body.laybar-bottom:not(.laybar-overflow) #layout-bar {
-  top: auto;
-  /* Vertically centered on the D-pad groups' own height band (`--group-h`,
-     already shaped for cross vs. column by client/style.css), so the bar
-     reads as sitting IN that row rather than floating above or below it. */
-  bottom: calc(var(--space-m) + var(--kb) + env(safe-area-inset-bottom, 0px)
-               + (var(--group-h) - var(--corner)) / 2);
-  /* `--group-w` (client/style.css, declared beside `--group-h`) is the real
-     rendered width of a `.group` — the same role `--corner` plays for the
-     corner buttons at the top. Mirroring the top row's own
-     `calc(space-m + X + space-s)` formula with `--group-w` in place of
-     `--corner` is what puts the bar exactly between the two columns, at
-     whichever shape (cross or column) is standing. */
-  left: calc(var(--space-m) + var(--group-w) + var(--space-s));
-  right: calc(var(--space-m) + var(--group-w) + var(--space-s));
-}
-/* At this shape the frame takes the whole bounded band exactly like the top
-   row's own base rule (`#lay-frame { flex: 1 1 auto }` above) — no override
-   needed, and the two-line name clamp stays the top position's own. */
 
 /* THE NO-ROOM FALLBACK — the shape this position always drew before task 237,
    kept now as the OVERFLOW case his ballot approved ("slika 2 ok"): its own
@@ -196,10 +239,16 @@ body.laybar-bottom:not(.laybar-overflow) #layout-bar {
    fits a usable name in. */
 body.laybar-bottom.laybar-overflow #layout-bar {
   top: auto;
+  /* The ONE placement that still CLEARS the groups' full height, and it must:
+     a full-width strip crosses both columns, so it cannot share their row. */
   bottom: calc(var(--space-m) + var(--kb) + env(safe-area-inset-bottom, 0px)
                + var(--group-h) + var(--space-s));
+  /* Undoing the base rule's centred cap: this shape's whole point is the full
+     row. `width: auto` with both edges pinned is what spends it. */
   left: var(--space-m);
   right: var(--space-m);
+  width: auto;
+  transform: none;
 }
 body.laybar-bottom.laybar-overflow #lay-frame { flex: 1 1 auto; }
 /* ONE LINE, THEN THE ELLIPSIS in the overflow strip — never wrap-then-ellipse.
@@ -217,8 +266,11 @@ body.laybar-bottom.laybar-overflow #lay-name {
    already fixed once. `body.laybar-overflow` without `.laybar-bottom` is the
    top case; `layBarFit()` sets it from the real gap between the corners. */
 body.laybar-overflow:not(.laybar-bottom) #layout-bar {
+  /* The full row, so the base rule's centred cap is undone here too. */
   left: var(--space-m);
   right: var(--space-m);
+  width: auto;
+  transform: none;
 }
 body.laybar-overflow:not(.laybar-bottom) .corner {
   top: calc(var(--space-m) + var(--vtop) + var(--corner) + var(--space-s));
@@ -231,36 +283,18 @@ body.laybar-overflow:not(.laybar-bottom) {
 }
 } /* @media (orientation: portrait) */
 
-/* ── LANDSCAPE IS ITS OWN GEOMETRY (ballot drawings 1-3, approved as drawn;
-   BUG FIXED task 237, point 3: it used to ignore the Bottom setting and take
-   the full width for no reason) ────────────────────────────────────────────
-   Centered, capped at a MAX width so a wide screen's edge is never spent end
-   to end — the portrait in-row/overflow CHOICE does not exist here at all:
-   `layBarFit()` skips the measurement entirely in landscape and never sets
-   `laybar-overflow` there (client/layouts.js), so this block is the WHOLE
-   rule regardless of position or overflow state. Arrows stay tight against
-   the frame, same as portrait — nothing about the bar's own shape changes. */
+/* ── LANDSCAPE HAS NO GEOMETRY OF ITS OWN ANY MORE (owner 2026-08-12) ───────
+   It used to: a centered bar under a 560 px cap at the top, and a bottom
+   position that cleared the whole D-pad instead of standing between the
+   columns. Both of those are now what EVERY orientation does — the base rule
+   centres and caps at `--laybar-max`, and the bottom rule above rides in the
+   row — so the two special cases were deleted rather than restated. What
+   remains is the one thing that really is only true here: `layBarFit()` skips
+   the measurement in landscape and never sets `laybar-overflow`, so there is
+   no "no room" case and the corners can never be pushed down. */
 @media (orientation: landscape) {
-  #layout-bar {
-    left: 50%;
-    right: auto;
-    top: calc(var(--space-m) + var(--vtop));
-    bottom: auto;
-    transform: translateX(-50%);
-    width: min(560px, calc(100% - 2 * (var(--space-m) + var(--corner) + var(--space-s))));
-  }
-  body.laybar-bottom #layout-bar {
-    top: auto;
-    /* CLEARS THE D-PAD, not sandwiched between the columns — landscape has no
-       in-row shape at all (there is nothing narrower to gain by trying: at a
-       915px-wide phone the capped, centered bar already reaches into the two
-       groups' own band). This is exactly the pre-237 bottom formula, applied
-       here because landscape kept it all along ("as drawn is OK"). */
-    bottom: calc(var(--space-m) + var(--kb) + env(safe-area-inset-bottom, 0px)
-                 + var(--group-h) + var(--space-s));
-  }
-  /* Corners never drop in landscape — there is no "no room" case here, the
-     bar is CAPPED, never squeezed the way it can be in portrait. */
+  /* Corners never drop in landscape — the bar is CAPPED here, never squeezed
+     the way it can be in portrait. */
   .corner { top: calc(var(--space-m) + var(--vtop)) !important; }
   #lay-frame { flex: 1 1 auto; }
 }

@@ -473,12 +473,13 @@ full width regardless) and is centered under a ~560 px cap.
   on every side of that 320-360 window so a later font or corner retune
   cannot flip the verdict by a few pixels.
 - **The bottom in-row rule** (`body.laybar-bottom:not(.laybar-overflow)
-  #layout-bar`, wrapped in `@media (orientation: portrait)` — see below for
-  why the wrap is load-bearing) centers the bar vertically on the D-pad
-  groups' own height band (`bottom: … + (--group-h − --corner)/2`) and bounds
-  it horizontally with `--group-w` mirroring the top row's own
-  `space-m + X + space-s` formula. No frame override is needed — the base
-  `#lay-frame { flex: 1 1 auto }` rule already applies.
+  #layout-bar`) puts the bar's own bottom edge exactly where a `.group`'s is
+  (`space-m + --kb + safe-area`) and caps its width at `--laybar-max` inside
+  the room the two columns leave (`--group-w` mirroring the top row's own
+  `space-m + X + space-s` formula). No frame override is needed — the base
+  `#lay-frame { flex: 1 1 auto }` rule already applies. **It is not scoped to
+  an orientation** — see the 2026-08-12 section below, which rewrote both
+  halves of this rule.
 - **The overflow fallback** at the bottom (`body.laybar-bottom.laybar-overflow
   #layout-bar`) is the exact pre-237 rule this file described above: its own
   strip, above the D-pad, spending the whole edge, one-line name. At the top
@@ -487,14 +488,12 @@ full width regardless) and is centered under a ~560 px cap.
   `top + --corner + --space-s` — below the bar's row. `--topbar` (the line
   every floating notice starts below) grows by one more `--corner` in this
   state, so a toast never covers the dropped corner row.
-- **Landscape is its own geometry**, in `@media (orientation: landscape)`:
-  centered (`left: 50%; transform: translateX(-50%)`), capped at
-  `min(560px, 100% - 2*(space-m+corner+space-s))`, honoring Top/Bottom for
-  VERTICAL placement only — at the bottom it clears the D-pad exactly like the
-  pre-237 formula (`+ --group-h + --space-s`), because landscape never had an
-  in-row shape to offer in the first place: a 915px-wide phone's capped,
-  centered bar already reaches into the two groups' own band, so sandwiching
-  gains nothing narrower is fought for.
+- **Landscape used to be its own geometry**, in `@media (orientation:
+  landscape)`: centered, capped at 560 px, and at the bottom clearing the
+  D-pad's whole height because a 560 px bar on a 915 px phone already reached
+  into the two groups' own band. Both halves were folded into the shared rules
+  on 2026-08-12 (below) once the cap came down to 420 px and the band became
+  wide enough to sandwich the bar in every size this project ships to.
 - **Why the portrait rules are wrapped in `@media (orientation: portrait)`
   instead of standing bare**: a media query changes WHEN a rule is eligible,
   never its SPECIFICITY. The bottom-position class selectors
@@ -505,13 +504,63 @@ full width regardless) and is centered under a ~560 px cap.
   a `left`/`right` box the portrait rule had already pinned, landing 280 px
   off-screen). Scoping both sides to their own orientation lets the simpler
   selector govern in landscape without a specificity fight.
-- Gate: `tests/test_phone_chrome.py` → `_bar_geometry_checks`, three
-  planted-defect-proven claims, one per size in `SIZES` (portrait phone,
-  landscape, and the new tablet-portrait 800x1280 entry) — his phone
-  overflows both positions, his tablet fits in-row at the bottom at the SAME
-  size as the top bar, and landscape honors Bottom while staying centered
-  under the cap. `tests/test_layout_audit.py` and `tests/run_guards.py` stay
-  green; visual proof in `.claude/layout-proof.md` → "ROUND 44".
+- Gate: `tests/test_phone_chrome.py` → `_bar_geometry_checks`, planted-defect-
+  proven claims, one set per size in `SIZES` (portrait phone, landscape, and
+  the tablet-portrait 800x1280 entry) — his phone overflows both positions,
+  his tablet fits in-row at the bottom, and landscape honors Bottom. Their
+  exact numbers were re-decided on 2026-08-12; see below.
+  `tests/test_layout_audit.py` and `tests/run_guards.py` stay green; visual
+  proof in `.claude/layout-proof.md` → "ROUND 44".
+
+## One maximum, one bottom row, and no bar means no row (owner 2026-08-12)
+
+Three reports of his landed on this same strip of screen, and the fix for each
+is one rule:
+
+- **"The maximum width is too large."** There were two answers before — 560 px
+  in landscape, and no cap at all in portrait, where the bar simply stretched
+  between whatever stood beside it. There is ONE now: `--laybar-max`, **420
+  px**, declared at the top of `client/layouts.css` and spent by EVERY in-row
+  placement (top and bottom, portrait and landscape). The base `#layout-bar`
+  rule is what centers and caps — `left: 50%; transform: translateX(-50%);
+  width: min(--laybar-max, 100% − 2·(space-m + --corner + space-s))` — so the
+  bar is never stretched edge to edge between its neighbours again. What the
+  old bounded-both-sides rule protected (a long name pushing the › arrow or
+  the ✕ off the screen, owner 2026-08-03) is now the `width` calc's job, and
+  the name still wraps to a second line rather than growing the box.
+  The OVERFLOW shapes are the exception and undo the cap explicitly
+  (`width: auto; transform: none` with both edges pinned): there the whole
+  point is the full row.
+- **"With the bar at the bottom it draws above or among the button groups,
+  never down in the bottom row where it belongs"** (his tablet, BOTH
+  orientations). The in-row rule used to centre the bar on the groups' HEIGHT
+  BAND, `(--group-h − --corner)/2` — and that band is 190 px in the cross
+  shape but **306 px** in the column shape, so the bar climbed a third of the
+  way up a tablet and past half of a phone. A bar that rides IN the row shares
+  the row's BASELINE: `bottom: space-m + --kb + safe-area`, byte for byte the
+  `.group` rule's own bottom, whatever shape the pads wear. The rule also left
+  its `@media (orientation: portrait)` wrapper, because his report named
+  landscape too — with the 420 px cap there IS room between the columns at
+  every size shipped (915 px landscape phone: 487 px of band; 1280 px tablet:
+  852 px), so landscape's separate "clear the whole D-pad" rule was deleted
+  rather than restated. Clearing the groups' full height is now the OVERFLOW
+  shape alone, where it is unavoidable: a full-width strip crosses both
+  columns and cannot share their row.
+- **"Pressing nothing at all, the top buttons sit one row down."** With NO
+  layout created there is no bar — and `layBarFit()` measured the corner-to-
+  corner gap anyway. On any phone-width screen that gap is under the minimum,
+  so `laybar-overflow` was set at load, the corners dropped a whole row and
+  the space they left was reserved for a bar that does not exist. It now
+  clears the class and returns when `layoutBar.hidden`; `updateLayoutBar()`
+  sets `hidden` before calling it, so the verdict is re-taken the moment the
+  first layout is born and again when the last one goes.
+
+Gates: `_bar_geometry_checks` in `tests/test_phone_chrome.py` — the tablet's
+in-row bar is measured against the D-pad's own baseline and the 420 px cap,
+landscape asserts the same two plus "between the columns", and a new check
+drives BOTH bar positions with no layouts staged and fails if either the
+overflow class or a dropped corner survives. Both new claims were proven red
+by planting their own defect.
 
 ## The desktop is a LIST OF MONITORS (owner 2026-08-09, task 155)
 

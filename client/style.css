@@ -468,13 +468,18 @@ body.wheel-open::before {
 }
 .wheel-x svg { width: 26px; height: 26px; }
 
-/* --- The mini radial of a two-job button (owner 2026-08-09, task 158) ------
-   Two options that drop SOUTH and SOUTH-EAST of the button that opened them —
-   his geometry, chosen for the analog stick that is coming (client/chrome.js).
+/* --- The mini radial of a multi-job button (owner 2026-08-09, task 158;
+   widened to three options 2026-08-12) --------------------------------------
+   Options that drop EAST / SOUTH-EAST / SOUTH of the button that opened them
+   (a two-option button takes the SOUTH and SOUTH-EAST pair) — his geometry,
+   chosen for the analog stick (client/chrome.js).
    It is NOT the category wheel: no veil, no ring, no centre ✕. Those exist
    because the wheel replaces the whole screen with a choice of eight; this is
-   two buttons beside one corner, and dimming the PC's picture for it would say
-   "something big is happening" when nothing is.
+   two or three buttons beside one corner, and dimming the PC's picture for it
+   would say "something big is happening" when nothing is. The centered variant
+   that DID borrow the wheel's veil and ✕ (task 186) was reversed by the owner
+   on 2026-08-12 and deleted with its `body.mini-open::before` layer — see the
+   note in client/chrome.js.
    z-index 36 — above the wheel's own layer, so the two can never fight for the
    same tap, and above the corners (30) it is anchored to. */
 #mini-radial {
@@ -483,27 +488,6 @@ body.wheel-open::before {
   z-index: 36;
 }
 #mini-radial[hidden] { display: none; }
-/* THE THREE-WAY RADIAL STANDS IN THE MIDDLE (owner 2026-08-09, task 186:
-   "najbolje da se držimo istog pravila" — lang-ok: owner quote). The rule he
-   means is the category wheel's, so this variant borrows the wheel's veil and
-   the wheel's own ✕: a choice that takes the whole screen says so, exactly as
-   the wheel does, while the two-option anchored radial above deliberately
-   does not. Only these three declarations differ — the options are the same
-   `.mini-item` faces, placed by the same code. */
-/* THE VEIL IS THE WHEEL'S OWN LAYER, and that is not decoration: a veil
-   painted UNDER the options (this element is z-index 36) is exactly the defect
-   measured above — it costs a coloured face far more luminance than it costs
-   white, and no ink can recover it. So it rides `body.mini-open::before` at
-   z-index 10, over the stream and under every control, byte for byte the
-   `body.wheel-open` rule. */
-body.mini-open::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  z-index: 10;
-  background: var(--scrim-soft);
-  pointer-events: none;      /* the tap belongs to #mini-radial */
-}
 #mini-radial .mini-item.current {
   border-color: var(--accent);
   box-shadow: 0 0 0 2px var(--accent-glow), 0 0 22px var(--accent-glow);
@@ -528,7 +512,7 @@ body.mini-open::before {
      clear of every edge. 74 is not a taste — it is the WIDEST face that still
      opens straight below the Layout (+) button without being pushed sideways
      by the screen-edge clamp: that corner's centre is 16 + 58/2 = 45 px in,
-     and 74/2 + MINI_EDGE = 45. A wider face would shift the first option off
+     and 74/2 + MINI_EDGE = 45. A wider face would shift the SOUTH option off
      the anchor's axis, which is the geometry the owner chose for the analog
      stick (chrome.js) and which tests/test_phone_chrome.py holds to 2 px.
      Height stays `--corner`, so AR is 1.28 and the 16 px radius is still
@@ -737,8 +721,20 @@ body.hidden-controls #wheel,
 body.hidden-controls #anywhere-banner,
 body.hidden-controls #layout-bar,
 body.hidden-controls #mini-radial,
-body.hidden-controls .corner-tr,
 body.hidden-controls .corner-tl { display: none; }
+/* …EXCEPT IN `sticky`, WHERE THE HIDE BUTTON IS THE ONLY DOOR (owner report
+   2026-08-12). The rule above is right for `auto` — any touch brings
+   everything back, so nothing is lost by hiding the button too. In `sticky`
+   NOTHING comes back by itself, by design, and hiding the one control that can
+   undo it left him with a page he could not recover: "kad pritisnem Hide sve
+   nestane zauvek" (lang-ok: his own report, quoted). His own spec for the mode
+   had already named the exception — the only thing that must remain in that
+   mode is the Hide button. `body.hide-sticky` is written by
+   `setControlsHidden` (client/chrome.js) from the live mode, so the two
+   classes can never disagree about which state the page is in.
+   The LAYOUT corner (`.corner-tl`) stays hidden in both modes on purpose: it
+   is not a way out, it is a second button, and hidden means hidden. */
+body.hidden-controls:not(.hide-sticky) .corner-tr { display: none; }
 
 /* --- Region grab (Attach, owner 2026-08-05) -------------------------------
    A frame the finger sizes and moves anywhere, then Send captures what is

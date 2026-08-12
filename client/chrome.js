@@ -20,13 +20,31 @@
 
 const hideBtn = document.getElementById("btn-hide");
 
+// STICKY KEEPS ITS OWN DOOR (owner report 2026-08-12: pressing Hide made
+// everything vanish for good). `body.hidden-controls` took the Hide button
+// with it — and in `sticky` NOTHING else brings the controls back, by design,
+// so the one press that hides was also the last press the page would ever
+// accept. His own spec for the mode had already said what must not go:
+//   lang-ok: owner quote
+//   "jedino što mora da ostane u tom modu je dugme Hide"
+// So the state class is joined by a class that names the MODE, and
+// client/style.css hides `.corner-tr` only under
+// `body.hidden-controls:not(.hide-sticky)`. In `auto` nothing changes — any
+// contact brings everything back, so the corner may go with the rest. The
+// Layout corner stays hidden in BOTH modes: hidden means hidden, and the one
+// exception is the way out, not a second button.
+//
+// This function stays the ONE writer of the hidden state, and the mode class
+// is written here for the same reason: two writers of one visual state is how
+// a flag someone forgot to clear earns this feature its reputation.
 function setControlsHidden(hidden) {
   document.body.classList.toggle("hidden-controls", hidden);
+  document.body.classList.toggle("hide-sticky", hideMode() === "sticky");
   hideBtn.classList.toggle("active", hidden);
 }
 
-// ── A BUTTON WITH TWO JOBS OPENS A SMALL RADIAL BESIDE IT (owner 2026-08-09,
-// task 158, with his sketch) ─────────────────────────────────────────────────
+// ── A BUTTON WITH MORE THAN ONE JOB OPENS A SMALL RADIAL BESIDE IT (owner
+// 2026-08-09, task 158, with his sketch; widened to THREE 2026-08-12) ────────
 //
 // His geometry, and the reason for it: the two options drop straight below the
 // button and below-diagonal from it — SOUTH and SOUTH-EAST — and that pair was
@@ -35,8 +53,19 @@ function setControlsHidden(hidden) {
 //   "važi za analog koji će na taj način lakše to birati"
 // Two directions a thumb can point at without ambiguity is a gamepad
 // affordance first; the finger simply inherits it. So the angles are fixed and
-// named here rather than spread from the option count — a third job would take
-// SOUTH-WEST, never a re-spread ring.
+// named here rather than spread from the option count.
+//
+// THREE OPTIONS TAKE THE SAME FAN, ONE QUARTER-TURN WIDE (owner decision
+// 2026-08-12, reversing task 186's centered ring for the Layout button):
+// EAST, SOUTH-EAST, SOUTH. Every option sits 45° from its neighbour — exactly
+// the separation the two-option pair already has — and all three stay inside
+// the quadrant a TOP-LEFT corner button has free, so nothing is ever clamped
+// by an edge. His verdict is that a button's options belong beside the button
+// in ALL situations, phone portrait included: the Layout row stands above the
+// picture, so the fan opens into it with room to spare. A FOURTH direction
+// would have to shrink the separation below 45° or leave the quadrant, which
+// is why the cap is stated out loud below (`MINI_MAX`) instead of being an
+// accident of how many options a caller happens to pass.
 //
 // EACH OPTION IS A REAL BUTTON, drawn AND labelled:
 //   lang-ok: owner quote
@@ -56,11 +85,27 @@ function setControlsHidden(hidden) {
 // overlapped by 9 px — the re-grade of 2026-08-11 caught it. The separator is
 // the HORIZONTAL gap (the two options always share vertical range):
 // dx = R·cos45 must clear the face width plus daylight — 114·0.707 ≈ 80.6 px
-// against 74 px faces leaves the same ~7 px the original pairing had.
+// against 74 px faces leaves the same ~7 px the original pairing had. The
+// three-option fan is the SAME arithmetic read the other way round: EAST and
+// SOUTH-EAST share horizontal range, so what has to clear is their vertical
+// distance, dy = R·sin45 ≈ 80.6 px against a 58 px face (`--corner`) — 22 px
+// of daylight, more than the pair below it has.
 const MINI_RADIUS = 114;
 
 const MINI_EDGE = 8;         // px an option keeps clear of the screen edge
-const MINI_ANGLES = { south: Math.PI / 2, diagonal: Math.PI / 4 };
+const MINI_MAX = 3;          // directions this quadrant holds — see above
+const MINI_ANGLES = { east: 0, diagonal: Math.PI / 4, south: Math.PI / 2 };
+
+// WHICH directions a radial of N options takes, in the order its options were
+// given. Written out per count rather than spread from it: a PAIR hangs below
+// the button (S, SE) while a FAN opens across the quadrant (E, SE, S), so the
+// pair is not "the first two of the three" and never was. Hide is the pair;
+// the Layout button's three sources are the fan.
+function miniAngleSet(count) {
+  return count >= 3
+    ? [MINI_ANGLES.east, MINI_ANGLES.diagonal, MINI_ANGLES.south]
+    : [MINI_ANGLES.south, MINI_ANGLES.diagonal];
+}
 
 const miniEl = document.createElement("div");
 miniEl.id = "mini-radial";
@@ -72,12 +117,24 @@ document.body.appendChild(miniEl);
 // than on it: it is an element reference, not a string.
 let miniAnchor = null;
 
+// THE ANGLE EACH OPTION REALLY ENDED UP AT, measured from the anchor's centre
+// AFTER the edge clamp — the controller's half of the same geometry (task 186,
+// re-pointed 2026-08-12). The pad used to derive the direction of item i from
+// the count, which is only true of a ring; the fan's directions are E/SE/S and
+// a right-half anchor mirrors them. Recording what was placed means the stick
+// points at where the option IS, whatever the placement rule does next, and
+// there is no second copy of the arithmetic to drift (constraint 9).
+let miniAngles = [];
+
+function miniRadialAngles() {
+  return miniAngles;
+}
+
 function closeMiniRadial() {
   miniEl.hidden = true;
   miniEl.innerHTML = "";
-  miniEl.classList.remove("centered");
-  document.body.classList.remove("mini-open");
   miniAnchor = null;
+  miniAngles = [];
 }
 
 // What the CONTROLLER needs of this component, and nothing more (task 186).
@@ -110,10 +167,12 @@ function miniRadialPoints(anchor, count, screen) {
   // The anchor's own side decides which way the diagonal leans — measured from
   // the anchor, never from where the finger happened to land.
   const lean = cx > screen.width / 2 ? -1 : 1;
-  const angles = [MINI_ANGLES.south, MINI_ANGLES.diagonal];
+  const angles = miniAngleSet(count);
   const half = anchor.size / 2 + MINI_EDGE;
-  return angles.slice(0, count).map((a, i) => {
-    const dx = i === 0 ? 0 : lean * MINI_RADIUS * Math.cos(a);
+  return angles.slice(0, count).map((a) => {
+    // SOUTH's own cosine is zero, so the pair's first option still lands on the
+    // anchor's axis exactly as it did when that case was written out by index.
+    const dx = lean * MINI_RADIUS * Math.cos(a);
     const dy = MINI_RADIUS * Math.sin(a);
     return {
       x: Math.min(Math.max(cx + dx, half), screen.width - half),
@@ -122,52 +181,25 @@ function miniRadialPoints(anchor, count, screen) {
   });
 }
 
-// ── AND THE THREE-WAY ONE STANDS IN THE MIDDLE OF THE SCREEN (owner
-// 2026-08-09, task 186, answering his own sketch) ───────────────────────────
+// ── THE CENTERED RING IS GONE (owner decision 2026-08-12) ──────────────────
 //
-// His sketch had the layout-birth radial beside the Layout (+) button, like
-// the two above. He changed it himself when the options became three:
-//   lang-ok: owner quote
-//   "najbolje da se držimo istog pravila"
-// The rule he means is the category wheel's — CENTERED, with a ✕ in the middle
-// — and it is the right one for three options for a reason the two-option case
-// does not have: a corner cannot hold three distinct directions without one of
-// them being clamped by an edge, and the whole point of the geometry is that a
-// thumb can point at each option unambiguously.
+// Between 2026-08-09 and this date the layout-birth radial had a SECOND
+// placement: a ring in the middle of the screen behind the category wheel's
+// veil, with the wheel's own ✕, adopted when its options became three
+// ("najbolje da se držimo istog pravila" — lang-ok: owner quote). He reversed
+// it after living with it: the options open BESIDE the Layout button, in every
+// situation, as the fan above. The ring, its radius, its veil
+// (`body.mini-open::before`) and its ✕ were deleted the same day rather than
+// left standing unreachable — a second placement nobody opens is the legacy
+// this project keeps paying for (CLAUDE.md constraint 6).
 //
-// SAME COMPONENT, not a second one. The angles are the WHEEL'S OWN
-// (`-PI/2 + i*2PI/n` — item 0 straight up, increasing i sweeping clockwise),
-// so the pad's `padPointedIndex` maps a stick angle onto this ring with the
-// arithmetic it already uses for L1/R1, and an option is still a `.ctl` built
-// by `makeButton`. One radial, two placements, one grammar.
-const MINI_RING_RADIUS = 132;
-
-// PURE — the ring's option centres, so its gate can drive any screen and any
-// count by argument. The radius shrinks on a small screen rather than letting
-// an option leave it: `half` is the option's own half-face plus the edge
-// keep-out, exactly as the anchored clamp above uses it.
-function miniRingPoints(count, screen, size) {
-  const cx = screen.width / 2;
-  const cy = screen.height / 2;
-  const half = (size || 74) / 2 + MINI_EDGE;
-  const r = Math.max(
-    half,
-    Math.min(MINI_RING_RADIUS,
-             Math.min(screen.width, screen.height) / 2 - half));
-  return Array.from({ length: count }, (_, i) => {
-    const a = -Math.PI / 2 + (i * 2 * Math.PI) / Math.max(1, count);
-    return { x: cx + r * Math.cos(a), y: cy + r * Math.sin(a) };
-  });
-}
-
 // The D-pad group's own CATEGORY wheel (controls.js -> openWheel) draws a
-// bigger, plain ring — not the centered mini-radial above, which caps at four
-// options by design (Tap/List/New). Its own points live here, next to
-// `miniRingPoints`, because they are the SAME fix for the SAME shape: task
+// bigger, plain ring of its own — that one is alive and is what the points
+// below place. It is the SAME fix for the SAME shape: task
 // 238, owner screenshot, "in landscape the wheel shows only four sets while
 // portrait shows all enabled ones". `openWheel` used a fixed 118 px radius
-// with NO clamp at all — unlike `miniRingPoints`, which already shrinks on a
-// small screen rather than letting an option leave it. A phone's landscape
+// with NO clamp at all — unlike the mini radial, which has always clamped an
+// option back onto the screen rather than letting it leave. A phone's landscape
 // HEIGHT is its SHORT side (~360-412 px, against an ~900 px portrait height),
 // so the same 118 px radius that comfortably fits six-plus items in portrait
 // leaves only a thin margin in landscape — and on a real device (a slightly
@@ -179,7 +211,7 @@ function miniRingPoints(count, screen, size) {
 // keeps every item ON the ring and ON screen, whatever the count; nothing is
 // ever sliced off the list — the actual "drop entries silently" failure is
 // what this function exists to NOT do. PURE, so its gate can drive every
-// size and count by argument, same discipline as `miniRingPoints`.
+// size and count by argument, the same discipline `miniRadialPoints` keeps.
 const WHEEL_RADIUS = 118;
 const WHEEL_ITEM_SIZE = 74;  // px — matches .wheel-item in style.css
 const WHEEL_EDGE = 8;        // px an item keeps clear of the screen edge
@@ -195,8 +227,8 @@ function wheelPoints(count, screen, size) {
   });
 }
 
-// `options` = [{icon, label, onPick}] — at most two ANCHORED (see the note
-// above), up to four on the centered ring.
+// `options` = [{icon, label, onPick}] — at most `MINI_MAX`, anchored beside
+// the button that owns them (see the geometry note above).
 //
 // A SECOND PRESS OF THE SAME BUTTON CLOSES IT, and that is not a convenience —
 // it is the only way OUT for the gamepad (found by the input gate, 2026-08-11).
@@ -208,44 +240,14 @@ function wheelPoints(count, screen, size) {
 // activator is unchanged and still the one a finger runs: what changed is that
 // the activator's own body now toggles, so BOTH input paths get the same door
 // in and the same door out, which is what constraint 12 is for.
-function openMiniRadial(anchorEl, options, opts) {
-  const centered = !!(opts && opts.centered);
+function openMiniRadial(anchorEl, options) {
   const reopening = !miniEl.hidden && miniAnchor === anchorEl;
   closeMiniRadial();
   if (reopening) return;
   miniAnchor = anchorEl;
   const screen = { width: window.innerWidth, height: window.innerHeight };
-  if (centered) {
-    miniEl.classList.add("centered");
-    document.body.classList.add("mini-open");
-    const items = options.slice(0, 4);
-    const points = miniRingPoints(items.length, screen, 74);
-    items.forEach((opt, i) => {
-      const el = makeButton("ctl mini-item", opt.icon, opt.label);
-      el.style.left = `${points[i].x}px`;
-      el.style.top = `${points[i].y}px`;
-      // The pick is held ON the element so BOTH input paths reach the same
-      // one: the finger through `keepFocus`, the pad through `miniRadialPick`.
-      // A second copy of the option list for the controller is exactly the
-      // parallel button path constraint 9 was written about.
-      el.__miniPick = () => {
-        closeMiniRadial();
-        opt.onPick();
-      };
-      keepFocus(el, () => el.__miniPick());
-      miniEl.appendChild(el);
-    });
-    // The ✕ in the middle, the wheel's own (`.wheel-x`) — his "same rule".
-    const x = document.createElement("div");
-    x.className = "wheel-x mini-x";
-    x.innerHTML = svg("x");
-    keepFocus(x, closeMiniRadial);
-    miniEl.appendChild(x);
-    miniEl.hidden = false;
-    return;
-  }
   const r = anchorEl.getBoundingClientRect();
-  const items = options.slice(0, 2);
+  const items = options.slice(0, MINI_MAX);
   const points = miniRadialPoints(
     // `size` is the OPTION's own face, not the anchor's: the clamp exists to
     // keep an option on screen, so it must be told how big an option is. It is
@@ -255,11 +257,20 @@ function openMiniRadial(anchorEl, options, opts) {
     // option further from an edge, never closer.
     { left: r.left, top: r.top, width: r.width, height: r.height, size: 74 },
     items.length, screen);
+  // The direction the CONTROLLER has to point along, per option, measured from
+  // what was actually placed — lean and edge clamp already in it.
+  const cx = r.left + r.width / 2;
+  const cy = r.top + r.height / 2;
+  miniAngles = points.map((p) => Math.atan2(p.y - cy, p.x - cx));
   items.forEach((opt, i) => {
     // The SAME maker every other button on this page goes through.
     const el = makeButton("ctl mini-item", opt.icon, opt.label);
     el.style.left = `${points[i].x}px`;
     el.style.top = `${points[i].y}px`;
+    // The pick is held ON the element so BOTH input paths reach the same one:
+    // the finger through `keepFocus`, the pad through `miniRadialPick`. A
+    // second copy of the option list for the controller is exactly the
+    // parallel button path constraint 9 was written about.
     el.__miniPick = () => {
       closeMiniRadial();
       opt.onPick();

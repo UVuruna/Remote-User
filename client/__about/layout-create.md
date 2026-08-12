@@ -72,7 +72,7 @@ vocabulary, so the phone never has two competing card styles.
 | `cancelCreation(silent)` | Ends the session and clears `layoutArm` — the + button's second tap, the backdrop tap, and Cancel all land here. |
 | `refreshNewlayButton()` | Lights the + button while a session or an armed tap is live. |
 | `keepRowTap(el, onTap)` | Task 227b's row activator: selects on RELEASE under 12px travel, reusing `pressVerdict`. Never `preventDefault`s on `pointerdown` — that is what let a row's tap steal the list's own scroll. Used by every row of every creation-panel list (`entryRow`, `recentRow`, `recentHistoryRow`), never `keepFocus`. |
-| `openRecentHistoryPanel()` / `handleLayoutRecent(msg)` | Task 228's fourth source: asks the server for `layout_history` (`layout_recent`) and shows it; a tap sends `layout_recent_use {id}` — matching, creating and the found/missing toast all happen server-side. |
+| `openRecentHistoryPanel()` / `handleLayoutRecent(msg)` | Task 228's Recent source: asks the server for `layout_history` (`layout_recent`) and shows it; a tap sends `layout_recent_use {id}` — matching, creating and the found/missing toast all happen server-side. Off the birth radial since 2026-08-12 (owner), panel and protocol kept whole. |
 
 ## Design Decisions
 
@@ -250,9 +250,10 @@ column and take the same width (task 156's rule, ALG-5).
 
 > "recent imaju svi" <!-- lang-ok: owner quote -->
 
-The source radial now offers **New / List / Tap** (one word each, each with its
+The source radial offers **New / Tap / List** (one word each, each with its
 own drawn face in `icons.js` — his ruling that the SVG matters more than the
-word). New asks the PC what it can open (`GET /recents`), draws the answer
+word; that array's ORDER is the fan's E / SE / S mapping since 2026-08-12, see
+below). New asks the PC what it can open (`GET /recents`), draws the answer
 grouped by app with each app's recents indented under its heading, and opens
 the chosen one (`POST /recents/open`). The window that appears becomes a slot
 and everything from there is the ordinary creation flow — nothing new on the
@@ -333,9 +334,8 @@ selected regardless).
 ## A FOURTH source: Recent — a layout already built before (owner report 2026-08-11, task 228)
 
 Tap / List / New all build from what stands on the desk NOW; none of them
-remember what he built YESTERDAY. **Recent** is the radial's fourth option
-(`icons.js` → `recentwin`, a drawn clock, never a font glyph — the ✥ lesson
-of 2026-08-05): it asks the server for its persisted creation log
+remember what he built YESTERDAY. **Recent** asks the server for its persisted
+creation log
 (`layout_recent {}`) and shows it (`renderRecentHistoryPanel`, reusing
 `.lay-item` row styling and `keepRowTap`). A tap sends
 `layout_recent_use {id}` and shows the ordinary loading cube — everything
@@ -343,9 +343,14 @@ else (matching the remembered members against what is open now, creating,
 and the "N of M found" toast) happens entirely server-side; see
 [Layout History](../../server/__about/layout_history.md).
 
-`openMiniRadial` (`chrome.js`) already drew up to four options on its
-centred ring — adding a fourth item here is the whole change this file makes
-to that radial; chrome.js itself is untouched.
+**It is no longer ON the radial** (owner decision 2026-08-12). It rode the
+centred ring as its fourth option for one day; when he reversed that ring for
+an anchored three-option fan (see [Chrome](chrome.md)) he dropped Recent from
+the options at the same time. Everything BEHIND it was deliberately kept —
+`openRecentHistoryPanel`, `handleLayoutRecent`, `renderRecentHistoryPanel`,
+the `layout_recent` / `layout_recent_use` messages and the PC's whole history
+file — so the next door onto this list costs one call and no server work.
+Only the entry point was withdrawn.
 
 Gate: `tests/test_layout_history.py` (the server half — dedupe, ranking,
 re-match, each proven by planting its own defect).

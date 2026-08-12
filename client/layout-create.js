@@ -98,43 +98,46 @@ function newCreation(source) {
 //   lang-ok: owner quote
 //   "kada neki button kao što su ti gornji ima dve tri funkcije … onako pored
 //    njega spuste dve te opcije"
-// SOUTH and SOUTH-EAST, in that order, because the analog stick that is coming
-// picks a direction and not a card (the geometry and its reason live once, in
-// client/chrome.js → openMiniRadial). Each option is a real button with its
-// icon and its words, exactly like every other button on this page — the same
-// `makeButton`, so it can never drift from them.
+// BESIDE THE BUTTON, in the directions the analog stick can pick without
+// ambiguity — the geometry and its reason live once, in client/chrome.js →
+// openMiniRadial. Each option is a real button with its icon and its words,
+// exactly like every other button on this page — the same `makeButton`, so it
+// can never drift from them.
 //
 // CANCELLING IS THE BUTTON ITSELF, and that is why no Cancel chip came across:
-// the radial's backdrop is the whole screen, a tap anywhere outside the two
+// the radial's backdrop is the whole screen, a tap anywhere outside the
 // options closes it, and Layout's own press already cancels an armed session
-// (see the handler above). A modal needed a Cancel; two buttons on the picture
-// do not.
-// THREE SOURCES NOW, AND THEY STAND IN THE MIDDLE OF THE SCREEN (owner
-// 2026-08-09, tasks 184 + 186). The third — **New** — makes a layout out of a
-// window that is not open yet, which is the point of task 184; and with three
-// options his own answer moved the radial to the centre, the category wheel's
-// rule ("najbolje da se držimo istog pravila" — lang-ok: owner quote). The
-// geometry, the ✕ and the pointing grammar all live once, in chrome.js.
+// (see the handler above). A modal needed a Cancel; buttons on the picture do
+// not.
+//
+// THREE SOURCES, AND THEY OPEN AS A FAN AROUND THE BUTTON (owner decision
+// 2026-08-12, superseding task 186's centered ring and task 228's fourth
+// option). Between 2026-08-09 and now this radial stood in the MIDDLE of the
+// screen behind a veil, because three options had felt like the category
+// wheel's job; he reversed that after using it — the options belong beside the
+// button they came out of, exactly like the Hide button's two modes, in ALL
+// situations (his own check: it fits phone portrait too, since the Layout
+// button's row stands above the picture). So: **New → EAST, Tap → SOUTH-EAST,
+// List → SOUTH**, and THE ORDER OF THIS ARRAY IS THAT MAPPING — `chrome.js`
+// hands option i the i-th direction of the fan, and the controller points at
+// the direction the option really ended up at (no second table to keep in
+// step).
+//
+// **Recent** left the radial in the same decision. Its panel, its
+// `layout_recent` messages and the PC's whole history file stay exactly as
+// they are (`openRecentHistoryPanel` below) — what he dropped is the entry
+// point on this radial, which is why nothing about the protocol changed.
 //
 // ONE WORD EACH, AND THE DRAWING CARRIES IT (his ruling ~20:25, task 184):
 // "the SVG matters more than the word — users learn the radial after a couple
-// of uses or from the guide". So Tap / List / New, each with a face of its own
-// in icons.js. His pick between his three word-triples (tap-point-touch /
-// list-open-current / new-create-start) is the one thing still open here, and
-// changing a word is changing three strings — nothing about the flow.
-// A FOURTH SOURCE (owner report 2026-08-11, task 228): "Recent" — a layout
-// already built before, on this very PC, re-created from the server's own
-// history (client/chrome.js's `openMiniRadial` already draws up to four on
-// its centred ring; adding a fourth item here is the whole change this file
-// makes to that radial). Placed last so New/List/Tap keep the exact ring
-// positions they have always drawn — see `openRecentHistoryPanel` below.
+// of uses or from the guide". So New / Tap / List, each with a face of its own
+// in icons.js.
 function openSourceChooser() {
   openMiniRadial(newlayBtn, [
     { icon: "winplus", label: "New", onPick: openRecentsPanel },
-    { icon: "listwin", label: "List", onPick: startListSource },
     { icon: "tapwin", label: "Tap", onPick: startTapSource },
-    { icon: "recentwin", label: "Recent", onPick: openRecentHistoryPanel },
-  ], { centered: true });
+    { icon: "listwin", label: "List", onPick: startListSource },
+  ]);
 }
 
 // ── NEW: A WINDOW THAT IS NOT OPEN YET (owner 2026-08-09, task 184) ─────────
@@ -291,6 +294,12 @@ async function openRecentEntry(e) {
 // change in the seconds between the ask and the tap and only the server ever
 // sees it fresh — the same reasoning `openRecentsPanel`'s New source lives
 // by, one door further in.
+//
+// IT IS NOT ON THE BIRTH RADIAL ANY MORE (owner decision 2026-08-12): the fan
+// carries New / Tap / List and nothing else. The panel and the whole
+// `layout_recent` protocol behind it were deliberately KEPT — only the entry
+// point was withdrawn, so the next door onto this list costs one call and no
+// server work.
 async function openRecentHistoryPanel() {
   if (!creating) creating = newCreation("recent");
   refreshNewlayButton();

@@ -106,9 +106,17 @@ a picture and with the words that say what they do. The geometry is his too:
 SOUTH and SOUTH-EAST, chosen for the ANALOG STICK that is coming, so the same
 two directions serve a thumb on a controller later.
 
-- `openMiniRadial(anchorEl, options)` places at most two options around the
-  button that opened them, and `miniRadialPoints` is the geometry alone —
-  PURE, so its gate drives every corner by argument.
+- `openMiniRadial(anchorEl, options)` places at most `MINI_MAX` (3) options
+  around the button that opened them, and `miniRadialPoints` is the geometry
+  alone — PURE, so its gate drives every corner by argument.
+- **Two options and three take different directions**, which is why
+  `miniAngleSet(count)` writes each list out instead of spreading one from the
+  count. A PAIR hangs below the button (SOUTH, SOUTH-EAST — Hide's two modes).
+  A FAN opens across the whole free quadrant (EAST, SOUTH-EAST, SOUTH — the
+  Layout button's three sources since 2026-08-12), every option 45° from its
+  neighbour, which is the same separation the pair has and the reason a thumb
+  can pick one without ambiguity. A fourth direction would have to halve that
+  separation or leave the quadrant, so `MINI_MAX` says three out loud.
 - **An option is a real `.ctl`.** It is built by `makeButton` from
   [Controls](controls.md) — the same icon size, the same label treatment as the
   D-pad and the corners. There is no second button implementation to drift from
@@ -135,15 +143,22 @@ two directions serve a thumb on a controller later.
   south-WEST on the right half. The two directions stay distinct and diagonal,
   which is all a stick needs.
 - **It is NOT the category wheel.** No veil, no ring, no centre ✕: the wheel
-  replaces the whole screen with a choice of eight, this is two buttons beside
-  one corner. A tap anywhere else cancels, exactly like the wheel's backdrop.
+  replaces the whole screen with a choice of eight, this is two or three
+  buttons beside one corner. A tap anywhere else cancels, exactly like the
+  wheel's backdrop.
 - **It blocks auto-hide** (`mini-radial` is in `AUTO_HIDE_BLOCKERS`): it draws
   outside `.group`, so the rule could not see it, and a set of options that
   vanishes while he is deciding between them is what the fence exists to stop.
+- **It records the angle each option really landed at** (`miniAngles`,
+  measured anchor-centre to option-centre AFTER the edge clamp, read by
+  `miniRadialAngles()`). That is the CONTROLLER's half of the geometry: a ring
+  lets the pad derive a direction from the item count, a fan does not, and a
+  right-half anchor mirrors the directions on top of that. Recording what was
+  placed means there is one geometry and the stick points at where an option
+  IS — constraint 9 again, applied to arithmetic instead of to a handler.
 
-Its first two users are the Layout button's sources ("From a list" / "Tap a
-window", which used to be a full-screen card asking a two-answer question) and
-the Hide button's two modes below.
+Its users are the Layout button's three sources and the Hide button's two
+modes below.
 
 ## Hide has two modes, and he named the trade-off himself (task 159)
 
@@ -177,36 +192,51 @@ and Tailscale addresses once already).
   on connect, the dictation card on the first Mic tap). Leaving a card on screen
   with its own controls hidden underneath is not "hidden stays hidden", it is a
   dialog with no way out.
+- **In `sticky` the Hide button itself stays on screen** (owner report
+  2026-08-12: pressing Hide made everything vanish for good). `hidden-controls`
+  hid the button along with everything else — right for `auto`, where any
+  touch brings it all back, and unrecoverable in `sticky`, where by design
+  nothing does. His own spec for the mode had already named the exception:
+  the one thing that must remain in that mode is the Hide button. So
+  `setControlsHidden` — still the ONE writer of this state — also toggles
+  `body.hide-sticky` from the live mode, and `client/style.css` hides
+  `.corner-tr` only under `body.hidden-controls:not(.hide-sticky)`. The LAYOUT
+  corner (`.corner-tl`) goes in both modes: hidden means hidden, and the
+  exception is a door out, not a second button.
 
 Gate: `tests/test_phone_chrome.py` — the radial's two directions and its
-edge lean, both modes' real behaviour, and that STICKY never hides by itself.
+edge lean, both modes' real behaviour, that STICKY never hides by itself, and
+that STICKY leaves the Hide button (and ONLY the Hide button) standing.
 
-## The radial has a second placement — CENTERED (owner 2026-08-09, task 186)
+## The centered ring is GONE (owner decision 2026-08-12)
 
-His own answer, once the Layout button's options became three: the radial shows
-**centered on screen**, the category wheel's rule —
+Between 2026-08-09 and that date the radial had a SECOND placement. Once the
+Layout button's options became three, the owner moved it to the middle of the
+screen, behind the category wheel's veil and around the wheel's own ✕ —
 
 > "najbolje da se držimo istog pravila" <!-- lang-ok: owner quote -->
 
-— and not beside the button as his first sketch had it. It is the SAME
-component: the options are still `.ctl` faces built by `makeButton`, and only
-their placement differs. Two reasons it must be the same one:
+— on the reasoning that a corner cannot hold three unambiguous directions.
+Task 228 then grew that ring to four (Recent).
 
-* a corner cannot hold three unambiguous directions — one is always clamped by
-  a screen edge, and unambiguous directions are the whole point of the
-  geometry;
-* the ring uses the WHEEL's own angles (`-PI/2 + i·2π/n`, item 0 straight up,
-  clockwise), so the gamepad's existing `padPointedIndex` maps a stick angle
-  onto it with no second arithmetic. Hold L2, point, release — the L1/R1
-  grammar, unchanged (see [Gamepad](gamepad.md)).
+**He reversed it after using it**: the options open BESIDE the button, exactly
+like Hide's two modes, in ALL situations — his own check is that it fits phone
+portrait too, since the Layout button's row stands above the picture. Recent
+left the radial in the same decision (its panel and the whole `layout_recent`
+protocol stay — see [Layout create](layout-create.md)). The corner turned out
+to hold three directions perfectly well: **E / SE / S**, 45° apart, all inside
+the quadrant a top-left button has free, which is what `miniAngleSet` above
+now spreads.
 
-The veil rides `body.mini-open::before` at z-index 10, exactly like the wheel's:
-a dim painted on `#mini-radial` itself (z-index 36) would sit UNDER the options
-and take their contrast with it — the measured failure that moved the wheel's
-veil to its own layer.
+So the ring, `MINI_RING_RADIUS`, `miniRingPoints`, the `body.mini-open::before`
+veil layer and the `.mini-x` ✕ were **deleted** the same day rather than left
+standing unreachable — a second placement nobody opens is exactly the legacy
+CLAUDE.md constraint 6 is about. The pad's pointing followed: `padPointedAt`
+matches the stick against the recorded angles instead of deriving them from
+the count (see [Gamepad](gamepad.md)).
 
-Hide keeps the anchored two-option radial. Its pair really is two, and beside a
-corner is where they belong.
+The only ring left on this page is the D-pad's own category wheel
+(`wheelPoints`), which is a different component with a different job.
 
 ## The layout bar switches by SWIPE too (owner 2026-08-11)
 

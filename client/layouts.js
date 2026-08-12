@@ -103,6 +103,21 @@ const LAY_BAR_MIN_GAP = 356;  // = 340 (bar content) + 2 * 8 (space-s margins)
 // D-pad columns in landscape), so this function does nothing there and the
 // CSS media query carries the whole rule by itself.
 function layBarFit() {
+  // NO BAR, NO ROW TO FIT IT IN (owner report 2026-08-12: on his phone the two
+  // corner buttons sat one row down, over an empty strip, from the moment the
+  // page loaded). This function measured the corner-to-corner gap whatever was
+  // standing between them — and on any phone narrower than ~504 px that gap is
+  // under the minimum, so `laybar-overflow` was set, the corners dropped by a
+  // whole row and the space they left was reserved for a bar that DOES NOT
+  // EXIST until the first layout is created. The overflow shape is a fallback
+  // for a bar with nowhere to go; with no bar there is nothing to fall back
+  // from. `updateLayoutBar` sets `hidden` and then calls this, so the verdict
+  // is re-taken the moment the first layout is born and again when the last
+  // one is removed.
+  if (layoutBar.hidden) {
+    document.body.classList.remove("laybar-overflow");
+    return;
+  }
   if (window.matchMedia && window.matchMedia("(orientation: landscape)").matches) {
     document.body.classList.remove("laybar-overflow");
     return;

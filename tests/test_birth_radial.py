@@ -3,21 +3,26 @@
 Three owner rulings land on one component and they are only worth anything
 together:
 
-* **186+228** — the Layout button's radial holds FOUR options now (New / List
-  / Tap / Recent) and stands CENTERED, the category wheel's own rule ("najbolje da se
-  držimo istog pravila" — lang-ok: owner quote). On the pad it is L2: a TAP
-  arms the tap-pick, a HOLD opens this same radial with the stick pointing at
-  it and the release confirming — the grammar L1/R1 already speak.
-* **184** — the third option, New, asks the PC what it can open.
+* **186, re-decided 2026-08-12** — the Layout button's radial holds THREE
+  options (New / Tap / List) and opens as an ANCHORED FAN beside the button,
+  exactly like the Hide button's mode chooser: New to the EAST, Tap to the
+  SOUTH-EAST, List to the SOUTH. It stood CENTERED behind a veil between
+  2026-08-09 and that date ("najbolje da se držimo istog pravila" — lang-ok:
+  owner quote); he reversed it after using it, and Recent left the radial in
+  the same decision (its panel and its `layout_recent` messages stay). On the
+  pad it is L2: a TAP arms the tap-pick, a HOLD opens this same radial with the
+  stick pointing at it and the release confirming — the grammar L1/R1 already
+  speak, now pointed at the fan's own recorded directions.
+* **184** — one of the three, New, asks the PC what it can open.
 * **185** — a window he just opened arrives as a chip, and his yes lands in the
   creation panel he already knows, pre-seeded.
 
 WHY A LIVE PAGE. Every claim here is about laid-out pixels or about a listener
-that only exists once the page is running: where three options sit on a ring,
-whether a veil paints over the buttons it is meant to sit behind, and whether
-the pad's release really runs the very handler a finger's tap runs. The
-`test_phone_chrome.py` pattern is reused wholesale — same server, same
-Chromium, same three sizes.
+that only exists once the page is running: which direction each option really
+ended up in, whether three faces can share one corner without overlapping each
+other or leaving the screen, and whether the pad's release really runs the very
+handler a finger's tap runs. The `test_phone_chrome.py` pattern is reused
+wholesale — same server, same Chromium, same three sizes.
 
 THE ONE THING THAT IS FAKED is `fetch`: the gate server builds the app through
 `create_app`, and `/recents` is registered at the composition root beside the
@@ -69,42 +74,66 @@ FAKE_RECENTS = """() => {
 
 
 def _checks(page, label, out):
-    # ── 186: THREE OPTIONS, ON A RING, IN THE MIDDLE OF THE SCREEN ───────────
-    # Catches (proven by planting): dropping the `{centered: true}` flag (the
-    # options fall back beside the corner button, where a third one is clamped
-    # onto its sibling), spreading them at any angles but the wheel's (the pad
-    # would then point at the wrong one), or losing the ✕.
-    ring = page.evaluate("""() => {
+    # ── 186 (2026-08-12): THREE OPTIONS, A FAN AROUND THE LAYOUT BUTTON ──────
+    # His decision, and every part of it is measurable: the options open BESIDE
+    # the button — not on a ring in the middle of the screen — at EAST,
+    # SOUTH-EAST and SOUTH, in that order (New / Tap / List), one quarter turn
+    # split into two 45° steps.
+    # Catches (proven by planting): the centered ring coming back (the angles
+    # are then measured from the screen centre and every one of them is wrong),
+    # re-ordering the option array (the pad points by position, so New must be
+    # index 0), a radius or a face size that lets two options overlap, and an
+    # option pushed off the screen by the corner it is anchored to.
+    fan = page.evaluate("""() => {
       const bad = [];
       openSourceChooser();
       const items = [...document.querySelectorAll('#mini-radial .mini-item')];
-      if (items.length !== 4) {
+      if (items.length !== 3) {
         closeMiniRadial();
-        return ['the Layout button offered ' + items.length + ' sources, not 4'];
+        return ['the Layout button offered ' + items.length + ' sources, not 3'];
       }
-      const cx = innerWidth / 2, cy = innerHeight / 2;
+      const b = document.getElementById('btn-newlay').getBoundingClientRect();
+      const cx = b.left + b.width / 2, cy = b.top + b.height / 2;
       const c = items.map((el) => {
         const r = el.getBoundingClientRect();
         return {x: r.left + r.width / 2, y: r.top + r.height / 2, r};
       });
-      // Item 0 is straight UP and the rest sweep clockwise — the wheel's own
-      // placement, which is what makes the pad's pointing arithmetic reusable.
-      const ang = c.map((p) => Math.atan2(p.y - cy, p.x - cx));
-      const want = [0, 1, 2, 3].map((i) => -Math.PI / 2 + i * 2 * Math.PI / 4);
-      ang.forEach((a, i) => {
+      // Screen coordinates: 0 = east, positive = downward.
+      const want = [0, Math.PI / 4, Math.PI / 2];
+      const words = items.map((el) => el.querySelector('.lbl').textContent.trim());
+      if (JSON.stringify(words) !== JSON.stringify(['New', 'Tap', 'List'])) {
+        bad.push('the fan reads ' + JSON.stringify(words) +
+                 ', not New (E) / Tap (SE) / List (S)');
+      }
+      c.forEach((p, i) => {
+        const a = Math.atan2(p.y - cy, p.x - cx);
         // Signed shortest angle between the two, wrapped into (-PI, PI].
         const d = ((a - want[i] + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
         if (Math.abs(d) > 0.08) {
-          bad.push('option ' + i + ' sits at ' + a.toFixed(2) +
-                   ' rad, not the wheel\\'s ' + want[i].toFixed(2));
+          bad.push('option ' + i + ' ("' + words[i] + '") sits at ' +
+                   a.toFixed(2) + ' rad from the button, not ' +
+                   want[i].toFixed(2));
         }
       });
-      // Equidistant from the centre, and really centred on the SCREEN.
-      const radii = c.map((p) => Math.hypot(p.x - cx, p.y - cy));
-      if (Math.max(...radii) - Math.min(...radii) > 2) {
-        bad.push('the four are not on one ring: ' + radii.map(Math.round));
+      // Anchored to the BUTTON, not to the middle of the screen — the shape
+      // this replaced. Every option is nearer the button than the centre is.
+      const sx = innerWidth / 2, sy = innerHeight / 2;
+      const toBtn = c.map((p) => Math.hypot(p.x - cx, p.y - cy));
+      if (Math.max(...toBtn) > Math.hypot(sx - cx, sy - cy)) {
+        bad.push('the options stand further from the Layout button than the ' +
+                 'screen centre does — the superseded centered ring');
       }
-      if (radii[0] < 40) bad.push('the ring has collapsed onto the centre');
+      if (Math.min(...toBtn) < 40) bad.push('the fan collapsed onto the button');
+      // Three faces in one quadrant may not touch each other.
+      for (let i = 0; i < c.length; i++) {
+        for (let j = i + 1; j < c.length; j++) {
+          const a = c[i].r, d = c[j].r;
+          if (a.left < d.right && d.left < a.right &&
+              a.top < d.bottom && d.top < a.bottom) {
+            bad.push('options ' + i + ' and ' + j + ' overlap');
+          }
+        }
+      }
       for (const item of items) {
         const r = item.getBoundingClientRect();
         if (r.left < 0 || r.top < 0 || r.right > innerWidth || r.bottom > innerHeight) {
@@ -121,27 +150,32 @@ def _checks(page, label, out):
           bad.push('"' + word + '" is not one word');
         }
       }
-      if (!document.querySelector('#mini-radial .wheel-x')) {
-        bad.push('there is no ✕ in the middle — the radial cannot be cancelled ' +
-                 'by anything but the backdrop');
-      }
       closeMiniRadial();
       return bad;
     }""")
-    out[f"the birth radial is four options on the wheel's ring @ {label}"] = not ring
-    if ring:
-        print(f"  DETAIL birth radial @ {label}: {ring}")
+    out[f"the birth radial is a three-option fan at E/SE/S @ {label}"] = not fan
+    if fan:
+        print(f"  DETAIL birth radial @ {label}: {fan}")
 
-    # ── 186: THE VEIL SITS *UNDER* THE CONTROLS ──────────────────────────────
-    # Catches: painting the dim on `#mini-radial` itself. That element is
-    # z-index 36 and the options are its children, so the veil would go BEHIND
-    # the very buttons it must not touch — the measured contrast failure that
-    # moved the wheel's own veil to its own layer (client/style.css).
-    veil = page.evaluate("""() => {
+    # ── 186 (2026-08-12): IT IS THE HIDE CHOOSER'S CONTRACT, NOT THE WHEEL'S ─
+    # The centered variant borrowed the category wheel's veil and its centre ✕
+    # because it took the whole screen. The fan does not take the whole screen,
+    # so it takes neither: cancelling is a tap OUTSIDE, exactly as the Hide
+    # button's two modes have always worked, and the PC's picture is never
+    # dimmed for a choice of three.
+    # Catches: the centered branch (or its `body.mini-open` veil layer) coming
+    # back, a ✕ being drawn anyway, and a backdrop that swallows the tap
+    # without closing — which would leave the radial with no way out at all.
+    plain = page.evaluate("""() => {
       const bad = [];
       openSourceChooser();
-      if (!document.body.classList.contains('mini-open')) {
-        bad.push('the centered radial raises no veil at all');
+      if (document.body.classList.contains('mini-open')) {
+        bad.push('the fan raises the wheel\\'s full-screen veil');
+      }
+      const layer = getComputedStyle(document.body, '::before');
+      if (layer.content !== 'none') {
+        bad.push('a veil layer is painted while the fan is open (content=' +
+                 layer.content + ')');
       }
       const own = getComputedStyle(document.getElementById('mini-radial'))
         .backgroundColor;
@@ -149,42 +183,55 @@ def _checks(page, label, out):
         bad.push('the radial paints its own background (' + own + '), which ' +
                  'lands UNDER the options and takes their contrast with it');
       }
-      const layer = getComputedStyle(document.body, '::before');
-      const bg = layer.backgroundColor;
-      if (layer.content === 'none' || bg === 'rgba(0, 0, 0, 0)' || bg === 'transparent') {
-        bad.push('the veil layer paints nothing (content=' + layer.content +
-                 ', background=' + bg + ')');
+      if (document.querySelector('#mini-radial .wheel-x')) {
+        bad.push('the fan still draws the wheel\\'s centre ✕');
       }
-      if (!(parseInt(layer.zIndex, 10) < 20)) {
-        bad.push('the veil is at z-index ' + layer.zIndex + ', at or above ' +
-                 'the controls (20)');
-      }
-      closeMiniRadial();
-      if (document.body.classList.contains('mini-open')) {
-        bad.push('the veil outlived the radial');
+      // A tap on the backdrop — the element itself, never an option — cancels.
+      const mini = document.getElementById('mini-radial');
+      mini.dispatchEvent(new PointerEvent('pointerdown', {
+        bubbles: true, cancelable: true, isPrimary: true, pointerId: 21,
+        clientX: innerWidth - 4, clientY: innerHeight - 4}));
+      if (document.querySelectorAll('#mini-radial .mini-item').length) {
+        bad.push('a tap outside the options did not cancel the fan');
+        closeMiniRadial();
       }
       return bad;
     }""")
-    out[f"the veil sits under the controls, not over them @ {label}"] = not veil
-    if veil:
-        print(f"  DETAIL veil @ {label}: {veil}")
+    out[f"the fan wears no veil and cancels on a tap outside @ {label}"] = not plain
+    if plain:
+        print(f"  DETAIL fan contract @ {label}: {plain}")
 
     # ── 186: L2 HELD, POINTED, RELEASED — THE L1/R1 GRAMMAR ──────────────────
+    # Re-pointed at the fan (2026-08-12): the options are no longer a ring, so
+    # a stick angle can no longer be turned into an index by arithmetic on the
+    # COUNT. The pad matches the directions chrome.js recorded when it placed
+    # them, which is what makes east mean New and south mean List.
     # Catches: mapping L2 back to a plain corner press (no radial at all),
-    # confirming on the press instead of the release, or picking something when
-    # the stick was never moved. The pick is observed through the REAL option
-    # element, so a controller-only option list could not pass this.
+    # confirming on the press instead of the release, picking something when
+    # the stick was never moved, and — the new one — the pad still using the
+    # ring's `-PI/2 + i*2PI/n` arithmetic, which on three options would answer
+    # "north = 0" and light New for a thumb pointing away from every option.
+    # The pick is observed through the REAL option element, so a
+    # controller-only option list could not pass this.
     pad = page.evaluate("""() => {
       const bad = [];
       const open = () => document.querySelectorAll('#mini-radial .mini-item').length;
+      const lit = () => [...document.querySelectorAll('#mini-radial .mini-item')]
+        .findIndex((el) => el.classList.contains('current'));
       // 1. HOLD opens it.
       window.__padButton('l2', true);
-      if (open() !== 4) bad.push('holding L2 did not open the radial');
-      // 2. The stick POINTS: straight up is option 0, and it lights.
-      window.__padAxis(0, -1, 0, 0);
-      const lit = [...document.querySelectorAll('#mini-radial .mini-item')]
-        .findIndex((el) => el.classList.contains('current'));
-      if (lit !== 0) bad.push('pointing up lit option ' + lit + ', not 0');
+      if (open() !== 3) bad.push('holding L2 did not open the radial');
+      // 2. The stick POINTS along the fan's own directions.
+      window.__padAxis(0, 1, 0, 0);        // south = List, the last option
+      if (lit() !== 2) bad.push('pointing south lit option ' + lit() + ', not 2');
+      window.__padAxis(0.7, 0.7, 0, 0);    // south-east = Tap
+      if (lit() !== 1) bad.push('pointing south-east lit option ' + lit() + ', not 1');
+      window.__padAxis(0, -1, 0, 0);       // north: the fan has nothing there
+      if (lit() !== -1) {
+        bad.push('pointing away from the fan (north) still lit option ' + lit());
+      }
+      window.__padAxis(1, 0, 0, 0);        // east = New, option 0
+      if (lit() !== 0) bad.push('pointing east lit option ' + lit() + ', not 0');
       // 3. RELEASE confirms — the option's own handler runs.
       let ran = null;
       const items = [...document.querySelectorAll('#mini-radial .mini-item')];
@@ -397,9 +444,9 @@ def main() -> int:
     if failed:
         print(f"\nBIRTH RADIAL GATE FAILED — {failed} check(s).", file=sys.stderr)
         return 1
-    print("\nBIRTH RADIAL GATE PASSED — four sources on one ring, the pad "
-          "speaks the grammar it already knows, and a window that opens can "
-          "become a layout.")
+    print("\nBIRTH RADIAL GATE PASSED — three sources fanned out beside the "
+          "button, the pad speaks the grammar it already knows, and a window "
+          "that opens can become a layout.")
     return 0
 
 

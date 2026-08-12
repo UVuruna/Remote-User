@@ -165,9 +165,25 @@ mapping flag was raised and he moved it:
 * **Tap** — arms the tap-pick, exactly as the Layout button did before it grew
   a radial (`layoutTapSource`, which is also what the button itself runs when a
   creation is already live: the second tap cancels).
-* **Hold** — opens the layout-birth radial (New / List / Tap around a ✕), the
-  stick points at an option and the release takes it. Releasing while pointing
-  at nothing changes nothing; a hold shorter than `PAD_TAP_MS` was the tap.
+* **Hold** — opens the layout-birth radial, the stick points at an option and
+  the release takes it. Releasing while pointing at nothing changes nothing;
+  a hold shorter than `PAD_TAP_MS` was the tap. Since 2026-08-12 that radial
+  is an anchored FAN beside the Layout button rather than a centered ring, so
+  the directions are **New = east, Tap = south-east, List = south** (see
+  [Chrome](chrome.md)).
+
+**Pointing at a fan is not pointing at a ring**, and the pad now says which it
+is doing. `padStickAngle()` answers where the pointing thumb is aimed (or null
+inside `PAD_POINT_MIN`), and two readers sit on it: `padPointedIndex(items)`
+for the category WHEEL, where the items divide the whole circle and every
+direction belongs to exactly one, and `padPointedAt(angles)` for the radial,
+which matches the stick against the angles `chrome.js` recorded when it PLACED
+the options — nearest wins, and only inside `PAD_POINT_CONE` (60°, wider than
+the fan's own 45° spacing so neighbouring cones overlap and a thumb between
+two options still picks one). The cone is what keeps "released at nothing" a
+real answer: a fan leaves most of the circle unclaimed, while a ring never
+could, and the ring arithmetic applied to three options would have answered
+"north = New" for a thumb pointing away from every one of them.
 
 That is `padShoulderPress` with a different menu in it, deliberately: the owner
 learns ONE grammar and it is already the one his shoulders speak. The radial

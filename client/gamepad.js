@@ -46,6 +46,15 @@ const PAD_TAP_MS = 320;
 // How far a stick must leave centre before it is POINTING at a wheel item.
 // Deliberately well above the deadzone: resting drift must never pick a set.
 const PAD_POINT_MIN = 0.45;
+// How far OFF an option's own direction the stick may be and still be pointing
+// at it (radians). A RING divides the whole circle between its items, so every
+// direction belongs to one of them; a FAN does not — the mini radial's three
+// options occupy a single quadrant and everything outside it must mean
+// "nothing", which is the owner's own rule for releasing at nothing (task
+// 186). 60° is wider than the 45° between two neighbouring options, so the
+// cones overlap and the NEAREST one wins there — a thumb between two options
+// still picks one — while pointing away from the fan altogether picks none.
+const PAD_POINT_CONE = Math.PI / 3;
 // A frame the page missed (backgrounded, a slow decode) must not teleport the
 // cursor across the screen when it comes back.
 const PAD_MAX_DT = 100;
@@ -241,10 +250,11 @@ function padShoulderPress(m, down) {
   padStartLoop();
 }
 
-// ── L2: THE SAME GRAMMAR, THE OTHER MENU (owner 2026-08-09, task 186) ───────
-// Hold L2 and the layout-birth radial opens in the middle of the screen; the
-// stick points at New / List / Tap and letting go takes the one being pointed
-// at. Letting go while pointing at nothing changes nothing, and if the whole
+// ── L2: THE SAME GRAMMAR, THE OTHER MENU (owner 2026-08-09, task 186; the
+// radial re-anchored beside the Layout button 2026-08-12) ──────────────────
+// Hold L2 and the layout-birth radial opens beside the Layout button; the
+// stick points at New (east) / Tap (south-east) / List (south) and letting go
+// takes the one being pointed at. Letting go while pointing at nothing changes nothing, and if the whole
 // press was quick it was the TAP instead — the tap-pick, armed as it always
 // was. Every line of that sentence is `padShoulderPress` with a different menu
 // in it, which is the point: the owner learns one grammar and it is already
@@ -286,26 +296,58 @@ function padAimRadial() {
   if (!r) return;
   const items = miniRadialItems();
   if (!items.length) return;
-  // The SAME pointing arithmetic the wheel uses — and it can be, because the
-  // centered radial places its options at the wheel's own angles (chrome.js).
-  r.index = padPointedIndex(items);
+  // THE RADIAL IS NO LONGER A RING (owner decision 2026-08-12): its options
+  // open as a FAN beside the Layout button — E / SE / S, mirrored on the right
+  // half of the screen — so the count no longer tells anyone where an option
+  // is. `chrome.js` records the angle each option really landed at, clamp
+  // included, and the stick is matched against THOSE. One geometry, written
+  // once, pointed at by both hands (constraint 9); deriving the fan's
+  // directions a second time here is exactly the drift that rule forbids.
+  r.index = padPointedAt(miniRadialAngles());
   miniRadialLight(r.index === null ? -1 : r.index);
 }
 
-// Which wheel item the stick points at. Either thumb may do it — the sticks
-// have no other job while the wheel is up, and which hand is free depends on
-// which shoulder is being held.
-function padPointedIndex(items) {
+// Where the pointing thumb is aimed, or null if neither stick has really left
+// centre. Either thumb may do it — the sticks have no other job while a menu
+// is up, and which hand is free depends on which shoulder is being held.
+function padStickAngle() {
   const useLeft = Math.hypot(padAxes.lx, padAxes.ly) >= Math.hypot(padAxes.rx, padAxes.ry);
   const x = useLeft ? padAxes.lx : padAxes.rx;
   const y = useLeft ? padAxes.ly : padAxes.ry;
   if (Math.hypot(x, y) < PAD_POINT_MIN) return null;
+  return Math.atan2(y, x);
+}
+
+// Which wheel item the stick points at — the RING case, where the items divide
+// the whole circle between them and every direction belongs to exactly one.
+function padPointedIndex(items) {
+  const stick = padStickAngle();
+  if (stick === null) return null;
   // openWheel() places item i at angle -PI/2 + i*2PI/n: i = 0 is straight up
   // and increasing i sweeps clockwise on screen — so the stick's own angle,
   // turned a quarter turn, IS the index.
   const n = items.length;
-  const a = Math.atan2(y, x) + Math.PI / 2;
+  const a = stick + Math.PI / 2;
   return ((Math.round(a / (2 * Math.PI / n)) % n) + n) % n;
+}
+
+// Which of a set of RECORDED directions the stick points along — the FAN case.
+// Nearest wins, and only inside `PAD_POINT_CONE`: a fan leaves most of the
+// circle unclaimed, and pointing at nothing must stay a real answer.
+function padPointedAt(angles) {
+  const stick = padStickAngle();
+  if (stick === null || !angles || !angles.length) return null;
+  let best = null;
+  let bestOff = PAD_POINT_CONE;
+  angles.forEach((want, i) => {
+    // Signed shortest angle between the two, wrapped into (-PI, PI].
+    const off = Math.abs(((stick - want + Math.PI * 3) % (Math.PI * 2)) - Math.PI);
+    if (off < bestOff) {
+      bestOff = off;
+      best = i;
+    }
+  });
+  return best;
 }
 
 function padAimWheel() {
