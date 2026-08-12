@@ -112,6 +112,16 @@ function setCanvasBackdrop(color) {
 // "nothing new" (keep the last picture, see `redraw`). Reset in `initMse`.
 let everDrew = false;
 
+// Whether THIS session has painted — a narrower question than `everDrew`, and
+// the only honest answer to "is the picture on screen the new stream's yet?"
+// (2026-08-12). `everDrew` deliberately survives a same-monitor swap now (see
+// `initMse`), and `video.readyState` cannot stand in for it: a torn-down
+// element can still report 2 for its old buffer — `video.load()` is
+// asynchronous — and that stale picture is FROZEN, which is exactly what the
+// settle watcher scores as "settled". So the watcher waits on this instead
+// (client/loading.js → `settleStreamReset`).
+let sessionDrew = false;
+
 // The pixels carried across a genuine buffer resize (rotation, a real keyboard
 // resize) so the seam is never a blank frame — the other half of
 // `liveResizePlan`'s rule. The copy is stretched into the new box: it is the
@@ -209,6 +219,7 @@ function redraw() {
         : D;
       ctx.drawImage(video, R.x, R.y, R.w, R.h);
       everDrew = true;
+      sessionDrew = true;
     }
   } else {
     if (baseBitmap) ctx.drawImage(baseBitmap, D.x, D.y, D.w, D.h);
@@ -518,9 +529,26 @@ let sourceBuffer = null;
 let mseQueue = [];
 let rafId = null;
 
-function initMse(codec) {
+// `keepPicture` — THE LAST FRAME HOLDS ACROSS A SESSION SWAP (2026-08-12, the
+// loading-overlay round). A quality change and a layout region change both end
+// one encoder and open another on the SAME monitor, and rebuilding it takes
+// 1.2–2.3 s on the owner's machine. Clearing `everDrew` made `redraw` fall
+// through its never-blank guard for every one of those milliseconds and paint
+// the flat theme colour: no overlay, no pill change, no toast — just the PC
+// vanishing. It is the same complaint `redraw`'s own header records ("A
+// PICTURE THAT STOPPED BEATS NO PICTURE", owner 2026-08-09), only arriving
+// through the other door. So a swap that keeps looking at the same screen
+// keeps the pixels already on the canvas until the first frame of the new
+// session replaces them.
+//
+// It stays FALSE for a genuinely new picture — a fresh connection, a monitor
+// switch — because there the old pixels are somebody else's screen and the
+// page colour is the honest answer (client/live-clock.js's `liveHoldFrame`
+// header states that rule; this is its caller keeping it).
+function initMse(codec, keepPicture) {
   teardownMse();
-  everDrew = false;         // a new session starts from a clean canvas
+  if (!keepPicture) everDrew = false;  // a new PICTURE starts from a clean canvas
+  sessionDrew = false;       // …but a new SESSION has always painted nothing
   liveRate = 1;              // …and clean regulator state — no stale
   liveDegradedSince = 0;     //   degradation or flush-gap memory carried
   liveLastFixAt = 0;         //   over from a previous stream

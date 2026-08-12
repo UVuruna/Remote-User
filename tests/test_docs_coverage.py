@@ -33,6 +33,12 @@ TRIVIAL = {
 # Standard: ordinary module. Needs __about/{name}.md only.
 STANDARD = {
     "server/gui_main.py",
+    # New 2026-08-12 (THE STRUCTURE LAW — main_window.py stands at the
+    # 1,000-line wall): the window's blocking work, off the window's thread.
+    # Standard: one thread helper plus the two slow calls that used to freeze
+    # the GUI (the pairing probe, the quit's shutdown). No state machine, no
+    # geometry — and its one promise is gated in tests/test_gui_nonblocking.py.
+    "server/gui/offthread.py",
     "server/bootstrap.py",
     "server/pairing.py",
     "server/monitors.py",

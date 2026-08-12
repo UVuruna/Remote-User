@@ -14,6 +14,7 @@ client (see [Theme](__about/theme.md) for the verified overlap).
 | `main_window.py` | Algorithmic | window shell, tray, layout, wiring — [about](__about/main_window.md) · [flow](__flow/main_window.md) |
 | `theme.py` | Algorithmic | TWO palettes (dark + light), the QSS generated from the active one, effect helpers, and `apply_theme` — which styles the APPLICATION, so one call re-themes every window — [about](__about/theme.md) · [flow](__flow/theme.md) |
 | `switch.py` | Algorithmic | the sun/moon theme pill (smoothstep knob, ~600 ms) and the snapshot COVER the palette changes under, so the repaint cascade is never seen — [about](__about/switch.md) · [flow](__flow/switch.md) |
+| `offthread.py` | Standard | the window's blocking work, off the window's thread: one worker-thread helper, the pairing probe and the quit's shutdown — [about](__about/offthread.md) |
 | `sizing.py` | Algorithmic | how a window declares the minimum it TRULY needs — `heightForWidth`, not `minimumSizeHint`, because a short layout overlaps instead of clipping — [about](__about/sizing.md) · [flow](__flow/sizing.md) |
 | `controls_editor.py` | Algorithmic | the Controls WINDOW: assembles/saves `actions.json` from the three modules below — [about](__about/controls_editor.md) · [flow](__flow/controls_editor.md) |
 | `controls_data.py` | Algorithmic | actions.json plumbing, no Qt: paths, client-table parsing, the shipped-pool merge, wheel-order helpers — [about](__about/controls_data.md) · [flow](__flow/controls_data.md) |

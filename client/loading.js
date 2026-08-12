@@ -30,7 +30,7 @@ let loadingTimer = null;
 const layCube = document.getElementById("lay-cube");
 const CUBE_BASE_SPEED = 70;  // deg/s idle spin
 const CUBE_BURST = 300;      // extra degrees granted per created window
-const LOADING_FADE_MS = 280; // must match #lay-loading's CSS transition
+const LOADING_FADE_MS = 500; // must match #lay-loading's CSS transition
 
 // Every showing opens on the NEXT face, in the owner's order
 // (top → left → back → right → front → bottom, looping — owner 2026-08-03:
@@ -111,11 +111,34 @@ function cubeNext() {
 // five-second last resort — the server already said the desk is done; this
 // side owes him a moment to catch the stream up, not a fight to see the
 // picture stop moving entirely.
+// AND ON THE PATH HE COMPLAINED ABOUT, THIS TIMER NO LONGER RUNS AT ALL
+// (2026-08-12). A layout change now ends the encoder session BEFORE
+// `layout_state` goes out (server/layout_api.py), so the phone gets a fresh
+// `config` moments later and `settleStreamReset` below throws this timer away
+// and waits for the new session's FIRST DECODED FRAME instead — evidence in
+// place of a guess, and typically sooner. The number therefore only still
+// governs the cases where no new session arrives (a layout change that does
+// not move the crop, JPEG), where its original job is untouched: the picture
+// on this phone is genuinely a few hundred ms behind the PC, and two samples
+// of a stale pre-move frame read as "settled". It is deliberately NOT cut on
+// that path — nothing here can yet tell a stale frame from a fresh one, and
+// the owner's rule is that the overlay leaves on evidence, never early.
 const SETTLE_CATCHUP_MS = 650; // stream latency: never judge before this
 const SETTLE_SAMPLE_MS = 140;
 const SETTLE_STABLE_HITS = 3; // ~420 ms of stillness — 2 let a paused move through
 const SETTLE_MAX_MS = 2200;   // "a few seconds" after catching up (task 194: was 4000)
-const LOADING_MIN_MS = 700;   // never flash the animation
+// NO FLOOR (owner ruling 2026-08-12, and he rejected the idea by name: "what
+// 700-millisecond floor? no floor is needed at all ... in any case we must not
+// produce this counter-effect where the user waits BECAUSE OF the loading
+// animation"). It was 700 ms of "never flash the animation", and on a fast
+// return that was 700 ms of the app waiting on itself over a PC that had
+// finished. What it was really protecting — a jarring blink — is now bought by
+// the FADE instead (LOADING_FADE_MS, 500 ms): a fade runs over the picture it
+// is uncovering, so he watches the screen appear through it and is never held
+// by it, which is exactly the difference between covering time and adding it.
+// Kept as a named 0 rather than deleted so the question cannot be re-asked
+// silently, and so `settleTick` below still reads one rule in one place.
+const LOADING_MIN_MS = 0;
 const LOADING_MAX_MS = 40000; // absolute backstop (server never answered)
 
 const settleCanvas = document.createElement("canvas");
@@ -124,6 +147,7 @@ settleCanvas.height = 36;
 const settleCtx = settleCanvas.getContext("2d", { willReadFrequently: true });
 let settleTimer = null;
 let settleStartTimer = null;
+let settleWaitTimer = null;
 let settlePrev = null;
 let settleHits = 0;
 let settleDeadline = 0;
@@ -172,13 +196,77 @@ function settleLayLoading() {
   }, SETTLE_CATCHUP_MS);
 }
 
+// A NEW ENCODER SESSION ARRIVED WHILE THE OVERLAY IS UP (2026-08-12).
+//
+// Called from connection.js on every `config`, which is the page's only news
+// that the stream was rebuilt — a layout region change and a quality change
+// both end one ffmpeg and open another, and that takes about half a second on
+// the owner's own PC. Two things go wrong if the watcher is left alone through
+// it, and they pull in opposite directions:
+//
+//   * It can hide the cube on a LIE. Between the old session ending and the
+//     new one decoding, the picture on this phone is frozen by definition —
+//     nothing is arriving. Three identical samples of that stopped picture is
+//     exactly what `settleTick` counts as "settled", and with the last frame
+//     now held across the swap (render.js `initMse`), `readyState` is no
+//     longer there to save us for the whole gap. He would watch the windows
+//     land under a page that had already declared itself ready — the very
+//     complaint this module exists for.
+//   * Or it wastes the wait. The catch-up it is sitting through was measured
+//     against the OLD session's latency; the new one starts from nothing.
+//
+// So the watcher is re-armed on EVIDENCE, not on a fresh timer: sampling
+// begins when this session has really decoded a frame, and not one tick
+// before. That is both stricter and faster than restarting the catch-up —
+// there is no stale picture left to drain once a new frame has been shown.
+// LOADING_MAX_MS above is still the only backstop, unchanged.
+// Has the NEW session put a frame on the canvas yet? `render.js` clears
+// `sessionDrew` in `initMse` and sets it on that session's first successful
+// draw, and nothing weaker will do: `video.readyState` can still read 2 for
+// the OLD buffer after a teardown (`video.load()` is asynchronous), and that
+// stale picture is frozen — the exact input `settleTick` scores as settled.
+// JPEG has no session to wait for. The `undefined` arm is for the audit
+// harness, which loads this module without render.js.
+function streamHasPainted() {
+  if (streamMode !== "h264") return true;
+  if (typeof sessionDrew === "undefined") return video.readyState >= 2;
+  return sessionDrew;
+}
+
+function settleStreamReset() {
+  if (!layLoadingOpen) return;
+  clearInterval(settleTimer);
+  clearTimeout(settleStartTimer);
+  clearInterval(settleWaitTimer);
+  settleTimer = null;
+  settleStartTimer = null;
+  settlePrev = null;
+  settleHits = 0;
+  settleWaitTimer = setInterval(() => {
+    if (!layLoadingOpen) {
+      clearInterval(settleWaitTimer);
+      settleWaitTimer = null;
+      return;
+    }
+    if (!streamHasPainted()) return;
+    clearInterval(settleWaitTimer);
+    settleWaitTimer = null;
+    settlePrev = null;
+    settleHits = 0;
+    settleDeadline = performance.now() + SETTLE_MAX_MS;
+    settleTimer = setInterval(settleTick, SETTLE_SAMPLE_MS);
+  }, SETTLE_SAMPLE_MS);
+}
+
 function showLayLoading(text) {
   layLoading.querySelector("span").textContent = text || "Working…";
   // A new operation — stop judging the old one; watch again when it answers.
   clearInterval(settleTimer);
   clearTimeout(settleStartTimer);
+  clearInterval(settleWaitTimer);
   settleTimer = null;
   settleStartTimer = null;
+  settleWaitTimer = null;
   clearTimeout(loadingTimer);
   loadingTimer = setTimeout(hideLayLoading, LOADING_MAX_MS);
   if (layLoadingOpen) return;
@@ -202,8 +290,10 @@ function hideLayLoading(why) {
   loadingTimer = null;
   clearInterval(settleTimer);
   clearTimeout(settleStartTimer);
+  clearInterval(settleWaitTimer);
   settleTimer = null;
   settleStartTimer = null;
+  settleWaitTimer = null;
   settlePrev = null;
   if (!layLoadingOpen) return;
   layLoadingOpen = false;

@@ -1,9 +1,11 @@
 """The desktop window: status, pairing QR, start/stop, tray.
 
 One column of soft-shadowed cards (DESIGN.md bento style, single column at
-this size). The window never blocks: server start/stop/restart run on worker
-threads and a 1 s timer pulls state from the ServerController. Closing the
-window hides to the tray — the server keeps running until Quit.
+this size). THE WINDOW NEVER BLOCKS, and since 2026-08-12 that is true: every
+slow thing — start/stop/restart, the pairing probe, the quit's own shutdown —
+runs on a worker thread ([Off-thread](offthread.py)) while a 1 s timer pulls
+state from the ServerController. The last two used to run inline and freeze it
+for seconds. Closing the window hides to the tray — the server runs until Quit.
 
 WHAT THIS WINDOW IS *NOT*, since round R2 (owner 2026-08-07). It had become
 two things at once: the thing you open to PAIR a phone, and the thing you open
@@ -20,7 +22,6 @@ import logging
 import os
 import subprocess
 import tempfile
-import threading
 import webbrowser
 from pathlib import Path
 
@@ -35,6 +36,7 @@ import pairing
 import update_handover
 import updates
 from config import BUNDLE_DIR, FROZEN, PROJECT_ROOT, SETTINGS, app_version, save_user_settings
+from gui import offthread
 from gui.controls_editor import ControlsEditor
 from gui.settings_window import SettingsWindow
 from gui.sizing import settle_minimum
@@ -114,6 +116,8 @@ class MainWindow(QMainWindow):
         self._shown_qr_url = None    # avoid re-rendering the same QR every tick
         self._tray_notice_shown = False
         self._tick = 0               # refresh counter (pairing re-checks are throttled)
+        self._pairing_busy = False   # a pairing-address worker is running
+        self._quitting = False       # the quit worker owns the shutdown now
         # Update flow — workers only SET these; the refresh timer (UI thread)
         # reads them and touches Qt. States: None → found → downloading →
         # ready (hand over to the installer + quit) / failed (retry).
@@ -165,7 +169,7 @@ class MainWindow(QMainWindow):
 
         self._settle_minimum(keep=QSize(0, 0))
 
-        threading.Thread(target=self._check_updates, daemon=True).start()
+        offthread.run(self._check_updates)
         # …and again while the app RUNS (owner 2026-08-07, and this is the
         # single most expensive defect this project has had). See
         # `_check_updates` for what one-check-per-start actually cost him.
@@ -532,7 +536,7 @@ class MainWindow(QMainWindow):
                 found = None
             self._manual_answer.emit(found)
 
-        threading.Thread(target=ask, daemon=True).start()
+        offthread.run(ask)
 
     def _apply_manual_check(self, found) -> None:
         self.check_btn.setEnabled(True)
@@ -588,18 +592,13 @@ class MainWindow(QMainWindow):
 
     def _run_worker(self, target) -> None:
         """Start/stop must never block the UI thread; _busy gates the buttons
-        until the worker finishes (the refresh timer clears it)."""
+        until the worker finishes (the refresh timer clears it). The thread,
+        its exception logging and the always-runs `on_done` are
+        [Off-thread](offthread.py)'s — one definition for every background job
+        this window has."""
         self._busy = True
         self._refresh_buttons()
-        threading.Thread(target=self._guarded(target), daemon=True).start()
-
-    def _guarded(self, target):
-        def run() -> None:
-            try:
-                target()
-            finally:
-                self._busy = False
-        return run
+        offthread.run(target, on_done=lambda: setattr(self, "_busy", False))
 
     def _restart_worker(self) -> None:
         self.controller.stop()
@@ -619,6 +618,9 @@ class MainWindow(QMainWindow):
         self.activateWindow()
 
     def _quit(self) -> None:
+        if self._quitting:
+            return
+        self._quitting = True
         self._timer.stop()
         self.tray.hide()
         # The desk gets its windows back FIRST — before anything that can
@@ -627,8 +629,22 @@ class MainWindow(QMainWindow):
         # not be left with windows nailed above his desk because a quit was
         # slow (owner decree 2026-08-05).
         self.controller.release_windows()
-        self.controller.stop()
-        QGuiApplication.instance().quit()
+        # …and the stop itself goes to a worker (2026-08-12): those ten seconds
+        # used to be ten seconds of a frozen, un-redrawing window sitting on
+        # his screen after he had already chosen Quit. Polled from a Qt timer
+        # rather than waited on, so the event loop keeps painting; the app
+        # leaves the moment the server is really down, or when
+        # offthread.QUIT_WAIT_S says a wedged stop has had long enough.
+        finished = offthread.stop_server(self.controller)
+        self._quit_timer = QTimer(self)
+        def poll() -> None:
+            if not finished():
+                return
+            self._quit_timer.stop()
+            QGuiApplication.instance().quit()
+
+        self._quit_timer.timeout.connect(poll)
+        self._quit_timer.start(100)
 
     # -- actions -----------------------------------------------------------
 
@@ -686,7 +702,7 @@ class MainWindow(QMainWindow):
         through installing would be its own bug."""
         if self._update_state is not None:
             return
-        threading.Thread(target=self._check_updates, daemon=True).start()
+        offthread.run(self._check_updates)
 
     def _install_update(self) -> None:
         upd = self._update
@@ -699,7 +715,7 @@ class MainWindow(QMainWindow):
         self._update_error = None    # a retry re-downloads; last time's reason goes
         self._update_progress = None  # a retry starts its bar from empty, not the last try's %
         self._refresh_update_button()
-        threading.Thread(target=self._download_update, args=(upd,), daemon=True).start()
+        offthread.run(self._download_update, upd)
 
     def _download_update(self, upd) -> None:
         """Worker: fetch the installer to %TEMP%; the refresh timer launches
@@ -836,17 +852,17 @@ class MainWindow(QMainWindow):
         self.update_btn.show()
 
     def _refresh_pairing(self) -> None:
-        """Re-checks the addresses while running — when the owner signs in to
-        Tailscale mid-run, the QR and hints switch to the works-anywhere URL
-        WITHOUT a restart (the server listens on all interfaces already)."""
+        """Signing in to Tailscale mid-run must switch the QR to the
+        works-anywhere URL with no restart. ON A WORKER THREAD since
+        2026-08-12 — it reaches the network for up to 4 s; the call and the
+        reasoning live in [Off-thread](offthread.py), and `_refresh` redraws
+        the QR on its next tick."""
         info = self.controller.info
-        if not info:
+        if self._pairing_busy or not info:
             return
-        urls = pairing.pairing_urls(info.token)
-        if urls["qr"] != info.qr_url:
-            info.qr_url = urls["qr"]
-            info.lan_url = urls["lan"]
-            info.tailscale_ip = urls["tailscale_ip"]  # _refresh redraws the QR
+        self._pairing_busy = True
+        offthread.run(offthread.refresh_pairing, info,
+                      on_done=lambda: setattr(self, "_pairing_busy", False))
 
     # -- refresh loop ------------------------------------------------------
 

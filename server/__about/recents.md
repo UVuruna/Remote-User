@@ -74,3 +74,13 @@ WebSocket for the same reason: the socket's dispatcher lives in
 `tests/test_layout_birth.py` — the list sources, the honest Chrome limit, the
 not-installed rule, the vanished-path error, and the newness rule, each proven
 by planting its own defect.
+
+## Look first, sleep after (2026-08-12)
+
+`open_entry`'s wait loop polled AFTER its sleep, so an app that already had its
+window up when `Popen` returned — Explorer on a warm cache, a second Chrome
+window — still cost a flat `OPEN_POLL_S` before anyone looked: 250 ms of the
+phone's loading cube spent watching a window that was already there. The sleep
+is now at the end of the turn. Nothing else changed, timeout included.
+
+Gate: `tests/test_return_speed.py`.

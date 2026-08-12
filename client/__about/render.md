@@ -269,3 +269,23 @@ It discriminates the ways this can still be wrong: `ime=0 browser=0` is the
 shell not reaching the page, `caret=unknown` is the PC unable to see the caret
 in that app, and `caret=0.951 rise=0` is arithmetic. A real rise is
 hand-checkable against `pic` and `kbTop` on the same line.
+
+## The picture holds across a session swap (2026-08-12)
+
+`initMse(codec, keepPicture)`. A quality change and a layout region change
+both end one encoder and open another on the SAME monitor, and that rebuild is
+1.2–2.3 s. Clearing `everDrew` made `redraw`'s never-blank guard fall through
+and paint the flat theme colour for every one of those milliseconds — no
+overlay, no pill change, no toast, the PC simply gone and back. It is the same
+complaint as "A PICTURE THAT STOPPED BEATS NO PICTURE" (owner 2026-08-09),
+arriving through the other door. [Connection](connection.md) asks whether this
+is still the same screen BEFORE it overwrites `monitor`, and only then may the
+canvas keep its pixels; a monitor switch or a fresh connection still clears,
+because there the old pixels are somebody else's screen.
+
+`sessionDrew` is the narrower question that came with it: has THIS session
+painted? It is cleared on every `initMse`, keep or not, and set on the first
+successful draw — [Loading](loading.md)'s settle watcher waits on it, because
+`readyState` can still read 2 for a torn-down element's old buffer.
+
+Gate: `tests/test_picture_hold.py`.

@@ -553,3 +553,42 @@ def input_gate(step, run) -> None:
     step("0aq/6  PANEL SCALE GATE — the encoder is capped by the device's own "
          "panel, and never scales up (tests/test_panel_scale.py)")
     run([sys.executable, str(PROJECT_DIR / "tests" / "test_panel_scale.py")])
+
+    # NOTHING IN THE RETURN PATH WAITS FOR ITS OWN SAKE (his instrumented log,
+    # 2026-08-12: median 3,443 ms of loading overlay per layout return, of
+    # which 1,800 ms came AFTER the server had logged that the windows had
+    # landed). Three of those waits were the app's own — the encoder rebuild
+    # queued behind the state frame, a DELIBERATE session end paying the
+    # error-loop brake, and one user switch performed twice because the
+    # interim frame invited the phone to redo the resume the server had
+    # already started. Driven with the real choke point and the real
+    # `_stream_h264` loop; the error-loop brake's own half is proven by a
+    # planted storm, because that protection may not be lost while it is being
+    # narrowed.
+    step("0au/6  RETURN SPEED GATE — the layout return waits for the work and "
+         "for nothing else (tests/test_return_speed.py)")
+    run([sys.executable, str(PROJECT_DIR / "tests" / "test_return_speed.py")])
+
+    # AND THE SCREEN NEVER GOES AWAY WHILE IT DOES (same round). A quality or
+    # region change rebuilds the encoder for 1.2–2.3 s and the canvas used to
+    # blank to the theme colour for all of it — no overlay, no toast, the PC
+    # simply gone. The last frame now HOLDS, which takes away the accident
+    # that used to stop the settle watcher scoring on a stale picture, so the
+    # watcher waits for the new session's own first painted frame instead.
+    # Both halves are driven in node against the REAL client/loading.js: the
+    # overlay must not leave over a frozen rebuild, and it must not linger
+    # after the work either — the owner deleted the 700 ms floor by name on
+    # 2026-08-12 and the 500 ms fade carries what it used to buy.
+    step("0av/6  PICTURE HOLD GATE — the picture survives a session swap, and "
+         "the cube leaves on evidence (tests/test_picture_hold.py)")
+    run([sys.executable, str(PROJECT_DIR / "tests" / "test_picture_hold.py")])
+
+    # THE DESKTOP WINDOW'S OWN HEADER MUST BE TRUE (2026-08-12). It claimed
+    # "the window never blocks" while the pairing probe (up to 4 s: a UDP
+    # timeout plus the Tailscale CLI) ran on the 1 s refresh tick, and Quit
+    # joined the server thread inline for up to 10 s. Both moved to
+    # gui/offthread.py; what is measured here is TIME ON THE GUI THREAD,
+    # against calls that deliberately take seconds.
+    step("0aw/6  GUI NON-BLOCKING GATE — the pairing probe and the quit are "
+         "off the window's thread (tests/test_gui_nonblocking.py)")
+    run([sys.executable, str(PROJECT_DIR / "tests" / "test_gui_nonblocking.py")])

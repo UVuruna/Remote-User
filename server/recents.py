@@ -380,9 +380,14 @@ def open_entry(entry_id: str) -> dict:
         logger.error("Could not start %s: %s", cmd[0], e)
         return {"error": f"Could not start {os.path.basename(cmd[0])}"}
 
+    # LOOK FIRST, SLEEP AFTER (2026-08-12, the loading-overlay round). The
+    # sleep used to come first, so an app that already had its window up by the
+    # time `Popen` returned — Explorer on a warm cache, a second Chrome window —
+    # still cost a flat OPEN_POLL_S before anyone looked. That is 250 ms of the
+    # phone's loading cube spent watching a window that was already there. The
+    # poll is otherwise unchanged: the sleep is simply at the END of the turn.
     deadline = time.monotonic() + OPEN_TIMEOUT_S
-    while time.monotonic() < deadline:
-        time.sleep(OPEN_POLL_S)
+    while True:
         for hwnd, process in _visible_hwnds().items():
             if hwnd in before or process != want:
                 continue
@@ -391,6 +396,9 @@ def open_entry(entry_id: str) -> dict:
                 logger.info("Recents opened %s (%s) as %s",
                             target or kind, app, info["title"][:60])
                 return info
+        if time.monotonic() >= deadline:
+            break
+        time.sleep(OPEN_POLL_S)
     logger.warning("Recents: %s (%s) opened no window within %.0fs",
                    target or kind, app, OPEN_TIMEOUT_S)
     return {"error": "The window never appeared — is the app still starting?"}

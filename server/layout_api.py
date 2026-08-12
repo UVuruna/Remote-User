@@ -37,8 +37,28 @@ def mon_rect(stream) -> tuple[int, int, int, int]:
     return rect_for_size(stream.width, stream.height, stream.monitor_index)
 
 
-async def send_layout_state(ws, layouts, conn: dict) -> None:
+async def send_layout_state(ws, layouts, conn: dict, resuming=None) -> None:
+    """`resuming` is the index the SERVER is about to focus by itself, and it
+    exists to stop one layout switch from being done twice (2026-08-12, read
+    out of the owner's own log: 11 of 60 "Layout N focused" lines fired within
+    one second of the previous, and each duplicate is a whole extra encoder
+    rebuild inside his loading overlay).
+
+    The race it closes: a fresh connection sends this INTERIM frame with
+    `active: null` (the per-connection focus starts empty) and only then reads
+    `resume_index` and focuses it (web.py). The phone, meanwhile, has its own
+    memory of the layout it was working in — and `active: null` is exactly the
+    signal its restore branch waits for, so it asks for the very focus the
+    server had already started. Both are legitimate mechanisms; they are simply
+    the same mechanism twice, and the phone's is the one that can be told to
+    stand down, because only the server knows what it is already doing.
+
+    Optional and absent by default: a frame that says nothing about a resume
+    changes nothing, so an older page keeps its own restore exactly as it was.
+    """
     state = await asyncio.to_thread(layouts.state, conn["active"], conn["region"])
+    if resuming is not None:
+        state["resuming"] = resuming
     # `state` re-maps the focus through its own prune, so the connection
     # adopts what it says — the focused layout may have SHIFTED (a window
     # closed at the desk), not just vanished. Trusting only the None case is
@@ -46,7 +66,6 @@ async def send_layout_state(ws, layouts, conn: dict) -> None:
     conn["active"] = state["active"]
     if state["active"] is None:
         conn["region"] = None
-    await ws.send_text(json.dumps(state))
     # THE ENCODER FOLLOWS THE REGION (owner order 2026-08-12: "why would the
     # phone decode something it does not see"). In H.264 the per-client ffmpeg
     # crops to the focused layout's region, and a crop lives inside a running
@@ -57,8 +76,20 @@ async def send_layout_state(ws, layouts, conn: dict) -> None:
     # written by the loop with what the session REALLY crops (web._h264_loop),
     # so this compares two truths, never two intentions. JPEG connections
     # never set the hook and are untouched.
+    #
+    # IT RUNS BEFORE THE SEND, NOT AFTER (2026-08-12, the loading-overlay
+    # round). The encoder rebuild is ~470 ms of ffmpeg spawn on the owner's own
+    # machine, and `layout_state` is what ARMS the phone's settle watcher — so
+    # ending the session first lets the rebuild and the phone's catch-up run
+    # side by side instead of one after the other. The region is already final
+    # here: `state` above is what re-maps the focus, so nothing below this line
+    # can change what the new session must crop to. Deliberately AFTER
+    # `layouts.state`, never before it — a reset that read a region the prune
+    # was about to null would crop to a dead layout and be thrown away by the
+    # very next state.
     if conn.get("reset_stream") and conn.get("region") != conn.get("stream_region"):
         conn["reset_stream"]()
+    await ws.send_text(json.dumps(state))
 
 
 async def layout_pick(ws, layouts, stream, msg: dict) -> None:
@@ -608,8 +639,18 @@ async def layout_focus(ws, layouts, stream, conn: dict, index: int) -> None:
                 # but "next focus" meant HIM leaving and coming back. One
                 # automatic retry runs a moment later; if it fails again the
                 # standing order remains for the next manual focus.
-                asyncio.create_task(
-                    _retry_place(ws, layouts, stream, conn, index))
+                # ONE retry in flight per layout (2026-08-12). Two focuses of
+                # the same layout inside 1.2 s used to arm two of these, and
+                # both passed the `active` guard below — two placement passes
+                # and two more `layout_state` frames, each of which the phone
+                # answers with a fresh viewport. That is the encoder-discard
+                # signature in his log; the second retry can only ever repeat
+                # what the first is already doing.
+                pending = conn.setdefault("retry_place", set())
+                if index not in pending:
+                    pending.add(index)
+                    asyncio.create_task(
+                        _retry_place(ws, layouts, stream, conn, index))
     await send_layout_state(ws, layouts, conn)
 
 
@@ -617,6 +658,13 @@ async def _retry_place(ws, layouts, stream, conn: dict, index: int) -> None:
     """One automatic re-place after a refused placement (task 231). Runs only
     while the phone still shows that layout; a failure leaves `place_pending`
     standing exactly as before, so nothing is lost by trying."""
+    try:
+        await _retry_place_inner(ws, layouts, stream, conn, index)
+    finally:
+        conn.get("retry_place", set()).discard(index)
+
+
+async def _retry_place_inner(ws, layouts, stream, conn: dict, index: int) -> None:
     await asyncio.sleep(1.2)
     if conn.get("active") != index:
         return

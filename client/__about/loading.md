@@ -74,3 +74,34 @@ return stopwatch, and the one the owner actually watches. `settleTick` passes
 *"we ran out of patience"* are different bugs and only one of them is this
 module's fault. The call is guarded on `typeof noteReturnDone === "function"`:
 this module is loaded by the audit harness too, with no connection.js in scope.
+
+## The overlay leaves when the work does — at BOTH ends (2026-08-12)
+
+Two changes from the round that measured his loading overlay (median 3,443 ms
+per layout return, 1,800 ms of it after the server had already logged the
+windows landed):
+
+- **`settleStreamReset()`** — a layout region change now ends the encoder
+  session BEFORE `layout_state` goes out (server-side), so a fresh `config`
+  lands moments later and the stream this module is judging is REPLACED
+  mid-overlay. The watcher is re-armed on that news and waits for the new
+  session's own first painted frame (`sessionDrew`, [Render](render.md)) —
+  never for a clock, and never for `video.readyState`, which a torn-down
+  element can still answer 2 to while showing a FROZEN old picture. A frozen
+  picture is exactly what `settleTick` scores as settled, which is how the
+  cube would have left over a PC still moving windows. `SETTLE_CATCHUP_MS`
+  therefore no longer runs at all on that path; it stays 650 ms for the cases
+  with no new session (a focus that does not move the crop, JPEG), where its
+  original job — a stale pre-move frame — is unchanged.
+- **`LOADING_MIN_MS` is 0.** The owner deleted the floor by name: *"what
+  700-millisecond floor? no floor is needed at all ... we must not produce
+  this counter-effect where the user waits BECAUSE OF the loading
+  animation"*. What it protected — a jarring blink — is bought by the fade
+  instead (`LOADING_FADE_MS`, 500 ms, matched in `client/layouts.css`), which
+  is allowed where a floor is not because it runs OVER the picture it
+  uncovers: he sees the screen progressively through it. The overlay stops
+  swallowing taps at the START of that fade (`pointer-events` on the closed
+  rule), or it would be the same floor with better manners.
+
+Gate: `tests/test_picture_hold.py` — the real module in node, with a scripted
+video element and a planted stale frame.

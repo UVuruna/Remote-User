@@ -352,12 +352,20 @@ def create_app(stream, hub: FrameHub | None, injector: InputInjector, token: str
             # series. JPEG stays below: its `config` precedes the subscribe.
             if stream.mode != "jpeg":
                 tasks.append(asyncio.create_task(_stream_h264(ws, stream, token, conn)))
-            await layout_api.send_layout_state(ws, layouts, conn)
             # Coming back resumes the layout the phone was last working in
             # (owner 2026-08-05) — leaving work mode minimized them, and the
             # desktop is NOT where the owner left off. Only a deliberate
             # desktop choice (which forgets the pointer) resumes on the desktop.
+            #
+            # READ BEFORE THE INTERIM FRAME GOES OUT, so that frame can SAY a
+            # resume is coming (2026-08-12). It is a plain read of a remembered
+            # index — no window is touched, nothing is placed — and it buys the
+            # phone the one fact it was missing: `active: null` here does not
+            # mean "nobody is restoring you", and believing it did made the
+            # phone ask for the same focus a round trip later. See
+            # layout_api.send_layout_state's `resuming`.
             resume = await asyncio.to_thread(layouts.resume_index)
+            await layout_api.send_layout_state(ws, layouts, conn, resuming=resume)
             if resume is not None:
                 await layout_api.layout_focus(ws, layouts, stream, conn, resume)
             tasks.append(asyncio.create_task(_send_cursor(ws, injector)))
@@ -491,9 +499,29 @@ async def _h264_loop(ws: WebSocket, manager, token: str, conn: dict,
                     q.get_nowait()
                 q.put_nowait(None)
 
-        # The quality handler ends the CURRENT session through this hook —
-        # the loop then reopens with the new reduced/full encoder settings.
-        conn["reset_stream"] = lambda p=push: loop.call_soon_threadsafe(p, None)
+        # The quality handler and the layout choke point end the CURRENT
+        # session through this hook — the loop then reopens with the new
+        # encoder settings / the new crop.
+        #
+        # AND THEY SAY SO (2026-08-12, the loading-overlay round). The pacing
+        # sleep at the bottom of this loop is a brake on the 2026-07-29 error
+        # loop (171 open failures in 90 s): a session that dies younger than
+        # two seconds is treated as a storm and costs a full second before the
+        # next try. But a quality change and a layout region change are
+        # SUCCESSFUL sessions ending ON PURPOSE, and the owner paid that whole
+        # second in his loading overlay every time he switched layouts twice
+        # in a row. A planned close is therefore marked here — by the only
+        # code that knows the close was intended — and the brake reads the
+        # mark instead of guessing from the clock. Nothing else clears it:
+        # a backlog reset (push, above), an ffmpeg death or an open failure
+        # leaves it False and is paced exactly as before.
+        conn["planned_close"] = False
+
+        def plan_close(p=push) -> None:
+            conn["planned_close"] = True
+            loop.call_soon_threadsafe(p, None)
+
+        conn["reset_stream"] = plan_close
         started = loop.time()
         # The region THIS session encodes (owner order 2026-08-12: the encoder
         # crops to the focused layout — the phone never decodes pixels it does
@@ -556,8 +584,11 @@ async def _h264_loop(ws: WebSocket, manager, token: str, conn: dict,
             # disagree about who is gone.
             manager.hold_source(hold)
             owner.release()
-        if loop.time() - started < 2.0:
-            await asyncio.sleep(1.0)  # a session dying this fast is an error loop — pace it
+        # A session dying this fast is an error loop — pace it. Unless WE ended
+        # it (see plan_close above): then the youth of the session is the
+        # feature, not the symptom.
+        if not conn.pop("planned_close", False) and loop.time() - started < 2.0:
+            await asyncio.sleep(1.0)
 
 
 INPUT_BLOCKED_TOAST = (

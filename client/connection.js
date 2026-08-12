@@ -170,6 +170,17 @@ function connect() {
         markReturn("config"); // the encoder exists — the first picture is due
         // Full view reset — sent after auth and after every stream (re)start
         // (monitor switch, H.264 session reset).
+        // IS THIS THE SAME SCREEN WE ARE ALREADY SHOWING? Asked BEFORE
+        // `monitor` is overwritten, because the answer decides whether the
+        // canvas keeps its last frame across the swap (render.js `initMse`,
+        // 2026-08-12). A quality change and a layout region change both come
+        // down this branch on the same monitor and both rebuild the encoder
+        // for 1.2–2.3 s — that used to be a blank, flat-coloured screen with
+        // nothing on the page to explain it. A monitor switch or a fresh
+        // connection is a different picture and clears as it always did.
+        const samePicture = streamMode === "h264" && everDrew
+          && monitor.w === msg.monitor_width && monitor.h === msg.monitor_height
+          && monitorIndex === (Number.isInteger(msg.monitor) ? msg.monitor : 0);
         monitor = { w: msg.monitor_width, h: msg.monitor_height };
         // THE MONITORS, AND WHICH ONE THIS IS (owner 2026-08-09, task 155).
         // Optional fields on a message that already exists: a server that does
@@ -229,8 +240,12 @@ function connect() {
         if (detailBitmap) { detailBitmap.close(); detailBitmap = null; }
         lastSentViewport = { x: 0, y: 0, w: 1, h: 1 };
         cursorPos = null;
-        if (streamMode === "h264") initMse(msg.codec);
+        if (streamMode === "h264") initMse(msg.codec, samePicture);
         else teardownMse();
+        // The stream this page is judging has just been replaced — the settle
+        // watcher must judge the NEW one's first decoded frame, never the
+        // frozen gap between the two (client/loading.js).
+        settleStreamReset();
         computeBaseRect();
         resetViewHome(); // a stream reset must not drop the focused region
         redraw();
@@ -324,6 +339,23 @@ function connect() {
         if (applyNoticeJump()) {
           layoutRestore = null;
           orientationRestoring = false;
+        } else if (layoutActive === null && msg.resuming !== undefined &&
+                   msg.resuming !== null) {
+          // THE SERVER IS ALREADY DOING IT (2026-08-12). This interim frame
+          // says desktop, which is the restore branch's own trigger — but the
+          // PC has read its remembered index and is placing those windows
+          // right now, so asking for the same focus a round trip later is one
+          // user switch done twice: two placement passes, two more state
+          // frames, and a second encoder rebuild inside the loading overlay he
+          // is watching. So: no send. Everything else the restore branch does
+          // still has to happen, because the same seconds are still passing —
+          // the rotation lock holds through them (task 204) and the overlay
+          // re-arms so the watcher judges the REAL move's frame and not this
+          // idle one (task 194). `layoutRestore` is left standing: if the
+          // server's resume finds the window gone, its own next frame carries
+          // neither `active` nor `resuming` and the final `else` clears it.
+          orientationRestoring = true;
+          showLayLoading("Back to your layout…");
         } else if (layoutActive === null && layoutRestore &&
             layouts[layoutRestore.index] &&
             layouts[layoutRestore.index].name === layoutRestore.name) {

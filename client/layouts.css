@@ -772,13 +772,24 @@ body.laybar-overflow:not(.laybar-bottom) {
   font: 600 15px system-ui, sans-serif;
   opacity: 0;
   visibility: hidden;
-  transition: opacity 280ms cubic-bezier(0.4, 0, 0.2, 1),
-              visibility 0s linear 280ms;
+  /* THE FADE IS WHAT THE 700 ms FLOOR USED TO BUY (owner ruling 2026-08-12:
+     "even if the loading finishes fast, in 200 or 300 ms, just let the
+     fade-out run" — the animation may warn and cover, it may never ADD time).
+     500 ms, and it is allowed where a floor is not for one reason only: it
+     fades over a picture that is ALREADY THERE, so he sees the screen
+     progressively through it. LOADING_FADE_MS in client/loading.js must match.
+     `pointer-events` is on the CLOSED state, so the overlay stops swallowing
+     taps the instant the class comes off — at the START of the fade, not its
+     end. Anything else would be the floor again with better manners. */
+  pointer-events: none;
+  transition: opacity 500ms cubic-bezier(0.4, 0, 0.2, 1),
+              visibility 0s linear 500ms;
 }
 #lay-loading.open {
   opacity: 1;
   visibility: visible;
-  transition: opacity 280ms cubic-bezier(0.4, 0, 0.2, 1), visibility 0s;
+  pointer-events: auto;
+  transition: opacity 500ms cubic-bezier(0.4, 0, 0.2, 1), visibility 0s;
 }
 /* NOTE: the fade is opacity-only on purpose — `.cube-scene`'s transform is
    owned by the cube-bob animation AND by the JS spin, so a transition on it

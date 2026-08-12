@@ -170,3 +170,20 @@ Because it rides `config`, a change made while the phone is connected reaches
 it on the next connection — which the phone makes on every visibility change,
 so in practice locking and unlocking is enough. The desktop's caption says so
 rather than promising instant.
+
+## A deliberate session end is not an error loop (2026-08-12)
+
+`_h264_loop` sleeps a full second whenever a session dies younger than two
+seconds. That is the correct answer to the 2026-07-29 storm (171 open failures
+in 90 s) and the wrong answer to a quality change or a layout region change,
+which are healthy sessions ending ON PURPOSE — and the owner paid that second
+inside his loading overlay every time he switched layouts twice in a row. The
+`reset_stream` hook now MARKS the close (`conn["planned_close"]`), because only
+the code that ends a session knows it was intended, and the brake reads the
+mark instead of guessing from the clock. Everything else — a backlog reset, an
+ffmpeg death, an open failure — leaves the mark False and is paced exactly as
+before.
+
+Gate: `tests/test_return_speed.py`, whose storm check plants a session that
+dies the instant it is born and proves the brake still holds the loop to about
+one open per second.

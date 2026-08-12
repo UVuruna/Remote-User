@@ -75,3 +75,27 @@ windows covered 75 % of the picture his phone was showing.
 
 ### Flow
 - [Layout API — Flow](../__flow/layout_api.md)
+
+## The encoder is rebuilt BEFORE the phone is told (2026-08-12)
+
+`send_layout_state` ends a session whose crop no longer matches *above* the
+`send_text`, not below it. The ffmpeg spawn is ~470 ms on the owner's machine
+and `layout_state` is what ARMS the phone's settle watcher, so ending the
+session first lets the rebuild and the phone's catch-up run side by side
+instead of one after the other. It stays AFTER `layouts.state` — that call is
+what re-maps the focus, so the region is final by then; a reset reading a
+region the prune was about to null would crop to a dead layout.
+
+`resuming` (optional) is the other half of the same round. On a fresh
+connection the server sends an interim frame with `active: null` and only then
+focuses the layout it remembers — and `active: null` is exactly the phone's own
+restore trigger, so it asked for the focus the server had already started: 11
+of 60 "Layout N focused" lines in his log fired within a second of the
+previous. The frame now NAMES the resume and the page stands down on it
+(keeping its overlay and its rotation lock, which the same seconds still need).
+
+`_retry_place` is deduped per layout (`conn["retry_place"]`) for the same
+reason: a duplicated focus armed two of them, and both passed the `active`
+guard — two placement passes and two more state frames inside one overlay.
+
+Gate: `tests/test_return_speed.py`.
