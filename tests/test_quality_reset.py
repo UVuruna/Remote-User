@@ -202,10 +202,16 @@ def check_bitrate_change_reaches_the_encoder() -> bool:
 
     asyncio.run(run())
     # The FIRST is the desktop's own bitrate, the SECOND the phone's step of
-    # it (config.bitrate_for_level: "low" is 10% of 12M).
+    # it (config.bitrate_for_level: "low" is 10% of the desktop base, which is
+    # 6M since 0.0.134 — so 600k, where this line read 1200k while the base was
+    # 12M). HELD AS A LITERAL on purpose: computing it from config here would
+    # let the gate mark its own homework, and the whole value of these numbers
+    # is that a silent change to a shipped default fails HERE, by name, with a
+    # readable number. The base is asserted on the line above for the same
+    # reason, so the pair can never drift apart unnoticed.
     return (result.get("ok") and len(result["spawns"]) >= 2
             and result["spawns"][0] == SETTINGS.h264_bitrate
-            and result["spawns"][1] == "1200k")
+            and result["spawns"][1] == "600k")
 
 
 def check_a_quality_change_does_not_recycle_capture() -> bool:
@@ -254,9 +260,11 @@ def check_a_slow_reopen_does_not_kill_the_socket() -> bool:
 
     asyncio.run(run())
     # Three encoders: the original, the one that stalled, the one that worked
-    # — and the one that worked carries the bitrate he asked for.
+    # — and the one that worked carries the bitrate he asked for. "low" is 10%
+    # of the desktop base (6M since 0.0.134), held literal for the reason given
+    # in the check above: a shipped default that moves must fail HERE, by name.
     return (result.get("recovered") and result["closed"] is None
-            and result["spawns"] == 3 and result["bitrate"] == "1200k")
+            and result["spawns"] == 3 and result["bitrate"] == "600k")
 
 
 def check_a_reopen_that_never_recovers_gives_up() -> bool:
@@ -361,9 +369,11 @@ def check_the_quality_change_is_logged_end_to_end() -> bool:
     web_log.removeHandler(watch)
     web_log.setLevel(level)
     said = any("Quality change from the phone" in line for line in watch.lines)
-    # "mid" is 40% of the desktop's 12M, and the panel's other two axes ride
-    # the same message — a log line alone would not prove the message ARRIVED.
-    return (result.get("reopened") and said and result["bitrate"] == "4800k"
+    # "mid" is 40% of the desktop's base — 6M since 0.0.134, so 2400k (it read
+    # 4800k under the old 12M). Kept literal for the reason given above, and
+    # the panel's other two axes ride the same message: a log line alone would
+    # not prove the message ARRIVED.
+    return (result.get("reopened") and said and result["bitrate"] == "2400k"
             and "fps=15" in result["filters"] and "scale=" in result["filters"])
 
 
