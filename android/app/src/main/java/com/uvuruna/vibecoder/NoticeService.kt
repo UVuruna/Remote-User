@@ -180,6 +180,22 @@ class NoticeService : Service() {
         return START_STICKY
     }
 
+    /** The owner's rule (2026-08-12): notices live only while the APP lives —
+     *  running in the background is fine, CLOSED is closed. Swiping the app
+     *  out of recents removes its task, and Android tells the service exactly
+     *  then; the channel stops with it and the ongoing notification goes too.
+     *  The PC's 30-minute queue holds whatever finishes until the app is
+     *  opened again. Without this, START_STICKY kept the channel alive after
+     *  a deliberate close — a notification from an app the owner had just
+     *  shut. (`running = false` first, so a sticky restart racing this stop
+     *  returns START_NOT_STICKY instead of re-arming the link.) */
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        Log.i(TAG, "App closed — the notice channel stops with it")
+        running = false
+        stopSelf()
+        super.onTaskRemoved(rootIntent)
+    }
+
     override fun onDestroy() {
         running = false
         link.stop()
@@ -229,11 +245,22 @@ class NoticeService : Service() {
             // the full body stays on the banner. Older servers send no
             // speak_text and keep the old sentence.
             val speakText = msg.optString("speak_text")
+            // THE VOICE IS THE PHONE'S OWN CHOICE (owner 2026-08-12): the
+            // page's Voice panel stores it per device, and this carrier reads
+            // the SAME store the page writes — a notice must sound identical
+            // whether the page was open or not. The frame's voice/rate are
+            // the fallback for a device that never chose (and old servers).
+            val store = getSharedPreferences(Prefs.CLIENT_FILE, MODE_PRIVATE)
+            val voice = store.getString("p_notifyVoice", "")?.ifBlank { null }
+                ?: msg.optString("voice")
+            val rate = store.getString("p_notifyRate", "")?.toFloatOrNull()
+                ?.takeIf { it > 0f }
+                ?: msg.optDouble("rate", 1.0).toFloat()
             notifier().speak(
                 if (speakText.isNotBlank()) speakText
                 else if (body.isBlank()) title else "$title. $body",
-                msg.optString("voice"),
-                msg.optDouble("rate", 1.0).toFloat(),
+                voice,
+                rate,
             )
         }
     }

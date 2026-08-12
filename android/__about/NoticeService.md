@@ -110,12 +110,18 @@ until the engine is ready, so the first notice is late, never lost.
 - **Started** from `MainActivity.onCreate` — Android 12+ refuses a foreground
   start from the background, and that is the one moment the app is certainly
   in the foreground.
-- **Never stopped by us.** It outlives the Activity on purpose: the whole
-  point is that a notice arrives when there is no page.
+- **Outlives the Activity, never the APP** (owner rule 2026-08-12: "notices
+  only while the app runs in the background — closed is closed"). It survives
+  the page hiding — the whole point is that a notice arrives when there is no
+  page — but a task removal (the owner swipes the app out of recents) is a
+  deliberate close, and `onTaskRemoved` stops the service and its channel on
+  the spot. `running` is cleared BEFORE `stopSelf()` so a sticky restart
+  racing the stop answers `START_NOT_STICKY` instead of re-arming the link.
+  Gate: the closed-app check in `tests/test_notice_channel.py`.
 - **`START_STICKY`** — if Android reclaims the process under memory pressure
-  it brings the service back and the link reconnects. A notice channel that
-  quietly stayed dead until the next app launch would be the same failure in
-  a new place.
+  WHILE the app still lives, it brings the service back and the link
+  reconnects. A notice channel that quietly stayed dead until the next app
+  launch would be the same failure in a new place.
 
 ## Honest limit
 

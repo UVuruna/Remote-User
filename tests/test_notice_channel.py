@@ -60,6 +60,7 @@ Run:  .venv\\Scripts\\python tests/test_notice_channel.py
 
 import json
 import queue
+import re
 import socket
 import sys
 import threading
@@ -628,6 +629,35 @@ def check_the_shell_sends_an_id_and_backs_off() -> bool:
     return ok
 
 
+def check_a_closed_app_stops_the_channel() -> bool:
+    """Owner rule 2026-08-12: notices live only while the APP lives — running
+    in the background is fine, CLOSED is closed. START_STICKY kept the
+    foreground service (and its channel) alive after the owner swiped the app
+    out of recents, so a shut app still raised notifications. The service must
+    stop itself in onTaskRemoved — and clear `running` FIRST, so a sticky
+    restart racing the stop answers START_NOT_STICKY instead of re-arming the
+    link. Read from the source, like the shell check above — this repo has no
+    JVM runner, and the rule shipping unwired is the exact failure class the
+    2026-08-08 voice round recorded."""
+    src = PROJECT / "android/app/src/main/java/com/uvuruna/vibecoder"
+    service = (src / "NoticeService.kt").read_text(encoding="utf-8")
+    m = re.search(r"override fun onTaskRemoved\((?:.|\n)*?\n    }", service)
+    if not m:
+        print("    NoticeService has no onTaskRemoved — a closed app keeps "
+              "raising notifications (owner rule 2026-08-12)", file=sys.stderr)
+        return False
+    body = m.group(0)
+    if "stopSelf()" not in body:
+        print("    onTaskRemoved does not stop the service", file=sys.stderr)
+        return False
+    if "running = false" not in body or \
+            body.index("running = false") > body.index("stopSelf()"):
+        print("    onTaskRemoved must clear `running` BEFORE stopSelf — a "
+              "sticky restart racing the stop re-arms the link", file=sys.stderr)
+        return False
+    return True
+
+
 def check_close_channels_ends_the_drain() -> bool:
     """Task 234: `force_exit` stops uvicorn from accepting work, but an
     endless `/notices` generator parked on its queue held the shutdown drain
@@ -699,6 +729,8 @@ def main() -> int:
         results["the closed channel really detaches"] = False
     results["the shell sends an id and backs off when kicked"] = (
         check_the_shell_sends_an_id_and_backs_off())
+    results["a closed app stops the channel (background keeps it)"] = (
+        check_a_closed_app_stops_the_channel())
     results["two devices each get ONE copy, neither kicked"] = (
         check_two_devices_each_get_one_copy())
     results["an older APK (no device id) behaves exactly as before"] = (
