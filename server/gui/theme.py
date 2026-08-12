@@ -278,6 +278,17 @@ QFrame#card {{
     border-radius: {radiusCard};
 }}
 
+/* A LAYOUT CONTAINER IS NOT A SURFACE (2026-08-12, the same class of bug as
+   the `QLineEdit` note in the palette above, photographed a fourth time). A
+   plain QWidget used only to GROUP widgets — a row of combos that must move
+   together, a block that a disclosure shows and hides — has no rule of its
+   own, so it falls through to the `QWidget` rule above and paints itself in
+   the PAGE colour. Inside a card that is a visibly darker band across the
+   card's own surface, announcing a container the design never intended.
+   `#group` is that container: it declares itself furniture, not a surface,
+   exactly as QLabel does one line down. */
+QWidget#group {{ background: transparent; }}
+
 QLabel {{ background: transparent; border: none; }}
 QLabel#h1 {{ font-size: 20px; font-weight: 700; }}
 QLabel#caption {{ color: {text2}; font-size: 12px; }}

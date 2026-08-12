@@ -209,6 +209,12 @@ STANDARD = {
     # that describe THIS device. Standard without argument — five rows over
     # helpers that already exist, and not one decision of its own.
     "client/phone-panel.js",
+    # New 2026-08-12 (owner ballot — appearance is per device): the card where
+    # a handset picks its own theme, colour and fill. Standard for the same
+    # reason phone-panel.js is — three rows over helpers that already exist;
+    # every rule about what a stored choice DOES lives in theme.js below,
+    # which is the Algorithmic half of the pair.
+    "client/appearance-panel.js",
     # New 2026-08-11 (owner 2026-08-04, task 218b): one set's own editor on the
     # phone — which pool commands ride and in which slot. Standard: it draws
     # rows and a preview and sends ONE message; every rule that decides whether
@@ -361,6 +367,12 @@ ALGORITHMIC = {
     # widget module, same tier as its siblings.
     "server/gui/controls_data.py",
     "server/gui/controls_order.py",
+    # Split out of settings_window.py on 2026-08-12 (owner ballot, option A —
+    # THE STRUCTURE LAW): the STREAM card, its four named quality steps and
+    # the Custom disclosure behind them. A GUI widget module, same tier as its
+    # siblings; the one rule it must not get wrong (Data saver IS the mobile
+    # data profile) lives in config.DATA_SAVER and is gated.
+    "server/gui/stream_card.py",
     # New 2026-08-07 (build round R3 — themes). One doc pair for the two
     # halves of one feature, exactly as layouts.css/layouts.js share theirs:
     # theme.css is every colour token in three themes and two fills, theme.js
@@ -399,6 +411,11 @@ ALGORITHMIC = {
     "setup/svg_to_ico.py",
     "setup/build_apk.py",
     "setup/build.py",
+    # Split out of build.py on 2026-08-12 (THE STRUCTURE LAW): the fail-closed
+    # gate suite, which grows every round, apart from the packaging steps,
+    # which barely change. Same tier as build.py — a list of subprocess calls,
+    # each explained where it is added.
+    "setup/gates.py",
     "android/app/src/main/java/com/uvuruna/vibecoder/MainActivity.kt",
     # New 2026-08-07 (owner decree — the waiting channel): one thread that
     # holds an idle socket open, a connect/read/backoff state machine with

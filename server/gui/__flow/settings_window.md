@@ -8,21 +8,28 @@
 flowchart TB
     A["Settings button on the main window"] --> B{"built before?"}
     B -- no --> C["SettingsWindow(controller, main.restart_server, parent)"]
-    C --> D["_build_cards — STREAM, NOTIFICATIONS, FOCUS, STARTUP"]
-    D --> E["every control reads its LIVE source: SETTINGS, agent_hook_installed(), autostart.installed(), notify.voices()"]
+    C --> D["_build_cards — APPEARANCE, STREAM (gui/stream_card.py), NOTIFICATIONS, FOCUS+STARTUP, ADVANCED"]
+    D --> E["every control reads its LIVE source: SETTINGS, agent_hook_installed(), autostart.installed()"]
     B -- yes --> F
     E --> F["show() → showEvent"]
     F --> G["_refresh_live_state() — voices, the hook, the logon task, re-read"]
     G --> H{"already settled?"}
     H -- yes --> K
     H -- no --> I["_align_label_column() — one label width for BOTH forms, in the polished font"]
-    I --> J["settle_minimum(self, _computed_minimum(), 0x0)"]
+    I --> I2["stream_card.settle() — pin the three Exact combos to their polished hint"]
+    I2 --> J["settle_minimum(self, _computed_minimum(), 0x0)"]
     J --> K["the owner sees it"]
 ```
 
-`_refresh_live_state()` runs on every show, not only the first: a phone may
-have connected since (new voices), and an installer run may have created or
-removed the logon task behind our back.
+`_refresh_live_state()` runs on every show, not only the first: an installer
+run may have created or removed the logon task behind our back, and
+`agent_hook.py --install` may have been run from a terminal.
+
+The STREAM card's own build and state machine moved to
+[Stream Card](../__about/stream_card.md) on 2026-08-12 (THE STRUCTURE LAW);
+this window keeps the column, the aligned label column and the measured
+minimum, and calls `stream_card.settle()` from the same show that aligns the
+labels — for the same reason, in the same font.
 
 ## Algorithm — what a change does
 

@@ -40,7 +40,7 @@ Frozen dataclass — the module-level `SETTINGS` instance is the only one. See t
 - `bitrate_bps(text)`: `"12M"` / `"1200k"` / `"900000"` → bits per second; unparsable text logs and falls back to 12 Mbps rather than killing a stream
 - `stream_base(stream)` (moved here from web.py 2026-08-10, THE STRUCTURE LAW — every number in it is a reading of SETTINGS): the desktop Settings card as the phone must read it, `{fps, width, height, bitrate, bitrate_mid, bitrate_low}`, shipped to the page as `config.base`. The phone's quality panel may only go BELOW it, so the panel has to be able to SAY what "Max / Full / High" currently mean
 - `h264_reopen_tries` / `h264_reopen_pause_s` (new 2026-08-10, owner's #1 report): how many consecutive **re-open** failures a live connection tolerates before the socket is given up, and the breath between them. A quality change can only be applied by a new encoder, and until this existed one slow ffmpeg restart closed the whole socket — see [H.264 Streamer](h264_streamer.md) and [Web Layer](web.md) → `_h264_loop`
-- `quality_override(msg)` (task 203): the per-client encoder overrides carried by a `quality` message — **or by the `auth` message's own `quality` field**. ONE parser, two callers, and the second caller is the point: the phone restates its saved overrides on every connect, and that used to be readable only after the whole connection setup had finished, so the first encoder was built at DEFAULT quality and immediately thrown away (his log 2026-08-11 10:08:08,773 → 08,864 → 10,086 — 1.31 s of nothing on every return from an excursion). Reading it off `auth` makes the FIRST session the right one and the restatement compare equal. `None` = pure defaults; legacy `reduced: true` maps to the auto-save profile
+- `quality_override(msg)` (task 203): the per-client encoder overrides carried by a `quality` message — **or by the `auth` message's own `quality` field**. ONE parser, two callers, and the second caller is the point: the phone restates its saved overrides on every connect, and that used to be readable only after the whole connection setup had finished, so the first encoder was built at DEFAULT quality and immediately thrown away (his log 2026-08-11 10:08:08,773 → 08,864 → 10,086 — 1.31 s of nothing on every return from an excursion). Reading it off `auth` makes the FIRST session the right one and the restatement compare equal. `None` = pure defaults; legacy `reduced: true` maps to **`DATA_SAVER`**, the one saving profile (below)
 - `bitrate_for_level(level)`: the phone's bitrate step resolved against the DESKTOP choice — `"high"` is `h264_bitrate` itself, `"mid"`/`"low"` are `h264_bitrate_mid_pct` / `_low_pct` percent of it. Percentages replaced the absolute `"5M"`/`"1200k"` on 2026-08-05: fixed numbers meant the desktop Bitrate combo applied only while the phone sat on "High", so the PC's choice was silently discarded the moment the phone picked Mid
 
 ## Settings trim (owner 2026-08-02); `hand` removed for good (owner 2026-08-07)
@@ -87,9 +87,62 @@ Four settings and one set-colour table (`SET_COLORS` — `SET_COLORS_DARK` and
 | Key | Values | What it is |
 |---|---|---|
 | `ui_theme` | `dark` / `light` | THIS PC's palette (`server/gui/theme.py`) |
-| `phone_theme` | `dark` / `light` | the PHONE PAGE's |
+| `phone_theme` | `dark` / `light` | the PHONE PAGE's — a DEFAULT since 2026-08-12 |
 | `phone_colored` | `True` / `False` | do the D-pad + wheel wear each set's colour |
 | `phone_fill` | `transparent` / `full` | outlined buttons, or filled |
+
+**THE THREE PHONE AXES ARE THE DEFAULT, NOT THE DECREE** (owner ballot
+2026-08-12: *"appearance is also per device, not global, so it belongs on the
+phone / tablet"*). They still ride every `config` frame through `ui_config()`,
+and a handset that has never chosen wears them byte for byte — but the choice
+itself now lives on the device, in its own SharedPreferences store
+(`client/theme.js` → `uiChoice`, the panel in `client/appearance-panel.js`).
+Two devices therefore render one frame differently, which is the whole
+request. The 2026-08-07 "one source of truth, no menu on the phone" rule was
+right that there must be ONE answer and wrong about where it lives: he uses a
+tablet AND a phone, and one desktop dropdown could only ever describe one of
+them. Nothing on the wire changed, and the desktop Settings window's three
+combos are gone rather than emptied.
+
+## `DATA_SAVER` — the one saving profile
+
+Three doors reach "save data" and there must never be two sets of numbers
+behind them (owner ballot 2026-08-12: *"just make sure you connect Data saver
+to mobile data, the mechanic we already have"*):
+
+| Door | Where |
+|---|---|
+| automatic, on cellular | the phone's "save data on mobile networks" tick + the `Android.transport()` bridge (`client/quality.js`) |
+| by hand | the desktop STREAM card's **Data saver** quality step (`server/gui/stream_card.py`) |
+| legacy | `quality {reduced: true}` from a page older than the quality panel — `quality_override` maps it here |
+
+`DATA_SAVER` is the per-client OVERRIDE shape (`{fps 10, res "1/2", bitrate
+"low"}`); `DATA_SAVER_BITRATE` (`1200k`) is the ABSOLUTE number the desktop
+step writes into `h264_bitrate`, because a base cannot be a percentage of
+itself; `DATA_SAVER_SCALE` is the capture-side halving. The three
+`h264_reduced_*` settings READ these rather than restating them.
+
+**The two halves are deliberately not derived from one another**, and the
+difference is the owner's own hierarchy rule of 2026-08-05: the phone's
+automatic switch asks for a LEVEL (`"low"` = `h264_bitrate_low_pct` of
+whatever the PC is set to, so it falls WITH the PC's choice and can never
+out-bid it), while the desktop step must name a NUMBER. They coincide exactly
+when the base is 12M; under the 6M default shipped on 2026-08-12 the automatic
+profile asks for 600k where the manual step sets 1.2M. That is the hierarchy
+working, not a drift — but it is worth knowing that "Data saver" means the same
+SHAPE on both doors, not always the same bits.
+
+**The shipped `h264_bitrate` default moved 12M → 6M on 2026-08-12**, with the
+desktop card's five-step ladder, so a fresh install lands on the named
+**Balanced** step (30 fps, 6 Mbps) rather than on the Custom entry. Defensible
+because the same round added the region crop and the device-panel scale: the
+encoder typically works at ~1920 wide instead of 3840, where 6 Mbps is a better
+picture than 12 Mbps at 4K was. It is a default, never an override — a saved
+`settings.json` wins.
+
+`tests/test_stream_card.py` (fail-closed, `setup/gates.py` 0at/6) asserts every
+door against this table, including by READING the literal out of
+`client/quality.js`, so the manual pick and the automatic switch cannot drift.
 
 **THREE INDEPENDENT AXES, not a fourth theme name** (owner correction
 2026-08-08, replacing the 2026-08-07 shape). His own words: *"teme postoje

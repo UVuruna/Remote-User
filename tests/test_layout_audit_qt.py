@@ -352,6 +352,14 @@ def make_settings_window() -> QWidget:
     window.setAttribute(Qt.WidgetAttribute.WA_DontShowOnScreen, True)
     window.show()               # …resolves the QSS font, then the worst caption
     window._set_caption(window.notify_caption, NOTIFY_WORST, error=True)
+    # …and the STREAM card OPEN at Custom… (2026-08-12). That disclosure holds
+    # three more combo rows and its own wrapping caption, so a shut card is not
+    # this window's fullest state — and ALG-1 (EXTREME STATE MATRIX) says a
+    # toggle is audited through its options, not in the one it happens to
+    # start in. The declared minimum already measures the open state; this is
+    # what makes the audit and the shot agree with it.
+    window.stream_card.custom_check.setChecked(True)
+    assert window.stream_card.custom_box.isVisible()
     assert SETTINGS.notify_voice   # the planted state really is in place
     return window
 

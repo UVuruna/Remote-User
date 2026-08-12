@@ -24,7 +24,7 @@ It exists because the [Main Window](main_window.md) had become two things at onc
 ## The cards, in reading order
 | Card | Rows | When it takes effect |
 |------|------|----------------------|
-| **STREAM** | Monitor · Resolution · Bitrate · Frame rate, then **Apply & restart** | on Apply — these shape the encoder, so the server restarts, exactly as before the move |
+| **STREAM** | Monitor · **Quality** (four named steps) · a **Custom…** disclosure holding Resolution · Bitrate · Frame rate, then **Apply & restart** — the card itself lives in [Stream Card](stream_card.md) since 2026-08-12 (THE STRUCTURE LAW) | on Apply — these shape the encoder, so the server restarts, exactly as before the move |
 | **NOTIFICATIONS** | "Tell my phone when an agent finishes" (the ROADMAP H2 hook switch, moved from the main window) · "Say it out loud" — and a caption saying where the voice itself is chosen | at once |
 | **FOCUS** | "Don't let applications steal focus" — default OFF | at once |
 | **STARTUP** | "Check for new versions when the app starts" (`update_check`, which had existed in code with no UI at all) · "Start with Windows" | at once |
@@ -71,58 +71,91 @@ whole look of the product, both halves:
 
 - **This PC** — the sun/moon pill ([Switch](switch.md)), riding the section
   heading's own row rather than taking a row of its own.
-- **The phone** — THREE combos on ONE row (owner correction 2026-08-08):
-  theme (Dark / Light), whether the controls are Coloured or Plain, and their
-  fill (Outlined / Filled). Chosen here and only here: the owner's answer to
-  this round's P4 was one source of truth and no menu on the phone, so the
-  page applies `config.ui` and asks the device nothing.
+- **The phone** — **GONE FROM THIS WINDOW on 2026-08-12** (owner ballot:
+  *"appearance is also per device, not global, so it belongs on the phone /
+  tablet"*). Three combos stood here — theme, Coloured/Plain,
+  Outlined/Filled — and they could only ever describe ONE handset while he
+  uses a tablet and a phone. The choice now lives on the device
+  ([Appearance Panel](../../../client/__about/appearance-panel.md)), stored
+  through the SharedPreferences bridge.
 
-  **THREE COMBOS, NOT TWO** (owner correction 2026-08-08, replacing the
-  2026-08-07 shape that folded colour into a fourth `phone_theme` value:
-  `"colored"` / `"colored-light"`). His own words: *"teme postoje samo dve,
-  svetla i tamna … a ove komande … on može da bude obojen, neobojen, i može
-  da bude transparentan ili pun."* A coloured look wears the SAME palette
-  whichever theme combo is picked (`config.SET_COLORS` — a SECOND owner
-  correction, the same day, kept below with a `lang-ok` note since it quotes
-  him verbatim — a set's colour is its identity, and an identity that changes
-  with the sun/moon switch is not one). `SET_COLORS_DARK` / `SET_COLORS_LIGHT`
-  still exist in `server/config.py`, both names pointing at that one table,
-  so an import written before this correction cannot quietly resurrect a
-  second one. `PHONE_COLORED` is its own dropdown, independent of both
-  `PHONE_THEMES` and `PHONE_FILLS` — it only switches the identity colours on
-  or off, never which colours they are.
+  This is the SAME correction the Voice dropdown got earlier the same day, for
+  the same reason, and it does NOT undo the 2026-08-08 three-axis model — the
+  three axes are exactly the three rows the phone's card now offers.
+  `phone_theme` / `phone_colored` / `phone_fill` survive in
+  [Config](../../__about/config.md) as the DEFAULT a device wears until it
+  chooses, still riding every `config` frame, so a handset he never touches
+  looks exactly as it does today. A coloured look still wears the SAME palette
+  under both themes (`config.SET_COLORS` — a set's colour is its identity, and
+  an identity that changes with the sun/moon switch is not one).
 
   > "nema dve verzije za obojene setove. Oni ce uvijek imati ove jake upecatljive boje." — lang-ok: owner's verbatim decision quote, 2026-08-08
 
-All three phone combos save immediately (`save_user_settings`), like every
-card in this window except STREAM. The caption says the honest thing — the
-phone reads the change on its NEXT connection, which in practice means
-locking and unlocking it, because `ui` rides the `config` frame.
+**WHAT IS LEFT IS NOT A HOLE.** The pill still rides the section heading's own
+row where it always did, the form row that carried the trio is GONE rather
+than emptied, and the caption below is the forwarding note — a setting that
+moves without one reads as a setting that was taken away. An orphaned label
+over an empty column is what a grader measures.
 
-**A pre-2026-08-08 `settings.json` is TRANSLATED, never reset** — see
-[Config](../../__about/config.md) → `_migrate_legacy_ui`. This window always
-reads `SETTINGS.phone_theme` / `SETTINGS.phone_colored` / `SETTINGS.phone_fill`
-AFTER `load_user_settings()` has already run the migration, so the three
-combos never have to know the old shape existed.
+**A pre-2026-08-08 `settings.json` is still TRANSLATED, never reset** — see
+[Config](../../__about/config.md) → `_migrate_legacy_ui`, and
+`client/theme.js` → `legacyTheme` for the same translation on the device's own
+cache. Neither path went anywhere; only the dial did.
 
-### The reflow the fifth card paid for
+### The reflow that makes this window FIT THE SCREEN (2026-08-12)
 
-A fifth card put the measured minimum at **614x1048**, past the 1000 px height
-this project declares in `.claude/layout-frame.json`. Raising that frame is the
-owner's decision, and the ladder says reflow first anyway (rules/GUI.md — free
-space -> reflow -> minimum -> scroll).
+Round R3's fifth card put the minimum at **614x1048**, and the answer then was
+to pair FOCUS and STARTUP on one row. That bought one rung and it was not
+enough. By 2026-08-12 the minimum had reached **767x1226** and the guard named
+the real defect:
 
-So **FOCUS and STARTUP now share one row**. They are the two shortest cards
-AND the two that belong together — both answer "how does Vibe Coder behave on
-this PC" rather than "what does it send". The window has roughly 666 px of
-unused WIDTH inside its own frame and 0 px of spare height, so spending one to
-save the other is what the ladder's first two rungs are for. The three cards
-above keep their full width: their captions are long, and halving them would
-have bought height back with one hand while giving it away with the other.
+    MIN 767x1226 does not fit the screen floor 1280x1000.
 
-Result: **718x921**, inside the frame, audited clean in both palettes.
-`_computed_minimum` gained `phone_row` (two combos side by side can be wider
-than the widest single one), `head_row` (heading + "This PC" + the pill) and
-`paired_row` (the longer of FOCUS/STARTUP's checkboxes, twice over, plus both
-cards' padding), and its `height_at` charges the paired row only the TALLER of
-the two cards at HALF width.
+That is problem #4 on the owner's own list — *"desktop Settings escapes the
+screen"* — and it is why round 46's `clamp_to_screen` could not answer it.
+Clamping pulls a window that has been PUSHED off-screen back inside; it can do
+nothing for a window that is TALLER than the screen. On a 1920x1080 display the
+workspace is about 1040 px with the taskbar, so this window could not be shown
+whole wherever it was put. The number was in the audit output the whole time,
+and he was told twice that it was fixed.
+
+**Ladder step 2, REFLOW** ([GUI Rules](../../../../../rules/GUI.md) — free space →
+reflow → minimum → scroll). Step 1 was tried and dismissed on the numbers: card
+padding is 36 px and the window margins 16/18, which together cannot pay a
+fifth of a 226 px overshoot and would cost every card its breathing room. Step
+3 is not available (the floor is what we must fit) and step 4 would put a
+scrollbar in a window carrying ~500 px of unused WIDTH, which is an audit
+failure on its own.
+
+| Band | Cards | Why |
+|---|---|---|
+| full width | APPEARANCE | its caption is one line wide and four lines narrow — halving it buys height with one hand and gives it back with the other |
+| full width | STREAM | it MUST be: the Exact row is three combos plus a label column, ~644 px that no half can give. Split it and the trio clips |
+| left column | NOTIFICATIONS · FOCUS · STARTUP | what the app does while you work, and how it starts |
+| right column | ADVANCED | alone, because it is nearly as tall as the other three together |
+
+**Three and one is a MEASURED split, not a tidy one.** Any two-and-two
+arrangement leaves one column ~120 px taller than the other, and the taller
+column IS the window's height. FOCUS and STARTUP stopped sharing their old
+half-of-a-half row in the same change; each is now simply a card in a column,
+and both captions wrap at a real width for the first time.
+
+New measured minimum: **959x996**.
+
+### The minimum is MEASURED, not modelled
+
+`_computed_minimum` used to model every heading, row, caption and card frame in
+the window to predict its height. That model was already drifting — it read 875
+where Qt needed 948 — and it could not see what actually binds: it believed
+width kept buying height up to 1,175 px, where Qt stops improving at about 960.
+It now asks the layout itself, `layout().totalHeightForWidth(w)`. Only the
+WIDTH FLOOR is still computed by hand, because combo entries and checkbox
+labels never reflow and no amount of height can pay for them: the form label
+plus the longest combo entry, the Exact row's three combos, the APPEARANCE
+heading with its pill, and the widest unwrappable thing in a switch card twice
+over for the two columns.
+
+The search also changed DIRECTION, and that fixed a typography defect the old
+shape hid: it takes the **smallest width whose measured height fits the screen
+floor**, instead of the widest width that minimises height. At 1,175 px the
+guidance ran about 150 characters to the line; DESIGN.md calls 60–80 readable.

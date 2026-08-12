@@ -14,9 +14,16 @@ combos, same Apply & restart, same save path.
 
 Five cards, in the order the owner reads them:
 
-  STREAM         — what the PC sends (monitor / resolution / bitrate / fps).
-                   The only card with an Apply: these shape the encoder, so
-                   they need the server restarted, exactly as before.
+  STREAM         — what the PC sends. Since 2026-08-12 (owner ballot, option
+                   A) it is Monitor + ONE Quality dropdown of four named steps
+                   carrying their own numbers — Max / High / Balanced / Data
+                   saver — with the exact values behind a Custom… disclosure;
+                   Resolution left the front of the card because the PC now
+                   scales to the watching device's panel. The card itself
+                   lives in gui/stream_card.py (THE STRUCTURE LAW); this
+                   window keeps the column and the measured minimum. Still the
+                   only card with an Apply: these shape the encoder, so they
+                   need the server restarted, exactly as before.
   NOTIFICATIONS  — the agent hook switch (moved here from the main window),
                    and WHETHER the phone reads a notice out loud. WHICH voice
                    and how fast is no longer here: that moved onto the phone
@@ -43,19 +50,15 @@ look of the product, both halves of it:
 
   - **This PC** — the sun/moon pill, the same widget the main window's top bar
     carries. Neither switch owns the setting; both call `switch.choose_theme`.
-  - **The phone** — THREE combos, not two: theme (dark / light), whether the
-    D-pad + wheel are coloured (coloured / plain) and their fill (outlined /
-    filled), chosen HERE and only here. A coloured look wears the SAME palette
-    whichever theme is picked (config.SET_COLORS — owner decision 2026-08-08,
-    replacing the two tables of 2026-08-07: a set's colour is its IDENTITY and
-    does not follow the page). Never a fourth theme name either — the
-    2026-08-07
-    shape folded colour into `phone_theme` itself ("colored" / "colored-light")
-    and produced the same eight looks by accident, but said the page has four
-    themes when the owner's own model is two themes plus two switches that
-    belong to the CONTROLS. The owner's answer to this round's P4 was one
-    source of truth and no menu on the phone, so the page never asks the
-    device anything: it applies what `config.ui` tells it.
+  - **The phone** — GONE FROM THIS WINDOW on 2026-08-12 (owner ballot:
+    "appearance is also per device, not global, so it belongs on the phone /
+    tablet"). Three combos stood here — theme, coloured/plain, outlined/filled
+    — and they could only ever describe ONE handset while he uses a tablet and
+    a phone. The choice now lives on the device (client/appearance-panel.js,
+    stored through the SharedPreferences bridge); `phone_theme` /
+    `phone_colored` / `phone_fill` survive as the DEFAULT a device wears until
+    it chooses, still riding every `config` frame, and the caption here is the
+    forwarding note.
 
 Everything except the STREAM card takes effect the moment it is switched;
 that is the rule the notify switch already set on the main window, and a
@@ -81,53 +84,40 @@ import updates
 # was its only caller here. The three names below are still imported by name.
 from config import SETTINGS, save_user_settings
 from gui.sizing import clamp_to_screen, settle_minimum
+from gui.stream_card import (
+    BITRATES, CUSTOM_TEXT, FPS_CHOICES, QUALITY_STEPS, RESOLUTIONS, STREAM_TEXT,
+    StreamCard,
+)
 from gui.switch import TRACK_W as THEME_SWITCH_W, ThemeSwitch, choose_theme
 from gui.theme import card, repolish
 from notify import HOOK_CHANGE_FAILED_TEXT, agent_hook_installed, set_agent_hook
 
 logger = logging.getLogger(__name__)
 
-# The stream choices. They moved here WITH the combos they fill (round R2) —
-# a list of resolutions belongs to the window that offers them, and the main
-# window no longer has a settings form to measure them against.
-RESOLUTIONS = [("Native (up to 4K)", 3840), ("2560 — QHD", 2560),
-               ("1920 — Full HD", 1920), ("1600 — light", 1600)]
-BITRATES = [("6 Mbps — slow links", "6M"), ("12 Mbps — default", "12M"),
-            ("20 Mbps — max quality", "20M")]
-FPS_CHOICES = [("10 fps — light", 10), ("30 fps", 30), ("60 fps", 60)]
-
-# The phone's look (round R3, corrected to three axes 2026-08-08). SHORT
-# labels on purpose: a combo is sized by its longest entry, and one
-# explanatory entry would set the width of the whole window (the lesson the
-# Voice row already taught this file on 2026-08-05). What the choices MEAN
-# belongs in the caption, which wraps.
-#
-# THREE COMBOS, NOT TWO (owner correction 2026-08-08, replacing the
-# 2026-08-07 shape that folded colour into a fourth `phone_theme` value:
-# "colored" / "colored-light"). His own model has exactly two themes and two
-# SEPARATE switches that belong to the controls, not the page: "teme postoje
-# samo dve, svetla i tamna … a ove komande … on može da bude obojen,
-# neobojen, i može da bude transparentan ili pun." PHONE_THEMES therefore
-# drops back to two entries — and the palette a coloured look wears is the
-# SAME under both (config.SET_COLORS, owner 2026-08-08: "oni ce uvijek imati
-# ove jake upecatljive boje"). This combo therefore moves everything AROUND
-# the controls and never the controls' own colours. PHONE_COLORED is new.
-PHONE_THEMES = [("Dark", "dark"), ("Light", "light")]
-PHONE_COLORED = [("Coloured", True), ("Plain", False)]
-PHONE_FILLS = [("Outlined", "transparent"), ("Filled", "full")]
+# The stream choices moved to gui/stream_card.py on 2026-08-12 (THE STRUCTURE
+# LAW) along with the card that offers them. They are imported back only for
+# the computed minimum below, which has to measure every string this window
+# can ever show — including the ones it no longer owns.
 
 # Every labelled row in the window, in one place — the label column is sized
 # from the widest of them ALL so the cards' fields line up in one straight
 # edge instead of each card finding its own.
-FORM_LABELS = ("The phone", "Monitor", "Resolution", "Bitrate", "Frame rate",
-               "Port", "JPEG quality")
+FORM_LABELS = ("Monitor", "Quality", "Exact", "Port", "JPEG quality")
 
-# The search the computed minimum runs over its own width (see
-# `_computed_minimum`): width is spent only while it buys height, in steps of
-# CAPTION_STEP, and never past CAPTION_MAX_INNER — beyond which the guidance
-# lines run past the 60–80 characters DESIGN.md's typography calls readable.
+# The granularity of the width search the computed minimum runs (see
+# `_computed_minimum`). It walks UP from the widest unwrappable row and stops
+# at the first width whose measured height fits the screen floor, so a coarser
+# step costs a few pixels of extra width and a finer one costs a few more
+# layout measurements — neither is load-bearing.
 CAPTION_STEP = 16
-CAPTION_MAX_INNER = 620
+
+# THE SCREEN FLOOR this window must fit inside (.claude/layout-frame.json).
+# Named here because `_computed_minimum` SEARCHES against it: it takes the
+# smallest width whose measured height fits, rather than the widest width that
+# minimises height. Declaring a bigger floor instead would be widening our way
+# out of the exact bug the ladder exists to prevent — and the owner's screen
+# does not grow to match a declaration.
+FLOOR_WIDTH, FLOOR_HEIGHT = 1280, 1000
 
 # The notify caption sits BETWEEN two checkboxes ("Tell my phone…" above,
 # "Say it out loud" below), so a plain full-width line under it reads at a
@@ -139,15 +129,17 @@ CAPTION_MAX_INNER = 620
 # window: the indent costs no extra row, only a few px of wrap width.
 CAPTION_INDENT_LEFT = 25
 
+# WHAT IS LEFT OF THIS CARD (owner ballot 2026-08-12: "appearance is also per
+# device, not global, so it belongs on the phone / tablet"). The three phone
+# combos are gone to the handset; the PC's own sun/moon pill stays, because
+# THIS window is the PC. The caption is the forwarding note — a setting that
+# moves without one reads as a setting that was taken away, which is the same
+# rule the Voice dropdown left behind on this window earlier the same day.
 APPEARANCE_TEXT = (
-    "Dark or Light picks the whole page. Coloured gives every set its own "
-    "colour on top of it — dark shades on a dark page, strong ones on a "
-    "light page; Filled paints the buttons in, Outlined leaves them "
-    "see-through. The phone has no menu of its own — it reads this on its "
-    "next connection.")
-
-STREAM_TEXT = ("These are the PC's own limits. The phone's quality panel may "
-               "go below them, never above.")
+    "The switch above is this PC's own theme. How your phone or tablet looks — "
+    "dark or light, coloured or plain controls, outlined or filled — is now "
+    "chosen on the device itself: Settings → Look in the app. A device that "
+    "has not chosen follows the PC.")
 NOTIFY_ON_TEXT = ("Claude Code will call this PC when a turn ends, and the PC "
                   "passes it to your phone by name.")
 NOTIFY_OFF_TEXT = "Off — the phone stays quiet when a job on this PC finishes."
@@ -216,24 +208,65 @@ class SettingsWindow(QDialog):
         owner's decision, and the ladder says reflow first anyway
         (rules/GUI.md — free space → reflow → minimum → scroll).
 
-        FOCUS and STARTUP therefore share one row. They are the two shortest
-        cards AND the two that belong together — both answer "how does Remote
-        User behave on this PC" rather than "what does it send". The window
-        has 666 px of unused WIDTH inside its own frame and 0 px of spare
-        height, so spending one to save the other is the whole point of the
-        ladder's first two rungs. The three cards above keep their full width:
-        their captions are long, and halving their width would have bought
-        height back with one hand while giving it away with the other.
+        FOCUS and STARTUP therefore shared one row from R3 onward. That bought
+        one rung and it was not enough: by 2026-08-12 the measured minimum had
+        reached **767x1226**, and the guard named the real defect —
+
+            MIN 767x1226 does not fit the screen floor 1280x1000.
+
+        This is problem #4 on the owner's own list ("desktop Settings escapes
+        the screen"), and it is why round 46's `clamp_to_screen` could not fix
+        it: clamping pulls a window that has been pushed off-screen back
+        inside, and can do NOTHING for a window that is TALLER than the screen.
+        On his 1920x1080 display the workspace is about 1040 px with the
+        taskbar, so this window could not be shown whole wherever it was put.
+        The number was in the audit output the whole time.
+
+        SO THE WHOLE COLUMN REFLOWS (ladder step 2, and step 1 was tried first
+        — see `_computed_minimum`). The window is 767 px wide inside a 1280 px
+        floor: about 500 px of unused WIDTH beside 226 px of missing height.
+        Two columns convert the axis we are short of into the one we have
+        spare.
+
+        WHICH CARDS GO SIDE BY SIDE IS NOT ARBITRARY. The two cards at the top
+        stay FULL WIDTH:
+          - STREAM because it must: its Exact row holds three combos plus a
+            label column and needs ~644 px that no half-column can give. Split
+            it and the trio clips, which is the bug one rung down.
+          - APPEARANCE because its caption is four lines at half width and one
+            at full — halving it would buy height with one hand and give it
+            back with the other, which is the mistake R3's own comment warned
+            about.
+        The four SWITCH cards below split THREE AND ONE, and the split is
+        measured rather than tidy: ADVANCED is nearly as tall as the other
+        three together (four captions, two form rows, its own Apply), so
+        putting it alone in the right column balances the two columns to within
+        a few rows, while any two-and-two split leaves one column ~120 px
+        taller than the other — and the taller column IS the window's height.
+        It also reads correctly: the left column is the app's behaviour while
+        you work and when it starts, the right is the one card almost nobody
+        opens. FOCUS and STARTUP stop sharing their old half-of-a-half row;
+        each is now simply a card in a column, and both captions wrap at a real
+        width for the first time.
         """
         root.addWidget(self._build_appearance_card())
         root.addWidget(self._build_stream_card())
-        root.addWidget(self._build_notifications_card())
-        pair = QHBoxLayout()
-        pair.setSpacing(12)
-        pair.addWidget(self._build_focus_card(), 1)
-        pair.addWidget(self._build_startup_card(), 1)
-        root.addLayout(pair)
-        root.addWidget(self._build_advanced_card())
+
+        columns = QHBoxLayout()
+        columns.setSpacing(12)
+        left = QVBoxLayout()
+        left.setSpacing(12)
+        left.addWidget(self._build_notifications_card())
+        left.addWidget(self._build_focus_card())
+        left.addWidget(self._build_startup_card())
+        left.addStretch()
+        right = QVBoxLayout()
+        right.setSpacing(12)
+        right.addWidget(self._build_advanced_card())
+        right.addStretch()
+        columns.addLayout(left, 1)
+        columns.addLayout(right, 1)
+        root.addLayout(columns)
 
     def _section(self, box: QVBoxLayout, title: str) -> None:
         label = QLabel(title)
@@ -306,17 +339,23 @@ class SettingsWindow(QDialog):
         repolish(label)
 
     def _build_appearance_card(self):
-        """Both surfaces' looks, in one card (round R3).
+        """THIS PC's look, and a pointer to where the phone's went.
 
         The PC's row is the SWITCH, not a combo: two states with a picture
         each is a switch, and the owner's own PromptPainter pill is the shape
-        he already reads. The phone's two rows are combos because one of them
-        has three states and the other has to sit beside it in the same
-        column.
+        he already reads.
 
-        Everything here takes effect at once — the PC repaints under the
-        cover transition, the phone reads `config.ui` on its next connect.
-        No Apply, exactly like every other card in this window except STREAM.
+        THE PHONE'S THREE COMBOS LEFT ON 2026-08-12 (owner ballot: appearance
+        is per device). They were one dropdown each for theme, colour and
+        fill, and they could only ever describe ONE handset — he uses a tablet
+        and a phone. What is left is a card with a heading row and a caption,
+        and NOT a hole: the pill still sits on the heading's own line where it
+        always did, the form row that carried the trio is gone rather than
+        emptied, and the caption below says where the setting went. An
+        orphaned label over an empty column is what a grader measures.
+
+        Takes effect at once — the PC repaints under the cover transition. No
+        Apply, exactly like every other card in this window except STREAM.
         """
         frame, box = card()
 
@@ -342,88 +381,36 @@ class SettingsWindow(QDialog):
         head.addWidget(self.theme_switch)
         box.addLayout(head)
 
-        # …and the phone's three choices share ONE row for the same reason
-        # (three combos since the owner's 2026-08-08 correction split what
-        # used to be a single four-value theme combo into theme + coloured).
-        # Each is one or two words; giving any of them a labelled row of its
-        # own would have bought nothing but height.
-        form = self._form()
-        self.phone_theme_combo = QComboBox()
-        for label, value in PHONE_THEMES:
-            self.phone_theme_combo.addItem(label, value)
-        index = self.phone_theme_combo.findData(SETTINGS.phone_theme)
-        self.phone_theme_combo.setCurrentIndex(index if index >= 0 else 0)
-        self.phone_theme_combo.currentIndexChanged.connect(self._save_phone_theme)
-
-        self.phone_colored_combo = QComboBox()
-        for label, value in PHONE_COLORED:
-            self.phone_colored_combo.addItem(label, value)
-        index = self.phone_colored_combo.findData(SETTINGS.phone_colored)
-        self.phone_colored_combo.setCurrentIndex(index if index >= 0 else 0)
-        self.phone_colored_combo.currentIndexChanged.connect(self._save_phone_colored)
-
-        self.phone_fill_combo = QComboBox()
-        for label, value in PHONE_FILLS:
-            self.phone_fill_combo.addItem(label, value)
-        index = self.phone_fill_combo.findData(SETTINGS.phone_fill)
-        self.phone_fill_combo.setCurrentIndex(index if index >= 0 else 0)
-        self.phone_fill_combo.currentIndexChanged.connect(self._save_phone_fill)
-
-        trio = QWidget()
-        trio_row = QHBoxLayout(trio)
-        trio_row.setContentsMargins(0, 0, 0, 0)
-        trio_row.setSpacing(8)
-        trio_row.addWidget(self.phone_theme_combo, 1)
-        trio_row.addWidget(self.phone_colored_combo, 1)
-        trio_row.addWidget(self.phone_fill_combo, 1)
-        self._row(form, "The phone", trio)
-        box.addLayout(form)
         self._caption(box, APPEARANCE_TEXT)
         return frame
 
-    def _save_phone_theme(self) -> None:
-        save_user_settings({"phone_theme": str(self.phone_theme_combo.currentData())})
+    # -- the seam the STREAM card is built through -------------------------
+    # gui/stream_card.py owns the card; this window owns the column and its
+    # measured minimum. These four are the window's own row helpers under
+    # public names, so the card can build rows that line up with every other
+    # card's without reaching into a private method.
 
-    def _save_phone_colored(self) -> None:
-        save_user_settings({"phone_colored": bool(self.phone_colored_combo.currentData())})
+    def card(self):
+        return card()
 
-    def _save_phone_fill(self) -> None:
-        save_user_settings({"phone_fill": str(self.phone_fill_combo.currentData())})
+    def section(self, box: QVBoxLayout, title: str) -> None:
+        self._section(box, title)
+
+    def form(self) -> QFormLayout:
+        return self._form()
+
+    def row(self, form: QFormLayout, text: str, field: QWidget) -> None:
+        self._row(form, text, field)
+
+    def caption(self, box: QVBoxLayout, text: str) -> QLabel:
+        return self._caption(box, text)
+
+    def resettle(self) -> None:
+        self._resettle()
 
     def _build_stream_card(self):
-        frame, box = card()
-        self._section(box, "STREAM")
-
-        form = self._form()
-        self.monitor_combo = QComboBox()
-        self._populate_monitors()
-        self.resolution_combo = QComboBox()
-        for label, value in RESOLUTIONS:
-            self.resolution_combo.addItem(label, value)
-        self.bitrate_combo = QComboBox()
-        for label, value in BITRATES:
-            self.bitrate_combo.addItem(label, value)
-        self.fps_combo = QComboBox()
-        for label, value in FPS_CHOICES:
-            self.fps_combo.addItem(label, value)
-        self._select_current_settings()
-
-        self._row(form, "Monitor", self.monitor_combo)
-        self._row(form, "Resolution", self.resolution_combo)
-        self._row(form, "Bitrate", self.bitrate_combo)
-        self._row(form, "Frame rate", self.fps_combo)
-        box.addLayout(form)
-
-        self._caption(box, STREAM_TEXT)
-
-        apply_row = QHBoxLayout()
-        apply_row.addStretch()
-        self.apply_btn = QPushButton("Apply && restart")
-        self.apply_btn.setObjectName("primary")
-        self.apply_btn.clicked.connect(self._apply_settings)
-        apply_row.addWidget(self.apply_btn)
-        box.addLayout(apply_row)
-        return frame
+        self.stream_card = StreamCard(self, self._populate_monitors, self._restart)
+        return self.stream_card.build()
 
     def _build_notifications_card(self):
         frame, box = card()
@@ -555,34 +542,18 @@ class SettingsWindow(QDialog):
 
     # -- stream settings ---------------------------------------------------
 
-    def _populate_monitors(self) -> None:
+    def _populate_monitors(self, combo: QComboBox) -> None:
+        """Enumeration stays HERE — it asks the capture layer a question about
+        this PC, which is this window's subject, not the stream card's."""
         from capture import BaseCapture
         try:
             count = BaseCapture.output_count()
         except Exception as e:  # enumeration is cosmetic — never kill the window
             logger.error("Monitor enumeration failed: %s", e)
             count = 1
-        self.monitor_combo.clear()
+        combo.clear()
         for i in range(max(1, count)):
-            self.monitor_combo.addItem(f"Monitor {i + 1}", i)
-
-    def _select_current_settings(self) -> None:
-        def select(combo: QComboBox, value) -> None:
-            index = combo.findData(value)
-            combo.setCurrentIndex(index if index >= 0 else 0)
-        select(self.monitor_combo, SETTINGS.monitor_index)
-        select(self.resolution_combo, SETTINGS.h264_max_width)
-        select(self.bitrate_combo, SETTINGS.h264_bitrate)
-        select(self.fps_combo, SETTINGS.target_fps)
-
-    def _apply_settings(self) -> None:
-        save_user_settings({
-            "monitor_index": self.monitor_combo.currentData(),
-            "h264_max_width": self.resolution_combo.currentData(),
-            "h264_bitrate": self.bitrate_combo.currentData(),
-            "target_fps": self.fps_combo.currentData(),
-        })
-        self._restart()
+            combo.addItem(f"Monitor {i + 1}", i)
 
     # -- notifications ------------------------------------------------------
 
@@ -705,6 +676,7 @@ class SettingsWindow(QDialog):
             return
         self._settled = True
         self._align_label_column()
+        self.stream_card.settle()
         settle_minimum(self, self._computed_minimum(), QSize(0, 0))
         # …AND AGAIN once the show has actually happened. Inside `showEvent`
         # the window still reports the geometry it had BEFORE the show, so
@@ -741,114 +713,83 @@ class SettingsWindow(QDialog):
         clamp_to_screen(self)
 
     def _computed_minimum(self) -> QSize:
-        """MEASURED, never guessed (THE SPACE & LEGIBILITY LAW, rules/GUI.md).
+        """MEASURED, never guessed (THE SPACE & LEGIBILITY LAW, rules/GUI.md) —
+        and since 2026-08-12 measured by asking THE LAYOUT, not by modelling it.
 
-        Width = the widest row that CANNOT wrap: a form label plus the longest
-        entry of the combo beside it — then WIDENED until the guidance under
-        the switches stops becoming a paragraph. Height = every row, plus what
-        those captions need once wrapped at that width.
+        Two numbers, found two different ways, because they are two different
+        questions:
 
-        Two form rows and one combo left this measurement on 2026-08-12 with
-        the Voice and Speaking pace rows themselves. The voice names were the
-        one input here that came from ANOTHER DEVICE, which is why they had to
-        be measured rather than guessed; with them gone every string this
-        window can show is one this file owns.
+        WIDTH FLOOR — the widest row that CANNOT wrap. A form label plus the
+        longest entry of the combo beside it; the Exact row's three combos side
+        by side; the APPEARANCE heading with its pill; and, now that everything
+        below STREAM sits in two columns, the widest unwrappable thing in a
+        SWITCH card twice over. Combo entries and checkbox labels never reflow,
+        so no amount of height can pay for them.
 
-        The widening is not decoration, it is which axis is scarce. A desktop
-        has 1280 px of width to spare and 720 px of height to obey, so a window
-        that saves 100 px of width by turning a two-line explanation into a
-        five-line one has made itself WORSE by the only measure that binds.
-        Both numbers are still measured — the loop stops at the first width
-        where the longest caption fits `CAPTION_LINES`, and never goes past
-        `CAPTION_MAX_INNER`.
+        HEIGHT — `layout().totalHeightForWidth(w)`, the real answer from the
+        real widgets. This REPLACED a hand-written model of every heading, row,
+        caption and card frame in the window (2026-08-12). That model was
+        already drifting — it read 875 where Qt needed 948 — and a model of a
+        layout is one more thing to keep in step with the layout. It also could
+        not see what actually binds: the model said width kept buying height up
+        to 1,175 px, while Qt stops improving at about 960.
+
+        THE SEARCH TAKES THE SMALLEST WIDTH THAT FITS THE SCREEN FLOOR, not the
+        widest that minimises height. That is the ladder's own instruction read
+        honestly: reflow until it fits, then stop. Spending another 200 px of
+        width past the point of fitting buys nothing and costs the reader —
+        DESIGN.md calls 60–80 characters a readable line, and this window's
+        guidance at 1,175 px runs to about 150. If no width fits (which would
+        mean the reflow itself is not enough), it falls back to the width with
+        the smallest height and the audit says so out loud, which is the honest
+        failure rather than a silent oversized window.
         """
         metrics = QFontMetrics(self.font())
 
         def widest(strings) -> int:
             return max((metrics.horizontalAdvance(s) for s in strings), default=0)
 
-        def tallest(width: int, *texts) -> int:
-            return max(metrics.boundingRect(0, 0, width, 10_000,
-                                            int(Qt.TextFlag.TextWordWrap), t).height()
-                       for t in texts)
-
         label_col = widest(FORM_LABELS) + 16
+        # The Quality steps are the longest entries this window has ever had
+        # ("Balanced — 30 fps, 6 Mbps"), and they cannot wrap — a combo entry
+        # never does. That makes them the row that sets the width, which is
+        # the whole reason they are measured here rather than guessed at.
         combo_col = widest(
-            [label for label, _ in RESOLUTIONS + BITRATES + FPS_CHOICES
-             + PHONE_THEMES + PHONE_COLORED + PHONE_FILLS]
-            + [f"Monitor {self.monitor_combo.count()}"]
+            [label for label, _ in RESOLUTIONS + BITRATES + FPS_CHOICES]
+            + [label for label, _, _ in QUALITY_STEPS]
+            + [f"Monitor {self.stream_card.monitor_combo.count()}"]
         ) + 56
         checkbox_col = widest(("Tell my phone when an agent finishes",
                                "Don't let applications steal focus",
                                "Check for new versions when the app starts",
-                               "Start with Windows", "Say it out loud")) + 34
-        # FOCUS and STARTUP share a row (see `_build_cards`), so the window
-        # must be wide enough for the longer of THEIR checkboxes twice over,
-        # plus both cards' own padding and the gap between them — otherwise
-        # ladder step 2 would have bought height by clipping a switch.
-        paired_row = 2 * (widest(("Don't let applications steal focus",
-                                  "Check for new versions when the app starts",
-                                  "Start with Windows")) + 34 + 36) + 12
-
-        # The phone's row holds THREE combos side by side (owner correction
-        # 2026-08-08 split one theme combo into theme + coloured), so it can
-        # be wider than the widest single one — and a heading row that also
-        # carries the theme pill has its own floor. Both measured, neither
-        # guessed. +8 per gap between combos (trio_row's own spacing), twice.
-        phone_row = (label_col
-                     + widest([label for label, _ in PHONE_THEMES]) + 56
-                     + widest([label for label, _ in PHONE_COLORED]) + 56
-                     + widest([label for label, _ in PHONE_FILLS]) + 56 + 16)
+                               "Start with Windows", "Say it out loud",
+                               "Custom…")) + 34
+        # The Exact row holds THREE combos side by side behind Custom…, and
+        # they share the row's width EQUALLY (each is stretch 1), so the widest
+        # entry of ANY of the three sets all three. `StreamCard.settle` pins
+        # each to its own polished size hint on first show, which is what makes
+        # this a floor Qt then enforces rather than an estimate.
+        exact_row = (label_col + 16
+                     + 3 * (widest([label for label, _ in
+                                    RESOLUTIONS + BITRATES + FPS_CHOICES]) + 64))
         head_row = (metrics.horizontalAdvance("APPEARANCE")
                     + metrics.horizontalAdvance("This PC")
                     + THEME_SWITCH_W + 32)
 
         card_pad, root_pad = 36, 36   # card contents margins, window margins
-        inner = max(label_col + combo_col, checkbox_col, phone_row, head_row,
-                    paired_row,
-                    metrics.horizontalAdvance("Apply & restart") + 40)
-        # The wrapping captions, at the width they will actually have. FIVE
-        # slots, and each slot contributes only its OWN tallest alternative —
-        # a caption that swaps between three sentences occupies one of them at
-        # a time, and summing all three would declare a floor with empty space
-        # under it, which is the same law read from the other side.
-        rows = metrics.height() + 12
+        # THE TWO COLUMNS (2026-08-12 reflow — see `_build_cards`). The widest
+        # UNWRAPPABLE thing in a switch card has to fit in a HALF, twice over,
+        # plus each card's padding and the gap. Get this wrong and the reflow
+        # buys its height by clipping a switch, which is the rung below the one
+        # we are standing on.
+        column_need = max(checkbox_col, label_col + 120,
+                          metrics.horizontalAdvance("Apply & restart") + 40)
+        floor = max(label_col + combo_col, exact_row, head_row,
+                    2 * (column_need + card_pad) + 12) + card_pad + root_pad
 
-        def height_at(width: int) -> int:
-            # FOCUS and STARTUP sit SIDE BY SIDE, so their captions wrap at
-            # roughly half the width and only the TALLER of the two costs the
-            # window anything — the same "one slot contributes its own tallest
-            # alternative" rule, applied to a row instead of to a label.
-            half = max(1, (width - 12) // 2 - 36)
-            wrapped = (tallest(width, APPEARANCE_TEXT)
-                       + tallest(width, STREAM_TEXT)
-                       # indented (see CAPTION_INDENT_LEFT) — less width to
-                       # wrap in than every other caption in this window
-                       + tallest(width - CAPTION_INDENT_LEFT,
-                                 NOTIFY_ON_TEXT, NOTIFY_OFF_TEXT)
-                       + tallest(width, SPEAK_OFF_TEXT, PHONE_VOICE_TEXT)
-                       + max(tallest(half, FOCUS_TEXT) + rows,      # + 1 tick
-                             tallest(half, STARTUP_TEXT) + rows * 2))
-            return (rows * 5      # the five section headings (one row shared)
-                    + rows * 5    # five form rows: the phone's trio (one row)
-                                  # + the four stream combos. Voice and pace
-                                  # left with the phone on 2026-08-12.
-                    + rows * 2    # the two checkboxes above the paired row
-                    + rows * 1    # the Apply row
-                    + wrapped
-                    + 5 * 32      # card frames + paddings (the pair is one)
-                    + 40)         # window margins and spacings
-
-        # Spend width ONLY while it buys height. Every extra pixel of width
-        # lets the guidance wrap into fewer rows, until it stops helping — and
-        # the first width that reaches the smallest height is the floor. Any
-        # wider is empty space; any narrower turns a two-line explanation into
-        # a five-line paragraph and pushes the window past the screen floor,
-        # which is the axis that actually binds on a desktop.
-        # `max(...)` on the stop: content alone can already be wider than the
-        # readable-line ceiling (a long voice name, or a machine whose font
-        # metrics run large), and there is nothing to search then — the widest
-        # unwrappable row IS the width.
-        best = min(range(inner, max(inner, CAPTION_MAX_INNER) + 1, CAPTION_STEP),
-                   key=lambda w: (height_at(w), w))
-        return QSize(best + card_pad + root_pad, height_at(best))
+        layout = self.layout()
+        widths = list(range(floor, max(floor, FLOOR_WIDTH) + 1, CAPTION_STEP))
+        heights = {w: layout.totalHeightForWidth(w) for w in widths}
+        fits = [w for w in widths if heights[w] <= FLOOR_HEIGHT]
+        best = fits[0] if fits else min(widths, key=lambda w: (heights[w], w))
+        return QSize(best, heights[best])

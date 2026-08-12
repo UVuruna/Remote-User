@@ -2197,3 +2197,110 @@ module run whole in a fresh node process, with `prefGet`/`prefSet`/`send`/
 Run: `.venv\Scripts\python tests/test_notify_prefs.py` (needs node) — also a
 fail-closed step in `build.py` (0aj/6).
 
+
+### `test_panel_scale.py` — Panel Scale Gate (owner order 2026-08-12)
+
+His order, approved on a ballot: *"what is the point of the PC sending 4K if
+the Android device cannot receive it? A Redmi Pad is 1920x1200 and we send it
+4K in desktop mode. It should be downscaled ON THE PC to the resolution the
+Android device can accept. And when Android zooms, that is a crop again."*
+(lang-ok: owner order, translated.) The rule is `scale = min(crop, panel)`,
+and NEVER up: upscaling a small crop spends bitrate inventing nothing, which
+is why a focused layout now comes out sharper at the same bitrate.
+
+Driven with the REAL `H264Session` (fake frame source, no ffmpeg spawn — only
+the command and the arithmetic) and the REAL client mirror run whole in node:
+
+1. His own case — a 3840x2160 monitor on a 1920x1200 panel encodes 1920x1080:
+   even in both dimensions, the monitor's 16:9 preserved (not the panel's).
+2. A crop narrower than the panel is never scaled UP, and a crop smaller in
+   both axes grows no `scale=` filter at all.
+3. Crop and scale compose in the right ORDER in the actual ffmpeg argv, and
+   there is exactly ONE scale — the resolution step and the panel ceiling
+   reconcile into a single size, the smallest factor winning.
+4. An `auth` with no `panel` field (or a nonsense one) produces a command that
+   is byte-for-byte today's, across every quality/region combination.
+5. The page computes the same width as the server, and caps nothing without a
+   panel.
+6. The wiring: page -> `auth` -> web -> `open_session` -> decode ceiling.
+
+| planted defect | check that goes red |
+|---|---|
+| the panel clamp drops `max(pw,ph)/max(src)` (short side only) | *his 4K desktop encodes 1920 wide* (got 2132) |
+| the `min(factor, …)` loses the resolution step | *the 1/2 step was lost* |
+| the no-upscale guard weakened (`factor == 1`) | *a 960x540 crop grew a scale (1920x1080)* |
+| `scale` appended after the crop is re-appended (order inverted) | *crop is not first in the chain* |
+| the even rounding replaced by `-1` | *panel width is the ceiling* (got 1919) |
+| an absent panel defaults to a size instead of "no cap" | *no panel field is exactly today's behaviour* |
+| the client mirror loses its `Math.min(1, …)` | *page says 1920 for 960x540* |
+
+Run: `.venv\Scripts\python tests/test_panel_scale.py` (needs node) — also a
+fail-closed step in `build.py` (0aq/6).
+
+### `test_appearance_device.py` — Appearance Per Device Gate
+Proves the owner's ballot verdict of 2026-08-12: *"appearance is also per
+device, not global, so it belongs on the phone / tablet."* The three look axes
+— theme, coloured or plain controls, outlined or filled — left the PC's
+Settings window for the handset, with the PC's values kept as the DEFAULT.
+
+**Why it drives the real page.** The promise he will judge is a RENDERING one:
+two devices, one frame, two looks. A check on a stored preference proves
+nothing about that — this project has been burned exactly there (the
+`actions.json` merge: every guard built its "user file" as a copy of the
+shipped one and proved the repo's file to itself). So the checks run
+`client/theme.js` WHOLE in node, one fresh module instance per simulated
+device, with the prefs bridge and the page stubbed, and they read what the page
+really writes onto `<body>` — `data-theme`, `data-colored`, `data-fill`.
+
+| planted defect | check that goes red |
+|---|---|
+| the device store is never read (`uiPick = {}`) | *the device store is read before the frame* — and *two devices render ONE frame differently* |
+| the composed look drops an axis of the frame | *a device that never chose wears the PC's value, byte for byte* |
+| a `config` frame clears the device's picks | *a reconnect never overwrites a device's choice* |
+| clearing an axis keeps it instead of deleting it | *handing an axis back to the PC really hands it back* |
+| the legacy translation is dropped from the choice path | *the legacy four-value theme still migrates, both sides* |
+| the choice is written into the frame cache's key | *the choice rides the prefs bridge, under its own key* |
+| `PANEL_KINDS.appearance` removed | *the panel exists and is reachable from the Settings set* |
+| a phone combo creeps back onto the desktop card | *the desktop card gave the choice up* |
+
+Run: `.venv\Scripts\python tests/test_appearance_device.py` (needs node) — also
+a fail-closed step in `build.py` (0as/6).
+
+### `test_stream_card.py` — Stream Card Gate
+Proves the desktop STREAM card's five named quality steps ARE A LADDER, and
+the one thing the owner attached a condition to (ballot 2026-08-12, option A):
+*"just make sure you connect Data saver to mobile data, the mechanic we
+already have."*
+
+**The four-step draft was REJECTED** (2026-08-12) for two defects, and both
+became checks. High at 60 fps / 12 Mbps over Balanced at 30 fps / 12 Mbps has
+both axes falling and yet gives the LOWER step twice the bits per frame — a
+"Balanced" sharper than "High" — which only the bits-per-frame rule can see;
+and 12 Mbps straight to 1.2 Mbps is a tenfold cliff with nothing in between.
+
+"Data saver" is reachable by three doors — the desktop step, the phone's
+auto-on-cellular switch, and a legacy `quality {reduced:true}` — and there must
+be ONE definition behind all three (`config.DATA_SAVER` +
+`DATA_SAVER_BITRATE`). Every check measures a door against THAT table, never
+against a fixture written to match it; the cellular one is proven by READING
+the literal out of `client/quality.js`, because the two live in different
+languages and cannot share an import.
+
+| planted defect | check that goes red |
+|---|---|
+| High becomes 30 fps / 12 Mbps under a 60 fps / 20 Mbps Max (everything else legal) | *bits per frame never RISES going down the ladder* — alone |
+| THE EXACT REJECTED PAIR (Balanced 30 fps / 12 Mbps under High 60 fps / 12 Mbps) | *bits per frame never RISES* (+ the cliff and default checks, since removing 6M moves both) |
+| THE EXACT REJECTED CLIFF (Light removed, 6 Mbps → 1.2 Mbps) | *no adjacent bitrate step is a cliff* |
+| Light runs at 60 fps, faster than the Balanced above it | *the ladder falls on BOTH axes* |
+| the shipped default set to 9M, matching no step | *the shipped default lands on a NAMED step* |
+| a step's bitrate dropped from the Custom combos | *every step's numbers exist in the Custom combos* (`_select` falls back to index 0, so the card would silently set a different bitrate) |
+| the Data saver step given its own numbers | *Data saver IS config.DATA_SAVER, the one profile* |
+| `client/quality.js` sends 15 fps on cellular | *the phone's auto-on-cellular switch uses that same profile* |
+| `quality_override({reduced:true})` returns its own dict | *the legacy reduced:true door maps to that same profile* |
+| a step's label stops stating its numbers | *four named steps, each carrying its own numbers* |
+| Apply stops saving `h264_max_width` | *resolution left the card, not the wire* |
+| picking a step also moves the resolution combo | *a quality step never moves the resolution* |
+| `h264_reduced_fps` hardcoded again | *the h264_reduced_\* settings derive from it* |
+
+Run: `.venv\Scripts\python tests/test_stream_card.py` — also a fail-closed step
+in `build.py` (0at/6).

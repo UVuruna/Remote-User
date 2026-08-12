@@ -58,7 +58,10 @@ One line each; the full call sequence is in [flow](../__flow/build.md).
   `.venv\Scripts\python.exe` if not already running there
 - `generate_version_info()` — writes `version_info.txt` (a Windows
   VERSIONINFO resource source) from `app_info.json` + `company.json`
-- `input_gate()` — the fail-closed gate run (Steps 0b–0o); a non-zero exit
+- `input_gate()` — the fail-closed gate run, whose SUITE lives in
+  [Gates](gates.md) since 2026-08-12 (THE STRUCTURE LAW — the gate list grows
+  every round, the packaging steps barely change); this module keeps the
+  console's voice and the subprocess policy and hands both to it. A non-zero exit
   from any of them stops the build before anything is packaged:
   `test_input_pipeline` (0b), `test_presence` (0c), `test_notify` +
   `test_notice_channel` (0d), `test_focus_guard` + `test_focus_hook` (0e),

@@ -79,10 +79,14 @@ USER_ADJUSTABLE = {
     "notify_speak", "notify_voice", "notify_rate",
     "foreground_lock", "update_check",
     # Appearance (build round R3, 2026-08-07; corrected to three independent
-    # axes 2026-08-08). `ui_theme` is the DESKTOP's palette; `phone_theme` /
-    # `phone_colored` / `phone_fill` are the PHONE's, chosen here and nowhere
-    # else (owner answer P4: one source of truth, no menu on the phone) and
-    # carried to it in every `config` frame.
+    # axes 2026-08-08; made PER DEVICE 2026-08-12). `ui_theme` is the
+    # DESKTOP's own palette and the only appearance dial this window still
+    # carries. `phone_theme` / `phone_colored` / `phone_fill` stay here as the
+    # DEFAULT a handset wears until it chooses for itself — they still ride
+    # every `config` frame — but the choice itself now lives on the device
+    # (Settings → Appearance, client/appearance-panel.js). They keep their
+    # place in this set so a hand-edited settings.json can still move the
+    # default a new phone starts from.
     "ui_theme", "phone_theme", "phone_colored", "phone_fill",
 }
 
@@ -94,6 +98,44 @@ def _default_ffmpeg() -> str:
         if bundled.exists():
             return str(bundled)
     return "ffmpeg"  # dev: on PATH
+
+
+# ═══════════════════════════ DATA SAVER — THE ONE PROFILE ═══════════════════════════
+# ONE definition of "save data", used by BOTH doors into it (owner ballot
+# 2026-08-12: "just make sure you connect Data saver to mobile data, the
+# mechanic we already have").
+#
+# There are two ways this profile is reached and there must never be two sets
+# of numbers behind them:
+#   * AUTOMATICALLY — the phone's "save data on mobile networks" tick plus the
+#     `Android.transport()` bridge: while the handset is on cellular,
+#     client/quality.js sends exactly this override instead of the saved one.
+#   * BY HAND — the desktop STREAM card's "Data saver" quality step
+#     (gui/stream_card.py), which sets the PC's own base to the same numbers.
+#   * …and the LEGACY door, a page older than the quality panel sending
+#     `quality {reduced: true}` — `quality_override` below maps it here.
+#
+# DATA_SAVER is the per-client OVERRIDE shape (what a `quality` message
+# carries): 10 fps, half resolution, the "low" bitrate LEVEL. DATA_SAVER_BITRATE
+# is the ABSOLUTE number the desktop card writes into `h264_bitrate` when the
+# owner picks the Data saver step by hand — because a base cannot be a
+# percentage of itself, and `"low"` is `h264_bitrate_low_pct` OF that base.
+#
+# The two are the same profile stated for the two different jobs, and they are
+# deliberately not derived from one another: the phone's automatic switch asks
+# for a LEVEL (so it falls with the PC's own choice, the owner's 2026-08-05
+# hierarchy), while the desktop step must name a NUMBER. 1.2 Mbps is that
+# number, and it is the bottom rung of the desktop ladder for the same reason
+# it is the saving profile's — it is the point below which the picture stops
+# being worth sending. DATA_SAVER_SCALE is the capture-side halving.
+#
+# The three `h264_reduced_*` settings below READ these rather than restating
+# them, and tests/test_stream_card.py asserts the desktop step, the legacy
+# mapping and client/quality.js's own literal all against this one table — so
+# the manual pick and the automatic switch can never drift apart.
+DATA_SAVER = {"fps": 10, "res": "1/2", "bitrate": "low"}
+DATA_SAVER_BITRATE = "1200k"
+DATA_SAVER_SCALE = 2
 
 
 def _default_actions() -> Path:
@@ -146,8 +188,25 @@ class Settings:
     # A saved setting always wins: this is the default for a PC that has never
     # been told otherwise, never an override of a choice the owner made.
     h264_max_width: int = 2560
-    h264_bitrate: str = "12M"       # target bitrate cap — reached only on heavy motion; static
-                                    # screens use a fraction of it regardless of resolution
+    # Target bitrate cap — reached only on heavy motion; a static screen uses a
+    # fraction of it regardless of resolution.
+    #
+    # LOWERED 12M -> 6M on 2026-08-12, with the desktop card's five-step
+    # ladder, so the shipped default lands on a NAMED step (Balanced: 30 fps,
+    # 6 Mbps) instead of on the Custom entry. It is defensible now in a way it
+    # would not have been a week ago, and the reason is the two other changes
+    # of this same round: the encoder CROPS to the focused layout's region and
+    # SCALES to the watching device's panel, so it is typically working at
+    # ~1920 wide rather than 3840. 6 Mbps at that width is a better picture
+    # than 12 Mbps at 4K ever was — the bits are no longer spread over four
+    # times the pixels.
+    #
+    # It is a DEFAULT, never an override: a saved settings.json wins, and the
+    # phone's own steps are percentages of whatever this holds
+    # (`bitrate_for_level`), so lowering it lowers all three of the phone's
+    # steps with it — which is the hierarchy the owner asked for on
+    # 2026-08-05, working as intended rather than a side effect.
+    h264_bitrate: str = "6M"
     h264_gop: int = 60              # keyframe every N frames (reconnect/seek granularity)
     h264_fragment_us: int = 16000   # fMP4 fragment target (µs) — below one frame interval,
                                     # so every encoded frame ships in its own fragment
@@ -178,10 +237,13 @@ class Settings:
     # 2026-07-29 error loop (171 failures in 90 s).
     h264_reopen_tries: int = 4      # consecutive RE-open failures tolerated
     h264_reopen_pause_s: float = 0.8  # breath between them
-    # The auto-on-mobile-data profile (legacy `reduced` maps to this too):
-    h264_reduced_scale: int = 2     # halve width and height
-    h264_reduced_fps: int = 10
-    h264_reduced_bitrate: str = "1200k"
+    # The auto-on-mobile-data profile — READ from the one definition above
+    # (DATA_SAVER), never restated here. The desktop STREAM card's "Data
+    # saver" step and the phone's auto-on-cellular switch are the same
+    # profile by construction, which is the whole point of the table.
+    h264_reduced_scale: int = DATA_SAVER_SCALE   # halve width and height
+    h264_reduced_fps: int = DATA_SAVER["fps"]
+    h264_reduced_bitrate: str = DATA_SAVER_BITRATE
 
     # Virtual cursor — DXGI capture never includes the mouse pointer, so the
     # server streams the cursor position and the client draws it.
@@ -364,10 +426,21 @@ class Settings:
     #                   (owner 2026-08-08: "vazi isto samo za controls, sets i
     #                   te buttone na ekranu sto su stalno vidljivi — layout,
     #                   hide..."), independent of theme AND colour.
-    # 2 x 2 x 2 = 8 combinations, all real. The phone gets these in `config.ui`
-    # and applies them; it has no menu of its own (owner answer P4). An
-    # unknown value is treated as the default by the surface that reads it,
-    # never as a reason to fail.
+    # 2 x 2 x 2 = 8 combinations, all real. An unknown value is treated as the
+    # default by the surface that reads it, never as a reason to fail.
+    #
+    # PER DEVICE SINCE 2026-08-12 (owner ballot: "appearance is also per
+    # device, not global, so it belongs on the phone / tablet"). The 2026-08-07
+    # answer to P4 — one source of truth, no menu on the phone — was right
+    # about there being ONE answer and wrong about where it lives: he uses a
+    # tablet AND a phone, and one desktop dropdown could only ever describe
+    # one of them. So the three values below are now the DEFAULT rather than
+    # the decree: they still ride every `config` frame, a handset that has
+    # never chosen wears them byte for byte, and a handset that HAS chosen
+    # keeps its own answer in its own SharedPreferences (client/theme.js —
+    # `uiChoice`, the sets-picker's bridge, never bare localStorage). Two
+    # devices therefore render the same frame differently, which is the whole
+    # request.
     ui_theme: str = "dark"
     phone_theme: str = "dark"
     phone_colored: bool = False
@@ -482,6 +555,13 @@ def ui_config() -> dict:
     desktop owns this decision, config.py owns the desktop's settings, and
     web.py's job is only to put it on the wire.
 
+    It is the DEFAULT, not the decree, since 2026-08-12: a device that has
+    chosen for itself (Settings → Appearance) lays its own answer over these
+    three axes and only the axes it never touched come from here. That is a
+    rule on the PAGE, deliberately — the PC cannot know which handset is
+    asking, and a per-device answer computed here would need a device
+    identity on the wire for nothing.
+
     THREE INDEPENDENT AXES (owner correction 2026-08-08), not a shape derived
     from one. `theme`/`colored`/`fill` are three flat fields the phone applies
     without ever knowing colour used to be folded into the theme name.
@@ -581,10 +661,10 @@ def quality_override(msg: dict) -> dict | None:
     the same vocabulary and because web.py has no room (THE STRUCTURE LAW).
 
     Legacy `reduced: true` (pages older than the quality panel) maps to the
-    auto-save profile."""
+    auto-save profile — the ONE definition (DATA_SAVER), never a second copy
+    of its numbers."""
     if "reduced" in msg and "res" not in msg:
-        return ({"fps": SETTINGS.h264_reduced_fps, "res": "1/2", "bitrate": "low"}
-                if msg.get("reduced") else None)
+        return dict(DATA_SAVER) if msg.get("reduced") else None
     quality = {
         "fps": int(msg.get("fps") or 0),
         "res": str(msg.get("res") or "full"),
