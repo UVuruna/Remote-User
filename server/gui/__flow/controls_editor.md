@@ -22,7 +22,7 @@ LEGIBILITY violations the owner photographed.
 │ │  VSCode (code)   │ │ │ [ ]│ Back         │ chord    │ alt+left     │  │
 │ │  Claude (code·…) │ │ │ [ ]│ Find next    │ chord    │ f3      ↕    │  │
 │ │ CUSTOM           │ │ │ [Add command][Remove]      4 of 4 on D-pad  │  │
-│ │  My set        ✓ │ │ │ [ ]│ Focus        │ chord    │ ctrl+esc     │  │
+│ │  My set        ✓ │ │ │ [ ]│ Reload       │ chord    │ ctrl+r       │  │
 │ └──────────────────┘ │ │ [Add command][Remove]      4 of 4 on D-pad  │  │
 │ [New set][Delete]    │ └────────────────────────────────────────────┘  │
 │ [Wheel order]        │ ┌ The selected command ──────────────────────┐   │

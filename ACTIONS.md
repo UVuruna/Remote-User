@@ -118,7 +118,7 @@ Shipped reserves, off until you tick them:
 | **VSCode** | Sidebar · Palette · Terminal · Find | **Preview (ctrl+shift+v)** · **Next tab** · **Prev tab** · Save · Go to file · Comment |
 | **Chrome** | New tab · Close · Next tab · Address | **Prev tab** · Reopen · Reload · Back · Forward · Find |
 | **Explorer** | Rename · New dir · Delete · Up | **Next tab** · **Prev tab** · New tab · Back · Forward · Copy path · Details · Search |
-| **Claude** | Usage · Model · **Thinking** · Stop | Menu · **Mode** · New chat · Rewind · Context · Agents · Resume · Focus (Compact MOVED to Claude Tools 2026-08-11) |
+| **Claude** | Usage · Model · **Thinking** · Stop | Menu · **Mode** · New chat · Rewind · Context · Agents · Resume (Compact MOVED to Claude Tools 2026-08-11; **Focus DELETED 2026-08-13** — the owner: a button whose whole job is to click into a text field is not needed, especially with Tab and `next_input` already doing it. It was also wired to `ctrl+esc`, which Windows reserves for the Start menu, so it most likely opened Start. Gated in `tests/test_actions_migration.py` so it cannot return.) |
 | **Claude Tools** | Review · Security · Clean up · Compact | Init CLAUDE |
 
 **Model, Thinking and Mode are WRITTEN panels, not generated option lists**

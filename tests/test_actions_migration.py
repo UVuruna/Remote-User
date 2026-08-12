@@ -363,7 +363,60 @@ def test_the_phones_arrangement_survives_the_next_release():
         "silently rearrange itself on the next update")
 
 
+def test_the_focus_button_is_gone_and_cannot_come_back():
+    """Owner ruling 2026-08-13: the Claude set's "Focus" button is deleted.
+
+    His words, in translation: such a button is not needed — a command whose
+    whole job is to click into a text field — especially since several
+    commands already do it (Tab, and `next_input`, which asks for the NEXT
+    text field outright).
+
+    It was also broken: `ctrl+esc` is a shortcut WINDOWS reserves for the
+    Start menu, so the button most likely opened Start rather than focusing
+    anything. That is not the reason it is gone — he decided the button has
+    no reason to exist — but it is why nobody had ever reported it working.
+
+    Two halves, and the second is the one that matters in a year:
+      * it must really be out of the SHIPPED pool, and
+      * it must reach HIS file, which is the mechanism that took four
+        releases to get right for `agent` (2026-08-07). `buttons` is entirely
+        ours, so the merge deletes it — the same direction the Monitor
+        cycler's check above proves.
+
+    His own `active` may still NAME it. That is deliberately left alone:
+    `active` is his key, `activeButtons` in controls.js simply skips an id
+    that resolves to nothing, and silently rewriting a choice he made is
+    worse than a set that shows three buttons until he ticks a fourth.
+    """
+    from gui.controls_data import merge_shipped_pools
+    shipped = shipped_actions()
+    claude = named(shipped["app_sets"], "Claude")
+    assert claude, "the Claude app set vanished entirely"
+    assert not any(b.get("chord") == "ctrl+esc" for b in claude["buttons"]), (
+        "the shipped Claude set still carries a ctrl+esc command — Windows "
+        "reserves that chord for the Start menu, and the owner deleted this "
+        f"button by name: {[b.get('label') for b in claude['buttons']]}")
+
+    user = copy(HIS_FILE)
+    his = named(user["app_sets"], "Claude")
+    if his is None:                     # his fixture predates the set entirely
+        merge_shipped_pools(user, shipped)
+        his = named(user["app_sets"], "Claude")
+        assert his, "the Claude set never reached his file at all"
+    else:
+        his["buttons"] = list(his["buttons"]) + [
+            {"label": "Focus", "icon": "input", "chord": "ctrl+esc"}]
+        his["active"] = ["Focus"]       # and he had ticked it
+        merge_shipped_pools(user, shipped)
+        his = named(user["app_sets"], "Claude")
+    assert not any(b.get("chord") == "ctrl+esc" for b in his["buttons"]), (
+        "the deleted Focus button stayed in the owner's own Claude pool — his "
+        f"phone would keep offering it: {[b.get('label') for b in his['buttons']]}")
+
+
 CHECKS = [
+    ("the deleted Focus button is gone from his file too",
+     test_the_focus_button_is_gone_and_cannot_come_back),
     ("the phone's arrangement survives the next release",
      test_the_phones_arrangement_survives_the_next_release),
     ("his real file receives the agent switch",

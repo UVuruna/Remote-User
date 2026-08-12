@@ -546,11 +546,6 @@
           "text": "/resume",
           "enter": true,
           "focus": "claude"
-        },
-        {
-          "label": "Focus",
-          "icon": "input",
-          "chord": "ctrl+esc"
         }
       ],
       "agent": "claude"
