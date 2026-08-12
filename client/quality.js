@@ -81,6 +81,91 @@ function raiseRequest() {
   };
 }
 
+// --- THE DEVICE'S DECODER CEILING (owner report 2026-08-12) -----------------
+// "Native 20 Mbps still sends no picture." His log: 3840×2160@30 played
+// smoothly (jumps=0); the moment the PC card went to 60 fps the same tablet
+// threw the picture forward ten times every 15 s — a decoder drowning, not a
+// network. The rules live in client/decode-caps.js (pure, gated); this is the
+// wiring: probe what THIS device decodes smoothly per resolution step, cap
+// what we request, and SAY the cap — in a toast and in the panel.
+//
+// Two ceilings, lower wins (combinedCeiling): the persisted probe result, and
+// a session-only override from the runtime backstop below. The probe is
+// per-device (prefGet/prefSet — the sets-picker precedent), so from the next
+// connection on even the FIRST auth message carries the capped fps and the
+// encoder is never built at a rate this device cannot drink.
+let decodeCeilings = {};
+try { decodeCeilings = JSON.parse(prefGet("decodeCeilings") || "{}") || {}; } catch { decodeCeilings = {}; }
+let decodeSessionCeilings = {};
+let decodeProbeSig = "";
+let decodeCapSaid = "";
+let decodeBadWindows = 0;
+
+function ceilingFor(width) {
+  return combinedCeiling(decodeCeilings[String(width)] || 0,
+                         decodeSessionCeilings[String(width)] || 0);
+}
+
+/** The width the CURRENT prefs would have the server encode. 0 before the
+ *  first config — nothing can be capped before the base is known. */
+function effectiveWidth(p) {
+  if (!streamBase) return 0;
+  return stepWidth(p.res, streamBase.width, monitor ? monitor.w : 0);
+}
+
+/** The cap decision for the current prefs — one source for the wire, the
+ *  toast and the panel note, so they can never disagree. */
+function decodeCapState(p) {
+  return capFps(p.fps, streamBase ? streamBase.fps : 0, ceilingFor(effectiveWidth(p)));
+}
+
+/** Probe every resolution step's width once per PC shape (monitor + base),
+ *  persist the ceilings, and restate quality if the running stream is above
+ *  what this device just admitted to. Called on every h264 `config`; the
+ *  signature check makes repeats free. Probe results only ever LOWER a
+ *  stored ceiling — mediaCapabilities answers from the spec sheet, and a
+ *  ceiling the runtime backstop had to lower must not creep back up. */
+async function refreshDecodeCeilings() {
+  if (!streamBase || !monitor || !monitor.w) return;
+  const sig = `${monitor.w}x${monitor.h}|${streamBase.width}|${streamBase.fps}`;
+  if (sig === decodeProbeSig) return;
+  decodeProbeSig = sig;
+  const before = JSON.stringify(effectiveQuality());
+  const widths = [...new Set(QUALITY_RES.map((r) => stepWidth(r, streamBase.width, monitor.w)))];
+  for (const w of widths) {
+    const h = Math.round((w * monitor.h) / monitor.w);
+    const smooth = await probeSmoothFps(w, h, bitrateBits(streamBase.bitrate), DECODE_FPS_STEPS);
+    if (!smooth) return; // no API on this device — never cap anything
+    const probed = smoothCeiling(smooth, DECODE_FPS_STEPS);
+    const kept = decodeCeilings[String(w)] || 0;
+    decodeCeilings[String(w)] = kept ? Math.min(kept, probed) : probed;
+  }
+  prefSet("decodeCeilings", JSON.stringify(decodeCeilings));
+  if (JSON.stringify(effectiveQuality()) !== before) sendQuality();
+}
+
+/** The runtime backstop: render.js hands over each 15 s live window's jump
+ *  count. Two drowning windows in a row lower this width's ceiling one step
+ *  below what is running — session-only, so one bad evening on hotel Wi-Fi
+ *  cannot permanently dull the stream; a decoder that really cannot keep up
+ *  re-lowers within a minute of every session, which is the honest state. */
+function noteDecodeStruggle(jumps) {
+  decodeBadWindows = jumps >= DECODE_BAD_JUMPS ? decodeBadWindows + 1 : 0;
+  if (decodeBadWindows < DECODE_BAD_WINDOWS) return;
+  decodeBadWindows = 0;
+  if (streamMode !== "h264" || !streamBase) return;
+  const p = qualityPrefs();
+  const width = effectiveWidth(p);
+  const running = decodeCapState(p).fps || streamBase.fps || 0;
+  const lower = struggleCeiling(running, DECODE_FPS_STEPS);
+  if (!lower) return;
+  decodeSessionCeilings[String(width)] = lower;
+  showToast(`The picture keeps falling behind — dropping to ${lower} fps for this session.`);
+  send({ type: "client_log", text:
+    `[decode] struggle at ${width}px/${running}fps — session ceiling ${lower}fps` });
+  sendQuality();
+}
+
 function rawQualityPrefs() {
   try {
     const p = JSON.parse(prefGet("qualityPrefs") || "{}");
@@ -116,7 +201,12 @@ function transportCellular() {
 function effectiveQuality() {
   const p = qualityPrefs();
   if (p.auto && transportCellular()) return { fps: 10, res: "1/2", bitrate: "low" };
-  return { fps: p.fps, res: p.res, bitrate: p.bitrate };
+  // The device's decoder ceiling caps what we ask for (owner report
+  // 2026-08-12): a 60 fps request at a width this SoC decodes at 30 goes out
+  // as 30 — lowering is per-client and free, and a capped stream that PLAYS
+  // beats an uncapped one that freezes. Uncapped, `fps` is the saved pref
+  // untouched, "follow the PC" (0) included.
+  return { fps: decodeCapState(p).fps, res: p.res, bitrate: p.bitrate };
 }
 
 function qualityOverridden() {
@@ -128,6 +218,17 @@ function sendQuality() {
   // `raise_*` rides the existing message as optional fields (the cursor-shape
   // pattern): a PC that predates task 131 ignores them and the panel simply
   // cannot go above its card, which is exactly the old behaviour.
+  const p = qualityPrefs();
+  const cap = decodeCapState(p);
+  if (cap.capped) {
+    // The cap is never silent — but said once per distinct decision, not on
+    // every restatement of the same one (a reconnect restates quality).
+    const key = `${effectiveWidth(p)}@${cap.fps}`;
+    if (decodeCapSaid !== key) {
+      decodeCapSaid = key;
+      showToast(`This device decodes that resolution up to ${cap.fps} fps — using ${cap.fps}.`);
+    }
+  }
   send({ type: "quality", ...effectiveQuality(), ...raiseRequest() });
 }
 
@@ -191,6 +292,18 @@ function openQualityPanel() {
   card.appendChild(segRow("FPS", QUALITY_FPS,
     ["Max", "10", "15", "30", "60"].map((l, i) => fpsLabel(QUALITY_FPS[i], l)),
     p.fps, (v) => saveQuality({ fps: v })));
+  // The device's own wall, stated where he chooses (owner report 2026-08-12:
+  // "native still sends no picture" was this tablet drowning in 4K@60). Only
+  // shown when the ceiling actually bites the current choice — a device that
+  // decodes everything sees nothing here.
+  const capNow = decodeCapState(p);
+  if (capNow.capped) {
+    const capLine = document.createElement("p");
+    capLine.className = "sets-sub";
+    capLine.innerHTML = `This device decodes the chosen resolution up to
+      <b>${capNow.fps} fps</b> — higher steps run at ${capNow.fps} automatically.`;
+    card.appendChild(capLine);
+  }
   card.appendChild(segRow("Resolution", QUALITY_RES,
     [resRaises("native") ? "Native ↑" : "Native", "Full", "⅔", "½"],
     p.res, (v) => saveQuality({ res: v }),

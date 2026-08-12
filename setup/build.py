@@ -646,6 +646,22 @@ def input_gate() -> None:
          "(tests/test_creation_footer.py)")
     run([sys.executable, str(PROJECT_DIR / "tests" / "test_creation_footer.py")])
 
+    # THE DEVICE'S OWN DECODER IS A WALL (owner report 2026-08-12: "native
+    # 20 Mbps still sends no picture"). His log: 3840x2160@30 played smoothly
+    # (jumps=0 for two minutes); the moment the PC card went to 60 fps every
+    # session opened level 5.2 and the same tablet threw the picture forward
+    # ten times every 15 s — a decoder drowning, not a network, and nothing
+    # anywhere asked the device what it can decode. The rules are a pure
+    # module (client/decode-caps.js): probe mediaCapabilities per resolution
+    # step, cap the requested fps at the device's smooth ceiling, SAY the cap,
+    # and a runtime backstop lowers a session's ceiling when the live windows
+    # keep counting jumps that the spec sheet promised away. Driven whole in
+    # node with the codec strings from his real sessions. Needs node, like
+    # 0j/0k/0o/0p/0q/0y — never skip it silently.
+    step("0ao/6  DECODE CAPS GATE — the phone never requests a stream its "
+         "own decoder cannot drink (tests/test_decode_caps.py)")
+    run([sys.executable, str(PROJECT_DIR / "tests" / "test_decode_caps.py")])
+
 
 def generate_icons() -> None:
     step("1/6  Generating ICOs from assets/logo.svg")

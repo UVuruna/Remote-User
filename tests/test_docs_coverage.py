@@ -117,6 +117,13 @@ STANDARD = {
     # pattern). Standard: one formula, no flow worth a diagram — the WHY
     # lives in its header and its __about.
     "client/view-anchor.js",
+    # New 2026-08-12 (owner report — "native 20 Mbps still sends no
+    # picture"): the device's own H.264 decode ceiling — level table, smooth-
+    # fps pick, cap and runtime-backstop rules — split into a pure module so
+    # tests/test_decode_caps.py can run it whole (the view-anchor.js pattern).
+    # Standard: tables and threshold picks, no flow worth a diagram — the WHY
+    # lives in its header and its __about; quality.js keeps the wiring.
+    "client/decode-caps.js",
     # New 2026-08-09 (owner report, task 162 — he held a layout row and the
     # layout opened): when a press is a hold, a drag or a tap. Split into a
     # pure module so tests/test_hold_gesture.py can drive it with a realistic

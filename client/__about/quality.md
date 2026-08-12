@@ -34,8 +34,8 @@ to panels.js as the one builder both call:
 
 | Row | Steps | Base-aware |
 |-----|-------|------------|
-| FPS | Max / 10 / 15 / 30 / 60 | steps ≥ the PC's fps are struck through and inert (`fpsUnreachable`, CSS `.q-seg button.out`) — the server clamps them away anyway |
-| Resolution | Full / ⅔ / ½ | half PER AXIS is quarter pixels, so the middle step is ⅔ (owner) |
+| FPS | Max / 10 / 15 / 30 / 60 | steps above the PC's rate wear **↑** (raises, task 131); the device's own decode ceiling caps what is actually requested (below) |
+| Resolution | Native / Full / ⅔ / ½ | **Full** = the width the PC's own card encodes (`h264_max_width`); **Native** = the monitor's real pixels — a raise (↑) when the card is set lower, greyed when they are the same picture; ⅔ and ½ scale Full; half PER AXIS is quarter pixels, so the middle step is ⅔ (owner) |
 | Bitrate | labelled with the real Mbps the PC's choice yields | every step is reachable by construction (percentages ≤ 100 %) |
 
 Plus "save data on mobile networks" — while `Android.transport()` reports
@@ -77,6 +77,28 @@ Two axes can be raised, and they are the two the PC's defaults take away:
 - **Bitrate cannot be raised.** Its steps are PERCENTAGES of the PC's own
   choice by the owner's 2026-08-05 rule, so there is no number above "High" to
   ask for. Stated rather than silently missing.
+
+## The device's decoder ceiling (owner report 2026-08-12)
+
+"Native 20 Mbps still sends no picture" was the tablet drowning in 4K@60: his
+log shows 3840×2160@30 playing smoothly (jumps=0) and the same device throwing
+the picture forward ten times every 15 s the moment the PC card went to 60 fps
+— H.264 level 5.2 is past what that SoC decodes in real time. The PC cannot
+know a phone's decoder; the phone asks its own `mediaCapabilities`. The rules
+live in the pure module `client/decode-caps.js` (gate:
+`tests/test_decode_caps.py`, fail-closed in build.py); the wiring here:
+
+- `refreshDecodeCeilings()` (called by connection.js on every h264 `config`)
+  probes each resolution step's width with the exact codec string that stream
+  would carry, keeps the highest SMOOTH fps per width, and persists it
+  per-device (probes only ever LOWER a stored ceiling).
+- `effectiveQuality()` caps the requested fps at the ceiling for the chosen
+  width — lowering is per-client and free, and a capped stream that plays
+  beats an uncapped one that freezes. The cap is SAID: a toast on the first
+  send it changes, and a line in the panel while it bites.
+- `noteDecodeStruggle()` is the runtime backstop, fed by render.js with each
+  15 s live window's jump count: two drowning windows in a row lower this
+  SESSION's ceiling one step — spec sheets flatter, the live pipeline does not.
 
 `raiseRequest()` puts `raise_fps` / `raise_width` on the existing `quality`
 message as OPTIONAL fields (the cursor-shape pattern): a PC that predates this

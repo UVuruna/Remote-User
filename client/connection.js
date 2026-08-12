@@ -187,6 +187,11 @@ function connect() {
         // The PC's own quality settings — the quality panel can only go BELOW
         // them, so it shows them and greys out the unreachable steps.
         setStreamBase(msg.base || null);
+        // …and what THIS device can decode of them (owner report 2026-08-12:
+        // 4K@60 drowned the tablet's decoder and read as "no picture"). Async
+        // and self-de-duplicating per PC shape; restates quality by itself if
+        // the running stream turns out to be above the device's ceiling.
+        if (streamMode === "h264") refreshDecodeCeilings();
         // How this phone should LOOK, decided on the DESKTOP (build round R3,
         // owner answer P4). Applied straight to CSS variables — the page
         // never asks the device and offers no menu of its own.
