@@ -65,7 +65,14 @@ const vm = require("vm");
 const events = [];
 const el = () => ({
   classList: { add: n => events.push(["class+", n, Date.now()]),
-               remove: n => events.push(["class-", n, Date.now()]) },
+               remove: n => events.push(["class-", n, Date.now()]),
+               // `toggle` joined loading.js on 2026-08-12 with the owner's
+               // second animation kind (cube-only): the overlay puts the
+               // `cube-only` class on or off per call. Recorded like the
+               // other two rather than stubbed away, so this driver stays a
+               // model of the element instead of the subset it used to need.
+               toggle: (n, on) => events.push([on ? "class+" : "class-",
+                                               n, Date.now()]) },
   querySelector: () => ({ textContent: "" }),
   style: {},
 });
