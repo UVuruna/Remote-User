@@ -435,6 +435,15 @@ const NOTIFY_RATE_LABELS = ["0.8×", "1×", "1.25×", "1.5×"];
 let voiceSpeakingName = null;
 let voiceSpeakingTimer = null;
 
+// WHICH language is open, or "" for the list of languages (owner 2026-08-13).
+// Kept while the card is open and cleared when it closes, exactly like the
+// dictation card's `dictMoreOpen`: re-opening the card should show the list, not
+// wherever he happened to be standing last time. Its own variable rather than
+// one shared with the dictation card — the two cards hold DIFFERENT languages
+// (voices installed here vs languages he can dictate in), so one shared
+// position would open a language in one card that the other does not have.
+let voiceOpenLang = "";
+
 function voicePreview(voice, btn) {
   if (voiceSpeakingName) return;
   try {
@@ -455,10 +464,20 @@ function voicePreview(voice, btn) {
   }, dictSampleMs(NOTIFY_SAMPLE));  // panels.js — one estimate, one copy
 }
 
-/** The label a voice wears: its own name, and the locale beside it when the
- *  engine gave one. The same shape the desktop dropdown used, so a screenshot
- *  of the old window and a screenshot of this card name the same voice. */
-function voiceLabel(voice) {
+/** The label a voice wears.
+ *
+ *  INSIDE A LANGUAGE GROUP the language word is the heading above it, so the
+ *  row wears only what tells it from its siblings — `lang-groups.js` decides
+ *  that (the engine's own variant when it is a word, "Voice 1, 2, 3" when it
+ *  is machinery: the owner's ruling of 2026-08-13). `grouped` is that label
+ *  and is used verbatim when present.
+ *
+ *  Without one — the no-choice row, and any aria text built before grouping —
+ *  it falls back to the engine's own label plus its locale, which is the shape
+ *  this card had before groups and the shape the removed desktop dropdown had,
+ *  so an old screenshot and a new one still name the same voice. */
+function voiceLabel(voice, grouped) {
+  if (grouped) return grouped;
   const locale = String(voice.locale || "");
   const label = String(voice.label || voice.name || "");
   return locale ? `${label} (${locale})` : label;
@@ -470,7 +489,7 @@ function voiceLabel(voice) {
  *  inside a label activates the control that label owns, so a speaker nested
  *  in the row would also CHOOSE that voice, and the tap meaning "let me hear
  *  it first" would have decided (the dictation card's own lesson). */
-function voiceRow(voice, chosen) {
+function voiceRow(voice, chosen, grouped) {
   const row = document.createElement("div");
   row.className = "dict-row";
   const label = document.createElement("label");
@@ -486,7 +505,7 @@ function voiceRow(voice, chosen) {
   });
   const txt = document.createElement("span");
   txt.className = "dict-name";
-  txt.textContent = voiceLabel(voice);
+  txt.textContent = voiceLabel(voice, grouped);
   label.append(rb, txt);
   row.appendChild(label);
 
@@ -496,7 +515,10 @@ function voiceRow(voice, chosen) {
     btn.className = "dict-listen" + (name === voiceSpeakingName ? " busy" : "");
     btn.innerHTML = svg("listen");
     // Named for the VOICE, not "play": a screen reader saying "button" over a
-    // speaker glyph says nothing about which row it belongs to.
+    // speaker glyph says nothing about which row it belongs to. It names the
+    // voice IN FULL — engine label and locale — rather than the group-relative
+    // row text: read aloud out of the list, "male 1" alone says nothing, and a
+    // screen-reader user has no heading in view to supply the language.
     btn.setAttribute("aria-label", `Listen to ${voiceLabel(voice)}`);
     btn.title = `Listen to ${voiceLabel(voice)}`;
     keepFocus(btn, () => voicePreview(voice, btn));
@@ -532,13 +554,49 @@ function renderNotifyVoiceCard() {
 
   const list = document.createElement("div");
   list.className = "sets-list";
-  // The no-choice row, first and always present. Its label is what it really
-  // means — this device has no opinion — and the caption under the list spells
-  // out the consequence rather than leaving him to guess it.
-  list.appendChild(voiceRow({ name: "", label: "The phone's own default" },
-                            chosen));
-  for (const v of (voices || [])) {
-    if (v && v.name) list.appendChild(voiceRow(v, chosen));
+  // LANGUAGE FIRST, VOICE SECOND (owner 2026-08-13). The engine returns every
+  // voice of every installed language in one run, which on his device is the
+  // pile he reported — and every row wore its language word again, so the
+  // same word ran down the whole column. `lang-groups.js` groups them and
+  // names the rows inside a group; this card only decides what is on screen.
+  const groups = groupVoicesByLanguage(voices);
+  const open = groups.find((g) => g.key === voiceOpenLang) || null;
+
+  if (open) {
+    // Inside one language: a way back FIRST, then that language's voices.
+    // The back row is a real button and the heading of what he is looking at,
+    // so nothing else has to repeat the language name.
+    list.appendChild(langBackRow(open.name, () => {
+      voiceOpenLang = "";
+      renderNotifyVoiceCard();
+    }));
+    for (const v of open.variants) {
+      list.appendChild(voiceRow(v.row, chosen, v.label));
+    }
+  } else {
+    // The no-choice row, first and always present, and never inside a
+    // language — it is the absence of a choice, not a voice of one. Its label
+    // is what it really means (this device has no opinion) and the caption
+    // under the list spells out the consequence.
+    list.appendChild(voiceRow({ name: "", label: "The phone's own default" },
+                              chosen));
+    for (const g of groups) {
+      // A language with exactly ONE voice is offered flat — a drill-down into
+      // a list of one is a tap that shows him nothing he could not already
+      // see, and it would hide the only voice he has behind a door.
+      if (g.variants.length === 1) {
+        const only = g.variants[0];
+        list.appendChild(voiceRow(only.row, chosen,
+                                  `${g.name} — ${only.label}`));
+      } else {
+        const holdsChosen = !!chosen
+          && g.variants.some((v) => String(v.row.name || "") === chosen);
+        list.appendChild(langGroupRow(g, holdsChosen, () => {
+          voiceOpenLang = g.key;
+          renderNotifyVoiceCard();
+        }));
+      }
+    }
   }
   body.appendChild(list);
 
@@ -586,6 +644,7 @@ function closeNotifyVoicePanel() {
   voicePanel.innerHTML = "";
   clearTimeout(voiceSpeakingTimer);
   voiceSpeakingName = null;
+  voiceOpenLang = "";      // next open starts at the list of languages
 }
 
 voicePanel.addEventListener("pointerdown", (e) => {

@@ -291,7 +291,17 @@
   <!-- Right after controls.js: it uses prefGet/prefSet and IN_APP from there,
        and it must run before anything paints a control. -->
   <script src="/static/theme.js"></script>
+  <!-- Pure, no DOM and no dependencies of its own (the grid-icons.js pattern),
+       so it may load before anything that reads it: the grouping arithmetic
+       BOTH language lists use — the dictation card below and Settings → Voice
+       in notify.js (owner 2026-08-13). -->
+  <script src="/static/lang-groups.js"></script>
   <script src="/static/panels.js"></script>
+  <!-- After panels.js (ghostClickArmor) and before notify.js, which uses this
+       file's langGroupRow/langBackRow and dictVoices. Split out of panels.js
+       on 2026-08-13 at the structure law's wall, by responsibility: this card
+       is about the DEVICE (what it hears, what it can speak). -->
+  <script src="/static/dictation-card.js"></script>
   <script src="/static/quality.js"></script>
   <!-- After panels.js (ghostClickArmor) and quality.js (segRow's home is
        panels.js, but these two cards are its other callers). -->

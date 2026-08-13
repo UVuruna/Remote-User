@@ -290,6 +290,51 @@
   text-align: left;
 }
 
+/* LANGUAGE FIRST, VARIANT SECOND (owner 2026-08-13) — the door into one
+   language, and the way back out. Both are BUTTONS, not labels with a radio:
+   opening a language chooses nothing, and a row that looked like the choices
+   around it would read as though the tap had already decided.
+
+   They borrow `.sets-row.dict`'s grid so a group row and a choice row line
+   their text up in the same column — the list must not visibly re-flow when he
+   steps in and out. The 20 px first column that holds a radio elsewhere holds
+   the back arrow here and stays EMPTY on a group row, whose arrow sits at the
+   far end where the row leads. */
+.sets-row.dict.lang-group,
+.sets-row.dict.lang-back {
+  grid-template-columns: 20px 1fr auto;
+  text-align: left;
+  width: 100%;
+  background: var(--glass-fill);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  font: inherit;
+}
+.sets-row.dict.lang-group .dict-name { grid-column: 2; }
+/* How many are inside — the reason this row is a door. It sits under the name
+   in the status line's own place, so a group row is exactly as tall as the
+   choice rows above and below it. */
+.sets-row.dict.lang-group .dict-status { grid-column: 2; grid-row: 2; }
+.sets-row.dict.lang-group .lang-arrow { grid-column: 3; grid-row: 1 / span 2; }
+.sets-row.dict.lang-back .lang-arrow { grid-column: 1; grid-row: 1; }
+.sets-row.dict.lang-back .dict-name {
+  grid-column: 2;
+  color: var(--text-secondary);   /* a heading, not one of the choices */
+}
+.lang-arrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+}
+.lang-arrow svg { width: 20px; height: 20px; }
+/* The group holding his current choice. The accent alone, exactly as a chosen
+   row wears it — with the choice itself one level down, this mark is the only
+   thing telling him the card has not forgotten what he picked. */
+.sets-row.dict.lang-group.sel .dict-name,
+.sets-row.dict.lang-group.sel .lang-arrow { color: var(--accent); }
+.sets-row.dict.lang-group.sel { border-color: var(--accent); }
+
 /* Mic while the chosen language's model downloads: dictation works online,
    the button says a better engine is on its way. Dashed border ONLY — the
    pulse was too much (owner round 4, 2026-08-05); a dashed border appears
