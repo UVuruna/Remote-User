@@ -735,7 +735,24 @@ async def _receive_input(ws: WebSocket, injector: InputInjector, stream, token: 
             if lost:
                 await _toast(ws, focus_guard.loss_notice(lost))
         elif kind == "key_special":
-            injector.press_key(str(msg["key"]))
+            # HALF 2 of the 2026-08-13 measured defect: `key_text` and
+            # `paste_text` both toast a loss when the fence is lost —
+            # `key_special` (Backspace, Enter's chord sibling, arrows…) had
+            # no check at all, so a key that landed nowhere was invisible to
+            # the owner ("buttons randomly stopped working" instead of a
+            # named error, constitution priority D). `focus_guard.typist()`
+            # is the SAME checkpoint `type_text`'s chunk loop uses between
+            # characters — a single key has no chunks, so it is checked once,
+            # verified (a bare foreground read on the happy path, a settled
+            # retry only when it disagrees) — never the un-verified `guard()`
+            # call a few lines above, which only ATTEMPTS a refocus and
+            # returns its target regardless of whether it landed.
+            ok = await asyncio.to_thread(focus_guard.typist(layouts, conn))
+            if ok:
+                injector.press_key(str(msg["key"]))
+            else:
+                await _toast(ws, focus_guard.loss_notice(
+                    str(msg["key"]), unit="key press"))
         elif kind == "paste_text":
             # A TYPED command button (owner 2026-08-05 — the Claude set's
             # /usage, /model, /effort). The text goes through the CLIPBOARD

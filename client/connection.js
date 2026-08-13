@@ -151,6 +151,9 @@ function connect() {
     // system dialog — and offered at most once per app version.
     offerNoticeSetup();
     if (qualityOverridden()) sendQuality();
+    // Whatever typing the outage queued (client/type-queue.js) goes out NOW —
+    // after `auth`, never before it (nothing may reach the server first).
+    flushTypeQueue();
     lastSentViewport = { x: 0, y: 0, w: 1, h: 1 };
     scheduleViewport();
     setStatus("connected", "Connected");

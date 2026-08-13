@@ -215,6 +215,36 @@ Gate: `tests/test_focus_dead_member.py`, fail-closed in `setup/gates.py`
 (0b8/6), five checks each proven by planting the pre-fix code back and
 watching exactly the checks that exercise it go red.
 
+## `key_special` gets the same loss report as its siblings (2026-08-13)
+
+HALF 2 of the same day's measured typing-loss defect (HALF 1: `client/`
+`type-queue.js`, the phone-side outbound queue). `key_text` and `_paste_text`
+both toast `loss_notice()` when the fence could not be held — the phone at
+least LEARNS its sentence was cut short. `key_special` (Backspace, Tab, Esc,
+Delete, Home, End, the arrows — every structural key `client/controls.js`
+sends) had NO check at all: `web.py`'s branch called `injector.press_key`
+unconditionally, with no return value to check and nothing inside
+`press_key` itself to report. A Backspace that landed nowhere was invisible
+to the owner — the reason this experienced as "buttons randomly stopped
+working" instead of a named error (constitution priority D: every app
+carries SOME error visibility).
+
+The fix reuses `typist(layouts, conn)` — the SAME verified checkpoint
+`type_text`'s chunk loop already calls between characters — once, before
+injecting: a single key has no chunks to checkpoint between, so it is
+checked exactly once. The happy path is the same bare `GetForegroundWindow`
+`typist()` already documents; only a foreground that disagrees pays for the
+full settle-retry of `checkpoint()`. A lost fence presses nothing and toasts
+`loss_notice(key, unit="key press")` — a NEW keyword-only `unit` parameter
+(default `"characters"`, so `key_text`/`_paste_text`'s existing wording is
+byte-for-byte unchanged) that swaps the sentence for one naming a single key
+press rather than a character count: "9 characters ... 'backspace'" would
+have named the wrong thing entirely.
+
+Gate: `tests/test_key_special_loss.py`, fail-closed in `setup/gates.py`
+(0b11/6), four checks each proven by planting the pre-fix branch back and
+watching only the loss-report check go red.
+
 ## Looking without acting (2026-08-08)
 `current_target(layouts, conn)` answers the same question as `guard()` — where
 the phone's keys would land right now — and does **none** of its actions: it

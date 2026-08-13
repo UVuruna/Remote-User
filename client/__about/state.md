@@ -61,12 +61,18 @@ Loads FIRST of the six client scripts (see [Client (folder)](../___client.md))
   into the status pill (visible, never a silent dead page).
 - `toCanvasPx(e)` — PointerEvent → canvas-px point (`clientX/Y * devicePixelRatio`).
 - `send(msg)` — JSON-encodes and sends on `ws` if open; otherwise (unless the
-  4401 "link expired" state is active) flips the status pill to
-  "Reconnecting…" and calls `ensureConnected()` (defined in
-  [Connection](connection.md), loaded later — safe because `send` only
-  *references* it inside a function body, and it is always defined by the
-  time `send` is actually invoked at runtime, well after all six scripts have
-  finished loading).
+  4401 "link expired" state is active) queues the message when it is one of
+  the four TYPING kinds ([Type Queue](type-queue.md) — `typeQueueKind` /
+  `typeQueuePush`), flips the status pill to "Reconnecting…" and calls
+  `ensureConnected()` (defined in [Connection](connection.md), loaded later —
+  safe because `send` only *references* it inside a function body, and it is
+  always defined by the time `send` is actually invoked at runtime, well
+  after all six scripts have finished loading).
+- `flushTypeQueue()` — called by [Connection](connection.md)'s `sock.onopen`,
+  after `auth` is sent: drains the queue in order, or gives up on the whole
+  of it at once (`typeQueueFlush`'s staleness rule) and toasts
+  `noteTypeQueueLoss()` — the 2026-08-13 fix for a typing message that used
+  to vanish silently in a short reconnect (see [Type Queue](type-queue.md)).
 
 ## Design Decisions
 

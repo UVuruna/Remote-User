@@ -810,3 +810,34 @@ def input_gate(step, run) -> None:
          "stray fragment cannot outlive a single keystroke "
          "(tests/test_kb_sync.py)")
     run([sys.executable, str(PROJECT_DIR / "tests" / "test_kb_sync.py")])
+
+    # HALF 1 of the 2026-08-13 MEASURED typing-loss defect: `client/state.js`'s
+    # `send()` dropped a typing message SILENTLY whenever the socket was not
+    # OPEN — a simulation driving the REAL controls.js handler + the REAL
+    # send() opened a 200ms outage inside a 20-key backspace burst and
+    # swallowed 8 of 21 messages, with `kbPrev` (the phone's model of the PC
+    # text) never re-syncing, so every later keystroke on a HEALTHY link kept
+    # the gap. Fix: client/type-queue.js (pure, like kb-sync.js/voice.js
+    # before it) — a bounded outbound queue for the four message kinds that
+    # TYPE, flushed in order on reconnect, given up on (with a toast) once it
+    # is either too full or too stale to trust. Needs node, like every
+    # whole-module gate here — never skip it silently.
+    step("0b10/6  TYPE QUEUE GATE — a typing message survives a short "
+         "reconnect, and a give-up is TOLD to the phone, never silent "
+         "(tests/test_type_queue.py)")
+    run([sys.executable, str(PROJECT_DIR / "tests" / "test_type_queue.py")])
+
+    # HALF 2 of the same defect: `key_special` (Backspace, arrows, Tab, Esc,
+    # Delete, Home, End) was the ONLY typing message with no loss report —
+    # `key_text`/`paste_text` both toast `focus_guard.loss_notice` when the
+    # fence is lost, and `server/web.py`'s `key_special` branch had no return
+    # value, no check and no toast at all. A key that landed nowhere was
+    # invisible to the owner — the reason he experienced this as "buttons
+    # randomly stopped working" instead of a named error (constitution
+    # priority D). Fix: the branch now runs the SAME verified checkpoint
+    # `type_text`'s chunk loop already uses (`focus_guard.typist`) once before
+    # injecting, and toasts `focus_guard.loss_notice(key, unit="key press")`
+    # on a lost fence — the SAME toast machinery its siblings use.
+    step("0b11/6  KEY SPECIAL LOSS GATE — a Backspace/arrow/Tab/Esc that "
+         "lands nowhere is TOLD to the phone (tests/test_key_special_loss.py)")
+    run([sys.executable, str(PROJECT_DIR / "tests" / "test_key_special_loss.py")])

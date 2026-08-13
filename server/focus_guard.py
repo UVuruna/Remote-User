@@ -413,15 +413,25 @@ def checkpoint(layouts, conn: dict) -> int:
     return 0
 
 
-def loss_notice(lost: str) -> str:
+def loss_notice(lost: str, *, unit: str = "characters") -> str:
     """What the PHONE is told when typing was cut off — the size of the loss
     and the start of what is missing, so he knows what to say again.
 
     It lives here, not in the dispatcher, because it is this module's subject:
     the whole point of the guard is that the owner is looking at his device,
     not at a server log, and a sentence destroyed in silence is the original
-    failure wearing a different coat."""
-    return (f"{len(lost)} characters did NOT reach the PC — another window "
+    failure wearing a different coat.
+
+    `unit` (2026-08-13, `key_special`'s own loss report — see web.py): a
+    dropped SPECIAL KEY is not text with a length worth counting — "9
+    characters" for the word "backspace" would name the wrong thing entirely.
+    Passing `unit="key press"` swaps the whole sentence for one naming the
+    key itself, on the SAME toast machinery `key_text`/`paste_text` already
+    use — never a second, parallel notice path."""
+    if unit != "characters":
+        return (f"A {unit} did NOT reach the PC — another window took the "
+                f"keyboard: “{lost}”")
+    return (f"{len(lost)} {unit} did NOT reach the PC — another window "
             f"took the keyboard: “{lost[:40]}”")
 
 

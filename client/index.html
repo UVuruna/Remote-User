@@ -246,6 +246,10 @@
        sharing one global scope — LOAD ORDER MATTERS, keep it in sync with
        client/load_test.js's FILES list. See client/___client.md. -->
   <script src="/static/state.js"></script>
+  <!-- The bounded outbound queue for typing messages (state.js's send() and
+       connection.js's reconnect flush both call it) — pure, so its own gate
+       can run it whole, same as kb-sync.js/voice.js. -->
+  <script src="/static/type-queue.js"></script>
   <script src="/static/caret.js"></script>
   <!-- Before render.js: it owns the fit-and-anchor math computeViewHome runs
        (pure so its gate can drive it — owner decree 2026-08-09). -->

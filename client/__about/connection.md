@@ -233,6 +233,18 @@ Only a return **into a layout** is timed: that is the seam he reported, and the
 only one with an overlay to end the measurement. Coming back to the plain
 desktop leaves `RETURN.sent` true, which makes every mark a no-op.
 
+## Flushing the type queue on reconnect (2026-08-13)
+
+`sock.onopen` calls `flushTypeQueue()` ([State](state.md), delegating its
+count/staleness rule to [Type Queue](type-queue.md)) right after `auth` is
+sent — never before it, since nothing may reach the server before `auth`
+(hard security rule). This is HALF 1 of the 2026-08-13 measured
+typing-loss defect: a short outage inside a keystroke burst used to drop
+messages with no queue and no record, and every later keystroke on a healthy
+link kept the gap because nothing told [Kb Sync](kb-sync.md)'s `kbPrev` a
+message never arrived. See `__about/type-queue.md` for the full mechanism and
+the bound's reasoning.
+
 ## `auth` carries the quality (task 203)
 
 The `auth` message now includes `quality: effectiveQuality()`. The restatement

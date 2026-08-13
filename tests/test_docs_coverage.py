@@ -326,6 +326,15 @@ ALGORITHMIC = {
     # its own end) does not hold, and it is kept pure so its gate can run it
     # whole, the voice.js pattern.
     "client/kb-sync.js",
+    # New 2026-08-13 (the 2026-08-13 MEASURED typing-loss defect, HALF 1):
+    # `send()` dropped a typing message silently whenever the socket was not
+    # OPEN, and a simulation driving the real controls.js + send() proved it
+    # amplifies inside an ordinary backspace burst. Algorithmic without
+    # argument: the bound (count + staleness) and the all-or-nothing giveup
+    # rule are real decisions that trade one failure mode for another if
+    # gotten wrong, and it is kept pure so tests/test_type_queue.py can run
+    # it whole, the kb-sync.js/voice.js pattern.
+    "client/type-queue.js",
     # New 2026-08-13 (owner: both language lists were one flat pile, and the
     # dictation one repeated the same choice). The grouping arithmetic BOTH
     # cards read, pure so tests/test_lang_groups.py runs it whole.

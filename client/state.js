@@ -325,6 +325,50 @@ function phoneNet() {
   }
 }
 
+// The bounded outbound queue for typing messages while the socket is down
+// (client/type-queue.js — pure, gated whole; see its header for the count
+// and staleness reasoning). `typeQueueLossNotified` dedupes the toast to ONE
+// per outage — a rapid burst can drop several messages in a row and a toast
+// per message would bury the one thing worth telling him under a stack of
+// identical ones; it resets the moment the outage truly ends (a successful
+// flush) so the NEXT outage can notify again.
+let typeQueue = [];
+let typeQueueLossNotified = false;
+
+function noteTypeQueueLoss() {
+  if (typeQueueLossNotified) return;
+  typeQueueLossNotified = true;
+  showToast("Some typing wasn't sent — the connection was down too long");
+  // The invisible field's own model of the PC text (kb-sync.js's `kbPrev`,
+  // controls.js) is now WRONG by an unknown amount — some of what it assumed
+  // landed did not. There is no way to learn the PC's real text from here
+  // (the field is a diff source, never a mirror read back), so the honest
+  // move is the same one blur() already performs after every send: stop
+  // assuming, and let the next edit start a fresh diff from whatever the
+  // owner sees on the PC screen he is already watching.
+  if (typeof kbInput !== "undefined" && document.activeElement === kbInput) {
+    kbInput.blur();
+  }
+}
+
+/** Called once the socket is OPEN again (connection.js `sock.onopen`) — sends
+ *  everything the outage queued, in order, or gives up on the whole queue at
+ *  once and says so. Must run AFTER `auth` is sent: nothing may reach the
+ *  server before it (hard security rule), and `send()` below routes straight
+ *  to `ws.send` once `ws.readyState` is OPEN, so calling this too early would
+ *  jump the queue's own messages ahead of `auth`. */
+function flushTypeQueue() {
+  if (typeQueue.length === 0) return;
+  const { messages, dropped } = typeQueueFlush(typeQueue, performance.now());
+  typeQueue = [];
+  if (dropped) {
+    noteTypeQueueLoss();
+    return;
+  }
+  typeQueueLossNotified = false; // the outage is over — the next one may notify again
+  messages.forEach((m) => send(m));
+}
+
 function send(msg) {
   // A DELIBERATE focus change or removal voids the auto-refocus — only a
   // reconnect may restore a layout, never a user's explicit choice of the
@@ -350,6 +394,14 @@ function send(msg) {
   // 4409 (another device took over) likewise: only a deliberate tap on the
   // pill reconnects, or two devices would steal the session in a loop.
   if (authRejected || takenOver) return;
+  // A TYPING message survives a short outage (2026-08-13 MEASURED defect,
+  // see client/type-queue.js) — every other kind keeps the old behaviour
+  // below it: dropped, with only the status pill to show for it.
+  if (typeQueueKind(msg)) {
+    const result = typeQueuePush(typeQueue, msg, performance.now());
+    typeQueue = result.queue;
+    if (result.dropped) noteTypeQueueLoss();
+  }
   // A dropped command must be VISIBLE (a dead socket behind a frozen frame
   // read as "buttons randomly stopped working" — owner report 2026-07-26).
   setStatus("connecting", "Reconnecting…");
