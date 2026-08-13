@@ -126,7 +126,13 @@ class FakeRegistry:
         self.cleared = 0
         self.layouts: list = []
 
-    def minimize_members(self):
+    def minimize_members(self, session_end: bool = False):
+        # `session_end` mirrors the real LayoutRegistry.minimize_members
+        # (constraint 24). THREE gates carry their own copy of this fake and
+        # not one of them was told when the argument was added on 2026-08-13,
+        # so each died on a TypeError the moment its checks walked a LEAVE —
+        # and every one of the three is fail-closed in build.py, which is why
+        # no build could complete at all since 0.0.178.
         self.minimized += 1
 
     def clear_topmost(self):
