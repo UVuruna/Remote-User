@@ -176,6 +176,45 @@ bug. Raising members in plain list order handed the keyboard to whichever
 window sat last in the grid, so one excursion was enough to move his dictation
 into the other pane.
 
+## A fence whose target no longer exists fails OPEN (owner report 2026-08-13)
+"Our application blocked me and my agents" — he had two solo layouts of the
+same project; layout 2's only member was a VS Code tab TORN OFF layout 1's
+window (our own extraction flow). He then, BY HAND on the PC, dragged that
+tab back into its origin window — Windows DESTROYS the torn-off window on
+such a merge, through **none** of our own removal paths
+(`drop_member`/`eject_member`/`merge`/`remove` in
+[Layout Registry](layout_registry.md) never ran). `Layout.members` is a note
+of who was ADDED, not who is still ALIVE: only `LayoutRegistry.prune()` ever
+removes a closed member from it, and it runs only when the phone next acts
+(`focus`/`layout_state`/…) — never on its own, and never from `watch()`'s own
+loop. Between the merge and the phone's next action, `_active_layout` treated
+a member list that still named the dead hwnd as a live fence, `_layout_target`
+handed that dead hwnd back as THE target (`lay.members[0]` /
+`lay.last_member`, both dead), and every guard call — the per-message fence
+AND the 0.25 s poll of `watch()` — kept trying to `_refocus`/`raise_window` it,
+fighting whatever window was really in front instead of ever giving the
+keyboard back. Because the poll runs continuously while a layout is shown
+(`_defending`), this was not a one-off refusal: it repeated four times a
+second for as long as the dead layout stayed focused.
+
+Fixed at the boundary a member list that can hold a dead window is the
+defect, not each caller that reads one: `_active_layout` now checks
+`window_manager.user32.IsWindow` across `lay.members` and answers "no active
+layout" (fail OPEN, never closed) the moment none of them are alive anymore —
+which naturally falls through to the ordinary desktop-pin rule below it, the
+exact behaviour a layout with no fence should have. `_layout_target` filters
+to the alive members before consulting `pin`/`last_member`, so a pin that
+independently names the exact member that just died is never handed back
+either. A layout that still has ONE live member among several dead ones keeps
+fencing correctly — only an ALL-dead layout releases the fence. The release is
+logged once per connection per layout index (`_log_dead_fence`, the
+`_log_silent_hook` pattern) so the cause is visible without becoming a diary
+entry every poll cycle.
+
+Gate: `tests/test_focus_dead_member.py`, fail-closed in `setup/gates.py`
+(0b8/6), five checks each proven by planting the pre-fix code back and
+watching exactly the checks that exercise it go red.
+
 ## Looking without acting (2026-08-08)
 `current_target(layouts, conn)` answers the same question as `guard()` — where
 the phone's keys would land right now — and does **none** of its actions: it

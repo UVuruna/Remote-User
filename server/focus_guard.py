@@ -178,22 +178,39 @@ def retarget(conn: dict) -> None:
 
 
 def _active_layout(layouts, conn: dict):
+    """A layout is a fence ONLY while it still has a window to fence around.
+    `lay.members` is a note of who was ADDED, not who is still ALIVE —
+    `prune()` is the only thing that ever removes a closed member from it,
+    and it runs only when the phone acts (focus, layout_state, …), never on
+    its own. A member destroyed by something OUTSIDE our own removal paths —
+    the live failure: a torn-off tab dragged back into its origin window,
+    which Windows destroys on the merge — leaves a DEAD hwnd sitting in
+    `lay.members` until the phone's next action, and every guard call in
+    between must not mistake that note for a real fence (owner report
+    2026-08-13 — "our application blocked me and my agents")."""
     index = conn.get("active")
     if layouts is None or index is None or not 0 <= index < len(layouts.layouts):
         return None
     lay = layouts.layouts[index]
-    return lay if lay.members else None
+    return lay if any(window_manager.user32.IsWindow(h) for h in lay.members) else None
 
 
 def _layout_target(lay, conn: dict) -> int:
     """Which member of `lay` the phone's keyboard belongs to when the
     foreground is NOT one of them. One implementation, two callers: the guard
     below (which then puts focus there) and `current_target` (which only
-    looks) — two copies of this rule would be two answers to one question."""
+    looks) — two copies of this rule would be two answers to one question.
+
+    Never names a DEAD member: `_active_layout` already guarantees at least
+    one live one exists when this is called, but `pin`/`last_member` are
+    conn-side memory that can independently point at the exact member that
+    just died, and picking it back would raise/poll a window that no longer
+    exists (the same failure `_active_layout` exists to stop)."""
+    alive = [h for h in lay.members if window_manager.user32.IsWindow(h)]
     pin = conn.get("pin")
-    if pin in lay.members:
+    if pin in alive:
         return pin
-    return lay.last_member if lay.last_member in lay.members else lay.members[0]
+    return lay.last_member if lay.last_member in alive else alive[0]
 
 
 def _armed_pin(conn: dict) -> int:
@@ -210,6 +227,35 @@ def _accept(conn: dict, lay, hwnd: int) -> int:
     if lay is not None:
         lay.last_member = hwnd   # survives this connection — an excursion drops it
     return hwnd
+
+
+def _log_dead_fence(layouts, conn: dict, lay) -> None:
+    """The fence just released itself because the layout it was pointed at
+    (`conn["active"]`) has NO living member left — every one of them was
+    destroyed by something outside our own removal paths, so nothing pruned
+    the note. FAIL OPEN, never closed (owner rule, non-negotiable): the
+    keyboard goes back to whatever is really in front rather than being
+    fought over a window that no longer exists. Logged once per connection
+    per layout index, like `_log_silent_hook` — the point is to be TOLD the
+    fence is gone, not to be reminded every 250ms.
+
+    Only fires when the index is otherwise VALID (a real layout, just an
+    empty one) — an index that is simply out of range (no layout there at
+    all) is not this defect and says nothing worth logging."""
+    index = conn.get("active")
+    valid_index = (lay is None and layouts is not None and index is not None
+                   and 0 <= index < len(layouts.layouts))
+    if not valid_index:
+        conn.pop("dead_fence_logged", None)
+        return
+    logged = conn.get("dead_fence_logged") or set()
+    if index in logged:
+        return
+    conn["dead_fence_logged"] = logged | {index}
+    logger.error(
+        "Layout %s has no living member left (destroyed outside our own "
+        "removal paths — a tab merge, a crash) — releasing the keyboard "
+        "fence instead of targeting a dead window.", index)
 
 
 def _log_steal(conn: dict, fg: int, target: int, where: str) -> None:
@@ -249,6 +295,7 @@ def _decide(layouts, conn: dict, typing: bool) -> int:
     fg = _foreground()
     root = _owner_root(fg)
     lay = _active_layout(layouts, conn)
+    _log_dead_fence(layouts, conn, lay)
     if lay is None and not typing:
         return fg
 
