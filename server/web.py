@@ -32,14 +32,12 @@ the H.264 side new_owner()/open_session()/close_session()/hold_source().
 import asyncio
 import json
 import logging
-import shutil
 import struct
-import tempfile
 import time
 from dataclasses import dataclass
 from pathlib import Path
 
-from fastapi import FastAPI, File, Request, UploadFile, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
@@ -62,6 +60,7 @@ import agents
 import content
 import traffic
 import uia
+import upload_api
 import window_manager
 from config import SETTINGS
 from config_api import send_config as _send_config
@@ -180,61 +179,11 @@ def create_app(stream, hub: FrameHub | None, injector: InputInjector, token: str
             filename="VibeCoder.apk",
         )
 
-    @app.post("/upload")
-    async def upload(request: Request, file: UploadFile = File(...)):
-        """Phone → PC: decode an image the tablet sent (incl. HEIC — the phone
-        camera default), put it in the PC clipboard and PASTE it into the
-        focused box right away (Ctrl+V injected — picking the image was the
-        whole gesture; the user clicked the target field before choosing it).
-        Token-gated like the WebSocket."""
-        if request.query_params.get("token") != token:
-            return JSONResponse({"ok": False, "error": "unauthorized"}, status_code=401)
-        data = await file.read()
-        traffic.METER.add_in(len(data))  # phone -> PC counts wherever it enters
-        img = await asyncio.to_thread(content.decode_upload, data)
-        if img is None:
-            # magic bytes identify the format we failed on (e.g. b'ftypheic')
-            logger.error("Upload not decodable: %d bytes, name=%r, type=%r, magic=%r",
-                         len(data), file.filename, file.content_type, bytes(data[:12]))
-            return JSONResponse({"ok": False, "error": "not an image"}, status_code=400)
-        ok = await asyncio.to_thread(clipboard.copy_image, img)
-        if ok:
-            await asyncio.to_thread(injector.press_chord, "ctrl+v")
-        return {"ok": ok}
-
-    @app.post("/upload_files")
-    async def upload_files(request: Request, files: list[UploadFile] = File(...)):
-        """Phone → PC, the multi-file / any-type path (owner 2026-08-04):
-        several gallery images, or a PDF from the phone's Files — saved to a
-        temp drop folder, put on the clipboard as REAL files (CF_HDROP) and
-        pasted right away, exactly like Copy in Explorer + Ctrl+V. A single
-        image goes through /upload instead (bitmap — image boxes need that).
-        Token-gated like the WebSocket."""
-        if request.query_params.get("token") != token:
-            return JSONResponse({"ok": False, "error": "unauthorized"}, status_code=401)
-        drop = Path(tempfile.gettempdir()) / "VibeCoderDrop"
-        # The PREVIOUS upload's files are cleared here, not right after their
-        # paste — a target app may still be reading them from the clipboard.
-        shutil.rmtree(drop, ignore_errors=True)
-        drop.mkdir(parents=True, exist_ok=True)
-        paths = []
-        for i, f in enumerate(files):
-            name = Path(f.filename or f"file_{i}").name or f"file_{i}"
-            path = drop / name
-            if path in paths:  # two picks may carry the same name
-                path = drop / f"{i}_{name}"
-            blob = await f.read()
-            traffic.METER.add_in(len(blob))
-            path.write_bytes(blob)
-            paths.append(path)
-        if not paths:
-            return JSONResponse({"ok": False, "error": "no files"}, status_code=400)
-        ok = await asyncio.to_thread(clipboard.copy_files, paths)
-        if ok:
-            await asyncio.to_thread(injector.press_chord, "ctrl+v")
-        else:
-            logger.error("CF_HDROP copy failed for %d files", len(paths))
-        return {"ok": ok, "count": len(paths)}
+    # Phone → PC content (the Attach set) is TWO HTTP routes and one injected
+    # Ctrl+V, and it registers itself: `server/upload_api.py`, split out here
+    # at the structure law's wall by responsibility — this file's subject is
+    # the live socket, and an upload never touches it.
+    upload_api.register(app, token, injector)
 
     app.mount("/static", StaticFiles(directory=SETTINGS.client_dir), name="static")
 
@@ -836,6 +785,14 @@ async def _receive_input(ws: WebSocket, injector: InputInjector, stream, token: 
             await layout_api.layout_pick(ws, layouts, stream, msg)
         elif kind == "layout_list":
             await layout_api.layout_list(ws, layouts, stream, conn)
+        elif kind == "layout_acts":
+            # WHAT THE LAYOUT'S OWN APP CAN DO (owner ballot 2026-08-13, T29).
+            # Asked by the New panel when it opens INSIDE a layout — from the
+            # desktop there is no member to act on and the answer is empty,
+            # which is what makes the panel draw one group instead of two.
+            await layout_api.layout_acts(ws, layouts, conn)
+        elif kind == "layout_act":
+            await layout_api.layout_act(ws, layouts, conn, injector, msg)
         elif kind == "layout_recent":
             # The FOURTH creation source (task 228): every layout previously
             # created on this PC, persisted across restarts.

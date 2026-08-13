@@ -60,6 +60,18 @@ STANDARD = {
     # was NOT standing before the launch may be handed back — is a comparison,
     # not a flow, and it is gated in tests/test_layout_birth.py.
     "server/recents.py",
+    # New 2026-08-13 (owner ballot, T29 — the New panel opened from INSIDE a
+    # layout offers its own app's acts first). Standard: a catalogue keyed by
+    # process plus a dispatcher, whose one rule with teeth — the PROCESS is
+    # asserted before a single key goes out — is the same fence
+    # content.palette_command already makes, and is gated in
+    # tests/test_new_source.py.
+    "server/layout_acts.py",
+    # Split out of web.py on 2026-08-13 at the structure law's wall, by
+    # responsibility: web.py's subject is the live SOCKET, and an upload is a
+    # plain request/response that happens to end in one injected Ctrl+V.
+    # Trivial: two routes, moved unchanged, with no logic of their own.
+    "server/upload_api.py",
     # New 2026-08-11 (task 228 — the "Recent" creation source). Standard: a
     # persisted, capped, deduped log with a dedupe key and a fuzzy re-match —
     # each promise is a comparison over a member list, not a state machine or
@@ -155,6 +167,14 @@ STANDARD = {
     # view-anchor.js pattern). Standard: one table and one translate, no flow
     # worth a diagram — the WHY lives in its header and its __about.
     "client/cursor-shapes.js",
+    # Split out of layout-create.js on 2026-08-13, at the structure law's wall
+    # and by responsibility: that file is the WIZARD (it owns `creating` and
+    # ends in one layout_create), while this one is about the PC's own
+    # programs — what they can OPEN and what the focused layout's app can DO.
+    # Standard: two lists and two messages; every rule with teeth lives on the
+    # server (server/recents.py, server/layout_acts.py).
+    "client/layout-new.js",
+
     # New 2026-08-09 (owner request, task 164 — a row of the layout list said
     # nothing about its SHAPE): the drawn silhouette per (member count,
     # arrangement, orientation), split into a pure module so

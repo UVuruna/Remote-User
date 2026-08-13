@@ -16,6 +16,7 @@ find the instrument instead of guessing again.
 | [`catch_popup.py`](catch_popup.py) | **What IS that popup?** Watches the live desktop and prints every window that appears, disappears, moves, or changes its enabled state — with its owner chain, class, process and rect. |
 | [`popup_test.html`](popup_test.html) | **Makes the four kinds of window this project keeps arguing about**, on demand, so the server can be watched while it decides what to do with each. |
 | `popup_test_image.png` | The picture `popup_test.html` opens and saves. Generated, not photographed; it has no content on purpose. |
+| [`open_default.py`](open_default.py) | **Which program does his machine really use for this file?** Opens five kinds of file through their OWN default handler, the way a double click in Explorer does — printing the handler read from the shell's own `assoc`/`ftype` first. Its five files live in [`assets/`](assets/___assets.md). |
 
 ---
 

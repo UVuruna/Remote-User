@@ -158,6 +158,35 @@ LAYOUT_LIST_STAGE_JS = (
 )
 LAYOUT_LIST_CLOSE_JS = "layoutActive = null; layouts = []; closeLayoutPanel()"
 
+# THE TAP-PICK, ARMED, WHILE A LAYOUT IS FOCUSED. His ballot's option (c) was
+# read for one day as "claim a window into the focused layout" and he
+# overruled that himself, 2026-08-13: "if I tapped on something in that
+# layout it IS ALREADY in that layout." Tap has ONE meaning everywhere — the
+# next tap always starts a NEW layout, seeded with a tab if that is what is
+# under the finger — and the state where the app is waiting for that tap is
+# exactly as reachable inside a focused layout as at the desktop, which is
+# worth photographing precisely because it never used to be: the corner
+# button carries `.active` and the toast says what is being asked for.
+#
+# Staged through `startTapSource()` itself, the real entry point the corner
+# button and the L2 gamepad tap both call — not by setting `layoutArm` by
+# hand, which would pass even if that function stopped setting it. That is
+# the exact shape of false-green gate this round found three times.
+LAYOUT_CLAIM_ARM_STAGE_JS = (
+    "layouts = ["
+    " {name:'Vibe Coder', process:'code.exe', orient:'portrait',"
+    f"  icon:'{_ICON_VSCODE}', ratio:[600,1000], pos:0.5,"
+    "  grid:'2', members:2, parent:false, dependents:[],"
+    "  member_titles:['Claude Code - Vibe Coder - Visual Studio Code',"
+    "                 'prompt.txt - Vibe Coder'],"
+    "  member_hwnds:[1, 2]}];"
+    "layoutActive = 0; startTapSource()"
+)
+LAYOUT_CLAIM_ARM_CLOSE_JS = (
+    "layoutArm = false; creating = null; layoutActive = null; layouts = [];"
+    "refreshNewlayButton(); closeLayoutPanel()"
+)
+
 # THE ⚙ SHEET (owner 2026-08-09, task 175), staged by MEMBER COUNT because the
 # sheet's whole content is "what can this layout be asked", and that answer
 # differs: a THREE is the fullest it ever gets (three menu rows, two
@@ -281,6 +310,48 @@ CREATION_GROUPS_STAGE_JS = (
     "renderCreationPanel()"
 )
 
+
+# THE NEW SOURCE, OPENED FROM INSIDE A LAYOUT (owner ballot 2026-08-13, T28 +
+# T29). Staged in its FULLEST state, which is also the one that can starve:
+# the layout's own act group under its own heading, then the standard list —
+# and in it a row that is ALREADY OPEN, wearing both a long path and the
+# "already open" pill on the same line. That row is the whole of his picture-1
+# fix, and the one thing it must never do is squeeze the project's NAME out of
+# legibility: knowing WHICH project he is looking at is the point of keeping
+# the row instead of dropping it. Photographed rather than reasoned about,
+# because a dimmed row plus a pill plus an elided path is exactly the
+# combination this project keeps getting wrong on a 412 px phone.
+NEW_SOURCE_STAGE_JS = (
+    "creating = newCreation('new');"
+    "renderRecentsPanel(["
+    " {app:'vscode', kind:'new', target:'', label:'New window', sub:'',"
+    "  id:'vscode|new|', open:false, why:''},"
+    # THE PATHS ARE REAL WINDOWS PATHS, backslashes and all. The first version
+    # of this stage lost them to escaping and the screenshot read
+    # "U:CodingUVuruna…" — a picture of a string this product never produces,
+    # which is the one thing a staged shot may never be. `String.raw` on the JS
+    # side and a raw Python literal on this one, so neither layer eats them.
+    r" {app:'vscode', kind:'recent', target:'U:/Coding/UVuruna/Applications/"
+    r"VibeCoder', label:'VibeCoder',"
+    r" sub:String.raw`U:\Coding\UVuruna\Applications\VibeCoder`,"
+    r" id:'vscode|recent|1', open:true, why:'already open'},"
+    r" {app:'vscode', kind:'recent', target:'U:/Coding/UVuruna/Gadgets/"
+    r"PromptPainter', label:'PromptPainter',"
+    r" sub:String.raw`U:\Coding\UVuruna\Gadgets\PromptPainter`,"
+    r" id:'vscode|recent|2', open:false, why:''},"
+    " {app:'chrome', kind:'new', target:'', label:'New window', sub:'',"
+    "  id:'chrome|new|', open:false, why:''},"
+    r" {app:'explorer', kind:'recent', target:'D:/Downloads',"
+    r" label:'Downloads', sub:String.raw`D:\Downloads`,"
+    r" id:'explorer|recent|3', open:true, why:'already open'}"
+    "], {in_layout:true, app:'vscode', name:'VS Code', entries:["
+    " {id:'vscode|claude', label:'New Claude Code',"
+    "  sub:'a new conversation in this window'},"
+    " {id:'vscode|window', label:'New window, same folder',"
+    "  sub:'a second VS Code on this project'}]})"
+)
+NEW_SOURCE_CLOSE_JS = "cancelCreation(true)"
+
 # The model the audit's own User-Agent carries — the card must READ it and say
 # it. A device name the page silently fails to find is exactly the failure the
 # owner reported (a card that describes one phone while he uses two), so the
@@ -400,6 +471,10 @@ PANELS = (
     ("Dictation card, one language open", DICT_OPEN_STAGE_JS,
      "dictOpenLang = ''; closeDictationPanel()",
      "#dictation-panel .sets-card"),
+    ("New source, from inside a layout", NEW_SOURCE_STAGE_JS,
+     NEW_SOURCE_CLOSE_JS, "#layout-panel .lay-card"),
+    ("Tap-pick armed, inside a layout", LAYOUT_CLAIM_ARM_STAGE_JS,
+     LAYOUT_CLAIM_ARM_CLOSE_JS, "#btn-newlay.active"),
     ("Notification voice card", NOTIFY_VOICE_STAGE_JS,
      "closeNotifyVoicePanel()", "#notify-voice-panel .sets-card"),
     ("Notification voice card, one language open",

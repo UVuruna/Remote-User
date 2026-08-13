@@ -56,6 +56,18 @@ function layoutTapSource() {
   startTapSource();
 }
 
+// TAP HAS ONE MEANING EVERYWHERE (owner correction 2026-08-13, overruling the
+// same day's earlier "claim" reading of his ballot vote): the next tap on the
+// screen ALWAYS starts a new layout seeded with what is under the finger —
+// whether or not a layout happens to be focused. His own words on why the
+// other reading cannot mean anything: "tap in an already-created layout
+// claims a window for that layout — what are you trying to say? If I tapped
+// on something in that layout it IS ALREADY in that layout." Inside a
+// focused layout the only thing under the finger that is NOT already a
+// member is a content TAB inside one — and tearing a tab into its own window
+// is exactly what this ordinary flow already does. See `handleLayoutOffer`
+// below for the one new case this leaves: a tap that lands on a member
+// window itself, with no tab, has nothing to create.
 function startTapSource() {
   creating = newCreation("tap");
   armNextTap();
@@ -142,149 +154,6 @@ function openSourceChooser() {
   ]);
 }
 
-// ── NEW: A WINDOW THAT IS NOT OPEN YET (owner 2026-08-09, task 184) ─────────
-//
-// His observation is the whole design: "recent imaju svi" (lang-ok: owner
-// quote) — VS Code, Chrome and Explorer each keep a recent list the taskbar
-// already shows him, so the phone can offer to OPEN one and make a layout out
-// of what appears. The PC owns every hard part (server/recents.py, which is
-// also where the honest per-app limits are written down); this side is a list
-// and one POST.
-//
-// Over HTTP and not the socket, exactly like the uploads and the window offer:
-// a list and a window are plain request/response, and the socket's dispatcher
-// belongs to another round.
-const APP_ICON = { vscode: "vscode", chrome: "chrome", explorer: "explorer" };
-const APP_NAME = { vscode: "VS Code", chrome: "Chrome", explorer: "Explorer" };
-
-async function openRecentsPanel() {
-  if (!creating) creating = newCreation("new");
-  refreshNewlayButton();
-  closeLayoutPanel();
-  // LOADING: CUBE — a pure query of what the PC could open
-  showLayLoading("Asking the PC what it can open…", LOADING_CUBE);
-  let list = [];
-  try {
-    const res = await fetch(`/recents?token=${encodeURIComponent(token)}`);
-    const data = await res.json();
-    list = data.entries || [];
-  } catch (err) {
-    hideLayLoading();
-    showToast(`Could not read the PC's recent list: ${err.message}`);
-    return;
-  }
-  hideLayLoading();
-  if (!list.length) {
-    // NAMED, never a blank card. None of the three apps installed is a real
-    // state of a PC, and a panel with nothing in it reads as a broken feature.
-    showToast("None of VS Code, Chrome or Explorer is installed on the PC");
-    return;
-  }
-  renderRecentsPanel(list);
-}
-
-function renderRecentsPanel(list) {
-  layPanel.innerHTML = "";
-  layPanel.hidden = false;
-  const card = document.createElement("div");
-  card.className = "lay-card card-columns lc-panel";
-  const scrollWrap = document.createElement("div");
-  scrollWrap.className = "lc-scrollwrap";
-  card.appendChild(scrollWrap);
-  const h = document.createElement("h2");
-  h.textContent = "Open a window";
-  const sub = document.createElement("p");
-  sub.className = "lay-sub";
-  sub.textContent = "It opens on the PC and becomes part of the layout.";
-  scrollWrap.append(h, sub);
-
-  const rows = document.createElement("div");
-  rows.className = "lc-rows lc-scroll";
-  let app = null;
-  list.forEach((e) => {
-    if (e.app !== app) {
-      app = e.app;
-      const head = document.createElement("p");
-      head.className = "lay-sub lc-app";
-      head.textContent = APP_NAME[app] || app;
-      rows.appendChild(head);
-    }
-    rows.appendChild(recentRow(e));
-  });
-  scrollWrap.appendChild(rows);
-
-  const actions = document.createElement("div");
-  actions.className = "lay-actions";
-  actions.appendChild(layChip("Cancel", false, () => cancelCreation()));
-  card.appendChild(actions);
-  layPanel.appendChild(card);
-}
-
-// A row of the New list. It wears its APP's drawn face (icons.js) rather than
-// the process icon the other two lists show — nothing has been opened yet, so
-// there is no window whose icon this could be, and drawing one would claim a
-// window exists. A `recent` row is INDENTED under its app's heading for the
-// same reason a tab is indented under its window (task 168): it belongs to it.
-function recentRow(e) {
-  const row = document.createElement("div");
-  row.className = "lay-item lc-row" + (e.kind === "recent" ? " lc-kid" : "");
-  const main = document.createElement("button");
-  main.type = "button";
-  main.className = "lay-item-main";
-  main.innerHTML = svg(APP_ICON[e.app] || "newwin");
-  const name = document.createElement("span");
-  name.textContent = e.label;
-  main.appendChild(name);
-  if (e.sub) {
-    const note = document.createElement("small");
-    note.className = "lc-note";
-    note.textContent = e.sub;
-    main.appendChild(note);
-  }
-  keepRowTap(main, () => openRecentEntry(e));
-  row.appendChild(main);
-  return row;
-}
-
-// The chosen thing OPENS, and the window that appears becomes the slot — the
-// ordinary creation flow from there on, with nothing new on the wire: the
-// panel already knows how to hold a slot, and `layout_create` already knows
-// how to resolve one from a handle.
-//
-// The LOADING OVERLAY covers the whole wait (owner 2026-08-03, repeatedly):
-// cold-starting VS Code is several visible seconds of the PC doing something,
-// and a phone that looks frozen during it is the complaint that rule exists
-// for. The server is what waits for the window, so the overlay's end is the
-// window's arrival and not a reply about an intention.
-async function openRecentEntry(e) {
-  closeLayoutPanel();
-  // LOADING: CUBE — his own example: he should SEE the app opening behind
-  showLayLoading(`Opening ${e.label}…`, LOADING_CUBE);
-  let data = {};
-  try {
-    const res = await fetch(`/recents/open?token=${encodeURIComponent(token)}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: e.id }),
-    });
-    data = await res.json();
-  } catch (err) {
-    data = { ok: false, error: err.message };
-  }
-  hideLayLoading();
-  if (!data.ok || !data.window) {
-    showToast(data.error || "The PC could not open it");
-    renderCreationPanel();
-    return;
-  }
-  const w = data.window;
-  creating.slots.push({
-    hwnd: w.hwnd, title: w.title, process: w.process, icon: w.icon,
-    agents: w.agents || [], tab: null, x: 0.5, y: 0.5,
-  });
-  refreshNewlayButton();
-  renderCreationPanel();
-}
 
 // ── RECENT: A LAYOUT ALREADY BUILT BEFORE (owner report 2026-08-11, task
 // 228) ───────────────────────────────────────────────────────────────────
@@ -578,9 +447,33 @@ function slotFromEntry(e) {
 
 // The layout_offer handler (connection.js delegates here): either the list
 // arrived, or one tap's result — both feed the same creation session.
+// A TAP THAT LANDED ON A MEMBER'S OWN WINDOW HAS NOTHING TO CREATE (owner
+// correction 2026-08-13): everything a focused layout shows on the phone is
+// ALREADY a member of it — the only thing under the finger that is not is a
+// content TAB inside one, and `msg.tab` is exactly how the server already
+// tells the two apart (`uia.tab_at` beside `window_at` in `layout_pick`).
+// `member_hwnds` rides `layout_state` per layout ([Layout Registry]
+// server/layout_registry.py) for precisely this question — a plain fact,
+// not a guess, and never re-derived from anything the phone remembers on
+// its own.
+function tapTargetIsExistingMember(msg) {
+  if (!msg.target || msg.tab) return false;         // a tab is never a member
+  if (layoutActive === null) return false;           // the desktop has none
+  const lay = layouts[layoutActive];
+  return !!(lay && lay.member_hwnds && lay.member_hwnds.includes(msg.target.hwnd));
+}
+
 function handleLayoutOffer(msg) {
   hideLayLoading();
   layoutArm = false;
+  if (tapTargetIsExistingMember(msg)) {
+    // Nothing armed survives this — a plain statement of fact, not an error,
+    // and never a swallowed tap (his own "or some other warning" instruction).
+    creating = null;
+    refreshNewlayButton();
+    showToast("That window is already in this layout — there's nothing to create.");
+    return;
+  }
   if (!creating) creating = newCreation("tap");
   if (msg.entries) {
     creating.entries = msg.entries;

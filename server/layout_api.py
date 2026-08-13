@@ -18,6 +18,8 @@ import json
 import logging
 
 import agents
+import focus_guard
+import layout_acts as layout_acts_mod
 import layout_history
 import layout_popup
 import uia
@@ -262,6 +264,60 @@ async def layout_member_list(ws, layouts, stream, msg: dict) -> None:
         "add_to": int(msg["index"]),
         "grids": list(window_manager.GRID_TEMPLATES),
     }))
+
+
+def _focused(layouts, conn: dict):
+    """The layout this connection is really watching, or None for the desktop.
+    One reading of `conn["active"]`, so the two handlers below cannot disagree
+    about what "in a layout" means."""
+    index = conn.get("active")
+    if index is None or not (0 <= index < len(layouts.layouts)):
+        return None
+    return layouts.layouts[index]
+
+
+async def layout_acts(ws, layouts, conn: dict) -> None:
+    """What the FOCUSED layout's own application can do (owner ballot
+    2026-08-13, T29 — the acts group above the New source's standard list).
+
+    Answered even at the desktop, with an empty list and `in_layout: false`:
+    the phone draws one group or two off this answer, and a panel that had to
+    infer which case it is in from an absent message would be inferring, not
+    reading (the same reasoning the two-group creation list already follows —
+    constraint 21).
+
+    The catalogue is read from the layout's PROCESS on every ask, never
+    remembered: what a layout is made of is a live fact (constraint 13), and
+    the Explorer rows are a folder list that changes on his desk."""
+    lay = _focused(layouts, conn)
+    process = lay.process if lay else ""
+    rows = await asyncio.to_thread(layout_acts_mod.catalogue, process)
+    await ws.send_text(json.dumps({
+        "type": "layout_acts",
+        "in_layout": lay is not None,
+        "app": layout_acts_mod.app_of(process),
+        "name": layout_acts_mod.APP_NAME.get(
+            layout_acts_mod.app_of(process), ""),
+        "entries": rows,
+    }))
+
+
+async def layout_act(ws, layouts, conn: dict, injector, msg: dict) -> None:
+    """Run one of them, or say why it was refused — in which case NOTHING was
+    injected (`layout_acts.run`, whose first act is the fence check).
+
+    Refused outright at the desktop: every act is an act on a MEMBER, and a
+    chord fired with no member to fire it into is exactly the accident
+    constraint 11 exists to prevent."""
+    lay = _focused(layouts, conn)
+    if lay is None:
+        await toast(ws, "Nothing was sent — no layout is focused")
+        return
+    problem = await asyncio.to_thread(
+        layout_acts_mod.run, str(msg.get("id", "")), injector,
+        focus_guard.typist(layouts, conn), lay.project())
+    if problem:
+        await toast(ws, problem)
 
 
 async def layout_recent(ws) -> None:

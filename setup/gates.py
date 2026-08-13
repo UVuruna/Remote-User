@@ -736,3 +736,47 @@ def input_gate(step, run) -> None:
     step("0b3/6  LAYOUT ADOPTION LIFECYCLE GATE — an adopted window survives "
          "a layout switch, not just the session (tests/test_layout_adoption.py)")
     run([sys.executable, str(PROJECT_DIR / "tests" / "test_layout_adoption.py")])
+
+    # THE OWNER'S BALLOT, 2026-08-13 — option (c): "you claim a window with
+    # one deliberate gesture, instead of the program guessing." The failure it
+    # answers: an agent's HTML report opens through VS Code's own OPEN button,
+    # and the page it opens is invisible to every rule in
+    # `layout_popup._attribute` — no new top-level window at all with one
+    # Chrome running, or a tab landing in whichever window Windows picks with
+    # two. The fix reuses the EXISTING wire end to end (`layout_pick` names
+    # the window under the finger, `layout_member_add` grows the FOCUSED
+    # layout with it, a real member, never `adopted`) — the only new server
+    # code is `window_manager.window_at`, which used to run its own weaker
+    # copy of "is this a window a layout could hold" instead of asking
+    # `is_listable`, so a tap could pick a window the creation list itself
+    # would refuse (owner point 3, the same lesson `layout_popup.py` already
+    # paid for once).
+    step("0b6/6  LAYOUT CLAIM GATE — a tapped window can join the layout he "
+         "is looking at, and only a window a layout could hold "
+         "(tests/test_layout_claim.py)")
+    run([sys.executable, str(PROJECT_DIR / "tests" / "test_layout_claim.py")])
+
+    # The phone half of the same gesture: the corner button/L2 tap must ARM
+    # before he even taps the PC screen, say what it is arming, and a
+    # four-member layout must refuse BEFORE arming rather than swallow the
+    # tap (owner point 3, matching the ⚙ sheet's own "Add a window" row).
+    step("0b7/6  LAYOUT CLAIM ARM GATE — the claim tap says what it is "
+         "arming, and a full layout refuses before it ever arms "
+         "(tests/test_layout_claim_arm.py)")
+    run([sys.executable, str(PROJECT_DIR / "tests" / "test_layout_claim_arm.py")])
+
+    # THE NEW SOURCE (owner ballot 2026-08-13, his two pictures). Picture 1: he
+    # picked a recent folder VS Code already had open, VS Code answered by
+    # raising the window it already held, no NEW window ever existed, and the
+    # poll ran its full 25 s with the loading cube on his phone — so a row an
+    # app already holds is now DIMMED and untappable, and the case that
+    # survives the dimming (a folder opened between the list and his tap) gives
+    # up in seconds with a sentence that NAMES what the PC did. Picture 2: the
+    # phone asked him whether to move a window into the layout, about a window
+    # he had just asked US to open — `layout_popup.mine()` exists for exactly
+    # that (constraint 19 point 4A) and the New source had never called it.
+    # T29 rides the same gate: the layout's own app acts, whose every row
+    # asserts the PROCESS before a single key goes out (constraint 11).
+    step("0b4/6  NEW SOURCE GATE — what is already open, what the layout's app "
+         "can do, and whose window it is (tests/test_new_source.py)")
+    run([sys.executable, str(PROJECT_DIR / "tests" / "test_new_source.py")])

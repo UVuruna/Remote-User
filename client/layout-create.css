@@ -142,6 +142,81 @@
   text-overflow: ellipsis; /* layout-law: exempt - task 233: the deliberate fix itself — this note gives its own room back to the name beside it instead of starving it, so THIS text abbreviates on purpose */
 }
 
+/* `.lc-new` — THE NEW SOURCE'S CARD, and its own class for a measured reason:
+   the first version keyed these rules off `.lc-panel`, which the ORDINARY
+   creation panel also wears, and the audit immediately failed that panel's own
+   kin check on a tablet. A rule written for one card must be able to name that
+   card.
+
+   THE CARD TAKES THE WIDTH IT IS GIVEN, IN BOTH ORIENTATIONS (rung 1 of THE
+   SPACE & LEGIBILITY LAW, and every number here was measured on this panel
+   rather than chosen: capped at the split card's 900 px it hid 42 CSS px of
+   rows on a tablet with 348 px idle beside them, and at 1100 px it still hid
+   9 with 164 idle. There is no ceiling to defend here — the ceiling next door
+   exists so a long window TITLE still elides inside half a card, and this
+   card's rows cap their own path (`.lc-busy .lc-note`) and elide their names
+   like every other `.lay-item`. So it simply takes the screen, and the rows
+   run in as many columns as that width really holds (the grid below). */
+body .lay-card.lc-new { width: 100%; max-width: 100%; }
+
+/* A ROW THAT CANNOT BE TAPPED MUST LOOK LIKE ONE (his report 2026-08-13,
+   picture 1: he tapped a folder VS Code already had open and watched the
+   loading cube for the full server-side timeout). The row keeps its place in
+   the list on his own ballot — a project missing from the list is a thing he
+   would hunt for — so its state has to be READABLE at a glance instead.
+
+   Dimmed, never hidden, and the reason rides on the row (`.lc-why`) rather
+   than in a toast he would have to provoke.
+
+   IT IS NOT `opacity`, AND THE AUDIT IS WHY. The first version of this rule
+   dimmed the whole button with `opacity: .55`; photographing it (the stage in
+   tests/_audit_panels.py) measured the path and the pill at 2.58-2.86:1 in
+   every one of the eight looks, and the folder NAME at 3.88:1 on the light
+   card — because opacity multiplies against the card, so a token that passes
+   4.5:1 stops passing the moment it is faded. Which project a row is, is
+   exactly what he must still be able to read, so the dimming is carried by
+   the BACKGROUND and the border instead: the row visibly recedes, and every
+   character on it keeps the contrast its token was chosen for. */
+.lc-busy .lay-item-main {
+  cursor: default;
+  background: transparent;
+  border-style: dashed;
+}
+
+/* THE PILL TAKES ITS ROOM FROM THE PATH, NEVER FROM THE NAME, and the audit
+   is why here too — twice. With the pill added, `lay-item-main` measured 370
+   CSS px of content inside a 306 px box on a 412 px phone: a name, a full
+   path and a pill do not share one line. Wrapping the row was tried FIRST and
+   the audit refused it, correctly: `the creation list's rows are one line,
+   equal within their own indent` is task 163's kin rule, and a two-line row
+   beside one-line siblings breaks it — a fix that trades one law's defect for
+   another's is not a fix.
+   So the ladder is walked on the row's OWN children instead, exactly as task
+   233 walked it for the Recent row: the NOTE (a path he can already read in
+   full on the row above) gives its width back, and the name — which project
+   this is, the only thing he must read here — keeps its room. */
+/* EVERY row of this panel, not only the busy ones — the first version capped
+   only `.lc-busy` and the audit then clipped a plain row by 12 px the moment
+   its path was a real Windows path with its backslashes (the fixture had been
+   eating them, which is its own lesson: a staged shot must show the string the
+   product really produces). */
+.lc-new .lc-note:not(.lc-act-note) {
+  max-width: 96px;
+  overflow: hidden;
+  text-overflow: ellipsis; /* layout-law: exempt - the deliberate fix itself: this note abbreviates ON PURPOSE so the project NAME beside it is never the thing that starves */
+}
+.lc-why {
+  flex: none;
+  font-size: 11px;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 6px;
+  margin-left: auto;
+}
+
 /* `.lc-note` — a short fact kept ON the row ("minimized", which is why that
    window shows no tabs) — is styled in client/layouts.css beside `.lay-note`,
    the same thing on a settings row. It moved there on 2026-08-09 (task 175)
@@ -182,6 +257,36 @@
      overrides it here, beside the card whose geometry needs it, rather than
      splitting one decision across two files.) */
   body #layout-panel { padding: var(--space-s); }
+
+  /* THE NEW SOURCE'S OWN LANDSCAPE REFLOW (owner ballot 2026-08-13, and found
+     by PHOTOGRAPHING the panel the same round). This card is one long list —
+     acts, then a heading and rows per app — so in landscape it hid 396 CSS px
+     of rows while 139 px of width stood idle beside them, which is BUG A of
+     THE SPACE & LEGIBILITY LAW: a scrollbar with unused space in the same
+     window. Rung 1 is width, rung 2 is reflow, and scroll is only what is
+     left over — so the card takes the width and the rows run in TWO columns.
+
+     A GRID and never `columns`. The multicol lesson two comments up was
+     measured in this very file: a scroller inside a fragmentainer is not
+     clipped by its own box, and rows come out sliced with no scrollbar to say
+     any are missing. A grid's children are ordinary boxes and the scroller
+     stays the one container that has always scrolled.
+
+     A heading spans both columns, or it would stand over half its own list. */
+  body .lay-card.lc-new .lc-rows {
+    display: grid;
+    /* AS MANY COLUMNS AS THE WIDTH REALLY HOLDS, not two by decree: on a
+       1280 px tablet a fixed pair still hid 80 px of rows with 364 px of
+       width idle beside them. `auto-fill` spends the width the screen has
+       (rung 1) before any of it is left to scrolling (rung 4); 280 px is the
+       measured floor at which a row still shows an app icon, a project name
+       and its abbreviated path without clipping. */
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 0 var(--space-m);
+    align-content: start;
+  }
+  body .lay-card.lc-new .lc-rows .lc-app { grid-column: 1 / -1; }
+
   body .lay-card.lc-split {
     display: flex;
     flex-direction: column;

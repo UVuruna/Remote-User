@@ -338,12 +338,30 @@ def open_folders() -> dict[str, set[str]]:
             if name:
                 found["vscode"].add(name)
         elif process == _EXE_NAMES["explorer"]:
-            # Explorer names its window after the folder it shows, and nothing
-            # else — no product name to strip, no separator to split on.
-            name = title.strip().lower()
+            name = _explorer_folder(title)
             if name:
                 found["explorer"].add(name)
     return found
+
+
+# What Windows 11 puts AFTER the folder's own name in an Explorer window's
+# title. MEASURED on this PC 2026-08-13 while building the feature — the first
+# version of `open_folders` compared the whole title and matched nothing at
+# all, because his open Explorer read `icons - File Explorer` and not `icons`.
+# A tuple and not one string: a localised Windows says it in its own words, and
+# a suffix we do not know must leave the title alone rather than guess at a
+# separator (a folder legitimately called `notes - drafts` would lose half its
+# name to a bare split on " - ").
+EXPLORER_TITLE_TAILS = (" - file explorer", " - windows explorer")
+
+
+def _explorer_folder(title: str) -> str:
+    """The folder an Explorer window is showing, from its title, lowercased."""
+    name = (title or "").strip().lower()
+    for tail in EXPLORER_TITLE_TAILS:
+        if name.endswith(tail):
+            return name[: -len(tail)].strip()
+    return name
 
 
 def _is_open(app: str, target: str, held: dict[str, set[str]]) -> bool:

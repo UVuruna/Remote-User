@@ -440,10 +440,20 @@ function connect() {
         if (typeof msg.add_to === "number") {
           renderAddMemberPanel(msg);
         } else {
+          // A tap always feeds the fresh-creation wizard now (owner
+          // correction 2026-08-13) — `handleLayoutOffer` is where the
+          // "already a member, nothing to create" refusal lives (a plain
+          // `member_hwnds` check, no separate routing here).
           handleLayoutOffer(msg);
         }
       } else if (msg.type === "layout_progress") {
         cubeNext(); // one window created on the PC = one cube turn
+      } else if (msg.type === "layout_acts") {
+        // What the FOCUSED layout's own app can do (T29) — the group the New
+        // panel draws ABOVE the standard list when it was opened from inside
+        // a layout. Routed here like every other layout-panel reply; the
+        // render lives in layout-create.js, which owns the wizard's panels.
+        handleLayoutActs(msg);
       } else if (msg.type === "layout_recent") {
         // The Recent creation source's answer (task 228) — routed here like
         // every other layout-panel reply; the render itself lives in
