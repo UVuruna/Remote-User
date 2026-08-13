@@ -58,6 +58,22 @@ against fake transcript files (title-wins-by-recency, tool-use-only skip,
 absent-title fallback, a file far bigger than the tail window, and the tail
 seek itself really excluding the front).
 
+## `send()` rides the title a SECOND time, unabbreviated (owner ruling 2026-08-13)
+
+*"da notifikacije bira layout u cijem se kreirao"* — a tap must land in the
+layout the conversation was really created in, not merely a layout sharing its
+project. `send(agent, event, text, project="", title="")` now carries
+`transcript_title(payload)` as its own `title` field, separate from `agent`:
+`agent` may be the SAME title already cut to 60 characters for the banner, or,
+when the transcript has no `ai-title` record yet, something that names no
+window at all (an explicit name, the `<project> · <session6>` fallback).
+[`layout_of`](../../server/__about/notify.md) needs the full, unabbreviated
+string to match a VS Code window's own title honestly, so this is a second,
+purpose-built copy — not a reuse of the (possibly truncated, possibly
+title-less) `agent` string. Absent (`""`) whenever the transcript carries no
+title, which is exactly what an older hook already sent (the field did not
+exist before this round) — the server treats both the same.
+
 ## Installation
 
 ```

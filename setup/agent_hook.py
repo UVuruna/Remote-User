@@ -203,14 +203,15 @@ def agent_project(payload: dict) -> str:
     return str(payload.get("cwd") or os.getcwd())[:260]
 
 
-def send(agent: str, event: str, text: str, project: str = "") -> bool:
+def send(agent: str, event: str, text: str, project: str = "",
+         title: str = "") -> bool:
     token = read_token()
     if not token:
         print("agent_hook: no token file — is Vibe Coder installed?", file=sys.stderr)
         return False
     url = f"http://127.0.0.1:{read_port()}/notify?token={token}"
     body = json.dumps({"agent": agent, "event": event, "text": text,
-                       "project": project}).encode()
+                       "project": project, "title": title}).encode()
     request = urllib.request.Request(
         url, data=body, headers={"Content-Type": "application/json"})
     try:
@@ -304,7 +305,8 @@ def main() -> int:
     if "--test" in sys.argv:
         probe = {"cwd": os.getcwd(), "session_id": "test00"}
         ok = send(agent_name(probe), "finished",
-                  "Test notice from agent_hook.py", agent_project(probe))
+                  "Test notice from agent_hook.py", agent_project(probe),
+                  transcript_title(probe) or "")
         return 0 if ok else 1
 
     try:
@@ -328,8 +330,19 @@ def main() -> int:
     # the transcript's own last reply says WHAT the agent just did (task 198).
     text = (str(payload.get("message") or "")[:200] if asking
             else (transcript_summary(payload) or ""))
+    # The conversation's own title, sent SEPARATELY from `agent_name` (owner
+    # ruling 2026-08-13, "notifications choose the layout the conversation
+    # was created in"): `agent_name` may return this SAME title cut to 60
+    # characters for the banner, or — when no `ai-title` record exists yet —
+    # an explicit name or a project·session fallback that names no window at
+    # all. The server needs the FULL, untruncated title to match a VS Code
+    # window's own title honestly; sending the (possibly non-title) agent
+    # name for that job would either truncate the tail that disambiguates two
+    # long titles, or match nothing on purpose. Absent when the transcript
+    # carries no title — an older server treats that exactly like an older
+    # hook that never sent the field at all.
     send(agent_name(payload), "asking" if asking else "waiting", text,
-         agent_project(payload))
+         agent_project(payload), transcript_title(payload) or "")
     return 0   # a hook must never fail the turn it reports on
 
 

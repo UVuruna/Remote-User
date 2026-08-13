@@ -391,6 +391,114 @@ def main() -> int:
         layout_registry.wm.is_alive, layout_registry.wm._title = real_alive, real_title
         notify._layouts = reg
 
+    # The hook itself must actually PUT the title on the wire — a matcher
+    # that works in notify.py is worthless if agent_hook.send() never sends
+    # the field it is supposed to match against.
+    sent_bodies = []
+    real_urlopen = agent_hook.urllib.request.urlopen
+
+    class _FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def read(self):
+            return b'{"ok": true}'
+
+    def _fake_urlopen(request, timeout=0):
+        sent_bodies.append(json.loads(request.data))
+        return _FakeResponse()
+
+    agent_hook.urllib.request.urlopen = _fake_urlopen
+    real_read_token = agent_hook.read_token
+    agent_hook.read_token = lambda: "tok"
+    try:
+        agent_hook.send("Agent", "finished", "text", "U:\\proj", "Real title")
+        agent_hook.send("Agent", "finished", "text", "U:\\proj")  # no title given
+    finally:
+        agent_hook.urllib.request.urlopen = real_urlopen
+        agent_hook.read_token = real_read_token
+    results["send() puts the conversation title on the wire"] = (
+        sent_bodies[0]["title"] == "Real title")
+    results["send() with no title sent still carries the field, empty"] = (
+        sent_bodies[1]["title"] == "")
+
+    # --- THE CONVERSATION TITLE, NOT JUST THE PROJECT (owner ruling
+    # 2026-08-13) -------------------------------------------------------
+    # "da notifikacije bira layout u cijem se kreirao" — his report: with
+    # several windows of ONE project spread across layouts, the tap always
+    # landed on the ⭐ PARENT instead of the window that actually finished.
+    # The ⭐ was never involved — layout_of had no tie-break at all and simply
+    # returned the FIRST layout in list order whose project matched, and the
+    # parent sits at the lowest index because it exists before anything is
+    # torn off it. The fix tries the conversation TITLE first.
+    results["title match: exact, VS Code's own furniture stripped"] = (
+        notify._title_matches(
+            "Ispravka UI dizajna menija",
+            "Ispravka UI dizajna menija - Vibe Coder - Visual Studio Code "
+            "[Administrator]"))
+    results["title match: VS Code's ellipsis is a truncated PREFIX"] = (
+        notify._title_matches(
+            "Ispravka UI dizajna menija",
+            "Ispravka UI dizajna meni… - Vibe Coder - Visual Studio Code"))
+    results["title match: a torn-off tab's window carries no folder segment"] = (
+        notify._title_matches("Ispravka UI dizajna menija",
+                              "Ispravka UI dizajna menija - Visual Studio Code"))
+    results["title match: two DIFFERENT elided titles never collide"] = not (
+        notify._title_matches(
+            "Fix login retry",
+            "Fix login retriever meni… - Vibe Coder - Visual Studio Code"))
+    results["title match: an unrelated window never matches"] = not (
+        notify._title_matches("Ispravka UI dizajna menija", "Docs - Google Chrome"))
+    results["title match: an empty title never matches by accident"] = not (
+        notify._title_matches("", "Anything - Vibe Coder - Visual Studio Code"))
+
+    titles2 = {}
+    real_alive2 = layout_registry.wm.is_alive
+    real_title2 = layout_registry.wm._title
+    layout_registry.wm.is_alive = lambda h: h in titles2
+    layout_registry.wm._title = lambda h: titles2.get(h, "")
+    try:
+        # His exact report, reproduced: two layouts hold windows of the SAME
+        # project ("VibeCoder"). The parent (index 0, created first) is a
+        # DIFFERENT conversation; the real target (index 1) is a torn-off tab
+        # titled after the conversation that actually finished.
+        titles2.update({
+            300: "prompt.txt - VibeCoder - Visual Studio Code",
+            301: "Add region streaming - VibeCoder - Visual Studio Code",
+            400: "Ispravka UI dizajna menija - Visual Studio Code",
+        })
+        parent = layout_registry.Layout(
+            "VibeCoder", "code.exe", [300, 301], "2-side", "landscape", 1.6)
+        target = layout_registry.Layout(
+            "Claude", "code.exe", [400], None, "landscape", 1.6)
+        notify._layouts = _Reg(parent, target)
+
+        results["the conversation title picks the RIGHT layout, "
+                "not the first one sharing the project"] = (
+            notify.layout_of(r"U:\Coding\UVuruna\Applications\VibeCoder",
+                             "Ispravka UI dizajna menija")
+            == {"index": 1, "name": "Claude"})
+        # AN OLDER HOOK, hard requirement: no `title` sent, `layout_of` gets
+        # "" (the route's own `clean()` default), and the answer must be
+        # BYTE-FOR-BYTE what it was before this round — the first layout by
+        # project, i.e. the parent.
+        results["an older hook (no title) lands exactly where it always did"] = (
+            notify.layout_of(r"U:\Coding\UVuruna\Applications\VibeCoder")
+            == {"index": 0, "name": "VibeCoder"})
+        # A title that matches NOTHING live falls back to the project search
+        # too — never a guess, never a miss where the old behaviour had a hit.
+        results["a title matching no window falls back to the project search"] = (
+            notify.layout_of(r"U:\Coding\UVuruna\Applications\VibeCoder",
+                             "Something nobody ever said")
+            == {"index": 0, "name": "VibeCoder"})
+    finally:
+        layout_registry.wm.is_alive = real_alive2
+        layout_registry.wm._title = real_title2
+        notify._layouts = reg
+
     # --- 2 + 3 + 4: the live path ------------------------------------------
     threading.Thread(target=gate.run_server, daemon=True).start()
     gate.server_ready.wait(15)

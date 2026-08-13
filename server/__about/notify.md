@@ -180,8 +180,41 @@ it.
 Nothing here is inferred. The finishing agent reports its own `cwd`
 (`setup/agent_hook.py` → `agent_project`), and every layout can be asked which
 project its windows really belong to (`window_manager.Layout.project`).
-`layout_of(project)` matches the two and returns `{index, name}`, which rides
-the notice as `layout`.
+`layout_of(project, title)` matches the two and returns `{index, name}`, which
+rides the notice as `layout`.
+
+### The conversation TITLE, not just the project (owner ruling 2026-08-13)
+
+*"da notifikacije bira layout u cijem se kreirao"* — the notice must land in
+the layout the conversation was really created in. His report: with several
+windows of ONE project spread across layouts, the tap always took him to the
+⭐ PARENT layout instead of the window the agent actually finished in. The ⭐
+was never involved — `layout_of` had no tie-break at all, and simply returned
+the FIRST layout in list order whose project matched; the parent happens to
+sit at the lowest index because it exists before anything is torn off it.
+
+The hook already reads the conversation's own title off the transcript's
+`ai-title` record to NAME the agent (task 198, `agent_hook.transcript_title`).
+`agent_hook.send()` now rides that SAME string a second time, unabbreviated,
+as its own `title` field — separate from `agent`, which may be the same title
+already cut to 60 characters for the banner, or, when no title exists yet,
+something else entirely (an explicit name, a project·session fallback) that
+names no window at all.
+
+`layout_of` tries the title FIRST: `_layout_by_title` walks every layout's
+live member titles (the same `wm._title(h) for h in lay.members` reading
+`layout_state` already sends the phone) and looks for the one that is really
+this conversation. A VS Code window's title is the conversation title PLUS
+VS Code's own furniture (`" - <folder> - Visual Studio Code[ tail]"`), and
+VS Code elides a title too long for its tab with a trailing "…" — so the
+comparison (`_title_matches`) strips the tail, then requires either an exact
+match or, when the window's own copy ends in that ellipsis, a strict
+`startswith` (the window's copy is a truncated PREFIX of the real title,
+never a fuzzy neighbour of it — two different elided titles must never
+collide). Only when nothing matches confidently does it fall through to
+today's project-folder search — the loop this feature had all along, and
+exactly what an OLDER hook (no `title` field, so `layout_of` receives `""`)
+still gets, unchanged.
 
 Three details, each of which would be a bug without it:
 
@@ -258,6 +291,10 @@ that does it.
 
 ## Functions
 
+- `layout_of(project, title="") -> {index, name} | None` — where a finished
+  agent's project (or, first, its exact conversation) is showing. Title match
+  first (`_layout_by_title` / `_title_matches` / `_vscode_conversation_part`),
+  project-folder loop as the fallback an older hook still gets.
 - `set_voices(reported) -> int` / `voices() -> list` — the phone's own
   text-to-speech voices, held for this run only. Anything unusable in the
   reported list is dropped rather than trusted: a name that reaches the log
