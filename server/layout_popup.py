@@ -495,6 +495,16 @@ def _adopt_owned(lay, hwnd: int, root: int, conn: dict) -> bool:
         return False
     if hwnd not in lay.adopted:
         lay.adopted.append(hwnd)
+    # Where Windows put it, remembered BEFORE we move it. He never asked for
+    # this placement — the owner chain did (constraint 19) — so it is ours to
+    # undo when the layout stops being shown, and `release_adopted` undoes it.
+    # Measured 2026-08-13: left in place, a member's MODAL dialog parked here
+    # leaves him an application he can raise and cannot click, because a modal
+    # disables its owner until it is answered.
+    if hwnd not in lay.adopted_home:
+        home = wm._frame_rect(hwnd)
+        if home is not None:
+            lay.adopted_home[hwnd] = home
     anchor = wm._frame_rect(root)
     if _contain(lay, hwnd, conn, anchor):
         logger.info("Popup %s centered on its parent %s", _describe(hwnd),

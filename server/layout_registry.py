@@ -95,6 +95,14 @@ class Layout:
         # the always-on-top band with it ([Layout Popup](layout_popup.py)),
         # so this list is what owes them the way back down (constraint 10).
         self.adopted: list[int] = []
+        # Where an adopted window stood BEFORE we moved it, for the ones we
+        # moved without being asked (constraint 19's owner-chain rule). His
+        # decree of 2026-08-13: nothing we force on a window may outlive the
+        # session, and a window parked in a layout's region is forced geometry
+        # exactly like a topmost flag is. A window he TAPPED to bring in is
+        # deliberately absent from this map — he asked for that placement, so
+        # undoing it behind his back would be the surprise, not the fix.
+        self.adopted_home: dict[int, tuple] = {}
         self.ratio: tuple[int, int] | None = None
         self.pos: float = 0.5
         self.arranged_ratio: tuple[int, int] | None = None
@@ -120,11 +128,30 @@ class Layout:
         The window is NOT moved back and NOT closed: no window is ever moved
         by us without being asked to be (the rule `remove` and `drop_member`
         already follow), and closing one is an act only the ✕ chooser has —
-        a report he still wants to read must survive being let go of."""
+        a report he still wants to read must survive being let go of.
+
+        A window we moved WITHOUT asking is the exception, and it is his decree
+        of 2026-08-13 rather than a refinement of the rule above: `_adopt_owned`
+        parks a member's own dialog on its parent, which is geometry that only
+        means anything while the phone is streaming. Leaving it there when the
+        phone goes is the same class of thing as leaving a topmost flag behind
+        — measured that day: our leave sequence left him a VS Code he could
+        raise but not click, because the modal that owned its input was parked
+        where the layout had wanted it and the app it belonged to was disabled
+        until that dialog is answered. So what we moved unasked, we put back."""
         released, self.adopted = self.adopted, []
+        home, self.adopted_home = self.adopted_home, {}
         for hwnd in released:
             wm.freeze_transitions(hwnd, False)
             wm.drop_topmost(hwnd)
+            rect = home.get(hwnd)
+            if rect and wm.user32.IsWindow(hwnd):
+                # (x, y, w, h) — `_frame_rect`'s own shape, which every other
+                # caller in this file uses. Read as left/top/right/bottom it
+                # produces a NEGATIVE size that Windows accepts in silence.
+                x, y, w, h = rect
+                wm.user32.SetWindowPos(hwnd, 0, x, y, w, h,
+                                       wm.SWP_NOZORDER | wm.SWP_NOACTIVATE)
         return released
 
     def project(self) -> str:
@@ -226,6 +253,8 @@ class LayoutRegistry:
                 else:
                     wm.drop_topmost(hwnd)
             lay.adopted = still
+            lay.adopted_home = {h: r for h, r in lay.adopted_home.items()
+                                if h in still}
             if alive and lay.last_member not in alive:
                 lay.last_member = alive[0]  # the typing target closed at the desk
         kept = [i for i, lay in enumerate(self.layouts) if lay.members]
@@ -396,16 +425,45 @@ class LayoutRegistry:
         # the original failure again, in a new place.
         for lay in self.layouts:
             lay.release_adopted()
+        went_down = []
         for hwnd in members:
+            # A window a MODAL dialog has disabled is left standing (measured
+            # 2026-08-13, A/B against the same window without the modal). A
+            # modal disables its owner until it is answered, and Windows hides
+            # the dialog when the owner goes down — so minimizing this one
+            # hands him back a window he can raise and cannot click, with the
+            # only thing that could unblock it hidden underneath. His rule is
+            # that nothing of ours may survive the session; a window we put
+            # into a state only we know how to leave is exactly that, so we do
+            # not put it there. It leaves the topmost band like every other.
+            if not wm.user32.IsWindowEnabled(hwnd):
+                logger.info("Member %#x holds a modal dialog — left standing "
+                            "rather than minimized into an unclickable state",
+                            hwnd)
+                wm.drop_topmost(hwnd)
+                wm.freeze_transitions(hwnd, False)
+                continue
             wm.freeze_transitions(hwnd)  # no slide-down to watch
             # Out of the topmost band FIRST — a member the owner later restores
             # from the taskbar at the desk must come back as a normal window.
-            # (drop_topmost gives its DWM animation back at the same time; the
-            # freeze above only has to outlive this one minimize.)
             wm.drop_topmost(hwnd)
             wm.user32.ShowWindow(hwnd, wm.SW_MINIMIZE)
-        # Only report Desktop once they are ALL really gone (owner 2026-08-03).
-        wm.wait_minimized(members)
+            went_down.append(hwnd)
+        # Only report Desktop once they are ALL really gone (owner 2026-08-03)
+        # — the ones we deliberately left standing are not waited for, or the
+        # phone would sit on a loading overlay until the timeout every time a
+        # member holds a dialog.
+        wm.wait_minimized(went_down)
+        # And the freeze is UNDONE here, by the code that applied it. It used
+        # to be left to `drop_topmost`, which does not do it, and to
+        # `release_all`, which walks the LEDGER that `drop_topmost` has just
+        # emptied of this window — so every member kept
+        # DWMWA_TRANSITIONS_FORCEDISABLED for good, surviving the app's exit.
+        # A frozen window still works, so this never reached him as its own
+        # report; it is still a manipulation of ours outliving the session,
+        # which his decree of 2026-08-13 forbids outright.
+        for hwnd in went_down:
+            wm.freeze_transitions(hwnd, False)
 
     def forget_focus(self) -> None:
         """The user DELIBERATELY chose the full desktop — that is the state the
@@ -702,7 +760,11 @@ class LayoutRegistry:
         # are the same windows, in the same picture, and the list that owes
         # them the way out of the topmost band must not be the one popped.
         dst.adopted += [h for h in src.adopted if h not in dst.adopted]
-        src.adopted = []
+        # The debt travels with the window: whoever owes it the topmost band
+        # back owes it its own position back too, or a merge would quietly
+        # discharge a debt nobody has paid (constraint 10's own reasoning).
+        dst.adopted_home = {**src.adopted_home, **dst.adopted_home}
+        src.adopted, src.adopted_home = [], {}
         dst.template = self._template_for(len(members), grid)
         dst.place_pending = True    # the shape changed — re-place on focus
         self.layouts.pop(source)

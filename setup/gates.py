@@ -687,3 +687,19 @@ def input_gate(step, run) -> None:
     step("0b0/6  LANGUAGE GATE — language first, and grouping never costs a "
          "choice (tests/test_lang_groups.py)")
     run([sys.executable, str(PROJECT_DIR / "tests" / "test_lang_groups.py")])
+
+    # OWNER DECREE 2026-08-13, absolute: while the app is not up — closed,
+    # minimized, backgrounded — NO manipulation of ours may remain on any
+    # window. His report was a layout he could not raise after pressing the
+    # Android home button, and the cause was MEASURED rather than reasoned: an
+    # A/B over our own leave sequence with one variable (a modal dialog up or
+    # not) showed the member coming back raisable and DISABLED. A modal
+    # disables its owner until it is answered, and Windows hides the dialog
+    # with the owner — so we minimized him into a window he could not click,
+    # with the only thing that could unblock it parked where the layout had
+    # wanted it. This gate is fail-closed because the class keeps returning:
+    # constraint 10 answered the topmost half of it in 2026-08-05 and every
+    # round since has found another residue the exit path never undid.
+    step("0b1/6  SESSION RESIDUE GATE — nothing we force on a window outlives "
+         "the session (tests/test_session_residue.py)")
+    run([sys.executable, str(PROJECT_DIR / "tests" / "test_session_residue.py")])

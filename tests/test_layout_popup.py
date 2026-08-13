@@ -79,6 +79,14 @@ NOT_LISTABLE = {TOOLWIN}
 MINSIZE = {BIG: (1400, 900)}
 
 RECTS: dict = {}
+# Windows a MODAL dialog has disabled. A modal disables its owner until it is
+# answered — that IS what modal means to Windows — and it is the one fact our
+# leave sequence never used to ask about (owner report 2026-08-13).
+DISABLED: set = set()
+# Every DWM transition freeze, in order: hwnd -> is it frozen right now.
+FROZEN: dict = {}
+# Raw SetWindowPos moves — how a window is put BACK where Windows had it.
+MOVED: list = []
 # What EnumWindows would return — the sweep's whole eye (task 239). Mutable
 # during a check on purpose: a window that opens WHILE the layout stays
 # focused is the entire subject, and a set fixed at setup time could only ever
@@ -98,9 +106,23 @@ def desk(fg, alive=None, owner=None):
     LEDGER.clear()
     MINIMIZED.clear()
 
+    DISABLED.clear()
+    FROZEN.clear()
+    MOVED.clear()
+
     alive = alive if alive is not None else tuple(HOME)
     fake = with_win32(fg=fg, alive=alive, owner=owner or {DIALOG: MEMBER_A})
     fake.ShowWindow = lambda hwnd, cmd: MINIMIZED.append((hwnd, cmd))
+    fake.IsWindowEnabled = lambda hwnd: 0 if hwnd in DISABLED else 1
+
+    def _setwindowpos(hwnd, after, x, y, w, h, flags):
+        MOVED.append((hwnd, (x, y, w, h)))
+        RECTS[hwnd] = (x, y, w, h)
+        return 1
+
+    fake.SetWindowPos = _setwindowpos
+    window_manager.freeze_transitions = \
+        lambda hwnd, disabled=True: FROZEN.__setitem__(hwnd, disabled)
     Raises().install()
 
     window_manager._frame_rect = lambda hwnd: RECTS.get(hwnd)
@@ -840,7 +862,6 @@ def check_a_dialog_too_big_for_its_parent_still_lands_in_the_picture() -> bool:
         print(f"  DETAIL placed {PLACED}, expected the region fallback {want}")
         return False
     return True
-
 
 
 CHECKS = [
