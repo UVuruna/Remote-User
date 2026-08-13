@@ -25,6 +25,12 @@ Nothing here imports anything: every value is a plain string or a plain table
 of strings the audit hands to the live page or reads to name a file.
 """
 
+from _audit_lang import (  # the language cards' own module
+    DICT_OPEN_STAGE_JS, DICT_STAGE_JS, NOTIFY_VOICE_OPEN_STAGE_JS,
+    NOTIFY_VOICE_STAGE_JS,
+)
+
+
 # THE DICTATION CARD, STAGED IN EVERY STATE A ROW CAN BE IN (owner 2026-08-09,
 # task 127 — the listen control). Its own constant because two things use it:
 # the panel sweep below, and the audit's own dictation check, which asserts
@@ -44,47 +50,6 @@ of strings the audit hands to the live page or reads to name a file.
 # Icelandic carries the third state ONLY because client/panels.js has no
 # Icelandic sample. The moment one is written, this row goes green and the
 # state stops being staged — swap in another language the table does not
-# cover; the check below fails loudly rather than silently losing the case.
-DICT_STAGE_JS = (
-    "window.Android = {"
-    " voiceLangs: () => JSON.stringify(["
-    "  {tag:'sr-RS', name:'Srpski (Srbija)', status:'download'},"
-    "  {tag:'en-US', name:'English (United States)', status:'ready'},"
-    "  {tag:'de-DE', name:'Deutsch (Deutschland)', status:'online'},"
-    "  {tag:'is-IS', name:'Íslenska (Ísland)', status:'online'},"
-    "  {tag:'pt-BR', name:'Português (Brasil)', status:'download', extra:true},"
-    "  {tag:'ja-JP', name:'日本語 (日本)', status:'online', extra:true},"
-    # A CARD THAT NEVER SCROLLS PROVES NOTHING ABOUT SCROLLING (owner standing
-    # order of 2026-08-10, task 215; the defect it exposed is task 217). Six
-    # rows FIT sideways, so every landscape measurement this card has ever
-    # passed was a measurement of a card with nothing to scroll — while the
-    # list it really draws is the phone's own languages, and his has many. The
-    # rows below are ordinary real locales, added only to make the card longer
-    # than the screen it is judged on; nothing else about the staging changes.
-    "  {tag:'fr-FR', name:'Français (France)', status:'online'},"
-    "  {tag:'es-ES', name:'Español (España)', status:'online'},"
-    "  {tag:'it-IT', name:'Italiano (Italia)', status:'online'},"
-    "  {tag:'nl-NL', name:'Nederlands (Nederland)', status:'online'},"
-    "  {tag:'pl-PL', name:'Polski (Polska)', status:'ready'},"
-    "  {tag:'tr-TR', name:'Türkçe (Türkiye)', status:'online'},"
-    "  {tag:'ru-RU', name:'Русский (Россия)', status:'online'},"
-    "  {tag:'hu-HU', name:'Magyar (Magyarország)', status:'online'},"
-    "  {tag:'ro-RO', name:'Română (România)', status:'online', extra:true},"
-    "  {tag:'cs-CZ', name:'Čeština (Česko)', status:'download', extra:true}]),"
-    # The same source the PC's own voice list comes from (`tts_info`), so the
-    # card is measured against a REAL shape: Android reports `{name, label,
-    # locale}` per voice and `name` is what `speakAs` takes back.
-    " ttsVoices: () => JSON.stringify(["
-    "  {name:'sr-rs-x-sfg#female_1', label:'Serbian female', locale:'sr-RS'},"
-    "  {name:'en-us-x-tpf#male_1', label:'English male', locale:'en-US'},"
-    "  {name:'is-is-x-isf#female_1', label:'Icelandic female', locale:'is-IS'}]),"
-    " speakAs: () => {},"
-    " voiceMuteBeeps: () => true, voiceSetMuteBeeps: () => {},"
-    " voiceChosen: () => 'sr-RS', voiceSetLang: () => {},"
-    " voiceState: () => '' };"
-    "renderDictationCard()"
-)
-
 # THE LAYOUT LIST, STAGED WITH THREE LAYOUTS (owner 2026-08-09, tasks 162+163).
 # Its own constant because three things use it: the panel sweep below, the
 # mid-drag staging under it, and the audit's own kin-row check.
@@ -432,6 +397,14 @@ PANELS = (
      "#sets-panel .sets-card"),
     ("Dictation card", DICT_STAGE_JS,
      "closeDictationPanel()", "#dictation-panel .sets-card"),
+    ("Dictation card, one language open", DICT_OPEN_STAGE_JS,
+     "dictOpenLang = ''; closeDictationPanel()",
+     "#dictation-panel .sets-card"),
+    ("Notification voice card", NOTIFY_VOICE_STAGE_JS,
+     "closeNotifyVoicePanel()", "#notify-voice-panel .sets-card"),
+    ("Notification voice card, one language open",
+     NOTIFY_VOICE_OPEN_STAGE_JS,
+     "closeNotifyVoicePanel()", "#notify-voice-panel .sets-card"),
     # The Region grab (owner 2026-08-05). Its bar is the part that
     # can starve: hint + Send + ✕ above the keyboard inset, on a
     # 412 px phone.
@@ -664,6 +637,7 @@ PANELS = (
 # says only what this phone last sent, and whether those two READ APART is
 # not a thing geometry can answer — it is the question a picture settles.
 COLOUR_SHOTS = {"Sets picker", "Quality panel", "Dictation card",
+                "Notification voice card",
                 "Layout list with rename", "Creation list with tabs",
                 "Layout settings sheet", "Layout close chooser warned",
                 "Claude model panel", "Claude thinking panel",

@@ -670,3 +670,20 @@ def input_gate(step, run) -> None:
     step("0az/6  CREATION LIST GATE — the list from a layout shows that "
          "layout's own tabs first (tests/test_layout_list_groups.py)")
     run([sys.executable, str(PROJECT_DIR / "tests" / "test_layout_list_groups.py")])
+
+    # OWNER REPORT 2026-08-13: both language lists — the voice that SPEAKS
+    # (Settings -> Voice) and the language he SPEAKS TO (the dictation card) —
+    # were one flat pile, and the dictation one repeated the same choice
+    # several times. Grouped by language now, opening into their variants.
+    #
+    # THE GATE'S REAL JOB IS THE SECOND HALF. Grouping is easy to get visibly
+    # right and quietly wrong: the first plan was a dedupe BY LANGUAGE, which
+    # he overruled ("da ali sa podgrupama" — the script decides what his
+    # dictated text comes out AS), and keying a VOICE by its locale drops every
+    # voice of a language but the first. Both make a tidier card that offers
+    # him LESS, so the checks assert one row per language AND every real
+    # variant still reachable. Both defects were caught by running the module
+    # before it was wired; both are planted in the gate now.
+    step("0b0/6  LANGUAGE GATE — language first, and grouping never costs a "
+         "choice (tests/test_lang_groups.py)")
+    run([sys.executable, str(PROJECT_DIR / "tests" / "test_lang_groups.py")])

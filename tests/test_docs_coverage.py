@@ -194,6 +194,13 @@ STANDARD = {
     "client/load_test.js",
     "client/state.js",
     "client/panels.js",
+    # New 2026-08-13: the DICTATION LANGUAGE CARD, split out of panels.js when
+    # the grouping pushed that file past 1,000 lines — by RESPONSIBILITY, not
+    # line count: panels.js answers which controls ride on the phone, this card
+    # answers what the DEVICE IN HIS HAND can hear and speak. Standard, not
+    # Algorithmic: the arithmetic it renders lives in client/lang-groups.js;
+    # what stays here is a card, its rows, and its honest limits.
+    "client/dictation-card.js",
     # panels.css is the overlay CARDS' styling, split out of style.css on
     # 2026-08-09 (THE STRUCTURE LAW — the dictation card's listen control
     # pushed that file past 1,000 lines). It shares __about/panels.md with
@@ -284,6 +291,17 @@ ALGORITHMIC = {
     # revising hypothesis plus the round-boundary overlap trim, and it is
     # kept pure so its gate can run it whole.
     "client/voice.js",
+    # New 2026-08-13 (owner: both language lists were one flat pile, and the
+    # dictation one repeated the same choice). The grouping arithmetic BOTH
+    # cards read, pure so tests/test_lang_groups.py runs it whole.
+    # Algorithmic without argument: every function in it is a DECISION that
+    # can be wrong in a way he would judge — what makes two locales the same
+    # (language + RESOLVED script + region, which is why sr-RS and sr-Latn-RS
+    # are one row and two choices), what makes an engine's variant a name
+    # rather than machinery, and that the GROUP is the unit of that naming.
+    # Two of those decisions shipped wrong in this very round and were caught
+    # by running the module.
+    "client/lang-groups.js",
     # New 2026-08-08 (owner: the keyboard must follow the caret, not a rule).
     # Algorithmic without argument — geometry that decides whether he can read
     # the row he is typing in, kept pure so its gate runs it whole.

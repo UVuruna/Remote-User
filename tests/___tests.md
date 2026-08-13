@@ -866,6 +866,51 @@ mandatory, and its failure message states the exact lines to add.
 Run: `.venv\Scripts\python tests/test_grid_icons.py` (needs node) — also a
 fail-closed step in `build.py` (0s/6).
 
+### `test_lang_groups.py` — Language Gate
+
+LANGUAGE FIRST, AND GROUPING NEVER COSTS A CHOICE. Owner report 2026-08-13:
+both language lists — the voice that speaks (Settings → Voice) and the language
+he speaks to (the dictation card) — were one flat pile, and the dictation one
+repeated the same choice several times.
+
+**The gate's real job is the second half, not the tidiness.** Grouping is easy
+to get visibly right and quietly wrong, and both ways were live inside this very
+round:
+
+* The first plan was a dedupe BY LANGUAGE. He overruled it — the script decides
+  what his dictated text comes out AS — so `sr-Latn` and `sr-Cyrl` must be one
+  GROUP and two VARIANTS. A check that only counted rows would have passed the
+  design he rejected.
+* Voices were first keyed by LOCALE, like dictation rows. Several voices share
+  one locale, so his American *male 1* was silently dropped and the card looked
+  tidier while offering **less**.
+* An engine name with no `#` ("sr-rs-x-sfg") has no variant at all, and it
+  sailed through the readability test as the words "sr rs x sfg" — the nonsense
+  case his ruling forbids — because it happens to be letters and digits. A hex
+  id did the same.
+
+So the checks assert one row per language AND every real variant still
+reachable, AND that the tag handed back is the exact string the platform
+offered (a canonical key decides sameness; a spelling we invented may simply
+not be accepted by the recognizer).
+
+The rules live on the PAGE — `client/lang-groups.js`, pure — because this repo
+has no JVM test runner, the lesson `test_voice_dedup.py` records at cost. Kotlin
+is deliberately UNCHANGED by the round: nothing is deleted on the phone, so
+nothing had to be. Thirteen checks, each proven by planting its own defect; the
+module runs whole in a fresh node process per scenario.
+
+**Its visual half is separate and both are needed.** This gate proves the
+arithmetic; `tests/_audit_lang.py` → `LANG_GROUP_CHECK_JS` (driven by the phone
+audit) proves the CARD rendered it, staging his real collision — `sr-RS` +
+`sr-Latn-RS` + `sr_RS`, and `en-US` + `en-GB`. Photographing those cards is what
+caught two defects no assertion had been written for: a group heading reading
+"English (United States)" over a group that also held the United Kingdom, and a
+naked "2" under a language name saying nothing about what it counted.
+
+Run: `.venv\Scripts\python tests/test_lang_groups.py` (needs node) — also a
+fail-closed step in `setup/gates.py` (0b0/6).
+
 ### `test_layout_drag.py` — Layout Drag Gate
 
 A ROW DRAGGED ONTO ANOTHER IS A GRID — the server half of the list's own two

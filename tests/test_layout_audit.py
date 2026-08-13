@@ -41,6 +41,9 @@ from _audit_panels import (  # noqa: E402
     LAYOUT_LIST_CLOSE_JS, LAYOUT_LIST_STAGE_JS, LAYOUT_SETTINGS_STAGE_JS,
     PANELS, SHOT_SUBJECTS, UA_MODEL, check_wheel_wrap,
 )
+from _audit_lang import (  # the language cards' own module — noqa: E402
+    DICT_CHECK_JS, LANG_GROUP_CHECK_JS,
+)
 from _audit_laybar import check_laybar_bottom  # the bottom bar's own module — noqa: E402
 # THE TABLET WAS NEVER MEASURED (owner report 2026-08-08: "do sad nikad nisam
 # probao preko tableta, sad sam probao … naišao sam na taj bag da Touch ne radi
@@ -136,7 +139,7 @@ def _fit_rect_audit() -> bool:
 # for a one-off sweep that is not the round's own proof (the colour VARIANTS of
 # 2026-08-08 were rendered into their own folder that way, because alternatives
 # offered for a decision are not candidate designs of ours to pass or fail).
-SHOT_TOPIC = os.environ.get("RU_SHOT_TOPIC", "round17-caret-claude-set-colours")
+SHOT_TOPIC = os.environ.get("RU_SHOT_TOPIC", "round52-language-groups")
 SHOT_DIR = PROJECT / ".claude" / "shots" / SHOT_TOPIC
 
 def shot_path(name: str):
@@ -668,56 +671,32 @@ def main() -> int:
             page.evaluate(DICT_STAGE_JS)
             page.wait_for_selector("#dictation-panel .sets-card", state="visible",
                                    timeout=4000)
-            dictation = page.evaluate(
-                """(model) => {
-                  const bad = [];
-                  const card = document.querySelector('#dictation-panel .sets-card');
-                  const cr = card.getBoundingClientRect();
-                  const who = card.querySelector('.dict-device');
-                  const said = who ? who.textContent.trim() : '';
-                  if (!said) bad.push('the card does not say which device it describes');
-                  else if (said.indexOf(model) < 0) {
-                    bad.push('the device line does not name this device: "' + said + '"');
-                  }
-                  const rows = [...card.querySelectorAll('.dict-row')];
-                  const play = rows.filter((r) => r.querySelector('.dict-listen'));
-                  const noted = rows.filter((r) => r.querySelector('.dict-note'));
-                  if (play.length < 2) bad.push('no row offers a listen button');
-                  if (!noted.length) bad.push('no row states the honest limit');
-                  // The two limits are DIFFERENT facts and each has to be on
-                  // screen: no voice for this language, and a voice with no
-                  // sample sentence written for it.
-                  const said2 = noted.map((r) => r.querySelector('.dict-note').textContent);
-                  if (!said2.some((t) => /preview voice/.test(t))) {
-                    bad.push('the "no voice on this device" row is not staged');
-                  }
-                  if (!said2.some((t) => /sample sentence/.test(t))) {
-                    bad.push('the "no sample sentence" row is not staged');
-                  }
-                  for (const b of card.querySelectorAll('.dict-listen')) {
-                    const r = b.getBoundingClientRect();
-                    if (r.width < 40 || r.height < 40) {
-                      bad.push('a listen button is ' + Math.round(r.width) + 'x' +
-                               Math.round(r.height) + ' — not a finger target');
-                    }
-                    if (r.left < cr.left - 1 || r.right > cr.right + 1 ||
-                        r.top < cr.top - 1 || r.bottom > cr.bottom + 1) {
-                      bad.push('a listen button leaves the card');
-                    }
-                    // …and it never lands ON the row's own text.
-                    const name = b.closest('.dict-row').querySelector('.dict-name');
-                    const nr = name.getBoundingClientRect();
-                    if (nr.right > r.left + 1) {
-                      bad.push('the language name runs under its listen button');
-                    }
-                  }
-                  return bad;
-                }""",
-                UA_MODEL)
+            dictation = page.evaluate(DICT_CHECK_JS, UA_MODEL)
             results[f"the dictation card names the device and stages both "
                     f"preview states @ {label}"] = not dictation
             if dictation:
                 print(f"  DETAIL dictation card @ {label}: {dictation}")
+
+            # ONE ROW PER LANGUAGE, AND HIS CHOICE STILL VISIBLE (owner
+            # 2026-08-13: *"tu isto se ponavljaju bez potrebe pa imamo vise
+            # puta iste odabire"*).  # lang-ok: owner quote
+            #
+            # tests/test_lang_groups.py proves the ARITHMETIC groups correctly.
+            # This proves the CARD renders what the arithmetic returned, which
+            # is a different claim and the one he judges: the stage plants his
+            # own collision (sr-RS + sr-Latn-RS + sr_RS, and en-US + en-GB), so
+            # a card that still printed a row per tag would show five rows
+            # where two belong. It also holds the two promises grouping could
+            # quietly break — that the group holding his current choice is
+            # MARKED (with the choice one level down, that mark is the only
+            # thing saying the card remembers it) and that a language whose
+            # variants are real choices says HOW MANY are behind the door.
+            grouping = page.evaluate(LANG_GROUP_CHECK_JS)
+            results[f"the language list shows one row per language, and marks "
+                    f"the one he chose @ {label}"] = not grouping
+            if grouping:
+                print(f"  DETAIL grouping @ {label}: {grouping}")
+
             page.evaluate("closeDictationPanel()")
 
             # KIN ROWS ARE THE SAME SIZE — A ROW IS ONE LINE, LIKE A BUTTON
