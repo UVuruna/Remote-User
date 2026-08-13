@@ -99,6 +99,9 @@ const FILES = [
   "icons.js",
   "sets.js",
   "voice.js",
+  // The invisible keyboard field's diff/caret rules, split off controls.js
+  // (owner report 2026-08-13) — loaded before it, exactly as index.html does.
+  "kb-sync.js",
   "controls.js",
   // THE LIST HAD DRIFTED FROM index.html, and the drift hid exactly the files
   // being worked on (found 2026-08-09, tasks 166–168): chrome.js, loading.js

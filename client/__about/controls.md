@@ -28,6 +28,8 @@ for the split's general load-order reasoning.
 - [State](state.md) — `send`, tunables
 - [Render](render.md) — `redraw()`, `computeBaseRect()`, `clampView()`
   (mode changes re-trigger a draw)
+- [Kb Sync](kb-sync.md) — `kbDiff`/`kbShouldRepin` run on every `kbInput`
+  `input` event (split out 2026-08-13)
 
 ### Used by
 - [Connection](connection.md) — the `actions` message handler calls

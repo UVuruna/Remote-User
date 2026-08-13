@@ -780,3 +780,33 @@ def input_gate(step, run) -> None:
     step("0b4/6  NEW SOURCE GATE — what is already open, what the layout's app "
          "can do, and whose window it is (tests/test_new_source.py)")
     run([sys.executable, str(PROJECT_DIR / "tests" / "test_new_source.py")])
+
+    # DEAD MEMBER FENCE (owner report 2026-08-13, game-breaking: "our
+    # application blocked me and my agents"). A torn-off tab dragged back into
+    # its origin window on the PC — Windows destroys it on the merge, through
+    # none of our own removal paths (drop_member/eject_member/merge/remove
+    # never run). `lay.members` kept naming the dead hwnd until the phone's
+    # next action (`prune()` runs only then), and every focus_guard call in
+    # between — the per-message fence AND the 0.25s poll of `watch()` — kept
+    # targeting it, fighting whatever was really in front instead of giving
+    # the keyboard back. FAIL OPEN, never closed: a layout whose members are
+    # all gone must not survive as a fence.
+    step("0b8/6  DEAD MEMBER FENCE GATE — a member destroyed outside every "
+         "removal path never leaves the keyboard fenced to a window that no "
+         "longer exists (tests/test_focus_dead_member.py)")
+    run([sys.executable, str(PROJECT_DIR / "tests" / "test_focus_dead_member.py")])
+
+    # A typed edit lands where his eyes are (owner report 2026-08-13, AFTER
+    # the mic hypothesis was tested live and ruled out): typed text landed
+    # INSERTED BEFORE a trailing fragment his visible PC caret sat past, and
+    # no amount of typing or deleting removed it — only a blur/refocus did.
+    # The invisible keyboard field's own caret had drifted off its own end
+    # (an Android IME quirk, not a tap of his), and every further edit shared
+    # a non-empty suffix with the stray fragment, re-sending it forever. Fix
+    # + mechanism: client/kb-sync.js (split out of controls.js's `input`
+    # handler, pure like client/voice.js). Needs node, like every whole-module
+    # gate here — never skip it silently.
+    step("0b9/6  KB SYNC GATE — a typed edit lands where his eyes are, and a "
+         "stray fragment cannot outlive a single keystroke "
+         "(tests/test_kb_sync.py)")
+    run([sys.executable, str(PROJECT_DIR / "tests" / "test_kb_sync.py")])

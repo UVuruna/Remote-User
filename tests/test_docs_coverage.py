@@ -318,6 +318,14 @@ ALGORITHMIC = {
     # revising hypothesis plus the round-boundary overlap trim, and it is
     # kept pure so its gate can run it whole.
     "client/voice.js",
+    # Split out of controls.js's `input` handler on 2026-08-13 (owner report:
+    # typed text landed before a trailing fragment that no edit could remove,
+    # freed only by a blur/refocus). Algorithmic without argument: the
+    # mid-string erase-and-retype dance is a real decision that can silently
+    # mis-place his text when its own assumption (the field's caret sits at
+    # its own end) does not hold, and it is kept pure so its gate can run it
+    # whole, the voice.js pattern.
+    "client/kb-sync.js",
     # New 2026-08-13 (owner: both language lists were one flat pile, and the
     # dictation one repeated the same choice). The grouping arithmetic BOTH
     # cards read, pure so tests/test_lang_groups.py runs it whole.

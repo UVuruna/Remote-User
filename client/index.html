@@ -272,6 +272,9 @@
   <!-- Before controls.js: it owns the dictation rules that file's mic
        callbacks call (split out of it 2026-08-08, THE STRUCTURE LAW). -->
   <script src="/static/voice.js"></script>
+  <!-- Also before controls.js: the invisible keyboard field's diff/caret
+       rules (pure, so its gate runs it whole — owner report 2026-08-13). -->
+  <script src="/static/kb-sync.js"></script>
   <script src="/static/controls.js"></script>
   <!-- After controls.js: reads its `IN_APP` and `keepFocus` globals at
        load time. `showToast` (chrome.js, loaded next) is only called from

@@ -240,25 +240,24 @@ function sendTyped(text) {
 
 kbInput.addEventListener("input", (e) => {
   const value = kbInput.value;
-  const minLen = Math.min(kbPrev.length, value.length);
-  let p = 0;
-  while (p < minLen && kbPrev[p] === value[p]) p++;
-  let s = 0;
-  while (s < minLen - p && kbPrev[kbPrev.length - 1 - s] === value[value.length - 1 - s]) s++;
-  const removed = kbPrev.length - p - s;
-  let inserted = value.slice(p, value.length - s);
-  let back = removed;
-  if (s > 0 && (removed > 0 || inserted)) {
-    // Mid-string edit (multi-word autocorrect, double-space period): the PC
-    // caret sits at the END of the text, so the surviving tail must be
-    // erased and retyped too — replaying only the middle would land the
-    // edit after the tail ("cant believe" → "cant believe'").
-    back += s;
-    inserted += value.slice(value.length - s);
-  }
+  // client/kb-sync.js: pure, so its own gate can run it whole.
+  const { back, inserted } = kbDiff(kbPrev, value);
   for (let i = 0; i < back; i++) send({ type: "key_special", key: "backspace" });
   if (inserted) sendTyped(inserted);
   kbPrev = value;
+  // RE-PIN the field's own caret to its end (owner report 2026-08-13: typed
+  // text landed BEFORE a trailing fragment that no amount of typing or
+  // deleting removed, freed only by a blur/refocus). `kbDiff`'s mid-string
+  // branch above assumes the field's caret sits at the END of `value` — an
+  // Android IME can leave it somewhere else with no tap of his (a
+  // predictive-completion span still claiming a trailing word), and once
+  // that happens every edit shares a non-empty suffix with the fragment and
+  // re-sends it to the PC forever. Re-pinning after every non-composing edit
+  // cannot undo what already landed THIS tick, but guarantees the NEXT one
+  // starts from the end again, so the drift cannot compound past one edit.
+  if (kbShouldRepin(value, kbInput.selectionStart, kbInput.selectionEnd, e.isComposing)) {
+    kbInput.setSelectionRange(value.length, value.length);
+  }
   if (!e.isComposing && value.length > 200) {
     kbInput.value = "";
     kbPrev = "";
