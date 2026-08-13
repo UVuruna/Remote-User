@@ -62,9 +62,21 @@ class FakeRegistry:
     def __init__(self):
         self.minimized = 0
         self.cleared = 0
+        self.session_ends = 0
 
-    def minimize_members(self) -> None:
+    def minimize_members(self, session_end: bool = False) -> None:
+        # THE FAKE MUST MIRROR THE REAL SIGNATURE, and this is why it is not a
+        # detail: `session_end` was added to the real
+        # `LayoutRegistry.minimize_members` on 2026-08-13 (constraint 24 — a
+        # true session end forgets an adoption, an ordinary Desktop tap does
+        # not) and this fake was never told. `presence.leave_session` passes
+        # it, so every check that walked a LEAVE died on a TypeError and the
+        # whole gate failed — fail-closed, so no build could complete at all.
+        # A fake that lags the thing it stands for does not test less; it
+        # stops testing.
         self.minimized += 1
+        if session_end:
+            self.session_ends += 1
 
     def clear_topmost(self) -> None:
         self.cleared += 1
