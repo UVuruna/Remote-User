@@ -26,6 +26,7 @@ import logging
 
 import agents
 import layout_history
+import layout_popup
 import window_manager as wm
 
 logger = logging.getLogger(__name__)
@@ -123,12 +124,10 @@ class Layout:
         always-on-top band, with its own minimize/restore animation returned —
         and forget it. Returns what was released, for the log.
 
-        Called wherever this layout stops being what the phone shows: another
-        layout focused, Desktop chosen, the layout removed, the phone gone.
-        The window is NOT moved back and NOT closed: no window is ever moved
-        by us without being asked to be (the rule `remove` and `drop_member`
-        already follow), and closing one is an act only the ✕ chooser has —
-        a report he still wants to read must survive being let go of.
+        Called where this layout's adoption truly ENDS: removed/pruned, or the
+        phone leaves (`presence.leave_session`) — never a mere switch to
+        another layout or Desktop mid-session (`drop_adopted_topmost`'s job,
+        defect 1). Not closed — closing is the ✕ chooser's act alone.
 
         A window we moved WITHOUT asking is the exception, and it is his decree
         of 2026-08-13 rather than a refinement of the rule above: `_adopt_owned`
@@ -164,6 +163,15 @@ class Layout:
                                        w + bl + br, h + bt + bb,
                                        wm.SWP_NOZORDER | wm.SWP_NOACTIVATE)
         return released
+
+    def drop_adopted_topmost(self) -> None:
+        """Leave the topmost band WITHOUT forgetting the adoption or moving
+        the window — this layout stops being shown FOR NOW, SESSION running.
+        `adopted`/`adopted_home` stay put, so the next `focus()` re-contains
+        it (defect 1: `release_adopted()` ran here too and forgot it)."""
+        for hwnd in self.adopted:
+            wm.freeze_transitions(hwnd, False)
+            wm.drop_topmost(hwnd)
 
     def project(self) -> str:
         """The project folder this layout's window belongs to, MEASURED every
@@ -204,6 +212,17 @@ class Layout:
         if not found and self.folder:
             found.append(self.folder)
         return found
+
+
+def _recontain_adopted(lay: Layout) -> None:
+    """Bring every ADOPTED window back into the picture — and the topmost
+    band with it — on every `focus()` of THIS layout. Delegates to
+    `layout_popup._contain` (constraint 13) rather than a local copy; `{}`
+    stands in for its per-connection retry dict — `focus()` runs once per
+    tap, not four times a second, so nothing needs bounding here."""
+    for hwnd in lay.adopted:
+        if wm.user32.IsWindow(hwnd) and not wm.user32.IsIconic(hwnd):
+            layout_popup._contain(lay, hwnd, {})
 
 
 # The apps whose torn-out content still DEPENDS on the window it came from
@@ -249,6 +268,12 @@ class LayoutRegistry:
                     alive.append(hwnd)
                 else:
                     wm.drop_topmost(hwnd)
+            # THE GRID SHRINKS WITH ITS MEMBERS TOO (live-tester defect,
+            # 2026-08-13) — `drop_member`/`eject_member`/`merge` re-derive it
+            # via `_template_for`; an organic close never did.
+            if len(alive) != len(lay.members):
+                lay.template = self._template_for(len(alive), lay.template)
+                lay.place_pending = True
             lay.members = alive
             # A member that is gone takes its source record with it: the record
             # is what makes ANOTHER layout wear the ⭐, and a layout must never
@@ -351,10 +376,10 @@ class LayoutRegistry:
                 continue
             for hwnd in other.members:
                 wm.drop_topmost(hwnd)
-            # …and whatever that layout's work had opened goes with it (task
-            # 202): the popup was above the world only for as long as the
-            # phone was showing the layout it belongs to.
-            other.release_adopted()
+            # …and its adopted popups drop out of the band with it (task
+            # 202) — but NOT `release_adopted()` (defect 1, 2026-08-13): a
+            # mere switch to another layout is not the popup's session end.
+            other.drop_adopted_topmost()
         if not 0 <= index < len(self.layouts):
             return None
         lay = self.layouts[index]
@@ -420,13 +445,21 @@ class LayoutRegistry:
             region = wm._frame_rect(lay.members[0])
             if region is None:
                 return None
+        # Adopted popups come back with the layout (defect 1): re-contained
+        # fresh, so one left standing during Desktop/another layout returns.
+        _recontain_adopted(lay)
         return wm._normalize(region, mon_rect), placed
 
-    def minimize_members(self) -> None:
+    def minimize_members(self, session_end: bool = False) -> None:
         """Desktop position (owner 2026-08-02): every window that belongs to
         ANY layout gets minimized — the full-desktop view shows the desktop
         and only the windows that are NOT layout material. Focusing a layout
-        later restores its own members (place/raise SW_RESTORE)."""
+        later restores its own members (place/raise SW_RESTORE).
+
+        `session_end` (defect 1): a Desktop TAP keeps the session running (an
+        adopted popup must still be there next focus); the phone truly
+        LEAVING (`presence.leave_session`) is where constraint 23 applies for
+        real, so the popup goes home and is forgotten."""
         self.prune()
         members = [h for lay in self.layouts for h in lay.members]
         # The adopted windows (task 202) leave the topmost band with their
@@ -435,7 +468,7 @@ class LayoutRegistry:
         # the thing he chose Desktop to get to. Minimizing it here would be
         # the original failure again, in a new place.
         for lay in self.layouts:
-            lay.release_adopted()
+            lay.release_adopted() if session_end else lay.drop_adopted_topmost()
         went_down = []
         for hwnd in members:
             # A window a MODAL dialog has disabled is left standing (measured

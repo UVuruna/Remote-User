@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="500" viewBox="0 0 800 500">
+  <rect width="800" height="500" fill="#0d1420"/>
+  <circle cx="400" cy="230" r="120" fill="none" stroke="#2563eb" stroke-width="10"/>
+  <text x="400" y="245" fill="#e8eef7" font-family="Segoe UI, sans-serif"
+        font-size="34" text-anchor="middle">SVG opened by the shell</text>
+  <text x="400" y="420" fill="#93a4bb" font-family="Segoe UI, sans-serif"
+        font-size="19" text-anchor="middle">Usually your browser. A new top-level window.</text>
+</svg>

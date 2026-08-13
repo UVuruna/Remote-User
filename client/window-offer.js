@@ -17,7 +17,7 @@
 //
 // IGNORING IT IS AN ANSWER, and the answer is the desktop: the chip fades by
 // itself, nothing on the PC moves, and the window stays exactly where Windows
-// put it. Only a tap on "Show in layout" moves anything.
+// put it. Only a tap on "Move it in" moves anything.
 
 const winOffer = document.getElementById("window-offer");
 const winOfferText = document.getElementById("window-offer-text");
@@ -36,9 +36,14 @@ let winOfferTimer = null;
 let winOfferAct = "layout";        // "layout" (task 202) | "layout_new" (185)
 let winOfferWindow = null;         // the window a `layout_new` chip is about
 
+// THE WORDING MUST NAME THE ACT, not just the event (owner report 2026-08-13,
+// defect 2): "X opened" read as an offer to CREATE a layout with the window —
+// it is not; the yes MOVES the window into the layout he is already watching.
+// "layout_new"'s yes is the one that creates something, and its own words say
+// so ("Make a layout"). The two chips must never read alike again.
 const WIN_OFFER_WORDS = {
-  layout: { text: (n) => `${n} opened`,
-            yes: "Show in layout", no: "Leave on desktop" },
+  layout: { text: (n) => `${n} opened outside this layout`,
+            yes: "Move it in", no: "Leave on desktop" },
   layout_new: { text: (n) => `${n} opened — a layout with it?`,
                 yes: "Make a layout", no: "No" },
   // THE THIRD QUESTION, and the one that is a way OUT rather than a way in

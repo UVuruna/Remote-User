@@ -30,6 +30,7 @@ import time
 from collections import deque
 from dataclasses import dataclass
 
+import traffic_devices
 from config import SETTINGS
 
 logger = logging.getLogger(__name__)
@@ -40,11 +41,21 @@ logger = logging.getLogger(__name__)
 class Sample:
     """One second of the graph. `clients` is part of the reading on purpose:
     a zero line means nothing until you can see whether anybody was connected
-    to produce it."""
+    to produce it. `device` (owner request 2026-08-13) is the identity of
+    whoever was connected — empty when nobody was (see traffic_devices);
+    exact for a live sample, since only one phone is ever connected at a
+    time (the 4409 takeover rule)."""
     t: float          # unix time at the end of the second
     out_bytes: int    # PC -> phone during that second
     in_bytes: int     # phone -> PC during that second
     clients: int      # connected clients during that second
+    device: str = ""  # the device KEY (traffic_devices.device_key) connected
+                       # during this second, "" when nobody was (owner request
+                       # 2026-08-13 — "which device sent these bytes"). Only
+                       # one device is ever active at a time (the protocol's
+                       # own "one device at a time" rule, 4409 on takeover),
+                       # so a plain per-second tag is a complete attribution —
+                       # no per-byte split is needed.
 
 
 # ═══════════════════════════ METER ═══════════════════════════
@@ -72,6 +83,10 @@ class TrafficMeter:
         self._gap_from: dict | None = None
         self._thread: threading.Thread | None = None
         self._recording = True
+        # Which device is the current session (see `traffic_devices.py`) —
+        # set at `auth`, cleared when the client count drops back to 0. Read
+        # into every `Sample` taken while it is set.
+        self._device: str = ""
 
     # -- counting ----------------------------------------------------------
 
@@ -97,6 +112,25 @@ class TrafficMeter:
                 # against its first report when it returns.
                 self._gap_from = self.phone_last
                 self.phone_first = self.phone_last = None
+                self._device = ""
+
+    def set_device(self, key: str) -> None:
+        """Called once at `auth`, after `traffic_devices.REGISTRY.note()` has
+        resolved this connection's stable key. Left untouched by `reset()` —
+        the Reset button clears COUNTERS, not who is holding the session."""
+        with self._lock:
+            self._device = key or ""
+
+    def note_device(self, w, h, name: str | None) -> str:
+        """`web.py`'s ONE call site: registers this connection's device with
+        `traffic_devices.REGISTRY` (assigning it a stable, persisted colour
+        slot the first time this resolution is ever seen) and arms
+        `set_device` with the resulting key in the same call — the two used
+        to be two call sites, which is exactly the kind of split that lets
+        one of them go missing on the next edit."""
+        entry = traffic_devices.REGISTRY.note(w, h, name)
+        self.set_device(entry["key"])
+        return entry["key"]
 
     def note_phone(self, reading: dict) -> None:
         """What the phone says IT has spent. `reading` carries app_rx/app_tx
@@ -156,7 +190,8 @@ class TrafficMeter:
 
     def _take_sample(self) -> None:
         with self._lock:
-            sample = Sample(time.time(), self._out, self._in, self.clients)
+            sample = Sample(time.time(), self._out, self._in, self.clients,
+                             self._device)
             self._out = self._in = 0
             self.samples.append(sample)
         self._append_csv(sample)
@@ -206,10 +241,16 @@ class TrafficMeter:
             header = not path.exists()
             with path.open("a", encoding="utf-8", newline="") as fh:
                 if header:
-                    fh.write("time,out_bytes,in_bytes,clients\n")
-                fh.write("{},{},{},{}\n".format(
+                    # A 5th column, appended (never inserted) — an OLDER
+                    # server still reads its own file's first 4 fields fine,
+                    # and `traffic_history._parse_row` accepts either width so
+                    # a file spanning the upgrade never breaks the reader
+                    # (owner's own hard rule for this round).
+                    fh.write("time,out_bytes,in_bytes,clients,device\n")
+                fh.write("{},{},{},{},{}\n".format(
                     time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(sample.t)),
-                    sample.out_bytes, sample.in_bytes, sample.clients))
+                    sample.out_bytes, sample.in_bytes, sample.clients,
+                    sample.device))
         except OSError as e:
             # Said once, then the graph keeps running from memory: a disk
             # problem must not cost the owner the live measurement too.

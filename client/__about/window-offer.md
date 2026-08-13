@@ -4,8 +4,8 @@
 [window-offer.css](../window-offer.css)
 
 ## Purpose
-Ask him where a window that just opened on the PC should go — **Show in
-layout** or **Leave on desktop** — and send his answer back.
+Ask him where a window that just opened on the PC should go — **Move it in**
+or **Leave on desktop** — and send his answer back.
 
 ## Why it exists
 Task 202 (owner report 2026-08-10, escalated 2026-08-11): an agent on the PC
@@ -27,7 +27,7 @@ asks whether to open it in the layout or normally on the desktop.
    read are a guess.
 3. **Ignoring it is an answer, and the answer is the desktop.** The chip fades
    after `WINDOW_OFFER_MS`, nothing on the PC moves, and the window stays
-   exactly where Windows put it. Only *Show in layout* moves anything.
+   exactly where Windows put it. Only *Move it in* moves anything.
 4. **One chip per window.** The server offers a window once (it is the side
    that knows what a window is); this page never re-raises one by itself.
 5. **The answer goes over HTTP** (`POST /window_offer?token=…`), the same route
@@ -139,3 +139,22 @@ Nothing on this page changed for either: a question that is never sent is a
 question this page never renders. It is recorded here because "the chip used to
 appear here and no longer does" is exactly the sort of change that gets
 re-reported as a regression.
+
+## The wording must name the ACT (owner report 2026-08-13, defect 2)
+
+He read *"X opened"* / *Show in layout* as an offer to CREATE a layout — it
+never was. The `"layout"` chip's yes has only ever run `_contain`, which MOVES
+the window into the layout he is already watching; the chip's own words never
+said "move" and used the word "layout" in a way that read exactly like the
+sibling `"layout_new"` chip's real offer to build one. Corrected to say the act
+plainly and briefly enough for a phone chip: `"${n} opened outside this
+layout"` / **Move it in** / **Leave on desktop**. `layout_new`'s wording did not
+change — it already named its own act ("Make a layout").
+
+**No third chip was added for "make a layout instead" while inside a focused
+layout**, and that is deliberate, not an oversight: constraint 18 settles it —
+a window the FOCUSED layout can claim is the sweep's question and NEVER the
+birth one, because "make a new layout out of the layout's own work" was never
+a sensible offer to begin with (the same reasoning that moved the sweep's
+attribution ahead of the birth scan's on 2026-08-12). A third button on this
+chip would violate that rule directly.

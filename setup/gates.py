@@ -703,3 +703,36 @@ def input_gate(step, run) -> None:
     step("0b1/6  SESSION RESIDUE GATE — nothing we force on a window outlives "
          "the session (tests/test_session_residue.py)")
     run([sys.executable, str(PROJECT_DIR / "tests" / "test_session_residue.py")])
+
+    # OWNER REQUEST 2026-08-13: the Traffic window's "this session X MB"
+    # line gains session length, MB/h, and WHICH device(s) sent it — named
+    # where a name was ever learned, else identified by resolution — with
+    # the chart's line coloured differently per device. The identity must
+    # be stable across a reconnect and across a server restart (persisted,
+    # `layout_history.py`'s own precedent), and an older CSV row with no
+    # `device` column must keep reading — the long-term record cannot break
+    # on the day this shipped.
+    step("0b2/6  TRAFFIC DEVICES GATE — a stable per-device identity, "
+         "session length/rate, and the old-CSV-still-reads promise "
+         "(tests/test_traffic_devices.py)")
+    run([sys.executable, str(PROJECT_DIR / "tests" / "test_traffic_devices.py")])
+
+    # OWNER REPORT 2026-08-13, the correction of the round above: `focus()`
+    # ignored `lay.adopted` entirely, and every path that stopped a layout
+    # being shown (another layout focused, Desktop chosen) called
+    # `release_adopted()` unconditionally — which treated a MERE SWITCH as
+    # the popup's session ending, moving it home and forgetting it outright.
+    # His words: switch to another layout or the desktop and come back, and
+    # "this new window just stands there, nowhere put into a layout." Fixed
+    # with `drop_adopted_topmost()` (lowers, keeps the adoption) for a
+    # mid-session switch and `focus()` re-containing on the way back in;
+    # `release_adopted()` now runs only where the adoption truly ends
+    # (removed/pruned, or `presence.leave_session`). Its own file by
+    # RESPONSIBILITY, same split as 0b1/6 above: that gate asks what must be
+    # true once the phone is gone; this one asks what must be true when the
+    # SAME layout is shown again, mid-session — plus the chip's wording
+    # (defect 2), which used to read like an offer to create a layout when
+    # its yes has only ever moved the window into the one already open.
+    step("0b3/6  LAYOUT ADOPTION LIFECYCLE GATE — an adopted window survives "
+         "a layout switch, not just the session (tests/test_layout_adoption.py)")
+    run([sys.executable, str(PROJECT_DIR / "tests" / "test_layout_adoption.py")])

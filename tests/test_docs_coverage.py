@@ -107,6 +107,13 @@ STANDARD = {
     "server/clipboard.py",
     "server/updates.py",
     "server/traffic.py",
+    # New 2026-08-13 (owner request — the Traffic window's per-device list
+    # and per-device chart colour). Standard, not Algorithmic: the one real
+    # decision it carries ("a device is identified by its resolution, and a
+    # name may only ever REPLACE that key — never change it") is one
+    # sentence in its __about; there is no state machine and nothing worth a
+    # flow diagram.
+    "server/traffic_devices.py",
     # New 2026-08-09 (owner request, task 142 — the phone drew one fixed
     # arrow): the live HCURSOR matched against the system cursors and turned
     # into a name. Standard, not Algorithmic — the only decision it carries

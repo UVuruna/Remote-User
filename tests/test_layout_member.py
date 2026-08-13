@@ -381,6 +381,42 @@ def check_the_leaving_window_takes_its_source_record_with_it() -> bool:
     return ok
 
 
+def check_an_organic_close_reshapes_the_grid() -> bool:
+    """LIVE-TESTER DEFECT (2026-08-13): `layout_member_remove` is a deliberate
+    act and it reshapes the grid through `_template_for`, exactly like
+    `merge`/`eject_member`. A window closed at the DESK — never asked, never
+    routed through that handler — is the one path that left `lay.template`
+    naming a shape one window too big for what survived it: a four still
+    called "4" with three members standing on three of its four quadrants,
+    which is exactly what `_template_for`'s own catalogue warns a caller never
+    to claim, and exactly what `layout_state` would then hand the phone.
+
+    Driven at `LayoutRegistry.prune()` itself, not through a message: there is
+    no protocol message for "a window closed on its own", so the method
+    boundary IS the only boundary here."""
+    conn, layouts = build_layouts([("Work", [WIN_A, WIN_B, WIN_C, WIN_D])])
+    lay = layouts.layouts[0]
+    if lay.template != "4" or len(lay.members) != 4:
+        print(f"  DETAIL setup failed: template={lay.template!r} "
+              f"members={lay.members}")
+        return False
+    window_manager.user32.alive.discard(WIN_C)   # closed organically, at the desk
+    lay.place_pending = False                    # isolate THIS reshape's own trigger
+    layouts.prune()
+    if len(lay.members) != 3 or WIN_C in lay.members:
+        print(f"  DETAIL the closed window is still counted: {lay.members}")
+        return False
+    if lay.template != "3-top":
+        print(f"  DETAIL still claims {lay.template!r} over 3 survivors — "
+              f"exactly the stale grid `layout_state` would repeat to the phone")
+        return False
+    if not lay.place_pending:
+        print("  DETAIL the shape changed but no re-place was ordered — the "
+              "survivors would stay sitting on the old template's quadrants")
+        return False
+    return True
+
+
 CHECKS = [
     ("a grid shrinks one window at a time (4→3, 3→2, 2→single)",
      check_a_grid_shrinks_one_window_at_a_time),
@@ -404,6 +440,8 @@ CHECKS = [
      check_layout_state_names_every_member),
     ("the leaving window takes its SOURCE record with it",
      check_the_leaving_window_takes_its_source_record_with_it),
+    ("a member that closes ORGANICALLY reshapes the grid too",
+     check_an_organic_close_reshapes_the_grid),
 ]
 
 

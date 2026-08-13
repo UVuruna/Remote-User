@@ -280,7 +280,14 @@ def rescue(hwnd: int, mon_rect: tuple[int, int, int, int] | None) -> bool:
     elif not user32.IsWindowVisible(hwnd):
         user32.ShowWindow(hwnd, SW_SHOW)
     target = _target(rect, area)
-    ok = wm.place_window(hwnd, target)
+    # topmost=False (defect 1, 2026-08-13 live-test report): `place_window`
+    # used to go through `HWND_TOPMOST` unconditionally — no non-topmost mode
+    # existed — so every rescue nailed the window above everything and wrote
+    # a ledger entry the docstring above had always claimed would never
+    # happen. `raise_window(topmost=False)` below only ever set z-order for
+    # that one call (HWND_TOP); it never cleared the bit or the ledger entry
+    # `place_window` had just set.
+    ok = wm.place_window(hwnd, target, topmost=False)
     # RAISED EVEN IF THE PLACEMENT REFUSED. A window that would not take the
     # rect may still have been restored out of the taskbar, and putting it in
     # front is the half of the rescue that can still succeed.

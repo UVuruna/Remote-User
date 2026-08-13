@@ -106,7 +106,15 @@ function connect() {
     // this device's aspect (tablet vs phone — owner 2026-08-02).
     sock.send(JSON.stringify({
       type: "auth", token,
-      screen: { w: window.screen.width, h: window.screen.height },
+      // `model` (owner request 2026-08-13 — the Traffic window's per-device
+      // list) reuses dictation-card.js's OWN UA-model arithmetic verbatim
+      // rather than inventing a second one: same synchronous best-effort
+      // read, same "no bridge method" reasoning (the page is served by the
+      // PC, the shell installed separately), same honest "" when nothing
+      // readable is found — never a guess. dictation-card.js loads before
+      // this file (index.html), so `dictModelFromUa` is already defined.
+      screen: { w: window.screen.width, h: window.screen.height,
+                model: (typeof dictModelFromUa === "function") ? dictModelFromUa() : "" },
       // …and `panel` is the pixel BUDGET (owner order 2026-08-12): the real
       // panel pixels, CSS px x devicePixelRatio, which is what the PC's
       // encoder may never exceed. A NEW field rather than a new meaning for

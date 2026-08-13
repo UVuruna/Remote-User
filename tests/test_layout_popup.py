@@ -434,16 +434,28 @@ def check_the_ledger_lets_it_go_on_desktop_focus() -> bool:
     """Nothing we raise may outlive the showing of the layout it belongs to.
     Desktop is the path he takes when he wants the popup itself — so it leaves
     the always-on-top band and is NOT minimized with the members, which would
-    be his original complaint in a new place."""
+    be his original complaint in a new place.
+
+    NOT forgotten either (defect 1, owner report 2026-08-13, the SAME evening
+    as the rest of this file — "another layout OR the desktop, and come back"):
+    a plain Desktop tap keeps the session running, so `lay.adopted` stands and
+    the next `focus()` of this layout re-contains the popup — see the fuller
+    lifecycle proof in `tests/test_layout_adoption.py`. Only a TRUE session end
+    (`minimize_members(session_end=True)`, wired to `presence.leave_session`)
+    actually forgets it."""
     reg, conn = desk(fg=POPUP)
     ask(reg, conn, act="layout")
     if POPUP not in LEDGER:
         print("  DETAIL nothing to release — the popup never reached the ledger")
         return False
     reg.minimize_members()
-    if POPUP in LEDGER or reg.layouts[0].adopted:
-        print(f"  DETAIL still ours after Desktop: ledger={list(LEDGER)} "
-              f"adopted={reg.layouts[0].adopted}")
+    if POPUP in LEDGER:
+        print(f"  DETAIL still in the always-on-top band after Desktop: "
+              f"{list(LEDGER)}")
+        return False
+    if POPUP not in reg.layouts[0].adopted:
+        print("  DETAIL Desktop forgot the adoption outright — the layout it "
+              "belongs to will never re-contain it again")
         return False
     if any(hwnd == POPUP for hwnd, _ in MINIMIZED):
         print("  DETAIL the popup was minimized away with the members")

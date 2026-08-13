@@ -1,0 +1,11 @@
+Default-handler test - plain text
+=================================
+
+If you are reading this in Notepad (or whatever you set as your .txt app),
+the test worked: the file opened through the SHELL, exactly as a double
+click in Explorer would, and not as another tab inside VS Code.
+
+What to watch on the phone:
+  1. Did a chip appear, and what did it ask?
+  2. Did the new window land inside the streamed picture?
+  3. Can the layout still be raised afterwards?

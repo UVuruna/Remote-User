@@ -75,6 +75,8 @@ from urllib.parse import unquote, urlparse
 from fastapi import Request
 from fastapi.responses import JSONResponse
 
+import agents
+import layout_popup
 import window_manager as wm
 
 logger = logging.getLogger(__name__)
@@ -94,6 +96,20 @@ MAX_PER_APP = 12
 # appear", and the phone says so instead of hanging on a spinner.
 OPEN_TIMEOUT_S = 25.0
 OPEN_POLL_S = 0.25
+
+# THE SECOND GIVE-UP POINT, and it is not an estimate of anything (constraint
+# 15). His report 2026-08-13, picture 1: he picked a folder VS Code ALREADY had
+# open, VS Code answered by raising the window it already held, no new handle
+# ever came into being, and the phone watched the loading cube for the full
+# OPEN_TIMEOUT_S over a screen where nothing would ever happen.
+#
+# `entries()` now greys those rows out, so this is the case that rule cannot
+# cover: a folder opened on the PC in the seconds between the list and his tap.
+# The CONDITION we are really waiting on is a cold start, and a cold start is
+# the only reason 25 s was ever right — so when the app was ALREADY RUNNING
+# before we launched (measured, not guessed: its own window was standing), the
+# wait is this instead, and the toast NAMES what happened.
+RUNNING_TIMEOUT_S = 5.0
 
 # The shell folders Explorer's own Quick Access pane is made of.
 QUICK_ACCESS = "shell:::{679f85cb-0220-4080-b29b-5540cc05aab6}"
@@ -290,13 +306,68 @@ def explorer_recents() -> list[dict]:
     return out
 
 
+# ═══════════════════════ WHAT IS ALREADY OPEN ═══════════════════════
+def open_folders() -> dict[str, set[str]]:
+    """`{app: {folder name, …}}` — what VS Code and Explorer really hold NOW.
+
+    Owner request 2026-08-13 (picture 1), and his own words for it: the
+    application must be AWARE of what VS Code has open so a row that cannot
+    do anything is greyed out and not clickable, rather than opening nothing
+    and leaving the phone on a spinner.
+
+    Read off the live windows, never remembered — the desk changes while he
+    reads the list, so a stored answer would be the class of bug constraint 13
+    is about. The folder a window holds is read from its TITLE, which is the
+    only thing Windows offers about a foreign app's document: `agents`
+    already owns that reading for VS Code (`title_folder`, the same regex the
+    Claude wheel is decided by, so the two can never disagree), and Explorer
+    titles its window with the folder's own name.
+
+    THE HONEST LIMIT, named here rather than discovered later: a title carries
+    a folder's NAME and not its PATH, so two different projects both called
+    `src` are one name to this function and the second would be dimmed while
+    it is really openable. The failure is a row he cannot tap, never a wrong
+    window — and a full path is not available from a foreign window at all.
+    """
+    found: dict[str, set[str]] = {app: set() for app in APPS}
+    for win in wm.list_windows():
+        process = (win.get("process") or "").lower()
+        title = win.get("title") or ""
+        if process == _EXE_NAMES["vscode"]:
+            name = agents.title_folder(title)
+            if name:
+                found["vscode"].add(name)
+        elif process == _EXE_NAMES["explorer"]:
+            # Explorer names its window after the folder it shows, and nothing
+            # else — no product name to strip, no separator to split on.
+            name = title.strip().lower()
+            if name:
+                found["explorer"].add(name)
+    return found
+
+
+def _is_open(app: str, target: str, held: dict[str, set[str]]) -> bool:
+    """Does `app` already hold this path? Compared by the folder's own name,
+    which is all a foreign window's title can tell us (see `open_folders`)."""
+    if not target:
+        return False               # "New window" is never already open
+    return (Path(target).name or target).lower() in held.get(app, set())
+
+
 def entries() -> list[dict]:
     """Everything the New source offers, grouped by app, in APPS order.
 
     `kind` is what OPENING it means, and it is the only thing `open_entry`
     reads: `new` = a fresh empty window, `private` = Chrome's incognito, and
     `recent` = open this path. An app that is not installed contributes
-    nothing at all — an entry that cannot be opened is not an offer."""
+    nothing at all — an entry that cannot be opened is not an offer.
+
+    A row the app ALREADY holds carries `open: True` and the `why` the phone
+    prints on it; it is drawn dimmed and refuses the tap (owner 2026-08-13).
+    It is still SHOWN rather than dropped, on his own ballot: a project that is
+    simply missing from the list is a thing he would hunt for, while a dimmed
+    row with a reason answers the question he came with."""
+    held = open_folders()
     out: list[dict] = []
     for app in APPS:
         if not app_exe(app):
@@ -314,8 +385,11 @@ def entries() -> list[dict]:
             continue
         recents = vscode_recents() if app == "vscode" else explorer_recents()
         for rec in recents:
+            busy = _is_open(app, rec["target"], held)
             out.append({"app": app, "kind": "recent", "target": rec["target"],
                         "label": rec["label"], "sub": rec["sub"],
+                        "open": busy,
+                        "why": "already open" if busy else "",
                         "id": f"{app}|recent|{rec['target']}"})
     return out
 
@@ -371,6 +445,10 @@ def open_entry(entry_id: str) -> dict:
 
     before = _visible_hwnds()
     want = _EXE_NAMES[app]
+    # WAS IT ALREADY RUNNING? Measured before the launch, because afterwards
+    # the answer is always yes. It decides only how long we are willing to
+    # wait and what the phone is told (see RUNNING_TIMEOUT_S).
+    was_running = any(process == want for process in before.values())
     try:
         # No shell, no console, and NO foreground call of our own: the app
         # raises its own window, which is what he asked for, and nothing here
@@ -386,21 +464,41 @@ def open_entry(entry_id: str) -> dict:
     # still cost a flat OPEN_POLL_S before anyone looked. That is 250 ms of the
     # phone's loading cube spent watching a window that was already there. The
     # poll is otherwise unchanged: the sleep is simply at the END of the turn.
-    deadline = time.monotonic() + OPEN_TIMEOUT_S
+    wait_s = RUNNING_TIMEOUT_S if was_running else OPEN_TIMEOUT_S
+    deadline = time.monotonic() + wait_s
     while True:
         for hwnd, process in _visible_hwnds().items():
             if hwnd in before or process != want:
                 continue
             info = wm.window_at_hwnd(hwnd)
             if info and info["title"]:
+                # OURS, AND THE SWEEP MUST NEVER ASK ABOUT IT (his report
+                # 2026-08-13, picture 2). A window WE opened on his behalf is
+                # a brand-new top-level window of a known app appearing out of
+                # nowhere, which is exactly what `layout_popup`'s attribution
+                # rules are built to notice — so every New-source window used
+                # to raise a chip asking whether to move it into the layout it
+                # was already on its way into. `mine()` is the maker saying so,
+                # the same statement tab extraction already makes
+                # (`layout_api.py`, constraint 19 point 4A); it is bounded in
+                # time there because Windows re-uses handles.
+                layout_popup.mine(hwnd)
                 logger.info("Recents opened %s (%s) as %s",
                             target or kind, app, info["title"][:60])
                 return info
         if time.monotonic() >= deadline:
             break
         time.sleep(OPEN_POLL_S)
-    logger.warning("Recents: %s (%s) opened no window within %.0fs",
-                   target or kind, app, OPEN_TIMEOUT_S)
+    logger.warning("Recents: %s (%s) opened no window within %.0fs "
+                   "(%s was already running: %s)",
+                   target or kind, app, wait_s, want, was_running)
+    if was_running:
+        # NAMED, not shrugged off. This is his picture-1 case surviving the
+        # grey-out (the folder was opened between the list and the tap), and
+        # the sentence has to say what the PC did instead — otherwise the only
+        # difference he sees is a shorter spinner before the same mystery.
+        return {"error": f"{os.path.basename(cmd[0])} opened no new window — "
+                         "it most likely brought the one it already has forward"}
     return {"error": "The window never appeared — is the app still starting?"}
 
 

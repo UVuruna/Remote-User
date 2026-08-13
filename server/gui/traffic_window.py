@@ -40,6 +40,7 @@ of the plot.
 Everything is drawn with QPainter. No new dependency for a diagnostic window.
 """
 
+import html
 import logging
 import math
 import time
@@ -53,10 +54,11 @@ from PySide6.QtWidgets import (
 )
 
 import traffic
+import traffic_devices
 import traffic_history
 from config import SETTINGS
-from gui.theme import TOKENS, card_shadow
-from gui.sizing import clamp_to_screen, settle_minimum
+from gui.theme import TOKENS, card_shadow, device_color
+from gui.sizing import WrapLabel, clamp_to_screen, settle_minimum
 
 logger = logging.getLogger(__name__)
 
@@ -206,7 +208,8 @@ def _point_from_sample(sample) -> traffic_history.Point:
     average — it already IS one second)."""
     return traffic_history.Point(
         t=sample.t, out_avg=sample.out_bytes, out_max=sample.out_bytes,
-        in_avg=sample.in_bytes, in_max=sample.in_bytes, clients=sample.clients)
+        in_avg=sample.in_bytes, in_max=sample.in_bytes, clients=sample.clients,
+        device=sample.device)
 
 
 def _coalesce(points: list, target: int) -> list:
@@ -228,6 +231,14 @@ def _coalesce(points: list, target: int) -> list:
         if j <= int(i):
             j = int(i) + 1
         chunk = points[int(i):j]
+        # Same "last ACTIVE device wins" rule as the disk reader
+        # (`traffic_history.read_history`) — an idle heartbeat second from a
+        # device about to be replaced must not steal a merged pixel's colour
+        # from the device that actually sent the bytes in it.
+        chunk_device = ""
+        for p in chunk:
+            if p.device and (p.out_avg or p.in_avg or p.out_max or p.in_max):
+                chunk_device = p.device
         merged.append(traffic_history.Point(
             t=chunk[len(chunk) // 2].t,
             out_avg=sum(p.out_avg for p in chunk) / len(chunk),
@@ -235,6 +246,7 @@ def _coalesce(points: list, target: int) -> list:
             in_avg=sum(p.in_avg for p in chunk) / len(chunk),
             in_max=max(p.in_max for p in chunk),
             clients=max(p.clients for p in chunk),
+            device=chunk_device,
         ))
         i += ratio
     return merged
@@ -430,36 +442,74 @@ class TrafficChart(QWidget):
             lx = min(max(plot.left(), x_of(t) - w / 2), plot.right() - w)
             painter.drawText(int(lx), plot.bottom() + metrics.ascent() + 3, label)
 
-        for color, avg_pick, max_pick in (
+        # PER-DEVICE COLOUR (owner request 2026-08-13): "colour the line
+        # differently depending on which device was using it — so we can see
+        # the difference in bytes sent to a smaller-resolution device." Only
+        # matters — and only fires — when the span actually shows MORE THAN
+        # ONE device; a single-device (the overwhelming common case) or
+        # device-less span keeps drawing the plain direction colour it always
+        # has, so nothing about an ordinary session's picture changes.
+        devices_seen = {p.device for p in pts if p.device}
+        multi_device = len(devices_seen) > 1
+
+        def _segment_color(base: QColor, device: str) -> QColor:
+            if not multi_device:
+                return base
+            if not device:
+                return QColor(device_color(-1))
+            return QColor(device_color(traffic_devices.REGISTRY.index_for(device)))
+
+        for base_color, avg_pick, max_pick in (
                 (out_color(), lambda p: p.out_avg, lambda p: p.out_max),
                 (in_color(), lambda p: p.in_avg, lambda p: p.in_max)):
             if not pts:
                 continue
-            path = QPainterPath()
-            path.moveTo(QPointF(x_of(pts[0].t), y_of(avg_pick(pts[0]))))
-            for p in pts[1:]:
-                path.lineTo(QPointF(x_of(p.t), y_of(avg_pick(p))))
-            fill = QPainterPath(path)
-            fill.lineTo(QPointF(x_of(pts[-1].t), plot.bottom()))
-            fill.lineTo(QPointF(x_of(pts[0].t), plot.bottom()))
-            fill.closeSubpath()
-            faded = QColor(color)
-            faded.setAlpha(46)
-            painter.fillPath(fill, faded)
-            painter.setPen(QPen(color, 2))
-            painter.drawPath(path)
-            if self.downsampled:
-                # The bucket MAX, as a faint hairline above the average —
-                # a spike that a wide bucket's average would otherwise
-                # smooth out of existence stays visible here.
-                mx_path = QPainterPath()
-                mx_path.moveTo(QPointF(x_of(pts[0].t), y_of(max_pick(pts[0]))))
-                for p in pts[1:]:
-                    mx_path.lineTo(QPointF(x_of(p.t), y_of(max_pick(p))))
-                mx_color = QColor(color)
-                mx_color.setAlpha(150)
-                painter.setPen(QPen(mx_color, 1, Qt.PenStyle.DotLine))
-                painter.drawPath(mx_path)
+            # Split into RUNS of consecutive points sharing one device — a
+            # plain single run, coloured `base_color`, when the span has at
+            # most one device (multi_device is False): identical output to
+            # before this feature existed.
+            runs: list[list] = []
+            for p in pts:
+                key = p.device if multi_device else ""
+                if runs and runs[-1][0] == key:
+                    runs[-1][1].append(p)
+                else:
+                    runs.append([key, [p]])
+            prev_last = None
+            for key, run_pts in runs:
+                color = _segment_color(base_color, key)
+                # A one-point run cannot draw a line — borrow the previous
+                # run's last point so adjacent segments still connect
+                # visually instead of leaving a gap at every device switch.
+                seg = ([prev_last] if prev_last is not None else []) + run_pts
+                prev_last = run_pts[-1]
+                if len(seg) < 2:
+                    continue
+                path = QPainterPath()
+                path.moveTo(QPointF(x_of(seg[0].t), y_of(avg_pick(seg[0]))))
+                for p in seg[1:]:
+                    path.lineTo(QPointF(x_of(p.t), y_of(avg_pick(p))))
+                fill = QPainterPath(path)
+                fill.lineTo(QPointF(x_of(seg[-1].t), plot.bottom()))
+                fill.lineTo(QPointF(x_of(seg[0].t), plot.bottom()))
+                fill.closeSubpath()
+                faded = QColor(color)
+                faded.setAlpha(46)
+                painter.fillPath(fill, faded)
+                painter.setPen(QPen(color, 2))
+                painter.drawPath(path)
+                if self.downsampled:
+                    # The bucket MAX, as a faint hairline above the average —
+                    # a spike that a wide bucket's average would otherwise
+                    # smooth out of existence stays visible here.
+                    mx_path = QPainterPath()
+                    mx_path.moveTo(QPointF(x_of(seg[0].t), y_of(max_pick(seg[0]))))
+                    for p in seg[1:]:
+                        mx_path.lineTo(QPointF(x_of(p.t), y_of(max_pick(p))))
+                    mx_color = QColor(color)
+                    mx_color.setAlpha(150)
+                    painter.setPen(QPen(mx_color, 1, Qt.PenStyle.DotLine))
+                    painter.drawPath(mx_path)
 
         if self._hover_x is not None and pts:
             self._paint_hover(painter, plot, pts, x_of, y_of, metrics)
@@ -536,16 +586,69 @@ class TrafficWindow(QDialog):
         root.setContentsMargins(18, 16, 18, 14)
         root.setSpacing(12)
 
-        self.out_label = QLabel("—")
-        self.in_label = QLabel("—")
-        self.phone_label = QLabel("—")
-        self.gap_label = QLabel("—")
-        for label in (self.out_label, self.in_label, self.phone_label, self.gap_label):
+        self.out_label = WrapLabel("—")
+        self.in_label = WrapLabel("—")
+        # SESSION LENGTH + RATE (owner request 2026-08-13, his first two
+        # asks beside "this session X MB"): one line, always shown — it
+        # needs no phone connected to mean something, unlike the phone/gap
+        # lines below it, which stay honest about what they cannot say yet.
+        self.duration_label = WrapLabel("—")
+        # WHICH DEVICES (owner's own refinement of the same request): "list
+        # them — a device with this resolution, a device with that
+        # resolution — and even better with a name". ONE ROW PER DEVICE, a
+        # DRAWN swatch (`_LegendMark`, same as the legend below — DESIGN.md:
+        # marks are drawn, not painted characters) beside a PLAIN, single-
+        # line QLabel — never a rich-text paragraph that wraps.
+        #
+        # Round 2 (owner's coordinator, 2026-08-13, after photographing this
+        # window with two real devices staged): the first version put the
+        # whole sentence — title, both devices, both HTML colour spans — into
+        # ONE wrapping RichText QLabel. It measured differently under every
+        # tool that looked at it: Qt's own `heightForWidth` (rich-text
+        # document layout) said 42px, the audit's plain
+        # `QFontMetrics.boundingRect` over the same markup-laden STRING said
+        # 54px, and forcing the label to the larger of the two then starved
+        # its SIBLINGS of the vertical budget `_computed_minimum` had given
+        # them. Three unrelated numbers fighting over one box is not a size
+        # bug to patch, it is the wrong widget: a sentence that WRAPS can
+        # never be measured the same way twice by three different callers,
+        # so this list no longer wraps at all — each device is its own row,
+        # each row is short enough at the window's floor width that it never
+        # needs a second line, and "how tall is one line of plain text" is a
+        # question every measurer in this codebase already agrees on.
+        self.devices_title = QLabel("Devices seen:")
+        self.devices_title.setObjectName("caption")
+        self.devices_rows_layout = QVBoxLayout()
+        self.devices_rows_layout.setContentsMargins(0, 0, 0, 0)
+        self.devices_rows_layout.setSpacing(2)
+        self._device_row_widgets: list[QWidget] = []
+        self.phone_label = WrapLabel("—")
+        self.gap_label = WrapLabel("—")
+        for label in (self.out_label, self.in_label, self.duration_label,
+                      self.phone_label, self.gap_label):
             label.setWordWrap(True)   # ladder step 2: reflow before a wider window
+            # AND THE LAYOUT MUST ACTUALLY ASK (found 2026-08-13 by the Qt
+            # audit, the first time this window was photographed with real
+            # data in it). `setWordWrap(True)` alone only lets a QLabel wrap —
+            # it does not make its parent layout allocate the second line,
+            # because a QVBoxLayout consults `heightForWidth` ONLY when the
+            # widget's size policy says it has one. Without this the device
+            # legend wrapped to two lines inside a 32 px box and the audit
+            # read it as ELIDED: 'needs 48px height, has 32'. The whole
+            # reflow step of the ladder was mute here, and it was invisible
+            # for as long as every one of these lines happened to be short
+            # enough to fit — which is exactly until a second device appeared.
+            policy = label.sizePolicy()
+            policy.setHeightForWidth(True)
+            label.setSizePolicy(policy)
+        self.duration_label.setObjectName("caption")
         self.phone_label.setObjectName("caption")
         self.gap_label.setObjectName("caption")
         root.addWidget(self.out_label)
         root.addWidget(self.in_label)
+        root.addWidget(self.duration_label)
+        root.addWidget(self.devices_title)
+        root.addLayout(self.devices_rows_layout)
         root.addWidget(self.phone_label)
         root.addWidget(self.gap_label)
 
@@ -695,7 +798,15 @@ class TrafficWindow(QDialog):
                         + 3 * spacing)
         width = max(CHART_MIN.width(), controls_row) + 36
         rows = metrics.height() + 6
-        height = (rows * 4            # the four header lines
+        height = (rows * 5            # out/in/duration/phone/gap: one line each
+                  + rows * 3          # devices title + up to two device rows —
+                                      # a FLOOR ONLY: `settle_minimum` grows
+                                      # this in place from the real, currently-
+                                      # built rows (`_rebuild_device_rows`,
+                                      # single-line, never wrapping), so a
+                                      # third or fourth device widens the
+                                      # window's declared minimum on its own
+                                      # rather than needing a bigger guess here
                   + CHART_MIN.height()
                   + rows * 2          # legend grid (two rows of marks)
                   + rows * 2          # legend note (wraps to two at the floor)
@@ -732,6 +843,42 @@ class TrafficWindow(QDialog):
             self._history.start(since, SETTINGS.traffic_history_max_buckets)
             self._history_next_at = now + SETTINGS.traffic_history_refresh_s
 
+    def _rebuild_device_rows(self, known: list[dict]) -> None:
+        """One row per device — a DRAWN colour swatch (`_LegendMark`) + a
+        PLAIN, single-line `QLabel` — never the wrapping rich-text paragraph
+        this used to be (see the constructor's own note on why: three
+        different Qt/audit measurers disagreed about how tall one wrapping
+        RichText label needed to be). `setUpdatesEnabled(False)` around the
+        teardown/rebuild avoids a visible flash on every 1 s tick when the
+        list has not actually changed — cheap insurance since this runs on
+        every refresh."""
+        self.devices_rows_layout.setEnabled(False)
+        for widget in self._device_row_widgets:
+            widget.setParent(None)
+            widget.deleteLater()
+        self._device_row_widgets = []
+        if not known:
+            row = QLabel("No device has connected since this server started.")
+            row.setObjectName("caption")
+            self.devices_rows_layout.addWidget(row)
+            self._device_row_widgets.append(row)
+        else:
+            for entry in known:
+                row = QWidget()
+                row_layout = QHBoxLayout(row)
+                row_layout.setContentsMargins(0, 0, 0, 0)
+                row_layout.setSpacing(6)
+                color = device_color(entry["index"])
+                mark = _LegendMark(lambda c=color: QColor(c), "dot")
+                label = QLabel(entry["label"])
+                label.setObjectName("caption")
+                row_layout.addWidget(mark)
+                row_layout.addWidget(label)
+                row_layout.addStretch()
+                self.devices_rows_layout.addWidget(row)
+                self._device_row_widgets.append(row)
+        self.devices_rows_layout.setEnabled(True)
+
     def _refresh(self) -> None:
         try:
             snap = traffic.METER.snapshot()
@@ -766,6 +913,25 @@ class TrafficWindow(QDialog):
             self.in_label.setText(
                 f"phone → PC:  {human_rate(snap['in_per_s'])}"
                 f"     ·  this session {human_bytes(snap['total_in'])}")
+
+            # SESSION LENGTH + RATE (owner's asks #1 and #2, 2026-08-13).
+            duration_s, mb_h = traffic_devices.duration_and_rate(
+                snap["total_out"] + snap["total_in"], snap["since"], now)
+            self.duration_label.setText(
+                f"Session length: {traffic_devices.human_duration(duration_s)}"
+                + (f"  ·  average rate: {mb_h:.1f} MB/h"
+                   if mb_h is not None else ""))
+
+            # WHICH DEVICES (owner's own refinement, same request): every
+            # resolution — named where a name was ever learned — that has
+            # connected on this PC, oldest first, each with the same colour
+            # swatch its line segments wear on the chart above. Rebuilt every
+            # tick — a device list changes rarely (once per NEW resolution
+            # ever seen), so tearing down and re-adding a handful of rows a
+            # second costs nothing worth avoiding, and it is the only way a
+            # newly-seen device's row appears without a window resize.
+            self._rebuild_device_rows(traffic_devices.REGISTRY.all())
+
             phone = snap["phone"]
             self.phone_label.setText(
                 "The phone's own count since it connected — this app "

@@ -45,6 +45,14 @@ from _focus_fakes import fresh_conn, run_checks, window_manager  # noqa: E402
 import layout_popup  # noqa: E402
 import lost_windows  # noqa: E402
 
+# Captured BEFORE any check ever runs: `install()`'s `lost_windows.wm.place_window
+# = _place` overwrites the ATTRIBUTE on the `window_manager` module itself —
+# `wm` IS `window_manager`, not a copy — so `window_manager.place_window` reads
+# back as the STUB from the very first check onward. The method-boundary checks
+# below need the REAL function back; reading `window_manager.place_window` at
+# that point would just hand them the stub a second time.
+_REAL_PLACE_WINDOW = window_manager.place_window
+
 # One 1920x1080 screen with a 40 px taskbar — the work area every rect below
 # is judged against.
 SCREEN = [(0, 0, 1920, 1040)]
@@ -131,7 +139,7 @@ def install(iconic=(), placed_ok=True):
     lost_windows.wm._title = lambda hwnd: f"window {hwnd:#x}"
     lost_windows.wm.freeze_transitions = lambda hwnd, disabled=True: None
 
-    def _place(hwnd, rect):
+    def _place(hwnd, rect, topmost=True):
         placements.append((hwnd, rect))
         # ALSO into the act log, in ORDER, beside the restore — the whole
         # defect check 6 exists for is the two happening the wrong way round,
@@ -234,10 +242,92 @@ def check_the_rescue_never_raises_topmost():
     """CONSTRAINT 10. A rescued window is a normal window on his desk, not a
     member of anything — and a topmost raise here would strand it above
     everything for the rest of the Windows session, which is the ledger's
-    whole reason for existing."""
+    whole reason for existing.
+
+    This checks only what `rescue()` PASSES to `raise_window` — the argument
+    the two functions agree on. It cannot see whether `place_window` itself
+    kept its own promise, because `install()` REPLACES `place_window` with a
+    stub that only records a rect: two live testers measured a real rescue
+    leaving a real notepad.exe topmost, with this very check green throughout,
+    because `place_window` had no non-topmost mode at all and nothing here
+    ever called the real one. The next two checks close that gap at the
+    METHOD boundary — the `test_layout_member.py`/`test_layout_decompose.py`
+    lesson that an end-to-end check can mask exactly this class of defect."""
     _, _, raises = install()
     lost_windows.rescue(STRANDED, (0, 0, 1920, 1080))
     return bool(raises) and all(topmost is False for _, topmost in raises)
+
+
+def _install_real_place_window():
+    """Point `window_manager.place_window` at the ACTUAL function (undoing
+    `install()`'s stub) with just enough Win32 faked under it — SetWindowPos
+    recording, a live `_frame_rect`, the ledger — for `wait_landed` to settle
+    in milliseconds. Returns `moves`, the `(hwnd, after_hwnd)` pairs every
+    `SetWindowPos` call made, `after_hwnd` being the ONE fact a stub asking
+    "was it placed" can never see: whether Windows was told `HWND_TOPMOST`."""
+    fake, _, _ = install()
+    moves: list[tuple[int, int]] = []
+
+    def _setwindowpos(hwnd, after, x, y, w, h, flags):
+        moves.append((hwnd, after))
+        RECTS[hwnd] = (x, y, w, h)          # zero border offsets — exact echo
+        return 1
+
+    fake.SetWindowPos = _setwindowpos
+    fake.GetWindowLongW = lambda hwnd, index: 0
+    window_manager.user32 = fake
+    window_manager._frame_rect = lambda hwnd: RECTS.get(hwnd)
+    window_manager._border_offsets = lambda hwnd: (0, 0, 0, 0)
+    window_manager.freeze_transitions = lambda hwnd, disabled=True: None
+    window_manager._ledger_save = lambda: None
+    window_manager._topmost.clear()
+    window_manager.place_window = _REAL_PLACE_WINDOW
+    lost_windows.wm.place_window = _REAL_PLACE_WINDOW
+    return moves
+
+
+def check_place_window_topmost_false_is_honest():
+    """THE METHOD ITSELF, isolated from `rescue()` entirely. Before this
+    round `place_window` had exactly one mode — `HWND_TOPMOST` plus
+    `mark_topmost` — so no caller anywhere in this codebase could ever place
+    a window without entering the always-on-top band. `topmost=False` must
+    both tell Windows `HWND_NOTOPMOST` and leave the ledger clean, whether or
+    not the hwnd was already in it."""
+    moves = _install_real_place_window()
+    window_manager._topmost[STRANDED] = "stale"     # a ledger lie to disprove
+    before = RECTS[STRANDED]
+    try:
+        ok = _REAL_PLACE_WINDOW(STRANDED, (100, 100, 900, 700), topmost=False)
+        if not ok or not moves:
+            print("  DETAIL placement never landed")
+            return False
+        if any(after == window_manager.HWND_TOPMOST for _, after in moves):
+            print(f"  DETAIL HWND_TOPMOST was used anyway: {moves}")
+            return False
+        if STRANDED in window_manager._topmost:
+            print("  DETAIL the ledger still claims it after a non-topmost place")
+            return False
+        return True
+    finally:
+        RECTS[STRANDED] = before   # this file's shared fixture, left as found
+
+
+def check_the_rescue_leaves_no_ledger_entry():
+    """THE REGRESSION ITSELF, reproduced: a real `rescue()` call through the
+    REAL `place_window` (not the stub every other check in this file uses)
+    must never leave the hwnd in `window_manager._topmost`. This is the check
+    that would have failed on the two live testers' notepad.exe."""
+    _install_real_place_window()
+    before = RECTS[STRANDED]
+    try:
+        lost_windows.rescue(STRANDED, (0, 0, 1920, 1080))
+        if STRANDED in window_manager._topmost:
+            print(f"  DETAIL still in the ledger after rescue: "
+                  f"{window_manager._topmost}")
+            return False
+        return True
+    finally:
+        RECTS[STRANDED] = before   # this file's shared fixture, left as found
 
 
 def check_a_refused_placement_still_raises_and_reports():
@@ -318,6 +408,10 @@ CHECKS = [
      check_the_target_lands_inside_the_work_area),
     ("restore comes before the placement", check_restore_comes_before_the_placement),
     ("the rescue never raises topmost", check_the_rescue_never_raises_topmost),
+    ("place_window(topmost=False) is honest at the method boundary",
+     check_place_window_topmost_false_is_honest),
+    ("the rescue leaves no ledger entry through the REAL place_window",
+     check_the_rescue_leaves_no_ledger_entry),
     ("a refused placement still raises, and reports failure",
      check_a_refused_placement_still_raises_and_reports),
     ("the chip is offered at the desktop too",

@@ -217,18 +217,48 @@ def focus_claude_prompt(injector: InputInjector, guard=None,
 
     Blocking on purpose (the caller runs it in a thread), like `paste_text`
     below, and it runs BEFORE that function rather than inside it: a refusal
-    here must cost zero keystrokes, not a partial command."""
+    here must cost zero keystrokes, not a partial command.
+
+    One line of its own body: everything below the process assertion is the
+    generic palette drive, which the layout acts of 2026-08-13 need too (VS
+    Code's "New Conversation" is the same act with another command name), and
+    a second copy of a sequence whose every step is a fence check is exactly
+    what this project's own history says goes stale."""
+    return palette_command(
+        injector, CLAUDE_FOCUS_COMMAND, guard, CLAUDE_FOCUS_PROCESS,
+        process_of=process_of,
+        wrong_app=("The command was NOT sent — VS Code is not the window in "
+                   "front. Open the Claude conversation first."),
+        what="Claude focus")
+
+
+def palette_command(injector: InputInjector, command: str, guard,
+                    want_process: str, process_of=None,
+                    wrong_app: str = "", what: str = "Palette command") -> str:
+    """Run one VS Code Command Palette entry, or refuse having injected NOTHING.
+
+    Extracted from `focus_claude_prompt` on 2026-08-13 unchanged — same
+    sequence, same fence checks at the same three points, same sentences — when
+    the New panel's layout group needed the SAME delivery for a different
+    command (`layout_acts.py`). The palette is the one route that does not
+    depend on any current state, and the reasoning for that, and for asserting
+    the process FIRST, is written above `CLAUDE_FOCUS_COMMAND`.
+
+    THE PROCESS ASSERTION IS NOT OPTIONAL AND IS NEVER A CALLER'S CHOICE:
+    `Ctrl+Shift+P` into a stranger's window is a global chord fired at whatever
+    really holds the keyboard, so a target that is not `want_process` costs
+    zero injections."""
     process_of = process_of or _target_process
     target = guard() if guard is not None else 0
     if guard is not None and not target:
-        logger.error("Claude focus refused — focus could not be secured")
+        logger.error("%s refused — focus could not be secured", what)
         return "The command was NOT sent — another window holds the keyboard"
     name = process_of(target) if target else ""
-    if name != CLAUDE_FOCUS_PROCESS:
-        logger.error("Claude focus refused — the target runs %s, not %s",
-                     name or "nothing readable", CLAUDE_FOCUS_PROCESS)
-        return ("The command was NOT sent — VS Code is not the window in "
-                "front. Open the Claude conversation first.")
+    if name != want_process:
+        logger.error("%s refused — the target runs %s, not %s",
+                     what, name or "nothing readable", want_process)
+        return wrong_app or ("The command was NOT sent — the window in front "
+                             "is not the one this button is for")
     # OURS, NOT HIS (owner 2026-08-12, task 200's loose end). This string is
     # machinery — the name of a VS Code command we are about to run through
     # the palette — and without this line the task-182 listener sees the PC
@@ -236,39 +266,39 @@ def focus_claude_prompt(injector: InputInjector, guard=None,
     # clipboard on EVERY tap of a Claude button, silently replacing whatever
     # he had there. `note_written` is the existing echo guard; the paste path
     # ten lines below has always called it and this path simply never did.
-    clipboard_sync.note_written(CLAUDE_FOCUS_COMMAND)
-    if not clipboard.copy_text(CLAUDE_FOCUS_COMMAND):
+    clipboard_sync.note_written(command)
+    if not clipboard.copy_text(command):
         # No typed fallback: the command name would go into the palette
         # character by character while it re-filters, and a MIS-filtered
         # palette entry run by the Enter below is an arbitrary VS Code command.
-        logger.error("Clipboard busy — the Claude prompt was not focused")
+        logger.error("Clipboard busy — %s was not run", command)
         return "Clipboard busy — try the command again"
     injector.press_chord("ctrl+shift+p")
     if not _settled(guard):
         # The palette is left standing on the PC, deliberately: the Escape that
         # would close it is another injection, and focus is exactly what we no
         # longer have — it would land in the thief.
-        logger.error("Claude focus abandoned — focus left before the command "
-                     "name could be pasted")
+        logger.error("%s abandoned — focus left before the command "
+                     "name could be pasted", what)
         return "The command was NOT sent — another window took the keyboard"
     injector.press_chord("ctrl+v")
     if not _settled(guard):
-        logger.error("Claude focus abandoned — focus left before the palette "
-                     "entry could be run; nothing was submitted")
+        logger.error("%s abandoned — focus left before the palette "
+                     "entry could be run; nothing was submitted", what)
         return "The command was NOT sent — another window took the keyboard"
     injector.press_key("enter")
     if not _handed_off(guard):
-        logger.error("Claude focus abandoned — focus left while VS Code was "
-                     "still handing the caret to the prompt; nothing was typed")
+        logger.error("%s abandoned — focus left while VS Code was "
+                     "still handing the caret over; nothing was typed", what)
         return "The command was NOT sent — another window took the keyboard"
     # Logged on SUCCESS too, and named. His 2026-08-12 report could not be
     # diagnosed from the log because this path was silent unless it refused:
     # the only trace a working sequence left was two clipboard writes 566 ms
     # apart, which says the palette ran and says nothing about where the caret
     # ended up. One line here is what makes the next report a read, not a hunt.
-    logger.info("Claude prompt focused via the Command Palette (target 0x%x) "
-                "— %.2fs hand-off honoured before the command is typed",
-                target, CLAUDE_HANDOFF_DELAY)
+    logger.info("%s ran %r via the Command Palette (target 0x%x) "
+                "— %.2fs hand-off honoured before anything is typed",
+                what, command, target, CLAUDE_HANDOFF_DELAY)
     return ""
 
 

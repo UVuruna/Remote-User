@@ -37,7 +37,80 @@ implementation, called wherever a window's geometry is final.
 
 from PySide6.QtCore import QSize
 from PySide6.QtGui import QGuiApplication
-from PySide6.QtWidgets import QWidget
+from PySide6.QtWidgets import QLabel, QSizePolicy, QWidget
+
+
+class WrapLabel(QLabel):
+    """A QLabel that really gets the height its wrapped text needs.
+
+    THE LADDER'S REFLOW STEP WAS MUTE IN THIS CODEBASE, and it was mute
+    silently (found 2026-08-13, the first time the Traffic window was
+    photographed with real data in it — the audit read its device legend as
+    ELIDED, "needs 48px height, has 32"). `setWordWrap(True)` only permits a
+    QLabel to wrap. It does not make the parent layout ALLOCATE the second
+    line: a wrapped QLabel's `minimumSizeHint` is one line tall, and a
+    QVBoxLayout squeezed by a stretching sibling — here the chart, which
+    takes every spare pixel by design — hands it exactly that. Setting
+    `sizePolicy().setHeightForWidth(True)` is not enough either; it changes
+    what the layout MAY ask for, not the floor below which the label refuses
+    to be squeezed.
+
+    So the floor is stated outright: on every resize, and after every text
+    change, the label's own `heightForWidth` at its current width becomes its
+    minimum height. That is a real measurement of the real string in the real
+    font at the real width, never an estimate of how many lines some text
+    "should" take.
+
+    It lives in `sizing.py` rather than beside its first caller because the
+    defect is not the Traffic window's: any window with a wrapping label under
+    a stretching sibling has it, and the responsibility for how big a thing
+    has to be is this module's.
+    """
+
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self.setWordWrap(True)
+        policy = self.sizePolicy()
+        policy.setHeightForWidth(True)
+        policy.setVerticalPolicy(QSizePolicy.Policy.Minimum)
+        self.setSizePolicy(policy)
+
+    def _claim_height(self) -> None:
+        width = self.width()
+        if width <= 0:
+            return
+        needed = self.heightForWidth(width)
+        if needed > 0 and needed != self.minimumHeight():
+            self.setMinimumHeight(needed)
+
+    def minimumSizeHint(self) -> QSize:        # noqa: N802 (Qt's own name)
+        """AND THE WINDOW'S OWN MINIMUM MUST HEAR ABOUT IT (ladder step 3).
+        `setMinimumHeight` alone fixes the label inside a window that is
+        already big enough; it does not raise the FLOOR the window declares,
+        because `sizing.settle_minimum` grows a window by re-measuring what
+        its children say they need, and a wrapped QLabel's own
+        `minimumSizeHint` is one line tall however long its text is. Without
+        this override the Traffic window's minimum stayed at a height its own
+        device legend could not fit in — reflow solved the roomy case and left
+        the smallest one exactly as broken."""
+        hint = super().minimumSizeHint()
+        width = self.width()
+        if width > 0:
+            needed = self.heightForWidth(width)
+            if needed > 0:
+                return QSize(hint.width(), max(hint.height(), needed))
+        return hint
+
+    def resizeEvent(self, event) -> None:      # noqa: N802 (Qt's own name)
+        super().resizeEvent(event)
+        self._claim_height()
+
+    def setText(self, text: str) -> None:      # noqa: N802 (Qt's own name)
+        super().setText(text)
+        # A LONGER STRING IS A TALLER LABEL, and this one's text changes once
+        # a second: the device legend grows a row the moment a second device
+        # connects, which is precisely when the old code ran out of height.
+        self._claim_height()
 
 # ═══════════════════════════ SETTLE PARAMETERS ═══════════════════════════
 # Wrapped text makes height depend on width, which makes the measurement

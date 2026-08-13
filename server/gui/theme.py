@@ -36,7 +36,7 @@ from PySide6.QtWidgets import (
     QApplication, QFrame, QGraphicsDropShadowEffect, QVBoxLayout, QWidget,
 )
 
-from config import BUNDLE_DIR, FROZEN, PROJECT_ROOT
+from config import BUNDLE_DIR, FROZEN, PROJECT_ROOT, SET_COLORS
 
 # ═══════════════════════════ ASSET PATHS ═══════════════════════════
 # QSS reaches assets by PATH, so it needs the one the app is actually running
@@ -236,6 +236,32 @@ PALETTES = {
         "radiusCard": "14px",
     },
 }
+
+# ═══════════════════════════ DEVICE COLOURS (Traffic window) ═══════════════════════════
+# One colour per PHONE that has connected, so the Traffic chart can show
+# which stretches of the line came from which device (owner request
+# 2026-08-13). Defined once, here — never a second table: this reuses
+# `config.SET_COLORS` verbatim, cycled by `server.traffic_devices`' persisted
+# device index, rather than inventing a second palette that would need its
+# own contrast proof. `SET_COLORS` already satisfies exactly the constraint
+# this window needs (its own header: "the same hex work on both pages" —
+# capped saturation, 26-54% lightness, a white label clears AA on every
+# entry) and is already swept by `tests/test_layout_audit.py` on both
+# palettes, so a device line stays legible on dark AND light with no new
+# audit surface. `DEVICE_UNKNOWN_COLOR` is what an old CSV row with no
+# recorded device — or a bucket where multiple devices mixed — draws in:
+# `text2`-family grey, never a bright hue nothing chose it to mean.
+DEVICE_COLORS: tuple[str, ...] = tuple(SET_COLORS.values())
+DEVICE_UNKNOWN_COLOR = "#8A93A6"   # a neutral grey, close to both palettes' text2
+
+
+def device_color(index: int) -> str:
+    """The colour for device slot `index` (from `traffic_devices.DeviceRegistry`),
+    or the neutral grey for an unknown/unattributed stretch (`index < 0`)."""
+    if index < 0 or not DEVICE_COLORS:
+        return DEVICE_UNKNOWN_COLOR
+    return DEVICE_COLORS[index % len(DEVICE_COLORS)]
+
 
 DEFAULT_THEME = "dark"
 

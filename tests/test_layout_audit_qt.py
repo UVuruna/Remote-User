@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import os
 import sys
+import tempfile
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -52,7 +53,7 @@ from types import SimpleNamespace
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "server"))
 
 from PySide6.QtCore import QSize, Qt  # noqa: E402
-from PySide6.QtGui import QPixmap  # noqa: E402
+from PySide6.QtGui import QPixmap, QTextDocument  # noqa: E402
 from PySide6.QtWidgets import (  # noqa: E402
     QAbstractItemView, QAbstractScrollArea, QApplication, QCheckBox,
     QHeaderView, QLabel, QLayout, QLineEdit, QListWidget, QPushButton,
@@ -305,15 +306,78 @@ def make_wheel_order_dialog() -> QWidget:
 
 
 def make_traffic_window() -> QWidget:
+    import time
     import traffic
+    import traffic_devices
+    from gui.theme import device_color
     from gui.traffic_window import TrafficWindow
-    # FULLEST state (the 2026-08-05 lesson: an empty panel measures nothing):
-    # a phone connected and reporting its own counters, and an absence long
-    # enough for the away-gap line to carry its longest sentence.
+    # FULLEST state (the 2026-08-05 lesson: an empty panel measures nothing).
+    # Round 2 (coordinator rejection, 2026-08-13): the FIRST version staged
+    # two devices but never fed the METER a `Sample` — the chart, "Session
+    # length" and MB/h all read `traffic.METER.samples`/`.since`/`.total_out`,
+    # none of which a bare `note_device`/`set_clients` call touches, so the
+    # screenshot showed the true EMPTY state under a passing gate. This now
+    # drives the real path: two devices alternating three times (one named,
+    # one resolution-only), a session backdated 10 minutes so the MB/h guard
+    # (<5s) never hides the rate, one sample/second across the default span.
     traffic.METER.reset()
-    traffic.METER.set_clients(1)
-    traffic.METER.note_phone({"app_rx": 1, "app_tx": 1, "dev_rx": 1, "dev_tx": 1})
-    traffic.METER.set_clients(0)
+    # AN AUDIT MAY NEVER WRITE INTO THE OWNER'S REAL, PERSISTED REGISTRY
+    # (found 2026-08-13 by reading the picture, not the code): a fixture
+    # calling `note()` on the live singleton wrote fake phones into his file
+    # for good, so a LATER run inherited a stale entry (three devices in the
+    # legend for two staged) while an EARLIER run's tablet key was simply
+    # missing (`index_for` -> -1, drawn in neutral grey) — a fixture whose
+    # result depends on a previous run's leftovers proves nothing either way.
+    tmp = Path(tempfile.mkdtemp(prefix="vc-audit-devices-"))
+    traffic_devices.REGISTRY = traffic_devices.DeviceRegistry(
+        tmp / "traffic_devices.json")
+    phone = traffic_devices.REGISTRY.note(1080, 2400, "Samsung Galaxy S10")
+    tablet = traffic_devices.REGISTRY.note(2560, 1600, None)
+    # The colours the chart will really use, asserted HERE rather than hoped
+    # for: two devices that both resolve to a real slot, and two slots that
+    # are not the same colour. A staged device that fails to register is the
+    # exact defect above, and it must not be able to pass quietly again.
+    assert phone["index"] >= 0 and tablet["index"] >= 0, (
+        "both staged devices must hold a colour slot")
+    assert device_color(phone["index"]) != device_color(tablet["index"]), (
+        "the staged devices must not share a colour — the picture is the proof")
+
+    now = time.time()
+    session_start = now - 600.0   # a real 10-minute session for the MB/h line
+    traffic.METER.since = session_start
+
+    SPAN_S = 110          # inside the default "Last 2 minutes" (120 s) span
+    SEGMENTS = 4           # A, B, A, B -> three colour switches
+    PHONE_OUT, PHONE_IN = 6_000, 900          # smaller screen, smaller bytes
+    TABLET_OUT, TABLET_IN = 42_000, 3_000     # bigger screen, bigger bytes
+    # THE FIXTURE MUST SPEAK THE PRODUCTION KEY, NOT A LITERAL (found
+    # 2026-08-13 by sampling the drawn stroke): a hand-written "2560x1600"
+    # string does not match `device_key`'s SORTED output, so `index_for`
+    # answered -1 and every tablet segment drew unknown-device grey while the
+    # shipped code was right. Calling `device_key` here also proves the
+    # ROTATED tablet (two spellings, one physical device) stays one slot.
+    tablet_key_by_segment = [traffic_devices.device_key(2560, 1600),
+                             traffic_devices.device_key(1600, 2560)]
+    phone_key = traffic_devices.device_key(1080, 2400)
+    seg_len = SPAN_S // SEGMENTS
+    total_out = total_in = 0
+    traffic.METER.samples.clear()
+    for i in range(SPAN_S):
+        t, segment = now - SPAN_S + i + 1, (i // seg_len)
+        on_tablet = segment % 2 == 1
+        key = tablet_key_by_segment[segment // 2 % 2] if on_tablet else phone_key
+        out_b, in_b = (TABLET_OUT, TABLET_IN) if on_tablet else (PHONE_OUT, PHONE_IN)
+        traffic.METER.samples.append(traffic.Sample(t, out_b, in_b, 1, key))
+        total_out += out_b
+        total_in += in_b
+    # The session TOTAL is the whole 10 minutes, not just the visible 110 s
+    # window (a real session sends steadily, not only in the last 2 minutes
+    # the default span shows) — scaled from the same per-second rates so the
+    # "this session X MB" line and the MB/h line agree with what the chart
+    # itself is showing per second.
+    traffic.METER.total_out = int(total_out * (600.0 / SPAN_S))
+    traffic.METER.total_in = int(total_in * (600.0 / SPAN_S))
+    traffic.METER.note_device(2560, 1600, None)   # the CURRENT device (tablet, unnamed)
     traffic.METER.set_clients(1)
     traffic.METER.note_phone({"app_rx": 9 << 20, "app_tx": 9 << 20,
                               "dev_rx": 9 << 30, "dev_tx": 9 << 30})
@@ -507,9 +571,45 @@ def check_clipping(window: QWidget) -> list[str]:
     return problems
 
 
+def _is_rich(label: QLabel) -> bool:
+    """Is this label's text HTML as far as QT is concerned? RichText outright,
+    or AutoText that Qt's own detector calls rich — the case here, since
+    nothing sets the format explicitly on a label that simply contains a
+    coloured bullet."""
+    fmt = label.textFormat()
+    if fmt == Qt.TextFormat.RichText:
+        return True
+    if fmt != Qt.TextFormat.AutoText:
+        return False
+    # Qt's own `mightBeRichText` is not exposed by PySide6, so the test is the
+    # narrowest one that cannot misfire on prose: a tag opened and closed.
+    # Plain sentences in this project's windows contain no angle brackets —
+    # its arrows are drawn or are the real characters (-> is written as an
+    # em-dash arrow), never `<` — so a label reaching this branch with both
+    # brackets really is markup.
+    text = label.text()
+    return "<" in text and ">" in text
+
+
 def visible_text(widget: QWidget) -> str:
     if isinstance(widget, (QLabel, QPushButton, QCheckBox)):
-        return widget.text()
+        text = widget.text()
+        # WHAT THE EYE READS, NOT WHAT THE STRING HOLDS (found 2026-08-13 on
+        # the Traffic window's device legend, the first RICH-TEXT label this
+        # audit ever measured). Every check below hands this string to plain
+        # QFontMetrics, which has no idea that `<span style="color:#186B89;">`
+        # is markup — it measured the CSS as if the owner could see it and
+        # demanded 54px for a line that renders in 21. A window cannot be made
+        # to pass that, and "make the label taller" would have been us
+        # reserving screen for invisible characters.
+        # Qt's own parser decides whether a label is rich text (auto-detection
+        # included, which is what this label relies on), and QTextDocument is
+        # the same engine that will paint it — never a regex over the markup.
+        if isinstance(widget, QLabel) and _is_rich(widget):
+            doc = QTextDocument()
+            doc.setHtml(text)
+            return doc.toPlainText()
+        return text
     if isinstance(widget, QLineEdit):
         return widget.text() or widget.placeholderText()
     return ""

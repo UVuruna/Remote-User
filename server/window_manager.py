@@ -381,27 +381,48 @@ def close_windows(hwnds: list[int],
     return alive
 
 
-def place_window(hwnd: int, rect: tuple[int, int, int, int]) -> bool:
+def place_window(hwnd: int, rect: tuple[int, int, int, int],
+                 topmost: bool = True) -> bool:
     """Restore + move/size so the VISIBLE frame lands on rect, VERIFIED. Apps
     with a minimum size simply end up larger — the phone letterboxes
     (owner-accepted). Layout members go TOPMOST the moment they are touched
     (owner decree 2026-08-04: a layout is NEVER below any other window, not
     even mid-creation); `drop_topmost` is the other half of that lifecycle.
     Returns whether the window really stands on the commanded rect — a False
-    must reach the phone as a toast, never be shrugged off."""
+    must reach the phone as a toast, never be shrugged off.
+
+    `topmost=False` (defect 1, 2026-08-13 live-test report): an HONEST
+    non-topmost placement — `HWND_NOTOPMOST`, which also clears the style bit
+    if the window somehow already carried it, and skips `mark_topmost` so the
+    LEDGER never claims a window we did not raise. Built for
+    `lost_windows.rescue()`, whose own contract says "a normal window
+    standing on his desk" — before this, EVERY caller of `place_window` went
+    through `HWND_TOPMOST` unconditionally, so a rescue silently nailed the
+    window above everything and left a ledger entry lying about it. A
+    `drop_topmost()` bolted on afterward was rejected on purpose: it would
+    still flash topmost-then-not, and briefly write a ledger entry this
+    function itself knows is false the moment it is written."""
     x, y, w, h = rect
+    after = HWND_TOPMOST if topmost else HWND_NOTOPMOST
     freeze_transitions(hwnd)
     user32.ShowWindow(hwnd, SW_RESTORE)
+    landed = False
     for _ in range(PLACE_RETRIES + 1):
         # Borders re-read per attempt — the first SetWindowPos can change them
         # (e.g. a maximized window dropping back to a sizable frame).
         bl, bt, br, bb = _border_offsets(hwnd)
-        user32.SetWindowPos(hwnd, HWND_TOPMOST,
+        user32.SetWindowPos(hwnd, after,
                             x - bl, y - bt, w + bl + br, h + bt + bb,
                             SWP_NOACTIVATE)
-        mark_topmost(hwnd)  # the ledger owes this window a way back down
+        if topmost:
+            mark_topmost(hwnd)  # the ledger owes this window a way back down
         if wait_landed(hwnd, rect):
-            return True
+            landed = True
+            break
+    if not topmost:
+        drop_topmost(hwnd)  # ledger cleanup — idempotent, and cheap either way
+    if landed:
+        return True
     logger.warning("Window %#x refused rect %s (stands at %s)",
                    hwnd, rect, _frame_rect(hwnd))
     return False

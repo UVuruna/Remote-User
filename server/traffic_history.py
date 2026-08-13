@@ -53,6 +53,15 @@ class Point:
     clients: int      # MAX clients seen anywhere in the bucket — a single
                        # connected second inside a wide bucket must not read
                        # as "nobody was here"
+    device: str = ""  # the device KEY that owned the LAST active second in
+                       # this bucket ("" = nobody / an old pre-device CSV row)
+                       # — see `traffic.Sample.device`. A whole-bucket vote
+                       # would need holding every row's device in memory,
+                       # against this reader's whole point (O(bucket count),
+                       # never O(file size)); "last active" is the cheap
+                       # answer and, since only one device is ever connected
+                       # at a time, is exactly right for every bucket the
+                       # session did not switch devices mid-bucket.
 
 
 # ═══════════════════════════ CSV FILES ═══════════════════════════
@@ -98,12 +107,23 @@ def _parse_time(text: str) -> float:
 
 def _parse_row(line: str):
     """`None` on anything malformed — a torn last line from a killed process,
-    a hand-edited file — never raises out of the reader."""
+    a hand-edited file — never raises out of the reader.
+
+    Accepts BOTH the 4-column pre-device format and the 5-column format that
+    added `device` (owner request 2026-08-13) — a file spanning the upgrade
+    has rows of both widths, and a reader that only accepted one would either
+    crash on the tail of an old file or throw away everything written before
+    the server was updated. A row shorter than 5 columns reads as device ""
+    ("unknown device") rather than failing — silently mis-attributing old
+    traffic would be worse than honestly not knowing whose it was."""
     parts = line.rstrip("\n").split(",")
-    if len(parts) != 4:
+    if len(parts) not in (4, 5):
         return None
     try:
-        return _parse_time(parts[0]), int(parts[1]), int(parts[2]), int(parts[3])
+        t, out_b, in_b, clients = (
+            _parse_time(parts[0]), int(parts[1]), int(parts[2]), int(parts[3]))
+        device = parts[4] if len(parts) == 5 else ""
+        return t, out_b, in_b, clients, device
     except (ValueError, IndexError):
         return None
 
@@ -150,9 +170,10 @@ def read_history(since: float | None, max_buckets: int) -> list[Point]:
     cur_out: list[int] = []
     cur_in: list[int] = []
     cur_clients = 0
+    cur_device = ""
 
     def flush() -> None:
-        nonlocal cur_idx, cur_out, cur_in, cur_clients
+        nonlocal cur_idx, cur_out, cur_in, cur_clients, cur_device
         if cur_idx is None or not cur_out:
             return
         points.append(Point(
@@ -162,14 +183,15 @@ def read_history(since: float | None, max_buckets: int) -> list[Point]:
             in_avg=sum(cur_in) / len(cur_in),
             in_max=max(cur_in),
             clients=cur_clients,
+            device=cur_device,
         ))
-        cur_out, cur_in, cur_clients = [], [], 0
+        cur_out, cur_in, cur_clients, cur_device = [], [], 0, ""
 
     for line in _iter_rows(paths):
         row = _parse_row(line)
         if row is None:
             continue
-        t, out_b, in_b, clients = row
+        t, out_b, in_b, clients, device = row
         if t < start:
             continue
         idx = min(max_buckets - 1, int((t - start) / width))
@@ -179,6 +201,13 @@ def read_history(since: float | None, max_buckets: int) -> list[Point]:
         cur_out.append(out_b)
         cur_in.append(in_b)
         cur_clients = max(cur_clients, clients)
+        # "Last ACTIVE second wins" (see the Point docstring): a device is
+        # only worth recording for a bucket when it actually sent/received
+        # something in it, else an idle heartbeat second from a device that
+        # is about to be replaced could steal the bucket's colour from the
+        # device that did all the real work in it.
+        if device and (out_b or in_b):
+            cur_device = device
     flush()
     return points
 

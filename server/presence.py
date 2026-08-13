@@ -150,7 +150,10 @@ async def leave_session(layouts, conn: dict) -> None:
     conn["left"] = True
     conn["active"], conn["region"] = None, None
     logger.info("Phone left work mode — layout members minimized")
-    await asyncio.to_thread(layouts.minimize_members)
+    # session_end=True (defect 1, 2026-08-13): this IS constraint 23's real
+    # session ending, unlike a plain Desktop tap — any adopted popup goes back
+    # where Windows had it and is forgotten, not merely lowered for later.
+    await asyncio.to_thread(layouts.minimize_members, session_end=True)
     await asyncio.to_thread(layouts.clear_topmost)
 
 

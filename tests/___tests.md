@@ -2463,3 +2463,19 @@ stub, because it is the scheduling under test, not Qt.
 
 Run: `.venv\Scripts\python tests/test_gui_nonblocking.py` — also a fail-closed
 step in `build.py` (0aw/6).
+
+---
+
+## Instruments a person runs by hand — [tests/manual/](manual/___manual.md)
+
+Everything above is a GATE: it runs unattended, it fails the build, and each
+check is proven by planting its own defect. [`tests/manual/`](manual/___manual.md)
+is the opposite and is kept apart for that reason — a folder of instruments the
+owner or an agent runs BY HAND on a real desktop, to answer questions no
+automated check can answer because they are about another application's
+behaviour.
+
+Nothing in it is wired into `run_guards.py` or `build.py`, and nothing in it may
+ever be cited as proof that something works. It exists because rounds were lost
+to guessing what a popup IS, and the next round should reach for the instrument
+instead of guessing again.

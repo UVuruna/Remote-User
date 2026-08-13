@@ -1,0 +1,6 @@
+what,expected default app,why it is in this test
+sample.txt,Notepad,a tiny app that opens instantly
+sample.png,Photos,a different process from the editor
+sample.svg,your browser,a browser may reuse a window instead of making one
+sample.csv,Excel,a slow cold start - the correlation window matters
+sample.html,your browser,the case that opens a TAB and no window at all

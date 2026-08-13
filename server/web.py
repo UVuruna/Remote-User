@@ -293,14 +293,14 @@ def create_app(stream, hub: FrameHub | None, injector: InputInjector, token: str
             hold.cancel()
         stats.clients += 1
         traffic.METER.set_clients(stats.clients)
-        # The device's short/long side ratio — layout placement turns it into
-        # a real aspect per the layout's chosen orientation.
+        # The device's short/long side ratio — layout placement turns it into a real aspect per the layout's chosen orientation.
         screen = first.get("screen") or {}
         try:
             w, h = float(screen.get("w", 9)), float(screen.get("h", 16))
             ratio = min(w, h) / max(w, h) if w > 0 and h > 0 else 9 / 16
         except (TypeError, ValueError):
             ratio = 9 / 16
+        traffic.METER.note_device(w, h, screen.get("model"))  # traffic_devices.py
         # THE PHONE'S OWN OVERRIDES, KNOWN BEFORE THE FIRST ENCODER EXISTS
         # (task 203). Carried on `auth` since 2026-08-11; a page that predates
         # the field says nothing and gets exactly the old behaviour.
