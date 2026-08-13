@@ -262,6 +262,48 @@ def _judged(conn: dict, hwnd: int) -> None:
         known.add(hwnd)
 
 
+# ═══════════════════ WINDOWS WE MADE OURSELVES ═══════════════════
+# OWNER REPORT 2026-08-13, his point 4A: inside a layout he taps "create a
+# layout from a tap", picks a TAB of that layout, and the moment the layout is
+# built the phone asks him whether to show the brand-new window in the layout.
+#
+# It is new, it does belong to a member's process, and every rule above is
+# therefore RIGHT about it — which is the point: no attribution rule can save
+# us here, because the window genuinely is the layout's work. What none of them
+# can know is that the layout's work in this case was OURS. We tore that tab
+# off ourselves, seconds ago, on his instruction.
+#
+# And he named the general case before we hit it: "it will probably happen
+# every time a tab is separated from its original window". So this is not a
+# patch on the creation path — it is a fact every pass in this module has to be
+# told, once, by whoever makes a window: `mine(hwnd)`.
+#
+# MODULE-LEVEL and not per-connection, because the maker does not have a `conn`
+# — `uia.extract_tab` is called from the layout API on a worker thread — and
+# because a window we made is ours on every connection, not just the one that
+# happened to be open. Bounded in time: a handle is a number Windows re-uses,
+# and a permanent set would one day silence a chip about a stranger's window
+# that inherited the number.
+OURS_TTL_S = 60.0
+_OURS: dict[int, float] = {}
+
+
+def mine(hwnd: int) -> None:
+    """Record that WE created this window. Called by every path that makes one
+    (today: tab extraction). Cheap and safe to call with a 0/None hwnd."""
+    if not hwnd:
+        return
+    now = time.monotonic()
+    for dead in [h for h, t in _OURS.items() if now - t > OURS_TTL_S]:
+        del _OURS[dead]
+    _OURS[int(hwnd)] = now
+
+
+def _is_ours(hwnd: int) -> bool:
+    made = _OURS.get(int(hwnd))
+    return made is not None and time.monotonic() - made <= OURS_TTL_S
+
+
 # ═══════════════════════════ ATTRIBUTION ═══════════════════════════
 def _recent_click(conn: dict) -> bool:
     """Did the phone inject a mouse click within `CLICK_GRACE_S`? The SAME
@@ -272,11 +314,18 @@ def _recent_click(conn: dict) -> bool:
     return bool(times) and time.monotonic() - times[-1] <= CLICK_GRACE_S
 
 
+# THE ONE ATTRIBUTION THAT IS NOT A GUESS, and therefore the one that is not a
+# question either (owner report 2026-08-13 — see THE PARENT'S OWN POPUP below).
+# Its own constant because two places must agree on it exactly: the rule that
+# produces it, and the rule that acts on it without asking him.
+OWNED_BY_MEMBER = "a dialog of a layout window"
+
+
 def _attribute(lay, hwnd: int, root: int, conn: dict) -> str:
     """WHY this window is the layout's work — a phrase for the log — or "" for
     a stranger, which is every window this module is not certain about."""
     if root and root in lay.members:
-        return "a dialog of a layout window"
+        return OWNED_BY_MEMBER
     if not _is_new(conn, hwnd):
         # Not new = it was standing here before the phone connected. His other
         # VS Code window is exactly that, and it shares its process with the
@@ -331,25 +380,43 @@ def _describe(hwnd: int) -> str:
     return f'{wm._process_name(hwnd) or "?"} "{wm._title(hwnd)[:60]}" ({hwnd:#x})'
 
 
-def _contain(lay, hwnd: int, conn: dict) -> bool:
+def _centered_in(rect, box):
+    """`rect`'s own size, centered in `box` — or None when it cannot fit."""
+    _, _, w, h = rect
+    bx, by, bw, bh = box
+    if w > bw or h > bh:
+        return None
+    return (bx + (bw - w) // 2, by + (bh - h) // 2, w, h)
+
+
+def _contain(lay, hwnd: int, conn: dict, anchor=None) -> bool:
     """Put this window where the phone can operate it. Returns whether it
     ended up inside the streamed picture.
 
-    The two branches are the owner's two sentences, and which one applies is
+    The branches are the owner's own sentences, and which one applies is
     MEASURED, never assumed:
 
+    * `anchor` — the window this popup BELONGS to, when we know it (his rule of
+      2026-08-13: a popup belongs in the middle of its parent application). It
+      is tried first and at the popup's own size, because a dialog centered on
+      the app that raised it is where the app itself would have put it if
+      Windows had let it.
     * it FITS the region — placed inside it, at its own size, centered. A
       dialog stretched to fill a whole layout would be a worse answer than the
       one Windows gave.
     * it does NOT fit — asked to take the region anyway (a resizable window
       simply obeys, and that is still the first answer), and only when it
       REFUSES, which is what a minimum size larger than the region looks like
-      from here, does it go full screen over the streamed monitor."""
+      from here, does it go full screen over the streamed monitor.
+
+    The anchor is a PREFERENCE and never a promise: a dialog larger than the
+    one quadrant its parent occupies still lands in the region, which is still
+    inside the picture. Falling through is the feature, not a failure."""
     region = _region(lay)
     rect = wm._frame_rect(hwnd) if wm.user32.IsWindow(hwnd) else None
     if region is None or rect is None:
         return False
-    if _inside(rect, region):
+    if _inside(rect, region) and (anchor is None or _inside(rect, anchor)):
         return True
 
     tries = conn.setdefault("popup_tries", {})
@@ -357,12 +424,13 @@ def _contain(lay, hwnd: int, conn: dict) -> bool:
     if tries[hwnd] > MAX_CONTAIN_TRIES:
         return False
 
-    x, y, w, h = rect
-    rx, ry, rw, rh = region
-    if w <= rw and h <= rh:
-        target = (rx + (rw - w) // 2, ry + (rh - h) // 2, w, h)
-        if wm.place_window(hwnd, target):
+    if anchor is not None:
+        target = _centered_in(rect, anchor)
+        if target and wm.place_window(hwnd, target):
             return True
+    target = _centered_in(rect, region)
+    if target and wm.place_window(hwnd, target):
+        return True
     if wm.place_window(hwnd, region):
         return True
     # It cannot be made to fit, so it opens separate over the whole screen —
@@ -377,6 +445,61 @@ def _contain(lay, hwnd: int, conn: dict) -> bool:
                  "full screen %s — it stays where Windows put it",
                  _describe(hwnd), region, full)
     return False
+
+
+# ═══════════════════ THE PARENT'S OWN POPUP ═══════════════════
+# OWNER REPORT 2026-08-13, and he had to correct the whole previous round to
+# get here. What actually happens to him is not "a window opened while I was
+# away" — it is this:
+# lang-ok-begin: owner quote — the sentence this section is built from
+#   "nekada ja otvaram aplikaciju kada aplikacija otvara aplikaciju"
+#   "Dakle kada se otvori popup WINDOWS ga baci VAN GRANICA NAŠEG PROZORA"
+#   "Rješenje je da se taj POPUP od MATIČNE APLIKACIJE PRIKAZUJE U NJENOJ
+#    SREDINI"
+# lang-ok-end
+#
+# An agent working in a layout's VS Code opens a report, a "Record a shortcut"
+# window, a permission dialog. Windows centers such a window on its parent's
+# *restored* geometry or on the last place that app used — neither of which is
+# the quarter of the screen the layout just moved the parent into. The popup
+# lands outside the region, under the members' always-on-top band, and there is
+# no taskbar on a phone.
+#
+# WHY THIS ONE IS NOT A QUESTION. Every other rule in this module is a guess
+# about WHOSE window this is, and a wrong guess would move a stranger's window
+# — which is why they all end in a chip he taps. The owner chain is not a
+# guess: Windows itself says this window was raised BY that member, takes it
+# down when the member minimizes, and closes it when the member closes. Asking
+# permission to put an application's own dialog on top of that application is
+# asking him to confirm what the application already decided. So rule 1 places,
+# and rules 2-4 still ask.
+#
+# IT IS THE PARENT AND NOT THE REGION. A layout of four holds four windows; a
+# VS Code dialog belongs on the VS Code, not floating in the middle of a grid
+# over three windows it has nothing to do with. `_contain`'s ladder falls back
+# to the region and then to the full screen when the dialog is simply too big
+# for one cell, so the guarantee — it is inside the picture — never depends on
+# the anchor succeeding.
+
+
+def _adopt_owned(lay, hwnd: int, root: int, conn: dict) -> bool:
+    """A member's OWN popup: put it on the member, now, without asking.
+
+    Returns whether it was handled here (so the caller offers nothing). The
+    LEDGER is owed either way (constraint 10) — `place_window` raises it into
+    the always-on-top band, and `lay.adopted` is what `release_adopted()` walks
+    when the layout stops being what the phone shows."""
+    if root == hwnd or root not in lay.members:
+        return False
+    if not wm.user32.IsWindow(hwnd) or wm.user32.IsIconic(hwnd):
+        return False
+    if hwnd not in lay.adopted:
+        lay.adopted.append(hwnd)
+    anchor = wm._frame_rect(root)
+    if _contain(lay, hwnd, conn, anchor):
+        logger.info("Popup %s centered on its parent %s", _describe(hwnd),
+                    _describe(root))
+    return True
 
 
 # ═══════════════════════════ ASKING HIM ═══════════════════════════
@@ -400,23 +523,36 @@ def _expire() -> None:
         del _OFFERS[key]
 
 
+def queue_offer(conn: dict, hwnd: int, prefix: str, held: dict,
+                payload: dict, asked_key: str) -> str:
+    """Register one chip and queue it for the phone; returns its id.
+
+    ONE FUNCTION FOR ALL THREE QUESTIONS this module asks (and for task 185's,
+    which lives next door). Each of them used to keep its own copy of the same
+    eight lines — expire, bump the counter, mint a key, file the offer, mark
+    the window as asked, append the frame — and three copies of a bookkeeping
+    dance is three places for the day one of them stops matching the others."""
+    global _NEXT_ID
+    _expire()
+    _NEXT_ID += 1
+    key = f"{prefix}{hwnd:x}-{_NEXT_ID}"
+    _OFFERS[key] = {"hwnd": hwnd, "conn": conn, "at": time.monotonic(), **held}
+    conn.setdefault(asked_key, set()).add(hwnd)
+    conn.setdefault("popup_send", []).append(
+        {"type": "window_offer", "id": key, **payload})
+    return key
+
+
 def _offer(lay, hwnd: int, conn: dict, reason: str) -> str:
     """Queue the phone's two-button chip for this window and return its id.
 
     ONE PROMPT PER WINDOW (`popup_asked`): the watcher runs four times a
     second, and a chip that reappeared on every tick would be worse than the
     bug it answers."""
-    global _NEXT_ID
-    _expire()
-    _NEXT_ID += 1
-    key = f"{hwnd:x}-{_NEXT_ID}"
-    _OFFERS[key] = {"hwnd": hwnd, "lay": lay, "conn": conn,
-                    "at": time.monotonic()}
-    conn.setdefault("popup_asked", set()).add(hwnd)
-    conn.setdefault("popup_send", []).append({
-        "type": "window_offer", "id": key,
-        "title": wm._title(hwnd), "process": wm._process_name(hwnd),
-        "layout": lay.name})
+    key = queue_offer(conn, hwnd, "", {"lay": lay},
+                      {"title": wm._title(hwnd),
+                       "process": wm._process_name(hwnd),
+                       "layout": lay.name}, "popup_asked")
     logger.info("Popup %s offered to the phone as %s (%s)",
                 _describe(hwnd), key, reason)
     return key
@@ -451,80 +587,6 @@ async def flush_offers(conn: dict) -> int:
     return sent
 
 
-# ═══════════════════════ WHEN AN APP OPENS, OFFER A LAYOUT ═══════════════════
-# Owner request 2026-08-09 (task 185): he double-clicks a picture or an .xlsx
-# through the stream, the viewer or Excel opens — and the phone should ASK
-# whether to make a layout with it, with the usual single/grid choices.
-#
-# The SCOPING was recorded before a line was written, and every clause of it is
-# a rule below rather than a hope:
-#
-# * **Only while a phone session is live.** This runs inside `focus_guard.watch`,
-#   which exists per connection, and it stands down while the phone is away —
-#   those windows belong to his desk again.
-# * **Only NEW top-level windows, never dialogs.** `wm.list_windows` already
-#   drops tool windows, cloaked windows, shell chrome, untitled windows and our
-#   own process; an OWNED window (`GW_OWNER`) is a dialog of something else and
-#   is dropped here. A layout member cannot hold a dialog anyway.
-# * **Correlated with an injected DOUBLE-CLICK.** This is the load-bearing one.
-#   This PC is never quiet — background agents launch GUI apps all day
-#   (constraint 11, and the memory note that names it) — so "a window
-#   appeared" is not evidence of anything. What makes it HIS act is that the
-#   phone injected two clicks, close together, moments before. No click, no
-#   question.
-# * **A non-modal chip, on the phone, that auto-dismisses**, reusing the
-#   window-offer flow above rather than a second one. Ignoring it is an answer.
-# * **It never steals PC focus.** Nothing here places, raises or foregrounds
-#   anything at all: the offer is a sentence on the phone, and the creation
-#   panel does every later step through the paths that already exist.
-
-# Two clicks no further apart than this are a double-click. Windows' own
-# default is 500 ms; a little more is right for a finger on a phone driving a
-# button, and being generous here can only ask a question, never move a window.
-DOUBLE_CLICK_S = 0.7
-# How long after that double-click a new window may still be its result. Cold
-# starts are slow (Excel on a busy machine), and the correlation is only ever
-# used to decide whether to ASK.
-BIRTH_AFTER_CLICK_S = 15.0
-GW_OWNER = 4
-
-
-def note_click(conn: dict) -> None:
-    """The phone injected a mouse click. Called from the web layer's click and
-    press branches — the ONLY source, deliberately: a click the PC's own mouse
-    made is not the phone opening something, and cannot be one."""
-    times = conn.setdefault("click_times", [])
-    times.append(time.monotonic())
-    del times[:-4]
-
-
-def _double_clicked(conn: dict) -> bool:
-    times = conn.get("click_times") or []
-    if len(times) < 2:
-        return False
-    now = time.monotonic()
-    return (times[-1] - times[-2] <= DOUBLE_CLICK_S
-            and now - times[-1] <= BIRTH_AFTER_CLICK_S)
-
-
-def _offer_birth(conn: dict, win: dict) -> None:
-    """Queue the "layout with it?" chip for a window he just opened."""
-    global _NEXT_ID
-    _expire()
-    _NEXT_ID += 1
-    hwnd = win["hwnd"]
-    key = f"b{hwnd:x}-{_NEXT_ID}"
-    _OFFERS[key] = {"hwnd": hwnd, "lay": None, "conn": conn, "birth": True,
-                    "at": time.monotonic()}
-    conn.setdefault("birth_asked", set()).add(hwnd)
-    conn.setdefault("popup_send", []).append({
-        "type": "window_offer", "id": key, "act": "layout_new",
-        "title": win.get("title", ""), "process": win.get("process", ""),
-        "hwnd": hwnd, "icon": win.get("icon")})
-    logger.info("New window %s offered as a layout (task 185)",
-                _describe(hwnd))
-
-
 # ═══════════════════ AND THE WINDOW NOBODY CAN REACH ═══════════════════
 # Owner report 2026-08-12, the FIFTH on one failure: a window that opened while
 # his phone was LOCKED sits off every screen and can never be shown again.
@@ -547,18 +609,11 @@ LOST_EVERY_S = 4.0
 
 def _offer_lost(conn: dict, win: dict) -> None:
     """Queue the "bring it back?" chip for a window nobody can reach."""
-    global _NEXT_ID
-    _expire()
-    _NEXT_ID += 1
     hwnd = win["hwnd"]
-    key = f"l{hwnd:x}-{_NEXT_ID}"
-    _OFFERS[key] = {"hwnd": hwnd, "lay": None, "conn": conn, "lost": True,
-                    "at": time.monotonic()}
-    conn.setdefault("lost_asked", set()).add(hwnd)
-    conn.setdefault("popup_send", []).append({
-        "type": "window_offer", "id": key, "act": "rescue",
-        "title": win.get("title", ""), "process": win.get("process", ""),
-        "hwnd": hwnd, "icon": win.get("icon")})
+    queue_offer(conn, hwnd, "l", {"lay": None, "lost": True},
+                {"act": "rescue", "title": win.get("title", ""),
+                 "process": win.get("process", ""), "hwnd": hwnd,
+                 "icon": win.get("icon")}, "lost_asked")
     logger.warning("Window %s is off every screen (%s%s) — rescue offered",
                    _describe(hwnd), win.get("rect"),
                    ", minimized" if win.get("minimized") else "")
@@ -594,62 +649,6 @@ def sweep_lost(layouts, conn: dict) -> None:
         if hwnd in asked or hwnd in left:
             continue
         _offer_lost(conn, win)
-
-
-def scan(layouts, conn: dict) -> None:
-    """One pass: did a window HE opened appear? Blocking Win32 — the watcher
-    runs it on a worker thread.
-
-    Cheap in the common case, and that matters because this runs beside a
-    0.25 s poll: with no recent double-click it costs one comparison and
-    returns. The window sweep is only paid when he has just clicked twice."""
-    seen = conn.get("birth_seen")
-    if seen is None or conn.get("away") or conn.get("left"):
-        return
-    if not _double_clicked(conn):
-        return
-    members: set[int] = set()
-    for other in getattr(layouts, "layouts", []):
-        members.update(other.members)
-        members.update(getattr(other, "adopted", ()))
-    # The layout the phone is SHOWING — the only one whose work can claim a
-    # window out from under this pass (see the one-window-one-question rule
-    # below). Named here rather than in the loop above, because a loop
-    # variable that leaks its last value is how a rule about the FOCUSED
-    # layout would quietly become a rule about the last one in the list.
-    focused = _focused(layouts, conn)
-    for win in wm.list_windows():
-        hwnd = win["hwnd"]
-        if hwnd in seen:
-            continue
-        seen.add(hwnd)          # judged once, whatever the answer
-        if wm.user32.GetWindow(hwnd, GW_OWNER):
-            continue            # a dialog of something else, never a member
-        if hwnd in members or hwnd in conn.get("birth_asked", ()):
-            continue
-        # ONE WINDOW, ONE QUESTION (owner report 2026-08-12, and his own log
-        # dated it to the millisecond). This pass and the sweep below are two
-        # features that never knew about each other, and at 20:29:58 they both
-        # fired on the SAME window inside one tick:
-        #
-        #   New window python.exe "Controls …" offered as a layout (task 185)
-        #   Popup     python.exe "Controls …" offered to the phone as 570a0a-3
-        #
-        # The phone has ONE chip strip and ONE live offer id, so the second
-        # message silently replaced the first — and four more birth chips
-        # followed within 400 ms. His single tap therefore answered a question
-        # he had never read: the "Show in layout" one, whose yes runs
-        # `_contain` and PLACES the window into the layout's region. That is
-        # his report exactly — "it made the dimensions as if for the phone,
-        # but there is no layout".
-        #
-        # So a window the focused layout can claim is the SWEEP's question,
-        # never this one. A new layout from a window that already belongs to
-        # the layout's own work was never a sensible offer anyway.
-        if focused is not None and _attribute(focused, hwnd,
-                                              _owner_root(hwnd), conn):
-            continue
-        _offer_birth(conn, win)
 
 
 def pick(offer_id: str, act: str) -> bool:
@@ -764,8 +763,14 @@ def handle(lay, hwnd: int, root: int, conn: dict) -> str:
         return ""
 
     reason = _attribute(lay, hwnd, root, conn)
+    if reason == OWNED_BY_MEMBER and _adopt_owned(lay, hwnd, root, conn):
+        # Its parent's own dialog, put on its parent (2026-08-13). It is the
+        # layout's now, so the keyboard may stay on it — the same answer
+        # `lay.adopted` gives above, reached without a tap because this
+        # attribution is Windows' own statement and not our guess.
+        return "a dialog this layout's own window raised"
     _judged(conn, hwnd)
-    if not reason:
+    if not reason or _is_ours(hwnd) or not wm.is_listable(hwnd):
         return ""
     _offer(lay, hwnd, conn, reason)
     return ""
@@ -817,6 +822,9 @@ SWEEP_EVERY_S = 1.0
 # exists, and `_judged` is permanent: one look taken at the wrong instant would
 # make a window unattributable for the rest of the session.
 SWEEP_GRACE_S = 3.0
+
+
+GW_OWNER = 4
 
 
 def _owner_root(hwnd: int) -> int:
@@ -878,12 +886,27 @@ def sweep(layouts, conn: dict) -> None:
             continue
         if hwnd in lay.members or hwnd in lay.adopted:
             continue
-        if hwnd in asked or hwnd in declined:
+        if hwnd in asked or hwnd in declined or _is_ours(hwnd):
             continue
-        reason = _attribute(lay, hwnd, _owner_root(hwnd), conn)
+        root = _owner_root(hwnd)
+        reason = _attribute(lay, hwnd, root, conn)
+        if reason == OWNED_BY_MEMBER and _adopt_owned(lay, hwnd, root, conn):
+            # Placed, not offered — his rule of 2026-08-13. Deliberately NOT
+            # `_judged`: an app's dialog can be moved again by the app itself
+            # (a resize as its content loads), and the next sweep must be free
+            # to put it back. `_contain`'s own `popup_tries` is what stops that
+            # becoming a fight with a window that refuses every rect.
+            pending.pop(hwnd, None)
+            continue
         if reason:
             pending.pop(hwnd, None)
             _judged(conn, hwnd)
+            if not wm.is_listable(hwnd):
+                # Attributable but not a window a layout could hold — a tool
+                # window, a cloaked shell surface, something with no title. It
+                # would not appear in the creation list, so a chip about it is
+                # a question the app cannot honour (his point 3).
+                continue
             _offer(lay, hwnd, conn, f"{reason}, seen by the sweep")
             continue
         # Not yet attributable. Give it the grace above before writing it off

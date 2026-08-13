@@ -70,6 +70,7 @@ import threading
 import time
 
 import focus_hook
+import layout_birth
 import layout_popup
 import window_manager
 
@@ -517,7 +518,7 @@ async def watch(layouts, conn: dict, injector=None) -> None:
             # nothing and takes no foreground; the scan's own rules decide
             # whether there is anything to ask (server/layout_popup.py).
             if not conn.get("away") and not conn.get("left"):
-                await asyncio.to_thread(layout_popup.scan, layouts, conn)
+                await asyncio.to_thread(layout_birth.scan, layouts, conn)
                 # IS THERE A WINDOW HE CANNOT REACH AT ALL? (owner report
                 # 2026-08-12, his fifth on one bug.) Beside `scan` and not
                 # inside the `_defending` gate below, for the same reason and

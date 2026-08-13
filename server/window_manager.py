@@ -134,26 +134,44 @@ def is_alive(hwnd: int) -> bool:
         and not _is_cloaked(hwnd)
 
 
+def is_listable(hwnd: int) -> bool:
+    """Is this a window a layout could actually hold?
+
+    THE ONE ANSWER TO THAT QUESTION (owner report 2026-08-13, his point 3): the
+    phone offered him "a layout with it?" for things that are not windows he can
+    do anything with — and when he tapped, the creation list did not even carry
+    them, because that list is built from `list_windows` and the offer was not.
+    A question the app cannot honour is worse than no question.
+
+    The test used to live INSIDE `list_windows`'s callback, where nothing else
+    could reach it, so every other pass that wanted "a real window" wrote its
+    own weaker version — `layout_popup._top_level_hwnds` is `IsWindowVisible`
+    and nothing more, which is how a tool window with a title ended up wearing
+    a chip. It is a function now, and the offer paths ask it."""
+    if not user32.IsWindowVisible(hwnd):
+        return False
+    if user32.GetWindowLongW(hwnd, GWL_EXSTYLE) & WS_EX_TOOLWINDOW:
+        return False
+    if not _title(hwnd) or _is_cloaked(hwnd):
+        return False
+    if _class_name(hwnd) in _SHELL_CLASSES:
+        return False
+    pid = wintypes.DWORD()
+    user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+    return pid.value != os.getpid()
+
+
 def list_windows(exclude: set[int] | None = None) -> list[dict]:
     """Top-level app windows a layout can hold: visible, titled, not shell
     chrome, not tool windows, not this server's own process."""
-    own_pid = os.getpid()
     out: list[dict] = []
     exclude = exclude or set()
 
     @_EnumWindowsProc
     def callback(hwnd, _lparam):
-        if not user32.IsWindowVisible(hwnd) or hwnd in exclude:
-            return True
-        if user32.GetWindowLongW(hwnd, GWL_EXSTYLE) & WS_EX_TOOLWINDOW:
+        if hwnd in exclude or not is_listable(hwnd):
             return True
         title = _title(hwnd)
-        if not title or _is_cloaked(hwnd) or _class_name(hwnd) in _SHELL_CLASSES:
-            return True
-        pid = wintypes.DWORD()
-        user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
-        if pid.value == own_pid:
-            return True
         path = _process_path(hwnd)
         out.append({"hwnd": hwnd, "title": title,
                     "process": os.path.basename(path),

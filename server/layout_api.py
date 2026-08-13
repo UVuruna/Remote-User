@@ -19,6 +19,7 @@ import logging
 
 import agents
 import layout_history
+import layout_popup
 import uia
 import window_manager
 from monitors import rect_for_size
@@ -185,13 +186,63 @@ async def _list_entries(layouts, stream) -> list[dict]:
     return entries
 
 
-async def layout_list(ws, layouts, stream) -> None:
-    """The list-based creation source (owner 2026-08-02)."""
+async def _own_tabs(lay, stream) -> list[dict]:
+    """The tabs of the FOCUSED layout's own members (owner request 2026-08-13,
+    his point 4B): "LAYOUT FROM LIST inside a LAYOUT offers two groups — first
+    what it sees in that layout, then the standard one".
+
+    A member WINDOW is deliberately absent: it is already in a layout, and one
+    window cannot be shown in two places (his rule of 2026-08-03, which is why
+    `_list_entries` excludes it). Its TABS are a different thing entirely — a
+    tab can be torn into a window of its own, so it is genuinely available
+    while its parent is not. That is also the flow he was already using by
+    hand: tap-pick a tab of the layout he is in. The list simply stops hiding
+    what the tap could already reach.
+
+    From the DESKTOP this returns nothing at all — there is no layout to ask,
+    and the list stays exactly what it has always been."""
+    if lay is None:
+        return []
+    rect = mon_rect(stream)
+    out: list[dict] = []
+    for hwnd in list(lay.members):
+        if not window_manager.is_alive(hwnd):
+            continue
+        process = window_manager._process_name(hwnd)
+        if not uia.has_tabs(process) or uia.is_minimized(hwnd):
+            continue
+        icon = window_manager.icon_data_uri(window_manager._process_path(hwnd))
+        for tab in await asyncio.to_thread(uia.offerable_tabs, rect, hwnd,
+                                           process):
+            out.append({"kind": "tab", "hwnd": hwnd, "group": "layout",
+                        "tab": {"name": tab["name"]},
+                        "x": tab["x"], "y": tab["y"],
+                        "title": tab["name"], "process": process,
+                        "icon": icon})
+    return out
+
+
+async def layout_list(ws, layouts, stream, conn: dict | None = None) -> None:
+    """The list-based creation source (owner 2026-08-02).
+
+    TWO GROUPS WHEN A LAYOUT IS FOCUSED (his point 4B, 2026-08-13): what is in
+    that layout first, then the desktop. Every entry carries its `group`, so
+    the phone renders a heading rather than guessing from the order — an order
+    is not a fact the page can check, and a list that silently changes meaning
+    is what task 167 was about."""
+    index = (conn or {}).get("active")
+    lay = None
+    if index is not None and 0 <= index < len(layouts.layouts):
+        lay = layouts.layouts[index]
+    own = await _own_tabs(lay, stream)
     entries = await _list_entries(layouts, stream)
+    for e in entries:
+        e["group"] = "desktop"
     await ws.send_text(json.dumps({
         "type": "layout_offer",
         "target": None,
-        "entries": entries,
+        "entries": own + entries,
+        "in_layout": lay.name if own else None,
         "grids": list(window_manager.GRID_TEMPLATES),
     }))
 
@@ -297,6 +348,15 @@ async def resolve_slot(ws, stream, slot: dict) -> tuple[int, str | None, int] | 
     if extracted is None:
         await toast(ws, f"Could not separate “{tab.get('name', 'tab')}” — using the whole window")
         return (hwnd, None, 0)
+    # WE MADE THIS WINDOW (owner report 2026-08-13, his point 4A). It is
+    # brand-new, it belongs to a member's process, and it appeared a second
+    # after an injected double-click — so every rule in [Layout Birth] and
+    # [Layout Popup] is correct to call it the layout's work and ask him about
+    # it. Only the maker knows it was already answered, by him, one tap ago.
+    # Said HERE and not inside `uia.extract_tab`: the tear-off is a Windows
+    # gesture that any caller may use, while "this is ours" is a fact about
+    # the layout flow that owns this one.
+    layout_popup.mine(extracted)
     return (extracted, tab.get("name"), hwnd)
 
 

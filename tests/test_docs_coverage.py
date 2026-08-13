@@ -323,6 +323,15 @@ ALGORITHMIC = {
     # named limits (whose window is this?) plus a measured containment
     # decision (does it fit the region, or must it go full screen).
     "server/layout_popup.py",
+    # Split out of layout_popup.py on 2026-08-13, when the popup module crossed
+    # the structure law's wall — and by responsibility, not by line count: its
+    # subject is a window HE opened (which nothing may touch until he says so),
+    # the opposite of the popup module's (a window the LAYOUT'S work opened,
+    # which the layout must contain). Sharing one file made them look like one
+    # feature, and on 2026-08-12 that cost him a moved window. Algorithmic: a
+    # double-click CORRELATION with named limits, and the rule deciding which
+    # of the two features owns a window both can claim.
+    "server/layout_birth.py",
     # New 2026-08-13 (owner report 2026-08-12 — the FIFTH on one failure: a
     # window that opened while his phone was locked stands off every screen
     # and can never be shown again). Algorithmic: a REACHABILITY test that is

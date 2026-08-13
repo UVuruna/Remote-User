@@ -51,6 +51,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _focus_fakes import run_checks  # noqa: E402
 
 import test_layout_popup as popup_gate  # noqa: E402
+import layout_birth  # noqa: E402
 import layout_popup  # noqa: E402
 
 CLIENT = Path(__file__).resolve().parent.parent / "client" / "window-offer.js"
@@ -79,9 +80,9 @@ def check_one_window_is_never_asked_about_twice():
     layout_popup.wm.list_windows = lambda exclude=None: [
         {"hwnd": popup_gate.POPUP, "title": "Controls — sets on the phone",
          "process": "python.exe", "icon": None}]
-    layout_popup.note_click(conn)
-    layout_popup.note_click(conn)
-    layout_popup.scan(reg, conn)
+    layout_birth.note_click(conn)
+    layout_birth.note_click(conn)
+    layout_birth.scan(reg, conn)
     layout_popup.sweep(reg, conn)
     for_popup = [m for m in popup_gate.offers(conn)
                  if f"{popup_gate.POPUP:x}" in m.get("id", "")]
@@ -113,9 +114,9 @@ def check_the_desktop_still_gets_the_birth_question():
     layout_popup.wm.list_windows = lambda exclude=None: [
         {"hwnd": popup_gate.STRANGER, "title": "Budget.xlsx - Excel",
          "process": "excel.exe", "icon": None}]
-    layout_popup.note_click(conn)
-    layout_popup.note_click(conn)
-    layout_popup.scan(reg, conn)
+    layout_birth.note_click(conn)
+    layout_birth.note_click(conn)
+    layout_birth.scan(reg, conn)
     return any(m.get("act") == "layout_new" for m in popup_gate.offers(conn))
 
 

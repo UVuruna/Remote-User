@@ -53,7 +53,8 @@ def run_js(body: str, app_sets: list, prefs: dict,
     since wheelCats()/placedCat() read both."""
     module = SETS.read_text(encoding="utf-8")
     for needed in ("function wheelCats", "function placedCat",
-                   "function wheelCap", "function setWheelMode"):
+                   "function wheelCap", "function setWheelMode",
+                   "function settleGroups"):
         assert needed in module, f"{needed} left client/sets.js"
     g = groups if groups is not None else {"left": 0, "right": 0}
     script = f"""
@@ -286,3 +287,93 @@ def main() -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
+
+
+# -- 3. THE DUPLICATE IS AN INVARIANT, NOT A FILTER (owner report 2026-08-13) --
+# His screenshot: Mouse on BOTH D-pad groups and NINE circles on the wheel.
+#
+# Everything above this line tests the FILTER — that a placed set is absent
+# from the ring. The filter was never the problem: it cannot be reached, since
+# a duplicate can only be ASSIGNED, never chosen. Two paths assigned one (the
+# startup restore and `refreshCategories`' per-side clamp), and nothing
+# anywhere held the two sides apart.
+#
+# `settleGroups` is that invariant. It is checked here, beside the filter it
+# protects, because the two together are the rule — and because his second
+# symptom proves they are one defect: with both sides on the same index,
+# `placedCat` returns the SAME OBJECT twice and the filter removes one item
+# instead of two. Nine, not eight. No cap changed; the duplicate did.
+
+def settled(groups, **kw):
+    body = ('settleGroups(); '
+            'console.log(JSON.stringify([groups.left, groups.right, '
+            'wheelCats("left").length]));')
+    return run_js(body, [], PREFS, categories=BASIC, groups=groups, **kw)
+
+
+def test_settle_splits_two_sides_that_hold_the_same_set():
+    left, right, _ = settled({"left": 0, "right": 0})
+    assert left != right, (
+        f"both D-pad groups still show set #{left} — this is his screenshot: "
+        f"Mouse left AND right")
+    assert left == 0, (
+        f"the LEFT side gave way ({left}) — the right is the one that moves, "
+        f"so the choice is predictable")
+
+
+def test_the_ninth_circle_goes_when_the_duplicate_does():
+    """His second symptom, and the proof it was never a cap bug."""
+    _, _, before = run_js(
+        'console.log(JSON.stringify([groups.left, groups.right, '
+        'wheelCats("left").length]));',
+        [], PREFS, categories=BASIC, groups={"left": 0, "right": 0})
+    _, _, after = settled({"left": 0, "right": 0})
+    assert before == len(BASIC) - 1, (
+        f"the duplicated state should shed ONE set ({before}) — if it does "
+        f"not, this check no longer reproduces what he saw")
+    assert after == len(BASIC) - 2, (
+        f"with the sides split, both placed sets shed: expected "
+        f"{len(BASIC) - 2} circles, got {after}")
+
+
+def test_a_shrinking_list_does_not_collapse_both_sides_onto_zero():
+    """The `refreshCategories` path, which is how it really happened: an app
+    set leaves with its layout, both indices fall out of range, and a per-side
+    clamp sends both to 0 — index 0 being Mouse under the shipped order."""
+    left, right, _ = settled({"left": 9, "right": 12})
+    assert (left, right) == (0, 1), (
+        f"out-of-range indices collapsed to ({left}, {right}) instead of "
+        f"landing on two different sets")
+
+
+def test_settle_leaves_a_healthy_pair_exactly_as_it_found_it():
+    """It is an invariant, not a policy: it may only act when the rule is
+    broken. A function that reshuffled his choice on every `actions` frame
+    would be the 2026-08-08 excursion bug all over again."""
+    left, right, _ = settled({"left": 4, "right": 2})
+    assert (left, right) == (4, 2), (
+        f"a legal pair was moved to ({left}, {right})")
+
+
+def test_the_real_path_calls_the_invariant_and_keeps_no_clamp_of_its_own():
+    """AN INVARIANT NOTHING CALLS IS NOT AN INVARIANT.
+
+    `settleGroups` lives in sets.js and every check above drives it directly —
+    which proves the rule and proves nothing about the code that broke it.
+    `refreshCategories` (controls.js) is the path that really assigned the
+    duplicate: it clamped each side to 0 separately, so a list shrinking past
+    both sent both to Mouse. That function is not reachable from this node
+    harness (it is all DOM), so it is read instead: it must delegate, and it
+    must keep no assignment to `groups` of its own — a second clamp beside the
+    invariant is exactly how the two would drift apart again.
+
+    Defect planted: restoring the old two-line clamp fails this and nothing
+    else — which is how we know the node checks above could not see it."""
+    src = (PROJECT / "client" / "controls.js").read_text(encoding="utf-8")
+    start = src.index("function refreshCategories()")
+    body = src[start:src.index("\n}", start)]
+    assert "settleGroups()" in body, (
+        "refreshCategories no longer calls settleGroups — the no-duplicate "
+        "invariant is unreachable from the path that broke it")
+    assert "groups[" not in body and "groups." not in body, (
+        f"refreshCategories assigns to `groups` itself again:\n{body}")

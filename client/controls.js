@@ -582,11 +582,11 @@ function refreshCategories() {
   // colour — the map is rebuilt here, once, rather than per button
   // (client/theme.js).
   resetSetColors();
-  const n = allCats().length;
-  for (const side of ["left", "right"]) {
-    if (groups[side] >= n) groups[side] = 0;
-    renderGroup(side);
-  }
+  // Clamping the two sides SEPARATELY is what put Mouse on both groups (owner
+  // 2026-08-13): a list that shrank past both indices sent both to 0. One
+  // function now owns the whole invariant, including that clamp.
+  settleGroups();
+  for (const side of ["left", "right"]) renderGroup(side);
   // Groups just (re)built at their real width — re-measure the bar (task 237).
   if (typeof layBarFit === "function") layBarFit();
 }

@@ -313,3 +313,19 @@
   body .lay-card.lc-split .lay-actions .lay-chip { width: 100%; text-align: center; }
   body .lay-card.lc-split .lay-name-in { height: 44px; }
 }
+
+/* THE LIST'S TWO GROUPS (owner request 2026-08-13, his point 4B) — the tabs
+   of the layout he is in, then the desktop. A heading INSIDE the scroller,
+   not above it: the groups scroll with their rows, so the one he is reading
+   always says which group it belongs to. It is the same `.lay-sub` type as
+   every other note on the card — a new heading size would claim these are a
+   different kind of thing, and they are the same rows either way. The first
+   one loses its top rule, since a divider above the very first line of a list
+   separates it from nothing. */
+.lc-rows .lc-group {
+  margin: 14px 0 6px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  font-weight: 600;
+}
+.lc-rows .lc-group:first-child { margin-top: 0; padding-top: 0; border-top: 0; }

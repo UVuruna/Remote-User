@@ -297,6 +297,11 @@ function connect() {
         // Mouse/Input). Resolved against the list that will actually ride,
         // by NAME: see sets.js -> restoredGroup.
         const riding = allCats();
+        // These two are still resolved independently — one side's remembered
+        // set says nothing about the other's — and both prefs CAN name the
+        // same set. `refreshCategories()` below runs `settleGroups()`, which
+        // is where the no-duplicate invariant is kept (sets.js); this must
+        // stay downstream of it, never the last word.
         groups.left = restoredGroup("left", msg.left ?? 0, riding);
         groups.right = restoredGroup("right", msg.right ?? 0, riding);
         // The cap of 8 is a LAW over the STORED state too (owner 2026-08-06):

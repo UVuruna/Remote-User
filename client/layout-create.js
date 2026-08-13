@@ -74,7 +74,8 @@ function startListSource() {
 function newCreation(source) {
   return {
     source,                 // "list" | "tap" | "new" | "recent"
-    entries: null,          // list source: [{kind, hwnd, title, process, icon, tab?, x?, y?}]
+    entries: null,          // list source: [{kind, hwnd, title, process, icon, tab?, x?, y?, group}]
+    inLayout: null,         // name of the focused layout whose tabs lead the list (4B)
     slots: [],              // chosen cells, in order — slot 1 names the layout
     name: null,             // owner-typed name; null = follow slot 1's title
     mode: "solo",
@@ -583,6 +584,8 @@ function handleLayoutOffer(msg) {
   if (!creating) creating = newCreation("tap");
   if (msg.entries) {
     creating.entries = msg.entries;
+    // The layout whose own tabs lead the list, or null at the desktop (4B).
+    creating.inLayout = msg.in_layout || null;
   } else if (msg.target) {
     creating.slots.push(slotFromOffer(msg));
     creating.awaitingTap = false;
@@ -828,7 +831,25 @@ function renderCreationPanel() {
     }
     const list = document.createElement("div");
     list.className = "lc-rows lc-scroll";
+    // TWO GROUPS WHEN THE LIST WAS ASKED FOR FROM INSIDE A LAYOUT (owner
+    // request 2026-08-13, his point 4B): the tabs of the layout he is in come
+    // first, then the desktop. Driven by each entry's own `group` and not by
+    // its position — an order is not something the page can verify, and a list
+    // that quietly changes meaning is the failure task 167 was about. With no
+    // layout focused the server sends one group and this emits no heading at
+    // all, so the desktop list looks exactly as it always has.
+    let group = null;
     c.entries.forEach((e) => {
+      if (e.group && e.group !== group) {
+        group = e.group;
+        if (c.inLayout) {
+          const head = document.createElement("p");
+          head.className = "lay-sub lc-group";
+          head.textContent = group === "layout"
+            ? `In this layout — ${c.inLayout}:` : "Elsewhere on the PC:";
+          list.appendChild(head);
+        }
+      }
       const slot = slotFromEntry(e);
       const idx = c.slots.findIndex((s) => sameSlot(s, slot));
       const off = idx < 0 && ownTabConflict(slot);

@@ -656,3 +656,17 @@ def input_gate(step, run) -> None:
     step("0ay/6  WINDOW OFFER GATE — one window asks one question, and the "
          "chip waits for his tap (tests/test_window_offer_queue.py)")
     run([sys.executable, str(PROJECT_DIR / "tests" / "test_window_offer_queue.py")])
+
+    # OWNER REPORT 2026-08-13, his point 4B: "LAYOUT FROM LIST from inside a
+    # LAYOUT should offer TWO groups — first what it sees in that layout, then
+    # the standard one; from the DESKTOP only the standard."
+    #
+    # A window in a layout is excluded from the creation list (his own rule of
+    # 2026-08-03 — one window cannot be in two places), and excluding the
+    # window silently took its TABS with it. But a tab is not its window: it
+    # can be torn into a window of its own, which is exactly what the TAP
+    # source could already do inside a layout. The list simply stopped hiding
+    # what the tap could reach.
+    step("0az/6  CREATION LIST GATE — the list from a layout shows that "
+         "layout's own tabs first (tests/test_layout_list_groups.py)")
+    run([sys.executable, str(PROJECT_DIR / "tests" / "test_layout_list_groups.py")])

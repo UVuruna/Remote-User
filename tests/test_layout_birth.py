@@ -42,6 +42,7 @@ from _focus_fakes import (  # noqa: E402
     window_manager, with_win32,
 )
 
+import layout_birth  # noqa: E402
 import layout_popup  # noqa: E402
 import recents  # noqa: E402
 
@@ -69,6 +70,10 @@ def desk(windows, owner=None, clicks=2, active=None):
     window_manager.list_windows = lambda exclude=None: listing(*windows)
     window_manager.place_window = lambda hwnd, rect: PLACED.append((hwnd, rect))
     PLACED.clear()
+    # "Windows we made ourselves" is MODULE state (a maker has no `conn`), so a
+    # fresh desk must forget it — otherwise one check's record silences the
+    # next one's chip and the gate reads green for the wrong reason.
+    layout_popup._OURS.clear()
     reg = layout_with([MEMBER_A, MEMBER_B])
     conn = fresh_conn(active=active)
     # The baseline the phone's connection took: MEMBER_A/B and OLD were up.
@@ -81,7 +86,7 @@ def desk(windows, owner=None, clicks=2, active=None):
     finally:
         layout_popup._top_level_hwnds = real_scan
     for _ in range(clicks):
-        layout_popup.note_click(conn)
+        layout_birth.note_click(conn)
     return reg, conn, fake
 
 
@@ -98,7 +103,7 @@ def check_a_window_he_opened_is_offered_as_a_layout() -> bool:
     phone is asked — once — and the chip NAMES the window, because "a layout
     with it?" about an unnamed thing is not a question anyone can answer."""
     reg, conn, _ = desk([MEMBER_A, MEMBER_B, OLD, NEWWIN])
-    layout_popup.scan(reg, conn)
+    layout_birth.scan(reg, conn)
     queued = chips(conn)
     if len(queued) != 1:
         print(f"  DETAIL he was asked {len(queued)} times: {queued}")
@@ -112,7 +117,7 @@ def check_a_window_he_opened_is_offered_as_a_layout() -> bool:
         return False
     # …and asked ONCE, not four times a second.
     for _ in range(5):
-        layout_popup.scan(reg, conn)
+        layout_birth.scan(reg, conn)
     return len(chips(conn)) == 1
 
 
@@ -124,14 +129,14 @@ def check_nothing_on_the_pc_is_touched_by_the_question() -> bool:
     yes is the phone's own creation panel."""
     reg, conn, _ = desk([MEMBER_A, MEMBER_B, OLD, NEWWIN])
     raises = Raises().install()
-    layout_popup.scan(reg, conn)
+    layout_birth.scan(reg, conn)
     if PLACED or raises:
         print(f"  DETAIL asking moved something: placed={PLACED} raises={raises}")
         return False
     for act in ("layout_new", "desktop"):
         reg, conn, _ = desk([MEMBER_A, MEMBER_B, OLD, NEWWIN])
         raises = Raises().install()
-        layout_popup.scan(reg, conn)
+        layout_birth.scan(reg, conn)
         layout_popup.pick(chips(conn)[0]["id"], act)
         if PLACED or raises:
             print(f"  DETAIL answering '{act}' moved something: {PLACED} {raises}")
@@ -146,24 +151,24 @@ def check_no_double_click_means_no_question() -> bool:
     is nothing to ask about."""
     for clicks in (0, 1):
         reg, conn, _ = desk([MEMBER_A, MEMBER_B, OLD, NEWWIN], clicks=clicks)
-        layout_popup.scan(reg, conn)
+        layout_birth.scan(reg, conn)
         if chips(conn):
             print(f"  DETAIL asked after {clicks} click(s): {chips(conn)}")
             return False
     # …and two clicks far apart are two single clicks, not a double.
     reg, conn, _ = desk([MEMBER_A, MEMBER_B, OLD, NEWWIN], clicks=0)
-    layout_popup.note_click(conn)
-    conn["click_times"][-1] -= layout_popup.DOUBLE_CLICK_S * 2
-    layout_popup.note_click(conn)
-    layout_popup.scan(reg, conn)
+    layout_birth.note_click(conn)
+    conn["click_times"][-1] -= layout_birth.DOUBLE_CLICK_S * 2
+    layout_birth.note_click(conn)
+    layout_birth.scan(reg, conn)
     if chips(conn):
         print("  DETAIL two clicks a second apart counted as a double-click")
         return False
     # …and a double-click LONG ago cannot explain a window opening now.
     reg, conn, _ = desk([MEMBER_A, MEMBER_B, OLD, NEWWIN])
-    conn["click_times"] = [t - layout_popup.BIRTH_AFTER_CLICK_S - 5
+    conn["click_times"] = [t - layout_birth.BIRTH_AFTER_CLICK_S - 5
                            for t in conn["click_times"]]
-    layout_popup.scan(reg, conn)
+    layout_birth.scan(reg, conn)
     return not chips(conn)
 
 
@@ -173,7 +178,7 @@ def check_a_dialog_is_never_offered() -> bool:
     is gone before he could answer."""
     reg, conn, _ = desk([MEMBER_A, MEMBER_B, OLD, DIALOG2],
                         owner={DIALOG2: NEWWIN})
-    layout_popup.scan(reg, conn)
+    layout_birth.scan(reg, conn)
     if chips(conn):
         print(f"  DETAIL a dialog was offered: {chips(conn)}")
         return False
@@ -185,7 +190,7 @@ def check_a_window_that_was_already_open_is_never_offered() -> bool:
     every window on his desk would be offered the first time he double-clicks
     anything."""
     reg, conn, _ = desk([MEMBER_A, MEMBER_B, OLD])
-    layout_popup.scan(reg, conn)
+    layout_birth.scan(reg, conn)
     if chips(conn):
         print(f"  DETAIL a standing window was offered: {chips(conn)}")
         return False
@@ -198,7 +203,7 @@ def check_a_layout_member_is_never_offered() -> bool:
     different question with a different chip."""
     reg, conn, _ = desk([MEMBER_A, MEMBER_B, OLD, NEWWIN], active=0)
     reg.layouts[0].members.append(NEWWIN)
-    layout_popup.scan(reg, conn)
+    layout_birth.scan(reg, conn)
     return not chips(conn)
 
 
@@ -209,7 +214,7 @@ def check_nothing_is_asked_while_the_phone_is_away() -> bool:
     for key in ("away", "left"):
         reg, conn, _ = desk([MEMBER_A, MEMBER_B, OLD, NEWWIN])
         conn[key] = True
-        layout_popup.scan(reg, conn)
+        layout_birth.scan(reg, conn)
         if chips(conn):
             print(f"  DETAIL asked while {key}: {chips(conn)}")
             return False
@@ -233,7 +238,7 @@ def check_the_two_questions_do_not_eat_each_other() -> bool:
     the window outright — which is where the bookkeeping property this check
     exists for is measured, unchanged."""
     reg, conn, _ = desk([MEMBER_A, MEMBER_B, OLD, NEWWIN], active=None)
-    layout_popup.scan(reg, conn)
+    layout_birth.scan(reg, conn)
     if not chips(conn):
         return False
     # The layout branch must still see NEWWIN as new — that is the whole
@@ -484,6 +489,39 @@ def check_an_entry_that_cannot_be_opened_says_so() -> bool:
     return recents.open_entry("nosuchapp|new|").get("error")
 
 
+def check_a_window_we_tore_off_ourselves_is_never_offered() -> bool:
+    """OWNER REPORT 2026-08-13, HIS POINT 4A: inside a layout he picks a TAB
+    with the tap source, the layout is built — and the phone immediately asks
+    whether to make a layout with the brand-new window.
+
+    Every rule this gate protects is RIGHT about that window. It IS new, he DID
+    just double-click (that is how he picked the tab), and it appeared moments
+    after. No attribution rule can tell it apart, because there is nothing to
+    tell apart: it is his act, and it was already answered when he tapped.
+
+    What makes it different is the one fact only the MAKER holds — we tore that
+    tab off ourselves — and he named the general case before the code did: it
+    will happen every time a tab is separated from its window. So the maker
+    says so, once, and every pass reads it.
+
+    Defect planted: dropping `layout_popup._is_ours` from `scan` fails this."""
+    reg, conn, _ = desk([MEMBER_A, MEMBER_B, OLD, NEWWIN])
+    layout_popup.mine(NEWWIN)
+    layout_birth.scan(reg, conn)
+    if chips(conn):
+        print(f"  DETAIL the tab we tore off was offered back to him: "
+              f"{chips(conn)}")
+        return False
+    # And the rule is a fact about ONE window, not a switch: a window we did
+    # NOT make is still his question, in the very same pass.
+    reg, conn, _ = desk([MEMBER_A, MEMBER_B, OLD, NEWWIN])
+    layout_birth.scan(reg, conn)
+    if len(chips(conn)) != 1:
+        print(f"  DETAIL the feature was switched off entirely: {chips(conn)}")
+        return False
+    return True
+
+
 CHECKS = [
     ("185: a window he opened is offered as a layout, once, and named",
      check_a_window_he_opened_is_offered_as_a_layout),
@@ -500,6 +538,8 @@ CHECKS = [
      check_nothing_is_asked_while_the_phone_is_away),
     ("185: it does not blind the layout-adoption question next door",
      check_the_two_questions_do_not_eat_each_other),
+    ("4A: a tab WE tore off is never offered back to him",
+     check_a_window_we_tore_off_ourselves_is_never_offered),
     ("242: VS Code recents come from the LIVE state.vscdb list, not the stale menu cache",
      check_vscode_recents_are_read_from_the_real_key),
     ("242: a decoy/wrong-key db yields nothing, never chaotic entries",

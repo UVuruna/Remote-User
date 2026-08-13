@@ -52,11 +52,14 @@ STRANGER = 0x50        # another agent's window — a different process, no kin
 OLD_TWIN = 0x51        # his OTHER VS Code window: same process, already open
 CHILD = 0x52           # the viewer a member started
 CLICKED = 0x53         # an already-running third-party app, opened by HIS click
+TOOLWIN = 0x54         # a member's own TOOL window — real, new, and unofferable
+OURS = 0x55            # a window WE made (a torn-off tab) — never his question
 
 MEMBER_PID, OTHER_PID, CHILD_PID = 1000, 2000, 3000
 PIDS = {MEMBER_A: MEMBER_PID, MEMBER_B: MEMBER_PID, DIALOG: MEMBER_PID,
         POPUP: MEMBER_PID, BIG: MEMBER_PID, OLD_TWIN: MEMBER_PID,
-        STRANGER: OTHER_PID, CHILD: CHILD_PID, CLICKED: OTHER_PID}
+        STRANGER: OTHER_PID, CHILD: CHILD_PID, CLICKED: OTHER_PID,
+        TOOLWIN: MEMBER_PID, OURS: MEMBER_PID}
 PARENTS = {CHILD_PID: MEMBER_PID, OTHER_PID: 4, MEMBER_PID: 4}
 
 MONITOR = (0, 0, 2560, 1400)
@@ -66,7 +69,12 @@ HOME = {MEMBER_A: (100, 100, 600, 800), MEMBER_B: (700, 100, 600, 800),
         POPUP: (1800, 900, 400, 300),   # outside the region, and small
         BIG: (1700, 40, 1600, 1000),    # outside the region, and too big
         STRANGER: (1500, 500, 800, 600), OLD_TWIN: (1500, 500, 800, 600),
-        CHILD: (2000, 200, 300, 200), CLICKED: (1600, 700, 700, 500)}
+        CHILD: (2000, 200, 300, 200), CLICKED: (1600, 700, 700, 500),
+        TOOLWIN: (1900, 300, 200, 120), OURS: (1750, 350, 500, 400)}
+# What `window_manager.is_listable` refuses: a window no layout could hold, so
+# no chip may name it (owner report 2026-08-13, his point 3). A TOOL window is
+# the honest case — Windows really does hand these a title and real geometry.
+NOT_LISTABLE = {TOOLWIN}
 # What a window REFUSES to shrink below — how a minimum size looks from here.
 MINSIZE = {BIG: (1400, 900)}
 
@@ -109,6 +117,8 @@ def desk(fg, alive=None, owner=None):
     DESK_WINDOWS.clear()
     DESK_WINDOWS.update(alive)
     layout_popup._top_level_hwnds = lambda: set(DESK_WINDOWS)
+    window_manager.is_listable = lambda hwnd: hwnd not in NOT_LISTABLE
+    layout_popup._OURS.clear()
 
     reg = layout_with([MEMBER_A, MEMBER_B], last_member=MEMBER_A)
     conn = fresh_conn(active=0)
@@ -178,7 +188,10 @@ def check_the_chip_is_sent_once_per_window() -> bool:
     """The watcher runs four times a second. A chip that came back on every
     tick would be worse than the bug it answers — and it must really reach the
     phone, over the page's own socket."""
-    reg, conn = desk(fg=DIALOG)
+    # POPUP and not DIALOG: since 2026-08-13 a member's OWN dialog is placed
+    # without a chip (his rule), so the window that still ASKS is the one whose
+    # attribution is a guess — a new window of the member's process.
+    reg, conn = desk(fg=POPUP)
     for _ in range(5):
         focus_guard.guard(reg, conn)
     if len(offers(conn)) != 1:
@@ -208,7 +221,7 @@ def check_leaving_it_on_the_desktop_moves_nothing_ever() -> bool:
     """His other answer, and the DEFAULT one. Nothing on the PC moves, and the
     window is never asked about again — a chip that reappeared after he had
     already answered it would be the same nagging in a new place."""
-    reg, conn = desk(fg=DIALOG)
+    reg, conn = desk(fg=POPUP)
     ask(reg, conn, act="desktop")
     if PLACED or LEDGER or reg.layouts[0].adopted:
         print(f"  DETAIL a declined window was still moved: {PLACED}")
@@ -223,25 +236,36 @@ def check_leaving_it_on_the_desktop_moves_nothing_ever() -> bool:
 
 
 # ═══════════════ 2. and when he says YES, the placement rules run ═══════════════
-def check_a_member_dialog_that_fits_is_placed_inside_the_region() -> bool:
-    """HIS CASE, in its commonest shape: a member window raises a prompt and
-    Windows puts it wherever it likes. It fits the region, so his "Show in
-    layout" moves it inside at its own size — and the keyboard stays on it
-    throughout, because it is a dialog he opened on purpose (the rule that
-    predates this round and must survive it)."""
+def check_a_member_dialog_is_placed_on_its_parent_without_asking() -> bool:
+    """HIS RULE OF 2026-08-13, and the correction of a whole round that fixed
+    the wrong thing: "when a popup opens, WINDOWS throws it OUTSIDE the bounds
+    of our window … the solution is that the POPUP of the PARENT APPLICATION is
+    SHOWN IN ITS MIDDLE".
+
+    Three separate promises, and each one is planted against below:
+
+    * NO CHIP. The owner chain is Windows' own statement that this member
+      raised this window — not a guess like every other rule here — so asking
+      him to confirm his app's own dialog is asking him to confirm nothing.
+    * ON THE PARENT, not on the region. A four-grid dialog belongs on the
+      window that raised it, and the two rects are deliberately different here
+      so a check cannot pass by measuring the wrong one.
+    * The LEDGER still owes it a way back down (constraint 10) — it is in the
+      always-on-top band now, and nothing we raise may outlive us there.
+    """
     reg, conn = desk(fg=DIALOG)
     target = focus_guard.guard(reg, conn)
     if target != DIALOG:
         print(f"  DETAIL focus was yanked to {target:#x} instead of the dialog")
         return False
-    queued = offers(conn)
-    if len(queued) != 1:
-        print(f"  DETAIL the dialog was not offered: {queued}")
+    if offers(conn):
+        print(f"  DETAIL his app's own dialog still asked him: {offers(conn)}")
         return False
-    layout_popup.pick(queued[0]["id"], "layout")
-    if PLACED != [(DIALOG, centered(HOME[DIALOG]))]:
+    want = centered(HOME[DIALOG], HOME[MEMBER_A])
+    if PLACED != [(DIALOG, want)]:
         print(f"  DETAIL the dialog was placed {PLACED}, expected it centered "
-              f"in the region at {centered(HOME[DIALOG])}")
+              f"on its PARENT at {want} (the region would be "
+              f"{centered(HOME[DIALOG])})")
         return False
     if DIALOG not in LEDGER or DIALOG not in reg.layouts[0].adopted:
         print("  DETAIL the dialog is in the picture but nothing owes it a way "
@@ -500,22 +524,38 @@ def check_a_window_opened_under_a_focused_layout_is_offered_at_once() -> bool:
 
 def check_it_is_not_asked_twice_when_he_then_switches_layout() -> bool:
     """His timeline continued: he changed layout, the window finally reached
-    the foreground and the old path looked at it. One window, one question —
-    whichever eye saw it first."""
-    # A member's DIALOG, deliberately, and not the report window: a dialog is
-    # attributed by its OWNER chain, so it stays attributable after the sweep
-    # has judged it. Planting proved the report window masks this check — the
-    # sweep marks it judged, and "not new any more" would refuse a second chip
-    # even with the one-question rule deleted. The check has to be able to see
-    # the defect it is written about (the 2026-08-09 lesson, task 165).
+    the foreground and the old path looked at it. TWO EYES, ONE ACT.
+
+    The check used to drive a member's DIALOG here, deliberately: a dialog is
+    attributed by its OWNER chain, so unlike every other case it stays
+    attributable after the sweep has judged it, and only that made the "asked
+    twice" defect visible at all. Since 2026-08-13 a dialog is PLACED and never
+    asked — so the two eyes now have two different promises to keep, and both
+    are checked, each with the fixture that can actually show it failing:
+
+    * the dialog: seen by both eyes, it must never produce a chip from either;
+    * the report window: chipped by the first eye, answered, and then never
+      raised again by the second.
+    """
     reg, conn = desk(fg=MEMBER_A, alive=(MEMBER_A, MEMBER_B, OLD_TWIN, DIALOG))
     layout_popup.sweep(reg, conn)
-    first = len(offers(conn))
-    # The switch: the members leave the topmost band and the window comes up.
-    # Same connection, same layout registry — only the foreground moved.
     window_manager.user32.fg = DIALOG
     focus_guard.guard(reg, conn)
     conn["popup_swept"] = 0.0                 # and the next sweep, unthrottled
+    layout_popup.sweep(reg, conn)
+    if offers(conn):
+        print(f"  DETAIL the dialog asked after all: {offers(conn)}")
+        return False
+    if DIALOG not in reg.layouts[0].adopted:
+        print("  DETAIL neither eye placed the dialog")
+        return False
+
+    reg, conn = desk(fg=MEMBER_A, alive=(MEMBER_A, MEMBER_B, OLD_TWIN, POPUP))
+    layout_popup.sweep(reg, conn)
+    first = len(offers(conn))
+    window_manager.user32.fg = POPUP
+    focus_guard.guard(reg, conn)
+    conn["popup_swept"] = 0.0
     layout_popup.sweep(reg, conn)
     if first != 1 or len(offers(conn)) != 1:
         print(f"  DETAIL asked {len(offers(conn))} times, first pass {first}")
@@ -637,9 +677,15 @@ def check_a_members_dialog_is_swept_however_old_it_is() -> bool:
     while the phone was away — which is precisely the window he reported.
 
     Both halves are checked, because only the pair is the rule: an OLD dialog
-    of a member is offered, and his OLD second window of the same app — same
+    of a member is ACTED ON, and his OLD second window of the same app — same
     process, no owner chain — is still refused. Losing the second half would
     be the fence gone.
+
+    What "acted on" means changed on 2026-08-13 and the age rule did not: a
+    dialog is now placed on its parent instead of chipped (his rule). So the
+    outcome measured here is the PLACEMENT, and OLD_TWIN must reach neither
+    the placement nor the chip — a fence that only held one of the two would
+    still be a way to move his window.
 
     Defect planted: restoring the bare `if not _is_new(...): continue` fails
     this and nothing else."""
@@ -651,10 +697,11 @@ def check_a_members_dialog_is_swept_however_old_it_is() -> bool:
     layout_popup.sweep(reg, conn)
     got = {m.get("id", "").split("-")[0] for m in offers(conn)}
     offered = {int(h, 16) for h in got if h}
-    if DIALOG not in offered:
+    placed = {h for h, _ in PLACED}
+    if DIALOG not in placed:
         print("  DETAIL a member's own dialog was skipped for being old")
         return False
-    if OLD_TWIN in offered:
+    if OLD_TWIN in offered or OLD_TWIN in placed:
         print("  DETAIL his OTHER window of the same app was adopted — the "
               "fence is gone")
         return False
@@ -719,6 +766,83 @@ def check_a_click_correlated_window_is_never_asked_twice() -> bool:
     return True
 
 
+# ═══ 7. WHAT MAY NEVER WEAR A CHIP AT ALL (owner report 2026-08-13) ═══
+def check_a_window_no_layout_could_hold_is_never_offered() -> bool:
+    """HIS POINT 3: the phone kept asking him about things that are not windows
+    he can do anything with — and when he tapped, the creation list did not
+    even carry them.
+
+    The two lists were built by different code. `wm.list_windows` (the creation
+    list) drops tool windows, cloaked surfaces and untitled windows; the popup
+    sweep's own eye was `IsWindowVisible` and nothing else. So a member's TOOL
+    window is attributable by every rule here, and it is exactly what a chip
+    may not name: a question the app cannot honour is worse than no question.
+
+    TOOLWIN is a member's own process and NEW, so it passes attribution — the
+    only thing standing between it and a chip is the listability test."""
+    reg, conn = desk(fg=MEMBER_A,
+                     alive=(MEMBER_A, MEMBER_B, TOOLWIN, POPUP))
+    layout_popup.sweep(reg, conn)
+    named = {int(m.get("id", "").split("-")[0], 16) for m in offers(conn)
+             if m.get("id")}
+    if TOOLWIN in named:
+        print("  DETAIL a tool window was offered as a layout member")
+        return False
+    # …and the real window beside it still is, so this is a filter and not a
+    # switch that turned the feature off.
+    if POPUP not in named:
+        print(f"  DETAIL the filter ate the real window too: {named}")
+        return False
+    return True
+
+
+def check_a_window_we_made_ourselves_is_never_offered() -> bool:
+    """HIS POINT 4A: he taps "create a layout from a tap" inside a layout,
+    picks a TAB of that layout, and the moment the layout is built the phone
+    asks whether to show the brand-new window in it.
+
+    Every rule is RIGHT about that window — new, a member's process, moments
+    after an injected click — which is why no attribution rule could ever fix
+    it. Only the maker knows, and `layout_popup.mine()` is the maker saying so.
+
+    Also checked: the record EXPIRES. A window handle is a number Windows
+    re-uses, and a permanent record would one day silence a chip about a
+    stranger's window that inherited it."""
+    reg, conn = desk(fg=MEMBER_A, alive=(MEMBER_A, MEMBER_B, OURS))
+    layout_popup.mine(OURS)
+    layout_popup.sweep(reg, conn)
+    if offers(conn):
+        print(f"  DETAIL the tab we tore off was offered back to him: "
+              f"{offers(conn)}")
+        return False
+    reg, conn = desk(fg=MEMBER_A, alive=(MEMBER_A, MEMBER_B, OURS))
+    layout_popup._OURS[OURS] = time.monotonic() - layout_popup.OURS_TTL_S - 1
+    layout_popup.sweep(reg, conn)
+    if not offers(conn):
+        print("  DETAIL a long-expired record still silences the chip — a "
+              "recycled handle would be muted forever")
+        return False
+    return True
+
+
+def check_a_dialog_too_big_for_its_parent_still_lands_in_the_picture() -> bool:
+    """The anchor is a PREFERENCE, never a promise. A dialog larger than the
+    one cell its parent occupies cannot be centered on it — and the guarantee
+    it must not lose is the one he actually cares about: it is inside the
+    picture the phone is streaming. So it falls through to the region, exactly
+    as it did before there was an anchor at all."""
+    reg, conn = desk(fg=MEMBER_A, alive=(MEMBER_A, MEMBER_B, DIALOG))
+    # Wider than MEMBER_A's cell, still inside the region.
+    RECTS[DIALOG] = (1900, 1000, 900, 400)
+    layout_popup.sweep(reg, conn)
+    want = centered(RECTS[DIALOG])
+    if PLACED != [(DIALOG, want)]:
+        print(f"  DETAIL placed {PLACED}, expected the region fallback {want}")
+        return False
+    return True
+
+
+
 CHECKS = [
     ("a new window is OFFERED to the phone, never grabbed",
      check_a_new_window_is_offered_and_not_grabbed),
@@ -727,7 +851,7 @@ CHECKS = [
     ("'Leave on desktop' moves nothing, ever, and is not asked twice",
      check_leaving_it_on_the_desktop_moves_nothing_ever),
     ("a member's dialog that FITS is placed inside the region",
-     check_a_member_dialog_that_fits_is_placed_inside_the_region),
+     check_a_member_dialog_is_placed_on_its_parent_without_asking),
     ("a NEW window of a member's own process is adopted",
      check_a_new_window_of_a_members_process_is_adopted),
     ("a window a member STARTED is adopted",
@@ -768,6 +892,12 @@ CHECKS = [
      check_the_same_window_with_no_recent_click_is_still_refused),
     ("a click-correlated window is never asked twice",
      check_a_click_correlated_window_is_never_asked_twice),
+    ("a window no layout could hold is never offered (his point 3)",
+     check_a_window_no_layout_could_hold_is_never_offered),
+    ("a window WE made is never offered back to him (his point 4A)",
+     check_a_window_we_made_ourselves_is_never_offered),
+    ("a dialog too big for its parent still lands in the picture",
+     check_a_dialog_too_big_for_its_parent_still_lands_in_the_picture),
 ]
 
 

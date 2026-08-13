@@ -299,6 +299,46 @@ function wheelCats(side) {
   return allCats().filter((c) => c !== otherCat && c !== thisCat);
 }
 
+// THE NO-DUPLICATE RULE IS AN INVARIANT, NOT A FILTER (owner report
+// 2026-08-13, with his screenshot: Mouse on BOTH groups and NINE circles on
+// the wheel).
+//
+// The rule above was only ever a DISPLAY filter — it hides the other side's
+// set from the ring, so a duplicate can never be CHOSEN. Nothing anywhere
+// stopped one being ASSIGNED, and two paths did exactly that:
+//
+//   * the startup restore (connection.js) called `restoredGroup` twice,
+//     independently, with no idea the other side existed;
+//   * `refreshCategories` (controls.js) reset an out-of-range index to 0 —
+//     per side, so when the list shrank past BOTH (an app set leaving with
+//     its layout, or the cap dropping one) it forced both to 0, and index 0
+//     under the shipped wheel_order is Mouse. That is his screenshot exactly.
+//
+// And the nine circles are not a second bug. `placedCat` returns a
+// REFERENCE, so when both groups hold the same index `otherCat` and `thisCat`
+// are the same object and the filter above removes ONE item instead of two:
+// 10 − 1 = 9. Fixing the duplicate fixes the count, which is the proof they
+// were always one defect — and why the cap needed no change at all.
+//
+// He also named why a duplicate cannot even be wanted: choosing a set from
+// the wheel makes it vanish from that wheel, so a set on both sides is a
+// state the interface cannot express, let alone let him leave.
+function settleGroups() {
+  const n = allCats().length;
+  for (const side of ["left", "right"]) {
+    if (!(groups[side] >= 0) || groups[side] >= n) groups[side] = 0;
+  }
+  if (n < 2 || groups.left !== groups.right) return;
+  // Only ONE side gives way, and it is the RIGHT: the left group is the one
+  // his thumb reaches first and the one the shipped default names first.
+  // Taking the first index that is not the left's keeps the choice
+  // predictable — never a random neighbour, never a wrap that depends on how
+  // long the list happens to be today.
+  for (let i = 0; i < n; i++) {
+    if (i !== groups.left) { groups.right = i; return; }
+  }
+}
+
 
 // --- WHICH CATEGORY EACH GROUP SHOWS, ACROSS A RECONNECT --------------------
 // Owner report 2026-08-08: "kad god ucitam neku sliku ili nesto, kada uradi

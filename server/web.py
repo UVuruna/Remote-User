@@ -51,8 +51,9 @@ import clipboard_sync
 import config
 import cursor_shape
 import focus_guard
-import layout_popup
 import layout_api
+import layout_birth
+import layout_popup
 import monitor_api
 import monitors
 import notify
@@ -746,7 +747,7 @@ async def _receive_input(ws: WebSocket, injector: InputInjector, stream, token: 
             # opens just after one is something HE opened — the only evidence
             # task 185 has, and the reason a background agent's window is never
             # mistaken for it (server/layout_popup.py).
-            layout_popup.note_click(conn)
+            layout_birth.note_click(conn)
         if kind in ("pointer_down", "pointer_up", "click"):
             button = msg.get("button", "left")
             if button not in BUTTON_FLAGS:
@@ -834,7 +835,7 @@ async def _receive_input(ws: WebSocket, injector: InputInjector, stream, token: 
         elif kind == "layout_pick":
             await layout_api.layout_pick(ws, layouts, stream, msg)
         elif kind == "layout_list":
-            await layout_api.layout_list(ws, layouts, stream)
+            await layout_api.layout_list(ws, layouts, stream, conn)
         elif kind == "layout_recent":
             # The FOURTH creation source (task 228): every layout previously
             # created on this PC, persisted across restarts.

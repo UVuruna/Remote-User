@@ -148,3 +148,65 @@ the one-question rule deleted so a layout switch asks twice, and (task 240)
 the click-correlation tier removed so an unattributable window after his own
 click is refused, plus the same window with a stale or absent click proving
 the rule was not widened into offering every stranger.
+
+---
+
+## A member's OWN popup is PLACED, never asked about (owner report 2026-08-13)
+
+The round before this one built [Lost Windows](lost_windows.md) — a sweep for
+any window standing off every screen — and shipped it as the answer to his
+report. **It was the wrong target, and he said so plainly.** His case is not
+"a window opened while nobody was watching"; it is:
+
+> lang-ok-begin: owner quote — the correction this section exists for
+> "nekada ja otvaram aplikaciju kada aplikacija otvara aplikaciju"
+> "Dakle kada se otvori popup WINDOWS ga baci VAN GRANICA NAŠEG PROZORA"
+> "Rješenje je da se taj POPUP od MATIČNE APLIKACIJE PRIKAZUJE U NJENOJ SREDINI"
+> lang-ok-end
+
+An agent working inside a layout's VS Code opens a report, a *Record a
+shortcut* window, a permission dialog. Windows places such a window on its
+parent's **restored** geometry, or wherever that app last used — neither of
+which is the quarter of the screen the layout just moved the parent into. The
+popup lands outside the region, under the members' always-on-top band, and a
+phone has no taskbar.
+
+### Why this one alone does not ask
+
+Every other rule here is a **guess about whose window this is**, and a wrong
+guess would move a stranger's window — which is why each of them ends in a chip
+he taps. The owner chain is not a guess. Windows itself says this window was
+raised by that member: it takes it down when the member minimizes, and closes
+it when the member closes. Asking permission to put an application's own dialog
+on that application is asking him to confirm what the application decided.
+
+So **rule 1 places; rules 2–4 still ask.**
+
+### The parent, not the region
+
+A layout of four holds four windows. A VS Code dialog belongs on the VS Code,
+not floating in the middle of a grid over three windows it has nothing to do
+with. `_contain` therefore takes an `anchor`, tried first and at the popup's own
+size.
+
+The anchor is a **preference, never a promise**. A dialog too big for the one
+cell its parent occupies falls through to the region, and then to the full
+screen — so the guarantee he actually cares about (it is inside the streamed
+picture) never depends on the anchor succeeding.
+
+### Two more windows that may never wear a chip
+
+* **A window no layout could hold** (his point 3). The creation list is built
+  by `window_manager.list_windows`; the popup sweep's own eye was
+  `IsWindowVisible` and nothing more. So the phone asked "a layout with it?"
+  about tool windows and shell surfaces that the list would not even carry when
+  he tapped — a question the app cannot honour. The filter is now a function,
+  `window_manager.is_listable`, and both paths ask it.
+* **A window WE made** (his point 4A). Tearing a tab off is a double-click
+  followed by a brand-new top-level window of a member's process: every
+  attribution rule is *correct* about it, which is why none of them could fix
+  it. `layout_popup.mine()` is the maker saying so, once, bounded in time
+  because Windows re-uses handles.
+
+Gate: `tests/test_layout_popup.py` — the three new checks plus the rewritten
+dialog checks, every one proven by planting its own defect.

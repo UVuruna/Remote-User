@@ -290,6 +290,32 @@ CREATION_LIST_STAGE_JS = (
 )
 CREATION_CLOSE_JS = "cancelCreation(true)"
 
+# THE SAME LIST, ASKED FOR FROM INSIDE A LAYOUT (owner request 2026-08-13, his
+# point 4B). Two groups with a heading each — the tabs of the layout he is in,
+# then the desktop. Staged because this is a new HEADING inside a scroller
+# that was already tight on a phone: the group line, its rule and its gap all
+# take height from the rows, and the only way to know they still fit on the
+# smallest screen is to photograph it. The first heading must also lose its
+# top rule — a divider above the first line of a list separates it from
+# nothing, and that is exactly the kind of detail a CSS rule gets wrong.
+CREATION_GROUPS_STAGE_JS = (
+    "creating = newCreation('list');"
+    "creating.inLayout = 'Vibe Coder';"
+    "creating.entries = ["
+    " {kind:'tab', hwnd:1, group:'layout', title:'prompt.txt',"
+    "  process:'code.exe', icon:null, tab:{name:'prompt.txt'}, x:0.1, y:0.02},"
+    " {kind:'tab', hwnd:1, group:'layout', title:'layout_api.py',"
+    "  process:'code.exe', icon:null, tab:{name:'layout_api.py'}, x:0.2,"
+    "  y:0.02},"
+    " {kind:'tab', hwnd:1, group:'layout', title:'CLAUDE.md',"
+    "  process:'code.exe', icon:null, tab:{name:'CLAUDE.md'}, x:0.3, y:0.02},"
+    " {kind:'window', hwnd:2, group:'desktop', title:'Mail - Google Chrome',"
+    "  process:'chrome.exe', icon:null, x:0.5, y:0.5},"
+    " {kind:'window', hwnd:3, group:'desktop', title:'Downloads',"
+    "  process:'explorer.exe', icon:null, x:0.7, y:0.5}];"
+    "renderCreationPanel()"
+)
+
 # The model the audit's own User-Agent carries — the card must READ it and say
 # it. A device name the page silently fails to find is exactly the failure the
 # owner reported (a card that describes one phone while he uses two), so the
@@ -587,6 +613,8 @@ PANELS = (
     # although this round rewrote every row in it (tasks 166 / 167 / 168). See
     # CREATION_LIST_STAGE_JS above for what each of the six rows is evidence of.
     ("Creation list with tabs", CREATION_LIST_STAGE_JS,
+     CREATION_CLOSE_JS, "#layout-panel .lay-card"),
+    ("Creation list, two groups", CREATION_GROUPS_STAGE_JS,
      CREATION_CLOSE_JS, "#layout-panel .lay-card"),
     # THE CAP, AND THE DEAD CREATE BUTTON (owner report 2026-08-09, task 166:
     # "it offers a grid of 4 when the desktop holds 3", and the half he

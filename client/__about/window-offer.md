@@ -121,3 +121,21 @@ four checks each proven by planting its own defect — the server plant
 reproduces his log line verbatim (`one window, 2 chips: ['layout_new',
 'layout']`). The phone half runs this REAL module in node against a DOM shim,
 since a rule about *which question a tap answers* cannot be proven in Python.
+
+---
+
+## What the chip no longer asks (owner report 2026-08-13)
+
+Two questions left this chip on 2026-08-13, and both left because they could
+not be answered:
+
+* **A member's own dialog.** It is now PLACED on its parent by the server,
+  without asking — the owner chain is Windows' own statement about whose window
+  it is, not a guess (see `server/__about/layout_popup.md`).
+* **A window no layout could hold.** The chip used to name tool windows and
+  shell surfaces that the creation list would not carry when he tapped.
+
+Nothing on this page changed for either: a question that is never sent is a
+question this page never renders. It is recorded here because "the chip used to
+appear here and no longer does" is exactly the sort of change that gets
+re-reported as a regression.
