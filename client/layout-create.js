@@ -814,9 +814,14 @@ function renderCreationPanel() {
     // PC and what can actually go in a layout are different quantities (a
     // three-tab window is four rows and three members), and the panel says
     // the one the choice above is limited by.
+    // "on the PC" is wrong the moment there are two groups: it sat directly
+    // above a heading that says "In this layout", and an intro that
+    // contradicts the first thing under it is worse than no intro. Found by
+    // PHOTOGRAPHING the two-group state — the wording read fine in the diff
+    // and only the picture put the two lines side by side.
+    const what = c.inLayout ? "Windows and tabs" : "Windows and tabs on the PC";
     hint.textContent = avail === null
-      ? "Windows and tabs on the PC:"
-      : `Windows and tabs on the PC — ${avail} can go in a layout:`;
+      ? `${what}:` : `${what} — ${avail} can go in a layout:`;
     listInto.appendChild(hint);
     // A minimized window enumerates NO tabs (Windows reports it as having no
     // size at all), so the list would silently show fewer rows for it than it
