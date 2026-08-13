@@ -87,6 +87,11 @@ DISABLED: set = set()
 FROZEN: dict = {}
 # Raw SetWindowPos moves — how a window is put BACK where Windows had it.
 MOVED: list = []
+# The invisible resize border every real window carries: the gap between
+# GetWindowRect (what SetWindowPos speaks) and the DWM visible frame (what
+# `_frame_rect` answers). Non-zero on purpose — with zeroes the two coordinate
+# spaces collapse into one and a missing compensation is invisible.
+BORDER = (7, 0, 7, 7)
 # What EnumWindows would return — the sweep's whole eye (task 239). Mutable
 # during a check on purpose: a window that opens WHILE the layout stays
 # focused is the entire subject, and a set fixed at setup time could only ever
@@ -116,11 +121,19 @@ def desk(fg, alive=None, owner=None):
     fake.IsWindowEnabled = lambda hwnd: 0 if hwnd in DISABLED else 1
 
     def _setwindowpos(hwnd, after, x, y, w, h, flags):
+        # Windows' own two coordinate spaces, modelled rather than flattened:
+        # SetWindowPos speaks GetWindowRect (invisible resize border included)
+        # while `_frame_rect` answers the VISIBLE frame. A fake that treats
+        # them as one cannot see a caller that forgot to compensate — which is
+        # exactly the defect an independent review found in the first version
+        # of this fix, after the gate had passed.
         MOVED.append((hwnd, (x, y, w, h)))
-        RECTS[hwnd] = (x, y, w, h)
+        bl, bt, br, bb = BORDER
+        RECTS[hwnd] = (x + bl, y + bt, w - bl - br, h - bt - bb)
         return 1
 
     fake.SetWindowPos = _setwindowpos
+    window_manager._border_offsets = lambda hwnd: BORDER
     window_manager.freeze_transitions = \
         lambda hwnd, disabled=True: FROZEN.__setitem__(hwnd, disabled)
     Raises().install()

@@ -149,8 +149,19 @@ class Layout:
                 # (x, y, w, h) — `_frame_rect`'s own shape, which every other
                 # caller in this file uses. Read as left/top/right/bottom it
                 # produces a NEGATIVE size that Windows accepts in silence.
+                #
+                # AND THE TWO COORDINATE SPACES ARE NOT THE SAME. `_frame_rect`
+                # is the DWM VISIBLE frame; `SetWindowPos` speaks GetWindowRect,
+                # which includes the invisible resize border. Handing one to the
+                # other puts the window back ~7 px off and slightly larger every
+                # time — "back where Windows had it" would be a claim the code
+                # does not keep. `place_window` compensates for exactly this;
+                # so does this, through the same helper rather than a second
+                # copy of the arithmetic.
                 x, y, w, h = rect
-                wm.user32.SetWindowPos(hwnd, 0, x, y, w, h,
+                bl, bt, br, bb = wm._border_offsets(hwnd)
+                wm.user32.SetWindowPos(hwnd, 0, x - bl, y - bt,
+                                       w + bl + br, h + bt + bb,
                                        wm.SWP_NOZORDER | wm.SWP_NOACTIVATE)
         return released
 
