@@ -39,6 +39,16 @@ WHAT THIS GATE HOLDS, AND WHY EACH ONE CAN BREAK SILENTLY:
 6. THE SERVER REALLY WIRES IT. A pure function nobody calls is a feature that
    does not exist (the actions.json lesson, 2026-08-07), and this one is only
    reachable through one `elif` in `web.py`.
+7. THE PASTE ITSELF IS FENCED (measured 2026-08-13, and it had been wrong since
+   the function was written). Everything above guards the palette sequence and
+   the trailing Enter; the `Ctrl+V` that carries the TEXT was checked by
+   nothing. A controlled A/B over this chain moved the foreground between a
+   caller's own chord and the paste, and a true outsider — notepad.exe, not a
+   member and not a member's dialog — received it, after which the guard handed
+   focus back and only the Enter was protected. The caller was answered "": a
+   silent success over text delivered to a stranger. A lost fence at entry now
+   costs zero injections, leaves the clipboard untouched, and reports the whole
+   text as never having reached the PC.
 
 Every check was proven by planting its own defect — the mapping is in
 DEFECTS below.
@@ -72,6 +82,20 @@ DEFECTS = {
     "the clipboard is left holding the real text, not the command name":
         "reverse the two clipboard writes",
     "the server really wires the field": "delete the elif branch from web.py",
+    "the paste itself is fenced before it goes out":
+        "delete the entry guard check from content.paste_text (the shape it "
+        "shipped in until 2026-08-13)",
+    "an unguarded paste behaves exactly as before":
+        "make the entry check fire without a guard too "
+        "(`if guard is None or not guard():`)",
+    # NOT A CHECK OF ITS OWN. "The Claude command path still works end to end"
+    # was written this round and then DELETED: planting `if guard is not None:`
+    # (the entry check refusing a fence that HOLDS) failed it together with
+    # four checks that already existed, and a check no defect fails alone is a
+    # check that is measuring somebody else's promise. The whole button —
+    # palette, hand-off, paste, Enter, with the new entry check live — is held
+    # by "the palette runs before the command text" above, which that same
+    # plant fails.
     "the caret hand-off is waited out with no selection":
         "restore the old tail of focus_claude_prompt — replace the "
         "_handed_off(guard) call after the Enter with "
@@ -401,6 +425,73 @@ def check_the_caret_hand_off_is_waited_out_with_no_selection() -> bool:
     return True
 
 
+def check_the_paste_itself_is_fenced_before_it_goes_out() -> bool:
+    """MEASURED 2026-08-13, AND IT HAD SHIPPED THAT WAY SINCE THE FUNCTION WAS
+    WRITTEN: the only guard call in `paste_text` was the one before the ENTER,
+    so the `Ctrl+V` carrying the TEXT crossed an unguarded gap. In a controlled
+    A/B over this same chain a true outsider (not a member, not a member's
+    dialog) received the paste; the guard then handed focus back and only the
+    Enter was ever protected — and the caller was answered "".
+
+    So: a fence that cannot be held at entry costs ZERO injections, writes
+    NOTHING to the clipboard (the placement of the check is the answer to what
+    the clipboard is left holding — nothing), never arms the task-182 echo
+    guard, and reports the whole text as lost so the phone is told."""
+    marked: list[str] = []
+    saved = content.clipboard_sync.note_written
+    content.clipboard_sync.note_written = marked.append
+    try:
+        with Stage() as stage:
+            lost = stage.paste("/model", True, FakeGuard(fails_at=1))
+    finally:
+        content.clipboard_sync.note_written = saved
+    if lost != "/model":
+        print(f"    a refused paste answered {lost!r} — the caller cannot toast that")
+        return False
+    if stage.injector.ops:
+        print(f"    a refused paste still injected {stage.injector.ops}")
+        return False
+    if stage.clipboard.writes:
+        print(f"    a refused paste still wrote the clipboard: "
+              f"{stage.clipboard.writes}")
+        return False
+    if marked:
+        print(f"    a refused paste still armed the echo guard: {marked}")
+        return False
+
+    # And the SECOND gap is unchanged: a fence lost only after the text landed
+    # still withholds the Enter, whatever was already pasted standing.
+    with Stage() as stage:
+        lost = stage.paste("/model", True, FakeGuard(fails_at=2))
+    if not lost or stage.injector.ops != [("chord", "ctrl+v")]:
+        print(f"    late loss: {lost!r} / {stage.injector.ops}")
+        return False
+    return True
+
+
+def check_an_unguarded_paste_behaves_exactly_as_before() -> bool:
+    """Callers with no fence (`guard=None`) pass no callable, and every one of
+    them must be untouched by the check above — a new refusal path that could
+    fire without a guard would silence the buttons of anyone the fence does not
+    cover. Two injections, the clipboard written, nothing withheld."""
+    with Stage() as stage:
+        lost = stage.paste("/usage", True, None)
+    if lost or stage.injector.ops != [("chord", "ctrl+v"), ("key", "enter")]:
+        print(f"    unguarded: {lost!r} / {stage.injector.ops}")
+        return False
+    if stage.clipboard.writes != ["/usage"]:
+        print(f"    unguarded clipboard writes were {stage.clipboard.writes}")
+        return False
+    # The typed fallback is the other unguarded path — a busy clipboard must
+    # still type, and with no fence nothing may be reported lost.
+    with Stage(busy=True) as stage:
+        lost = stage.paste("/usage", True, None)
+    if lost or stage.injector.ops != [("type", "/usage"), ("key", "enter")]:
+        print(f"    unguarded fallback: {lost!r} / {stage.injector.ops}")
+        return False
+    return True
+
+
 def check_the_server_really_wires_the_field() -> bool:
     """The feature is reachable only through `web.py`'s `paste_text` branch,
     and only for `focus == "claude"`. Read as source because the alternative —
@@ -438,6 +529,10 @@ CHECKS = [
      check_a_fence_lost_mid_sequence_withholds_the_enter),
     ("the caret hand-off is waited out with no selection",
      check_the_caret_hand_off_is_waited_out_with_no_selection),
+    ("the paste itself is fenced before it goes out",
+     check_the_paste_itself_is_fenced_before_it_goes_out),
+    ("an unguarded paste behaves exactly as before",
+     check_an_unguarded_paste_behaves_exactly_as_before),
     ("the server really wires the field",
      check_the_server_really_wires_the_field),
 ]

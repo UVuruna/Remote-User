@@ -418,6 +418,105 @@ def check_the_dispatcher_hands_the_injector_the_fence() -> bool:
             and injector.guards[0]() == MEMBER_A)
 
 
+def check_a_refused_paste_tells_the_phone_and_injects_nothing() -> bool:
+    """THE PASTE HAS A FENCE OF ITS OWN, PROVEN THROUGH THE REAL DISPATCHER
+    (measured 2026-08-13). `paste_text` used to check the fence only before its
+    trailing Enter, so the `Ctrl+V` carrying the text landed in whatever really
+    held the keyboard and the caller was answered "" — a silent success over
+    text delivered to a stranger.
+
+    The thief here cannot be evicted (`Raises().install()` with no fake, so the
+    hand-back is refused), which is the case the owner actually lives with: an
+    elevated or stubborn window. What must then be true is all three at once —
+    nothing injected, nothing written to the PC clipboard, and a toast on his
+    phone naming the loss.
+
+    The clipboard is a REAL module, so it is replaced for the duration: no gate
+    in this project may touch the owner's desk, and the point of this check is
+    precisely that the refused path never reaches it."""
+    fake = with_win32(fg=THIEF, alive=(MEMBER_A, THIEF))
+    Raises().install()                    # the raise is refused: focus stays gone
+    reg, conn = layout_with([MEMBER_A]), fresh_conn(active=0)
+    focus_guard.guard(reg, conn)          # arm on the member, as a burst would
+    fake.fg = THIEF
+    injector = FakeInjector()
+    writes: list[str] = []
+
+    class NoClipboard:
+        def copy_text(self, text):
+            writes.append(text)
+            return True
+
+    box: dict = {}
+
+    async def run():
+        ws = FakeWs([{"type": "paste_text", "text": "/code-review",
+                      "enter": True}])
+        box["ws"] = ws
+        try:
+            await web._receive_input(ws, injector=injector, stream=None,
+                                     token="t", layouts=reg, conn=conn)
+        except web.WebSocketDisconnect:
+            pass
+
+    real = web.content.clipboard
+    web.content.clipboard = NoClipboard()
+    try:
+        asyncio.run(run())
+    finally:
+        web.content.clipboard = real
+    toasts = [m for m in box["ws"].sent if m.get("type") == "toast"]
+    return (injector.ops == [] and writes == [] and len(toasts) == 1
+            and "/code-review" in toasts[0]["text"])
+
+
+def check_a_multi_step_act_reports_its_refusal_as_a_sentence() -> bool:
+    """THE OTHER HALF OF THE SAME HONESTY, AND A CONTRACT CLASH THAT HID IT.
+
+    `layout_acts`' two multi-step acts (`explorer|go`, `chrome|clip`) fire a
+    chord and THEN paste, so the fence can be lost between their own two steps
+    — which until 2026-08-13 handed the text to whatever held the keyboard and
+    answered "" (success).
+
+    Reporting it is not automatic even now, because two contracts meet there:
+    `paste_text` returns what did NOT reach the PC, while `layout_acts.run`'s
+    return is TOASTED on the phone verbatim. Passing the raw text straight
+    through would put a folder path on his screen as if it were an
+    explanation, so it is wrapped in the one shared sentence
+    (`focus_guard.loss_notice`) — which is what this check reads.
+
+    The clipboard is replaced for the duration: no gate here may touch the
+    owner's desk."""
+    import layout_acts
+
+    calls = [0]
+
+    def guard():
+        calls[0] += 1
+        return MEMBER_A if calls[0] == 1 else 0   # secured, then stolen
+
+    injector = FakeInjector()
+    path = r"C:\Users\owner\Documents\Reports"
+    writes: list[str] = []
+
+    class NoClipboard:
+        def copy_text(self, text):
+            writes.append(text)
+            return True
+
+    real = layout_acts.content.clipboard
+    layout_acts.content.clipboard = NoClipboard()
+    try:
+        problem = layout_acts.run(f"explorer|go|{path}", injector, guard,
+                                  process_of=lambda _h: "explorer.exe")
+    finally:
+        layout_acts.content.clipboard = real
+    return (bool(problem) and problem != path
+            and problem == focus_guard.loss_notice(path)
+            # the address band was opened; the path never went out after it
+            and injector.ops == [("press_chord", "ctrl+l")] and writes == [])
+
+
 CHECKS = [
     ("a focus thief never gets the keystroke", check_a_thief_never_gets_the_keystroke),
     ("the fence holds on a fresh connection (no pin yet)",
@@ -459,6 +558,10 @@ CHECKS = [
      check_typing_without_a_fence_is_unchanged),
     ("the dispatcher hands the injector the mid-sentence fence",
      check_the_dispatcher_hands_the_injector_the_fence),
+    ("a paste refused by the fence tells the phone and injects nothing",
+     check_a_refused_paste_tells_the_phone_and_injects_nothing),
+    ("a multi-step layout act reports its refusal as a sentence",
+     check_a_multi_step_act_reports_its_refusal_as_a_sentence),
 ]
 
 

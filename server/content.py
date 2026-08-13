@@ -281,6 +281,13 @@ def palette_command(injector: InputInjector, command: str, guard,
         logger.error("%s abandoned — focus left before the command "
                      "name could be pasted", what)
         return "The command was NOT sent — another window took the keyboard"
+    # THIS `ctrl+v` IS ALREADY FENCED, and it was checked rather than assumed
+    # (2026-08-13, the round that found `paste_text`'s own paste unguarded).
+    # The line immediately above it is `_settled(guard)`, which re-reads the
+    # fence across the gap and refuses; so unlike `paste_text` before this
+    # round, no unguarded gap precedes it and nothing here needed changing.
+    # What it pastes is also machinery — the palette command NAME — so even a
+    # miss would type a command name, never his text, into the stranger.
     injector.press_chord("ctrl+v")
     if not _settled(guard):
         logger.error("%s abandoned — focus left before the palette "
@@ -315,6 +322,44 @@ def paste_text(injector: InputInjector, text: str, enter: bool, guard=None) -> s
     """
     if not text:
         return ""
+    # THE PASTE ITSELF IS FENCED, NOT ONLY THE ENTER (measured 2026-08-13,
+    # a controlled A/B over this very chain). Until this round the only guard
+    # call in this function was the one below, before the Enter — so the
+    # `Ctrl+V` that carries the TEXT crossed an unguarded gap and landed in
+    # whatever really held the keyboard. The measurement, with a two-member
+    # layout and the foreground moved between a caller's own chord and this
+    # function:
+    #
+    #   chord 'ctrl+l' -> 0x10 explorer.exe
+    #   chord 'ctrl+v' -> 0x20 code.exe      <- the text, in an outsider
+    #   key   'enter'  -> 0x20 code.exe
+    #
+    # and the caller was answered "" — a SILENT SUCCESS over text delivered to
+    # the wrong window. A true outsider (notepad.exe: not a member, not a
+    # member's dialog) received the paste in the same A/B; the guard then
+    # handed focus back and only the Enter was ever protected.
+    #
+    # The check is placed HERE, before the clipboard write, and that placement
+    # IS the answer to "what happens to the clipboard when the paste is
+    # refused": nothing at all is written, so there is no residue to describe
+    # and `clipboard_sync.note_written` is never armed for a value that was
+    # never put out. The alternative — write, then check — leaves the PC
+    # clipboard holding a slash command the owner never copied AND pushes it
+    # to his phone through the task-182 listener, which is a second surprise
+    # bought for no gain: the window between the check and the `Ctrl+V` is a
+    # clipboard write either way.
+    #
+    # Same shape as `palette_command` above (its own entry check, then a
+    # fence-checked gap before every further injection) rather than a second
+    # invention: one refusal shape, one place to keep it right.
+    if guard is not None and not guard():
+        logger.error("Paste withheld — focus left the fence before %r could be "
+                     "pasted; nothing was injected and the clipboard was not "
+                     "touched", text[:40])
+        # The whole text is what did NOT reach the PC — the function's own
+        # contract, which is what makes the phone's sentence honest without a
+        # second kind of return value (`focus_guard.loss_notice`).
+        return text
     if clipboard.copy_text(text):
         # Written on the phone's behalf (task 182) — the live clipboard
         # listener must not read this back and push it to the phone as if

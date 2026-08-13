@@ -49,6 +49,39 @@ between the last two is not cosmetic: the target app reacts to the paste — a
 command menu re-filters, an input resizes — and an Enter delivered inside that
 reaction lands in the old state.
 
+### The PASTE is fenced too, not only the Enter (2026-08-13)
+
+For most of this function's life the only guard call in it was the one before
+the Enter, described below. **The `Ctrl+V` that carries the TEXT crossed an
+unguarded gap** — and a controlled A/B over the real chain measured what that
+costs: with a two-member layout and the foreground moved between a caller's own
+chord and this function, a true outsider (`notepad.exe` — not a member, not a
+member's dialog) received the paste, the guard then handed focus back, and only
+the Enter was protected. The caller was answered `""` — **a silent success over
+text delivered to a stranger's window**, no toast, no log line.
+
+`paste_text` now asks the fence at ENTRY, before anything at all happens, and a
+fence it cannot hold costs **zero injections** and returns the whole text as
+lost — which `web.py` turns into `focus_guard.loss_notice` for the phone and
+`layout_acts` wraps in the same sentence.
+
+**What the clipboard is left holding, and why**: nothing. The check sits BEFORE
+the clipboard write on purpose, so a refused paste writes no clipboard and
+never arms the task-182 echo guard (`clipboard_sync.note_written`). Checking
+after the write would leave the PC clipboard holding a slash command the owner
+never copied AND push it to his phone through the live clipboard listener — a
+second surprise bought for nothing, since a clipboard write is all that
+separates the check from the `Ctrl+V` either way.
+
+The shape is `palette_command`'s (entry assertion, then a fence-checked gap
+before every further injection), deliberately, rather than a second invention:
+one refusal shape, one place to keep it right.
+
+**`palette_command`'s own `Ctrl+V` was checked and needed nothing.** The line
+immediately above it is `_settled(guard)`, which re-reads the fence across the
+gap and refuses — so no unguarded gap precedes it; and what it pastes is
+machinery (the palette command NAME), never his text.
+
 ### The fence is re-checked across that wait (2026-08-08)
 
 The paste and the Enter are two separate injections with 120 ms of nothing

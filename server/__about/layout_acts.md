@@ -29,6 +29,16 @@ standing over nothing.
    PROCESS before a single key goes out — a target that is not the app the row
    was drawn for costs **zero** injections and says so. `Ctrl+T` fired into
    whatever really holds the keyboard is not a harmless no-op.
+   **A refusal mid-sequence is REPORTED, not swallowed** (2026-08-13). The two
+   multi-step acts — `chrome|clip` and `explorer|go` — fire a chord and then
+   paste, and until the paste itself was fenced (see [Content](content.md)) a
+   thief between those two steps got the text while `run()` answered `""`.
+   Two contracts meet here and only one of them is a sentence: `paste_text`
+   returns what did NOT reach the PC, while `run()`'s return is toasted on the
+   phone verbatim — so `_pasted()` wraps it in `focus_guard.loss_notice`, the
+   one shared sentence. Returning the raw text straight through, as this module
+   did until now, put a folder path or a copied URL on his screen as if it were
+   an explanation.
 3. **Nothing here is a new way to do an old thing.** The palette drive is
    [Content](content.md)'s `palette_command` (extracted from
    `focus_claude_prompt` unchanged in the same round — same sequence, same

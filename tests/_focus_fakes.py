@@ -243,14 +243,22 @@ class FakeInjector:
         self.lost = lost
         self.typed: list[str] = []
         self.guards: list = []      # the mid-sentence fence the dispatcher hands over
+        # EVERY injection, in order (2026-08-13). A refusal that must cost ZERO
+        # injections cannot be proven by a fake that answers every call with
+        # None and remembers nothing — `press_chord`/`press_key` went through
+        # `__getattr__` and left no trace at all.
+        self.ops: list[tuple] = []
 
     def type_text(self, text, guard=None):
         self.typed.append(text)
         self.guards.append(guard)
+        self.ops.append(("type", text))
         return self.lost
 
     def __getattr__(self, name):
-        return lambda *a, **k: None
+        def record(*a, **_k):
+            self.ops.append((name, *a))
+        return record
 
 
 class FakeWs:

@@ -66,6 +66,7 @@ from pathlib import Path
 
 import clipboard_sync
 import content
+import focus_guard
 import layout_popup
 import recents
 import window_manager as wm
@@ -190,6 +191,24 @@ def _vscode_folder_path(folder: str) -> str:
     return ""
 
 
+def _pasted(injector, text: str, guard) -> str:
+    """`content.paste_text`, turned into this module's own kind of answer.
+
+    TWO CONTRACTS MEET HERE AND ONLY ONE OF THEM IS A SENTENCE (found
+    2026-08-13, in the round that fenced the paste itself). `paste_text`
+    returns what did NOT reach the PC — `web.py` wraps that in
+    `focus_guard.loss_notice` before it ever reaches a phone — while `run()`
+    below returns a sentence the phone is TOASTED verbatim. Returning the raw
+    text straight through, as this module did until now, put a folder path or
+    a copied URL on his screen as if it were an explanation.
+
+    So the wrap happens here, with the one shared sentence rather than a
+    second copy of it, and a refusal mid-sequence is reported instead of
+    swallowed — the whole point of asking for the fence at all."""
+    lost = content.paste_text(injector, text, True, guard)
+    return focus_guard.loss_notice(lost) if lost else ""
+
+
 def _watch_and_claim(process: str, before: set[int]) -> None:
     """Mark the window our own launch produced as OURS (`layout_popup.mine`).
 
@@ -272,7 +291,7 @@ def run(act_id: str, injector, guard=None, folder: str = "",
             # silently does the wrong thing is worse than one that says why.
             return "Nothing was opened — the PC clipboard is empty"
         injector.press_chord("ctrl+t")
-        return content.paste_text(injector, text, True, guard)
+        return _pasted(injector, text, guard)
 
     if app == "explorer" and act == "go":
         if not target_path:
@@ -281,6 +300,6 @@ def run(act_id: str, injector, guard=None, folder: str = "",
         # driven the other way. It navigates THIS window, which is the whole
         # difference from the standard list's row for the same folder.
         injector.press_chord("ctrl+l")
-        return content.paste_text(injector, target_path, True, guard)
+        return _pasted(injector, target_path, guard)
 
     return "Unknown command"
