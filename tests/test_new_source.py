@@ -54,6 +54,7 @@ sys.path.insert(0, str(PROJECT_DIR / "server"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import content  # noqa: E402
+import clipboard_sync  # noqa: E402
 import layout_acts  # noqa: E402
 import layout_popup  # noqa: E402
 import recents  # noqa: E402
@@ -347,6 +348,79 @@ def check_the_claude_command_is_the_extension_s_real_one() -> bool:
             and content.CLAUDE_FOCUS_COMMAND == "Claude Code: Focus input")
 
 
+
+# ═════════ 16-18. THE MULTI-STEP ACTS, WHICH THIS GATE COULD NOT SEE ═════════
+# FOUND BY AN INDEPENDENT ADVERSARIAL AGENT, 2026-08-13, and confirmed by me
+# before it was believed: it removed `injector.press_chord("ctrl+l")` from the
+# Explorer act and ALL FIFTEEN checks above stayed green.
+#
+# The gap was structural rather than an oversight of one line. Checks 7 and 8
+# drive `chrome|tab`, whose whole body IS one chord — so "an act injects the
+# right thing" was only ever asked of the acts that cannot get the ORDER
+# wrong. The two acts made of several injections (`explorer|go` = open the
+# address band, then the path, then Enter; `chrome|clip` = open a tab, then
+# what was copied) had nothing driving them at all.
+#
+# What the missing Ctrl+L really costs him is why these are worth their lines:
+# the path would be typed into whatever Explorer control happens to hold focus
+# — the file list, where a stray keystroke starts a RENAME on the selected
+# file. A silent wrong act on his own files, from a button that promised to
+# open a folder.
+#
+# The ORDER is asserted, not just the presence of each part: a paste that
+# lands before the address band is open is exactly the defect, and a check
+# that only counted injections would pass over it.
+def _act_with_paste(act_id, app_process, clip=None):
+    """Drive one multi-step act, recording the chords and the pastes IN ORDER.
+
+    `content.paste_text` is recorded rather than run: it writes the real PC
+    clipboard, and no gate in this project may touch the owner's desk. What is
+    under test here is this module's own sequence — the paste itself is gated
+    where it lives (tests/test_claude_focus.py)."""
+    injector = Injector()
+    steps = []
+    real_paste, real_read = content.paste_text, clipboard_sync.read_text
+    content.paste_text = lambda inj, text, enter, guard=None: (
+        steps.append(("paste", text, enter)) or "")
+    clipboard_sync.read_text = lambda: clip
+    # The chords have to land in the SAME ordered list as the pastes, or the
+    # order — the whole subject of these checks — is unmeasurable.
+    injector.press_chord = lambda chord: steps.append(("chord", chord))
+    try:
+        problem = layout_acts.run(act_id, injector, guard_for(0x88),
+                                  process_of=process_of({0x88: app_process}))
+    finally:
+        content.paste_text, clipboard_sync.read_text = real_paste, real_read
+    return problem, steps
+
+
+def check_the_explorer_folder_act_opens_the_address_band_first() -> bool:
+    """Ctrl+L, THEN the path, THEN Enter. Without the Ctrl+L the path is typed
+    into whatever control holds focus — in Explorer that is often the file
+    list, where typing starts a rename on his own file."""
+    problem, steps = _act_with_paste(r"explorer|go|D:\Downloads", "explorer.exe")
+    return (problem == ""
+            and steps == [("chord", "ctrl+l"), ("paste", r"D:\Downloads", True)])
+
+
+def check_the_chrome_clipboard_act_opens_a_tab_first() -> bool:
+    """Ctrl+T, THEN what he copied. Pasting first would put the address into
+    the page he is already reading."""
+    problem, steps = _act_with_paste("chrome|clip", "chrome.exe",
+                                     clip="  https://example.com  ")
+    return (problem == ""
+            and steps == [("chord", "ctrl+t"),
+                          ("paste", "https://example.com", True)])
+
+
+def check_an_empty_clipboard_refuses_instead_of_opening_a_blank_tab() -> bool:
+    """The row promises the tab will hold what he copied. With nothing copied
+    the honest act is a sentence — and ZERO injections, so no blank tab is
+    left standing on his PC either."""
+    problem, steps = _act_with_paste("chrome|clip", "chrome.exe", clip="   ")
+    return bool(problem) and steps == []
+
+
 # ═════════ 13-15. THE ACTS, THROUGH THE REAL DISPATCHER ═════════
 # Owner ballot 2026-08-13 (T29). The checks above prove the CATALOGUE and the
 # fence as functions; these three drive the two new messages through
@@ -428,6 +502,12 @@ CHECKS = [
      check_a_project_whose_path_is_unknown_is_refused_not_guessed),
     ("the Claude command is the extension's real one",
      check_the_claude_command_is_the_extension_s_real_one),
+    ("the Explorer folder act opens the address band FIRST",
+     check_the_explorer_folder_act_opens_the_address_band_first),
+    ("the Chrome clipboard act opens a tab FIRST",
+     check_the_chrome_clipboard_act_opens_a_tab_first),
+    ("an empty clipboard refuses instead of opening a blank tab",
+     check_an_empty_clipboard_refuses_instead_of_opening_a_blank_tab),
     ("layout_acts answers at the desktop, through the dispatcher",
      check_layout_acts_answers_at_the_desktop),
     ("layout_acts answers inside a layout, through the dispatcher",
