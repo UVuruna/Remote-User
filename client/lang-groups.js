@@ -109,19 +109,15 @@ function langVariantKey(tag) {
   return [p.lang, langScript(tag), p.region].join("|");
 }
 
-/** The platform's own name for a language with its region dropped: "Srpski
- *  (Srbija)" becomes "Srpski", "English (United States)" becomes "English".
+/** A platform-supplied name with its region dropped: "Srpski (Srbija)" becomes
+ *  "Srpski", "English (United States)" becomes "English".
  *
- *  A group heading is built by SHORTENING his own wording rather than looking a
- *  new one up, and that is deliberate. `Intl.DisplayNames` answers "sr" with
- *  the Cyrillic endonym "Српски" while every row of his card is written in
- *  Latin — so a lookup would have replaced a familiar word with a correct one
- *  he does not read, in the very list whose whole point is that he recognises
- *  his language in it. Dropping a parenthesis keeps his spelling and removes
- *  only the part that was false of the group.
+ *  Only ever reached as a FALLBACK now (see langGroupName): a name carrying a
+ *  region is a lie over a group that holds two, so if we are forced to use the
+ *  platform's wording at all, we use the part of it that is true of everything
+ *  behind it.
  *
- *  Returns "" when there is nothing to shorten, which sends the caller to the
- *  lookup — a name with no region in it was never the problem. */
+ *  Returns "" when there is nothing to shorten. */
 function langBareName(given) {
   const s = String(given == null ? "" : given).trim();
   if (!s) return "";
@@ -130,29 +126,42 @@ function langBareName(given) {
   return bare;
 }
 
-/** The endonym-ish name of a language, for a GROUP heading.
+/** The ENGLISH name of a language, for a GROUP heading.
  *
- *  Preference order is deliberate: a name the platform gave us (the dictation
- *  card's rows already carry `Locale.getDisplayName(locale)` from Kotlin, the
- *  language in ITS OWN words) beats one we look up, and a lookup beats the
- *  bare subtag. The subtag is the last resort and is upper-cased so it reads
- *  as a code rather than as a misspelt word. */
+ *  The owner's decision (2026-08-13), after the grader photographed the two
+ *  cards spelling one language two ways: every heading is in English —
+ *  "Serbian", "German", "Icelandic".
+ *
+ *  It is a rule about CONSISTENCY, not about preferring English for its own
+ *  sake. The dictation card is handed an endonym by Android
+ *  (`Locale.getDisplayName(locale)`, the language in its own words) while the
+ *  voice card has none and must look one up; asked for `sr` a lookup answers the
+ *  Cyrillic endonym while Android had answered the Latin "Srpski", so the same
+ *  language wore two spellings two screens apart — and Icelandic, whose endonym
+ *  Android did not have, was already in English among the endonyms. Two sources
+ *  can never agree by accident; one source can never disagree. So the lookup is
+ *  asked in ENGLISH and the platform's own wording is no longer preferred to it.
+ *  The rows INSIDE a group are untouched: a script choice still reads Cyrillic /
+ *  Latin, because what those rows decide is what his dictated text comes out AS.
+ *
+ *  `given` survives only as the fallback for a runtime with no
+ *  `Intl.DisplayNames` — shortened, since a region is false of a group — and the
+ *  bare subtag is the last resort, upper-cased so it reads as a code rather than
+ *  as a misspelt word. */
 function langGroupName(tag, given) {
-  const supplied = String(given == null ? "" : given).trim();
-  if (supplied) return supplied;
   const lang = langKey(tag);
   if (!lang) return "";
   try {
     if (typeof Intl !== "undefined" && Intl.DisplayNames) {
-      // In the language's own words where the platform can, which is what the
-      // dictation card has always done (`getDisplayName(locale)`).
-      const dn = new Intl.DisplayNames([lang, "en"], { type: "language" });
+      const dn = new Intl.DisplayNames(["en"], { type: "language" });
       const name = dn.of(lang);
       if (name && name.toLowerCase() !== lang) {
         return name.charAt(0).toUpperCase() + name.slice(1);
       }
     }
-  } catch { /* the subtag below */ }
+  } catch { /* the supplied name, then the subtag */ }
+  const supplied = langBareName(given);
+  if (supplied) return supplied;
   return lang.toUpperCase();
 }
 
@@ -180,6 +189,29 @@ function langVariantLabel(tag, scripts, regions) {
     bits.push(regionName(p.region) || (p.region ? p.region.toUpperCase() : ""));
   }
   return bits.filter(Boolean).join(" — ");
+}
+
+/** One tag named in full and in ENGLISH: "Portuguese (Brazil)",
+ *  "Serbian (Latin — Serbia)".
+ *
+ *  For a row standing in a FLAT list that nothing grouped — the dictation card's
+ *  "More languages" expansion, which is a bag of everything downloadable and
+ *  cannot promise one row per language. There the region must be said, because
+ *  two entries of one language may both be present and a group heading is not
+ *  above them to tell them apart. A row inside a real group must NOT use this:
+ *  its siblings decide what distinguishes it (langVariantLabel), and a group of
+ *  one needs no distinguishing word at all.
+ *
+ *  The script is named only when the tag SPELLS it. Resolving it here would put
+ *  "Cyrillic" on a bare `sr` that never asked to be told apart from anything. */
+function langFullName(tag, given) {
+  const base = langGroupName(tag, given);
+  const p = langParts(tag);
+  const bits = [];
+  if (p.script) bits.push(scriptName(p.script));
+  if (p.region) bits.push(regionName(p.region));
+  const tail = bits.filter(Boolean).join(" — ");
+  return tail ? `${base} (${tail})` : base;
 }
 
 function scriptName(script) {
@@ -270,12 +302,13 @@ function groupByLanguage(rows, tagOf, nameOf, idOf) {
     // caught it: the list read "English (United States)  2", naming one of the
     // two things behind it.
     //
-    // So a group of SEVERAL variants is named by its language alone, looked up
-    // rather than taken from any one row; a group of ONE keeps the platform's
-    // own wording, which is the name this card has always shown.
-    g.name = g.variants.length === 1
-      ? langGroupName(g.variants[0].tag, g.given)
-      : langGroupName(g.variants[0].tag, langBareName(g.given));
+    // Every group is named the same way, by ONE source, whatever its size (the
+    // owner's decision of 2026-08-13 — see langGroupName). The earlier split,
+    // which let a group of one keep the platform's own wording, is exactly how
+    // the two cards came to spell Serbian differently: on his phone almost
+    // every language IS a group of one, so the "exception" was the common case
+    // and the lookup was the rare one.
+    g.name = langGroupName(g.variants[0].tag, g.given);
     if (!g.name) g.name = g.key.toUpperCase();
     delete g.seen;
     delete g.given;
@@ -391,7 +424,8 @@ function groupVoicesByLanguage(voices) {
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
     LANG_DEFAULT_SCRIPT, langParts, langKey, langScript, langVariantKey,
-    langGroupName, langBareName, langVariantLabel, scriptName, regionName,
+    langGroupName, langBareName, langFullName, langVariantLabel,
+    scriptName, regionName,
     groupByLanguage, voiceVariant, voiceVariantReadable, voiceGroupLabels,
     groupVoicesByLanguage,
   };

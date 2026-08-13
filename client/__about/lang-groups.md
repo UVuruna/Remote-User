@@ -107,24 +107,65 @@ characters.
   whole group, because half a group named and half numbered is not a sequence
   he can read.
 
+## One name source, and it answers in English
+
+The owner's decision of 2026-08-13, taken after an independent grader **opened
+the two screenshots** and read the same language spelled two ways two screens
+apart: the dictation card said `Srpski` while the voice card said the Cyrillic
+endonym, and `Icelandic` was the one English name among the endonyms.
+<!-- lang-ok: the defect being described is a Cyrillic rendering; the word itself is not reproduced -->
+
+The cause was structural rather than a slip. Android hands the dictation card a
+full endonym per row (`Locale.getDisplayName(locale)` — the language in its own
+words); the voice card is given no such name and must look one up, and asked for
+`sr` a lookup answers the Cyrillic endonym. Preferring the platform's word where
+there was one and looking one up where there was not is **two sources**, and two
+sources cannot agree by accident. One source cannot disagree.
+
+So every heading is asked of `Intl.DisplayNames(["en"])`, whatever the platform
+supplied, and **whatever the group's size** — the earlier code kept the
+platform's wording for a group of one and looked the name up only for a group of
+several, which on his phone means the exception was the common case.
+
+Two things are deliberately NOT translated:
+
+* **The rows inside a group** keep `Cyrillic` / `Latin` / `United Kingdom`,
+  because what those rows decide is what his dictated text **comes out as** —
+  they are choices, not labels.
+* **The spoken samples** stay in the language they demonstrate. A sample read out
+  in English would be the exact deception the honest-limit rule exists to
+  prevent.
+
 ## Honest limits
 
 * Script resolution is the platform's (or the small table's). A language with an
   unusual script and no `Intl.Locale` gets **no** assumed script rather than a
   plausible one — it may then show one row where two were possible, which is
   strictly better than two rows for one choice.
-* Group headings prefer the name the platform already gave the row (the
-  dictation card's endonym from Kotlin) and fall back to `Intl.DisplayNames`,
-  then to the upper-cased subtag. A device with neither shows a code, which
-  reads as a code rather than as a misspelt word.
+* Group headings are the **English** language name, from `Intl.DisplayNames`
+  (owner 2026-08-13 — see "One name source" below). The endonym the platform
+  handed the row survives only as the fallback for a runtime with no
+  `Intl.DisplayNames`, shortened of its region; the upper-cased subtag is the
+  last resort and reads as a code rather than as a misspelt word.
 * Variant words (`Latin`, `United Kingdom`) come from `Intl.DisplayNames` in
   English, not in the language being named — the app's own language is English
   everywhere but its samples.
 
 ## Gate
 
-`tests/test_lang_groups.py`, fail-closed in `setup/gates.py` (0b0/6), thirteen
+`tests/test_lang_groups.py`, fail-closed in `setup/gates.py` (0b0/6), fourteen
 checks. It runs the real module in node, one fresh interpreter per scenario, and
 each defence is proven by planting its own defect — including the two that
 shipped wrong inside this round (the locale-keyed voice, and the id offered as a
 name).
+
+The English-heading check **supplies** an endonym and demands it be ignored: a
+heading that merely happened to read `Serbian` because nothing was supplied would
+prove nothing.
+
+Its own honest limit, and it is why the phone audit is the second half: this gate
+can only see a **group's** heading. A group of ONE is drawn from the row itself
+(`dictation-card.js`), so the leaf rows kept their endonyms after the arithmetic
+was already correct — green gate, wrong card. `tests/_audit_lang.py` →
+`LANG_GROUP_CHECK_JS` sweeps the rendered names for the endonyms its own stage
+supplies, which is what caught it.

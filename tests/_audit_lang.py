@@ -138,7 +138,11 @@ LANG_GROUP_CHECK_JS = """() => {
                     return n ? n.textContent.trim() : '';
                   });
                   // The staged collision: Serbian three ways, English two.
-                  const serbian = names.filter((t) => /^Srpski/i.test(t));
+                  // The heading is the ENGLISH name (owner 2026-08-13), so it
+                  // is 'Serbian' although every staged row supplied the Latin
+                  // endonym 'Srpski (Srbija)' — which is the point: the card
+                  // must IGNORE what the platform handed it.
+                  const serbian = names.filter((t) => /^Serbian/i.test(t));
                   if (serbian.length !== 1) {
                     bad.push('Serbian appears on ' + serbian.length +
                              ' rows — his repetition, unfixed: ' +
@@ -148,6 +152,21 @@ LANG_GROUP_CHECK_JS = """() => {
                   if (english.length !== 1) {
                     bad.push('English appears on ' + english.length +
                              ' rows: ' + JSON.stringify(english));
+                  }
+                  // NO HEADING IS AN ENDONYM, and this is measured on the CARD
+                  // rather than only in the arithmetic's gate, because the
+                  // divergence it fixes was found by OPENING a screenshot and by
+                  // nothing else: the two cards spelled one language two ways
+                  // and every assertion in the repo was green. The staged rows
+                  // supply these words, so any of them reaching a heading means
+                  // the platform's wording is being preferred again.
+                  for (const endonym of ['Srpski', 'Deutsch', 'Íslenska',
+                                         'Português', 'Русский']) {
+                    if (names.some((t) => t.startsWith(endonym))) {
+                      bad.push('a heading reads the endonym ' + endonym +
+                               ' — headings are English (owner 2026-08-13), ' +
+                               'and two name sources cannot agree by accident');
+                    }
                   }
                   // A door says how many are behind it, and the door holding
                   // the chosen variant is lit.

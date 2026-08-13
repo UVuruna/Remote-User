@@ -52,6 +52,27 @@ then, for each group                     ← a second pass, and it must be secon
                 └─ names ONLY the axes that differ across THIS group
 ```
 
+And in the same second pass, the heading:
+
+```
+g.name = langGroupName(firstTag, g.given)
+           │
+           ├─ Intl.DisplayNames(["en"]).of(lang)   ← ONE source, always asked
+           ├─ langBareName(g.given)                ← no Intl: his word, region cut
+           └─ lang.toUpperCase()                   ← reads as a code
+```
+
+One source and one language, whatever the group's SIZE (owner 2026-08-13). The
+platform's endonym is no longer preferred to the lookup, and a group of one is no
+longer an exception to it — that exception is how one card came to spell Serbian
+in Latin while the other spelled it in Cyrillic, since on his phone almost every
+language IS a group of one.
+
+The rows drawn from a group of one therefore take `g.name` rather than
+`row.name`; the flat "More languages" bag, which nothing grouped, takes
+`langFullName(tag, name)` — English plus the region, because two entries of one
+language can both be in there with no heading above them to tell them apart.
+
 Why the labels need their own pass: a variant's label depends on its
 **siblings**. `sr-Latn-RS` reads `Latin` next to a Cyrillic sibling and reads
 nothing at all when it is the language's only variant. A per-row rule cannot
@@ -100,7 +121,9 @@ render (either card)
   └─ else   →  per group:
                  variants.length === 1
                    →  a flat, ordinary row       ← a door into a list of one
-                                                    hides his only choice
+                        wearing g.name              hides his only choice;
+                                                    the NAME is still the
+                                                    group's, never the row's
                  else
                    →  langGroupRow(group, holdsChosen)
                         name · count · drawn arrow

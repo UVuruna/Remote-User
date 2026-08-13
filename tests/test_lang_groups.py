@@ -183,6 +183,52 @@ console.log(JSON.stringify({ label: g.variants[0].label }));
              f"{out['label']!r}")
 
 
+def check_every_heading_is_english_whatever_the_platform_supplied() -> None:
+    """The owner's decision of 2026-08-13, and it is the fix for a defect no
+    ASSERTION found — an independent grader OPENED the two screenshots and read
+    the same language spelled two ways two screens apart.
+
+    The two cards have different name sources: Android hands the dictation card
+    an endonym (`Locale.getDisplayName`), the voice card gets none and must look
+    one up. Two sources cannot agree by accident, so there is one source now and
+    it answers in English. The check therefore SUPPLIES an endonym and demands it
+    be ignored — a heading that merely happens to read "Serbian" because nothing
+    was supplied would prove nothing.
+
+    Both group sizes are asserted deliberately: the shipped code took the
+    platform's wording for a group of ONE and looked the name up only for a group
+    of several, which on his phone means the exception was the common case. A
+    rule that holds for the rare shape only is what let the divergence ship."""
+    out = _run("""
+const lone = groupByLanguage(
+  [{tag:"sr-Latn-RS", nm:"Srpski (Srbija)"}],
+  (r) => r.tag, (r) => r.nm);
+const many = groupByLanguage(
+  [{tag:"sr-RS", nm:"Srpski (Srbija)"}, {tag:"sr-Latn-RS", nm:"Srpski"}],
+  (r) => r.tag, (r) => r.nm);
+const en = groupByLanguage(
+  [{tag:"is-IS", nm:""}], (r) => r.tag, (r) => r.nm);
+console.log(JSON.stringify({
+  lone: lone[0].name, many: many[0].name, is: en[0].name,
+  labels: many[0].variants.map((v) => v.label),
+}));
+""")
+    for where, name in (("a group of ONE", out["lone"]),
+                        ("a group of SEVERAL", out["many"])):
+        if name != "Serbian":
+            fail(f"{where} must be headed by the ENGLISH language name "
+                 f"(owner 2026-08-13); got {name!r}. A supplied endonym was "
+                 "offered on purpose — preferring it is exactly how one card "
+                 "came to write Serbian in Latin and the other in Cyrillic")
+    if out["is"] != "Icelandic":
+        fail("a language the platform supplied NO name for must still be "
+             f"headed in English; got {out['is']!r}")
+    if not any("Latin" in (l or "") for l in out["labels"]):
+        fail("the heading going English must NOT reach the rows INSIDE a "
+             "group: those decide what his dictated text comes out AS, and "
+             f"the script must still be named; labels were {out['labels']}")
+
+
 def check_the_tag_handed_back_is_never_rewritten() -> None:
     """A canonical key decides SAMENESS and must never reach the recognizer:
     `Android.voiceSetLang` is given the exact string the platform offered."""
@@ -390,6 +436,8 @@ CHECKS = [
      check_several_voices_of_one_locale_all_survive),
     ("a readable variant is kept (his 'female 1 male 1')",
      check_readable_variants_are_kept),
+    ("every heading is English, whatever the platform supplied",
+     check_every_heading_is_english_whatever_the_platform_supplied),
     ("nonsense numbers the WHOLE group (incl. a name with no '#')",
      check_nonsense_numbers_the_whole_group),
     ("a bare number is not a name",

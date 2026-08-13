@@ -370,7 +370,7 @@ function langBackRow(name, onBack) {
  *  anywhere inside a label activates the control the label owns, so a speaker
  *  button nested in this row would also SELECT that language — the tap that
  *  means "let me hear it before I decide" would have decided. */
-function dictRow(lang, chosen, voices, variantLabel) {
+function dictRow(lang, chosen, voices, variantLabel, groupName) {
   const row = document.createElement("div");
   row.className = "dict-row";
   const label = document.createElement("label");
@@ -387,9 +387,18 @@ function dictRow(lang, chosen, voices, variantLabel) {
   txt.className = "dict-name";
   // INSIDE a language, the row wears only what tells it from its siblings —
   // the script or the region (lang-groups.js), because the back row above is
-  // already the language's name. Outside one it wears the platform's own full
-  // name, which is what this card has always shown.
-  txt.textContent = variantLabel || lang.name;
+  // already the language's name.
+  //
+  // Outside one it is NAMED IN ENGLISH (owner 2026-08-13). It used to wear
+  // `lang.name`, the endonym Android hands us, and that is the half of the
+  // divergence the arithmetic's gate could not see: it checks a GROUP's heading,
+  // while on his phone almost every language is a group of ONE and its row is
+  // drawn straight from the platform's word. Only the phone audit caught it, by
+  // opening the picture and reading "Deutsch" beside "Serbian". `groupName` is
+  // that group's English name; `langFullName` covers the flat "More languages"
+  // bag, where nothing grouped the rows and the region must therefore be said.
+  txt.textContent = variantLabel || groupName
+    || langFullName(lang.tag, lang.name);
   const st = document.createElement("span");
   st.className = "dict-status";
   st.textContent = DICT_STATUS[lang.status] || "";
@@ -515,7 +524,10 @@ function renderDictationCard() {
       // one shows him nothing he could not already see, and it would put his
       // only Serbian behind a tap.
       if (g.variants.length === 1) {
-        list.appendChild(dictRow(g.variants[0].row, chosen, voices));
+        // Its group's ENGLISH name, never the row's own endonym — a group of one
+        // is still a group, and it is the shape his phone mostly has.
+        list.appendChild(
+          dictRow(g.variants[0].row, chosen, voices, "", g.name));
       } else {
         const holdsChosen = g.variants.some((v) => v.tag === chosen);
         const row = langGroupRow(g, holdsChosen, () => {
