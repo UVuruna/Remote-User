@@ -267,6 +267,69 @@ console.log(JSON.stringify({
              "how his 'male 1' disappeared.")
 
 
+def check_one_speaker_shipped_twice_is_one_row() -> None:
+    """His report of 2026-08-13: sixteen English rows, and he asked outright
+    whether they are all different. Half of them were not — Android engines
+    ship most speakers as a `-local` and a `-network` copy of one voice, two
+    `Voice` objects with two distinct names, so nothing treated them as one.
+    Playing both is comparing a voice with itself."""
+    out = _run("""
+const groups = groupVoicesByLanguage([
+  {name:"en-us-x-tpf-local",   locale:"en-US"},
+  {name:"en-us-x-tpf-network", locale:"en-US"},
+  {name:"en-us-x-tpd-local",   locale:"en-US"},
+  {name:"en-us-x-tpd-network", locale:"en-US"},
+]);
+console.log(JSON.stringify({
+  names: groups[0] ? groups[0].variants.map((v) => v.row.name) : [],
+}));
+""")
+    names = out["names"]
+    if len(names) != 2:
+        fail("two speakers shipped local+network are TWO rows, not "
+             f"{len(names)} — got {names}")
+    if any("network" in n for n in names):
+        fail("the ON-DEVICE copy must be the one kept: a network voice needs "
+             "a connection at the moment a notice arrives, which is exactly "
+             f"when he is away from Wi-Fi. Got {names}")
+
+
+def check_a_network_only_voice_is_still_offered() -> None:
+    """Deduping must never cost him a voice. A speaker with no on-device copy
+    is still the only way to hear that speaker — dropping it because it is
+    not local would remove a choice rather than a repetition, which is the
+    exact failure his script ruling of 2026-08-13 forbids."""
+    out = _run("""
+const groups = groupVoicesByLanguage([
+  {name:"en-gb-x-gba-network", locale:"en-GB"},
+]);
+console.log(JSON.stringify({
+  names: groups[0] ? groups[0].variants.map((v) => v.row.name) : [],
+}));
+""")
+    if out["names"] != ["en-gb-x-gba-network"]:
+        fail("a speaker that exists ONLY in the cloud must still be offered; "
+             f"got {out['names']}")
+
+
+def check_dedupe_does_not_reshuffle_the_numbering() -> None:
+    """The kept copy takes the place the FIRST copy already held. Otherwise
+    the "Voice 1, 2, 3" numbering would depend on which copy the engine
+    happened to list first, and the row he chose yesterday would wear a
+    different number today."""
+    out = _run("""
+const kept = dedupeVoices([
+  {name:"en-us-x-aaa-network"},
+  {name:"en-us-x-bbb-local"},
+  {name:"en-us-x-aaa-local"},
+]);
+console.log(JSON.stringify({names: kept.map((v) => v.name)}));
+""")
+    if out["names"] != ["en-us-x-aaa-local", "en-us-x-bbb-local"]:
+        fail("the on-device copy must replace its network twin IN PLACE — "
+             f"order is the engine's, not the dedupe's; got {out['names']}")
+
+
 def check_readable_variants_are_kept() -> None:
     """His ruling: *"ako je to female 1 male 1 i tako dalje onda ok"*."""
     out = _run("""
@@ -434,6 +497,12 @@ CHECKS = [
      check_the_tag_handed_back_is_never_rewritten),
     ("several voices of one locale ALL survive",
      check_several_voices_of_one_locale_all_survive),
+    ("one speaker shipped local+network is ONE row",
+     check_one_speaker_shipped_twice_is_one_row),
+    ("a network-only speaker is still offered",
+     check_a_network_only_voice_is_still_offered),
+    ("deduping never reshuffles the numbering",
+     check_dedupe_does_not_reshuffle_the_numbering),
     ("a readable variant is kept (his 'female 1 male 1')",
      check_readable_variants_are_kept),
     ("every heading is English, whatever the platform supplied",

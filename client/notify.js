@@ -444,24 +444,73 @@ let voiceSpeakingTimer = null;
 // position would open a language in one card that the other does not have.
 let voiceOpenLang = "";
 
-function voicePreview(voice, btn) {
-  if (voiceSpeakingName) return;
+/** Lights exactly the row that is speaking, and no other.
+ *
+ *  THE LAMP IS DRAWN FROM STATE, never remembered as a node. His report of
+ *  2026-08-13: two or more rows often looked selected at once. The old code
+ *  handed a `btn` to a timer and cleared the class on THAT node seconds
+ *  later; any re-render in between — choosing a voice re-renders the whole
+ *  card — left the class on a live button nobody would ever clear, so a lit
+ *  speaker sat beside a chosen row and read as a second selection.
+ *
+ *  It re-classes in place rather than re-rendering: the list is as long as the
+ *  engine makes it, and rebuilding it would throw away his scroll position on
+ *  every tap — the rows he is comparing are the ones he just scrolled to. */
+function voiceLamps() {
+  if (!voicePanel) return;
+  for (const b of voicePanel.querySelectorAll(".dict-listen")) {
+    b.classList.toggle("busy", (b.dataset.voice || "") === voiceSpeakingName);
+  }
+}
+
+/** A sample has really ended — finished, cut off by the next one, or failed.
+ *  The shell calls this; nothing here decides it. */
+function voiceSampleEnded() {
+  clearTimeout(voiceSpeakingTimer);
+  voiceSpeakingName = null;
+  voiceLamps();
+}
+window.__ttsDone = voiceSampleEnded;
+
+/** Plays one voice. A tap while another is speaking REPLACES it.
+ *
+ *  His report of 2026-08-13: a second voice could not be tapped until the
+ *  first had finished. The old guard `if (voiceSpeakingName) return;` was not
+ *  arbitrary — the engine queues (QUEUE_ADD) and its voice is set per call but
+ *  applies to the whole queue, so a second tap would have spoken BOTH samples
+ *  in the second voice, which is worse than refusing. The refusal was the
+ *  right answer to the wrong question: the fix belongs in the shell, which can
+ *  flush the queue, and it is there now (`Notifier.speakSample`).
+ *
+ *  AND NOTHING HERE ESTIMATES A DURATION any more (constraint 15). The lamp
+ *  used to be released by a character-count guess, so it lied in both
+ *  directions — dark while a slow network voice still spoke, lit for seconds
+ *  after a short one stopped. The engine reports its own end.
+ *
+ *  An older shell has neither method; it keeps exactly the old behaviour, and
+ *  its guess survives only as the give-up point for the lamp. */
+function voicePreview(voice) {
+  const name = String(voice.name || "");
+  // At the pace he has chosen HERE: a voice at 1.5× is a different thing to
+  // listen to than the same voice at 0.8×, and it is the pair he will hear.
+  const rate = notifyRatePref() || 1;
+  const bridge = window.Android;
+  const canInterrupt = !!bridge && typeof bridge.speakSample === "function";
+  if (!canInterrupt && voiceSpeakingName) return;   // old shell: as before
   try {
-    // At the pace he has chosen HERE: a voice at 1.5× is a different thing to
-    // listen to than the same voice at 0.8×, and it is the pair he will hear.
-    window.Android.speakAs(NOTIFY_SAMPLE, voice.name || "",
-                           notifyRatePref() || 1);
+    if (canInterrupt) bridge.speakSample(NOTIFY_SAMPLE, name, rate);
+    else bridge.speakAs(NOTIFY_SAMPLE, name, rate);
   } catch {
     showToast("This device could not play the sample");
     return;
   }
-  voiceSpeakingName = voice.name;
-  btn.classList.add("busy");
   clearTimeout(voiceSpeakingTimer);
-  voiceSpeakingTimer = setTimeout(() => {
-    voiceSpeakingName = null;
-    btn.classList.remove("busy");   // harmless if the card was re-rendered
-  }, dictSampleMs(NOTIFY_SAMPLE));  // panels.js — one estimate, one copy
+  voiceSpeakingName = name;
+  if (!canInterrupt) {
+    voiceSpeakingTimer = setTimeout(voiceSampleEnded,
+                                    dictSampleMs(NOTIFY_SAMPLE));
+  }
+  voiceLamps();
 }
 
 /** The label a voice wears.
@@ -513,6 +562,9 @@ function voiceRow(voice, chosen, grouped) {
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "dict-listen" + (name === voiceSpeakingName ? " busy" : "");
+    // WHICH voice this speaker plays, on the node itself — `voiceLamps` reads
+    // it back to light exactly one row without rebuilding the list.
+    btn.dataset.voice = name;
     btn.innerHTML = svg("listen");
     // Named for the VOICE, not "play": a screen reader saying "button" over a
     // speaker glyph says nothing about which row it belongs to. It names the
@@ -521,7 +573,7 @@ function voiceRow(voice, chosen, grouped) {
     // screen-reader user has no heading in view to supply the language.
     btn.setAttribute("aria-label", `Listen to ${voiceLabel(voice)}`);
     btn.title = `Listen to ${voiceLabel(voice)}`;
-    keepFocus(btn, () => voicePreview(voice, btn));
+    keepFocus(btn, () => voicePreview(voice));
     row.appendChild(btn);
   }
   return row;

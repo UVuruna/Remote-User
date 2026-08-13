@@ -287,6 +287,21 @@ class Bridge(private val host: MainActivity) {
         host.runOnUiThread { host.notifier.speak(text, voice, rate) }
     }
 
+    /** Plays a voice SAMPLE: interrupts whatever is speaking, and calls
+     *  `window.__ttsDone()` when this one really ends (owner report
+     *  2026-08-13 — a second voice could not be tapped until the first
+     *  finished, and the speaker stayed lit afterwards). The page must never
+     *  guess a duration; see `Notifier.speakSample`.
+     *
+     *  A NEW method beside `speakAs`, not an argument on it — the page is
+     *  served by the PC while this shell is installed separately, so changed
+     *  arity would simply stop resolving. A page that finds this missing
+     *  falls back to `speakAs`. */
+    @JavascriptInterface
+    fun speakSample(text: String, voice: String, rate: Float) {
+        host.runOnUiThread { host.notifier.speakSample(text, voice, rate) }
+    }
+
     /** Every text-to-speech voice this DEVICE has, as JSON — sent to the
      *  PC once per connection so the desktop Settings window can offer
      *  them. The PC cannot enumerate them itself. */

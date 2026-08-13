@@ -8,6 +8,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.speech.tts.TextToSpeech
+import android.speech.tts.UtteranceProgressListener
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
@@ -45,11 +46,18 @@ import java.util.Locale
  * come from here — a TextToSpeech engine's voices differ per device, per
  * language pack, per Android version, and the PC cannot see any of it.
  */
-class Notifier(private val ctx: Context) {
+/** `js` is how a page learns that a spoken sample has FINISHED. It is
+ *  optional because `NoticeService` also builds a Notifier and has no page at
+ *  all — a service speaking a notice into a pocket has nobody to tell. */
+class Notifier(private val ctx: Context, private val js: ((String) -> Unit)? = null) {
 
     companion object {
         private const val TAG = "Notifier"
         private const val CHANNEL_ID = "agents"
+        /** The utterance id a voice SAMPLE rides under. Only a sample is
+         *  reported back to the page — a notice being spoken is not something
+         *  the voice card is waiting on. */
+        private const val UTT_SAMPLE = "sample"
         /** Where the tapped notice happened — `{index, name}` as JSON. */
         const val EXTRA_JUMP = "com.uvuruna.vibecoder.JUMP"
         // One id per agent name, so notifications REPLACE per agent instead of
@@ -144,6 +152,45 @@ class Notifier(private val ctx: Context) {
         if (ttsReady) drain() else ensureEngine()
     }
 
+    /** Speaks a SAMPLE: interrupts whatever is speaking and says this
+     *  instead, then tells the page when it is really finished.
+     *
+     *  TWO THINGS `speak` CANNOT DO, and both are his report of 2026-08-13
+     *  (a second voice could not be tapped until the first finished, and the
+     *  speaker button stayed lit afterwards).
+     *
+     *  1. IT INTERRUPTS. `speak` queues (QUEUE_ADD) because a notice must
+     *     never be dropped — two agents finishing together are two things he
+     *     needs to hear. A sample is the opposite: tapping voice 13 while
+     *     voice 11 talks means "let me hear THIRTEEN", and queueing it would
+     *     also speak it in the wrong voice, since the engine's voice is set
+     *     per call but applies to the whole queue.
+     *  2. IT ANSWERS. The page had to GUESS how long the sample would take
+     *     from its character count — forbidden outright (root CLAUDE.md,
+     *     constraint 15: we never estimate how long another program needs, we
+     *     watch for the condition). The engine knows, so it says so.
+     *
+     *  A NEW METHOD rather than a flag on `speak`, for the reason written
+     *  over `speakAs`: the page is served by the PC and this shell is
+     *  installed separately, so a changed signature simply stops resolving
+     *  for a page that has not been re-served yet. */
+    fun speakSample(text: String, voice: String = "", rate: Float = 1f) {
+        if (text.isBlank()) return
+        setSpeechRate(rate)
+        setVoice(voice)
+        // A queued NOTICE must survive being interrupted by a sample — it is
+        // the thing this app exists to deliver. Only the utterance already
+        // leaving the speaker is cut off.
+        if (!ttsReady) { ensureEngine(); synchronized(pending) { pending.add(text) }; return }
+        tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, UTT_SAMPLE)
+    }
+
+    /** The engine has stopped speaking a SAMPLE — said once per sample,
+     *  whether it ended, was cut off by the next one, or failed. */
+    private fun sampleDone() {
+        js?.invoke("window.__ttsDone && __ttsDone()")
+    }
+
     /** Every voice this DEVICE has, as JSON the page forwards to the PC:
      *  `[{name, label, locale}, …]`. `name` is the identity the PC stores and
      *  sends back; `label` is what a person reads. Empty when the engine has
@@ -221,6 +268,24 @@ class Notifier(private val ctx: Context) {
             // hears best; an engine without it falls back on its own.
             tts?.language = Locale.getDefault()
             tts?.setSpeechRate(speechRate)
+            // ALL THREE ENDINGS REPORT, and that is the point: a sample that
+            // failed or was cut off leaves the page's speaker button lit
+            // forever if only `onDone` speaks. `onStop` fires for the
+            // utterance a QUEUE_FLUSH replaced, which is exactly what one tap
+            // interrupting another looks like.
+            tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+                override fun onStart(id: String?) {}
+                override fun onDone(id: String?) { if (id == UTT_SAMPLE) sampleDone() }
+                override fun onStop(id: String?, interrupted: Boolean) {
+                    if (id == UTT_SAMPLE) sampleDone()
+                }
+                @Deprecated("Kept: the non-deprecated overload is API 21+ only in name — "
+                            + "the base class still routes old engines through this one.")
+                override fun onError(id: String?) { if (id == UTT_SAMPLE) sampleDone() }
+                override fun onError(id: String?, code: Int) {
+                    if (id == UTT_SAMPLE) sampleDone()
+                }
+            })
             applyVoice()
             drain()
         }

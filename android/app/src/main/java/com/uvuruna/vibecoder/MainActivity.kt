@@ -381,7 +381,11 @@ class MainActivity : AppCompatActivity() {
     // ── Notifications ── lives in Notifier.kt (ROADMAP Phase H, owner
     // 2026-08-05): a job on the PC finished, and the phone says WHICH agent.
     // Lazy, because most sessions never receive one.
-    internal val notifier by lazy { Notifier(this) }
+    // The page is handed a callback so a spoken SAMPLE can report its own end
+    // instead of the voice card estimating one (constraint 15).
+    internal val notifier by lazy {
+        Notifier(this) { code -> if (::web.isInitialized) web.evaluateJavascript(code, null) }
+    }
 
     private fun launchCamera() {
         val dir = File(cacheDir, "camera").apply { mkdirs() }

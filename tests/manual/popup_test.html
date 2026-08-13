@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Popup test — VibeCoder</title>
+<style>
+  :root { color-scheme: dark; }
+  body {
+    margin: 0; padding: 28px 32px;
+    background: #0d1420; color: #e8eef7;
+    font: 17px/1.55 "Segoe UI", system-ui, sans-serif;
+  }
+  h1 { font-size: 26px; margin: 0 0 4px; }
+  .sub { color: #93a4bb; margin: 0 0 24px; }
+  .row {
+    display: flex; align-items: flex-start; gap: 18px;
+    padding: 16px 0; border-top: 1px solid #223047;
+  }
+  .num {
+    flex: 0 0 34px; height: 34px; border-radius: 50%;
+    background: #1d2c44; color: #7fb2ff;
+    display: grid; place-items: center; font-weight: 700;
+  }
+  .what { flex: 1 1 auto; min-width: 0; }
+  .what b { display: block; font-size: 18px; margin-bottom: 3px; }
+  .what span { color: #93a4bb; font-size: 15px; }
+  .kind { color: #ffb454; font-size: 13px; letter-spacing: .04em; }
+  button, a.btn {
+    flex: 0 0 auto; min-width: 190px;
+    padding: 12px 20px; border: 0; border-radius: 8px;
+    background: #2563eb; color: #fff; font: inherit; font-weight: 600;
+    cursor: pointer; text-align: center; text-decoration: none;
+  }
+  button:hover, a.btn:hover { background: #1d4ed8; }
+  input[type=file] { display: none; }
+  footer { margin-top: 26px; color: #6f8299; font-size: 14px; }
+</style>
+</head>
+<body>
+
+<h1>Popup test</h1>
+<p class="sub">Open this page inside a layout member window, then press the
+buttons from the phone. Watch two things every time: <b>does the new window
+land inside the streamed picture</b>, and <b>can the layout still be raised
+afterwards</b>.</p>
+
+<div class="row">
+  <div class="num">1</div>
+  <div class="what">
+    <b>A separate browser window</b>
+    <span class="kind">TOP-LEVEL — not owned</span>
+    <span>A brand-new window of the same process. Nothing owns it, so nothing
+    disables this one. This is the case the &ldquo;a layout with it?&rdquo;
+    chip is supposed to notice.</span>
+  </div>
+  <button onclick="window.open('about:blank', '_blank', 'width=760,height=520')">
+    Open a popup window
+  </button>
+</div>
+
+<div class="row">
+  <div class="num">2</div>
+  <div class="what">
+    <b>The print dialog</b>
+    <span class="kind">OWNED MODAL — the important one</span>
+    <span>A real Windows dialog owned by this window. While it stands, this
+    window is <i>disabled</i>, and Windows hides the dialog if this window is
+    minimized. That pair is what nailed the layout down.</span>
+  </div>
+  <button onclick="window.print()">Open the print dialog</button>
+</div>
+
+<div class="row">
+  <div class="num">3</div>
+  <div class="what">
+    <b>The file picker</b>
+    <span class="kind">OWNED MODAL</span>
+    <span>The same shape as the print dialog, from a different Windows
+    subsystem. If one behaves and the other does not, the cause is not the
+    ownership rule.</span>
+  </div>
+  <button onclick="document.getElementById('pick').click()">
+    Open the file picker
+  </button>
+  <input id="pick" type="file">
+</div>
+
+<div class="row">
+  <div class="num">4</div>
+  <div class="what">
+    <b>An image, in a window of its own</b>
+    <span class="kind">TOP-LEVEL — new tab or window</span>
+    <span>Opens the picture beside this page. Use this one to check the chip
+    after a plain single click, rather than a double click.</span>
+  </div>
+  <a class="btn" href="popup_test_image.png" target="_blank">Open the image</a>
+</div>
+
+<div class="row">
+  <div class="num">5</div>
+  <div class="what">
+    <b>The image in the Photos app</b>
+    <span class="kind">TOP-LEVEL — another process</span>
+    <span>Save it, then double-click the saved file in Explorer through the
+    stream. A new window of a <i>different</i> process is the cleanest case
+    for the chip, and a double click is what the offer waits for.</span>
+  </div>
+  <a class="btn" href="popup_test_image.png" download>Save the image</a>
+</div>
+
+<footer>
+  Nothing here talks to the server. It only makes windows, so the server can be
+  watched while it decides what to do with them.
+</footer>
+
+</body>
+</html>

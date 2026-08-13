@@ -402,6 +402,48 @@ function voiceGroupLabels(voices) {
   });
 }
 
+/** WHO a voice is, with WHERE IT RUNS taken off — or "" when it has no name.
+ *
+ *  Android engines ship most speakers TWICE: `en-us-x-tpf-local` runs on the
+ *  device, `en-us-x-tpf-network` is the same speaker rendered in the cloud.
+ *  They are two `Voice` objects with two distinct `name`s, so nothing before
+ *  this treated them as one — which is half of the pile the owner reported
+ *  (his own English group held sixteen rows). Playing both is comparing a
+ *  voice with itself. */
+function voiceSpeaker(name) {
+  const s = String(name == null ? "" : name).trim();
+  if (!s) return "";
+  return s.replace(/[-_](local|network|compact|embedded)$/i, "").toLowerCase();
+}
+
+/** One row per SPEAKER, keeping the on-device copy of every pair.
+ *
+ *  ON-DEVICE WINS, and not by preference: a network voice needs the phone to
+ *  have a connection at the moment a notice arrives, and a notice arriving
+ *  when he is away from Wi-Fi is exactly when the app matters most. Where
+ *  there is only a network copy it is kept — a voice he can usually hear beats
+ *  a voice he can never choose.
+ *
+ *  ORDER IS THE ENGINE'S, taken from whichever copy came first, so the "Voice
+ *  1, 2, 3" numbering does not reshuffle itself when this list changes.
+ *  Anything with no name at all is passed through untouched: the voice card's
+ *  own "the phone's own default" row is one, and it is not a speaker. */
+function dedupeVoices(voices) {
+  const list = Array.isArray(voices) ? voices : [];
+  const out = [];
+  const at = new Map();          // speaker -> index in `out`
+  for (const v of list) {
+    const key = voiceSpeaker(v && v.name);
+    if (!key) { out.push(v); continue; }
+    const seen = at.get(key);
+    if (seen === undefined) { at.set(key, out.length); out.push(v); continue; }
+    // Same speaker again: keep the on-device copy in the place the first one
+    // already holds, so nothing moves up or down the list.
+    if (/[-_]local$/i.test(String(v.name || ""))) out[seen] = v;
+  }
+  return out;
+}
+
 /** Both halves at once, for the voice card: groups by language, then names
  *  the voices inside each group by the rule above. Same shape as
  *  groupByLanguage, with `label` filled from voiceGroupLabels instead of the
@@ -409,7 +451,7 @@ function voiceGroupLabels(voices) {
  *  them all "United States" would name none of them. */
 function groupVoicesByLanguage(voices) {
   const groups = groupByLanguage(
-    (voices || []).filter((v) => v && v.name),
+    dedupeVoices((voices || []).filter((v) => v && v.name)),
     (v) => v.locale || v.name,     // a voice with no locale still has a name
     () => "",                       // the engine's label carries the language
     (v) => v.name,                  // A VOICE IS ITS NAME — see groupByLanguage
@@ -427,6 +469,6 @@ if (typeof module !== "undefined" && module.exports) {
     langGroupName, langBareName, langFullName, langVariantLabel,
     scriptName, regionName,
     groupByLanguage, voiceVariant, voiceVariantReadable, voiceGroupLabels,
-    groupVoicesByLanguage,
+    voiceSpeaker, dedupeVoices, groupVoicesByLanguage,
   };
 }
