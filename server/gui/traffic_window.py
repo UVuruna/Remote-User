@@ -442,15 +442,17 @@ class TrafficChart(QWidget):
             lx = min(max(plot.left(), x_of(t) - w / 2), plot.right() - w)
             painter.drawText(int(lx), plot.bottom() + metrics.ascent() + 3, label)
 
-        # PER-DEVICE COLOUR (owner request 2026-08-13): "colour the line
-        # differently depending on which device was using it — so we can see
-        # the difference in bytes sent to a smaller-resolution device." Only
-        # matters — and only fires — when the span actually shows MORE THAN
-        # ONE device; a single-device (the overwhelming common case) or
-        # device-less span keeps drawing the plain direction colour it always
-        # has, so nothing about an ordinary session's picture changes.
-        devices_seen = {p.device for p in pts if p.device}
-        multi_device = len(devices_seen) > 1
+        # PER-DEVICE COLOUR (owner request 2026-08-13). T75 correction
+        # (2026-08-14, from his own screenshot): the predicate used to be
+        # "does the VISIBLE SPAN hold >1 device" — so a span where only the
+        # phone talked fell back to the plain direction colour (blue) while
+        # the legend beside it already listed two devices and gave the phone
+        # its OWN colour there. Blue meant two things in one window. Rule:
+        # once this PC has EVER seen >1 device, always colour by device.
+        # `traffic_devices.REGISTRY` is the "ever seen" source — it persists
+        # across restarts, which is why the "Devices seen" list can name a
+        # device that sent nothing in the visible span at all.
+        multi_device = len(traffic_devices.REGISTRY.all()) > 1
 
         def _segment_color(base: QColor, device: str) -> QColor:
             if not multi_device:
@@ -459,11 +461,20 @@ class TrafficChart(QWidget):
                 return QColor(device_color(-1))
             return QColor(device_color(traffic_devices.REGISTRY.index_for(device)))
 
-        for base_color, avg_pick, max_pick in (
-                (out_color(), lambda p: p.out_avg, lambda p: p.out_max),
-                (in_color(), lambda p: p.in_avg, lambda p: p.in_max)):
+        # Direction vs identity: once `multi_device` colours BOTH series by
+        # device, colour alone no longer says which direction a segment is.
+        # Direction stays readable via PEN STYLE instead: out is always the
+        # plain solid line this chart has always drawn; in is DASHED whenever
+        # `multi_device` is active — no new legend layout needed (task rule),
+        # since the two direction items already read "PC → phone" / "phone
+        # → PC" and only need one more cue to stay apart from device colour.
+        for base_color, avg_pick, max_pick, is_out in (
+                (out_color(), lambda p: p.out_avg, lambda p: p.out_max, True),
+                (in_color(), lambda p: p.in_avg, lambda p: p.in_max, False)):
             if not pts:
                 continue
+            line_style = (Qt.PenStyle.SolidLine if (is_out or not multi_device)
+                          else Qt.PenStyle.DashLine)
             # Split into RUNS of consecutive points sharing one device — a
             # plain single run, coloured `base_color`, when the span has at
             # most one device (multi_device is False): identical output to
@@ -496,7 +507,7 @@ class TrafficChart(QWidget):
                 faded = QColor(color)
                 faded.setAlpha(46)
                 painter.fillPath(fill, faded)
-                painter.setPen(QPen(color, 2))
+                painter.setPen(QPen(color, 2, line_style))
                 painter.drawPath(path)
                 if self.downsampled:
                     # The bucket MAX, as a faint hairline above the average —
@@ -672,7 +683,12 @@ class TrafficWindow(QDialog):
         legend_grid.setVerticalSpacing(4)
         legend_items = [
             (out_color, "series", "PC → phone"),
-            (in_color, "series", "phone → PC"),
+            # T75: once >1 device has ever connected, both lines colour by
+            # DEVICE and direction is told apart by pen style instead — the
+            # word "dashed" here is the reader's only cue, since the swatch
+            # itself stays a plain solid mark (no new legend layout, per
+            # task) and always shows the plain direction colour.
+            (in_color, "series", "phone → PC (dashed once >1 device is known)"),
             (lambda: _alpha(TOKENS["text2"], 26), "band", "Nobody connected"),
             (lambda: QColor(TOKENS["text2"]), "dotted", "Peak within a bucket (long spans only)"),
         ]

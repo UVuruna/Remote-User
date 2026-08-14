@@ -166,6 +166,50 @@ confirming the crosshair card's edge-flip still holds.
 ### Flow
 - [Traffic Window — Flow](../__flow/traffic_window.md)
 
+## Per-device colour (owner request 2026-08-13, corrected 2026-08-14 — T75)
+
+Both series can colour by DEVICE instead of by direction: each run of
+consecutive points sharing one `Point.device` is drawn in that device's own
+colour (`gui.theme.device_color(traffic_devices.REGISTRY.index_for(device))`),
+so a smaller-resolution phone's lighter cost is visible against a tablet's.
+An unattributed point (`device == ""` — nobody connected, or a pre-`device`-
+column CSV row) draws `device_color(-1)`, the neutral "unknown" grey — never a
+real device's colour and never the plain direction colour either, since
+neither claim ("this is device X" / "this is the ordinary single-device
+picture") is true of it.
+
+**T75 correction (owner report 2026-08-14, from his own screenshot):** the
+predicate deciding whether to colour by device at all used to be "does the
+VISIBLE SPAN hold more than one device" — computed from the points on screen.
+His screenshot showed why that is wrong: the legend already listed two
+devices seen (persisted across the session) while the visible 2-minute span
+held only the phone, so the chart fell back to the plain direction colour
+(blue) for that span — the SAME blue the legend's own swatch had already
+given the phone as its device colour. One colour, two meanings, in one
+window. The predicate is now **"has this PC EVER seen more than one
+device"** — `len(traffic_devices.REGISTRY.all()) > 1`, read fresh at every
+paint from the registry that already persists across restarts (the entire
+reason the "Devices seen" list can show a device that sent nothing in the
+visible span). Once true, it stays true for the rest of this PC's life; it
+never depends on which points happen to be on screen.
+
+**Direction vs identity, once colour means device:** with both series
+coloured by device, colour alone can no longer say which direction a segment
+is (a device that talks both ways would draw the same colour twice, looking
+like one line). Direction is told apart by PEN STYLE instead — PC→phone
+stays the plain solid line this chart has always drawn; phone→PC becomes
+DASHED whenever per-device colouring is active. No new legend layout (kept
+deliberately simple, per the task): the legend's "phone → PC" item text notes
+the dash, and its swatch stays a plain solid mark showing the direction
+colour, since the swatch is a KEY to the direction, not a live preview of
+every segment's device colour.
+
+Gate: `tests/test_traffic_devices.py` → RENDERED PIXELS, two checks added for
+this correction — a real pixel readback proving a device the registry has
+ever seen (but that sent nothing in the visible span) still draws its OWN
+colour, and a companion check proving a revert to the old visible-span-only
+predicate makes that same check fail.
+
 ## Build round R3 (2026-08-07) — themes
 
 `OUT_COLOR` and `IN_COLOR` were module-level `QColor`s. A module-level palette

@@ -38,6 +38,7 @@ in this suite).
 Run:  .venv\\Scripts\\python tests/test_traffic_devices.py
 """
 
+import contextlib
 import importlib
 import json
 import os
@@ -52,6 +53,34 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import traffic_devices  # noqa: E402
 import traffic_history  # noqa: E402
+
+
+@contextlib.contextmanager
+def _isolated_registry():
+    """RENDERED PIXELS fixtures must never write into the OWNER's real,
+    persisted `logs/traffic_devices.json` (T18.1's own lesson, reintroduced
+    by this round's own first draft and caught by the coordinator running
+    the gate the way `setup/gates.py` really runs it — three runs in a row,
+    not once under pytest). A fixture calling `traffic_devices.REGISTRY.
+    note(...)` on the live singleton assigns slot indices that depend on
+    whatever this PC's file already holds, so the SAME fixture code passes
+    or fails depending on run history — a gate whose answer changes between
+    runs of identical code is not a gate.
+
+    Installs a fresh `DeviceRegistry` pointed at a throwaway temp file as
+    `traffic_devices.REGISTRY` — the MODULE ATTRIBUTE, not a local copy,
+    because `gui/traffic_window.py` reads `traffic_devices.REGISTRY` at
+    paint time and must see the isolated one — and restores the original
+    in `finally` so no other check in this file (or a later run) is ever
+    affected by what a paint check staged."""
+    original = traffic_devices.REGISTRY
+    with tempfile.TemporaryDirectory() as d:
+        traffic_devices.REGISTRY = traffic_devices.DeviceRegistry(
+            path=Path(d) / "traffic_devices.json")
+        try:
+            yield traffic_devices.REGISTRY
+        finally:
+            traffic_devices.REGISTRY = original
 
 
 def fail(msg: str) -> None:
@@ -129,6 +158,8 @@ IDENTITY_CHECKS = [
 
 def _fresh_registry(path: Path) -> "traffic_devices.DeviceRegistry":
     return traffic_devices.DeviceRegistry(path=path)
+
+
 
 
 def test_first_seen_gets_slot_zero() -> bool:
@@ -455,8 +486,11 @@ def _staged_chart_widget():
     + `TrafficChart.paintEvent` — with two devices alternating three times,
     same shape as the Qt audit's own `make_traffic_window` fixture (kept
     independent of it deliberately: this gate must not depend on the audit
-    module to run standalone)."""
+    module to run standalone). MUST be called inside `_isolated_registry()`
+    — it notes devices on whatever `traffic_devices.REGISTRY` currently is,
+    and that must be the throwaway temp one, never the owner's real file."""
     from PySide6.QtWidgets import QApplication
+    from gui.theme import device_color
     if QApplication.instance() is None:
         QApplication([])
     traffic = importlib.import_module("traffic")
@@ -464,8 +498,16 @@ def _staged_chart_widget():
     tw = importlib.import_module("gui.traffic_window")
 
     traffic.METER.reset()
-    td.REGISTRY.note(1080, 2400, "Samsung Galaxy S10")
-    td.REGISTRY.note(2560, 1600, None)
+    # ORDER is explicit and asserted, not incidental (T18.2): the phone
+    # first (slot 0), the tablet second (slot 1) — and both must really
+    # hold a slot, and different colours, or the picture this fixture stages
+    # is not the picture its name claims.
+    phone = td.REGISTRY.note(1080, 2400, "Samsung Galaxy S10")
+    tablet = td.REGISTRY.note(2560, 1600, None)
+    assert phone["index"] >= 0 and tablet["index"] >= 0 and phone["index"] != tablet["index"], (
+        "both staged devices must hold their own colour slot")
+    assert device_color(phone["index"]) != device_color(tablet["index"]), (
+        "the staged devices must not share a colour")
     now = float(int(time.time()))
     traffic.METER.since = now - 600.0
     SPAN_S, SEGMENTS = 110, 4
@@ -502,81 +544,240 @@ def test_chart_line_is_actually_coloured_per_device() -> bool:
     monkeypatching exactly that."""
     from gui.theme import device_color
     td = importlib.import_module("traffic_devices")
-    window = _staged_chart_widget()
-    try:
-        chart = window.chart
-        plot = chart._plot
-        idx_a = td.REGISTRY.index_for("1080x2400")
-        idx_b = td.REGISTRY.index_for("2560x1600")
-        color_a, color_b = device_color(idx_a), device_color(idx_b)
-        pixmap = chart.grab()
-        image = pixmap.toImage()
+    with _isolated_registry():
+        window = _staged_chart_widget()
+        try:
+            chart = window.chart
+            plot = chart._plot
+            idx_a = td.REGISTRY.index_for("1080x2400")
+            idx_b = td.REGISTRY.index_for("2560x1600")
+            color_a, color_b = device_color(idx_a), device_color(idx_b)
+            pixmap = chart.grab()
+            image = pixmap.toImage()
 
-        def line_color_at(frac: float):
-            from PySide6.QtGui import QColor
-            x = int(plot.left() + plot.width() * frac)
-            best, best_d = None, 1e9
-            for y in range(plot.top(), plot.bottom()):
-                c = image.pixelColor(x, y)
-                for cand in (color_a, color_b):
-                    tc = QColor(cand)
-                    d = ((c.red() - tc.red()) ** 2 + (c.green() - tc.green()) ** 2
-                         + (c.blue() - tc.blue()) ** 2)
-                    if d < best_d:
-                        best_d, best = d, cand
-            return best if best_d < 900 else None
+            def line_color_at(frac: float):
+                from PySide6.QtGui import QColor
+                x = int(plot.left() + plot.width() * frac)
+                best, best_d = None, 1e9
+                for y in range(plot.top(), plot.bottom()):
+                    c = image.pixelColor(x, y)
+                    for cand in (color_a, color_b):
+                        tc = QColor(cand)
+                        d = ((c.red() - tc.red()) ** 2 + (c.green() - tc.green()) ** 2
+                             + (c.blue() - tc.blue()) ** 2)
+                        if d < best_d:
+                            best_d, best = d, cand
+                return best if best_d < 900 else None
 
-        # Segment 1 (device A) is the first quarter, segment 2 (device B)
-        # the second quarter of the visible span — sampled well inside each,
-        # away from the transition.
-        seen_a = line_color_at(0.12)
-        seen_b = line_color_at(0.37)
-        return (seen_a is not None and seen_b is not None
-                and seen_a != seen_b)
-    finally:
-        window.close()
+            # Segment 1 (device A) is the first quarter, segment 2 (device B)
+            # the second quarter of the visible span — sampled well inside
+            # each, away from the transition.
+            seen_a = line_color_at(0.12)
+            seen_b = line_color_at(0.37)
+            return (seen_a is not None and seen_b is not None
+                    and seen_a != seen_b)
+        finally:
+            window.close()
 
 
 def test_chart_line_check_catches_a_single_colour_regression() -> bool:
-    """Proves the check above actually catches the defect: monkeypatches
-    `TrafficChart._peak_of`'s sibling — the `multi_device` decision — by
-    forcing every point's `device` attribute blank right before paint, which
-    is exactly what a broken paint path (or a broken point-attribution path
-    feeding it) looks like from the outside. With every device blanked the
-    chart falls back to ONE colour for the whole line, and the readback
-    check above must then report `seen_a == seen_b` (or one side unreadable) —
-    i.e. FAIL. This is run inline rather than via `run_checks` because it
-    asserts the OPPOSITE of the real check's normal pass condition."""
-    window = _staged_chart_widget()
-    try:
-        chart = window.chart
-        for p in chart.points:
-            p.device = ""
-        chart.update()
-        from PySide6.QtWidgets import QApplication
-        QApplication.instance().processEvents()
-        plot = chart._plot
-        pixmap = chart.grab()
-        image = pixmap.toImage()
-        tw = importlib.import_module("gui.traffic_window")
-        base = tw.out_color()
+    """Proves the check above actually catches the defect: forces every
+    point's `device` attribute blank right before paint, simulating a broken
+    attribution path. T75 note: `multi_device` is now decided from the
+    REGISTRY (`traffic_devices.REGISTRY.all()`), not from the points — so
+    blanking every point's `device` no longer disables per-device colouring
+    (that predicate is unreachable from a point at all any more); it makes
+    every point UNATTRIBUTED, which must draw the neutral "unknown" colour
+    (`device_color(-1)`), never a real device's colour AND never the plain
+    direction colour either — a point with no device is not the same claim
+    as "this span holds one device". Both stretches must therefore read as
+    the SAME neutral colour, proving the readback check above is sensitive
+    to a broken attribution path."""
+    from gui.theme import device_color
+    with _isolated_registry():
+        window = _staged_chart_widget()
+        try:
+            chart = window.chart
+            for p in chart.points:
+                p.device = ""
+            chart.update()
+            from PySide6.QtWidgets import QApplication
+            QApplication.instance().processEvents()
+            plot = chart._plot
+            pixmap = chart.grab()
+            image = pixmap.toImage()
+            unknown = device_color(-1)
 
-        def sample(frac):
-            x = int(plot.left() + plot.width() * frac)
-            for y in range(plot.top(), plot.bottom()):
-                c = image.pixelColor(x, y)
-                if abs(c.red() - base.red()) < 30 and abs(c.green() - base.green()) < 30 \
-                        and abs(c.blue() - base.blue()) < 30:
-                    return "base"
-            return None
+            def sample(frac):
+                from PySide6.QtGui import QColor
+                tc = QColor(unknown)
+                xc = int(plot.left() + plot.width() * frac)
+                for x in range(max(plot.left(), xc - 3), min(plot.right(), xc + 4)):
+                    for y in range(plot.top(), plot.bottom()):
+                        c = image.pixelColor(x, y)
+                        if (abs(c.red() - tc.red()) < 30 and abs(c.green() - tc.green()) < 30
+                                and abs(c.blue() - tc.blue()) < 30):
+                            return "unknown"
+                return None
 
-        a, b = sample(0.12), sample(0.37)
-        # Both stretches must now read as the SAME plain series colour —
-        # proving the readback check above is sensitive to exactly this
-        # regression, not a check that would pass regardless.
-        return a == b == "base"
-    finally:
-        window.close()
+            a, b = sample(0.12), sample(0.37)
+            return a == b == "unknown"
+        finally:
+            window.close()
+
+
+def _staged_single_device_span_widget():
+    """T75 owner scenario, exactly (his screenshot): the REGISTRY has
+    already seen TWO devices — a phone earlier, a tablet even earlier — but
+    the currently VISIBLE span (his "Last 2 minutes") holds only ONE of
+    them, the phone. Deliberately independent of `_staged_chart_widget`
+    above: that fixture always keeps both devices active inside the visible
+    span, which is exactly the shape that could never have caught this bug —
+    the old predicate ("does the visible span hold >1 device") stayed true
+    there too."""
+    from PySide6.QtWidgets import QApplication
+    if QApplication.instance() is None:
+        QApplication([])
+    traffic = importlib.import_module("traffic")
+    td = importlib.import_module("traffic_devices")
+    tw = importlib.import_module("gui.traffic_window")
+
+    traffic.METER.reset()
+    # Two devices EVER seen, oldest first — a tablet, then a phone — neither
+    # noted again during the visible span below. The slots are ASSERTED rather
+    # than assumed: on the shared global registry these indices depended on run
+    # history, which is exactly the defect this isolation closes.
+    tablet = td.REGISTRY.note(2560, 1600, None)          # slot 0 — the tablet
+    phone = td.REGISTRY.note(1080, 2400, "Pixel phone")  # slot 1 — the phone
+    from gui.theme import device_color as _dc
+    assert (tablet["index"], phone["index"]) == (0, 1), (
+        "the staged devices must hold the slots this fixture's name claims")
+    assert _dc(tablet["index"]) != _dc(phone["index"]), (
+        "the staged devices must not share a colour")
+    now = float(int(time.time()))
+    traffic.METER.since = now - 120.0
+    traffic.METER.samples.clear()
+    total_out = total_in = 0
+    # The samples must fill the WHOLE visible span, not half of it. Filling
+    # only `now-60..now` inside a 120 s window put the line's first stroke at
+    # almost exactly the plot's midpoint — and both T75 checks read their
+    # pixel at frac 0.5, so a second of wall-clock drift decided whether there
+    # was any stroke there at all. Measured: the gate failed on roughly one run
+    # in three with identical code. A gate that is a coin flip is not a gate,
+    # and this was NOT the registry-isolation defect it looked like.
+    for i in range(120):
+        t = now - 120 + i + 1
+        # A slight ramp, not a flat constant — a perfectly flat line lands
+        # its y on a fractional pixel row and Qt's antialiasing splits its
+        # coverage across two rows, so NO row ever reaches full opacity and
+        # a tight pixel-colour match finds nothing at all (found live while
+        # writing this check). A few bytes of variation per sample is enough
+        # for the line to cross whole pixel rows and paint at least one of
+        # them fully opaque, exactly like every other staged fixture here.
+        out_b, in_b = 6_000 + (i % 7) * 40, 900 + (i % 5) * 10
+        traffic.METER.samples.append(
+            traffic.Sample(t, out_b, in_b, 1, "1080x2400"))  # phone ONLY
+        total_out += out_b
+        total_in += in_b
+    traffic.METER.total_out = total_out
+    traffic.METER.total_in = total_in
+    traffic.METER.set_clients(1)
+    window = tw.TrafficWindow()
+    window.resize(1074, 700)
+    window.show()
+    QApplication.instance().processEvents()
+    window._refresh()
+    QApplication.instance().processEvents()
+    return window
+
+
+def test_ever_seen_device_colours_a_single_device_span() -> bool:
+    """The owner's exact reported defect. Two devices are in the REGISTRY,
+    but every point in the visible span belongs to just one of them — the
+    predicate must still be "has this PC EVER seen >1 device", so the line
+    draws that device's OWN colour, never the plain direction (out_color)
+    blue. PLANTED DEFECT (proven by the check right below): reverting to
+    `devices_seen = {p.device for p in pts if p.device}; multi_device =
+    len(devices_seen) > 1` makes this span (one device only) fall back to
+    plain direction colour — this check must then FAIL."""
+    from gui.theme import device_color
+    td = importlib.import_module("traffic_devices")
+    tw = importlib.import_module("gui.traffic_window")
+    with _isolated_registry():
+        window = _staged_single_device_span_widget()
+        try:
+            chart = window.chart
+            plot = chart._plot
+            idx_phone = td.REGISTRY.index_for("1080x2400")
+            phone_color = device_color(idx_phone)
+            out_blue = tw.out_color()
+            pixmap = chart.grab()
+            image = pixmap.toImage()
+
+            def color_at(frac: float):
+                from PySide6.QtGui import QColor
+                xc = int(plot.left() + plot.width() * frac)
+                best, best_d = None, 1e9
+                for x in range(max(plot.left(), xc - 3), min(plot.right(), xc + 4)):
+                    for y in range(plot.top(), plot.bottom()):
+                        c = image.pixelColor(x, y)
+                        for name, cand in (("phone", phone_color), ("blue", out_blue)):
+                            tc = QColor(cand)
+                            d = ((c.red() - tc.red()) ** 2 + (c.green() - tc.green()) ** 2
+                                 + (c.blue() - tc.blue()) ** 2)
+                            if d < best_d:
+                                best_d, best = d, name
+                return best if best_d < 900 else None
+
+            seen = color_at(0.5)
+            return seen == "phone"
+        finally:
+            window.close()
+
+
+def test_ever_seen_check_catches_the_visible_span_only_regression() -> bool:
+    """Proves the check above is sensitive to exactly his reported bug: force
+    `multi_device` back to the OLD "visible span only" predicate right before
+    paint and confirm the line comes back plain direction blue, not the
+    phone's own colour."""
+    tw = importlib.import_module("gui.traffic_window")
+    with _isolated_registry():
+        window = _staged_single_device_span_widget()
+        try:
+            chart = window.chart
+            real_all = chart.__class__.__module__  # keep import handle alive
+            # Simulate the OLD defect: strip every point's device so the
+            # per-point "devices seen in this span" set collapses to empty/one
+            # — exactly what a visible-span-only predicate computes for a span
+            # that (like this one) holds a single active device.
+            import traffic_devices as td
+            original_all = td.REGISTRY.all
+            td.REGISTRY.all = lambda: [original_all()[0]]  # PLANT: registry now "sees" only 1 device
+            try:
+                chart.update()
+                from PySide6.QtWidgets import QApplication
+                QApplication.instance().processEvents()
+                plot = chart._plot
+                pixmap = chart.grab()
+                image = pixmap.toImage()
+                out_blue = tw.out_color()
+
+                def is_blue_at(frac):
+                    xc = int(plot.left() + plot.width() * frac)
+                    for x in range(max(plot.left(), xc - 3), min(plot.right(), xc + 4)):
+                        for y in range(plot.top(), plot.bottom()):
+                            c = image.pixelColor(x, y)
+                            if (abs(c.red() - out_blue.red()) < 30
+                                    and abs(c.green() - out_blue.green()) < 30
+                                    and abs(c.blue() - out_blue.blue()) < 30):
+                                return True
+                    return False
+
+                return is_blue_at(0.5)
+            finally:
+                td.REGISTRY.all = original_all
+        finally:
+            window.close()
 
 
 PAINT_CHECKS = [
@@ -584,6 +785,11 @@ PAINT_CHECKS = [
      test_chart_line_is_actually_coloured_per_device),
     ("the readback check catches a forced single-colour regression",
      test_chart_line_check_catches_a_single_colour_regression),
+    ("T75: a device the REGISTRY has ever seen colours a single-device "
+     "visible span (owner's own screenshot)",
+     test_ever_seen_device_colours_a_single_device_span),
+    ("T75: the check above catches a revert to the visible-span-only predicate",
+     test_ever_seen_check_catches_the_visible_span_only_regression),
 ]
 
 
