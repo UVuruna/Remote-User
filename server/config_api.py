@@ -18,7 +18,7 @@ from config import SETTINGS, apk_version, app_version, ui_config
 
 
 async def send_config(ws, stream, token: str, codec: str | None = None,
-                      region: dict | None = None) -> None:
+                      region: dict | None = None, zoom: int = 1) -> None:
     # tailscale_url feeds the client's guided "access from anywhere" wizard:
     # null when the PC has no Tailscale yet (the desktop window guides that
     # side); checked fresh per config so a login mid-run shows on reconnect.
@@ -58,4 +58,12 @@ async def send_config(ws, stream, token: str, codec: str | None = None,
         # the page must map the video onto that rect, not the full monitor.
         # Absent = full frame — a page that predates the field changes nothing.
         payload["stream_region"] = region
+    if zoom > 1:
+        # The resolution step THIS stream was encoded with (owner design,
+        # round 3 of T76): the page's decode ceiling must judge the RAISED
+        # width, or a deep zoom would push a native-size stream at a device
+        # whose decoder was only ever probed panel-capped — the exact "4K60 =
+        # no picture" failure of 2026-08-12. Absent = step 1, old pages and
+        # old servers both keep working.
+        payload["stream_zoom"] = int(zoom)
     await ws.send_text(json.dumps(payload))

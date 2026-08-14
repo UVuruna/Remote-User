@@ -155,7 +155,14 @@ function effectiveWidth(p) {
   // judge the SCALED size — the same arithmetic, in decode-caps.js. Without
   // this a cap earned by a full 4K desktop would go on holding a stream that
   // is already only 1920 wide.
-  return panelScaledWidth(cropW, cropH, devicePanel());
+  // …and the ZOOM STEP raises it back (round 3 of T76): a pinch has the
+  // encoder outputting up to `streamZoom`x the panel-capped size, clamped at
+  // the crop's own native width — the same clamp `_scale_size` applies — so
+  // the ceiling judges the pixels the decoder will REALLY be handed. Without
+  // this a deep zoom pushed a native-size stream past a ceiling probed
+  // panel-capped: the 2026-08-12 "4K60 = no picture" failure, back again.
+  const scaled = panelScaledWidth(cropW, cropH, devicePanel());
+  return Math.min(cropW, scaled * (streamZoom || 1));
 }
 
 /** The cap decision for the current prefs — one source for the wire, the
