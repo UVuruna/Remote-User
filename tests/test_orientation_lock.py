@@ -233,6 +233,12 @@ vm.runInContext("setStatus = () => {};", ctx);
 // TRUTHY, so `if (applyNoticeJump())` would always take the "a tap already
 // decided" branch and never exercise the restore path under test.
 vm.runInContext("applyNoticeJump = () => false;", ctx);
+// The REAL version-skew decision (T94) — the same STUB hazard as
+// applyNoticeJump above: unloaded, `pageVersionStep(...)` returns STUB and
+// STUB.reload is truthy, so the config handler "reloads" on every frame.
+// `location` deliberately has no reload — no scenario here changes the
+// server version, so a reload firing is a defect this harness crashes on.
+load("page-version.js");
 load("connection.js");
 load("layouts.js");
 
