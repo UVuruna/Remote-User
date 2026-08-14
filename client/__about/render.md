@@ -55,9 +55,53 @@ MediaSource Extensions (MSE). Second of the six client scripts to load (after
 - `initMse(codec)` / `teardownMse()` / `pumpMse()` / `onMseUpdateEnd()` /
   `renderLoop()` — H.264 mode: opens a `MediaSource`, appends arriving fMP4
   chunks in order, keeps playback near the live edge, trims old buffered
-  history, and drives a `requestAnimationFrame` loop that calls `redraw()`.
+  history, and drives the paint loop.
+- `scheduleRedraw()` / `pumpRaf()` — one paint per animation frame at most,
+  and none at all when nothing has changed.
 
 ## Design Decisions
+
+- **The picture is drawn when there is a new picture, not when the panel
+  blinks** (owner order 2026-08-14). `renderLoop()` used to call `redraw()` on
+  EVERY animation frame, unconditionally. On his S25 Ultra that is 120 Hz
+  against a stream he may have set to 10 fps — eleven of every twelve
+  full-canvas composites of a 4K-ish video redrew the picture that was already
+  on the screen. The screen is the biggest battery cost on a phone and the GPU
+  work behind it is the biggest one this app controls.
+
+  **His own framing decided the design and it is better than the obvious one.**
+  The obvious fix is to ask the device what it can do — `screen.refreshRate`,
+  or Android's `Display.getRefreshRate` through the bridge. That is a claim,
+  and a claim about the PANEL rather than about our stream, and it would have
+  to be kept in step with the fps he picks, with the network, and with a layout
+  crop that makes the stream cheaper. Instead the page draws when a frame
+  ACTUALLY ARRIVES (`requestVideoFrameCallback`, once per decoded frame), so
+  the rate follows the encoder by construction and nothing has to be kept in
+  step with anything.
+
+  **A frame is not the only reason to repaint**, which is why this is a dirty
+  flag rather than a bare frame callback: the virtual cursor moves, a pinch
+  pans and zooms, the theme flips. Those call `scheduleRedraw()` and are
+  coalesced to at most one paint per animation frame — so steering with a
+  finger still paints at panel rate WHILE THE FINGER MOVES and costs nothing
+  the moment it stops. The old loop was the worst of both: full rate always,
+  whether anything moved or not. The rAF loop STOPS when nothing is dirty
+  rather than idling, because an always-armed callback is exactly the wakeup
+  this change exists to remove.
+
+  `connection.js`'s cursor handler had to change with it: it used to skip its
+  redraw in H.264 and lean on "h264 redraws every rAF anyway", which stopped
+  being true here. It schedules now, or the PC-side pointer would step at the
+  stream's fps — ten times a second on a 10 fps stream, worse than before.
+
+  A device with no `requestVideoFrameCallback` keeps the old always-draw loop
+  verbatim; a fallback that changes behaviour is not a fallback.
+
+  Gate: `tests/test_redraw_rate.py` (0b18/6), and it runs a REAL browser on
+  purpose — the whole claim is about a RATE, which cannot be read off a diff.
+  A source check would pass just as happily on the old loop with a comment
+  about frames added above it. Measured: 1 redraw per idle second, against
+  ~60 before.
 
 - **Two-layer JPEG rendering** — a full-monitor base frame is always drawn
   (so panning/zooming never flashes blank) with a sharp zoomed-region overlay

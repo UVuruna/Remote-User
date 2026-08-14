@@ -815,11 +815,72 @@ video.addEventListener("waiting", unfreezeIfStarved);
 video.addEventListener("stalled", unfreezeIfStarved);
 setInterval(unfreezeIfStarved, LIVE_UNFREEZE_TICK_MS);
 
-function renderLoop() {
+// THE PICTURE IS DRAWN WHEN THERE IS A NEW PICTURE, NOT WHEN THE PANEL BLINKS
+// (owner order 2026-08-14, and the rule is his own words: "ako korisnik odabere
+// 10 fps onda je to dovoljno, nema potrebe 120 puta u sekundi da telefon
+// iscrtava sliku kada se ona menja samo 10 puta u sekundi").
+//
+// This loop used to call `redraw()` on EVERY animation frame unconditionally.
+// On his S25 Ultra that is 120 Hz against a stream he may have set to 10 fps —
+// eleven of every twelve full-canvas composites of a 4K-ish video drew the
+// picture that was already on the screen. The screen is the biggest battery
+// cost on a phone and the GPU work behind it is the biggest one we control.
+//
+// HIS OWN FRAMING SETTLED THE DESIGN and it is better than the obvious one: we
+// do not ask the device what it can do (`screen.refreshRate` is a claim, and a
+// claim about the PANEL, not about our stream). We draw when a frame ACTUALLY
+// ARRIVES — `requestVideoFrameCallback` fires once per decoded video frame, so
+// the rate follows the encoder by construction and keeps following it when the
+// owner changes fps, when the network sags, and when a layout crop makes the
+// stream cheaper. Nothing has to be kept in step with anything.
+//
+// A FRAME IS NOT THE ONLY REASON TO REDRAW, which is why this is a dirty flag
+// and not a bare frame callback: the virtual cursor moves, a pinch pans and
+// zooms, the theme flips. Those already call `redraw()` directly and now go
+// through `scheduleRedraw()`, coalesced to at most one paint per animation
+// frame — so steering with a finger still paints at panel rate WHILE THE
+// FINGER MOVES, and costs nothing the moment it stops. The old behaviour was
+// the worst of both: full rate always, whether anything moved or not.
+//
+// The rAF loop STOPS when nothing is dirty rather than idling, because an
+// always-armed callback is exactly the wakeup this change exists to remove.
+// A device with no `requestVideoFrameCallback` (it is Chrome 83+, so every
+// Android WebView this app supports has it, but a browser used for dev may
+// not) keeps the old always-draw loop verbatim — a fallback that changes
+// behaviour is not a fallback.
+let redrawDirty = false;
+const HAS_VFC = typeof HTMLVideoElement !== "undefined"
+  && typeof HTMLVideoElement.prototype.requestVideoFrameCallback === "function";
+
+function pumpRaf() {
   if (rafId) return;
   const step = () => {
+    if (!redrawDirty && HAS_VFC) {   // nothing to paint — stop, do not idle
+      rafId = null;
+      return;
+    }
+    redrawDirty = false;
     rafId = requestAnimationFrame(step);
     redraw();
   };
   rafId = requestAnimationFrame(step);
+}
+
+function scheduleRedraw() {
+  redrawDirty = true;
+  pumpRaf();
+}
+
+function renderLoop() {
+  if (HAS_VFC) {
+    const onFrame = () => {
+      if (!mediaSource) return;      // torn down — do not re-arm
+      scheduleRedraw();
+      video.requestVideoFrameCallback(onFrame);
+    };
+    video.requestVideoFrameCallback(onFrame);
+    scheduleRedraw();                // paint the first frame without waiting
+    return;
+  }
+  pumpRaf();
 }

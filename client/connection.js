@@ -274,7 +274,15 @@ function connect() {
         // a shape, and the pointer must not flick back to an arrow every time
         // he drags along the very edge he is trying to grab.
         cursorShapeName = msg.shape;
-        if (streamMode !== "h264") redraw(); // h264 redraws every rAF anyway
+        // THE CURSOR IS ITS OWN REASON TO REPAINT (2026-08-14). This used to
+        // skip the redraw in h264 and lean on "h264 redraws every rAF anyway"
+        // — which stopped being true the moment the render loop began drawing
+        // on FRAME ARRIVAL instead of on every panel blink. Without this the
+        // PC-side pointer would move only as often as the video does, so at
+        // 10 fps the cursor would step ten times a second. `scheduleRedraw`
+        // coalesces it to at most one paint per animation frame, so a moving
+        // cursor is smooth and a still one costs nothing at all.
+        scheduleRedraw();
       } else if (msg.type === "claude_state") {
         // What Claude Code is running RIGHT NOW (owner verdict 2026-08-11,
         // item 3) — asked for by the Model/Thinking/Mode panels and answered
@@ -548,8 +556,17 @@ setInterval(() => {
   // one after it, which is the only measurement that can answer "did the app
   // keep running while the screen was off" without either of us guessing
   // (owner 2026-08-05).
+  // ...and, since T80d (owner 2026-08-14), what the phone's own battery is
+  // doing WHILE THE APP IS RUNNING — which is the cost he actually cares
+  // about. It rides the EXISTING beat exactly as `net` does rather than
+  // inventing a message type, and it is absent whenever the device will not
+  // say.
   const net = phoneNet();
-  ws.send(JSON.stringify(net ? { type: "hb", net } : { type: "hb" }));
+  const bat = phoneBattery();
+  const beat = { type: "hb" };
+  if (net) beat.net = net;
+  if (bat) beat.bat = bat;
+  ws.send(JSON.stringify(beat));
 }, HEARTBEAT_MS);
 
 // The screen is held awake while the owner is actually working, and released
@@ -585,8 +602,13 @@ document.addEventListener("visibilitychange", () => {
       // at once. Getting this word wrong is the whole 2026-08-05 failure.
       const reason = hideReason();
       const net = phoneNet();
+      const bat = phoneBattery();
       const bye = { type: "away", reason, excursion: reason === "excursion" };
       if (net) bye.net = net;
+      // The LAST battery reading of the session (T80d) — the level here
+      // against the one at connect is what "this session cost N%" is made of,
+      // and a leave is the only moment that closing reading exists.
+      if (bat) bye.bat = bat;
       ws.send(JSON.stringify(bye));
     }
     if (ws) ws.close();
