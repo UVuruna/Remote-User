@@ -38,6 +38,19 @@ COLOUR: `gui.theme.DEVICE_COLORS`, not invented here — see that module's own
 docstring for why it is the existing `SET_COLORS` palette, already proven
 (by `tests/test_layout_audit.py`) to read on both the dark and the light
 desktop palette.
+
+THE HUMAN NAME (T74, owner decision 2026-08-13): the phone reports a raw
+model CODE (`SM-S938B`, `23073RPBFG`) and this window used to print it. He
+rejected a hand-written table and a bundled database alike — a snapshot only
+covers the phones that existed when it was written — and chose an ONLINE
+lookup, at most once per code ever, cached forever. The lookup itself lives
+in [device_names.py](device_names.py) (which source, and why it survives "a
+new phone appears", is argued there); this module owns only the CACHE and
+the label. Two new fields per entry, in the SAME persisted file — never a
+second one: `model` (the resolved human name, or `None`) and `resolved` (the
+lookup has been ANSWERED, so it is never repeated — including the negative
+answer for a code Google's list does not carry). A lookup that could not
+reach the list at all writes NEITHER, because that is not an answer.
 """
 
 import json
@@ -45,6 +58,7 @@ import logging
 import threading
 from pathlib import Path
 
+import device_names
 from config import USER_DIR
 
 logger = logging.getLogger(__name__)
@@ -83,20 +97,34 @@ def device_key(w, h) -> str:
     return f"{lo}x{hi_}"
 
 
-def label_for(key: str, name: str | None, wh: tuple[int, int] | None = None) -> str:
-    """What the phone list shows for one device: the name when we have one,
-    else an honest admission we don't (the task's hard rule — never guess a
-    model name), always paired with a resolution. `wh` — the device's own
-    LAST-SEEN orientation, `DeviceRegistry`'s `last_wh` — is used when given;
-    only the identity KEY is orientation-sorted, never what he reads."""
+def label_for(key: str, name: str | None, wh: tuple[int, int] | None = None,
+              model: str | None = None) -> str:
+    """What the phone list shows for one device, in a strict order of
+    honesty (T74, owner decision 2026-08-13):
+
+      1. `model` — the RESOLVED human name ("Samsung Galaxy S25 Ultra"),
+         looked up once from Google's own device list (`device_names.py`).
+      2. `name` — the raw model CODE the phone reported ("SM-S938B"). Ugly,
+         but TRUE, and it is exactly what this line printed before T74.
+      3. `unknown device` — the phone told us no code at all.
+
+    always paired with a resolution. There is deliberately no fourth case
+    and no guessing between 1 and 2: rule 4 of the task, and the reason the
+    resolver has a three-state answer — a WRONG model name is worse than a
+    code, so an unresolved device simply keeps the label it has today.
+
+    `wh` — the device's own LAST-SEEN orientation, `DeviceRegistry`'s
+    `last_wh` — is used when given; only the identity KEY is
+    orientation-sorted, never what he reads."""
     if not key:
         return "unknown device"
     if wh is not None:
         w, h = wh
     else:
         w, h = key.split("x")
-    if name:
-        return f"{name} ({w}×{h})"
+    shown = model or name
+    if shown:
+        return f"{shown} ({w}×{h})"
     return f"{UNKNOWN_LABEL} ({w}×{h})"
 
 
@@ -106,10 +134,15 @@ class DeviceRegistry:
     `note()` runs on the event loop at `auth` time; the GUI thread only ever
     reads via `all()`/`label_for_key()`, which take the same lock."""
 
-    def __init__(self, path: Path | None = None) -> None:
+    def __init__(self, path: Path | None = None, resolver=None) -> None:
         self._lock = threading.Lock()
         self._path = path or _path()
-        self._entries: dict[str, dict] = {}   # key -> {"index", "name"}
+        # key -> {"index", "name", "last_wh", "model", "resolved"}
+        self._entries: dict[str, dict] = {}
+        # T74: injectable so the gate drives a FAKE network. Defaults to the
+        # one process-wide resolver, whose per-process catalogue memo is the
+        # reason there is only one.
+        self._resolver = resolver if resolver is not None else device_names.RESOLVER
         self._load()
 
     def _load(self) -> None:
@@ -158,11 +191,20 @@ class DeviceRegistry:
                     "index": entry["index"],
                     "name": entry.get("name"),
                     "last_wh": entry.get("last_wh", [w, h]),
+                    # T74: a file written before the online lookup existed
+                    # simply has neither field, and reads as "never looked
+                    # up" — which is exactly right, so its device is resolved
+                    # on its next connection instead of being migrated.
+                    "model": entry.get("model"),
+                    "resolved": bool(entry.get("resolved")),
                 }
             else:
                 changed = True   # a real collision — two raw keys, one device
                 if not existing.get("name") and entry.get("name"):
                     existing["name"] = entry["name"]
+                if not existing.get("model") and entry.get("model"):
+                    existing["model"] = entry["model"]
+                    existing["resolved"] = True
         self._entries = migrated
         if changed:
             self._save()
@@ -186,10 +228,16 @@ class DeviceRegistry:
         field) must not erase a name an earlier connection already found.
         `last_wh` — the actual orientation THIS call reported — is always
         updated, so the device list shows the phone the way it is being
-        held right now, not the sorted identity key."""
+        held right now, not the sorted identity key.
+
+        T74: `name` is the raw model CODE the phone reported (`SM-S938B`).
+        If this device has never had that code looked up, ONE online lookup
+        is REQUESTED here — `request()` only enqueues, so this method stays
+        exactly as fast on the event loop as it was before, and the answer
+        arrives later on a worker thread via `_on_resolved`."""
         key = device_key(w, h)
         if not key:
-            return {"key": "", "index": -1, "name": None}
+            return {"key": "", "index": -1, "name": None, "model": None}
         try:
             wh = (int(round(float(w))), int(round(float(h))))
         except (TypeError, ValueError):
@@ -198,20 +246,66 @@ class DeviceRegistry:
             entry = self._entries.get(key)
             if entry is None:
                 entry = {"index": len(self._entries), "name": name or None,
-                         "last_wh": list(wh) if wh else None}
+                         "last_wh": list(wh) if wh else None,
+                         "model": None, "resolved": False}
                 self._entries[key] = entry
                 self._save()
             else:
                 dirty = False
                 if name and entry.get("name") != name:
                     entry["name"] = name
+                    # A DIFFERENT code on the same slot is a different phone
+                    # behind one resolution (the accepted collision this
+                    # module has always named). Whatever name was resolved
+                    # for the old code must not be worn by the new one — a
+                    # wrong model name is worse than a code.
+                    entry["model"] = None
+                    entry["resolved"] = False
                     dirty = True
                 if wh is not None and entry.get("last_wh") != list(wh):
                     entry["last_wh"] = list(wh)
                     dirty = True
                 if dirty:
                     self._save()
-            return {"key": key, "index": entry["index"], "name": entry.get("name")}
+            code = entry.get("name")
+            needs_lookup = bool(code) and not entry.get("resolved")
+            result = {"key": key, "index": entry["index"],
+                      "name": code, "model": entry.get("model")}
+        # OUTSIDE the lock: `request()` is non-blocking, but the callback it
+        # will eventually run takes this same lock, and holding it across the
+        # hand-off is how a future in-line resolver would deadlock.
+        if needs_lookup:
+            self._resolver.request(code, self._on_resolved)
+        return result
+
+    def _on_resolved(self, code: str, model: str | None, outcome: str) -> None:
+        """Called ON THE RESOLVER'S WORKER THREAD when a lookup finishes.
+
+        Writes the answer against every entry that reported this code, then
+        persists it — "once per device code ever" (the owner's decision) is
+        only true if the answer survives a restart.
+
+        `Answer.UNDECIDED` — we could not read the device list at all — is
+        DELIBERATELY not written down: it is not an answer, and recording it
+        as one would blind this PC to that phone forever because it was
+        offline on the wrong evening (see `device_names`' own docstring).
+
+        The GUI needs no signal: `gui/traffic_window.py` rebuilds its device
+        rows on its own 1 s `QTimer`, reading `all()` under this same lock,
+        so a name landing here shows up on the next tick."""
+        if outcome == device_names.Answer.UNDECIDED:
+            return
+        with self._lock:
+            dirty = False
+            for entry in self._entries.values():
+                if entry.get("name") != code:
+                    continue
+                if entry.get("model") != model or not entry.get("resolved"):
+                    entry["model"] = model or None
+                    entry["resolved"] = True
+                    dirty = True
+            if dirty:
+                self._save()
 
     def index_for(self, key: str) -> int:
         with self._lock:
@@ -222,19 +316,23 @@ class DeviceRegistry:
         with self._lock:
             entry = self._entries.get(key)
             name = entry.get("name") if entry else None
+            model = entry.get("model") if entry else None
             wh = tuple(entry["last_wh"]) if entry and entry.get("last_wh") else None
-        return label_for(key, name, wh)
+        return label_for(key, name, wh, model)
 
     def all(self) -> list[dict]:
         """Every device ever seen on this PC, oldest slot first — what the
-        Traffic window's device list reads."""
+        Traffic window's device list reads. `name` is the raw model CODE,
+        `model` the resolved human name (T74) or `None`; `label` has already
+        chosen between them, so a caller never has to."""
         with self._lock:
-            items = [(k, v["index"], v.get("name"),
+            items = [(k, v["index"], v.get("name"), v.get("model"),
                       tuple(v["last_wh"]) if v.get("last_wh") else None)
                      for k, v in self._entries.items()]
         items.sort(key=lambda t: t[1])
-        return [{"key": k, "index": i, "name": n, "label": label_for(k, n, wh)}
-                for k, i, n, wh in items]
+        return [{"key": k, "index": i, "name": n, "model": m,
+                 "label": label_for(k, n, wh, m)}
+                for k, i, n, m, wh in items]
 
 
 # One registry per process, same "outlives any single server run" reasoning
