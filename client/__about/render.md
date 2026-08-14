@@ -199,7 +199,14 @@ just applied — a self-erasing loop, invisible to every gate because none read
 connection.js. Now a `config` whose `stream_region` matches `lastSentZoom`
 (within `ZOOM_MIN_DELTA`) keeps the view transform exactly where the fingers
 left it and re-arms nothing; only a config that is NOT our own echo resets.
-Gate: `check_the_config_echo_never_undoes_the_zoom` in
+The SECOND path of the same loop (found by the adversarial verify, not by the
+fix's author): `zoom_region` re-sends `layout_state` through the choke point
+before the rebuild, on every zoom — and the `layout_state` handler ended with
+the same unconditional pair. A frame that changes neither the focus nor the
+region now keeps the pinch (the home is still re-derived, so a `pos` change
+riding such a frame applies the moment the view sits at home); only a real
+layout change resets. Gates: `check_the_config_echo_never_undoes_the_zoom` and
+`check_an_unchanged_layout_state_never_undoes_the_zoom` in
 `tests/test_zoom_crop.py`.
 
 ## The cursor has the shape the PC's cursor has (owner request 2026-08-09, task 142)

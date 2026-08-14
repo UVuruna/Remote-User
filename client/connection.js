@@ -376,6 +376,18 @@ function connect() {
         // and sliding into place. The loading animation stays up until the
         // STREAM stops moving (owner 2026-08-03).
         settleLayLoading();
+        // WHAT THIS FRAME CHANGED decides what happens to the view below
+        // (T76 round 2, the SECOND path of the same self-erasing loop — the
+        // adversarial verify of the config-echo fix found it): the server's
+        // zoom_region re-sends layout_state through the same choke point
+        // BEFORE the encoder rebuild, so a frame that changed neither the
+        // focus nor the region is the zoom's own echo (or a rename/reorder),
+        // never a layout change — and resetting the view on it erased every
+        // zoom a second way, unconditionally, on every single pinch.
+        const prevFull = { x: 0, y: 0, w: 1, h: 1 };
+        const focusUnchanged =
+          (msg.active ?? null) === layoutActive &&
+          zoomRectDelta(msg.region || prevFull, layoutRegion || prevFull) < 1e-6;
         layouts = msg.layouts || [];
         layoutActive = msg.active ?? null;
         layoutRegion = msg.region || null;
@@ -456,8 +468,19 @@ function connect() {
         refreshCategories(); // app-aware sets appear/vanish with layout focus
         updateLayoutBar();
         applyOrientationLock();
-        resetViewHome(); // every layout change starts fully zoomed out again
-        scheduleViewport();
+        if (focusUnchanged) {
+          // The same focus, the same region — the picture he framed is still
+          // the picture: keep the pinch, drop nothing, re-arm no watcher.
+          // The home is still re-derived (a `pos` change rides these frames)
+          // and the clamp applies it the moment the view sits at home.
+          computeBaseRect();
+          computeViewHome();
+          clampView();
+          redraw();
+        } else {
+          resetViewHome(); // every layout CHANGE starts fully zoomed out again
+          scheduleViewport();
+        }
       } else if (msg.type === "window_offer") {
         // Something opened on the PC that belongs to this layout's work
         // (task 202). HE decides: show it in the layout, or leave it on the

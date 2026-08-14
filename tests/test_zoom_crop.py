@@ -588,8 +588,35 @@ def check_the_config_echo_never_undoes_the_zoom() -> None:
     print("  config echo: the zoom's own rebuild keeps the pinch and sends nothing")
 
 
+def check_an_unchanged_layout_state_never_undoes_the_zoom() -> None:
+    """THE SECOND PATH of the same loop, found by the adversarial verify of
+    the config-echo fix and not by the fix's author: `zoom_region` re-sends
+    `layout_state` through the choke point BEFORE the encoder rebuild, on
+    EVERY zoom — and the client's layout_state handler ended with the same
+    unconditional resetViewHome() + scheduleViewport(). A frame that changed
+    neither the focus nor the region must keep the pinch."""
+    conn_js = (PROJECT / "client" / "connection.js").read_text(encoding="utf-8")
+    assert re.search(
+        r"const focusUnchanged =\s*\(msg\.active \?\? null\) === layoutActive &&\s*"
+        r"zoomRectDelta\(msg\.region \|\| prevFull, layoutRegion \|\| prevFull\)",
+        conn_js), \
+        "the layout_state handler no longer asks what the frame changed"
+    assert re.search(
+        r"if \(focusUnchanged\) \{[^}]*\} else \{[^}]*resetViewHome\(\);[^}]*"
+        r"scheduleViewport\(\);", conn_js, re.S), \
+        ("resetViewHome()/scheduleViewport() run on every layout_state again "
+         "— the second self-erasing path, fired by every single zoom")
+    unchanged = re.search(r"if \(focusUnchanged\) \{(.*?)\} else", conn_js, re.S)
+    assert unchanged and "resetViewHome" not in unchanged.group(1) \
+        and "scheduleViewport" not in unchanged.group(1) \
+        and "lastSentZoom = null" not in unchanged.group(1), \
+        "the unchanged-focus branch itself resets the view or forgets the rect"
+    print("  layout_state echo: an unchanged focus keeps the pinch too")
+
+
 CHECKS = [
     check_the_config_echo_never_undoes_the_zoom,
+    check_an_unchanged_layout_state_never_undoes_the_zoom,
     check_a_desktop_zoom_becomes_a_real_pixel_crop,
     check_zooming_all_the_way_out_returns_the_full_frame,
     check_a_zoom_inside_a_layout_never_widens_past_the_region,
