@@ -521,6 +521,27 @@ def main() -> int:
     from playwright.sync_api import sync_playwright
 
     results: dict[str, bool] = {}
+    # T83 (owner decision 2026-08-14): this gate used to read the owner's REAL
+    # desktop. `run_server` starts the real app, and a connecting page makes
+    # `focus_guard.watch` run `layout_birth.scan` and `layout_popup.sweep_lost`
+    # — both `EnumWindows`. His own failing run logged "PromptPainter ... is
+    # off every screen": a rescue chip about a real window of his, rendered
+    # over a page whose checks had staged nothing of the sort. MEASURED before
+    # the fix: 31 of his windows entered this gate. After: 0.
+    #
+    # Checked HERE, in the gate that suffered, and checked in the SERVER's own
+    # process rather than by reading `test_input_pipeline.py` as text — the
+    # patch has to have taken effect where the sweeps actually run, and a
+    # source check would pass just as happily on a call that was moved
+    # somewhere it never executes.
+    import layout_popup as _lp
+    import window_manager as _wm
+    isolated = not _lp._top_level_hwnds() and not _wm.list_windows()
+    results["the harness shows the page an isolated desktop, never his own"] = isolated
+    if not isolated:
+        print(f"  DETAIL the real desktop is visible to this gate: "
+              f"{len(_lp._top_level_hwnds())} top-level window(s) — a chip "
+              f"about one of them lands on a page that staged nothing")
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         for label, w, h in SIZES:

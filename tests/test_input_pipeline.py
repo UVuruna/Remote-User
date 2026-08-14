@@ -181,11 +181,51 @@ server_ready = threading.Event()
 server_error = []
 
 
+def isolate_desktop() -> None:
+    """THE BROWSER GATES MUST NOT SEE THE OWNER'S REAL DESKTOP (T83, owner
+    decision 2026-08-14 after `tests/test_birth_radial.py` failed once inside
+    `build.py` and passed every time it was run alone).
+
+    These gates start the REAL `web.create_app`, and a connecting page makes
+    `focus_guard.watch` run `layout_birth.scan` and `layout_popup.sweep_lost`
+    — both of which call `EnumWindows` and read WHATEVER IS OPEN ON THIS PC AT
+    THAT MOMENT. His own failing run has the evidence in its log:
+    "PromptPainter ... is off every screen", a rescue chip raised about a real
+    window of his that had nothing to do with the test. A page that gets an
+    unexpected chip renders something the checks did not stage, so the result
+    depended on what he happened to have open.
+
+    THE COST OF LEAVING IT IS NOT A RED BUILD, IT IS THE HABIT. A gate that
+    sometimes reddens for no reason teaches everyone — the owner included — to
+    RE-RUN a red build instead of reading it, and that habit is the only way a
+    broken guard can let a real defect through. This is the one hazard
+    constraint 18 names, met for real.
+
+    Three seams, all of them the enumeration itself and none of them a
+    behaviour these gates are about: the creation list, the popup sweep's own
+    eye, and the lost-window sweep. Everything else in `window_manager` stays
+    real, so nothing that DOES belong to a browser gate is faked away.
+
+    Deliberately in the shared harness rather than in one gate's own `main()`:
+    every browser gate here starts this same server, so every one of them had
+    the same exposure, and a fix in only the file that happened to fail first
+    is how the next one gets found the same way in three weeks.
+    """
+    import layout_popup
+    import lost_windows
+    import window_manager
+
+    window_manager.list_windows = lambda: []
+    layout_popup._top_level_hwnds = lambda: set()
+    lost_windows.sweep = lambda *a, **k: []
+
+
 def run_server():
     async def main():
         import config
         import web
         config.apply(actions_path=ACTIONS_FIXTURE)
+        isolate_desktop()
         loop = asyncio.get_running_loop()
 
         def quiet_reset(l, context):  # noqa: ANN001
