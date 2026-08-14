@@ -32,6 +32,11 @@ TRIVIAL = {
 
 # Standard: ordinary module. Needs __about/{name}.md only.
 STANDARD = {
+    # New 2026-08-14 (T94, the version-skew round): the page must not outlive
+    # its own protocol — one pure decision (remember the first config's
+    # app_version, reload on any different one), no state machine beyond a
+    # single remembered string. Gate: tests/test_zoom_crop.py section 12.
+    "client/page-version.js",
     "server/gui_main.py",
     # New 2026-08-12 (THE STRUCTURE LAW — main_window.py stands at the
     # 1,000-line wall): the window's blocking work, off the window's thread.

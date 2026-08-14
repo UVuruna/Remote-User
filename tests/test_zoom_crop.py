@@ -696,6 +696,89 @@ def check_the_decode_ceiling_judges_the_raised_width() -> None:
           "at the crop's native size; streamZoom is assigned before it is read")
 
 
+# ════════════════ 12. THE PAGE MUST NOT OUTLIVE ITS OWN PROTOCOL ════════════
+# T94, owner report 2026-08-14: the round-3 zoom was correct in this tree and
+# still self-erased on his tablet, because the PC had UPDATED ITSELF while his
+# page stayed loaded — a v0.0.205 document against a v0.0.209 server, and the
+# old page's zoom-echo guard undid every pinch (reproduced byte for byte in a
+# real-browser harness against the extracted v0.0.205 client). No gate that
+# imports only the current tree can express two versions facing each other, so
+# what IS gated is the structural rule that ends the whole class: a config
+# whose app_version differs from the one the document was first served under
+# reloads the document, before anything else acts on the frame.
+PAGE_VERSION = PROJECT / "client" / "page-version.js"
+INDEX_HTML = (PROJECT / "client" / "index.html").read_text(encoding="utf-8")
+
+
+def check_a_version_skew_reloads_the_page() -> None:
+    """The REAL module, a whole document lifetime: the first versioned config
+    arms the memory and never reloads; a same-version restatement (every
+    later config of an ordinary evening) keeps quiet; a DIFFERENT version —
+    newer or older alike — reloads; a version-less frame (an older server)
+    decides nothing and never arms the memory."""
+    out = _node(f"""
+      const P = require({json.dumps(str(PAGE_VERSION))});
+      let v = "";
+      const log = [];
+      for (const cfg of [null, "0.0.209", "0.0.209", "0.0.210", "0.0.208"]) {{
+        const r = P.pageVersionStep(v, cfg);
+        v = r.servedVersion;
+        log.push({{cfg, v, reload: r.reload}});
+      }}
+      console.log(JSON.stringify(log));
+    """)
+    assert not out[0]["reload"] and out[0]["v"] == "", \
+        "a version-less config armed the memory or reloaded — an older " \
+        "server would reload the page forever"
+    assert not out[1]["reload"] and out[1]["v"] == "0.0.209", \
+        "the first versioned config did not arm the memory quietly"
+    assert not out[2]["reload"], \
+        "a same-version restatement reloaded the page — every reconnect " \
+        "would flash a reload"
+    assert out[3]["reload"], \
+        "a NEWER server did not reload the page — the exact 2026-08-14 " \
+        "failure: last hour's client undoing this hour's server"
+    assert out[3]["v"] == "0.0.209", \
+        "the reload rewrote the served version — a reload that fails would " \
+        "then never fire again"
+    assert out[4]["reload"], \
+        "an OLDER server (a rollback) did not reload — a rollback changes " \
+        "the wire just as surely as an update"
+    print("  page-version.js: arms once, restates quietly, reloads on any skew")
+
+
+def check_the_config_handler_reloads_before_acting() -> None:
+    """connection.js really asks the module, really reloads, and does it
+    BEFORE the frame's protocol-bearing work (initMse, the view decision) —
+    a page that first acted on a foreign frame and then reloaded would have
+    already done the damage the reload exists to prevent. And the module is
+    loaded by the page at all (the grid-icons lesson: a pure module nobody
+    loads is a feature that does not exist)."""
+    handler = re.search(r'msg\.type === "config"\) \{(.*?)\} else if', CONN_JS, re.S)
+    assert handler, "no config handler found in connection.js"
+    body = handler.group(0)
+    call = body.find("pageVersionStep(pageServedVersion, msg.app_version)")
+    assert call >= 0, "the config handler no longer asks pageVersionStep"
+    reload_pos = body.find("location.reload();")
+    assert reload_pos > call, "the skew decision no longer reloads the document"
+    assert re.search(r"location\.reload\(\);\s*\n\s*return;", body), \
+        "the reload does not return — the handler would act on a frame from " \
+        "a protocol this page predates before the reload lands"
+    mse_pos = body.find("initMse(")
+    assert mse_pos > reload_pos, \
+        "the version decision runs AFTER initMse — the stale page rebuilds " \
+        "its pipeline on the foreign frame before reloading"
+    assert 'let pageServedVersion = ""' in STATE_JS, \
+        "pageServedVersion is no longer per-document state in state.js"
+    assert "/static/page-version.js" in INDEX_HTML, \
+        "index.html no longer loads page-version.js — the config handler " \
+        "would throw on its first frame"
+    assert INDEX_HTML.find("/static/page-version.js") \
+        < INDEX_HTML.find("/static/connection.js"), \
+        "page-version.js loads after connection.js"
+    print("  connection.js reloads on a version skew before acting on the frame")
+
+
 CHECKS = [
     check_zoom_step_arithmetic_at_the_desktop,
     check_zoom_step_arithmetic_inside_a_layout,
@@ -719,6 +802,8 @@ CHECKS = [
     check_an_unchanged_layout_state_never_undoes_the_zoom,
     check_the_settle_suppresses_a_gesture_in_progress,
     check_the_floor_rule_is_the_module_the_page_runs,
+    check_a_version_skew_reloads_the_page,
+    check_the_config_handler_reloads_before_acting,
 ]
 
 

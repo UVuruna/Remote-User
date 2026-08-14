@@ -1,4 +1,4 @@
-// WebSocket connection lifecycle: connect/reconnect, the `config`/`cursor`/
+﻿// WebSocket connection lifecycle: connect/reconnect, the `config`/`cursor`/
 // `actions`/`toast` message handlers, visibility-gated session, and the
 // initial connect() call. Loads LAST — this is where the page actually
 // starts running. Part of the app.js split. See client/__about/connection.md.
@@ -227,6 +227,21 @@ function connect() {
           window.Android.setTailscaleUrl(tailscaleUrl || "");
         }
         updateAnywhereBanner();
+        // THE PAGE MUST NOT OUTLIVE ITS OWN PROTOCOL (T94): a config whose
+        // app_version differs from the one this document was first served
+        // under means the PC updated itself while we stayed loaded — the
+        // measured 2026-08-14 failure had last hour's page undoing this
+        // hour's server once per pinch. Re-fetch the document; the fresh
+        // load re-pairs page and server. Decision in client/page-version.js
+        // (pure) so its gate runs it whole; the reload is the last act, so
+        // nothing below acts on a frame from a protocol this page predates.
+        const pv = pageVersionStep(pageServedVersion, msg.app_version);
+        pageServedVersion = pv.servedVersion;
+        if (pv.reload) {
+          setStatus("connecting", "The PC updated — reloading…");
+          location.reload();
+          return;
+        }
         refreshUpdateBanner(msg.apk_version || msg.app_version);
         // The PC's own quality settings — the quality panel can only go BELOW
         // them, so it shows them and greys out the unreachable steps.

@@ -232,6 +232,11 @@ let zoomSettleTimer = null;
 // the first one always resets the view — a fresh server holds no zoom — and
 // every later one keeps the pinch when the stream's region did not change.
 let h264ConfigSeen = false;
+// The app_version this DOCUMENT was first served under (T94) — "" until the
+// first `config` carries one. A later config with a DIFFERENT version means
+// the PC updated itself while this page stayed loaded, and the page reloads
+// (client/page-version.js). Per document, deliberately not per connection.
+let pageServedVersion = "";
 
 function setStatus(cls, text) {
   statusEl.className = cls;

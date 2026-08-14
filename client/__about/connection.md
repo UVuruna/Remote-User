@@ -37,7 +37,13 @@ every other script must already be loaded by this point (and is, since
   - `config` — full view reset: monitor size, stream mode/codec,
     `tailscale_url` (fed to the Android bridge), `app_version` (drives the
     update banner); re-inits or tears down MSE; sent after auth and after
-    every stream restart.
+    every stream restart. FIRST, though, `app_version` is compared against
+    the version this DOCUMENT was first served under
+    ([Page Version](page-version.md), T94 2026-08-14): a difference means
+    the PC updated itself while this page stayed loaded, and the page
+    reloads itself before acting on the frame — a stale page facing a newer
+    protocol is exactly how the v0.0.205 zoom-echo guard erased every pinch
+    against the v0.0.209 server.
   - `cursor` — updates `cursorPos` (server-authoritative correction of the
     client's optimistic draw) and `cursorShapeName` from the OPTIONAL `shape`
     field (owner request 2026-08-09, task 142 — the name of the system cursor
