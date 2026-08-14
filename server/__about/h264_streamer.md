@@ -90,15 +90,36 @@ The re-open on region change lives in the web layer (the quality-change
 mechanism, reused): `layout_api.send_layout_state` is the choke point. Gate:
 `tests/test_region_stream.py`, fail-closed in build.py (0ap/6).
 
-**And since T76 (2026-08-14) the ZOOM feeds the same `region` argument.** The
-crop was only ever fed by a focused layout, and the `viewport` message the
-pinch has always sent was discarded in this mode — so a zoom magnified pixels
-that had already been through the panel cap below, which is exactly the blurry
-picture the owner reported. Nothing here changed: the region handed in is now
-`layout_api.stream_crop(conn)` — the focused layout's region NARROWED by the
-phone's settled visible rect, with the layout's region as a FLOOR the crop can
-never widen past. See [Layout API](layout_api.md) for the derivation and
+**And since T76 (2026-08-14) the ZOOM feeds a `zoom` argument beside `region`
+— NOT the same argument.** The `viewport` message the pinch has always sent
+was discarded in H.264 mode, so a zoom magnified pixels that had already been
+through the panel cap below, which is exactly the blurry picture the owner
+reported.
+
+**Corrected in place, T76 round 3 (2026-08-14).** The paragraph below
+described the zoom as NARROWING the crop — feeding `region` a smaller rect
+via `layout_api.stream_crop`. That was round 2, shipped and reverted the same
+day: with no base layer under a crop-only stream a pan showed the canvas
+background, a settled pan rebuilt ffmpeg (a 1–2 s stall) per step with no
+throttle, and a decoder error caught in that storm reconnected with the zoom
+erased. **The crop the encoder gets is now always exactly the focused
+layout's region (or the full frame at the desktop) — `stream_crop(conn)` is
+unchanged in what it returns.** What the settled pinch rect drives instead is
+a NEW, separate `zoom` argument to `H264Session`/`_scale_size` — a quantized
+power-of-two RESOLUTION step (`layout_api.zoom_step`, capped at
+`ZOOM_MAX_STEP=8`) that raises the panel ceiling toward native, clamped there.
+A pan that keeps the same step rebuilds nothing; only a step CROSSING resets
+the session — panning inside a step is free, which round 2's per-pan rebuild
+was not. `conn["stream_zoom"]` is the intention copy beside
+`conn["stream_region"]`, read at the same choke point. See
+[Layout API](layout_api.md) for the derivation and
 [Zoom Crop](../../client/__about/zoom-crop.md) for the page's own half.
+
+*(Round 2 reasoning, superseded above but kept as the record of what was
+tried.)* "Nothing here changed: the region handed in is now
+`layout_api.stream_crop(conn)` — the focused layout's region NARROWED by the
+phone's settled visible rect, with the layout's region as a FLOOR the crop
+can never widen past."
 
 ## The panel cap (owner order 2026-08-12, approved on a ballot)
 
@@ -145,7 +166,14 @@ Gate: `tests/test_panel_scale.py`, fail-closed in build.py (0aq/6).
   looking at. The page now only sends the rect once the gesture has SETTLED
   (client/zoom-crop.js), and both sides refuse a change too small to be worth
   the blink, so the "transient" objection is answered by the settle rather
-  than by discarding the message.
+  than by discarding the message. **What the settled rect drives changed
+  between T76's two rounds** (corrected in place, round 3, same day): round 2
+  turned it into a NARROWER crop, rebuilt on every settled pan step with no
+  base layer under it — condemned live (canvas background showing through a
+  pan, a 1–2 s stall per step, a decoder-error storm that erased the zoom on
+  reconnect). Round 3 keeps the crop fixed at the layout's region and turns
+  the settled rect into a quantized resolution STEP instead — a pan inside
+  the same step rebuilds nothing; only a step crossing does.
 - Frames the sink drops (encoder slower than capture) compress the video timeline slightly; the client chases the live edge, so this never accumulates as latency.
 
 ## Per-client quality overrides (owner 2026-08-05, growing the 2026-08-02 full/reduced pair)
@@ -181,8 +209,20 @@ own ~3.6 Mbps and the waste only appears under motion; and the panel cap above
 already equalises a full desktop and a 2×2 cell onto the panel, where the bits
 per pixel are IDENTICAL. The overspend lives exactly where the crop falls
 BELOW the panel and is therefore sent at its own small size — roughly 2.2× the
-reference's bits per pixel — and the zoom crop (T76) is what turns that from
-an edge case into the normal one.
+reference's bits per pixel — and a small layout crop is exactly that case.
+
+**Corrected in place, T76 round 3 (2026-08-14):** this section originally
+read "and the zoom crop (T76) is what turns that from an edge case into the
+normal one" — true of round 2, where zooming NARROWED the crop and so pushed
+MORE sessions below the panel, toward the floor. Round 3 zoom does the
+opposite: it RAISES `_scale_size`'s ceiling (the `zoom` argument to
+`_scale_size`, clamped at native — see the crop section above), so encoded
+pixels rise toward — and can reach — the reference size as he zooms in, and
+`_bitrate`'s factor rises toward 1 (the rung) rather than collapsing toward
+the floor. `_reference_size` always asks `_scale_size` with `zoom=1`
+specifically so this ratio still means "a full screen on this panel" and is
+untouched by the zoom step. The floor still matters for an UNZOOMED small
+layout crop; it is no longer what a deep zoom produces.
 
 `H264Session._bitrate()` — the rules, in the owner's order:
 
@@ -205,22 +245,33 @@ an edge case into the normal one.
   phone may never break (task 131 — it may not raise the bitrate) is enforced
   where a gate can drive it. A second clamp would make that one unreachable
   and therefore unprovable.
-- **A floor**, `BITRATE_FLOOR_BPS` = 800 kbps, so a deep zoom cannot collapse
-  into mush. It is a JUDGEMENT and is stated as one: at his own quarter-width
-  layout (484×1048 at 10 fps) 800 kbps is ~0.16 bits per pixel per frame,
-  nearly double the ~0.096 the reference full screen gets at the same rung —
-  the generous end, not the marginal one. Expect it to be tuned on the real
-  device.
+- **A floor**, `BITRATE_FLOOR_BPS` = 800 kbps, so a small UNZOOMED crop
+  cannot collapse into mush. It is a JUDGEMENT and is stated as one: at his
+  own quarter-width layout (484×1048 at 10 fps) 800 kbps is ~0.16 bits per
+  pixel per frame, nearly double the ~0.096 the reference full screen gets at
+  the same rung — the generous end, not the marginal one. Expect it to be
+  tuned on the real device. **Corrected in place, T76 round 3 (2026-08-14):**
+  this floor was written to also cover "a deep zoom", back when zooming
+  narrowed the crop and pushed it further below the floor. Round 3 zoom
+  instead RAISES encoded pixels toward the reference as he zooms in, so a
+  deep zoom now pushes the factor UP toward the rung, not down toward this
+  floor — the floor's remaining job is the unzoomed small-crop case alone.
 - **Logged.** The applied number and the factor ride the session's own log
   line beside the crop and the scale, because a bitrate that is never printed
   cannot be told apart from a bitrate that was simply not spent.
 
 Measured, 3840×2160 source on a 1920×1200 panel, saving profile (10 fps,
 ½, `saver` = 2 Mbps): full screen → 1920×1080, ×1.000, 2,000,000 bps
-(unchanged); his own quarter-width layout → 484×1048, ×0.244, 800,000 bps
-(the floor); a deep zoom → the same 800,000 bps floor. On Wi-Fi every one of
-those is the rung's own number, untouched. Gate: `tests/test_zoom_crop.py`,
-fail-closed in `setup/gates.py` (0b13/6).
+(unchanged); his own quarter-width layout, UNZOOMED → 484×1048, ×0.244,
+800,000 bps (the floor). **Corrected in place, T76 round 3 (2026-08-14):**
+this line originally ended "a deep zoom → the same 800,000 bps floor" — that
+was round 2, where zooming narrowed the crop further below the floor. Round
+3 zoom raises the encoded size instead (`_scale_size`'s `zoom` argument), so
+a deep zoom on that same quarter-width layout pushes the factor UP toward
+the rung's own 2,000,000 bps as the resolution step climbs, never down
+toward the floor. On Wi-Fi every one of those is the rung's own number,
+untouched. Gate: `tests/test_zoom_crop.py`, fail-closed in `setup/gates.py`
+(0b13/6).
 
 **The re-open is the whole cost of a quality change, and it used to be paid
 with the connection** (owner report 2026-08-10, his #1: changing the bitrate

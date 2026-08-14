@@ -176,36 +176,59 @@ reset in `initMse()` beside the rescue seek's state.
 ## Layouts (Phase F+ step 1)
 Layout focus is client-side: the view is bound to `layoutRegion`. Streaming
 narrows with it — since 2026-08-12 the H.264 encoder crops to the focused
-layout's region, and since T76 (2026-08-14) to the ZOOM inside it as well.
+layout's region.
 
-`scheduleViewport()` therefore has two paths. JPEG: the throttled
-`currentViewport()` send it always had. H.264: `scheduleZoomRegion()`, a
-60 ms sampler that sends the same `viewport` message only once the gesture has
-SETTLED — every region change rebuilds this client's ffmpeg and the picture
-blinks once, so one blink per finished gesture is the budget. The rules it runs
-are pure and live in [Zoom Crop](zoom-crop.md): `zoomFloorRect` (the layout's
-region is a floor the crop may never widen past) and `zoomSettleStep` (a
-pointer still down, or a transform that moved since the last sample, means the
-gesture is alive — an observation, not the estimate constraint 15 forbids).
-`resetViewHome()` drops `lastSentZoom`: a new picture is a new zoom.
+**Corrected in place, T76 round 3 (2026-08-14):** this section previously
+said the crop also narrowed to the ZOOM inside the layout. That was round 2,
+shipped and reverted the same day — condemned live (no base layer under a
+crop-only stream, a 1–2 s ffmpeg rebuild per settled PAN with no throttle, a
+decoder-error storm that reconnected with the zoom erased). **The encoder
+crop is now fixed at the layout's region alone; the pinch never narrows it.**
+What the pinch drives instead is a RESOLUTION step
+(`layout_api.zoom_step`, server-side) that raises the encoder's pixel
+ceiling toward native — see [H.264 Streamer](../../server/__about/h264_streamer.md)
+and [Zoom Crop](zoom-crop.md) for the mechanism.
 
-**The config that echoes our own zoom keeps the pinch** (T76 round 2, owner
-report 2026-08-14 — the zoom "did not work at all, it kept throwing me back").
-Every zoom rebuild ends with a fresh `config`, and connection.js used to run
-`resetViewHome()` + `scheduleViewport()` on every one: the reset dropped
-`lastSentZoom` and snapped the view out, the re-armed watcher measured that
-reset view as the full frame and SENT it, and the server undid the zoom it had
-just applied — a self-erasing loop, invisible to every gate because none read
-connection.js. Now a `config` whose `stream_region` matches `lastSentZoom`
-(within `ZOOM_MIN_DELTA`) keeps the view transform exactly where the fingers
-left it and re-arms nothing; only a config that is NOT our own echo resets.
-The SECOND path of the same loop (found by the adversarial verify, not by the
-fix's author): `zoom_region` re-sends `layout_state` through the choke point
-before the rebuild, on every zoom — and the `layout_state` handler ended with
-the same unconditional pair. A frame that changes neither the focus nor the
-region now keeps the pinch (the home is still re-derived, so a `pos` change
-riding such a frame applies the moment the view sits at home); only a real
-layout change resets. Gates: `check_the_config_echo_never_undoes_the_zoom` and
+`scheduleViewport()` still has two paths. JPEG: the throttled
+`currentViewport()` send it always had (unchanged — JPEG still crops to the
+viewport it requests). H.264: `scheduleZoomRegion()`, a 60 ms sampler that
+sends the same `viewport` message only once the gesture has SETTLED — a step
+crossing still rebuilds this client's ffmpeg and the picture still blinks
+once, so one blink per finished gesture stays the budget, even though what
+crosses is now a resolution step rather than a crop boundary. The rules it
+runs are pure and live in [Zoom Crop](zoom-crop.md): `zoomFloorRect` (the
+layout's region is a floor the REPORTED rect may never widen past) and
+`zoomSettleStep` (a pointer still down, or a transform that moved since the
+last sample, means the gesture is alive — an observation, not the estimate
+constraint 15 forbids). `resetViewHome()` drops `lastSentZoom`: a new picture
+resets the reported measurement.
+
+**The config that echoes our own zoom keeps the pinch.** Every zoom-step
+rebuild ends with a fresh `config`, and connection.js used to run
+`resetViewHome()` + `scheduleViewport()` on every one (round 1 of this fix):
+the reset dropped `lastSentZoom` and snapped the view out, the re-armed
+watcher measured that reset view as the full frame and SENT it, and the
+server undid the zoom it had just applied — a self-erasing loop, invisible to
+every gate because none read connection.js. **Corrected in place, round 3:**
+the fix originally compared the fresh `config`'s `stream_region` against
+`lastSentZoom` (an echo check, since round 2's crop DID narrow
+`stream_region` per zoom step). Round 3's crop no longer narrows with the
+zoom at all, so `stream_region` no longer echoes the zoom — it echoes only
+the LAYOUT. The comparison that keeps the pinch is now simply "did this
+config's `stream_region` change from the previous one" (`h264ConfigSeen` +
+`zoomRectDelta(prevRegion, streamRegion)`): an unchanged region on a
+connection that has already seen a config means the rebuild was a pure
+resolution-step change, so the view stays exactly where the fingers left it
+and nothing is re-sent; a changed region is a real layout/desktop change and
+resets; the FIRST config of a connection always resets, since a fresh server
+holds no zoom step whatever the region looks like. The SECOND path of the
+same loop (found by the adversarial verify, not by the fix's author):
+`zoom_region` re-sends `layout_state` through the choke point before the
+rebuild, on every zoom — and the `layout_state` handler ended with the same
+unconditional pair. A frame that changes neither the focus nor the region now
+keeps the pinch (the home is still re-derived, so a `pos` change riding such
+a frame applies the moment the view sits at home); only a real layout change
+resets. Gates: `check_the_config_echo_never_undoes_the_zoom` and
 `check_an_unchanged_layout_state_never_undoes_the_zoom` in
 `tests/test_zoom_crop.py`.
 

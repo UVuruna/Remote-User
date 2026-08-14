@@ -85,35 +85,42 @@ whether the running one still matches. Two reads of one function, so the
 equality at the choke point stays exact — the rule that made the layout crop
 trustworthy in the first place.
 
-Two facts feed it and neither is a second region:
+**Corrected in place, T76 round 3 (2026-08-14).** The paragraphs below
+described `conn["zoom"]` as a second, narrower REGION — the settled pinch rect
+intersected with the layout's region and fed straight to the encoder's crop.
+That was round 2's design, built and shipped the same day, and it was
+condemned live within hours: with no base layer under a crop-only stream a pan
+showed the canvas background, a settled PAN rebuilt ffmpeg (a 1–2 s stall)
+for every step with no throttle, and a decoder error caught in that storm
+reconnected with the zoom erased. **`stream_crop(conn)` still exists and is
+still the one derivation both callers ask, but it no longer crops to the
+pinch at all — it is always exactly the focused layout's region (or the full
+frame at the desktop).** The settled rect is now consumed as a MEASUREMENT by
+`zoom_step`, which turns it into a quantized power-of-two resolution step
+(`conn["stream_zoom"]`) that raises the panel ceiling in
+[H.264 Streamer](h264_streamer.md) `_scale_size` — the crop's pixels never
+change, only how many of them the encoder is allowed to keep. See
+[Zoom Crop](../../client/__about/zoom-crop.md) for the page's half and
+[H.264 Streamer](h264_streamer.md) for the resolution step. The paragraphs
+that follow, describing the region-intersection design, are kept as evidence
+of what was tried and reverted rather than deleted.
 
-- `conn["region"]` — what the focused LAYOUT frames. Unchanged in meaning: the
-  phone locks its view to it, clamps the cursor to it and letterboxes around
-  it, so a pinch may never overwrite it.
-- `conn["zoom"]` — the settled rect the finger is really looking at, or None.
-  Written only by `zoom_region`, the H.264 half of the `viewport` message.
+*(Round 2 reasoning, superseded above but kept as the record of what was
+built and why it did not survive contact with the device.)* Two facts fed it
+and neither was a second region: `conn["region"]` — what the focused LAYOUT
+frames — and `conn["zoom"]` — the settled rect the finger was really looking
+at, or None, written only by `zoom_region`, the H.264 half of the `viewport`
+message. The layout's region was meant to be the FLOOR, never the ceiling:
+inside a layout the crop was the INTERSECTION, zooming in narrowed further,
+zooming out returned to exactly the layout's region and no wider, and a rect
+that missed the layout entirely fell back to the region rather than to an
+empty crop. `zoom_region` guarded twice before anything rebuilt — the rect
+had to move at least `ZOOM_MIN_DELTA` (0.02), and the crop it produced had to
+really differ from the one the running session was opened with — and a focus
+change cleared `conn["zoom"]` in `send_layout_state`.
 
-**The layout's region is the FLOOR, never the ceiling.** Inside a layout the
-crop is the INTERSECTION: zooming in narrows further, zooming out returns to
-exactly the layout's region and no wider, and a rect that misses the layout
-entirely (a stale one from the layout just left) falls back to the region
-rather than to an empty crop. At the desktop there is no floor, and a
-full-frame zoom gives None — the old world, with no residue.
-
-`zoom_region` guards twice before anything is rebuilt, because a rebuild is a
-visible blink: the rect must have moved at least `ZOOM_MIN_DELTA` (0.02, the
-same threshold the page holds), and the CROP it produces must really differ
-from the one the running session was opened with. A pinch the floor absorbs
-whole therefore costs nothing — and the "nothing narrowed" case returns the
-region OBJECT rather than a recomputed dict, because `x2 - x1` for an
-intersection that clipped nothing is not bit-identical to the region's own `w`
-and a rounding error must not blink his picture.
-
-A focus change clears `conn["zoom"]` in `send_layout_state` — the one place
-every focus, removal and prune-shift passes through. The settled rect belongs
-to the picture it was measured in, and carrying it into the next layout would
-crop the new picture to the old one's slice. Gate: `tests/test_zoom_crop.py`,
-fail-closed in `setup/gates.py` (0b13/6).
+Gate: `tests/test_zoom_crop.py`, fail-closed in `setup/gates.py` (0b13/6) —
+now proving the round-3 `zoom_step` semantics, not the intersection above.
 
 ## The encoder is rebuilt BEFORE the phone is told (2026-08-12)
 
