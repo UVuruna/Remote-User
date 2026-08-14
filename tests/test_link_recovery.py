@@ -372,6 +372,12 @@ const ctx = vm.createContext(new Proxy(store, {
 const load = (f) => vm.runInContext(fs.readFileSync(path.join(CLIENT, f), "utf8"), ctx,
                                     { filename: f });
 load("state.js");
+// The REAL version-skew decision (T94) — without it the sandbox's STUB
+// answers `pageVersionStep(...)` and STUB.reload is truthy, so the config
+// handler "reloads" on every frame. `location` deliberately has no reload:
+// none of these scenarios changes the server version, so a reload firing
+// here is a defect this harness should crash on, not swallow.
+load("page-version.js");
 store.__record = (c, t) => statuses.push(t);
 vm.runInContext("setStatus = (c, t) => __record(c, t);", ctx);
 load("connection.js");
