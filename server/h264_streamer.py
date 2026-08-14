@@ -118,7 +118,18 @@ class H264Session:
         self._scale = self._scale_size(*src)
         # What the encoder is really told to spend, and why (T79) — computed
         # here so `open_session` can LOG both beside the crop and the scale.
-        self.bitrate, self.bitrate_factor = self._bitrate()
+        # NOT precomputed into plain attributes. `_ffmpeg_cmd` needs this, and
+        # binding it in `__init__` made the command depend on construction
+        # ORDER rather than on the session's own inputs — which broke two
+        # unrelated gates at once (`test_raw_pixel_cost.py`,
+        # `test_quality_raise.py`) because both legitimately build a session
+        # with `__new__` and set only the fields their subject needs. Two gates
+        # failing on one coupling is a design answer, not a test problem: the
+        # bitrate is DERIVED from `_quality`, `_crop`, `_scale` and the panel,
+        # so it is a property over those, cached once because `_bitrate` is
+        # asked for the command and again for the log and must give the same
+        # answer to both.
+        self._bitrate_cache: tuple[str, float] | None = None
 
     def _crop_rect(self, region: dict | None) -> tuple[int, int, int, int] | None:
         """(w, h, x, y) of the pixel crop on the encoded frame, or None for a
@@ -213,6 +224,22 @@ class H264Session:
         today."""
         full = (self.width, self.height)
         return self._scale_size(*full) or full
+
+    @property
+    def bitrate(self) -> str:
+        """The `-b:v` string this session really uses. See `_bitrate`."""
+        if getattr(self, "_bitrate_cache", None) is None:
+            self._bitrate_cache = self._bitrate()
+        return self._bitrate_cache[0]
+
+    @property
+    def bitrate_factor(self) -> float:
+        """What the pixel arithmetic actually produced — 1.0 whenever nothing
+        was scaled. Logged beside the number, because a bitrate that is never
+        printed cannot be told apart from one that was simply not spent."""
+        if getattr(self, "_bitrate_cache", None) is None:
+            self._bitrate_cache = self._bitrate()
+        return self._bitrate_cache[1]
 
     def _bitrate(self) -> tuple[str, float]:
         """THE BITRATE FOLLOWS THE PIXELS — on cellular only (T79).
