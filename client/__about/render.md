@@ -131,9 +131,19 @@ The forward catch-up's own flush budget (`liveCatchUp`, the other half of task
 reset in `initMse()` beside the rescue seek's state.
 ## Layouts (Phase F+ step 1)
 Layout focus is client-side: the view is bound to `layoutRegion`. Streaming
-itself is
-untouched: full-frame H.264 stays cheap (ROADMAP measurement), and the JPEG
-path narrows through the existing `viewport` region mechanism.
+narrows with it — since 2026-08-12 the H.264 encoder crops to the focused
+layout's region, and since T76 (2026-08-14) to the ZOOM inside it as well.
+
+`scheduleViewport()` therefore has two paths. JPEG: the throttled
+`currentViewport()` send it always had. H.264: `scheduleZoomRegion()`, a
+60 ms sampler that sends the same `viewport` message only once the gesture has
+SETTLED — every region change rebuilds this client's ffmpeg and the picture
+blinks once, so one blink per finished gesture is the budget. The rules it runs
+are pure and live in [Zoom Crop](zoom-crop.md): `zoomFloorRect` (the layout's
+region is a floor the crop may never widen past) and `zoomSettleStep` (a
+pointer still down, or a transform that moved since the last sample, means the
+gesture is alive — an observation, not the estimate constraint 15 forbids).
+`resetViewHome()` drops `lastSentZoom`: a new picture is a new zoom.
 
 ## The cursor has the shape the PC's cursor has (owner request 2026-08-09, task 142)
 

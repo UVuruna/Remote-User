@@ -254,6 +254,9 @@
   <!-- Before render.js: it owns the fit-and-anchor math computeViewHome runs
        (pure so its gate can drive it — owner decree 2026-08-09). -->
   <script src="/static/view-anchor.js"></script>
+  <!-- Also before render.js: the zoom's own crop — the layout floor and the
+       gesture settle, pure so its gate runs them whole (T76). -->
+  <script src="/static/zoom-crop.js"></script>
   <!-- The device's decoder ceiling — pure rules (gated), wired by quality.js. -->
   <script src="/static/decode-caps.js"></script>
   <!-- Also before render.js: the drawn shape of the PC's real cursor, keyed

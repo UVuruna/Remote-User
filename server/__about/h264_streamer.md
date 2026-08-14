@@ -90,6 +90,16 @@ The re-open on region change lives in the web layer (the quality-change
 mechanism, reused): `layout_api.send_layout_state` is the choke point. Gate:
 `tests/test_region_stream.py`, fail-closed in build.py (0ap/6).
 
+**And since T76 (2026-08-14) the ZOOM feeds the same `region` argument.** The
+crop was only ever fed by a focused layout, and the `viewport` message the
+pinch has always sent was discarded in this mode — so a zoom magnified pixels
+that had already been through the panel cap below, which is exactly the blurry
+picture the owner reported. Nothing here changed: the region handed in is now
+`layout_api.stream_crop(conn)` — the focused layout's region NARROWED by the
+phone's settled visible rect, with the layout's region as a FLOOR the crop can
+never widen past. See [Layout API](layout_api.md) for the derivation and
+[Zoom Crop](../../client/__about/zoom-crop.md) for the page's own half.
+
 ## The panel cap (owner order 2026-08-12, approved on a ballot)
 
 His words: "what is the point of the PC sending 4K if the Android device
@@ -127,9 +137,15 @@ video's own intrinsic pixels, so a smaller encode simply arrives smaller.
 Gate: `tests/test_panel_scale.py`, fail-closed in build.py (0aq/6).
 
 ## Notes
-- The zoomed-viewport request (`viewport`) stays JPEG-only — H.264's crop is
-  decided server-side by the focused layout, never by pinch zoom (a zoom is
-  transient; a layout region is a state worth a session rebuild).
+- The zoomed-viewport request (`viewport`) is NO LONGER JPEG-only (T76,
+  2026-08-14). It was, and this note said so as though it were a design
+  decision — "a zoom is transient; a layout region is a state worth a session
+  rebuild" — which is what made the reported blur unfindable for a whole
+  round. A zoom the owner has finished is not transient: it is what he is
+  looking at. The page now only sends the rect once the gesture has SETTLED
+  (client/zoom-crop.js), and both sides refuse a change too small to be worth
+  the blink, so the "transient" objection is answered by the settle rather
+  than by discarding the message.
 - Frames the sink drops (encoder slower than capture) compress the video timeline slightly; the client chases the live edge, so this never accumulates as latency.
 
 ## Per-client quality overrides (owner 2026-08-05, growing the 2026-08-02 full/reduced pair)
@@ -151,6 +167,60 @@ by `H264Manager.stream_size`). The web layer resets the running session
 when the client's `quality` message changes the dict; the loop reopens with
 the new settings (same machinery as a monitor switch). Legacy
 `quality {reduced: true}` maps in web.py to the saving profile.
+
+## The bitrate follows the pixels — on cellular only (T79, 2026-08-14)
+
+His question, in translation: for this house it does not matter that much, but
+for MOBILE DATA it is very important that we optimise the BITRATE too.
+
+`-b:v`/`-maxrate` used to be the rung's flat number whatever the encoder was
+actually fed, so 20 Mbps on a quarter-size crop was the same ceiling as
+20 Mbps on the full 4K. Two things kept that honest and both are stated rather
+than glossed over: `-maxrate` is a CEILING, so a static screen still costs its
+own ~3.6 Mbps and the waste only appears under motion; and the panel cap above
+already equalises a full desktop and a 2×2 cell onto the panel, where the bits
+per pixel are IDENTICAL. The overspend lives exactly where the crop falls
+BELOW the panel and is therefore sent at its own small size — roughly 2.2× the
+reference's bits per pixel — and the zoom crop (T76) is what turns that from
+an edge case into the normal one.
+
+`H264Session._bitrate()` — the rules, in the owner's order:
+
+- **On Wi-Fi nothing changes.** A focused layout coming out sharper at the
+  same nominal quality is a FEATURE (see the panel cap) and it is untouched.
+- **"On cellular" is not a new notion.** It is `config.is_data_saver(...)` —
+  the saving profile the phone ALREADY sends over the existing path while the
+  handset is on cellular (`client/quality.js` `effectiveQuality`, via the
+  `Android.transport()` bridge). A `transport` field beside it would be a
+  second answer to one question, and the two would drift the first time one of
+  them moved. It correctly also covers the owner picking Data saver by hand.
+- **The factor is encoded pixels over reference pixels**, where the reference
+  is "a full screen on this panel" — `_reference_size()` asks the SAME
+  `_scale_size` about the uncropped frame, so the client's own resolution step
+  is inside both sides of the ratio and cancels. A full-screen Data saver
+  session comes out at factor 1.0 and is byte for byte what it is today, which
+  is what keeps the ladder's rungs meaning what they say.
+- **Downward only, in ONE place.** The ratio is deliberately not pre-clamped
+  to 1; there is a single `min` against the rung's own number, so the rule the
+  phone may never break (task 131 — it may not raise the bitrate) is enforced
+  where a gate can drive it. A second clamp would make that one unreachable
+  and therefore unprovable.
+- **A floor**, `BITRATE_FLOOR_BPS` = 800 kbps, so a deep zoom cannot collapse
+  into mush. It is a JUDGEMENT and is stated as one: at his own quarter-width
+  layout (484×1048 at 10 fps) 800 kbps is ~0.16 bits per pixel per frame,
+  nearly double the ~0.096 the reference full screen gets at the same rung —
+  the generous end, not the marginal one. Expect it to be tuned on the real
+  device.
+- **Logged.** The applied number and the factor ride the session's own log
+  line beside the crop and the scale, because a bitrate that is never printed
+  cannot be told apart from a bitrate that was simply not spent.
+
+Measured, 3840×2160 source on a 1920×1200 panel, saving profile (10 fps,
+½, `saver` = 2 Mbps): full screen → 1920×1080, ×1.000, 2,000,000 bps
+(unchanged); his own quarter-width layout → 484×1048, ×0.244, 800,000 bps
+(the floor); a deep zoom → the same 800,000 bps floor. On Wi-Fi every one of
+those is the rung's own number, untouched. Gate: `tests/test_zoom_crop.py`,
+fail-closed in `setup/gates.py` (0b13/6).
 
 **The re-open is the whole cost of a quality change, and it used to be paid
 with the connection** (owner report 2026-08-10, his #1: changing the bitrate

@@ -150,7 +150,12 @@ def check_a_region_change_resets_the_session_and_an_unchanged_one_never_does():
 
 
 def check_the_wiring_end_to_end():
-    assert re.search(r"req_region = conn\.get\(\"region\"\)", WEB), \
+    # Since T76 the region the session is opened with is the ONE derivation
+    # `layout_api.stream_crop` makes — the focused layout's region narrowed by
+    # the phone's settled zoom, and the very same call the choke point below
+    # compares against. With no zoom it returns `conn["region"]` unchanged,
+    # which is the whole of what this line used to read.
+    assert "req_region = layout_api.stream_crop(conn)" in WEB, \
         "web no longer reads the region for the session"
     assert re.search(r"manager\.open_session,(?:.|\n){0,400}?req_region,\n", WEB), \
         "the region is not passed into open_session"

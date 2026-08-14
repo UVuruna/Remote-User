@@ -33,6 +33,11 @@ logger = logging.getLogger(__name__)
 
 CREATE_NO_WINDOW = 0x08000000
 READ_CHUNK = 32768
+# The lowest `-b:v` the cellular bitrate rule may ever ask for (T79). A
+# JUDGEMENT, stated as one — see `H264Session._bitrate` for why 800 kbps is
+# the generous end rather than the marginal one, and expect the owner to tune
+# it on the real device.
+BITRATE_FLOOR_BPS = 800_000
 FEED_POLL_S = 0.5  # how often the feed thread re-checks _running while frames stall
 
 
@@ -108,7 +113,12 @@ class H264Session:
                         "w": self._crop[0] / self.width,
                         "h": self._crop[1] / self.height}
                        if self._crop else None)
-        self._scale = self._scale_size(panel)
+        self._panel = self._panel_size(panel)
+        src = self._crop[:2] if self._crop else (self.width, self.height)
+        self._scale = self._scale_size(*src)
+        # What the encoder is really told to spend, and why (T79) — computed
+        # here so `open_session` can LOG both beside the crop and the scale.
+        self.bitrate, self.bitrate_factor = self._bitrate()
 
     def _crop_rect(self, region: dict | None) -> tuple[int, int, int, int] | None:
         """(w, h, x, y) of the pixel crop on the encoded frame, or None for a
@@ -140,7 +150,7 @@ class H264Session:
             return (0, 0)
         return (w, h) if w > 1 and h > 1 else (0, 0)
 
-    def _scale_size(self, panel: dict | None) -> tuple[int, int] | None:
+    def _scale_size(self, src_w: int, src_h: int) -> tuple[int, int] | None:
         """(w, h) the encoder must OUTPUT, or None to leave the crop at its own
         size.
 
@@ -167,11 +177,16 @@ class H264Session:
 
         The aspect ratio of the crop is preserved (the height is derived from
         the chosen width), and both dimensions are even — yuv420p subsamples
-        chroma 2x2, exactly as in `_crop_rect`."""
-        src_w, src_h = self._crop[:2] if self._crop else (self.width, self.height)
+        chroma 2x2, exactly as in `_crop_rect`.
+
+        Takes the SOURCE size as an argument rather than reading the crop
+        (T79): the bitrate reference below has to ask this same function what
+        a FULL screen would come out as on this panel, and asking it is the
+        only way the two can never disagree — a second copy of the ceiling
+        arithmetic is exactly the drift this project keeps paying for."""
         num, den = {"2/3": (2, 3), "1/2": (1, 2)}.get(self._quality.get("res"), (1, 1))
         factor = num / den
-        pw, ph = self._panel_size(panel)
+        pw, ph = self._panel
         if pw and ph:
             factor = min(factor,
                          max(pw, ph) / max(src_w, src_h),
@@ -181,6 +196,77 @@ class H264Session:
         w = max(2, int(round(src_w * factor)) // 2 * 2)
         h = max(2, int(round(src_h * w / src_w)) // 2 * 2)
         return None if (w, h) == (src_w, src_h) else (w, h)
+
+    def _encoded_size(self) -> tuple[int, int]:
+        """The pixels the encoder really produces per frame — the scale when
+        there is one, else the crop, else the whole frame."""
+        if self._scale:
+            return self._scale
+        return self._crop[:2] if self._crop else (self.width, self.height)
+
+    def _reference_size(self) -> tuple[int, int]:
+        """"A FULL SCREEN ON THIS PANEL" — the picture a ladder rung's number
+        was written for. The same `_scale_size` the real size goes through,
+        asked about the uncropped frame, so the client's own resolution step
+        is inside BOTH sides of the ratio and cancels: a full-screen Data
+        saver session comes out at factor 1.0 and is byte for byte what it is
+        today."""
+        full = (self.width, self.height)
+        return self._scale_size(*full) or full
+
+    def _bitrate(self) -> tuple[str, float]:
+        """THE BITRATE FOLLOWS THE PIXELS — on cellular only (T79).
+
+        `-b:v`/`-maxrate` used to be the rung's flat number whatever the
+        encoder was actually fed, so 20 Mbps on a quarter-size crop was the
+        same ceiling as 20 Mbps on the full 4K. Two things kept that honest
+        until now and both are stated rather than glossed over: `-maxrate` is
+        a CEILING, so a static screen still costs its own ~3.6 Mbps and the
+        waste only appears under motion; and `_scale_size` already equalises a
+        full desktop and a 2x2 cell onto the panel, where the bits per pixel
+        are IDENTICAL. The overspend lives exactly where the crop falls BELOW
+        the panel and is therefore sent at its own small size — measured at
+        roughly 2.2x the reference's bits per pixel — and the zoom crop (T76)
+        is what turns that from an edge case into the normal one.
+
+        The rules, in the owner's order:
+
+        - ON WI-FI, NOTHING CHANGES. A focused layout coming out sharper at
+          the same nominal quality is a FEATURE (see `_scale_size`), and it is
+          not touched. "On cellular" is asked of `config.is_data_saver` — the
+          saving profile the phone already sends over the existing path, never
+          a new field.
+        - the factor is encoded pixels over reference pixels, so the rungs
+          keep meaning what they say;
+        - DOWNWARD ONLY, absolutely: `min` against the rung's own number, so
+          no arithmetic here can ever raise what the phone is not allowed to
+          raise (task 131);
+        - and a FLOOR, so a small crop cannot collapse into mush.
+
+        `BITRATE_FLOOR_BPS` is a JUDGEMENT and is meant to be tuned on the
+        real device. 800 kbps was chosen because it is generous rather than
+        marginal at the sizes this can reach: his own quarter-width layout
+        encodes 484x1048 at 10 fps, where 800 kbps is ~0.16 bits per pixel per
+        frame — nearly double the ~0.096 the reference full screen gets at the
+        same rung. So the floor never produces a picture worse than the one he
+        already accepts, and every saving above it is real."""
+        nominal = config.bitrate_for_level(self._quality.get("bitrate"))
+        if not config.is_data_saver(self._quality.get("bitrate")):
+            return nominal, 1.0
+        ew, eh = self._encoded_size()
+        rw, rh = self._reference_size()
+        # The RAW ratio — deliberately not pre-clamped to 1. There is exactly
+        # ONE downward-only clamp, on the line below, so the rule "never above
+        # the rung" is enforced in one place a gate can drive; a second clamp
+        # here would make that one unreachable and therefore unprovable, and
+        # an unprovable rule is how this project's regressions ship. It also
+        # keeps the LOGGED factor honest about what the arithmetic really
+        # produced.
+        factor = (ew * eh) / max(1, rw * rh)
+        nominal_bps = config.bitrate_bps(nominal)
+        applied = min(nominal_bps, max(BITRATE_FLOOR_BPS,
+                                       int(nominal_bps * factor)))
+        return str(applied), factor
 
     def _ffmpeg_cmd(self) -> list[str]:
         # Quality overrides downscale / drop fps INSIDE this client's own
@@ -212,7 +298,10 @@ class H264Session:
         if 0 < fps < source_fps:
             chain.append(f"fps={fps}")
         filters = ["-vf", ",".join(chain)] if chain else []
-        bitrate = config.bitrate_for_level(self._quality.get("bitrate"))
+        # Decided in __init__ (T79) so the number and the factor that produced
+        # it can be logged with the session — a bitrate that is never printed
+        # cannot be told apart from a bitrate that was simply not spent.
+        bitrate = self.bitrate
         return [
             SETTINGS.ffmpeg_path, "-hide_banner", "-loglevel", "error",
             # yuv420p in, not bgr24: capture.py hands us I420 (task 130 — half
@@ -480,9 +569,15 @@ class H264Manager:
             # server.log must show the REAL numbers the encoder was built with
             # (owner order 2026-08-12), not a claim that a cap exists.
             scale = (" scale %dx%d" % session._scale) if session._scale else " scale none"
-            logger.info("H.264 session opened — %d active, codec %s, %dx%d%s%s",
+            # …and the BITRATE beside them (T79). His own reason for wanting
+            # it: without the applied number and the factor there is no way to
+            # tell "the encoder did not spend because nothing moved" from "we
+            # capped it".
+            rate = " bitrate %s (x%.3f of the rung)" % (
+                session.bitrate, session.bitrate_factor)
+            logger.info("H.264 session opened — %d active, codec %s, %dx%d%s%s%s",
                         len(self._sessions), session.codec, session.width,
-                        session.height, crop, scale)
+                        session.height, crop, scale, rate)
             return session
 
     def close_session(self, session: H264Session) -> None:

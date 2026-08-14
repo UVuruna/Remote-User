@@ -841,3 +841,60 @@ def input_gate(step, run) -> None:
     step("0b11/6  KEY SPECIAL LOSS GATE — a Backspace/arrow/Tab/Esc that "
          "lands nowhere is TOLD to the phone (tests/test_key_special_loss.py)")
     run([sys.executable, str(PROJECT_DIR / "tests" / "test_key_special_loss.py")])
+
+    # T76 + T79, owner report 2026-08-14, and he is angry because he asked for
+    # this at the very start and was told yes. In translation: "why is
+    # downscaling done even when the picture is zoomed — when we zoom on the
+    # phone we are enlarging that downscaled resolution so the picture is
+    # blurry, even though the whole screen does not need to be sent then
+    # either, because we are in a slice just like in layout mode".
+    #
+    # The gap was one missing wire, not a missing feature: `H264Session`
+    # cropped only from a region fed by a focused LAYOUT, and the `viewport`
+    # message the pinch has always sent was DISCARDED in H.264 mode — a rule
+    # the docs stated as deliberate ("JPEG mode only"), which is what made it
+    # unfindable for a whole round. Fix: the settled visible rect feeds the
+    # SAME region path (client/zoom-crop.js's floor + settle, pure and driven
+    # whole here; `layout_api.stream_crop`, the ONE derivation both the
+    # session opener and the choke point ask), with the focused layout's
+    # region as a FLOOR the crop may never widen past.
+    #
+    # T79 rides the same function because T76 is what makes it matter: a crop
+    # below the panel is sent at its own small size, where a flat `-b:v` spent
+    # ~2.2x the reference's bits per pixel — an edge case until the zoom made
+    # it the normal one. On cellular ONLY (read off the saving profile the
+    # phone already sends — never a new field), the number follows the pixels,
+    # downward only, with a floor.
+    #
+    # Fail-closed because every defect here is invisible in code review and
+    # obvious on his screen: a blurry zoom looks exactly like a working one in
+    # a diff, a crop that widens past a layout leaks windows he chose not to
+    # show, a settle that fires mid-gesture is a blink storm nobody can read
+    # off a variable, and a bitrate that is capped looks precisely like a
+    # bitrate that was simply not spent.
+    step("0b13/6  ZOOM CROP GATE — the zoom crops the encoder (never wider "
+         "than the layout), settles before it blinks, and on cellular the "
+         "bitrate follows the pixels (tests/test_zoom_crop.py)")
+    run([sys.executable, str(PROJECT_DIR / "tests" / "test_zoom_crop.py")])
+
+    # T74, owner decision 2026-08-13. The Traffic window printed `SM-S938B`
+    # and `23073RPBFG` and he asked for the real model names. He rejected a
+    # hand-written table AND a bundled offline database with one reason — a
+    # snapshot works only until a new phone appears — and chose an ONLINE
+    # lookup, once per device code ever, cached forever. The source is
+    # Google's own published Play-supported-devices CSV (no key, no payment,
+    # and it names a phone before the owner can buy it).
+    #
+    # Fail-closed because both ways this can go wrong are INVISIBLE to him.
+    # A guessed or near-miss name is worse than the code it replaces (a
+    # planted `startswith` fallback in `resolve()` left the first version of
+    # this gate entirely green). And a negative cached from a TIMEOUT rather
+    # than from a real answer would blind this PC to that phone forever,
+    # looking exactly like the honest fallback while it did so — which is why
+    # the resolver answers UNDECIDED as a third state and only ever writes
+    # down the other two. The network is FAKED throughout; the PARSER is
+    # driven over a real slice of Google's own published bytes, in its
+    # published UTF-16, so a renamed column fails here and not on his PC.
+    step("0b12/6  DEVICE NAME GATE — a model code becomes a real name once, "
+         "cached forever, and never a guess (tests/test_device_names.py)")
+    run([sys.executable, str(PROJECT_DIR / "tests" / "test_device_names.py")])

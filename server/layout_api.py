@@ -40,6 +40,127 @@ def mon_rect(stream) -> tuple[int, int, int, int]:
     return rect_for_size(stream.width, stream.height, stream.monitor_index)
 
 
+# THE ZOOM IS A CROP TOO (owner report 2026-08-14, T76, and he is right that
+# he asked for this at the start): "why is there downscaling even when the
+# picture is zoomed ... when we zoom on the phone we are enlarging that
+# downscaled resolution so the picture is blurry, even though the whole screen
+# does not need to be sent then either, because we are in a slice just like in
+# layout mode" (lang-ok: owner quote, translated). The machinery for a crop
+# already existed WHOLE — it was simply only ever fed by a focused layout, and
+# `viewport` (the message the pinch has always sent) was thrown away outright
+# in H.264. Now it feeds the same path.
+#
+# HOW MUCH THE RECT MUST MOVE before a session is rebuilt. Every region change
+# costs one ffmpeg rebuild and one visible blink; a pinch that ends a hair
+# from where it ended last time must not buy him one. Measured on the rect the
+# encoder crops to, in monitor-normalized units, so it means the same thing on
+# every monitor.
+ZOOM_MIN_DELTA = 0.02
+
+
+def _norm(rect: dict) -> dict:
+    """A wire rect clamped into the unit square and never inside-out. The
+    phone computes it from its own canvas arithmetic; a rect that walks off
+    the frame would crop nothing or crop garbage."""
+    x = min(max(float(rect.get("x", 0.0)), 0.0), 1.0)
+    y = min(max(float(rect.get("y", 0.0)), 0.0), 1.0)
+    w = min(max(float(rect.get("w", 1.0)), 0.0), 1.0 - x)
+    h = min(max(float(rect.get("h", 1.0)), 0.0), 1.0 - y)
+    return {"x": x, "y": y, "w": w, "h": h}
+
+
+def _is_full(r: dict) -> bool:
+    return r["x"] <= 0.0 and r["y"] <= 0.0 and r["w"] >= 1.0 and r["h"] >= 1.0
+
+
+def stream_crop(conn: dict) -> dict | None:
+    """WHAT THE ENCODER MUST CROP TO — the ONE derivation of it.
+
+    Two facts feed it and neither is a region of its own: `conn["region"]` is
+    what the focused LAYOUT frames (unchanged in meaning — the phone locks its
+    view to it, clamps the cursor to it and letterboxes around it, so it may
+    never be overwritten by a pinch), and `conn["zoom"]` is the settled rect
+    the finger is actually looking at, or None. There is exactly one expression
+    that turns the pair into a crop, and both callers ask it: web.py when it
+    opens a session, and `send_layout_state` when it decides whether the
+    running session still matches. Two reads of one function, so the equality
+    there stays exact — the rule that made the layout crop trustworthy.
+
+    THE LAYOUT'S REGION IS THE FLOOR, NEVER THE CEILING (constraint 13's whole
+    model): inside a layout the crop is the INTERSECTION, so zooming in narrows
+    further and zooming out returns to exactly the layout's region and no
+    wider. A wider crop would stream windows he is not meant to be shown. At
+    the desktop there is no floor, and zooming all the way out gives None —
+    the full frame, byte for byte the old world, with no residue.
+
+    A zoom that misses the layout entirely (a stale rect from the layout he
+    just left) falls back to the region rather than to an empty crop."""
+    region = conn.get("region")
+    zoom = conn.get("zoom")
+    if not zoom:
+        return region
+    z = _norm(zoom)
+    if not region:
+        return None if _is_full(z) else z
+    r = _norm(region)
+    x1, y1 = max(r["x"], z["x"]), max(r["y"], z["y"])
+    x2 = min(r["x"] + r["w"], z["x"] + z["w"])
+    y2 = min(r["y"] + r["h"], z["y"] + z["h"])
+    if x2 - x1 <= 0.0 or y2 - y1 <= 0.0:
+        return region
+    # NOTHING NARROWED? Then the answer is the region OBJECT itself. The
+    # comparison in `send_layout_state` is an exact dict equality against what
+    # the running session was opened with, and floating point is why this is
+    # tested on the EDGES rather than on the recomputed width: `x2 - x1` for
+    # an intersection that clipped nothing is not bit-identical to the
+    # region's own `w` (his own region: 0.3736979166666667 + 0.25234375 -
+    # 0.3736979166666667 is not 0.25234375), so a pinch the floor absorbed
+    # whole would have blinked the picture for a rounding error.
+    if (x1, y1, x2, y2) == (r["x"], r["y"], r["x"] + r["w"], r["y"] + r["h"]):
+        return region
+    return {"x": x1, "y": y1, "w": x2 - x1, "h": y2 - y1}
+
+
+def _rect_delta(a: dict | None, b: dict | None) -> float:
+    """How far one rect moved from another, as the largest edge move. None vs
+    a rect is a whole change (the full frame is a different picture)."""
+    if (a is None) != (b is None):
+        return 1.0
+    if a is None:
+        return 0.0
+    return max(abs(a[k] - b[k]) for k in ("x", "y", "w", "h"))
+
+
+async def zoom_region(ws, layouts, conn: dict, msg: dict) -> None:
+    """The phone's `viewport` in H.264 mode: the rect the finger has SETTLED
+    on (client/render.js only sends it once the gesture has stopped — see
+    there for why a settle is an observation and not an estimate).
+
+    Two guards before anything is rebuilt, because a rebuild is a blink:
+    the rect must have moved by at least `ZOOM_MIN_DELTA`, and the CROP it
+    produces must really differ from the one the running session was opened
+    with. Inside a layout the second guard is what makes a pinch that stays
+    within the region free — the crop is the intersection, and an intersection
+    that has not changed is not a new session.
+
+    An old page never sends this message at all and behaves exactly as before;
+    a JPEG connection never reaches here (web.py routes it to the JPEG
+    streamer's own viewport, untouched)."""
+    rect = _norm(msg)
+    zoom = None if _is_full(rect) else rect
+    if _rect_delta(zoom, conn.get("zoom")) < ZOOM_MIN_DELTA:
+        return
+    before = stream_crop(conn)
+    conn["zoom"] = zoom
+    if stream_crop(conn) == before:
+        return
+    # THE SAME CHOKE POINT, deliberately (owner order 2026-08-12's rule): one
+    # place compares the live crop against what the encoder really holds and
+    # ends the mismatched session. A second teardown path is exactly what the
+    # 2026-08-07 orphan was made of.
+    await send_layout_state(ws, layouts, conn)
+
+
 async def send_layout_state(ws, layouts, conn: dict, resuming=None) -> None:
     """`resuming` is the index the SERVER is about to focus by itself, and it
     exists to stop one layout switch from being done twice (2026-08-12, read
@@ -59,6 +180,7 @@ async def send_layout_state(ws, layouts, conn: dict, resuming=None) -> None:
     Optional and absent by default: a frame that says nothing about a resume
     changes nothing, so an older page keeps its own restore exactly as it was.
     """
+    was_active = conn["active"]
     state = await asyncio.to_thread(layouts.state, conn["active"], conn["region"])
     if resuming is not None:
         state["resuming"] = resuming
@@ -69,6 +191,14 @@ async def send_layout_state(ws, layouts, conn: dict, resuming=None) -> None:
     conn["active"] = state["active"]
     if state["active"] is None:
         conn["region"] = None
+    # A DIFFERENT PICTURE IS A DIFFERENT ZOOM (T76). The settled zoom rect
+    # belongs to the layout it was measured in — carrying it into the next one
+    # (or onto the desktop) would crop the new picture to the old one's slice
+    # for as long as it takes the phone to settle and say otherwise. Cleared
+    # in the ONE place every focus, removal and prune-shift passes through,
+    # rather than at each of their call sites.
+    if state["active"] != was_active:
+        conn["zoom"] = None
     # THE ENCODER FOLLOWS THE REGION (owner order 2026-08-12: "why would the
     # phone decode something it does not see"). In H.264 the per-client ffmpeg
     # crops to the focused layout's region, and a crop lives inside a running
@@ -90,7 +220,11 @@ async def send_layout_state(ws, layouts, conn: dict, resuming=None) -> None:
     # `layouts.state`, never before it — a reset that read a region the prune
     # was about to null would crop to a dead layout and be thrown away by the
     # very next state.
-    if conn.get("reset_stream") and conn.get("region") != conn.get("stream_region"):
+    # `stream_crop` and not `conn["region"]` since T76: the crop is the layout
+    # region NARROWED by the settled zoom, and the comparison must be against
+    # the same derivation web.py opened the session with — one function, two
+    # reads, exact equality.
+    if conn.get("reset_stream") and stream_crop(conn) != conn.get("stream_region"):
         conn["reset_stream"]()
     await ws.send_text(json.dumps(state))
 

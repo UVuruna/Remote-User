@@ -18,6 +18,22 @@ const SCROLL_FLING_MIN = 0.35;
 const SCROLL_FLING_DECAY = 0.004;
 const VIEWPORT_MARGIN = 0.15;
 const VIEWPORT_THROTTLE_MS = 150;
+// --- The zoom's own crop (T76) --------------------------------------------
+// In H.264 every region change rebuilds this client's ffmpeg and the picture
+// blinks once. He has accepted ONE blink per finished gesture and no more, so
+// the rect is sent only once the gesture has STOPPED — which is an
+// observation, not an estimate of anyone's timing: the fingers are ours to
+// watch (no pointer down, and the view transform identical across two
+// samples). ~280 ms of stillness at 60 ms sampling is the "settled" threshold
+// — long enough that the pause between a pinch and its follow-up pan does not
+// count as an end, short enough that the sharp picture arrives while his hand
+// is still on the way down.
+const ZOOM_SAMPLE_MS = 60;
+const ZOOM_SETTLE_MS = 280;
+// How far the rect must have moved before it is worth a blink at all — the
+// same rule the server enforces (layout_api.ZOOM_MIN_DELTA), here so a
+// one-pixel drift does not even reach the wire.
+const ZOOM_MIN_DELTA = 0.02;
 const RECONNECT_MS = 2000;
 // --- Losing the route (owner report 2026-08-07) ----------------------------
 // *"kada nismo na wi-fi mreži ... dešava nam se prekid veze, i ovo 'Try again'
@@ -200,6 +216,12 @@ function layoutAnchorPos() {
 // Region-streaming state — declared before the first updateViewport() call.
 let lastSentViewport = { x: 0, y: 0, w: 1, h: 1 };
 let viewportTimer = null;
+// The H.264 zoom-crop settle (T76): the last rect really sent, the last
+// sample taken, when that sample last CHANGED, and the sampler itself.
+let lastSentZoom = null;
+let zoomSample = null;
+let zoomChangedAt = 0;
+let zoomSettleTimer = null;
 
 function setStatus(cls, text) {
   statusEl.className = cls;

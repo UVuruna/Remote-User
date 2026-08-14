@@ -55,7 +55,10 @@ Loads FIRST of the six client scripts (see [Client (folder)](../___client.md))
 - **Gesture state** — `touchMode` (single active mode: move/drag/scroll/pan),
   `pointers` (Map of active PointerEvents), `pinch`, `primary` (the steering
   finger).
-- **Region-streaming state** — `lastSentViewport`, `viewportTimer`.
+- **Region-streaming state** — `lastSentViewport`, `viewportTimer`, and (T76)
+  the H.264 zoom-crop settle: `lastSentZoom`, `zoomSample`, `zoomChangedAt`,
+  `zoomSettleTimer`, with `ZOOM_SAMPLE_MS` / `ZOOM_SETTLE_MS` /
+  `ZOOM_MIN_DELTA` beside the other tunables. See [Zoom Crop](zoom-crop.md).
 - `setStatus(cls, text)` — sets the status pill's class + text.
 - Global `error`/`unhandledrejection` listeners route uncaught page errors
   into the status pill (visible, never a silent dead page).

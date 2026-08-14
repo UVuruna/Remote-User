@@ -76,6 +76,45 @@ windows covered 75 % of the picture his phone was showing.
 ### Flow
 - [Layout API — Flow](../__flow/layout_api.md)
 
+## What the encoder crops to — ONE derivation (T76, 2026-08-14)
+
+`stream_crop(conn)` is the only expression in this codebase that turns the
+connection into an encoder crop, and both callers ask it: [Web Layer](web.md)
+when it opens a session (`req_region`), and `send_layout_state` when it decides
+whether the running one still matches. Two reads of one function, so the
+equality at the choke point stays exact — the rule that made the layout crop
+trustworthy in the first place.
+
+Two facts feed it and neither is a second region:
+
+- `conn["region"]` — what the focused LAYOUT frames. Unchanged in meaning: the
+  phone locks its view to it, clamps the cursor to it and letterboxes around
+  it, so a pinch may never overwrite it.
+- `conn["zoom"]` — the settled rect the finger is really looking at, or None.
+  Written only by `zoom_region`, the H.264 half of the `viewport` message.
+
+**The layout's region is the FLOOR, never the ceiling.** Inside a layout the
+crop is the INTERSECTION: zooming in narrows further, zooming out returns to
+exactly the layout's region and no wider, and a rect that misses the layout
+entirely (a stale one from the layout just left) falls back to the region
+rather than to an empty crop. At the desktop there is no floor, and a
+full-frame zoom gives None — the old world, with no residue.
+
+`zoom_region` guards twice before anything is rebuilt, because a rebuild is a
+visible blink: the rect must have moved at least `ZOOM_MIN_DELTA` (0.02, the
+same threshold the page holds), and the CROP it produces must really differ
+from the one the running session was opened with. A pinch the floor absorbs
+whole therefore costs nothing — and the "nothing narrowed" case returns the
+region OBJECT rather than a recomputed dict, because `x2 - x1` for an
+intersection that clipped nothing is not bit-identical to the region's own `w`
+and a rounding error must not blink his picture.
+
+A focus change clears `conn["zoom"]` in `send_layout_state` — the one place
+every focus, removal and prune-shift passes through. The settled rect belongs
+to the picture it was measured in, and carrying it into the next layout would
+crop the new picture to the old one's slice. Gate: `tests/test_zoom_crop.py`,
+fail-closed in `setup/gates.py` (0b13/6).
+
 ## The encoder is rebuilt BEFORE the phone is told (2026-08-12)
 
 `send_layout_state` ends a session whose crop no longer matches *above* the

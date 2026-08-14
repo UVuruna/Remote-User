@@ -126,6 +126,14 @@ STANDARD = {
     # sentence in its __about; there is no state machine and nothing worth a
     # flow diagram.
     "server/traffic_devices.py",
+    # New 2026-08-13 (T74, owner decision — a model code becomes the name he
+    # calls the phone, via ONE online lookup against Google's own Play device
+    # list, cached forever). Standard, not Algorithmic: it is a fetch, a
+    # dict lookup and a worker queue. The decisions it carries (WHY that
+    # source survives "a new phone appears", and why a network failure is a
+    # third answer rather than a negative) are prose in its __about — there
+    # is no state machine and nothing worth a flow diagram.
+    "server/device_names.py",
     # New 2026-08-09 (owner request, task 142 — the phone drew one fixed
     # arrow): the live HCURSOR matched against the system cursors and turned
     # into a name. Standard, not Algorithmic — the only decision it carries
@@ -148,6 +156,13 @@ STANDARD = {
     # pattern). Standard: one formula, no flow worth a diagram — the WHY
     # lives in its header and its __about.
     "client/view-anchor.js",
+    # New 2026-08-14 (owner report T76 — "why is downscaling done even when
+    # the picture is zoomed"): the zoom's own crop — the layout FLOOR the crop
+    # may never widen past, and the gesture SETTLE that keeps one region
+    # change per finished gesture. Pure so tests/test_zoom_crop.py can run it
+    # whole (the view-anchor.js pattern). Standard: two small rules, no flow
+    # worth a diagram — the WHY lives in its header and its __about.
+    "client/zoom-crop.js",
     # New 2026-08-12 (owner report — "native 20 Mbps still sends no
     # picture"): the device's own H.264 decode ceiling — level table, smooth-
     # fps pick, cap and runtime-backstop rules — split into a pure module so

@@ -684,6 +684,27 @@ def bitrate_for_level(level: str | None) -> str:
     return rung["bitrate"]
 
 
+def is_data_saver(level: str | None) -> bool:
+    """Is this client running the SAVING PROFILE — the bottom rung?
+
+    THE ONE NOTION OF "ON CELLULAR" THIS SERVER HAS, and it is deliberately
+    not a new one (T79, owner: "for this house it does not matter that much
+    but for Mobile Data it is very important that we optimise the BITRATE too"
+    — lang-ok: owner quote, translated). The phone's "save data on mobile
+    networks" tick plus the `Android.transport()` bridge already send exactly
+    this rung as the client's override while the handset is on cellular
+    (client/quality.js `effectiveQuality`), so the fact is already on the
+    wire. Inventing a `transport` field beside it would be a SECOND answer to
+    one question, and the two would drift the first time one of them moved.
+
+    Reading it this way also, correctly, covers the owner picking Data saver
+    BY HAND: a person who asked to spend less data means it whether or not the
+    radio agrees. Legacy `"low"` from an older page is translated onto the
+    rung first, exactly as `bitrate_for_level` does."""
+    name = str(level or "")
+    return LEGACY_BITRATE_LEVELS.get(name, name) == DATA_SAVER_LEVEL["id"]
+
+
 def quality_override(msg: dict) -> dict | None:
     """The per-client encoder overrides carried by a `quality` message — or by
     the `auth` message's own `quality` field (task 203, 2026-08-11).

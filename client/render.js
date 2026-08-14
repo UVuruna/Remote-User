@@ -75,6 +75,11 @@ function resetViewHome() {
   computeBaseRect();
   computeViewHome();
   view = { ...viewHome };
+  // A new picture is a new zoom (T76): the rect last sent belonged to the
+  // layout/monitor being left, and comparing the next one against it would
+  // measure two different pictures against each other. The server clears its
+  // own copy on the same event, in `send_layout_state`.
+  lastSentZoom = null;
   redraw();
 }
 
@@ -486,8 +491,69 @@ function currentViewport() {
   return { x: x1, y: y1, w: x2 - x1, h: y2 - y1 };
 }
 
+// THE RECT THE FINGER IS REALLY LOOKING AT, monitor-normalized (T76).
+//
+// `currentViewport()` above answers the same question for the JPEG path, and
+// this one adds the rule H.264 cannot do without: INSIDE A LAYOUT THE REGION
+// IS THE FLOOR. The crop may only ever narrow further into the layout, never
+// widen past it — a wider crop would stream windows the layout deliberately
+// does not show, and the server clamps it a second time for the same reason.
+// At home in a layout this returns exactly `layoutRegion`, so pinching back
+// out lands on the layout's own crop and no wider; on the desktop at home it
+// returns the full frame.
+// The arithmetic itself lives in client/zoom-crop.js, PURE so the gate runs
+// it whole — this function only measures the canvas and hands it over.
+function zoomVisibleRect() {
+  const D = drawnRect();
+  const x1 = Math.max(0, -D.x / D.w);
+  const y1 = Math.max(0, -D.y / D.h);
+  const x2 = Math.min(1, (canvas.width - D.x) / D.w);
+  const y2 = Math.min(1, (canvas.height - D.y) / D.h);
+  const floor = viewLocked() ? layoutRegion : { x: 0, y: 0, w: 1, h: 1 };
+  return zoomFloorRect({ x: x1, y: y1, w: x2 - x1, h: y2 - y1 },
+                       floor, VIEWPORT_MARGIN);
+}
+
+// THE GESTURE IS WATCHED, NEVER TIMED (T76, and constraint 15's rule applied
+// the only way it can be here). Constraint 15 forbids estimating how long
+// ANOTHER program needs — but this is not another program: it is the owner's
+// own hand, and a hand is observable. The sampler asks two questions it can
+// answer for certain — is a pointer still down, and is the view transform the
+// same as it was 60 ms ago — and only counts stillness while both say yes.
+// The 280 ms is the give-up point of that observation, not a guess about how
+// long a pinch takes; a gesture that never stops never sends, however long it
+// lasts.
+function scheduleZoomRegion() {
+  // A fresh event means the gesture is alive again — the stillness restarts.
+  zoomSample = null;
+  if (zoomSettleTimer) return;
+  zoomSettleTimer = setInterval(() => {
+    const rect = zoomVisibleRect();
+    const step = zoomSettleStep(
+      { sample: zoomSample, changedAt: zoomChangedAt },
+      { now: Date.now(), pointersDown: pointers.size > 0, rect,
+        settleMs: ZOOM_SETTLE_MS });
+    zoomSample = step.sample;
+    zoomChangedAt = step.changedAt;
+    if (!step.settled) return;
+    clearInterval(zoomSettleTimer);
+    zoomSettleTimer = null;
+    // Settled. One blink is the price of a sharp picture; a drift too small
+    // to see is not worth one, so the server is told nothing at all.
+    if (lastSentZoom && zoomRectDelta(lastSentZoom, rect) < ZOOM_MIN_DELTA) return;
+    lastSentZoom = rect;
+    send({ type: "viewport", ...rect });
+  }, ZOOM_SAMPLE_MS);
+}
+
 function scheduleViewport() {
-  if (streamMode !== "jpeg") return; // region streaming is a JPEG-path concept
+  if (streamMode !== "jpeg") {
+    // H.264: the encoder crops to what he is really looking at (T76) — the
+    // same `viewport` message, settled first because a region change there
+    // costs a session rebuild.
+    scheduleZoomRegion();
+    return;
+  }
   if (viewportTimer) return;
   viewportTimer = setTimeout(() => {
     viewportTimer = null;

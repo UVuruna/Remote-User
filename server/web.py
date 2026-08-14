@@ -5,7 +5,9 @@ Protocol (see project CLAUDE.md):
   current cursor, no coordinates), press (one half of a CLICK/HOLD mouse
   button — down on finger-land, up on lift, at the current cursor),
   pointer_move, scroll (vertical `ticks` + optional horizontal `hticks`),
-  viewport (JPEG mode only), key_text, key_special,
+  viewport (the rect the phone really shows — the JPEG streamer crops to it,
+  and since T76 the H.264 encoder does too, narrowed by the focused layout's
+  region and never wider), key_text, key_special,
   chord, monitor_switch, screenshot (optionally with the region the phone
   views + paste=true — crops and injects Ctrl+V), tts_info (the voices the
   phone can speak with, once per connection — the desktop Settings window
@@ -477,7 +479,10 @@ async def _h264_loop(ws: WebSocket, manager, token: str, conn: dict,
         # crops to the focused layout — the phone never decodes pixels it does
         # not show). Read ONCE: layout_api compares the live conn["region"]
         # against the copy recorded after open; a second read would race a focus.
-        req_region = conn.get("region")
+        # ONE derivation of the crop, asked here and in layout_api's choke
+        # point (T76): the focused layout's region NARROWED by the settled
+        # zoom rect, or None for the full frame.
+        req_region = layout_api.stream_crop(conn)
         try:
             # Default args bind THIS iteration's push — `push` itself rebinds
             # next iteration, and a late callback from a dying session must
@@ -777,7 +782,16 @@ async def _receive_input(ws: WebSocket, injector: InputInjector, stream, token: 
                 stream.set_viewport(
                     float(msg["x"]), float(msg["y"]), float(msg["w"]), float(msg["h"])
                 )
-            # H.264 streams the full frame — a viewport from a stale client is noise
+            else:
+                # THE ZOOM CROPS THE ENCODER TOO (owner report 2026-08-14,
+                # T76). This message used to be dropped on the floor in H.264
+                # — "H.264 streams the full frame" — so a pinch magnified
+                # pixels that had already been downscaled and asked the PC for
+                # nothing. It now feeds the SAME region path the focused
+                # layout feeds; the phone only sends it once the gesture has
+                # settled, and layout_api decides whether the crop really
+                # changed before anything is rebuilt.
+                await layout_api.zoom_region(ws, layouts, conn, msg)
         elif kind == "chord":
             chord_text = str(msg["chord"])
             injector.press_chord(chord_text)

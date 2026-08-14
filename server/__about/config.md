@@ -180,6 +180,14 @@ picture than 12 Mbps at 4K was. It is a default, never an override — a saved
 door against this table, including by READING the literal out of
 `client/quality.js`, so the manual pick and the automatic switch cannot drift.
 
+`is_data_saver(level)` (T79, 2026-08-14) is the ONE question "is this client
+on cellular" this server can honestly ask: the bottom rung IS the saving
+profile the phone sends while the handset is on mobile data, so the fact is
+already on the wire and no `transport` field was invented beside it. Legacy
+`"low"` is translated onto the rung first, exactly as `bitrate_for_level`
+does. Used by `H264Session._bitrate` — see
+[H.264 Streamer](h264_streamer.md) → The bitrate follows the pixels.
+
 **THREE INDEPENDENT AXES, not a fourth theme name** (owner correction
 2026-08-08, replacing the 2026-08-07 shape). His own words: *"teme postoje
 samo dve, svetla i tamna … a ove komande … on može da bude obojen, neobojen,
