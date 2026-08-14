@@ -266,6 +266,18 @@ class H264Session:
         nominal_bps = config.bitrate_bps(nominal)
         applied = min(nominal_bps, max(BITRATE_FLOOR_BPS,
                                        int(nominal_bps * factor)))
+        if applied >= nominal_bps:
+            # NOTHING WAS REDUCED, so nothing may CHANGE — the rung's own
+            # string goes to ffmpeg exactly as it always did. Returning
+            # `str(nominal_bps)` here would be numerically identical and still
+            # wrong: "a full-screen saver session is unchanged to the bit" is a
+            # promise about what the encoder is handed and what the log prints,
+            # not only about the arithmetic. It was measured, not reasoned —
+            # `tests/test_quality_reset.py` holds the rung as the literal "2M"
+            # on purpose (so a silent change to a shipped default fails there
+            # by name with a readable number) and this turned it into
+            # "2000000", failing two checks and the whole build.
+            return nominal, factor
         return str(applied), factor
 
     def _ffmpeg_cmd(self) -> list[str]:

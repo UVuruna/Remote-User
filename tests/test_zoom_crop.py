@@ -57,6 +57,7 @@ from pathlib import Path
 PROJECT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT / "server"))
 
+import config  # noqa: E402
 import h264_streamer  # noqa: E402
 import layout_api  # noqa: E402
 
@@ -386,8 +387,23 @@ def _sess(region, quality, panel=PANEL):
 
 
 def _bv(session) -> str:
+    """The exact string handed to ffmpeg as `-b:v`. Compared as a STRING only
+    where the promise is "unchanged" — see `_bvi` for every numeric check."""
     cmd = session._ffmpeg_cmd()
     return cmd[cmd.index("-b:v") + 1]
+
+
+def _bvi(session) -> int:
+    """`-b:v` in bits per second, parsed the way ffmpeg reads it.
+
+    Never `_bvi(session)`: a rung's own string is `"2M"`, not a decimal.
+    That is deliberate on the product side — when the arithmetic reduces
+    nothing, the rung's string goes out exactly as it always did, so a
+    full-screen saver session is unchanged in what ffmpeg is handed and in
+    what the log prints, not merely in its arithmetic. A gate that assumed a
+    decimal was asserting the SHAPE of the number instead of its value.
+    """
+    return config.bitrate_bps(_bv(session))
 
 
 def check_wi_fi_bitrate_is_untouched() -> None:
@@ -412,6 +428,28 @@ def config_bitrate(level):
     return _c.bitrate_for_level(level)
 
 
+def check_an_unreduced_bitrate_keeps_the_rung_s_own_string() -> None:
+    """UNCHANGED MEANS UNCHANGED — the string, not merely the value.
+
+    This defect SHIPPED and was caught by the build, not by this gate: when
+    the arithmetic reduced nothing, `_bitrate` still returned a decimal, so a
+    full-screen saver session handed ffmpeg "2000000" where it had always been
+    handed "2M". Numerically identical and still wrong twice over — it is what
+    the session log prints, and `tests/test_quality_reset.py` deliberately
+    holds the rung as the literal "2M" so a silent change to a shipped default
+    fails there by name. Two of its checks went red and the whole build
+    stopped. The promise is asserted HERE too, beside the feature that broke
+    it, rather than left to a gate that happens to notice.
+
+    PLANTED DEFECT this catches: deleting the `applied >= nominal_bps` branch
+    in `H264Session._bitrate`."""
+    s = _sess(None, dict(CELL))
+    assert s.bitrate == config_bitrate("saver"), (
+        f"an unreduced cellular session handed ffmpeg {s.bitrate!r} instead of "
+        f"the rung's own {config_bitrate('saver')!r}")
+    print("  an unreduced bitrate is the rung's own string, not a decimal")
+
+
 def check_a_cellular_full_screen_is_also_untouched() -> None:
     """The reference is "a full screen on this panel", so the rung keeps
     meaning what it says: on cellular WITHOUT a crop the number is the rung's
@@ -426,7 +464,7 @@ def check_a_cellular_full_screen_is_also_untouched() -> None:
     for panel in (PANEL, {"w": 1280, "h": 720}, {"w": 2400, "h": 1080}, None):
         s = _sess(None, dict(CELL), panel)
         assert s.bitrate_factor == 1.0, (panel, s.bitrate_factor)
-        assert int(_bv(s)) == rung, \
+        assert _bvi(s) == rung, \
             f"a cellular full screen on panel {panel} was scaled to {_bv(s)}"
     print(f"  cellular full screen: {rung} bps on every panel — the rung, unchanged")
 
@@ -438,13 +476,13 @@ def check_a_cellular_below_panel_crop_spends_less() -> None:
     lay = _sess(dict(HIS_REGION), dict(CELL))
     assert lay.bitrate_factor < 0.5, (
         f"his quarter-width layout still claims x{lay.bitrate_factor} of the rung")
-    assert int(_bv(lay)) < int(_bv(full)), (
+    assert _bvi(lay) < _bvi(full), (
         f"a below-panel crop still asks for {_bv(lay)} — the reported overspend")
     ew, eh = lay._encoded_size()
     rw, rh = full._encoded_size()
     # The bits per pixel per frame may never come out WORSE than the reference
     # picture he already accepts — that is what the floor is for.
-    assert int(_bv(lay)) / (ew * eh) >= int(_bv(full)) / (rw * rh), \
+    assert _bvi(lay) / (ew * eh) >= _bvi(full) / (rw * rh), \
         "the crop is given fewer bits per pixel than a full screen"
     print(f"  cellular layout crop {ew}x{eh}: {_bv(lay)} bps vs {_bv(full)} "
           f"full-screen — x{lay.bitrate_factor:.3f}")
@@ -460,7 +498,7 @@ def check_the_bitrate_is_never_scaled_up() -> None:
         for region in (None, dict(HIS_REGION)):
             s = _sess(region, dict(CELL), panel)
             assert s.bitrate_factor <= 1.0, s.bitrate_factor
-            assert int(_bv(s)) <= rung, (
+            assert _bvi(s) <= rung, (
                 f"panel {panel} region {region} raised the bitrate to {_bv(s)} "
                 f"above the rung's {rung}")
     # AND THE CLAMP ITSELF, at the method boundary (the test_layout_member.py
@@ -472,7 +510,7 @@ def check_the_bitrate_is_never_scaled_up() -> None:
     s = _sess(dict(HIS_REGION), dict(CELL))
     s._reference_size = lambda: (16, 16)
     raised, factor = s._bitrate()
-    assert int(raised) <= rung, (
+    assert config.bitrate_bps(raised) <= rung, (
         f"a reference smaller than the crop raised the bitrate to {raised} — "
         f"the phone may never raise the bitrate (task 131)")
     print("  no panel, crop or arithmetic ever raises the rung's number")
@@ -483,7 +521,7 @@ def check_a_tiny_crop_lands_on_the_floor() -> None:
     the SAME wall however small the crop gets."""
     tiny = _sess({"x": 0.5, "y": 0.5, "w": 0.02, "h": 0.02}, dict(CELL))
     tinier = _sess({"x": 0.5, "y": 0.5, "w": 0.005, "h": 0.005}, dict(CELL))
-    assert int(_bv(tiny)) == int(_bv(tinier)) == h264_streamer.BITRATE_FLOOR_BPS, \
+    assert _bvi(tiny) == _bvi(tinier) == h264_streamer.BITRATE_FLOOR_BPS, \
         f"a deep zoom fell through the floor: {_bv(tiny)} / {_bv(tinier)}"
     print(f"  a deep zoom stops at the {h264_streamer.BITRATE_FLOOR_BPS} bps floor")
 
@@ -532,6 +570,7 @@ CHECKS = [
     check_an_old_client_is_exactly_the_old_world,
     check_a_focus_change_drops_the_zoom_it_was_measured_in,
     check_wi_fi_bitrate_is_untouched,
+    check_an_unreduced_bitrate_keeps_the_rung_s_own_string,
     check_a_cellular_full_screen_is_also_untouched,
     check_a_cellular_below_panel_crop_spends_less,
     check_the_bitrate_is_never_scaled_up,
