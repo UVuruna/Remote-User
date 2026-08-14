@@ -42,7 +42,6 @@ Everything is drawn with QPainter. No new dependency for a diagnostic window.
 
 import html
 import logging
-import math
 import time
 from pathlib import Path
 
@@ -59,21 +58,38 @@ import traffic_history
 from config import SETTINGS
 from gui.theme import TOKENS, card_shadow, device_color
 from gui.sizing import WrapLabel, clamp_to_screen, settle_minimum
+from gui.traffic_axis import (
+    X_TICK_COUNT, _alpha, _axis_unit, _format_axis_value, _x_label, _x_ticks,
+    _y_ticks, human_bytes, human_rate,
+)
 
 logger = logging.getLogger(__name__)
 
 REFRESH_MS = 1000
 # The spans the owner picks between. "recent" spans read the live in-memory
-# ring buffer (traffic.METER.history); "since_start"/"all" read traffic.csv
+# ring buffer (traffic.METER.history); every other kind reads traffic.csv
 # through traffic_history.HistoryJob — a slower, off-thread path, so they
-# carry no `seconds` (their own start time is computed, not fixed).
+# carry no `seconds` (their own start time is computed, not fixed: see
+# `_history_since`).
+#
+# "Last 10 hours" and "Today" are the owner's own request (2026-08-14): the
+# live ring buffer stops at one hour and the next step up was his whole
+# server session, so an evening's work had no picture between the two. They
+# are file-backed like the two long spans and cost the same read — a short
+# span is NOT a cheaper read, because `read_history` still scans past every
+# row before its `since` (measured numbers in `traffic_history.py`'s
+# docstring). What they buy is a picture at a readable time resolution, not
+# a faster one.
 SPANS = [
     ("Last 2 minutes", "recent", 120),
     ("Last 10 minutes", "recent", 600),
     ("Last hour", "recent", 3600),
+    ("Last 10 hours", "last10h", None),
+    ("Today", "today", None),
     ("Since start", "since_start", None),
     ("All (from file)", "all", None),
 ]
+TEN_HOURS_S = 10 * 3600
 
 def out_color() -> QColor:      # PC -> phone
     """FUNCTIONS, not constants (build round R3). These were two module-level
@@ -91,116 +107,29 @@ def in_color() -> QColor:       # phone -> PC (the warning hue, reused as a
 
 CHART_MIN = QSize(560, 260)                   # readable at the smallest useful
 #                                                size, with room for the axes
-Y_TICK_MIN = 4           # the owner's "4-5 gridlines" — inclusive of zero
-Y_TICK_MAX = 5
-X_TICK_COUNT = 4
 HOVER_MARGIN = 12       # px between the crosshair and the card
 
 
-def human_bytes(n: float) -> str:
-    """Bytes as the owner reads them, never as raw digits."""
-    for unit, step in (("GB", 1 << 30), ("MB", 1 << 20), ("kB", 1 << 10)):
-        if n >= step:
-            return f"{n / step:.1f} {unit}"
-    return f"{int(n)} B"
+def history_since(kind: str, now: float) -> float | None:
+    """Where a file-backed span STARTS, as unix time — `None` for "All",
+    which means "the recording's own beginning" to `read_history`.
 
-
-def human_rate(n: float) -> str:
-    return human_bytes(n) + "/s"
-
-
-def _alpha(hex_color: str, alpha: int) -> QColor:
-    """A theme color at a given alpha. Chart chrome (gridlines, idle band,
-    crosshair) needs translucency a bare QPainter has no QSS to give it — but
-    the HUE still has to come from a token, never a hardcoded white: a fixed
-    white-alpha grid would all but vanish on the light palette headed for
-    this file. Read at paint time (cheap — a handful of calls per frame) so
-    it never caches a stale value if TOKENS is ever made theme-live."""
-    color = QColor(hex_color)
-    color.setAlpha(alpha)
-    return color
-
-
-# ═══════════════════════════ AXIS MATH ═══════════════════════════
-def _y_ticks(peak: float, min_ticks: int = Y_TICK_MIN,
-             max_ticks: int = Y_TICK_MAX) -> list[float]:
-    """Round gridlines on the 1 / 2 / 5 x 10^n ladder, instead of an
-    arbitrary max-and-zero — the owner's "4-5 gridlines".
-
-    Every step on the ladder within a wide magnitude range is scored by how
-    many gridlines it would produce (0 counted); a count already inside
-    [min_ticks, max_ticks] scores 0, otherwise the distance to the nearer
-    bound — so the search always prefers a step that lands the count in
-    range over the "nearest round number" a naive single-formula pick would
-    choose (that naive version put a real peak of 1024 at exactly 3 lines,
-    one short of the owner's floor, because 1/2/5 steps are coarse near
-    round-number boundaries)."""
-    if peak <= 0:
-        return [0.0]
-    best_step = best_score = best_n = None
-    for exp in range(-3, 8):
-        magnitude = 10 ** exp
-        for mult in (1, 2, 5):
-            step = mult * magnitude
-            n = math.ceil(peak / step) + 1   # ticks 0..top, top always >= peak
-            if n < 2:
-                continue
-            if n < min_ticks:
-                score = min_ticks - n
-            elif n > max_ticks:
-                score = n - max_ticks
-            else:
-                score = 0
-            if (best_score is None or score < best_score
-                    or (score == best_score and n > best_n)):
-                best_score, best_step, best_n = score, step, n
-    return [i * best_step for i in range(best_n)]
-
-
-def _x_ticks(start: float, end: float, count: int) -> list[float]:
-    span = max(1e-6, end - start)
-    if count <= 1:
-        return [start]
-    return [start + span * i / (count - 1) for i in range(count)]
-
-
-# One axis, one unit — picked ONCE from the axis's own TOP value, never per
-# label (Finding 2, 2026-08-07 grade): the old per-tick `human_rate()` call
-# let a single axis read "1.5 kB/s" over "1000 B/s" over "500 B/s" — three
-# gridlines, three units, because each one picked its own independently. The
-# boundaries below match `human_bytes()`'s own ladder so the axis and every
-# other number this window prints never disagree about where "kB" starts.
-_AXIS_UNITS = (("GB/s", 1 << 30), ("MB/s", 1 << 20), ("kB/s", 1 << 10), ("B/s", 1))
-
-
-def _axis_unit(axis_max: float) -> tuple[str, float]:
-    """The unit the WHOLE axis reads in, chosen from its top gridline."""
-    for unit, step in _AXIS_UNITS:
-        if axis_max >= step:
-            return unit, float(step)
-    return "B/s", 1.0
-
-
-def _format_axis_value(value: float, divisor: float) -> str:
-    """A bare number in the axis's chosen unit — the unit itself is stated
-    once (see `_axis_unit`), so no label repeats it. Whole numbers stay
-    whole ("2"); anything the ladder's 1/2/5 steps leave fractional gets one
-    decimal ("1.5") — the same rounding `human_bytes` already uses."""
-    scaled = value / divisor
-    if abs(scaled - round(scaled)) < 0.05:
-        return str(int(round(scaled)))
-    return f"{scaled:.1f}"
-
-
-def _x_label(t: float, span_s: float) -> str:
-    """Granularity scales with how wide the span is — seconds matter at
-    2 minutes, a date matters at four months."""
-    local = time.localtime(t)
-    if span_s <= 3600:
-        return time.strftime("%H:%M:%S", local)
-    if span_s <= 86400:
-        return time.strftime("%H:%M", local)
-    return time.strftime("%b %d", local)
+    A pure function of (kind, now) on purpose: it is the one place a span's
+    meaning is written down, so its gate can assert "Today" really is local
+    midnight (never `now - 86400`) without building a window.
+    """
+    if kind == "since_start":
+        return traffic.PROCESS_START
+    if kind == "last10h":
+        return now - TEN_HOURS_S
+    if kind == "today":
+        # LOCAL midnight — the owner's own day, not UTC's and not a rolling
+        # 24 hours: "Today" that starts at 04:17 because that is when the
+        # clock was 24 hours ago would be a different question than the one
+        # he asked.
+        lt = time.localtime(now)
+        return time.mktime((lt.tm_year, lt.tm_mon, lt.tm_mday, 0, 0, 0, 0, 0, -1))
+    return None      # "all"
 
 
 def _point_from_sample(sample) -> traffic_history.Point:
@@ -239,6 +168,16 @@ def _coalesce(points: list, target: int) -> list:
         for p in chunk:
             if p.device and (p.out_avg or p.in_avg or p.out_max or p.in_max):
                 chunk_device = p.device
+        # ...and, exactly like the disk reader, the device CARRIES FORWARD
+        # across a merged pixel that moved no bytes at all. Without this the
+        # live spans have the same defect the long spans had (owner report
+        # 2026-08-14): the line sits at zero most of the time, an all-idle
+        # pixel keeps "", and "" paints as the neutral grey. The two paths
+        # must agree or the same session colours differently depending on
+        # which span happens to be open — which is what
+        # `test_coalesce_agrees_with_the_disk_reader` exists to hold.
+        if not chunk_device and merged:
+            chunk_device = merged[-1].device
         merged.append(traffic_history.Point(
             t=chunk[len(chunk) // 2].t,
             out_avg=sum(p.out_avg for p in chunk) / len(chunk),
@@ -458,7 +397,21 @@ class TrafficChart(QWidget):
             if not multi_device:
                 return base
             if not device:
-                return QColor(device_color(-1))
+                # THE DIRECTION'S OWN COLOUR, NEVER GREY (owner order
+                # 2026-08-14: "svaki uredjaj na grafikonu se prikazuje svojom
+                # bojom" — and grey is not a device's colour, it is the
+                # absence of an answer). A stretch reaches here only when the
+                # recording itself never named a device for it: `traffic.csv`
+                # grew its `device` column on 2026-08-13, so every row older
+                # than that carries no attribution at all and no amount of
+                # carrying-forward (see `traffic_history.read_history`) can
+                # invent one. Painting it the first-known device's colour
+                # WOULD invent one. So it falls back to exactly what this
+                # chart drew before device colours existed — the direction's
+                # own blue/orange — which claims nothing about whose traffic
+                # it was. Grey survives for the `Nobody connected` band alone,
+                # which is a different statement and has its own legend row.
+                return base
             return QColor(device_color(traffic_devices.REGISTRY.index_for(device)))
 
         # Direction vs identity: once `multi_device` colours BOTH series by
@@ -591,7 +544,10 @@ class TrafficWindow(QDialog):
         self._history_points: list = []
         self._history_kind: str | None = None
         self._history_next_at = 0.0
-        self._history_loading = False
+        # NO `_history_loading` flag lives here any more: the overlay is
+        # derived from `HistoryJob.pending_key` (see `_refresh`), because a
+        # flag only a successful poll could clear is a flag that outlives
+        # the work the moment a result is dropped.
 
         root = QVBoxLayout(self)
         root.setContentsMargins(18, 16, 18, 14)
@@ -833,10 +789,10 @@ class TrafficWindow(QDialog):
     # -- refresh -----------------------------------------------------------
 
     def _on_span_changed(self) -> None:
-        """A span switch to a long span drops whatever the last long span
-        showed and forces an immediate read on the next tick — a stale
-        "All (from file)" graph must never be shown under a "Since start"
-        label just because the file read has not finished yet."""
+        """A span switch to a file-backed span drops whatever the last one
+        showed and forces an immediate read — a stale "All (from file)"
+        graph must never be shown under a "Since start" label just because
+        the file read has not finished yet."""
         idx = self.span_combo.currentData()
         if idx is None:
             return
@@ -849,15 +805,22 @@ class TrafficWindow(QDialog):
 
     def _maybe_start_history(self, kind: str, since: float | None) -> None:
         """Kicks off a background read when the span just changed, or the
-        periodic re-read interval elapsed — never while one is already
-        running (its result would just be discarded by the token check)."""
-        if self._history.running:
-            return
+        periodic re-read interval elapsed.
+
+        A read already in flight for THIS SAME span is left alone (a second
+        one would read the same file for the same answer). A read in flight
+        for a DIFFERENT span is SUPERSEDED, never waited for — that early
+        return was the 2026-08-14 defect: a span switch made while a read
+        was running started no read of its own, and the older read's data
+        then landed and was drawn under the new span's label.
+        """
         now = time.time()
-        if kind != self._history_kind or now >= self._history_next_at:
-            self._history_loading = True
-            self._history.start(since, SETTINGS.traffic_history_max_buckets)
-            self._history_next_at = now + SETTINGS.traffic_history_refresh_s
+        if kind == self._history_kind and now < self._history_next_at:
+            return
+        if self._history.pending_key == kind:
+            return
+        self._history.start(kind, since, SETTINGS.traffic_history_max_buckets)
+        self._history_next_at = now + SETTINGS.traffic_history_refresh_s
 
     def _rebuild_device_rows(self, known: list[dict]) -> None:
         """One row per device — a DRAWN colour swatch (`_LegendMark`) + a
@@ -908,14 +871,25 @@ class TrafficWindow(QDialog):
                 points = [_point_from_sample(s) for s in samples]
                 self.chart.set_data(points, now - seconds, now, name, downsampled=False)
             else:
-                since = traffic.PROCESS_START if kind == "since_start" else None
+                since = history_since(kind, now)
                 self._maybe_start_history(kind, since)
                 result = self._history.poll()
                 if result is not None:
-                    self._history_points = result
-                    self._history_kind = kind
-                    self._history_loading = False
-                loading = self._history_loading and not self._history_points
+                    got_kind, points = result
+                    # THE RULE, and it is the whole fix (2026-08-14): a
+                    # result is adopted only under ITS OWN key. A read for a
+                    # span the owner has clicked away from is DROPPED — it is
+                    # never re-labelled as the span now selected.
+                    if got_kind == kind:
+                        self._history_points = points
+                        self._history_kind = kind
+                # The overlay is read off the JOB, never off a flag of our
+                # own: it is up exactly while a read for the SELECTED span is
+                # in flight and we hold nothing for that span yet, so it
+                # cannot outlive the work (the job clears `pending_key` in a
+                # `finally`) and it cannot linger over another span's data.
+                loading = (self._history.pending_key == kind
+                           and self._history_kind != kind)
                 start = since if since is not None else (
                     self._history_points[0].t if self._history_points else now)
                 self.chart.set_data(self._history_points, start, now, name,

@@ -35,6 +35,23 @@ case this module can be handed is a server that has been running for a few
 seconds against a recording that goes back months, and the full scan that
 produces is the cost measured in the round report.
 
+**MEASURED (2026-08-14, the owner's own PC)** — this module's honest answer
+to "what does the biggest span cost", because his report was that the long
+spans "load for a very long time, if not never":
+
+| file | rows | span | `read_history` |
+|------|------|------|----------------|
+| his real `traffic.csv`, 3.7 MB | 138,540 | 2.5 days | **0.23 s** |
+| the rotation ceiling: a full 20 MB live file + its one backup, 53 MB | 1.28 M | ~14 months | **2.5 s** |
+
+So no span this module can be asked for costs more than a few seconds, and
+"All (from file)" was NOT the reason the window appeared to load forever —
+that was `gui/traffic_window.py`'s job bookkeeping (see its own doc). The
+second row is the number to quote for a SHORT span too: `since` decides
+which rows are AGGREGATED, never which are READ, so at that same 53 MB
+ceiling "Last 10 hours" cost **2.1 s** against "All"'s 2.5 s. The saving is
+the fold, not the I/O.
+
 `max_buckets` (`SETTINGS.traffic_history_max_buckets`) bounds the DISK read
 only — comfortably above any real window width. The chart itself
 (`gui/traffic_window.py`'s `_coalesce`) further downsamples to its actual
@@ -49,6 +66,19 @@ in this project uses one, and THE STRUCTURE LAW wants one way to do a thing,
 not two. A `_token` discards a still-running read's result if a newer one was
 started first (span switched again before the first read finished).
 
+**Every read carries a KEY** — the caller's own name for the span — and the
+key travels WITH the result: `poll()` answers `(key, points)`, never bare
+points (owner report 2026-08-14). The caller used to poll bare points and
+stamp them with whatever span was selected when they arrived, so a read
+still in flight when the owner changed span had its data drawn under the NEW
+span's label. A key that rides with the data makes that impossible to write
+rather than merely unlikely. `pending_key` is the second half: the key of
+the newest read in flight, `None` when nothing runs, and the one thing the
+window's loading overlay is derived from — cleared in a `finally`, so an
+overlay read off it cannot outlive the work. A SUPERSEDED read clears
+nothing at all (before this round `_run` cleared `running` unconditionally,
+so a stale thread could clear the flag belonging to a newer read).
+
 ## Connections
 ### Uses
 - [Config](config.md) — `traffic_csv_path`/`traffic_csv_backups` (which
@@ -60,15 +90,20 @@ started first (span switched again before the first read finished).
 
 ## Classes
 ### Point
-One chart point — `t`, `out_avg`/`out_max`, `in_avg`/`in_max`, `clients`.
+One chart point — `t`, `out_avg`/`out_max`, `in_avg`/`in_max`, `clients`,
+`device`. A bucket that moved no bytes INHERITS the device last seen before
+it (T87, owner report 2026-08-14): a quiet stretch belongs to whoever was
+connected across it, and leaving it blank painted 96% of his chart the
+neutral grey. `""` therefore means only "no device has been named yet at this
+point in the file".
 For a raw per-second sample `avg == max`; for a downsampled bucket they
 differ on purpose, so a spike inside a wide bucket is never smoothed into
 invisibility by the average alone.
 
 ### HistoryJob
-The background-thread wrapper: `start(since, max_buckets)`, `poll()` (the
-newest ready result, once), `running`/`elapsed_s` (read-only from the GUI
-side).
+The background-thread wrapper: `start(key, since, max_buckets)`, `poll()`
+(the newest ready result, once, as `(key, points)`),
+`running`/`pending_key`/`elapsed_s` (read-only from the GUI side).
 
 ## Functions
 - `read_history(since, max_buckets)`: the streaming downsample itself

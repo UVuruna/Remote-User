@@ -77,12 +77,43 @@ Everything is `QPainter` on a plain `QWidget` — no new dependency for a
 diagnostic window, and the chart takes every spare pixel (`Expanding`), so it
 grows with the window instead of leaving slack beside it.
 
-## The two long spans
-Selecting **Since start** or **All (from file)** starts a `traffic_history.
-HistoryJob` on a background thread — never the UI thread, since either span
+## The file-backed spans
+The live in-memory ring buffer only reaches one hour, so everything longer
+reads `traffic.csv`: **Last 10 hours**, **Today** (local midnight — his day,
+never a rolling 24 hours), **Since start** and **All (from file)**. The two
+shorter ones are the owner's request of 2026-08-14 — an evening's work had
+no picture between "Last hour" and his whole server session. They are not a
+cheaper READ (the reader still scans past every row before their `since`;
+measured numbers in [Traffic History](../../__about/traffic_history.md)),
+they are a readable time resolution. Each span's start is one pure function,
+`history_since(kind, now)`.
+
+Selecting any of them starts a `traffic_history.HistoryJob` on a background thread — never the UI thread, since either span
 can mean reading a file with ~4 months of one-second rows. While the first
 read for a freshly-picked span is still running the chart shows "Reading
-traffic.csv…" instead of a stale or empty graph; once loaded it re-reads
+traffic.csv…" instead of a stale or empty graph;
+
+**Which span's data is on the screen is decided by the RESULT's own key**
+(owner report 2026-08-14: "All (from file)" and "Since start" drew the same
+four hours, his screenshots reading 11:48 -> 15:42 for both). Two rules,
+both structural:
+
+- a span switch made while a read is in flight **supersedes** it and issues
+  its own read. The old code returned early on `HistoryJob.running`, so the
+  switch started nothing, and the older read's data landed one tick later
+  and was stamped with the newly selected span.
+- a polled result is adopted **only under its own key** (`got_kind == kind`)
+  and otherwise dropped — never re-labelled.
+
+The overlay follows from the same place: it is up exactly while
+`HistoryJob.pending_key` names the SELECTED span and nothing for that span
+has arrived. There is no window-owned `_history_loading` flag any more — a
+flag only a successful poll can clear is stuck the first time a result is
+dropped, which is the shape of "loads forever".
+
+Gate: `tests/test_traffic_spans.py`, fail-closed in `setup/gates.py`
+(0b15/6).
+ once loaded it re-reads
 every `SETTINGS.traffic_history_refresh_s` (30 s) so a long watch still sees
 new samples land, without re-scanning the file on every 1 s GUI tick. A
 window **resize never re-reads the file** — `traffic_history` already bounds
@@ -154,6 +185,7 @@ confirming the crosshair card's edge-flip still holds.
 ## Connections
 ### Uses
 - [Traffic Meter](../../__about/traffic.md) — `history()`, `snapshot()`, `reset()`, `PROCESS_START`
+- [Traffic Axis](traffic_axis.md) — `human_bytes`, the gridline ladder, the one-unit axis and the time labels
 - [Traffic History](../../__about/traffic_history.md) — `HistoryJob`, `Point` — the two long spans
 - [Theme](theme.md) — tokens and the card shadow (chart chrome — gridlines,
   idle band, crosshair, hover card — reads `TOKENS` at paint time, alpha-blended
@@ -172,11 +204,10 @@ Both series can colour by DEVICE instead of by direction: each run of
 consecutive points sharing one `Point.device` is drawn in that device's own
 colour (`gui.theme.device_color(traffic_devices.REGISTRY.index_for(device))`),
 so a smaller-resolution phone's lighter cost is visible against a tablet's.
-An unattributed point (`device == ""` — nobody connected, or a pre-`device`-
-column CSV row) draws `device_color(-1)`, the neutral "unknown" grey — never a
-real device's colour and never the plain direction colour either, since
-neither claim ("this is device X" / "this is the ordinary single-device
-picture") is true of it.
+An unattributed point (`device == ""` — a stretch the recording itself never
+named a device for) draws the DIRECTION's own colour, never a real device's
+colour and **never the neutral grey** — see the T87 section below, which is
+where that rule was decided and why the previous sentence here was wrong.
 
 **T75 correction (owner report 2026-08-14, from his own screenshot):** the
 predicate deciding whether to colour by device at all used to be "does the
@@ -221,3 +252,45 @@ Everything else in this file already read `TOKENS` at paint time and needed no
 change; `_alpha()` had even been written with this round in mind ("the HUE
 still has to come from a token, never a hardcoded white: a fixed white-alpha
 grid would all but vanish on the light palette headed for this file").
+
+
+## T87 — a quiet stretch is not an unknown one (owner report 2026-08-14)
+
+He reported it three times in a row and in capitals: the chart had gone grey.
+It had, and this session's own T75 fix is what exposed it — while the
+`multi_device` predicate was wrong the chart drew everything in the plain
+direction colours, so the grey had nowhere to show.
+
+MEASURED on his own `traffic.csv` and his own registry, before anything was
+changed and before anything was explained to him:
+
+    Today   652 buckets -> device mix {'': 625, '412x892': 9,  '686x1098': 18}
+    All    1030 buckets -> device mix {'': 1002, '686x1098': 25, '412x892': 3}
+
+96% of the picture carried no device. Two independent causes, fixed
+separately because they are two different statements:
+
+1. **A bucket that moved no bytes kept `""`.** `traffic_history.read_history`
+   only recorded a device for a bucket that actually sent something, and the
+   line sits at zero almost all of the time. The device now CARRIES FORWARD
+   across quiet buckets: a quiet stretch belongs to the device that was
+   connected across it and simply sent nothing. `gui/traffic_window.py`'s live
+   merge (`_coalesce`) carries it forward by the same rule, or the same
+   session would colour differently depending on which span is open — a hole
+   the gate did not have until planting found it blind.
+2. **What is left genuinely has no attribution.** `traffic.csv` grew its
+   `device` column on 2026-08-13, so every older row carries none and no
+   carry-forward can invent one — 80% of his file. Painting those the
+   first-known device's colour WOULD invent one, so they fall back to the
+   direction's own blue/orange: exactly what this chart drew before device
+   colours existed, and a claim about direction rather than about whose
+   traffic it was.
+
+Grey now belongs to the `Nobody connected` band alone, which is a different
+statement and has its own legend row.
+
+Gate: four checks in `tests/test_traffic_devices.py` (T87), each proven by
+planting its own defect. The third exists BECAUSE planting found it blind, and
+the fourth is the pre-existing readback check whose assertion had to be
+corrected — it had been demanding the grey, which is the defect written down
+as a promise.

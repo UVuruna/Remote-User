@@ -51,13 +51,13 @@ backwards once it has advanced.
 
 ```mermaid
 flowchart TB
-    A["TrafficWindow: span combo -> 'Od starta' / 'Sve'"] --> B["HistoryJob.start(since, max_buckets)"]
+    A["TrafficWindow: span combo -> Last 10 hours / Today / Since start / All"] --> B["HistoryJob.start(key, since, max_buckets)"]
     B --> C["token += 1; threading.Thread(daemon=True).start()"]
     C --> D["background thread: read_history(...)"]
     D --> E{"token still current?"}
     E -- yes --> F["_result = points; running = False"]
     E -- no (a newer span was picked meanwhile) --> G["result discarded"]
-    H["TrafficWindow._refresh(), every 1 s"] --> I["HistoryJob.poll()"]
+    H["TrafficWindow._refresh(), every 1 s"] --> I["HistoryJob.poll() -> (key, points)"]
     I --> J{"result ready?"}
     J -- yes --> K["chart shows the new points; loading = False"]
     J -- no --> L["keep showing the last points (or 'Reading traffic.csv…' if none yet)"]

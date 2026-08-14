@@ -461,11 +461,109 @@ def test_coalesce_agrees_with_the_disk_reader() -> bool:
     return len(merged) == 1 and merged[0].device == "deviceB"
 
 
+def test_a_quiet_bucket_inherits_the_last_known_device() -> bool:
+    """T87 (owner report 2026-08-14, shouted three times: "sad je sivo nije
+    vise u BOJI"). A bucket that moved NO bytes must inherit the device last
+    seen before it, never fall back to "" — because "" is drawn through
+    `theme.device_color(-1)`, the neutral grey, and the line sits at zero
+    almost all of the time. MEASURED on his own file before the fix: of 652
+    buckets in "Today" only 27 ever carried a device, so 625 were grey and
+    the picture read as "the colour feature broke".
+
+    A quiet stretch is not an unknown one — it belongs to the device that was
+    connected across it and simply sent nothing.
+
+    PLANTED DEFECT: drop the carry-forward and this check goes red while the
+    two attribution checks above stay green — which is exactly how the defect
+    survived a whole round: they only ever assert who owns an ACTIVE bucket.
+    """
+    with tempfile.TemporaryDirectory() as d:
+        path = Path(d) / "traffic.csv"
+        now = float(int(time.time()))
+        lines = ["time,out_bytes,in_bytes,clients,device" + "\n"]
+        # one active second, then eight dead ones — the ordinary shape of a
+        # recording that ran all night with the phone connected once.
+        for i, (out, dev) in enumerate([(1000, "deviceA")] + [(0, "")] * 8):
+            ts = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(now - 9 + i))
+            lines.append("%s,%d,0,1,%s%s" % (ts, out, dev, "\n"))
+        path.write_text("".join(lines), encoding="utf-8")
+
+        import config
+        original = config.SETTINGS.traffic_csv_path
+        object.__setattr__(config.SETTINGS, "traffic_csv_path", path)
+        try:
+            points = traffic_history.read_history(now - 9, 9)
+        finally:
+            object.__setattr__(config.SETTINGS, "traffic_csv_path", original)
+        if len(points) < 3:
+            return False
+        return all(p.device == "deviceA" for p in points[1:])
+
+
+def test_a_stretch_before_any_device_is_never_grey() -> bool:
+    """T87, the other half. Rows written before `traffic.csv` grew its
+    `device` column (2026-08-13) carry no attribution AT ALL, and no
+    carry-forward can invent one — 80% of his own file is such rows. Painting
+    them the first-known device's colour would be inventing a fact, so the
+    chart falls back to the DIRECTION's own colour (what it drew before device
+    colours existed), which claims nothing about whose traffic it was.
+
+    What it may never do is paint them the neutral grey: grey is the
+    `Nobody connected` band's statement and has its own legend row.
+
+    PLANTED DEFECT: restore `return QColor(device_color(-1))` for an
+    unattributed stretch and this check goes red."""
+    source = (Path(__file__).resolve().parents[1] / "server" / "gui"
+              / "traffic_window.py").read_text(encoding="utf-8")
+    marker = "def _segment_color("
+    if marker not in source:
+        return False
+    body = source[source.index(marker):]
+    body = body[:body.index("        # Direction vs identity")]
+    return ("return base" in body) and ("device_color(-1)" not in body)
+
+
+def test_the_live_merge_also_carries_the_device_forward() -> bool:
+    """T87, and it exists because PLANTING FOUND IT BLIND. The disk reader's
+    carry-forward was gated the moment it was written; deleting the SAME rule
+    from `gui/traffic_window.py`'s live merge (`_coalesce`) reddened nothing
+    at all — so the three live spans, which are the ones the owner actually
+    watches, could have gone back to grey with every gate green.
+
+    The two paths must agree, or one session colours differently depending on
+    which span happens to be open.
+
+    PLANTED DEFECT: remove the `if not chunk_device and merged:` carry-forward
+    from `_coalesce` and this check goes red — and only this one."""
+    tw = importlib.import_module("gui.traffic_window")
+    Point = traffic_history.Point
+    now = float(int(time.time()))
+    # one active point, then five dead ones: the ordinary shape of a live span
+    # a moment after the phone stops sending.
+    chunk = [Point(t=now - 5, out_avg=1000, out_max=1000, in_avg=0, in_max=0,
+                   clients=1, device="deviceA")]
+    for i in range(5):
+        chunk.append(Point(t=now - 4 + i, out_avg=0, out_max=0, in_avg=0,
+                           in_max=0, clients=0, device=""))
+    merged = tw._coalesce(chunk, 3)
+    if len(merged) < 2:
+        return False
+    return all(m.device == "deviceA" for m in merged)
+
+
 ATTRIBUTION_CHECKS = [
     ("a bucket is attributed to the last device that actually sent bytes",
      test_bucket_device_is_last_active_sender),
     ("a trailing idle second never steals a bucket's colour",
      test_idle_second_never_steals_the_buckets_colour),
+    ("T87: a quiet bucket inherits the last known device (never grey)",
+     test_a_quiet_bucket_inherits_the_last_known_device),
+    ("T87: a stretch the file never attributed falls back to the direction "
+     "colour, never the neutral grey",
+     test_a_stretch_before_any_device_is_never_grey),
+    ("T87: the LIVE merge carries the device forward too (found blind "
+     "by planting)",
+     test_the_live_merge_also_carries_the_device_forward),
     ("the live chart's bucket-merge agrees with the disk reader",
      test_coalesce_agrees_with_the_disk_reader),
 ]
@@ -587,12 +685,20 @@ def test_chart_line_check_catches_a_single_colour_regression() -> bool:
     REGISTRY (`traffic_devices.REGISTRY.all()`), not from the points — so
     blanking every point's `device` no longer disables per-device colouring
     (that predicate is unreachable from a point at all any more); it makes
-    every point UNATTRIBUTED, which must draw the neutral "unknown" colour
-    (`device_color(-1)`), never a real device's colour AND never the plain
-    direction colour either — a point with no device is not the same claim
-    as "this span holds one device". Both stretches must therefore read as
-    the SAME neutral colour, proving the readback check above is sensitive
-    to a broken attribution path."""
+    every point UNATTRIBUTED. Both stretches must then read as ONE colour
+    instead of two, which is what proves the readback check above is
+    sensitive to a broken attribution path.
+
+    T87 CHANGED WHICH COLOUR THAT IS, on the owner's own order of 2026-08-14
+    ("svaki uredjaj na grafikonu se prikazuje svojom bojom" — and grey is not
+    a device's colour, it is the absence of an answer). This check used to
+    demand the neutral grey here, and that demand was the defect written down
+    as a promise: his file is 80% rows older than the `device` column, so the
+    grey it required was most of his picture. An unattributed stretch now
+    draws the DIRECTION's own colour — exactly what this chart drew before
+    device colours existed, and a claim about direction rather than about
+    whose traffic it was. Grey belongs to the `Nobody connected` band alone.
+    """
     from gui.theme import device_color
     with _isolated_registry():
         window = _staged_chart_widget()
@@ -606,22 +712,31 @@ def test_chart_line_check_catches_a_single_colour_regression() -> bool:
             plot = chart._plot
             pixmap = chart.grab()
             image = pixmap.toImage()
+            # The colour an unattributed stretch must now read as: the OUT
+            # series' own base. `device_color(-1)` is fetched too, and
+            # asserted ABSENT — a check that only looked for the new colour
+            # would stay green if both were painted somewhere.
+            from gui.traffic_window import out_color
+            expected = out_color()
             unknown = device_color(-1)
 
-            def sample(frac):
+            def sample(frac, target):
                 from PySide6.QtGui import QColor
-                tc = QColor(unknown)
+                tc = QColor(target)
                 xc = int(plot.left() + plot.width() * frac)
                 for x in range(max(plot.left(), xc - 3), min(plot.right(), xc + 4)):
                     for y in range(plot.top(), plot.bottom()):
                         c = image.pixelColor(x, y)
                         if (abs(c.red() - tc.red()) < 30 and abs(c.green() - tc.green()) < 30
                                 and abs(c.blue() - tc.blue()) < 30):
-                            return "unknown"
+                            return "hit"
                 return None
 
-            a, b = sample(0.12), sample(0.37)
-            return a == b == "unknown"
+            a = sample(0.12, expected)
+            b = sample(0.37, expected)
+            grey_a = sample(0.12, unknown)
+            grey_b = sample(0.37, unknown)
+            return (a == b == "hit") and grey_a is None and grey_b is None
         finally:
             window.close()
 
