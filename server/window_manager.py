@@ -193,13 +193,15 @@ def window_at(mon_rect: tuple[int, int, int, int], nx: float, ny: float) -> dict
     root = user32.GetAncestor(hwnd, GA_ROOT)
     if not root or not is_alive(root):
         return None
+    # THE SAME ANSWER THE CREATION LIST GIVES, never a weaker copy of it
+    # (owner report 2026-08-13, his point 3). This used to test title, shell
+    # class and our own pid by hand — three of `is_listable`'s six rules — so
+    # the tap offered him tool windows and cloaked windows that the creation
+    # list, built from `list_windows`, would not carry when he tapped. A
+    # question the app cannot honour is worse than no question.
+    if not is_listable(root):
+        return None
     title = _title(root)
-    if not title or _class_name(root) in _SHELL_CLASSES:
-        return None
-    pid = wintypes.DWORD()
-    user32.GetWindowThreadProcessId(root, ctypes.byref(pid))
-    if pid.value == os.getpid():
-        return None
     path = _process_path(root)
     return {"hwnd": root, "title": title,
             "process": os.path.basename(path), "icon": icon_data_uri(path)}

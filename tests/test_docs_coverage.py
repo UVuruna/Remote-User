@@ -111,6 +111,14 @@ STANDARD = {
     # the pos anchor) is explained in its __about; the geometry itself lives
     # in grids.py and client/view-anchor.js, each with its own coverage.
     "server/layout_registry.py",
+    # Split out of layout_registry.py on 2026-08-14 (THE STRUCTURE LAW — that
+    # file stood at exactly 1,000 lines and `member_hwnds` could not land in
+    # it). By responsibility: the registry owns the WINDOWS, this owns what a
+    # connected phone is TOLD about them. Standard — it carries one real
+    # decision (who is a parent, and which apps' torn-out content still
+    # depends on its origin window) and that decision is explained in its
+    # __about; everything else is assembling a frame from facts read live.
+    "server/layout_state.py",
     # New 2026-08-08 (task 116 forced the split — window_manager.py sat at
     # exactly 1,000 lines). One function, one job: an exe path to a PNG data
     # URI. Standard, not Algorithmic — it carries no decision, only shell+GDI

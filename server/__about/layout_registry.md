@@ -74,7 +74,7 @@ directly, first, finds a half-initialized `window_manager` and fails loudly.
   correction 2026-08-10 — his screenshot: a Chrome layout wearing the ⭐). A
   Chrome/Explorer tab moved to its own window is fully independent, so a close
   destroys nothing there; the star and the ✕ warning therefore consult
-  `PARENT_CLOSE_APPS` (`{"code.exe"}`), judged by the BRANCH layout's process
+  `PARENT_CLOSE_APPS` (`{"code.exe"}`, in [Layout State](layout_state.md) with its only reader since 2026-08-14), judged by the BRANCH layout's process
   — the tab and its origin are the same app, and no extra Win32 call rides the
   state frame. The extraction still records its source for every app
   (`project()` needs it); the rule scoped the STAR, never the record. Gate:
