@@ -479,10 +479,12 @@ async def _h264_loop(ws: WebSocket, manager, token: str, conn: dict,
         # crops to the focused layout — the phone never decodes pixels it does
         # not show). Read ONCE: layout_api compares the live conn["region"]
         # against the copy recorded after open; a second read would race a focus.
-        # ONE derivation of the crop, asked here and in layout_api's choke
-        # point (T76): the focused layout's region NARROWED by the settled
-        # zoom rect, or None for the full frame.
+        # ONE derivation each, asked here and in layout_api's choke point:
+        # the crop = the focused layout's region; the zoom = the settled
+        # pinch's RESOLUTION step (owner design, round 3 of T76 — the pinch
+        # raises the encoded resolution, never the crop; a pan rebuilds nothing).
         req_region = layout_api.stream_crop(conn)
+        req_zoom = layout_api.zoom_step(conn)
         try:
             # Default args bind THIS iteration's push — `push` itself rebinds
             # next iteration, and a late callback from a dying session must
@@ -495,6 +497,7 @@ async def _h264_loop(ws: WebSocket, manager, token: str, conn: dict,
                 owner,
                 req_region,
                 conn.get("panel"),
+                req_zoom,
             )
         except (RuntimeError, OSError) as e:
             owner.release()
@@ -519,12 +522,13 @@ async def _h264_loop(ws: WebSocket, manager, token: str, conn: dict,
             owner.release()
             raise
         first, failures = False, 0
-        # Intention-valued: layout_api compares two reads of ONE source
+        # Intention-valued, both: layout_api compares two reads of ONE source
         # (session.region is the even-rounded crop — other decimals).
         conn["stream_region"] = req_region
+        conn["stream_zoom"] = req_zoom
         try:
             await _send_config(ws, manager, token, codec=session.codec,
-                               region=session.region)
+                               region=session.region, zoom=session._zoom)
             while (chunk := await queue.get()) is not None:
                 await ws.send_bytes(chunk)
         except (WebSocketDisconnect, RuntimeError):
@@ -792,14 +796,10 @@ async def _receive_input(ws: WebSocket, injector: InputInjector, stream, token: 
                     float(msg["x"]), float(msg["y"]), float(msg["w"]), float(msg["h"])
                 )
             else:
-                # THE ZOOM CROPS THE ENCODER TOO (owner report 2026-08-14,
-                # T76). This message used to be dropped on the floor in H.264
-                # — "H.264 streams the full frame" — so a pinch magnified
-                # pixels that had already been downscaled and asked the PC for
-                # nothing. It now feeds the SAME region path the focused
-                # layout feeds; the phone only sends it once the gesture has
-                # settled, and layout_api decides whether the crop really
-                # changed before anything is rebuilt.
+                # THE ZOOM RAISES THE ENCODED RESOLUTION (owner design,
+                # round 3 of T76): the settled rect earns a quantized step
+                # (layout_api.zoom_step), the crop never moves, a pan never
+                # rebuilds — only a step crossing resets the session.
                 await layout_api.zoom_region(ws, layouts, conn, msg)
         elif kind == "chord":
             chord_text = str(msg["chord"])

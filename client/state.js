@@ -18,21 +18,22 @@ const SCROLL_FLING_MIN = 0.35;
 const SCROLL_FLING_DECAY = 0.004;
 const VIEWPORT_MARGIN = 0.15;
 const VIEWPORT_THROTTLE_MS = 150;
-// --- The zoom's own crop (T76) --------------------------------------------
-// In H.264 every region change rebuilds this client's ffmpeg and the picture
-// blinks once. He has accepted ONE blink per finished gesture and no more, so
-// the rect is sent only once the gesture has STOPPED — which is an
-// observation, not an estimate of anyone's timing: the fingers are ours to
-// watch (no pointer down, and the view transform identical across two
-// samples). ~280 ms of stillness at 60 ms sampling is the "settled" threshold
-// — long enough that the pause between a pinch and its follow-up pan does not
-// count as an end, short enough that the sharp picture arrives while his hand
-// is still on the way down.
+// --- The zoom's resolution step (T76, round 3 — the owner's own design) ----
+// The pinch raises the RESOLUTION the unchanged picture is encoded at
+// (layout_api.zoom_step); only a step crossing rebuilds this client's ffmpeg
+// and blinks the picture once — a pan keeps the step and rebuilds nothing.
+// The rect is still sent only once the gesture has STOPPED — an observation,
+// not an estimate of anyone's timing: the fingers are ours to watch (no
+// pointer down, and the view transform identical across two samples). ~280 ms
+// of stillness at 60 ms sampling is the "settled" threshold — long enough
+// that the pause between a pinch and its follow-up pan does not count as an
+// end, short enough that the sharp picture arrives while his hand is still on
+// the way down.
 const ZOOM_SAMPLE_MS = 60;
 const ZOOM_SETTLE_MS = 280;
-// How far the rect must have moved before it is worth a blink at all — the
+// How far the rect must have moved before it is worth the wire at all — the
 // same rule the server enforces (layout_api.ZOOM_MIN_DELTA), here so a
-// one-pixel drift does not even reach the wire.
+// one-pixel drift does not even reach it.
 const ZOOM_MIN_DELTA = 0.02;
 const RECONNECT_MS = 2000;
 // --- Losing the route (owner report 2026-08-07) ----------------------------
@@ -139,6 +140,11 @@ let monitorIndex = 0;      // which of them the stream is showing
 // null = the stream is the full monitor, exactly the old world. render.js
 // maps the video onto this rect; quality.js sizes the decode ceiling by it.
 let streamRegion = null;
+// The resolution step the CURRENT stream was encoded with (round 3 of T76,
+// from `config.stream_zoom`; 1 = the ordinary panel-capped stream). The
+// decode ceiling judges the RAISED width with it — a deep zoom encodes
+// toward native, and a ceiling probed panel-capped must not wave it through.
+let streamZoom = 1;
 let baseRect = { x: 0, y: 0, w: 1, h: 1 };
 let view = { scale: 1, tx: 0, ty: 0 };
 
@@ -222,6 +228,10 @@ let lastSentZoom = null;
 let zoomSample = null;
 let zoomChangedAt = 0;
 let zoomSettleTimer = null;
+// Whether THIS connection has already delivered a `config` (round 3 of T76):
+// the first one always resets the view — a fresh server holds no zoom — and
+// every later one keeps the pinch when the stream's region did not change.
+let h264ConfigSeen = false;
 
 function setStatus(cls, text) {
   statusEl.className = cls;

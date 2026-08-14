@@ -1,22 +1,23 @@
-// THE ZOOM IS A CROP, AND THE CROP IS GEOMETRY (T76, owner report
-// 2026-08-14). In translation: "why is downscaling done even when the picture
-// is zoomed — when we zoom on the phone we are enlarging that downscaled
-// resolution so the picture is blurry, even though the whole screen does not
-// need to be sent then either, because we are in a slice just like in layout
-// mode". Everything a focused layout already had — the encoder crop,
-// `stream_region`, the page mapping the video onto that rect, the decode
-// ceiling sized by it — existed whole; only the PINCH was never wired into
-// it, and its `viewport` message was discarded outright in H.264 mode.
+// THE ZOOM RAISES THE RESOLUTION — THE RECT ONLY REPORTS WHAT IS WATCHED
+// (T76 round 3, the owner's OWN design, 2026-08-14; his words, translated:
+// "the zoom may simply send a better resolution than the phone can accept,
+// because the phone is now looking at part of the screen and not the
+// whole"). Round 2 made this rect a CROP, and the live result condemned it:
+// no base layer under the crop, a rebuild per pan step, a reconnect that
+// erased the zoom. The rect this module settles is now only the MEASUREMENT
+// the server turns into a quantized resolution step (layout_api.zoom_step);
+// the stream always covers the whole picture, so a pan changes nothing and
+// only a pinch across a step boundary costs a blink.
 //
 // Two rules live here, both pure so the gate can run them whole (the
 // view-anchor.js / decode-caps.js pattern — a rule the gate can only read as
 // text is a rule nothing proves):
 //
-//   1. THE FLOOR. Inside a layout the crop may narrow further and may NEVER
-//      widen past the layout's own region — a wider crop would stream windows
-//      the layout deliberately does not show, and would break the model that
-//      makes `layout_state`'s region trustworthy at all.
-//   2. THE SETTLE. Every region change rebuilds this client's ffmpeg and the
+//   1. THE FLOOR. Inside a layout the reported rect may narrow further and
+//      may NEVER widen past the layout's own region — a wider rect would
+//      claim the phone watches windows the layout deliberately does not
+//      show, and would earn a step the region never justifies.
+//   2. THE SETTLE. A step crossing rebuilds this client's ffmpeg and the
 //      picture blinks once, so the rect is sent only when the gesture has
 //      STOPPED. That is an observation and not an estimate: constraint 15
 //      forbids guessing how long ANOTHER program needs, and this measures the

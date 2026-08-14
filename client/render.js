@@ -538,8 +538,9 @@ function scheduleZoomRegion() {
     if (!step.settled) return;
     clearInterval(zoomSettleTimer);
     zoomSettleTimer = null;
-    // Settled. One blink is the price of a sharp picture; a drift too small
-    // to see is not worth one, so the server is told nothing at all.
+    // Settled. Only a step crossing costs a blink (round 3 of T76) — the
+    // server ignores a rect that keeps the step — but a drift too small to
+    // see is not worth even the wire, so it is not sent at all.
     if (lastSentZoom && zoomRectDelta(lastSentZoom, rect) < ZOOM_MIN_DELTA) return;
     lastSentZoom = rect;
     send({ type: "viewport", ...rect });

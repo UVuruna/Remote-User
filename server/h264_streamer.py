@@ -76,7 +76,7 @@ class H264Session:
 
     def __init__(self, source: RawFrameSource, encoder: str, on_data, on_end,
                  quality: dict | None = None, region: dict | None = None,
-                 panel: dict | None = None):
+                 panel: dict | None = None, zoom: int = 1):
         """on_data(bytes) / on_end() are called from the read thread and must
         be cheap and thread-safe (the web layer bridges them to asyncio).
         quality = this client's overrides from the phone's quality panel
@@ -93,7 +93,12 @@ class H264Session:
         the `auth` message (owner order 2026-08-12: "what is the point of the
         PC sending 4K if the Android device cannot receive it"). It is a
         CEILING on the encoded size — see `_scale_size`. None (an older page,
-        a browser that sends no panel) means exactly the old behaviour."""
+        a browser that sends no panel) means exactly the old behaviour.
+        zoom = the settled pinch's resolution step (layout_api.zoom_step,
+        owner design round 3 of T76): the panel ceiling is RAISED by this
+        factor because a zoomed phone shows only part of the picture, so the
+        panel-pixels argument no longer binds — capped at native inside
+        `_scale_size`, never past it. 1 = the old behaviour to the byte."""
         self._source = source
         self._encoder = encoder
         self._on_data = on_data
@@ -114,8 +119,9 @@ class H264Session:
                         "h": self._crop[1] / self.height}
                        if self._crop else None)
         self._panel = self._panel_size(panel)
+        self._zoom = max(1, int(zoom or 1))
         src = self._crop[:2] if self._crop else (self.width, self.height)
-        self._scale = self._scale_size(*src)
+        self._scale = self._scale_size(*src, zoom=self._zoom)
         # What the encoder is really told to spend, and why (T79) — computed
         # here so `open_session` can LOG both beside the crop and the scale.
         # NOT precomputed into plain attributes. `_ffmpeg_cmd` needs this, and
@@ -161,7 +167,8 @@ class H264Session:
             return (0, 0)
         return (w, h) if w > 1 and h > 1 else (0, 0)
 
-    def _scale_size(self, src_w: int, src_h: int) -> tuple[int, int] | None:
+    def _scale_size(self, src_w: int, src_h: int,
+                    zoom: int = 1) -> tuple[int, int] | None:
         """(w, h) the encoder must OUTPUT, or None to leave the crop at its own
         size.
 
@@ -202,6 +209,14 @@ class H264Session:
             factor = min(factor,
                          max(pw, ph) / max(src_w, src_h),
                          min(pw, ph) / min(src_w, src_h))
+        # THE ZOOM RAISES THE CEILING (owner design, round 3 of T76): a zoomed
+        # phone shows only 1/zoom of the picture per axis, so the panel is no
+        # longer the honest cap — the encoded size may grow by the step, and
+        # min(..., 1) is his ZOOM 20x drawing: native is the wall, a deeper
+        # pinch has nothing left to raise. zoom=1 is the old arithmetic to
+        # the byte, and `_reference_size` always asks with 1 so the cellular
+        # bitrate reference (T79) keeps meaning "a full screen on this panel".
+        factor = min(factor * max(1, zoom), 1.0)
         if factor >= 1:
             return None
         w = max(2, int(round(src_w * factor)) // 2 * 2)
@@ -574,7 +589,8 @@ class H264Manager:
     def open_session(self, on_data, on_end, quality: dict | None = None,
                      owner: SessionOwner | None = None,
                      region: dict | None = None,
-                     panel: dict | None = None) -> H264Session:
+                     panel: dict | None = None,
+                     zoom: int = 1) -> H264Session:
         """Starts capture with the first client. Blocking (ffmpeg spawn + init
         segment wait). Raises RuntimeError when the encoder fails to start, or
         when the manager is already shut down.
@@ -592,7 +608,8 @@ class H264Manager:
                 self._source.start()
                 self._source_running = True
             session = H264Session(self._source, self.encoder, on_data, on_end,
-                                  quality=quality, region=region, panel=panel)
+                                  quality=quality, region=region, panel=panel,
+                                  zoom=zoom)
             try:
                 session.start()
             except Exception:  # RuntimeError (no head) or OSError (Popen) — same cleanup
@@ -608,6 +625,11 @@ class H264Manager:
             # server.log must show the REAL numbers the encoder was built with
             # (owner order 2026-08-12), not a claim that a cap exists.
             scale = (" scale %dx%d" % session._scale) if session._scale else " scale none"
+            # …the ZOOM STEP beside it (owner design, round 3 of T76): a step
+            # that never reaches the log cannot be told apart from a pinch
+            # that never reached the server.
+            if session._zoom > 1:
+                scale += " zoom x%d" % session._zoom
             # …and the BITRATE beside them (T79). His own reason for wanting
             # it: without the applied number and the factor there is no way to
             # tell "the encoder did not spend because nothing moved" from "we

@@ -155,6 +155,10 @@ function connect() {
     // after `auth`, never before it (nothing may reach the server first).
     flushTypeQueue();
     lastSentViewport = { x: 0, y: 0, w: 1, h: 1 };
+    // A fresh connection is a fresh server: its conn holds no zoom, so the
+    // first `config` must reset the view however its region happens to
+    // compare with the last connection's (owner design, round 3 of T76).
+    h264ConfigSeen = false;
     scheduleViewport();
     setStatus("connected", "Connected");
   };
@@ -208,7 +212,13 @@ function connect() {
         // What this stream COVERS (owner order 2026-08-12): the encoder crops
         // to the focused layout, and this rect is where the video lands on
         // the monitor space. Absent/old server = full frame, unchanged.
+        // `prevRegion` is what the view-keeping decision below compares
+        // against (owner design, round 3 of T76).
+        const prevRegion = streamRegion;
         streamRegion = msg.stream_region || null;
+        // The step the encoder really used (round 3 of T76) — feeds the
+        // decode ceiling in quality.js; absent/old server = 1, unchanged.
+        streamZoom = Math.max(1, Number(msg.stream_zoom) || 1);
         tailscaleUrl = msg.tailscale_url || null;
         if (IN_APP && window.Android.setTailscaleUrl) {
           // The shell stores the works-anywhere address (fresh token included)
@@ -258,23 +268,23 @@ function connect() {
         // frozen gap between the two (client/loading.js).
         settleStreamReset();
         computeBaseRect();
-        // A CONFIG THAT ECHOES OUR OWN ZOOM MUST NOT UNDO IT (T76 round 2,
-        // owner report 2026-08-14, in translation: "zoom does not work at
-        // all any more because it keeps throwing me back"). Every zoom-crop
-        // rebuild ends here with a fresh `config`, and this branch used to
-        // resetViewHome() + scheduleViewport() unconditionally — a
-        // self-erasing loop: the reset snapped the view fully out AND
-        // dropped `lastSentZoom`, the re-armed settle watcher then measured
-        // that reset view as "he is looking at the whole frame" and sent it,
-        // and the server obediently undid the very zoom it had just applied.
-        // The zoom therefore never survived one second and the sharper crop
-        // was never seen. A `stream_region` that is (within the wire's own
-        // ZOOM_MIN_DELTA) the rect this page itself asked for changes the
-        // picture's SHARPNESS, never his framing: keep the pinch exactly
-        // where his fingers left it and tell the server nothing.
-        const zoomEcho = streamMode === "h264" && lastSentZoom && streamRegion &&
-          zoomRectDelta(lastSentZoom, streamRegion) < ZOOM_MIN_DELTA;
-        if (zoomEcho) {
+        // A CONFIG THAT CHANGES ONLY THE SHARPNESS MUST NOT MOVE HIS VIEW
+        // (owner design, round 3 of T76; round 2's echo check was the first
+        // half of this lesson — its `config` used to resetViewHome() +
+        // scheduleViewport() unconditionally, and every zoom therefore
+        // erased itself within a second). Since the pinch now raises the
+        // encoded RESOLUTION and never the crop, a zoom-step rebuild ends
+        // here with the SAME `stream_region` it had before — so an unchanged
+        // region on a connection that has already seen a config keeps the
+        // pinch exactly where his fingers left it and tells the server
+        // nothing. A changed region is a real layout/desktop change and
+        // resets; the FIRST config of a connection always resets, because a
+        // fresh server holds no zoom whatever the region looks like.
+        const FULL_RECT = { x: 0, y: 0, w: 1, h: 1 };
+        const regionUnchanged = streamMode === "h264" && h264ConfigSeen &&
+          zoomRectDelta(prevRegion || FULL_RECT, streamRegion || FULL_RECT) < 1e-6;
+        h264ConfigSeen = true;
+        if (regionUnchanged) {
           computeViewHome();
           clampView();
           redraw();
