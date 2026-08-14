@@ -42,6 +42,10 @@ RENDER = PROJECT / "client" / "render.js"
 STATE = PROJECT / "client" / "state.js"
 INDEX = PROJECT / "client" / "index.html"
 WM = PROJECT / "server" / "window_manager.py"
+# NOT `STATE` — that name is already taken above by client/state.js,
+# and quietly rebinding it made this file's render.js check read a
+# Python module instead of the page it is about.
+LAYOUT_STATE = PROJECT / "server" / "layout_state.py"
 REGISTRY = PROJECT / "server" / "layout_registry.py"
 
 # A phone-ish stage, both ways up. The numbers only have to make ONE axis
@@ -252,7 +256,13 @@ def check_the_server_still_feeds_the_anchor_and_centres_the_windows() -> None:
             raise AssertionError(
                 f"placement follows pos again on the PC monitor: {use!r} — "
                 "that is the screen the owner never sees (decree 2026-08-09)")
-    if '"pos": round(lay.pos, 3)' not in reg:
+    # The pos echo moved to server/layout_state.py on 2026-08-14 (THE
+    # STRUCTURE LAW split — the registry owns the windows, that module owns
+    # what the phone is told). The PROMISE is unchanged, so this follows the
+    # code rather than being weakened: whichever of the two files carries the
+    # frame, it must still echo pos.
+    frame = reg + LAYOUT_STATE.read_text(encoding="utf-8")
+    if '"pos": round(lay.pos, 3)' not in frame:
         raise AssertionError(
             "layout_state no longer echoes pos — the phone would have "
             "nothing to anchor the picture by")

@@ -49,6 +49,7 @@ LAYOUTS_JS = PROJECT / "client" / "layouts.js"
 INDEX = PROJECT / "client" / "index.html"
 LOAD_TEST = PROJECT / "client" / "load_test.js"
 REGISTRY = PROJECT / "server" / "layout_registry.py"
+FRAME = REGISTRY.with_name("layout_state.py")
 
 sys.path.insert(0, str(PROJECT / "server"))
 
@@ -406,10 +407,14 @@ def check_the_server_still_sends_the_shape() -> None:
     """The other end of the chain, pinned here so one gate tells the whole
     story: `layout_state` must keep carrying the three fields the drawing is
     keyed by. Losing one silently un-fixes this round."""
-    reg = REGISTRY.read_text(encoding="utf-8")
-    m = re.search(r'"type": "layout_state"(.*?)\n        \}', reg, re.S)
+    # The frame moved to server/layout_state.py on 2026-08-14 (THE STRUCTURE
+    # LAW split: the registry owns the windows, that module owns what the
+    # phone is told). This FOLLOWS the code rather than being weakened —
+    # whichever file builds the frame, it must carry all three fields.
+    reg = REGISTRY.read_text(encoding="utf-8") + FRAME.read_text(encoding="utf-8")
+    m = re.search(r'"type": "layout_state"(.*?)\n(?:        |    )\}', reg, re.S)
     if not m:
-        raise AssertionError("layout_registry no longer builds layout_state")
+        raise AssertionError("nothing builds the layout_state frame any more")
     body = m.group(1)
     for field, why in (('"grid"', "which arrangement"),
                        ('"members"', "how many windows are really in it"),
