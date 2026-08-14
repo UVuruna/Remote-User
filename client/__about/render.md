@@ -189,6 +189,19 @@ pointer still down, or a transform that moved since the last sample, means the
 gesture is alive — an observation, not the estimate constraint 15 forbids).
 `resetViewHome()` drops `lastSentZoom`: a new picture is a new zoom.
 
+**The config that echoes our own zoom keeps the pinch** (T76 round 2, owner
+report 2026-08-14 — the zoom "did not work at all, it kept throwing me back").
+Every zoom rebuild ends with a fresh `config`, and connection.js used to run
+`resetViewHome()` + `scheduleViewport()` on every one: the reset dropped
+`lastSentZoom` and snapped the view out, the re-armed watcher measured that
+reset view as the full frame and SENT it, and the server undid the zoom it had
+just applied — a self-erasing loop, invisible to every gate because none read
+connection.js. Now a `config` whose `stream_region` matches `lastSentZoom`
+(within `ZOOM_MIN_DELTA`) keeps the view transform exactly where the fingers
+left it and re-arms nothing; only a config that is NOT our own echo resets.
+Gate: `check_the_config_echo_never_undoes_the_zoom` in
+`tests/test_zoom_crop.py`.
+
 ## The cursor has the shape the PC's cursor has (owner request 2026-08-09, task 142)
 
 `drawCursor` drew one fixed arrow, so from the tablet a draggable window edge,

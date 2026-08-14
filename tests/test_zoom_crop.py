@@ -559,7 +559,37 @@ def check_the_wiring_end_to_end() -> None:
     print("  wiring: finger -> viewport -> stream_crop -> encoder -> page, present")
 
 
+def check_the_config_echo_never_undoes_the_zoom() -> None:
+    """T76 ROUND 2 (owner report 2026-08-14): every check above was GREEN
+    while the zoom did not work at all on his tablet, because none of them
+    reads connection.js — where the config handler ran resetViewHome() +
+    scheduleViewport() unconditionally. Every zoom rebuild ends with a fresh
+    `config`, so that pair was a self-erasing loop: the reset dropped
+    `lastSentZoom` and snapped the view out, the re-armed watcher measured the
+    reset view as the full frame and SENT it, and the server undid the zoom it
+    had just applied. This check holds the guard: a config whose stream_region
+    echoes the rect this page itself asked for keeps the pinch and re-arms
+    nothing."""
+    conn_js = (PROJECT / "client" / "connection.js").read_text(encoding="utf-8")
+    assert re.search(
+        r"const zoomEcho = [^;]*lastSentZoom[^;]*streamRegion[^;]*"
+        r"zoomRectDelta\(lastSentZoom, streamRegion\) < ZOOM_MIN_DELTA", conn_js), \
+        "the config handler no longer recognises its own zoom's echo"
+    assert re.search(
+        r"if \(zoomEcho\) \{[^}]*\} else \{[^}]*resetViewHome\(\);[^}]*"
+        r"scheduleViewport\(\);", conn_js, re.S), \
+        ("resetViewHome()/scheduleViewport() run unconditionally on config "
+         "again — the self-erasing loop that killed every zoom on his tablet")
+    echo_branch = re.search(r"if \(zoomEcho\) \{(.*?)\} else", conn_js, re.S)
+    assert echo_branch and "resetViewHome" not in echo_branch.group(1) \
+        and "scheduleViewport" not in echo_branch.group(1) \
+        and "lastSentZoom = null" not in echo_branch.group(1), \
+        "the echo branch itself resets the view or forgets the sent rect"
+    print("  config echo: the zoom's own rebuild keeps the pinch and sends nothing")
+
+
 CHECKS = [
+    check_the_config_echo_never_undoes_the_zoom,
     check_a_desktop_zoom_becomes_a_real_pixel_crop,
     check_zooming_all_the_way_out_returns_the_full_frame,
     check_a_zoom_inside_a_layout_never_widens_past_the_region,

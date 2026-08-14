@@ -258,9 +258,31 @@ function connect() {
         // frozen gap between the two (client/loading.js).
         settleStreamReset();
         computeBaseRect();
-        resetViewHome(); // a stream reset must not drop the focused region
-        redraw();
-        scheduleViewport();
+        // A CONFIG THAT ECHOES OUR OWN ZOOM MUST NOT UNDO IT (T76 round 2,
+        // owner report 2026-08-14, in translation: "zoom does not work at
+        // all any more because it keeps throwing me back"). Every zoom-crop
+        // rebuild ends here with a fresh `config`, and this branch used to
+        // resetViewHome() + scheduleViewport() unconditionally — a
+        // self-erasing loop: the reset snapped the view fully out AND
+        // dropped `lastSentZoom`, the re-armed settle watcher then measured
+        // that reset view as "he is looking at the whole frame" and sent it,
+        // and the server obediently undid the very zoom it had just applied.
+        // The zoom therefore never survived one second and the sharper crop
+        // was never seen. A `stream_region` that is (within the wire's own
+        // ZOOM_MIN_DELTA) the rect this page itself asked for changes the
+        // picture's SHARPNESS, never his framing: keep the pinch exactly
+        // where his fingers left it and tell the server nothing.
+        const zoomEcho = streamMode === "h264" && lastSentZoom && streamRegion &&
+          zoomRectDelta(lastSentZoom, streamRegion) < ZOOM_MIN_DELTA;
+        if (zoomEcho) {
+          computeViewHome();
+          clampView();
+          redraw();
+        } else {
+          resetViewHome(); // a stream reset must not drop the focused region
+          redraw();
+          scheduleViewport();
+        }
       } else if (msg.type === "cursor") {
         cursorPos = { x: msg.x, y: msg.y };
         // `shape` is OPTIONAL (owner request 2026-08-09, task 142): the name
