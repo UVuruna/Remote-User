@@ -13,6 +13,7 @@ scanner). Package `com.uvuruna.vibecoder`, min Android 8 (API 26).
 |------|------|----------|
 | `MainActivity.kt` | Algorithmic | WebView shell — dual-address resolve/failover state machine, self-healing error card, network callbacks, immersive UI — [about](__about/MainActivity.md) · [flow](__flow/MainActivity.md) |
 | `Insets.kt` | Standard | what the window's EDGES do — the immersive system bars, and the keyboard inset only the shell can measure (edge-to-edge broke `adjustResize`); split off `MainActivity.kt` 2026-08-09 — [about](__about/Insets.md) |
+| `ScreenAwake.kt` | Standard | which layer is on screen (error card / loader / page) and whether `FLAG_KEEP_SCREEN_ON` may be held — one owner instead of the page alone, which could not clear it while the error card was up (T80a, 2026-08-14) — [about](__about/ScreenAwake.md) |
 | `Bridge.kt` | Standard | `window.Android` — every name the PAGE calls; the shell's compatibility surface (split from MainActivity 2026-08-07) — [about](__about/Bridge.md) |
 | `Gamepad.kt` | Standard | the Bluetooth game controller — keys and sticks captured before the WebView sees them and forwarded to the page, which owns the whole mapping (build round G1, 2026-08-07) — [about](__about/Gamepad.md) |
 | `OnboardingActivity.kt` | Standard | first-run pairing screen — automatic funnel handoff + manual QR-scan/paste fallback — [about](__about/OnboardingActivity.md) |

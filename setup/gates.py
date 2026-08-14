@@ -57,6 +57,19 @@ def input_gate(step, run) -> None:
     step("0d/6  NOTICE CHANNEL GATE — it reaches a closed page, once "
          "(tests/test_notice_channel.py)")
     run([sys.executable, str(PROJECT_DIR / "tests" / "test_notice_channel.py")])
+    # T80a + T80b, owner-approved 2026-08-14. What this shell spends while
+    # nobody is looking at it, and both defects were invisible from the
+    # outside: FLAG_KEEP_SCREEN_ON was owned by the PAGE alone, so the native
+    # error card — the one state where there IS no page — held the screen on
+    # for as long as the phone sat there, and the notice channel had no OFF
+    # switch at all while its beat woke the radio ~1440 times a day. A battery
+    # cost never appears in a diff and never appears on his screen either; it
+    # appears hours later as a flat phone, which is exactly why it needs a
+    # gate. Kotlin cannot be run here, so these read the shell's source.
+    step("0b14/6  SHELL BATTERY GATE — the screen is held only for a live "
+         "session, and the notice channel has a real OFF switch "
+         "(tests/test_shell_battery.py)")
+    run([sys.executable, str(PROJECT_DIR / "tests" / "test_shell_battery.py")])
     # And for WHERE typed input lands (owner 2026-08-06): `SendInput` has no
     # target, so a release that lets the foreground decide sends the owner's
     # dictation into whatever window happened to take focus mid-sentence —
@@ -716,6 +729,21 @@ def input_gate(step, run) -> None:
          "session length/rate, and the old-CSV-still-reads promise "
          "(tests/test_traffic_devices.py)")
     run([sys.executable, str(PROJECT_DIR / "tests" / "test_traffic_devices.py")])
+
+    # OWNER REPORT 2026-08-14: the Traffic window's two long spans "end up
+    # either in an endless loop or in some very long loading loop", and both
+    # drew the SAME four hours — his screenshots have "All (from file)" and
+    # "Since start" reading 11:48 -> 15:42. Measured: his file holds 2.5 days
+    # and reads whole in 0.23 s, so neither the file nor the reader was the
+    # problem — the window's job bookkeeping was. A span switch made while a
+    # read was in flight started no read of its own, and the older read's
+    # data was then stamped with the span selected when it arrived. This gate
+    # is fail-closed because the failure is invisible from the code: both
+    # spans look right, and only the x-axis says otherwise.
+    step("0b15/6  TRAFFIC SPANS GATE — one span's data may never appear under "
+         "another span's label, and the loading overlay may never outlive the "
+         "work (tests/test_traffic_spans.py)")
+    run([sys.executable, str(PROJECT_DIR / "tests" / "test_traffic_spans.py")])
 
     # OWNER REPORT 2026-08-13, the correction of the round above: `focus()`
     # ignored `lay.adopted` entirely, and every path that stopped a layout

@@ -170,8 +170,18 @@ visible was half the point of the split.
 service that lets an agent's notice reach the phone with **no page at all**
 (owner decree 2026-08-07). Started from `onCreate` because Android 12+ refuses
 a foreground service start from the background, and that is the one moment the
-app is certainly in the foreground; never stopped by us, because the whole
-point is that it keeps waiting after the Activity is gone.
+app is certainly in the foreground; never stopped by the lifecycle, because
+the whole point is that it keeps waiting after the Activity is gone.
+
+**T80b (2026-08-14) — the OFF switch.** The start is now conditional on
+`Prefs.noticeChannel(this)`. Default ON, so nothing changes for anyone who
+never opens the page's Notices row; OFF and the service never starts at all,
+leaving the PC's 30-minute queue as the whole delivery path. Turning it on or
+off later goes through `NoticeService.setEnabled` — the one function in this
+app allowed to stop that service, deliberately NOT in the lifecycle, since a
+pause, a screen-off or a keyguard taking the channel down is the bug of
+2026-08-12. It acts immediately as well as at the next launch: a switch that
+only takes effect after a restart is not one he can trust.
 
 Nothing about the streaming session changed: the page still closes its socket
 the moment it hides, and `hideReason()` still answers exactly as before. The
@@ -251,8 +261,21 @@ component that can actually know, so the shell answers now.
 - **`keepAwake(on)`** — `FLAG_KEEP_SCREEN_ON` was set once in `onCreate` and
   never cleared, so the tablet NEVER slept by itself: the presence signal the
   layout design rests on could only fire if the owner locked it by hand, and
-  the screen burned battery over a stream nobody was watching. The page now
-  holds it while he works and releases it after 3 idle minutes.
+  the screen burned battery over a stream nobody was watching. The page holds
+  it while he works and releases it after 3 idle minutes.
+
+  **T80a (2026-08-14) — who OWNS the flag.** Handing it to the page fixed the
+  session and left the other half open: the page was the ONLY thing that could
+  clear it, and the page is not always alive. While the native error card is up
+  — no network, PC unreachable, Tailscale off — there is no page at all, so the
+  flag taken in `onCreate` was never released and the phone burned its screen
+  over a card saying the session was dead. Ownership moved to
+  [ScreenAwake](ScreenAwake.md), which is the shell's only writer of the flag;
+  this bridge method records the page's wish and is weighed with the three
+  facts only the window knows. What is left in MainActivity is the four inputs
+  themselves — `started` (onStart/onStop), `pageAlive` (the load callbacks) and
+  the two layers, which now move only through `showLayer`. Gate:
+  `tests/test_shell_battery.py` (source-read — Kotlin cannot be run here).
 - **`onStart` / `onStop`** — nothing probes, retries or LOADS while there is no
   window on screen. The resolver's 4 s timer and the network callback used to
   run on regardless, and a `loadUrl` from either woke a pocketed phone into a

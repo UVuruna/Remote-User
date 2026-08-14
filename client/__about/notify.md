@@ -159,6 +159,37 @@ phone under either choice, the per-device store, and the four links that make
 the card reachable) and `tests/test_notify_prefs.py`, which EXECUTES the page's
 default rule in node.
 
+### WHETHER it listens at all (T80b, owner-approved 2026-08-14)
+
+The rows above answer WHEN. Until this round there was no answer to WHETHER:
+the shell started its waiting service at every launch, and that channel's beat
+wakes the radio about 1440 times a day whether or not he wants notices on this
+handset. The card now carries an OFF switch ABOVE the two WHEN rows — whether
+it listens comes before when it listens.
+
+- `noticeChannelSupported()` / `noticeChannelOn()` / `setNoticeChannel(on)`
+  wrap the NEW bridge methods `Android.setNoticeChannel` /
+  `Android.noticeChannelOn`. A NEW method, never an extra argument on an
+  existing one: this page is served by the PC while the shell is installed
+  separately, so a changed signature simply stops resolving on the phone in his
+  hand.
+- **Feature-detected, and the row is hidden entirely when the method is
+  absent** — an older APK cannot act on it, and a row that cannot act is a
+  promise the panel cannot keep.
+- The row states the consequence in plain words: off, nothing listens and no
+  notice can arrive on its own — the PC holds them in its 30-minute queue and
+  he gets them the next time he opens Vibe Coder.
+- While it is off the two WHEN rows are DIMMED (`.sets-row.dict.chan-off` in
+  panels.css) — they decide nothing then. Dimmed by BACKGROUND and BORDER,
+  never `opacity`: opacity multiplies against the card and drops a token that
+  passes 4.5:1 below it (task 233's own measured lesson), and these rows are
+  two full sentences he must still be able to read.
+- The switch acts on the phone immediately (`NoticeService.setEnabled`
+  starts or stops the service) as well as being read at the next launch.
+
+Gate: the two T80b checks in `tests/test_shell_battery.py` — the Kotlin half
+is read from the source, since this repo has no JVM runner.
+
 ## THE LAST-RESORT RULE (task 226, owner ballot verdict)
 
 `notifyPrefs()` reads what the switches below are set to; `handleNotify()`

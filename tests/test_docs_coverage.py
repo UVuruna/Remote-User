@@ -300,6 +300,11 @@ STANDARD = {
     # Standard: one dependency (WindowInsets), no decision of its own; the
     # rule that USES the keyboard height lives on the page (client/caret.js).
     "android/app/src/main/java/com/uvuruna/vibecoder/Insets.kt",
+    # New 2026-08-14 (T80a, THE STRUCTURE LAW): which layer is on screen and
+    # whether the screen may stay lit — one question, one dependency (the
+    # window). Standard: the decision it holds is four booleans and an
+    # ownership rule, not an algorithm worth a flow diagram.
+    "android/app/src/main/java/com/uvuruna/vibecoder/ScreenAwake.kt",
     "android/app/src/main/java/com/uvuruna/vibecoder/Bridge.kt",
     # New 2026-08-07 (build round G1 — the game controller): an ADAPTER, the
     # same reading as Bridge. Platform events in, three page callbacks out; the
@@ -451,6 +456,11 @@ ALGORITHMIC = {
     # is algorithmic (a circular measurement that has to converge).
     "server/gui/sizing.py",
     "server/gui/traffic_window.py",
+    # Split off traffic_window.py 2026-08-14 at the structure law's wall,
+    # by responsibility: how a byte count and a moment become the WORDS on
+    # an axis. Algorithmic — the 1/2/5 gridline ladder is scored, not
+    # picked, and "one axis, one unit" is a rule a grade already caught.
+    "server/gui/traffic_axis.py",
     "server/gui/main_window.py",
     # New 2026-08-07 (round R2): the Settings window, and Windows' foreground
     # lock borrowed with a ledger (a state machine with a repair path —

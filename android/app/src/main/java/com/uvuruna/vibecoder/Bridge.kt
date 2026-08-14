@@ -9,7 +9,6 @@ import android.content.pm.PackageManager
 import android.net.TrafficStats
 import android.net.Uri
 import android.os.Build
-import android.view.WindowManager
 import android.webkit.JavascriptInterface
 import org.json.JSONObject
 
@@ -158,14 +157,47 @@ class Bridge(private val host: MainActivity) {
      *  never cleared, so the tablet NEVER slept by itself: the presence
      *  signal the whole layout design rests on could only fire if he
      *  locked it by hand, and the screen burned battery over a stream
-     *  nobody was watching (audit 2026-08-05). */
+     *  nobody was watching (audit 2026-08-05).
+     *
+     *  T80a: this no longer touches the window flag itself. The page is only
+     *  ONE of the flag's inputs and it is not always alive — while the native
+     *  error card is up there is no page at all, and nothing could clear a
+     *  flag only the page could clear. The shell owns the flag now
+     *  (`ScreenAwake.apply`); this records the page's wish, which
+     *  still releases the screen during a live session exactly as before. */
     @JavascriptInterface
     fun keepAwake(on: Boolean) {
-        host.runOnUiThread {
-            if (on) host.window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-            else host.window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        }
+        host.runOnUiThread { ScreenAwake.pageAsked(host, on) }
     }
+
+    /** T80b — the notice channel's OFF switch (a NEW method, never an extra
+     *  argument on an existing one: the page is served by the PC while this
+     *  shell is installed separately, so a changed signature simply stops
+     *  resolving on the phone in his hand).
+     *
+     *  The waiting channel wakes the radio once a minute — ~1440 times a day —
+     *  and until this round the only choice was WHEN it stops. It acts NOW as
+     *  well as at the next launch: a switch whose effect is "next time you
+     *  restart the app" is not a switch he can trust.
+     *
+     *  With it off the PC's 30-minute queue is the whole delivery path, which
+     *  is what the page's row says in plain words.
+     *
+     *  The act itself lives in the service's own companion, not here: Bridge
+     *  is the PROTOCOL, and the shell's standing rule is that nothing but a
+     *  deliberate switch may ever stop that channel (a pause, a screen-off or
+     *  a keyguard taking it down is the bug of 2026-08-12), so the one place
+     *  allowed to stop it is one named function where that rule can be read. */
+    @JavascriptInterface
+    fun setNoticeChannel(on: Boolean) {
+        host.runOnUiThread { NoticeService.setEnabled(host, on) }
+    }
+
+    /** The getter half — the page reads the stored answer to light its row.
+     *  Feature-detected on the SETTER by the page, since the two ship
+     *  together; both are absent on an older shell and the row is hidden. */
+    @JavascriptInterface
+    fun noticeChannelOn(): Boolean = Prefs.noticeChannel(host)
 
     /** Layout focus locks the phone's rotation to the layout's chosen
      *  orientation (owner 2026-08-02); "" unlocks (full-desktop view,

@@ -75,11 +75,12 @@ class MainActivity : AppCompatActivity() {
     // `internal`, not private: Insets.kt attaches the window-inset listener
     // to this view (split 2026-08-09).
     internal lateinit var web: WebView
-    private lateinit var errorView: View
+    internal var viewsReady = false // the two layers below are assigned (onCreate)
+    internal lateinit var errorView: View
     private lateinit var errorTitle: TextView
     private lateinit var errorBody: TextView
     private lateinit var errorAction: Button
-    private lateinit var loadingView: View
+    internal lateinit var loadingView: View
     private var fileCallback: ValueCallback<Array<Uri>>? = null
 
     private val handler = Handler(Looper.getMainLooper())
@@ -96,7 +97,7 @@ class MainActivity : AppCompatActivity() {
     // a reload tears the whole session down (audit finding 2026-07-29: the
     // unlock-after-doze race turned every transient ping failure into a
     // guaranteed reload of a healthy session).
-    private var pageAlive = false
+    internal var pageAlive = false
     private var lastLoadFailed = false
     /** An EXCURSION is a trip THIS shell sent the user on — a file picker, the
      *  camera, the voice recogniser, a runtime permission dialog. It is the
@@ -112,7 +113,8 @@ class MainActivity : AppCompatActivity() {
     internal var excursions = 0
     /** The activity is between onStart and onStop — i.e. there is a window on
      *  screen to load a page into. */
-    private var started = false
+    internal var started = false
+
 
     /** Reconnect the moment the phone actually has a network again. Foreign
      *  Wi-Fi drops and re-grants connectivity constantly (AP kicks, power
@@ -284,7 +286,6 @@ class MainActivity : AppCompatActivity() {
             return
         }
         setContentView(R.layout.activity_main)
-        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         hideSystemBars()
         // Task 204: re-assert the remembered rotation lock before the page has
         // even loaded — a fresh Activity instance (process reclaimed during an
@@ -298,13 +299,15 @@ class MainActivity : AppCompatActivity() {
         // Started from onCreate because Android 12+ refuses a foreground
         // service start from the background, and this is the one moment the
         // app is certainly in the foreground.
-        NoticeService.start(this)
+        // T80b: unless he switched it off (NoticeService.setEnabled).
+        if (Prefs.noticeChannel(this)) NoticeService.start(this)
 
         errorView = findViewById(R.id.error_view)
         errorTitle = findViewById(R.id.error_title)
         errorBody = findViewById(R.id.error_body)
         errorAction = findViewById(R.id.btn_action) // label + action set per cause
         loadingView = findViewById(R.id.loading_view)
+        viewsReady = true   // ScreenAwake may read the two layers from here on
         findViewById<Button>(R.id.btn_repair).setOnClickListener { repair() }
 
         web = findViewById(R.id.web)
@@ -419,8 +422,8 @@ class MainActivity : AppCompatActivity() {
     private fun resolveAndLoad(silent: Boolean = false) {
         val epoch = ++resolveEpoch
         if (!silent) {
-            errorView.visibility = View.GONE
-            loadingView.visibility = View.VISIBLE // "Connecting…" until the page loads or an address fails
+            // "Connecting…" until the page loads or an address fails
+            showLayer(error = false, loading = true)
         }
         val lan = Prefs.lanUrl(this)
         val ts = Prefs.tsUrl(this)
@@ -470,8 +473,7 @@ class MainActivity : AppCompatActivity() {
                         // The document is live and ITS address answers — the
                         // page's own JS reconnects the WebSocket; a loadUrl
                         // here would kill a healthy session (the unlock race).
-                        errorView.visibility = View.GONE
-                        loadingView.visibility = View.GONE
+                        showLayer(error = false, loading = false)
                     } else if (started) {
                         web.loadUrl(chosen) // loader (or card) stays until the page reacts
                     }
@@ -479,7 +481,6 @@ class MainActivity : AppCompatActivity() {
                     // let a background network event open a full stream to a
                     // phone in a pocket; onResume re-runs the resolver anyway.
                 } else {
-                    loadingView.visibility = View.GONE
                     showErrorCard()
                     scheduleRetry(epoch)
                 }
@@ -537,7 +538,7 @@ class MainActivity : AppCompatActivity() {
                 R.string.error_title, R.string.error_body, R.string.try_again
             ) { resolveAndLoad() }
         }
-        errorView.visibility = View.VISIBLE
+        showLayer(error = true, loading = false)
     }
 
     private fun renderErrorCard(title: Int, body: Int, action: Int, onAction: () -> Unit) {
@@ -756,6 +757,7 @@ class MainActivity : AppCompatActivity() {
     override fun onStart() {
         super.onStart()
         started = true
+        ScreenAwake.apply(this)
     }
 
     override fun onStop() {
@@ -764,6 +766,7 @@ class MainActivity : AppCompatActivity() {
         // used to run on regardless, and a loadUrl from either of them woke a
         // pocketed phone into a full session (audit 2026-08-05).
         started = false
+        ScreenAwake.apply(this)   // backgrounded is never awake (T80a)
         handler.removeCallbacksAndMessages(null)
         resolveEpoch++   // voids any resolver thread still in flight
         super.onStop()
@@ -931,7 +934,6 @@ class MainActivity : AppCompatActivity() {
             if (request.isForMainFrame) {
                 lastLoadFailed = true
                 pageAlive = false
-                loadingView.visibility = View.GONE
                 showErrorCard()
                 scheduleRetry(resolveEpoch) // a failed page load self-heals too
             }
@@ -940,7 +942,7 @@ class MainActivity : AppCompatActivity() {
         override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
             lastLoadFailed = false
             pageAlive = false
-            errorView.visibility = View.GONE
+            showLayer(error = false)
         }
 
         override fun onPageFinished(view: WebView, url: String?) {
@@ -948,7 +950,7 @@ class MainActivity : AppCompatActivity() {
             // (onPageFinished fires after onReceivedError too — a failed
             // load must not count as a live document.)
             pageAlive = !lastLoadFailed
-            loadingView.visibility = View.GONE
+            showLayer(loading = false)
             // A new document has no `window.__imeHeight` history — the shell's
             // memo of the last pushed inset does, and it outlives the page.
             // Forget it and re-deliver, or a keyboard reopened at the same

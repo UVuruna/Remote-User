@@ -40,6 +40,32 @@ object Prefs {
         context.getSharedPreferences(CLIENT_FILE, Context.MODE_PRIVATE)
             .getString("p_noticeWhen", "") == "always"
 
+    /** WHETHER this device listens for notices at all (T80b, owner-approved
+     *  2026-08-14). The switch beside it, `noticeAlways`, answers WHEN — and
+     *  until this round that was the only choice there was: the waiting
+     *  channel started unconditionally at every launch and woke the radio
+     *  ~1440 times a day whether or not he wanted notices on this handset.
+     *
+     *  Written by the page's Notices card through the `setNoticeChannel`
+     *  bridge, into the SAME per-device store the `prefGet`/`prefSet` bridge
+     *  uses (CLIENT_FILE, under the bridge's own `p_` prefix), because it is
+     *  read while NO page exists — MainActivity asks it before the WebView has
+     *  loaded anything.
+     *
+     *  DEFAULT ON, and the question is an equality against the one literal the
+     *  page writes for "off": an absent pref, an empty one, a store from an
+     *  older version — every one of them is ON, so nothing changes for anyone
+     *  who does not touch the row, and only a deliberate tap can silence a
+     *  device. */
+    fun noticeChannel(context: Context): Boolean =
+        context.getSharedPreferences(CLIENT_FILE, Context.MODE_PRIVATE)
+            .getString("p_noticeChannel", "") != "off"
+
+    fun setNoticeChannel(context: Context, on: Boolean) {
+        context.getSharedPreferences(CLIENT_FILE, Context.MODE_PRIVATE)
+            .edit().putString("p_noticeChannel", if (on) "on" else "off").apply()
+    }
+
     /** Both stored page URLs, LAN first: the notice service probes them in
      *  this order exactly as MainActivity's resolver does. */
     fun addresses(context: Context): List<String> =

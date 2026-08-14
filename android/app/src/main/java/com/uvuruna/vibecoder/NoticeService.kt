@@ -89,6 +89,30 @@ class NoticeService : Service() {
             ctx.stopService(Intent(ctx, NoticeService::class.java))
         }
 
+        /** T80b (owner-approved 2026-08-14) — the channel's OFF switch, and
+         *  the ONE act in this app allowed to stop the service on purpose.
+         *
+         *  Until this round the only choice was WHEN it stops (a swipe out of
+         *  recents, `Prefs.noticeAlways`); it started at every launch and its
+         *  beat wakes the radio ~1440 times a day whether or not he wants
+         *  notices on this handset. Off, and the PC's 30-minute queue is the
+         *  whole delivery path — which is what the page's row says in words.
+         *
+         *  It lives HERE, in the service's own companion, so that the shell's
+         *  standing rule stays readable and checkable: NOTHING else — not a
+         *  pause, not a screen-off, not a keyguard — may ever take the channel
+         *  down (a locked phone keeps its channel, the 2026-08-12 rule). The
+         *  choice is stored FIRST, so a start the platform refuses still
+         *  leaves an honest answer for the next launch, which is the one thing
+         *  MainActivity reads at `onCreate`.
+         *
+         *  It acts NOW as well as at the next launch: a switch whose effect is
+         *  "next time you restart the app" is not a switch he can trust. */
+        fun setEnabled(ctx: Context, on: Boolean) {
+            Prefs.setNoticeChannel(ctx, on)
+            if (on) start(ctx) else stop(ctx)
+        }
+
         /** Is this app exempt from Doze's battery optimisation?
          *
          *  It matters more than it sounds. The foreground service keeps the

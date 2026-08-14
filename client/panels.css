@@ -239,6 +239,21 @@
 .dict-status { grid-column: 2; grid-row: 2; color: var(--text-secondary); font-size: 12px; }
 .sets-row.dict.sel .dict-name { color: var(--accent); }
 
+/* T80b — the WHEN rows while the channel itself is OFF. They decide nothing
+   then, and a live-looking choice under a dead switch is exactly what he
+   reports as "the setting does nothing".
+
+   NOT `opacity`, for the reason task 233's own dimming records in
+   layout-create.css: opacity multiplies against the card, so a token chosen
+   to pass 4.5:1 stops passing the moment it is faded — and these rows are two
+   full sentences he must still be able to read to understand what he has
+   turned off. The row recedes by its BACKGROUND and its BORDER; every
+   character keeps its own contrast. */
+.sets-row.dict.chan-off {
+  background: transparent;
+  border-style: dashed;
+}
+
 /* HEAR IT BEFORE CHOOSING (owner 2026-08-09) — the listen button sits BESIDE
    the row's label, not inside it: a click anywhere inside a <label> activates
    the control that label owns, so a speaker nested in the row would also pick

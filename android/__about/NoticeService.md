@@ -109,7 +109,20 @@ until the engine is ready, so the first notice is late, never lost.
 
 - **Started** from `MainActivity.onCreate` — Android 12+ refuses a foreground
   start from the background, and that is the one moment the app is certainly
-  in the foreground.
+  in the foreground — **unless the owner switched the channel off** (T80b,
+  2026-08-14): `Prefs.noticeChannel` gates that start, default ON so nothing
+  changes for a device that never touches the row.
+- **`setEnabled(ctx, on)`** is the OFF switch itself and the ONE act in this
+  app allowed to stop the service on purpose (the page's Notices row, through
+  `Bridge.setNoticeChannel`). It persists the choice first — a start the
+  platform refuses still leaves an honest answer for the next launch — and
+  acts immediately, because a switch that only takes effect after a restart is
+  not one he can trust. Nothing in the LIFECYCLE may ever reach it: a pause, a
+  screen-off or a keyguard taking the channel down is the bug of 2026-08-12,
+  and `tests/test_notice_channel.py` still refuses any `NoticeService.stop`
+  call in MainActivity, Bridge or NoticeLink. With the channel off the PC's
+  30-minute queue is the whole delivery path. Gate:
+  `tests/test_shell_battery.py`.
 - **Outlives the Activity, never the APP** (owner rule 2026-08-12: "notices
   only while the app runs in the background — closed is closed"). It survives
   the page hiding — the whole point is that a notice arrives when there is no

@@ -50,6 +50,7 @@ because Activity Result launchers are the Activity's own —
 | Pairing / addresses | `rescan`, `setTailscaleUrl`, `linkLost`, `appVersion`, `update` |
 | Per-device storage | `prefGet`, `prefSet` — origin-independent, because the shell alternates between the LAN and Tailscale addresses and `localStorage` is keyed by ORIGIN (the "sets picker rotates" bug, 2026-08-05) |
 | Network / presence | `transport`, `netStats`, `hideReason`, `keepAwake`, `lockOrientation` |
+| Notices | `setNoticeChannel(on)`, `noticeChannelOn()` — T80b, 2026-08-14 |
 | Dictation | `startVoice`, `stopVoice`, `voiceLangs`, `voiceChosen`, `voiceSetLang`, `voiceState`, `voiceMuteBeeps`, `voiceSetMuteBeeps` |
 | Notices | `notify`, `speak`, `speakAs`, `ttsVoices`, `noticeState`, `noticeSetup` |
 

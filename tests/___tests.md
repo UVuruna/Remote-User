@@ -541,6 +541,43 @@ the PC's half of the contract and the exact bytes the shell must read.
 
 Run: `.venv\Scripts\python tests/test_notice_channel.py`
 
+### `test_shell_battery.py` — Shell Battery Gate
+Two owner-approved changes of 2026-08-14 (T80a + T80b), in one file because
+they are one question: what this shell spends while **no page of ours is on
+screen**. Its own file rather than more of `test_notice_channel.py`, which
+stands at the structure law's wall and asks a different question — that gate
+asks whether a notice REACHES a phone whose page is closed; this asks what the
+shell must stop doing when there is no session at all.
+
+**T80a** — `FLAG_KEEP_SCREEN_ON` was added in `onCreate` and cleared by exactly
+one thing, the PAGE (`Bridge.keepAwake(false)`). While the native error card is
+up there is no page, so nothing could clear it and the phone burned its screen
+— the biggest consumer it has — over a card saying the session was dead. Two
+checks: the flag has exactly ONE writer in the whole shell
+([ScreenAwake.apply](../android/__about/ScreenAwake.md)), with every other
+Kotlin file swept for it; and the rule really weighs all four inputs while the
+error card, the background, the load callbacks and the layer funnel each
+re-apply it.
+
+**T80b** — the notice channel started at every launch and the only choice he
+had was WHEN it stops, while its beat wakes the radio ~1440 times a day. Two
+checks: the switch is real (conditional start, persisted in the same per-device
+store the `prefGet`/`prefSet` bridge uses, DEFAULT ON as an equality against
+the one `"off"` literal — never a truthiness test that would silence every
+phone in the world — and acting immediately through `NoticeService.setEnabled`,
+the one function in the app allowed to stop the channel); and the page's row is
+feature-detected on the NEW bridge method, hidden entirely when it is absent,
+and states in words what OFF costs.
+
+Every check was shown red on its own planted defect. **Kotlin cannot be
+executed in this repo** — there is no JVM test runner and no device attached —
+so these read the shell's SOURCE and assert the structural promises, exactly as
+the shell checks in `test_notice_channel.py` do. What the phone really does
+with the flag and the service is proven only on the owner's device.
+
+Run: `.venv\Scripts\python tests/test_shell_battery.py` — also a fail-closed
+step in `setup/gates.py` (0b14/6).
+
 ### `test_link_recovery.py` — Link Recovery Gate
 Proves that a phone which loses its **route** comes back by itself. His report
 on 2026-08-07: *"kada nismo na wi-fi mreži … dešava nam se prekid veze, i ovo

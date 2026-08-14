@@ -796,6 +796,59 @@ function noticeModeRow(mode, chosen) {
   return label;
 }
 
+// --- T80b: the channel's own OFF switch -----------------------------------
+//
+// The card above answers WHEN this phone listens. Until this round there was
+// no answer to WHETHER it listens at all: the waiting service started at every
+// launch and holds a connection whose beat wakes the radio about 1440 times a
+// day. Off, and the PC's own 30-minute queue is the entire delivery path — the
+// row says exactly that, because a switch that hides its cost is a switch he
+// will turn off once and then report the consequence as a bug.
+//
+// FEATURE-DETECTED, and the row is HIDDEN when the bridge method is absent:
+// this page is served by the PC while the shell is installed separately, so a
+// phone running an older APK has no `setNoticeChannel` at all, and a row that
+// cannot act is a promise the panel cannot keep. A NEW method rather than an
+// argument on an existing one, for the same reason (CLAUDE.md, the `speakAs`
+// rule).
+function noticeChannelSupported() {
+  try {
+    return IN_APP && typeof window.Android.setNoticeChannel === "function";
+  } catch { return false; }
+}
+
+function noticeChannelOn() {
+  try { return window.Android.noticeChannelOn() !== false; } catch { return true; }
+}
+
+function setNoticeChannel(on) {
+  try { window.Android.setNoticeChannel(!!on); } catch {}
+}
+
+function noticeChannelRow() {
+  const label = document.createElement("label");
+  const on = noticeChannelOn();
+  label.className = "sets-row dict" + (on ? " sel" : "");
+  const cb = document.createElement("input");
+  cb.type = "checkbox";
+  cb.checked = on;
+  cb.addEventListener("change", () => {
+    setNoticeChannel(cb.checked);
+    renderNoticeModeCard();   // the WHEN rows dim or return with it
+  });
+  const txt = document.createElement("span");
+  txt.className = "dict-name";
+  txt.textContent = "Listen for notices on this device";
+  const note = document.createElement("span");
+  note.className = "dict-note";
+  note.textContent = "On, this phone keeps a small connection to your PC so a "
+    + "notice reaches you the moment an agent needs you. Off, nothing listens "
+    + "and no notice can arrive on its own — your PC holds them in its "
+    + "30-minute queue, and you get them when you next open Vibe Coder.";
+  label.append(cb, txt, note);
+  return label;
+}
+
 function renderNoticeModeCard() {
   const chosen = noticeMode();
   noticeModePanel.innerHTML = "";
@@ -813,7 +866,17 @@ function renderNoticeModeCard() {
 
   const list = document.createElement("div");
   list.className = "sets-list";
-  NOTICE_MODES.forEach((mode) => list.appendChild(noticeModeRow(mode, chosen)));
+  // T80b first: whether it listens at all comes before when it listens. The
+  // WHEN rows are dimmed while the channel is off — they decide nothing then,
+  // and a live-looking choice under a dead switch is the class of thing he
+  // reports as "the setting does nothing".
+  const channelOff = noticeChannelSupported() && !noticeChannelOn();
+  if (noticeChannelSupported()) list.appendChild(noticeChannelRow());
+  NOTICE_MODES.forEach((mode) => {
+    const row = noticeModeRow(mode, chosen);
+    if (channelOff) row.classList.add("chan-off");
+    list.appendChild(row);
+  });
   body.appendChild(list);
 
   // THE HONEST LIMIT, in the card rather than in a comment nobody reads: the
