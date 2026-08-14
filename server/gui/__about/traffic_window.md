@@ -294,3 +294,72 @@ planting its own defect. The third exists BECAUSE planting found it blind, and
 the fourth is the pre-existing readback check whose assertion had to be
 corrected — it had been demanding the grey, which is the defect written down
 as a promise.
+
+## What it costs the phone's BATTERY (T80d, owner request 2026-08-14)
+
+The window has always answered "how many bytes", and his question was the one
+underneath it: what does this app cost the battery **while it is running** —
+and for **every** device, not only the one on his desk. Simulation was refused
+outright, because an Android emulator has no battery and reports a fixed fake
+value: a simulated number would look authoritative and mean nothing.
+
+So the answer is a MEASUREMENT with the same shape as the phone-side traffic
+counters directly above it in this window: the handset reads its own hardware
+(`BatteryManager`, no permission and no adb, through the new
+`Bridge.batteryStats()`), reports it on the EXISTING `hb`/`away` beat exactly
+as `net` does, and this window only repeats what it was told. One line, under
+the away-gap line:
+
+    Phone battery: 62%  ·  4% used in 1 h with the app running  ·  drawing
+    512 mA now, 480 mA average while connected
+
+**Every word of that line is decided by [Traffic Battery](traffic_battery.md)**
+— its own module by RESPONSIBILITY, the same split [Traffic
+Axis](traffic_axis.md) made: this window's subject is bytes, which the PC
+counts at its own socket and which therefore always exist, while power can
+only be measured by the phone and a large share of devices refuse. That
+refusal is the whole reason the wording needed a module, and it is a pure
+function so its gate can prove the rules without building a Qt window.
+
+**A device that does not report SAYS so**, and the two silences are different
+sentences because they are different facts:
+
+- nobody connected — *"Phone battery: the phone reports its own level and draw
+  while it is connected."*
+- connected and refusing — *"Phone battery: this device does not report it —
+  some phones will not say, and an older app version cannot ask."*
+
+Never a blank, never a dash, and above all **never a zero**: `0 mA` reads as
+"this app costs nothing", which is the most flattering possible claim about a
+measurement that never happened. And **one missing half never silences the
+other** — `BATTERY_PROPERTY_CURRENT_NOW` is optional and widely stubbed, so a
+phone that reports its level and refuses its draw states the level it has and
+names the half it lacks.
+
+### The honest limits, stated rather than papered over
+
+- **The sign of the draw is not trusted.** The property is documented positive
+  while charging and a known share of OEMs ship it inverted, with no way for
+  the app to tell which. The shell therefore sends the MAGNITUDE and takes the
+  direction from `BatteryManager.isCharging`, which has no convention to get
+  wrong. `charging` is stated on the line because it changes what every number
+  before it MEANS: a level that is not falling while charging says nothing
+  about the cost.
+- **The unit is what Android documents — microamps — and some OEMs report
+  milliamps in the same property.** That is a limit this code can state and
+  cannot detect, and stating it is better than a heuristic that would be wrong
+  silently on the devices it guessed about.
+- **A drop is never stated over a span too short to carry one** — a level is
+  an integer percent, so `4% used in 0s` is a rounding boundary, not a rate.
+  Found by photographing this window, not by reading the diff.
+- **The draw is an average over the readings that carried one.** A single
+  instantaneous sample swings with whatever the screen did that second.
+- **A level is never carried across an absence** — see [Traffic
+  Meter](../../__about/traffic.md); a phone charged while it was away would
+  otherwise report a nonsense session cost.
+
+Gate: `tests/test_battery_report.py`, ten checks each proven by planting its
+own defect, fail-closed in `setup/gates.py` (0b17/6). The Kotlin half is
+asserted by READING the shell's source — there is no JVM test runner in this
+repo and no device attached — so what a real handset reports is proven only on
+a real handset.

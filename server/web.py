@@ -654,6 +654,11 @@ async def _receive_input(ws: WebSocket, injector: InputInjector, stream, token: 
             # argument (owner 2026-08-05).
             if msg.get("net"):
                 traffic.METER.note_phone(msg["net"])
+            # ...and the phone's own battery (T80d), riding this SAME beat
+            # exactly as `net` does. Absent whenever the device will not say,
+            # and absent must never become zero — see `traffic.note_battery`.
+            if msg.get("bat"):
+                traffic.METER.note_battery(msg["bat"])
             continue
         if kind == "away":
             # The page is about to be hidden, and it says WHY. An EXCURSION
@@ -669,6 +674,10 @@ async def _receive_input(ws: WebSocket, injector: InputInjector, stream, token: 
             # dictating, which is the whole 2026-08-05 topmost failure.
             if msg.get("net"):
                 traffic.METER.note_phone(msg["net"])
+            # The session's LAST battery reading (T80d): the parting word is
+            # the only moment a closing level exists.
+            if msg.get("bat"):
+                traffic.METER.note_battery(msg["bat"])
             # Nothing may be SENT to a phone that has gone: the page normally
             # closes the socket right behind this message, but when its Wi-Fi
             # falls asleep first the socket lingers — and the encoder was

@@ -172,6 +172,23 @@ log measured it twice, to the second.
   fallback**, where there is nothing to ask.
 - **`phoneNet()`** returns Android's own TrafficStats counters (this app's UID
   and the whole device) for the PC's Traffic window.
+- **`phoneBattery()`** (T80d, owner request 2026-08-14) returns what the phone
+  says about ITS OWN battery — `level` (percent), `current_ua` (the MAGNITUDE
+  of the instantaneous draw) and `charging` — read through the NEW
+  `Android.batteryStats()` bridge method and feature-detected on it, since the
+  page is served by the PC while the shell is installed separately. It rides
+  the existing `hb` and `away` messages exactly as `phoneNet()` does; no new
+  message type exists.
+
+  **Absent is never zero, at every layer.** A device that will not answer a
+  property has it left OUT of the shell's JSON, this function drops anything
+  the shell did not send, and a reading with no properties at all comes back
+  `null` rather than as an empty object — so the desktop can say in words that
+  this device does not report, instead of printing a `0 mA` that would read as
+  "this app costs nothing". The requirement behind it was the owner's: every
+  device must answer for its own hardware, not only his, which is why the
+  measurement is taken on the handset and a SIMULATION was refused (an
+  emulator has no battery and reports a fixed fake value).
 - **`KEEP_AWAKE_MS`** (3 min) is how long the screen is held awake after the
   last touch. The shell used to set `FLAG_KEEP_SCREEN_ON` once and never clear
   it, so the tablet never slept by itself — the presence signal the whole

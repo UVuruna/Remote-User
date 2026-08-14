@@ -762,6 +762,52 @@ def _bar_geometry_checks(page, label, out):
         if bad:
             print(f"  DETAIL phone overflow @ {label}: {bad}")
 
+        # ── T89: THE PADS' LIFT LANDS ON THE FRAME THE BAR DOES ──────────────
+        # His own phone's size, and the ONE size where the reservation moves
+        # anything at all (the tablet fits the bar between the columns, so its
+        # pads never move — which is why every other staged size passed while
+        # this one did not). The bar is painted in its new row the instant
+        # `laybar-overflow` lands; `.group` carries `transition: bottom 0.1s`
+        # for the SOFT KEYBOARD, so raising `bottom` for the reservation drew
+        # the strip straight across both D-pad columns for the whole 100 ms.
+        # Catches (proven by planting): putting the reservation back on
+        # `bottom` in client/layouts.css — the FIRST reading then overlaps and
+        # differs from the settled one, and BOTH halves are asserted, because
+        # a settled-only test cannot tell an instant lift from an animated one
+        # and an overlap-only test cannot say why it overlapped.
+        page.evaluate("setLayBarPos('top')")
+        page.wait_for_timeout(200)
+        first = page.evaluate("""() => {
+          setLayBarPos('bottom');
+          const bar = document.getElementById('layout-bar').getBoundingClientRect();
+          const g = [...document.querySelectorAll('.group')]
+            .map((el) => el.getBoundingClientRect());
+          return {bar: {top: bar.top, bottom: bar.bottom, left: bar.left,
+                        right: bar.right},
+                  over: g.some((r) => bar.left < r.right && r.left < bar.right &&
+                                      bar.top < r.bottom && r.top < bar.bottom),
+                  padBottom: Math.max(...g.map((r) => r.bottom))};
+        }""")
+        page.wait_for_timeout(400)      # comfortably past the 100 ms transition
+        settled = page.evaluate("""() => {
+          const g = [...document.querySelectorAll('.group')]
+            .map((el) => el.getBoundingClientRect());
+          return {padBottom: Math.max(...g.map((r) => r.bottom))};
+        }""")
+        bad = []
+        if first["over"]:
+            bad.append("on the frame the bar took the bottom row it was drawn "
+                       f"across a D-pad group: {first}")
+        if abs(first["padBottom"] - settled["padBottom"]) > 1:
+            bad.append("the pads ANIMATED out of the bar's way — they stood at "
+                       f"{round(first['padBottom'])} on that frame and at "
+                       f"{round(settled['padBottom'])} once it settled; a row "
+                       "reservation is not a keyboard glide")
+        out[f"phone: the pads clear the bar on the same frame @ {label}"] = not bad
+        if bad:
+            print(f"  DETAIL pad lift @ {label}: {bad}")
+        page.evaluate("setLayBarPos('top')")
+
     if label.startswith("landscape"):
         # Catches: the pre-237 bug (Bottom ignored in landscape, bar always at
         # the same top y) coming back, or the cap / centering breaking.

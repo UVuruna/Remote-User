@@ -347,6 +347,35 @@ function phoneNet() {
   }
 }
 
+// What this phone's own battery says (T80d, owner 2026-08-14). The owner's
+// requirement is that EVERY device answers for its own hardware, not just his
+// — so the phone measures itself through `Android.batteryStats()` and the PC
+// only reports what it was told. A simulated number was refused and must not
+// come back: an emulator has no battery and reports a fixed fake value.
+//
+// Feature-detected on the method itself: the page is served by the PC while
+// the shell is installed separately, so an older APK simply has no such
+// method and this returns null — which travels as an ABSENT field, never as a
+// zero. Same rule inside the reading: the shell leaves out a property its
+// device will not answer, and this must not fill it in.
+function phoneBattery() {
+  if (!IN_APP || typeof window.Android.batteryStats !== "function") return null;
+  try {
+    const raw = JSON.parse(window.Android.batteryStats() || "null");
+    if (!raw || typeof raw !== "object") return null;
+    const out = {};
+    if (typeof raw.level === "number") out.level = raw.level;
+    if (typeof raw.current_ua === "number") out.current_ua = raw.current_ua;
+    if (typeof raw.charging === "boolean") out.charging = raw.charging;
+    // An empty object is a device that answered nothing — that is a "will not
+    // say" and it must reach the PC as no field at all, so the desktop says so
+    // in words instead of drawing a blank.
+    return Object.keys(out).length ? out : null;
+  } catch (e) {
+    return null;
+  }
+}
+
 // The bounded outbound queue for typing messages while the socket is down
 // (client/type-queue.js — pure, gated whole; see its header for the count
 // and staleness reasoning). `typeQueueLossNotified` dedupes the toast to ONE

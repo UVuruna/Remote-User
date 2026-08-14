@@ -21,6 +21,7 @@ client (see [Theme](__about/theme.md) for the verified overlap).
 | `controls_widgets.py` | Algorithmic | command-editing widgets: chord recorder, pool table, command form — [about](__about/controls_widgets.md) · [flow](__flow/controls_widgets.md) |
 | `controls_order.py` | Algorithmic | arrangement/order-editing widgets: the per-set ladder, the wheel-order ring — [about](__about/controls_order.md) · [flow](__flow/controls_order.md) |
 | `traffic_axis.py` | Algorithmic | how a byte count and a moment in time become the WORDS on the Traffic chart's axes — one axis, one unit; the scored 1/2/5 gridline ladder — [about](__about/traffic_axis.md) · [flow](__flow/traffic_axis.md) |
+| `traffic_battery.py` | Algorithmic | what this app costs the phone’s BATTERY while it runs, in words — a device that will not say SAYS so, never a blank and never a zero — [about](__about/traffic_battery.md) · [flow](__flow/traffic_battery.md) |
 | `traffic_window.py` | Algorithmic | the Traffic window: bytes to and from the phone over time, with a grey band wherever nobody was connected — [about](__about/traffic_window.md) · [flow](__flow/traffic_window.md) |
 | `settings_window.py` | Algorithmic | the Settings window: APPEARANCE (this PC's theme + the PHONE's), STREAM, NOTIFICATIONS, FOCUS beside STARTUP on one row, and ADVANCED (port / H.264 / JPEG quality / QR image) — [about](__about/settings_window.md) · [flow](__flow/settings_window.md) |
 | `__init__.py` | Trivial | package marker; one-line docstring naming `gui_main.py` as the entry point |

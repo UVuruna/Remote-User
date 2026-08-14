@@ -81,6 +81,16 @@ class TrafficMeter:
         self.phone_last: dict | None = None
         self.away_gap: dict | None = None
         self._gap_from: dict | None = None
+        # WHAT THIS APP COSTS THE BATTERY WHILE IT RUNS (T80d, owner
+        # 2026-08-14). The phone measures ITSELF and reports it on the
+        # existing beat, so every device answers for its own hardware rather
+        # than being predicted from his. Nothing here is ever computed when
+        # the phone did not say: a missing property stays missing all the way
+        # to the window, which then says so in words.
+        self.battery_first: dict | None = None
+        self.battery_last: dict | None = None
+        self._drain_sum = 0.0     # sum of reported draw magnitudes, microamps
+        self._drain_n = 0         # how many readings carried one
         self._thread: threading.Thread | None = None
         self._recording = True
         # Which device is the current session (see `traffic_devices.py`) —
@@ -113,6 +123,14 @@ class TrafficMeter:
                 self._gap_from = self.phone_last
                 self.phone_first = self.phone_last = None
                 self._device = ""
+                # The battery figures are about THIS session — "what did the
+                # app cost while it was running" is the owner's own question
+                # (T80d), and a level carried across a gap in which the phone
+                # may have been charged would answer a different one. The
+                # LAST reading survives so the window can still state the
+                # closing level of the session that just ended.
+                self.battery_first = None
+                self._drain_sum, self._drain_n = 0.0, 0
 
     def set_device(self, key: str) -> None:
         """Called once at `auth`, after `traffic_devices.REGISTRY.note()` has
@@ -153,6 +171,69 @@ class TrafficMeter:
                 self.phone_first = reading
             self.phone_last = reading
 
+    def note_battery(self, reading: dict) -> None:
+        """What the phone says ITS OWN battery is doing (T80d, owner
+        2026-08-14). `reading` may carry `level` (percent), `current_ua` (the
+        MAGNITUDE of the instantaneous draw — the shell never sends a sign,
+        because `BATTERY_PROPERTY_CURRENT_NOW`'s convention is inverted on a
+        known share of OEMs and there is no way to tell which) and
+        `charging`. Every one of them is independently optional: a device
+        that will not answer sends nothing, and nothing is what must be
+        stored — a zero here would become "this app costs nothing" on his
+        screen, which is the one wrong answer that looks like a good one.
+
+        No value is ever invented from another: a session with a level and no
+        current reports a level and no current, and the window says which
+        half is missing.
+        """
+        if not reading:
+            return
+        kept = {}
+        level = reading.get("level")
+        if isinstance(level, (int, float)) and 0 <= level <= 100:
+            kept["level"] = int(level)
+        current = reading.get("current_ua")
+        if isinstance(current, (int, float)) and current > 0:
+            kept["current_ua"] = float(current)
+        if isinstance(reading.get("charging"), bool):
+            kept["charging"] = reading["charging"]
+        if not kept:
+            return
+        with self._lock:
+            kept["t"] = time.time()
+            if self.battery_first is None:
+                self.battery_first = kept
+            self.battery_last = kept
+            if "current_ua" in kept:
+                # An AVERAGE over the readings that carried one — a single
+                # instantaneous sample swings with whatever the screen is
+                # doing that second, and the number he asked for is what the
+                # session costs, not what one heartbeat caught.
+                self._drain_sum += kept["current_ua"]
+                self._drain_n += 1
+
+    def battery(self) -> dict | None:
+        """The session's battery picture, or `None` when this phone has said
+        nothing at all — the window renders that as plain words, never as a
+        blank or a zero. Caller must hold no lock."""
+        with self._lock:
+            last, first = self.battery_last, self.battery_first
+            drain_sum, drain_n = self._drain_sum, self._drain_n
+        if not last:
+            return None
+        out: dict = {
+            "level": last.get("level"),
+            "charging": last.get("charging"),
+            "current_ua": last.get("current_ua"),
+            "avg_ua": (drain_sum / drain_n) if drain_n else None,
+            "level_drop": None,
+            "seconds": None,
+        }
+        if first and first.get("level") is not None and last.get("level") is not None:
+            out["level_drop"] = first["level"] - last["level"]
+            out["seconds"] = max(0.0, last["t"] - first["t"])
+        return out
+
     def reset(self) -> None:
         """The window's Reset button: totals and history start over. The CSV
         is NOT touched — a recording the owner may still want to read is not
@@ -164,6 +245,8 @@ class TrafficMeter:
             self.samples.clear()
             self.phone_first = self.phone_last = None
             self.away_gap = self._gap_from = None
+            self.battery_first = self.battery_last = None
+            self._drain_sum, self._drain_n = 0.0, 0
 
     # -- sampling ----------------------------------------------------------
 

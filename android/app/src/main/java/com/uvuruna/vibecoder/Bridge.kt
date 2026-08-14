@@ -7,6 +7,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.TrafficStats
+import android.os.BatteryManager
 import android.net.Uri
 import android.os.Build
 import android.webkit.JavascriptInterface
@@ -150,6 +151,60 @@ class Bridge(private val host: MainActivity) {
             .put("dev_rx", ok(TrafficStats.getTotalRxBytes()))
             .put("dev_tx", ok(TrafficStats.getTotalTxBytes()))
             .toString()
+    }
+
+    /** T80d — what this app costs the battery WHILE IT IS RUNNING, measured
+     *  by the phone about itself.
+     *
+     *  The owner's requirement was that every device answers, not only his:
+     *  lang-ok: owner quote
+     *  "nije samo do mog uređaja već za svaki treba da predvidimo".
+     *  A simulation was refused outright and cannot come back — an emulator
+     *  has no battery and reports a fixed fake value, which would look
+     *  authoritative and mean nothing. So the phone in his hand reads its own
+     *  hardware, and so does anyone else's.
+     *
+     *  A NEW method rather than more fields on `netStats()`: the page is
+     *  served by the PC while this shell is installed separately, so a
+     *  changed signature simply stops resolving on the phone he already has.
+     *  `netStats` keeps its exact shape and this stands beside it.
+     *
+     *  THE SIGN IS NEVER TRUSTED. `BATTERY_PROPERTY_CURRENT_NOW` is
+     *  documented as positive while charging and negative while discharging,
+     *  and a well-known share of OEMs ship it inverted — there is no way for
+     *  this code to tell which convention a given handset follows, and
+     *  guessing would put a plus sign on a phone that is emptying. So the
+     *  MAGNITUDE travels (`abs`), and the DIRECTION comes from
+     *  `BatteryManager.isCharging`, which is a plain boolean with no
+     *  convention to get wrong. The PC then says "drawing X" or "charging"
+     *  from a fact rather than from a sign it cannot interpret.
+     *
+     *  ABSENT IS NOT ZERO. A device that will not answer returns
+     *  `Integer.MIN_VALUE` (the documented "not supported") or a flat 0, and
+     *  a zero on the PC's card would read as "this app costs nothing" — the
+     *  most flattering possible lie about the exact number he asked for.
+     *  Those readings are LEFT OUT of the JSON entirely, so the desktop can
+     *  say in plain words that this device does not report it.
+     *
+     *  The unit is what Android documents: microamps. Some OEMs report
+     *  milliamps here instead; that is a limit we can state and cannot
+     *  detect, and it is written down in `server/gui/__about/traffic_window.md`
+     *  rather than papered over with a heuristic. */
+    @JavascriptInterface
+    fun batteryStats(): String {
+        val out = JSONObject()
+        val bm = host.getSystemService(Context.BATTERY_SERVICE) as? BatteryManager
+            ?: return out.toString()
+        val level = bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
+        if (level in 0..100) out.put("level", level)
+        val current = bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CURRENT_NOW)
+        // Integer.MIN_VALUE is the documented "this device will not say"; 0 is
+        // the undocumented one every OEM that stubs the property returns.
+        if (current != Int.MIN_VALUE && current != 0) {
+            out.put("current_ua", Math.abs(current.toLong()))
+        }
+        out.put("charging", bm.isCharging)
+        return out.toString()
     }
 
     /** Hold the screen awake while the owner is actually working, release

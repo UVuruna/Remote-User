@@ -32,6 +32,19 @@ def input_gate(step, run) -> None:
     fails the build too (install it; never skip the gate silently)."""
     step("0b/6  INPUT GATE — end-to-end click path (tests/test_input_pipeline.py)")
     run([sys.executable, str(PROJECT_DIR / "tests" / "test_input_pipeline.py")])
+    # AND THE CHROME AROUND IT (T89, 2026-08-14). This gate has existed for
+    # rounds — the layout bar's geometry, the two-job buttons' radials, Hide's
+    # two modes, the monitor list, every panel's bottom button — and NOTHING
+    # RAN IT: it appeared in neither this file nor build.py, so every release
+    # shipped over a check that was already red at 412x915, his own phone's CSS
+    # size. A gate nobody runs is worse than no gate, because it reads as
+    # coverage on every later review. It belongs beside the input gate: same
+    # browser toolchain, same fail-closed rule (a missing playwright/Chromium
+    # fails the build; install it, never skip it silently).
+    step("0b16/6  PHONE CHROME GATE — the bar, the corner radials and every "
+         "panel's bottom button, at four real device sizes "
+         "(tests/test_phone_chrome.py)")
+    run([sys.executable, str(PROJECT_DIR / "tests" / "test_phone_chrome.py")])
     # Same fail-closed reasoning for presence (owner 2026-08-05): layout
     # members are always-on-top while the phone watches them, so a release
     # that forgets to notice the phone leaving locks the owner's own desk
@@ -70,6 +83,21 @@ def input_gate(step, run) -> None:
          "session, and the notice channel has a real OFF switch "
          "(tests/test_shell_battery.py)")
     run([sys.executable, str(PROJECT_DIR / "tests" / "test_shell_battery.py")])
+    # T80d, the other half of the same subject and its own file by
+    # RESPONSIBILITY: 0b14 above asks what this shell must STOP doing while
+    # nobody is looking at it, and this asks what it COSTS while he is — the
+    # question he actually raised, and he raised it for every handset rather
+    # than his own ("not only my device"). The answer can only ever be a
+    # MEASUREMENT taken by the phone about itself, since a simulation was
+    # refused outright (an emulator has no battery and reports a fixed fake
+    # value). What needs a gate is not the arithmetic but the honesty of the
+    # silences: a refusing device answers Integer.MIN_VALUE or a flat 0, and
+    # a zero rendered as "0 mA" would be this window claiming the app costs
+    # nothing about a reading that never happened.
+    step("0b17/6  BATTERY REPORT GATE — every device answers for its own "
+         "battery, and one that will not say says so "
+         "(tests/test_battery_report.py)")
+    run([sys.executable, str(PROJECT_DIR / "tests" / "test_battery_report.py")])
     # And for WHERE typed input lands (owner 2026-08-06): `SendInput` has no
     # target, so a release that lets the foreground decide sends the owner's
     # dictation into whatever window happened to take focus mid-sentence —
@@ -744,6 +772,19 @@ def input_gate(step, run) -> None:
          "another span's label, and the loading overlay may never outlive the "
          "work (tests/test_traffic_spans.py)")
     run([sys.executable, str(PROJECT_DIR / "tests" / "test_traffic_spans.py")])
+
+    # OWNER ORDER 2026-08-14, in his own words: "ako korisnik odabere 10 fps
+    # onda je to dovoljno, nema potrebe 120 puta u sekundi da telefon iscrtava
+    # sliku kada se ona menja samo 10 puta u sekundi" (lang-ok: owner quote).
+    # render.js drew on EVERY animation frame — 120 Hz on his S25 Ultra against
+    # a stream he may have set to 10 fps, so eleven of every twelve full-canvas
+    # composites redrew a picture already on the screen. It draws on frame
+    # ARRIVAL now, so the rate follows the encoder by construction and never a
+    # number the panel claims about itself. A RATE cannot be read off a diff,
+    # so this gate counts real redraws in real Chromium over a real second.
+    step("0b18/6  REDRAW RATE GATE — the phone draws when there is a new "
+         "picture, not when the panel blinks (tests/test_redraw_rate.py)")
+    run([sys.executable, str(PROJECT_DIR / "tests" / "test_redraw_rate.py")])
 
     # OWNER REPORT 2026-08-13, the correction of the round above: `focus()`
     # ignored `lay.adopted` entirely, and every path that stopped a layout

@@ -58,6 +58,42 @@ Reset must never touch that answer. Long-span reads of the recording
 (`traffic.csv`) — both "Od starta" and "Sve (iz fajla)" — live in
 [Traffic History](traffic_history.md), which this module does not import.
 
+## The phone's own battery (T80d, 2026-08-14)
+
+**`note_battery(reading)`** and **`battery()`** are the byte counters'
+counterpart for POWER, and they exist because the owner asked what this app
+costs a battery *while it is running* — on **every** device, not only his. The
+number can only ever be measured by the phone about itself
+(`Bridge.batteryStats`, riding the existing `hb`/`away` beat exactly as `net`
+does), so this module only ever repeats what it was told. A simulated figure
+was refused and may not return: an emulator has no battery and reports a fixed
+fake value.
+
+Three rules, each of which is a way the honest answer could turn back into a
+claim:
+
+- **Nothing is invented.** A zero or negative draw and a level outside 0..100
+  are refusals that reached us anyway (an older page, a device the shell's own
+  guard did not catch) and are dropped here too — a gate on one layer holds
+  only that layer. A reading of nothing but refusals leaves `battery()`
+  returning `None`, which the window renders in plain words.
+- **The sign is never trusted.** `BATTERY_PROPERTY_CURRENT_NOW` is documented
+  positive while charging and is inverted on a known share of OEMs, so the
+  shell sends the MAGNITUDE and the direction comes from `charging`.
+- **Nothing is carried across an absence.** `set_clients(0)` ends the
+  session's battery accounting: "what the session cost" measured against a
+  reading taken before the phone went away — and was very possibly charged —
+  is a different question answered with a confident number. The last reading
+  survives so the closing level of the session that just ended can still be
+  stated; the first one does not.
+
+The draw is AVERAGED over the readings that carried one (`avg_ua`): a single
+instantaneous sample swings with whatever the screen did that second, and the
+number he asked for is what the session costs.
+
+Gate: `tests/test_battery_report.py`, fail-closed in `setup/gates.py`
+(0b17/6).
+
 ## Connections
 ### Uses
 - [Config](config.md) — sample interval, history length, CSV path and rotation

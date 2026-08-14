@@ -267,10 +267,25 @@ body.laybar-bottom.laybar-overflow #layout-bar {
    shorter than it — so this is read from the bar rather than guessed, and a
    later retune of the corner size carries both the bar and this clearance.
    The rest of the `.group` rule (client/style.css) is untouched: same edge
-   inset, same keyboard shift, same safe area, just one row higher. */
+   inset, same keyboard shift, same safe area, just one row higher.
+
+   ── AND THE LIFT IS INSTANT, BECAUSE IT IS NOT A KEYBOARD (task T89) ────────
+   It used to raise `bottom` itself, and `.group` carries `transition: bottom
+   0.1s ease-out` (client/style.css) for the SOFT KEYBOARD — a shift the pads
+   should glide out of the way of. A row RESERVATION is not that: the bar is
+   painted in its new row the instant the class lands, so animating the pads'
+   half of the same change drew the strip straight across both D-pad columns
+   for the whole 100 ms, every time the bar moved to Bottom and every time the
+   first layout was born with it already there. Two components of one layout
+   decision must land on the same frame.
+   The reservation therefore rides `margin-bottom`, which is NOT in that
+   transition's property list and so applies at once, while the keyboard glide
+   `bottom` still owns is untouched. For a fixed-position box with `bottom`
+   set, the margin is part of the offset — the bottom edge lands at
+   `bottom + margin-bottom` — so the geometry is exactly what the old rule
+   computed, arrived at on the frame the class does. */
 body.laybar-bottom.laybar-overflow .group {
-  bottom: calc(var(--space-m) + var(--kb) + env(safe-area-inset-bottom, 0px)
-               + var(--corner) + var(--space-s));
+  margin-bottom: calc(var(--corner) + var(--space-s));
 }
 body.laybar-bottom.laybar-overflow #lay-frame { flex: 1 1 auto; }
 /* ONE LINE, THEN THE ELLIPSIS in the overflow strip — never wrap-then-ellipse.

@@ -545,7 +545,24 @@ is one rule:
   852 px), so landscape's separate "clear the whole D-pad" rule was deleted
   rather than restated. Clearing the groups' full height is now the OVERFLOW
   shape alone, where it is unavoidable: a full-width strip crosses both
-  columns and cannot share their row.
+  columns and cannot share their row. **In that shape the ROW moves instead of
+  the bar** — the pads are lifted by exactly one bar (`--corner + --space-s`)
+  so the strip has the edge to itself.
+- **The pads' lift is INSTANT, and it took T89 (2026-08-14) to see why it was
+  not** (`tests/test_phone_chrome.py` had been failing at 412x915 — his own
+  phone's CSS size — and nothing ran it: it was wired into neither
+  `setup/gates.py` nor `setup/build.py`, so every release shipped over it).
+  The lift used to raise the pads' own `bottom`, and `.group` carries
+  `transition: bottom 0.1s ease-out` (client/style.css) for the SOFT KEYBOARD.
+  A row RESERVATION is not a keyboard: the bar is painted in its new row the
+  instant `laybar-overflow` lands, so animating the pads' half of one layout
+  decision drew the full-width strip straight across BOTH D-pad columns for
+  the whole 100 ms — every time the bar moved to Bottom, and every time the
+  first layout was born with Bottom already chosen. The reservation now rides
+  `margin-bottom`, which that transition does not name and which therefore
+  applies on the same frame; for a fixed box with `bottom` set the margin is
+  part of the offset, so the geometry is byte for byte what the old rule
+  computed. The keyboard glide `bottom` owns is untouched.
 - **"Pressing nothing at all, the top buttons sit one row down."** With NO
   layout created there is no bar — and `layBarFit()` measured the corner-to-
   corner gap anyway. On any phone-width screen that gap is under the minimum,
@@ -560,7 +577,13 @@ in-row bar is measured against the D-pad's own baseline and the 420 px cap,
 landscape asserts the same two plus "between the columns", and a new check
 drives BOTH bar positions with no layouts staged and fails if either the
 overflow class or a dropped corner survives. Both new claims were proven red
-by planting their own defect.
+by planting their own defect. T89 added a check at his own phone's size that
+reads the pads' bottom edge TWICE — on the frame the bar takes the row and
+again once anything moving has settled — and fails on either an overlap or a
+difference between the two, because a settled-only test cannot tell an instant
+lift from an animated one. **The whole file is now fail-closed in the build**
+(`setup/gates.py` → `0b16/6`, beside the input gate it shares a browser
+toolchain with).
 
 ## The desktop is a LIST OF MONITORS (owner 2026-08-09, task 155)
 

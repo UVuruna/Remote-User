@@ -381,6 +381,13 @@ def make_traffic_window() -> QWidget:
     traffic.METER.set_clients(1)
     traffic.METER.note_phone({"app_rx": 9 << 20, "app_tx": 9 << 20,
                               "dev_rx": 9 << 30, "dev_tx": 9 << 30})
+    # The BATTERY line (T80d) in its fullest real state: TWO readings, so the
+    # drop and the averaged draw are real, backdated to the same 10 minutes
+    # (below MIN_DROP_SPAN_S the drop clause is suppressed, and a fixture
+    # staging both readings in one instant photographs a state he never sees).
+    traffic.METER.note_battery({"level": 66, "current_ua": 448_000, "charging": False})
+    traffic.METER.note_battery({"level": 62, "current_ua": 512_000, "charging": False})
+    traffic.METER.battery_first["t"] = session_start
     window = TrafficWindow()
     window._refresh()
     return window

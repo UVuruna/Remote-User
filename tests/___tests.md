@@ -578,6 +578,46 @@ with the flag and the service is proven only on the owner's device.
 Run: `.venv\Scripts\python tests/test_shell_battery.py` — also a fail-closed
 step in `setup/gates.py` (0b14/6).
 
+### `test_battery_report.py` — Battery Report Gate
+T80d, owner request 2026-08-14, and the other half of the subject above: `0b14`
+asks what the shell must STOP doing while nobody is looking at it, this asks
+what it COSTS while he is. His framing is the requirement — the app must be
+able to answer for **every** device, not only the one on his desk — and
+**simulation was refused outright**, because an Android emulator has no
+battery and reports a fixed fake value, so a simulated figure would look
+authoritative and mean nothing.
+
+The build is therefore a MEASUREMENT: the handset reads its own hardware
+(`Bridge.batteryStats` — `BatteryManager`, no permission and no adb), reports
+it on the EXISTING `hb`/`away` beat exactly as the TrafficStats counters do,
+and the PC only repeats what it was told. Ten checks, across all four layers:
+
+- **The shell** — the measurement exists on its OWN new method (`netStats` is
+  swept to prove it was not extended, the `speakAs` rule); a refusing device's
+  reading is OMITTED rather than sent as a zero, and `current_ua` may be
+  written from exactly one place, since a well-meaning `else` is how the zero
+  comes back; the SIGN is never trusted (magnitude plus `isCharging`).
+- **The page** — feature-detected on the new method, and a reading with no
+  properties at all comes back `null` rather than as an empty object.
+- **The protocol** — it rides `hb` AND `away` (the parting word is the only
+  moment a closing level exists) and invents no message type; the server reads
+  it on both.
+- **The meter** — a zero draw or an out-of-range level is refused here too
+  (a gate on one layer holds only that layer), the draw is AVERAGED over the
+  readings that carried one, and no level is carried across an absence (a
+  phone charged while away would otherwise report a nonsense session cost).
+- **The words** ([Traffic Battery](../server/gui/__about/traffic_battery.md))
+  — a device that does not report SAYS so, the two silences are different
+  sentences, and one missing half never silences the other.
+
+Every check was shown red on its own planted defect (19 plants). **Kotlin
+cannot be executed in this repo** — no JVM test runner, no device attached —
+so the shell checks read the SOURCE, the same shape `test_shell_battery.py`
+uses. What a real handset reports is proven only on a real handset.
+
+Run: `.venv\Scripts\python tests/test_battery_report.py` — also a fail-closed
+step in `setup/gates.py` (0b17/6).
+
 ### `test_link_recovery.py` — Link Recovery Gate
 Proves that a phone which loses its **route** comes back by itself. His report
 on 2026-08-07: *"kada nismo na wi-fi mreži … dešava nam se prekid veze, i ovo
@@ -2068,6 +2108,18 @@ What it holds, and the defect each check catches:
   screen edge, or dropping `--group-h` from the calc, would draw the bar
   straight across two control groups that meet in the middle of a 412 px phone.
   It also asserts the position really MOVED, so a pref nothing reads fails.
+- **The pads clear the bar ON THE SAME FRAME** (T89, 2026-08-14, his own
+  phone's 412x915). The pads' bottom edge is read twice — on the frame the bar
+  takes the row and again once anything moving has settled — and either an
+  overlap or a difference between the two readings fails. Catches putting the
+  overflow row-reservation back on `bottom`, which `.group` animates for the
+  soft keyboard: the strip was then drawn across both D-pad columns for 100 ms.
+  A settled-only check cannot tell an instant lift from an animated one, which
+  is why both readings are asserted.
+
+**This file is fail-closed in the build** (`setup/gates.py` → `0b16/6`). It was
+not, until T89 — it appeared in neither `gates.py` nor `build.py`, so it had
+been red at 412x915 through every release while reading as coverage.
 - **The Layout radial drops SOUTH and SOUTH-EAST**, each option carrying its
   drawing AND its words, both the same size, neither off the screen — his
   geometry, chosen for the analog stick.

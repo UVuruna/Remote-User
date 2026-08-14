@@ -57,6 +57,7 @@ import traffic_devices
 import traffic_history
 from config import SETTINGS
 from gui.theme import TOKENS, card_shadow, device_color
+from gui.traffic_battery import battery_sentence
 from gui.sizing import WrapLabel, clamp_to_screen, settle_minimum
 from gui.traffic_axis import (
     X_TICK_COUNT, _alpha, _axis_unit, _format_axis_value, _x_label, _x_ticks,
@@ -591,8 +592,21 @@ class TrafficWindow(QDialog):
         self._device_row_widgets: list[QWidget] = []
         self.phone_label = WrapLabel("—")
         self.gap_label = WrapLabel("—")
+        # WHAT THE APP COSTS THE BATTERY WHILE IT RUNS (T80d, owner request
+        # 2026-08-14). It sits beside the traffic because it answers the same
+        # class of question with the same method: the PHONE measures itself
+        # and reports it on the existing heartbeat, so every device answers
+        # for its own hardware, not only his —
+        # lang-ok: owner quote
+        # "nije samo do mog uređaja već za svaki treba da predvidimo".
+        # A simulated number was refused and may not return: an emulator has
+        # no battery and reports a fixed fake value, which would look
+        # authoritative and mean nothing. The line that matters most to him is
+        # the RUNNING cost, not the background one, which is why the draw is
+        # reported per session and averaged over the readings that carried one.
+        self.battery_label = WrapLabel("—")
         for label in (self.out_label, self.in_label, self.duration_label,
-                      self.phone_label, self.gap_label):
+                      self.phone_label, self.gap_label, self.battery_label):
             label.setWordWrap(True)   # ladder step 2: reflow before a wider window
             # AND THE LAYOUT MUST ACTUALLY ASK (found 2026-08-13 by the Qt
             # audit, the first time this window was photographed with real
@@ -611,6 +625,7 @@ class TrafficWindow(QDialog):
         self.duration_label.setObjectName("caption")
         self.phone_label.setObjectName("caption")
         self.gap_label.setObjectName("caption")
+        self.battery_label.setObjectName("caption")
         root.addWidget(self.out_label)
         root.addWidget(self.in_label)
         root.addWidget(self.duration_label)
@@ -618,6 +633,7 @@ class TrafficWindow(QDialog):
         root.addLayout(self.devices_rows_layout)
         root.addWidget(self.phone_label)
         root.addWidget(self.gap_label)
+        root.addWidget(self.battery_label)
 
         self.chart = TrafficChart(self)
         card_shadow(self.chart)
@@ -770,7 +786,8 @@ class TrafficWindow(QDialog):
                         + 3 * spacing)
         width = max(CHART_MIN.width(), controls_row) + 36
         rows = metrics.height() + 6
-        height = (rows * 5            # out/in/duration/phone/gap: one line each
+        height = (rows * 6            # out/in/duration/phone/gap/battery: one
+                                      # line each
                   + rows * 3          # devices title + up to two device rows —
                                       # a FLOOR ONLY: `settle_minimum` grows
                                       # this in place from the real, currently-
@@ -938,6 +955,13 @@ class TrafficWindow(QDialog):
                 if gap else
                 "Lock the phone and unlock it: this line then says what the "
                 "app spent while it was gone, measured by the phone itself.")
+            # T80d — what the app costs the phone's battery while it RUNS.
+            # `battery_sentence` owns every word of it, including the two
+            # honest "this device does not report it" cases: the number can
+            # only be measured on the handset, and a device that refuses must
+            # say so rather than show a blank or a zero.
+            self.battery_label.setText(
+                battery_sentence(traffic.METER.battery(), clients))
             self._recording = bool(snap["recording"])
             self.record_label.setText(
                 "Recording to file" if self._recording else "Recording stopped")

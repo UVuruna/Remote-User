@@ -469,6 +469,14 @@ ALGORITHMIC = {
     # an axis. Algorithmic — the 1/2/5 gridline ladder is scored, not
     # picked, and "one axis, one unit" is a rule a grade already caught.
     "server/gui/traffic_axis.py",
+    # Split off traffic_window.py 2026-08-14 (T80d), also by responsibility:
+    # that window's subject is BYTES, which the PC counts at its own socket
+    # and which therefore always exist; this one's is POWER, which only the
+    # phone can measure about itself and which a large share of devices
+    # refuse to report. Algorithmic because the RULES are the content — a
+    # refusal must be stated in words and never as a zero, and one missing
+    # property may never silence the other.
+    "server/gui/traffic_battery.py",
     "server/gui/main_window.py",
     # New 2026-08-07 (round R2): the Settings window, and Windows' foreground
     # lock borrowed with a ledger (a state machine with a repair path —
