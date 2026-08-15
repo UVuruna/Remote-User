@@ -44,6 +44,7 @@ from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 import actions_api
+import agents_refresh
 import caret
 import claude_api
 import clipboard
@@ -329,6 +330,7 @@ def create_app(stream, hub: FrameHub | None, injector: InputInjector, token: str
             # round, so a thief that strikes mid-sentence destroys the whole
             # utterance instead of misplacing it.
             tasks.append(asyncio.create_task(focus_guard.watch(layouts, conn, injector)))
+            tasks.append(asyncio.create_task(agents_refresh.watch(ws, layouts, conn)))
             # THE CLIPBOARD LIVES ON BOTH DEVICES (task 182): a copy made AT
             # THE PC while this phone is watching reaches it too. One task
             # per connection, same family as the two lines above.

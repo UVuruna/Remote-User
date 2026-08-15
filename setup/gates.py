@@ -967,3 +967,19 @@ def input_gate(step, run) -> None:
     step("0b12/6  DEVICE NAME GATE — a model code becomes a real name once, "
          "cached forever, and never a guess (tests/test_device_names.py)")
     run([sys.executable, str(PROJECT_DIR / "tests" / "test_device_names.py")])
+
+    # OWNER REPORT 2026-08-15: he built a new layout on a VS Code window
+    # still loading its previous Claude conversation. `agents_in()` answered
+    # empty at that instant and stayed empty — no Claude set on the wheel —
+    # until he switched to Desktop and back, because `layout_state` computes
+    # agents live but nothing re-sends when the process table changes on its
+    # own between the human actions that already trigger a send. Fix:
+    # `agents_refresh.watch`, one task per connection alongside
+    # `focus_guard.watch`, polling a comparable signature and re-sending
+    # through the existing `layout_api.send_layout_state` choke point only
+    # when it moved — never for an unchanged answer (constraint 27's own
+    # lesson, applied here too).
+    step("0b19/6  AGENTS REFRESH GATE — a process-table change reaches the "
+         "phone without a human action, and an unchanged one sends nothing "
+         "(tests/test_agents_refresh.py)")
+    run([sys.executable, str(PROJECT_DIR / "tests" / "test_agents_refresh.py")])
