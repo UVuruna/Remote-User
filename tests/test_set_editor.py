@@ -370,6 +370,17 @@ window.__padButtons = () =>
   [...document.getElementById('group-left').children]
     .filter((c) => !c.classList.contains('cat'))
     .map((c) => (c.textContent || '').trim());
+// T107 — what a rotation with the card OPEN must move: the drawing, the
+// caption and which order key is being edited. `column`/`key` ask the exact
+// functions the product asks (`padColumn`/`editedOrderKey`), never a second
+// reading of the DOM, so this can never disagree with what the page itself
+// believes it is doing.
+window.__editorShape = () => ({
+  column: typeof padColumn === 'function' ? padColumn() : null,
+  key: typeof editedOrderKey === 'function' ? editedOrderKey() : null,
+  caption: (document.querySelector('#set-editor-panel p.sets-sub') || {}).textContent || '',
+  arrangeIsColumn: !!document.querySelector('#set-editor-panel .se-arrange.se-column'),
+});
 """
 
 
@@ -541,6 +552,126 @@ def check_the_phone_walks_the_path(browser, gate, actions_path: Path, results):
         ctx.close()
 
 
+def check_rotation_redraws_the_open_editor(browser, gate, actions_path, results):
+    """T107 (owner report 2026-08-15). His finding: the card rendered ONCE and
+    never again, so a rotation with it open left the DRAWING of the mode he
+    left AND — the worse half — kept editing that mode's `order_land`/
+    `order_port` key while his caption still named the old shape. Proven two
+    ways: a REAL rotation of a card left on its default (`auto` both sides,
+    which is where his screenshot found it: column upright → cross sideways),
+    and his explicit case — a preference OUTRANKS the default, in the
+    orientation he is actually holding, even one just entered by rotating."""
+    ctx = browser.new_context(
+        viewport={"width": 412, "height": 915}, has_touch=True, is_mobile=True,
+        device_scale_factor=2,
+        user_agent=("Mozilla/5.0 (Linux; Android 15; Pixel 8) AppleWebKit/537.36 "
+                    "(KHTML, like Gecko) Chrome/126.0 Mobile Safari/537.36 VibeCoderApp"))
+    page = ctx.new_page()
+    errors = []
+    page.on("pageerror", lambda e: errors.append(str(e)))
+    try:
+        page.goto(f"http://127.0.0.1:{gate.PORT}/?token={gate.TOKEN}")
+        page.wait_for_selector("#group-left button", timeout=8000)
+        page.wait_for_function("() => monitor.w > 0", timeout=10000)
+        page.evaluate("() => {" + EDITOR_JS + "}")
+
+        # ── (1) both sides on `auto` — the picture he sent. Portrait upright
+        # is `auto` -> column; landscape is `auto` -> cross. Nothing to set.
+        page.evaluate("() => { openSetsPanel(); openSetEditor("
+                      "categories.find((c) => c.name === 'Mouse')); }")
+        page.wait_for_timeout(150)
+        before = page.evaluate("() => __editorShape()")
+        results["opens showing the upright column, editing order_port"] = (
+            before["column"] is True and before["key"] == "order_port"
+            and before["arrangeIsColumn"] and "column" in before["caption"])
+        if not results["opens showing the upright column, editing order_port"]:
+            print(f"  DETAIL before rotation: {before}")
+
+        # ── the rotation itself, WITH THE CARD STILL OPEN. Real viewport
+        # resize, not a synthetic dispatch — matchMedia(orientation) reacts to
+        # the browser's own aspect ratio, exactly what a real phone changes.
+        page.set_viewport_size({"width": 915, "height": 412})
+        page.wait_for_timeout(250)
+        after = page.evaluate("() => __editorShape()")
+
+        results["(a) the drawing changes on rotation"] = (
+            after["arrangeIsColumn"] != before["arrangeIsColumn"]
+            and after["column"] is False)
+        results["(b) the caption names the new shape"] = (
+            "cross" in after["caption"] and "column" not in after["caption"])
+        results["the edited key's NAME changes with it"] = (
+            after["key"] == "order_land" and after["key"] != before["key"])
+        if after["column"] is not False or after["key"] != "order_land":
+            print(f"  DETAIL after rotation: {after}")
+
+        # (c) THE STRONGER PROOF: a name changing proves nothing if the box a
+        # finger is really tapping still writes the OLD key underneath a stale
+        # picture — his "worse half". Swap the first two slots NOW, with the
+        # rotation already applied, and read `edit` (a bare top-level `let`,
+        # visible as a global binding to every later evaluate on this page)
+        # directly: only `order_land` may have moved.
+        port_before = page.evaluate("() => JSON.stringify(edit.order_port)")
+        page.evaluate("() => { const c = document.querySelectorAll('.se-slot');"
+                      " __tap(c[0]); __tap(c[1]); }")
+        page.wait_for_timeout(150)
+        land_after = page.evaluate("() => edit.order_land")
+        port_after = page.evaluate("() => JSON.stringify(edit.order_port)")
+        results["(c) a post-rotation swap writes order_land, not order_port"] = (
+            land_after != [0, 1, 2, 3] and port_after == port_before)
+        if land_after == [0, 1, 2, 3] or port_after != port_before:
+            print(f"  DETAIL land={land_after} port_before={port_before} "
+                  f"port_after={port_after}")
+
+        # The card must still be alive and well after the redraw — a rotation
+        # is not a reason to lose the open editor.
+        still_open = page.evaluate("() => !document.getElementById('set-editor-panel').hidden")
+        results["the card stays open across the rotation"] = still_open
+
+        page.evaluate("() => { closeSetEditor(); closeSetsPanel(); }")
+        page.set_viewport_size({"width": 412, "height": 915})
+        page.wait_for_timeout(150)
+
+        # ── (d) HIS EXPLICIT CASE, twice: a choice outranks the default, in
+        # the orientation he is really holding — including one just entered.
+        page.evaluate("() => setPadShape('landscape', 'column')")
+        page.evaluate("() => { openSetsPanel(); openSetEditor("
+                      "categories.find((c) => c.name === 'Mouse')); }")
+        page.wait_for_timeout(150)
+        results["portrait still opens as the column (unaffected pref)"] = (
+            page.evaluate("() => __editorShape()")["column"] is True)
+        page.set_viewport_size({"width": 915, "height": 412})
+        page.wait_for_timeout(250)
+        g = page.evaluate("() => __editorShape()")
+        results["(d) landscape column preference draws the column, sideways"] = (
+            g["column"] is True and g["arrangeIsColumn"] and g["key"] == "order_port"
+            and "column" in g["caption"])
+        if not results["(d) landscape column preference draws the column, sideways"]:
+            print(f"  DETAIL landscape-pref-column: {g}")
+        page.evaluate("() => { closeSetEditor(); closeSetsPanel();"
+                      " setPadShape('landscape', 'auto'); }")
+        page.set_viewport_size({"width": 412, "height": 915})
+        page.wait_for_timeout(150)
+
+        page.evaluate("() => setPadShape('portrait', 'cross')")
+        page.evaluate("() => { openSetsPanel(); openSetEditor("
+                      "categories.find((c) => c.name === 'Mouse')); }")
+        page.wait_for_timeout(150)
+        g = page.evaluate("() => __editorShape()")
+        results["(d) portrait cross preference draws the cross, upright"] = (
+            g["column"] is False and not g["arrangeIsColumn"] and g["key"] == "order_land"
+            and "cross" in g["caption"])
+        if not results["(d) portrait cross preference draws the cross, upright"]:
+            print(f"  DETAIL portrait-pref-cross: {g}")
+        page.evaluate("() => { closeSetEditor(); closeSetsPanel();"
+                      " setPadShape('portrait', 'auto'); }")
+
+        results["the rotation checks ran clean"] = not errors
+        if errors:
+            print(f"  DETAIL page errors: {errors}")
+    finally:
+        ctx.close()
+
+
 SHOT_DIR = PROJECT / ".claude" / "shots" / "task218b-set-editor"
 
 
@@ -607,6 +738,11 @@ def main() -> int:
             except Exception as e:  # noqa: BLE001 — same reason as above
                 results["the phone walks his path"] = False
                 print(f"  DETAIL the phone half: {e}")
+            try:
+                check_rotation_redraws_the_open_editor(browser, gate, actions_path, results)
+            except Exception as e:  # noqa: BLE001 — same reason as above
+                results["a rotation with the card open redraws it (T107)"] = False
+                print(f"  DETAIL the rotation half: {e}")
             finally:
                 browser.close()
 

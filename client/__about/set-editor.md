@@ -63,6 +63,28 @@ the card says so. Preserving the survivors' positions has no honest answer for
 the button that just arrived, and an order that half-survives reads as the
 panel doing something it was not asked to.
 
+**A rotation while the card is open is a different question** (owner report
+2026-08-15, T107). `drawSetEditor()` only ever ran from three call sites —
+open, a slot tap, a tick change — nothing re-ran it on a rotation, so a phone
+turned sideways with the card open kept the UPRIGHT drawing on screen while
+`editedOrderKey()` had already silently started answering `order_land`
+underneath it: the worse half of his report, because a swap tapped there would
+edit the arrangement of the mode he was not looking at. His own spec is
+narrower than "portrait = column, landscape = cross" — it is *whatever
+`padShape()` answers for the orientation he is really holding, including a
+choice made in the OTHER orientation that outranks the default* — and the
+editor already asked that question correctly on OPEN; it just never asked it
+again. Fixed with the file's own `(orientation: portrait)` listener
+(`matchMedia`, the same primitive `controls.js` already uses for the D-pad
+itself) that calls `drawSetEditor()` again whenever the card is open
+(`edit !== null`). Nothing is discarded across the rotation: `edit.order_land`
+and `edit.order_port` are both carried for the card's whole life, so a
+rotation only changes which one `editedOrderKey()`/`buildArrangement` are
+looking at — as if the card had been closed and reopened in the new
+orientation — while `edit.active` (which does not depend on orientation)
+and an armed `swapFrom` (a SLOT index, valid in either order since both have
+the same length) survive untouched.
+
 ## Where it saves — not in this phone
 
 Every other phone-side switch is per DEVICE on purpose (his tablet and his
@@ -86,7 +108,7 @@ shape of the bug the layout Move handle took four rounds to close.
 
 ## Gate
 
-`tests/test_set_editor.py` (fail-closed in `setup/build.py`). Four promises,
+`tests/test_set_editor.py` (fail-closed in `setup/gates.py`). Four promises,
 each proven by planting its own defect: the edit lands in the USER's
 actions.json (driven from a file of an OLDER shape, never `copy(shipped)`); a
 non-owner key is refused whole; an id outside the pool is refused; and the
@@ -95,6 +117,17 @@ Chromium and walks his own path — Settings → Sets → the edit door → unti
 tick, swap, Save — then reads the message off the wire and measures that the
 LIVE D-pad changed, because a module nobody calls is a feature that does not
 exist (the actions.json lesson of 2026-08-07).
+
+**T107's rotation block** drives a REAL viewport resize with the card open
+(never a synthetic dispatch — `matchMedia(orientation)` reacts to the
+browser's own aspect ratio, exactly what a real phone changes) and asserts:
+the drawing changes, the caption names the new shape, a swap tapped after the
+rotation writes the NEW key's array and leaves the other one untouched (read
+straight off `edit`, a bare top-level `let` and therefore a global binding any
+later `page.evaluate` on the same page can see), and his explicit case in both
+directions — a landscape `column` preference draws the column sideways, a
+portrait `cross` preference draws the cross upright — proving the choice
+outranks the default even in an orientation just entered by rotating.
 
 `tests/test_actions_migration.py` carries the other side: what the phone wrote
 must survive the NEXT release's shipped-pool merge.

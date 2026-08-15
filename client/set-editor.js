@@ -328,3 +328,29 @@ function closeSetEditor() {
 setEditorPanel.addEventListener("pointerdown", (e) => {
   if (e.target === setEditorPanel) closeSetEditor();   // backdrop tap = cancel
 });
+
+// ── A ROTATION WHILE THE CARD IS OPEN IS A DIFFERENT QUESTION (owner report
+// 2026-08-15, T107) ─────────────────────────────────────────────────────────
+// `drawSetEditor` only ever ran from three call sites (open, a slot tap, a
+// tick change) — nothing re-ran it on a rotation, so a phone turned sideways
+// with the card open kept showing the upright column's DRAWING while
+// `editedOrderKey()` (line 86) had already silently started answering
+// `order_land` underneath it: the worse half his report named, because the
+// finger would then be arranging the mode it is not looking at. `controls.js`
+// already owns an `(orientation: portrait)` listener for the D-pad itself
+// (line 888) but has no reason to know this card exists — the editor's own
+// state (`edit`) is private to this file, so the redraw belongs here, not
+// bolted onto a module that would then have to import our internals.
+//
+// What happens to an in-progress edit crossing the rotation: NOTHING is
+// discarded. `edit.order_land` and `edit.order_port` are both carried for the
+// whole life of the card (line 61 on) — a rotation only changes which one
+// `editedOrderKey()`/`buildArrangement` are looking at, exactly as if he had
+// closed the card and reopened it in the new orientation, except the ticks in
+// `edit.active` (which do not depend on orientation) survive untouched. An
+// armed `swapFrom` also survives — it names a SLOT index, and both orders
+// have the same length, so a swap armed just before the rotation still swaps
+// two real positions in whichever order is now on screen.
+matchMedia("(orientation: portrait)").addEventListener("change", () => {
+  if (edit) drawSetEditor();
+});
