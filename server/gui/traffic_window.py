@@ -96,8 +96,9 @@ SPANS = [
     ("All (from file)", "all", None),
 ]
 TEN_HOURS_S = 10 * 3600
-ZOOM_HINT = ("Zoom: drag a rectangle over the graph, roll the wheel over it, "
-             "or use − / + — Reset zoom shows the whole span again.")
+ZOOM_HINT = ("Zoom: drag a rectangle over the graph (time and rate), roll the wheel "
+             "over it, or use − / +. Once zoomed, dragging MOVES the slice — "
+             "Reset zoom shows the whole span again.")
 
 
 def history_since(kind: str, now: float) -> float | None:
@@ -689,6 +690,9 @@ class TrafficWindow(QDialog):
             text = ("Zoomed: " + time.strftime(fmt, time.localtime(view.start))
                     + " – " + time.strftime(fmt, time.localtime(view.end))
                     + f"  ({traffic_devices.human_duration(view.span())})")
+            if view.has_y():
+                text += (f"  ·  {human_rate(view.y_lo)} – {human_rate(view.y_hi)}"
+                         "  ·  drag to move the slice")
         if self.zoom_label.text() != text:
             self.zoom_label.setText(text)
 

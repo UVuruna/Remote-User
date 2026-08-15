@@ -17,8 +17,17 @@ must agree on the same view, so both ask this one object.
 """
 
 MIN_SPAN_S = 10.0     # a view narrower than this holds too few seconds to draw
+MIN_Y_SPAN = 64.0     # bytes/s — a Y window narrower than this is a line, not a curve
 ZOOM_FACTOR = 2.0     # + halves the view, − doubles it, around the anchor
 DRAG_MIN_PX = 6       # a press-and-release that moved less is a click, not a drag
+
+
+# THE ZOOM IS 2D (owner decision 2026-08-15, option B): a rectangle limits
+# BOTH the time axis and the rate axis, "so the Y scale is not always
+# 0..MAX and the curve can be seen in detail". While the view is the whole
+# span the Y axis is AUTO — 0 up to the visible peak's gridline, exactly as
+# before; a drawn rectangle sets `y_lo..y_hi`, and from then on the drag
+# PANS the slice along both axes (his B: zoomed = move, full view = zoom).
 
 
 class ViewRange:
@@ -27,6 +36,13 @@ class ViewRange:
         self.full_end = 0.0
         self.start = 0.0
         self.end = 0.0
+        # The rate window; None = automatic (0 .. the visible peak's top
+        # gridline). `y_cap` is the CEILING a pan/zoom-out may reach — the
+        # whole span's own top gridline, told to us by the chart at paint,
+        # since only the chart knows the ladder its axis uses.
+        self.y_lo: float | None = None
+        self.y_hi: float | None = None
+        self.y_cap: float = 0.0
 
     # -- the span the picker selected --------------------------------------
 
@@ -44,7 +60,14 @@ class ViewRange:
 
     def is_zoomed(self) -> bool:
         return (self.start > self.full_start + 1e-6
-                or self.end < self.full_end - 1e-6)
+                or self.end < self.full_end - 1e-6
+                or self.has_y())
+
+    def has_y(self) -> bool:
+        return self.y_lo is not None and self.y_hi is not None
+
+    def y_span(self) -> float:
+        return (self.y_hi - self.y_lo) if self.has_y() else 0.0
 
     def span(self) -> float:
         return max(0.0, self.end - self.start)
@@ -63,35 +86,67 @@ class ViewRange:
         return self._zoom_by(ZOOM_FACTOR, anchor)
 
     def reset(self) -> bool:
-        """Back to the full span. False when nothing was zoomed."""
+        """Back to the full span, Y automatic again. False when nothing was
+        zoomed."""
         if not self.is_zoomed():
             return False
         self.start, self.end = self.full_start, self.full_end
+        self.y_lo = self.y_hi = None
         return True
 
-    def _zoom_by(self, factor: float, anchor: float | None) -> bool:
+    def _zoom_by(self, factor: float, anchor: float | None,
+                 y_anchor: float | None = None) -> bool:
         cur = self.span()
         full = max(0.0, self.full_end - self.full_start)
         if cur <= 0 or full <= 0:
             return False
+        changed = False
         new_span = min(full, max(MIN_SPAN_S, cur * factor))
-        if abs(new_span - cur) < 1e-6:
-            return False
-        if anchor is None or not (self.start <= anchor <= self.end):
-            anchor = (self.start + self.end) / 2
-        # Keep the anchor at the same FRACTION of the view — zooming toward
-        # the mouse keeps what is under it in place.
-        frac = (anchor - self.start) / cur
-        self.start = anchor - frac * new_span
-        self.end = self.start + new_span
-        self._clamp()
-        return True
+        if abs(new_span - cur) >= 1e-6:
+            if anchor is None or not (self.start <= anchor <= self.end):
+                anchor = (self.start + self.end) / 2
+            # Keep the anchor at the same FRACTION of the view — zooming
+            # toward the mouse keeps what is under it in place.
+            frac = (anchor - self.start) / cur
+            self.start = anchor - frac * new_span
+            self.end = self.start + new_span
+            self._clamp()
+            changed = True
+        # The rate axis follows ONLY once a rectangle has set it — an
+        # automatic Y stays automatic, so − / + on a plain time zoom keep the
+        # old picture to the pixel.
+        if self.has_y() and self.y_cap > 0:
+            cur_y = self.y_span()
+            new_y = min(self.y_cap, max(MIN_Y_SPAN, cur_y * factor))
+            if abs(new_y - cur_y) >= 1e-9:
+                if y_anchor is None or not (self.y_lo <= y_anchor <= self.y_hi):
+                    y_anchor = (self.y_lo + self.y_hi) / 2
+                fy = (y_anchor - self.y_lo) / cur_y if cur_y > 0 else 0.5
+                self.y_lo = y_anchor - fy * new_y
+                self.y_hi = self.y_lo + new_y
+                self._clamp_y()
+                changed = True
+        return changed
+
+    def zoom_in_at(self, anchor: float | None, y_anchor: float | None) -> bool:
+        return self._zoom_by(1.0 / ZOOM_FACTOR, anchor, y_anchor)
+
+    def zoom_out_at(self, anchor: float | None, y_anchor: float | None) -> bool:
+        return self._zoom_by(ZOOM_FACTOR, anchor, y_anchor)
 
     # -- the drag ---------------------------------------------------------
 
-    def set_view(self, start: float, end: float) -> bool:
-        """The rectangle he drew, in unix time (either order). Clamped and
-        widened to `MIN_SPAN_S`; False when it would change nothing."""
+    def set_view(self, start: float, end: float,
+                 y_lo: float | None = None, y_hi: float | None = None) -> bool:
+        """The rectangle he drew: unix times (either order) and, when the
+        rectangle had height, the rate window (either order, bytes/s).
+        Clamped and widened to the floors; False when nothing changes. Only
+        `y_lo`/`y_hi` BOTH given set the rate axis — a flat rectangle keeps
+        Y automatic."""
+        before = (self.start, self.end, self.y_lo, self.y_hi)
+        if y_lo is not None and y_hi is not None:
+            self.y_lo, self.y_hi = (y_lo, y_hi) if y_lo <= y_hi else (y_hi, y_lo)
+            self._clamp_y()
         lo, hi = (start, end) if start <= end else (end, start)
         # The rectangle's EDGES are clamped first — a drag that ran past the
         # plot means "up to the end", not "the whole span".
@@ -100,10 +155,38 @@ class ViewRange:
         if hi - lo < MIN_SPAN_S:
             mid = (lo + hi) / 2
             lo, hi = mid - MIN_SPAN_S / 2, mid + MIN_SPAN_S / 2
-        before = (self.start, self.end)
         self.start, self.end = lo, hi
         self._clamp()
-        return (self.start, self.end) != before
+        return (self.start, self.end, self.y_lo, self.y_hi) != before
+
+    # -- the pan (option B: zoomed = the drag MOVES the slice) -----------
+
+    def pan(self, dt: float, dy: float) -> bool:
+        """Shift the view by `dt` seconds and `dy` bytes/s (Y only when a
+        rectangle has set it), clamped inside the full span and 0..y_cap.
+        False when nothing moved (already at an edge)."""
+        before = (self.start, self.end, self.y_lo, self.y_hi)
+        span = self.span()
+        if dt and span > 0:
+            self.start = min(max(self.full_start, self.start + dt), self.full_end - span)
+            self.end = self.start + span
+            self._clamp()
+        if dy and self.has_y():
+            ys = self.y_span()
+            self.y_lo = min(max(0.0, self.y_lo + dy), max(0.0, self.y_cap - ys))
+            self.y_hi = self.y_lo + ys
+            self._clamp_y()
+        return (self.start, self.end, self.y_lo, self.y_hi) != before
+
+    def _clamp_y(self) -> None:
+        if not self.has_y():
+            return
+        cap = self.y_cap if self.y_cap > 0 else max(self.y_hi, MIN_Y_SPAN)
+        span = min(max(self.y_span(), min(MIN_Y_SPAN, cap)), cap)
+        self.y_lo = max(0.0, self.y_lo)
+        if self.y_lo + span > cap:
+            self.y_lo = max(0.0, cap - span)
+        self.y_hi = self.y_lo + span
 
     def _clamp(self) -> None:
         full = self.full_end - self.full_start
@@ -122,6 +205,15 @@ def px_to_time(x: float, plot_left: float, plot_right: float,
     width = max(1.0, plot_right - plot_left)
     frac = min(1.0, max(0.0, (x - plot_left) / width))
     return start + frac * (end - start)
+
+
+def px_to_rate(y: float, plot_top: float, plot_bottom: float,
+               y_lo: float, y_hi: float) -> float:
+    """A pixel ROW of the plot as bytes/s inside [y_lo, y_hi] — the inverse
+    of the chart's `y_of` (the bottom is `y_lo`), clamped to the plot."""
+    height = max(1.0, plot_bottom - plot_top)
+    frac = min(1.0, max(0.0, (plot_bottom - y) / height))
+    return y_lo + frac * (y_hi - y_lo)
 
 
 def is_drag(x0: float, x1: float) -> bool:

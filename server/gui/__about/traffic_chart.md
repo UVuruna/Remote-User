@@ -50,10 +50,16 @@ READ for it.
 
 ## Design Decisions
 
-- **The zoom is a TIME window; the y-axis follows the visible peak.** Owner
-  words: a dragged "square" zooms that section — since the plot's y-axis is
-  always scaled to what is visible, zooming the time axis also zooms the
-  amplitude of that section, and one axis is one rule.
+- **The zoom is 2D** (owner decision 2026-08-15, option B — it was time-only
+  for one release, 0.0.234): a rectangle with height limits the RATE axis
+  too, so the Y scale is no longer always 0..MAX and a curve can be read in
+  detail; the series are CLIPPED to the plot and `y_of` is unclamped, so a
+  curve keeps its true slope at the window's edge instead of flattening onto
+  it; gridlines come from `traffic_axis._y_ticks_range` — the same 1/2/5
+  step, laid inside the window. **Zoomed, the drag MOVES the slice** (open-
+  hand cursor; closed while dragging) along both axes from the press-time
+  view; in the full view the drag draws the rectangle. The rectangle's card
+  reads the time range and, when it has height, the rate range too.
 - **A drag rectangle is visible while it is drawn** — his own phrase
   ("vizuelno se prikazuje dok to radimo" — lang-ok: owner quote); a
   translucent accent band with a dashed edge and the spanned seconds in a

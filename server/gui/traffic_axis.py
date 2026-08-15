@@ -86,6 +86,22 @@ def _y_ticks(peak: float, min_ticks: int = Y_TICK_MIN,
     return [i * best_step for i in range(best_n)]
 
 
+def _y_ticks_range(lo: float, hi: float) -> list[float]:
+    """Gridlines for a ZOOMED rate window `[lo, hi]` (the 2D zoom, owner
+    decision 2026-08-15): the same 1/2/5 ladder step `_y_ticks` would pick
+    for a span of `hi - lo`, laid on multiples of that step inside the
+    window — so a zoomed axis reads in the same round numbers as the full
+    one, only closer together. Empty when the window is degenerate."""
+    span = hi - lo
+    if span <= 0:
+        return []
+    ladder = _y_ticks(span)
+    step = ladder[1] if len(ladder) > 1 else span
+    first = math.ceil(lo / step - 1e-9)
+    last = math.floor(hi / step + 1e-9)
+    return [i * step for i in range(first, last + 1)]
+
+
 def _x_ticks(start: float, end: float, count: int) -> list[float]:
     span = max(1e-6, end - start)
     if count <= 1:

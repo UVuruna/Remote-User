@@ -21,7 +21,7 @@ colours and the live/disk point helpers now live in
 the zoom's arithmetic in [Traffic Zoom](traffic_zoom.md). This window keeps
 the numbers, the picker, the zoom controls (− / + / Reset zoom, T104, and the
 caption under the control row that reads either the how-to hint or
-"Zoomed: from – to (duration)") and the recording footer, and it decides what
+"Zoomed: from – to (duration) · lo – hi rate · drag to move the slice") and the recording footer, and it decides what
 to READ for a zoomed file-backed span: `_history_key(kind)` is the span alone
 or `kind|start-end`, so a whole-span result is never adopted as the zoomed
 read (the spans gate's own rule), `_on_zoomed` drops the key and re-reads

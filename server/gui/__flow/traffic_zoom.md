@@ -11,7 +11,8 @@ button + / wheel up ─► zoom_in(anchor)  ─┐
 button − / wheel dn ─► zoom_out(anchor) ─┼─► _zoom_by(factor, anchor)
                                           │     new_span := clamp(cur·factor, MIN_SPAN_S..full)
                                           │     keep anchor's FRACTION → start/end → _clamp
-drag release ────────► set_view(t0, t1)   │     edges clamped to full, widened to MIN_SPAN_S
+drag release ────────► set_view(t0, t1, r0, r1)  edges clamped, widened to the floors; r = rate window
+zoomed drag ─────────► pan(dt, dy)         │     from the press-time view; clamped to full and 0..y_cap
 Reset ───────────────► reset()            ┘
 
 changed? ──► TrafficChart._view_changed ──► zoomed ──► TrafficWindow._on_zoomed

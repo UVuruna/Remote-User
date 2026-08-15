@@ -16,6 +16,11 @@ WHAT THIS GATE EXISTS TO PREVENT:
   * A zoomed file-backed span being merely stretched instead of re-read for
     the view (`read_history(..., until)` + the window's zoom key), and a
     result for the whole span being adopted as the zoomed one.
+  * The 2D zoom (owner decision 2026-08-15, option B) coming apart: a
+    rectangle with height must limit the RATE axis too, a zoomed plot's drag
+    must MOVE the slice (never draw a second rectangle), a pan may never
+    leave the span or the 0..cap rate ceiling, and Reset must give the
+    automatic Y back.
   * The Traffic window losing its minimize/maximize buttons (T103).
   * A CSV row written WITHOUT the stream descriptor while a session
     streams, or an OLD row (4/5/partial columns) failing to read, or an old
@@ -85,6 +90,8 @@ def _chart(points, start, end, w=800, h=300):
 
 
 def _mouse(chart, kind, x, y=150, button=Qt.MouseButton.LeftButton):
+    """A synthetic mouse event at widget coords (x, y), delivered straight
+    to the chart's handler for `kind`."""
     pos = QPointF(x, y)
     ev = QMouseEvent(kind, pos, chart.mapToGlobal(QPoint(int(x), int(y))),
                      button, button if kind != QEvent.Type.MouseMove else Qt.MouseButton.NoButton,
@@ -396,6 +403,120 @@ def check_hover_card_names_device_and_stream() -> bool:
                 and "slice: 968x2096" in text and "zoom: x2" in text)
 
 
+# ═══════════════════════════ 5. THE 2D ZOOM (option B) ═══════════════════════════
+def check_rectangle_with_height_sets_the_rate_axis() -> bool:
+    """A press at (25 %, 20 %) and a release at (75 %, 80 %) of the plot
+    limits BOTH axes: the time to the middle half and the rate to the middle
+    60 % of the automatic axis. PLANTED DEFECT: `set_view` ignores y_lo/y_hi
+    (or the release never computes them)."""
+    start, end = 1_700_000_000.0, 1_700_000_000.0 + 1000.0
+    chart = _chart([_pt(start + i, out=50_000.0) for i in range(0, 1000, 10)], start, end)
+    plot = chart._plot
+    y_hi_auto = chart.y_hi           # the automatic axis top before the drag
+    x0, x1 = plot.left() + plot.width() * 0.25, plot.left() + plot.width() * 0.75
+    y0, y1 = plot.top() + plot.height() * 0.20, plot.top() + plot.height() * 0.80
+    _mouse(chart, QEvent.Type.MouseButtonPress, x0, y0)
+    _mouse(chart, QEvent.Type.MouseMove, x1, y1)
+    _mouse(chart, QEvent.Type.MouseButtonRelease, x1, y1)
+    chart.grab()                     # a paint: the axis really drawn follows the view
+    v = chart.view
+    return (v.has_y()
+            and abs(v.y_lo - 0.20 * y_hi_auto) < 0.01 * y_hi_auto
+            and abs(v.y_hi - 0.80 * y_hi_auto) < 0.01 * y_hi_auto
+            and abs(v.start - (start + 250.0)) < 2.0
+            and abs(v.end - (start + 750.0)) < 2.0
+            and chart.y_lo == v.y_lo and chart.y_hi == v.y_hi)
+
+
+def check_flat_rectangle_keeps_y_automatic() -> bool:
+    """A rectangle too flat to mean a rate window (< DRAG_MIN_PX tall) zooms
+    time only and leaves Y automatic. PLANTED DEFECT: apply Y regardless."""
+    start, end = 1_700_000_000.0, 1_700_000_000.0 + 1000.0
+    chart = _chart([_pt(start + i) for i in range(0, 1000, 10)], start, end)
+    plot = chart._plot
+    x0, x1 = plot.left() + plot.width() * 0.25, plot.left() + plot.width() * 0.75
+    _mouse(chart, QEvent.Type.MouseButtonPress, x0, 150)
+    _mouse(chart, QEvent.Type.MouseButtonRelease, x1, 152)
+    return chart.view.is_zoomed() and not chart.view.has_y()
+
+
+def check_zoomed_drag_pans_and_draws_no_rectangle() -> bool:
+    """Option B: once zoomed, a drag MOVES the slice — the view shifts by the
+    dragged pixels along both axes, no rectangle is armed, and `zoomed`
+    fires ONCE on release (a re-read per pan, never per pixel). PLANTED
+    DEFECT: press arms the rectangle regardless of `is_zoomed()`."""
+    start, end = 1_700_000_000.0, 1_700_000_000.0 + 1000.0
+    chart = _chart([_pt(start + i, out=50_000.0) for i in range(0, 1000, 10)], start, end)
+    plot = chart._plot
+    chart.view.set_view(start + 400, start + 600, 10_000.0, 30_000.0)
+    chart._view_changed(); chart.grab()
+    fired = []
+    chart.zoomed.connect(lambda: fired.append(1))
+    x0, y0 = plot.center().x(), plot.center().y()
+    _mouse(chart, QEvent.Type.MouseButtonPress, x0, y0)
+    armed = chart._drag_x0 is not None
+    # drag LEFT by a quarter of the plot (→ view moves later in time by
+    # a quarter of its span = 50 s) and DOWN by a quarter (→ rate window
+    # moves up by a quarter of its span = 5 kB/s)
+    _mouse(chart, QEvent.Type.MouseMove, x0 - plot.width() * 0.25, y0 + plot.height() * 0.25)
+    mid_fired = len(fired)
+    _mouse(chart, QEvent.Type.MouseButtonRelease, x0 - plot.width() * 0.25, y0 + plot.height() * 0.25)
+    v = chart.view
+    return (not armed and mid_fired == 0 and len(fired) == 1
+            and abs(v.start - (start + 450.0)) < 2.0
+            and abs(v.end - (start + 650.0)) < 2.0
+            and abs(v.y_lo - 15_000.0) < 200.0
+            and abs(v.y_hi - 35_000.0) < 200.0)
+
+
+def check_pan_never_leaves_span_or_rate_ceiling() -> bool:
+    """PLANTED DEFECT: drop the clamps in `pan`."""
+    v = traffic_zoom.ViewRange()
+    v.set_full(0.0, 1000.0)
+    v.y_cap = 60_000.0
+    v.set_view(400.0, 600.0, 10_000.0, 30_000.0)
+    v.pan(-5000.0, -100_000.0)
+    at_low = (v.start, v.end, v.y_lo, v.y_hi) == (0.0, 200.0, 0.0, 20_000.0)
+    v.pan(+5000.0, +1_000_000.0)
+    at_high = (v.start, v.end, v.y_lo, v.y_hi) == (800.0, 1000.0, 40_000.0, 60_000.0)
+    return at_low and at_high
+
+
+def check_reset_gives_the_automatic_axis_back() -> bool:
+    """PLANTED DEFECT: `reset` forgets to clear y_lo/y_hi."""
+    v = traffic_zoom.ViewRange()
+    v.set_full(0.0, 1000.0); v.y_cap = 60_000.0
+    v.set_view(400.0, 600.0, 10_000.0, 30_000.0)
+    v.reset()
+    return not v.is_zoomed() and not v.has_y() and (v.start, v.end) == (0.0, 1000.0)
+
+
+def check_zoom_buttons_scale_the_rate_window_too() -> bool:
+    """With a rate window set, − / + scale it around its middle (clamped to
+    0..cap); with Y automatic they leave it automatic. PLANTED DEFECT:
+    `_zoom_by` never touches y."""
+    v = traffic_zoom.ViewRange()
+    v.set_full(0.0, 1000.0); v.y_cap = 60_000.0
+    v.set_view(400.0, 600.0, 10_000.0, 30_000.0)
+    v.zoom_in()
+    halved = abs(v.y_span() - 10_000.0) < 1e-6 and abs(v.y_lo - 15_000.0) < 1e-6
+    v.zoom_out(); v.zoom_out(); v.zoom_out(); v.zoom_out()
+    capped = v.has_y() and abs(v.y_span() - 60_000.0) < 1e-6 and v.y_lo == 0.0
+    w = traffic_zoom.ViewRange()
+    w.set_full(0.0, 1000.0); w.y_cap = 60_000.0
+    w.zoom_in()
+    return halved and capped and not w.has_y()
+
+
+def check_zoomed_ticks_lie_inside_the_window() -> bool:
+    """`_y_ticks_range` lays round gridlines INSIDE [lo, hi]. PLANTED
+    DEFECT: return the 0-based ladder regardless of `lo`."""
+    from gui.traffic_axis import _y_ticks_range
+    ticks = _y_ticks_range(20_000.0, 45_000.0)
+    return (ticks and all(20_000.0 <= t <= 45_000.0 for t in ticks)
+            and 3 <= len(ticks) <= 6 and 0.0 not in ticks)
+
+
 CHECKS = [
     ("the view never leaves the selected span", check_view_never_leaves_the_span),
     ("the view is never narrower than the floor", check_view_never_narrower_than_the_floor),
@@ -413,6 +534,13 @@ CHECKS = [
     ("the descriptor round-trips the CSV", check_descriptor_round_trips_the_csv),
     ("old rows still read and say 'not recorded'", check_old_rows_still_read_and_say_not_recorded),
     ("the hover card names device and stream", check_hover_card_names_device_and_stream),
+    ("a rectangle with height sets the rate axis (2D)", check_rectangle_with_height_sets_the_rate_axis),
+    ("a flat rectangle keeps Y automatic", check_flat_rectangle_keeps_y_automatic),
+    ("zoomed: a drag pans, arms no rectangle, re-reads once", check_zoomed_drag_pans_and_draws_no_rectangle),
+    ("a pan never leaves the span or the rate ceiling", check_pan_never_leaves_span_or_rate_ceiling),
+    ("Reset gives the automatic axis back", check_reset_gives_the_automatic_axis_back),
+    ("− / + scale the rate window too, never an automatic one", check_zoom_buttons_scale_the_rate_window_too),
+    ("zoomed gridlines lie inside the window", check_zoomed_ticks_lie_inside_the_window),
 ]
 
 

@@ -2533,7 +2533,7 @@ step in `build.py` (0av/6). Needs node.
 ---
 
 ### `test_traffic_zoom.py` — Traffic Zoom Gate (owner requests 2026-08-15, T103–T106)
-Fail-closed in `setup/gates.py` (0b20/6). Sixteen checks over the Traffic
+Fail-closed in `setup/gates.py` (0b20/6). Twenty-three checks over the Traffic
 window's zoom and the per-second stream descriptor, each proven red on its
 own planted defect:
 
@@ -2551,6 +2551,13 @@ own planted defect:
   re-reads the file for `[view.start, view.end]` under its own
   `kind|start-end` key and never adopts the whole-span result for it;
   `read_history` honours `until`.
+- **The 2D zoom** (owner option B, same day) — a rectangle with height sets
+  the rate axis (measured after a paint), a flat one keeps Y automatic, a
+  zoomed drag PANS by the dragged pixels along both axes, arms no rectangle
+  and fires `zoomed` once on release, a pan never leaves the span or the
+  0..cap ceiling, Reset restores the automatic axis, − / + scale a set rate
+  window and never an automatic one, and ranged gridlines lie inside the
+  window.
 - **The descriptor** ([Traffic Stream](../server/__about/traffic_stream.md))
   — reads the session's resolved fields (a scaled session says its SENT
   size, not the crop's), round-trips the CSV (eleven cells while streaming,

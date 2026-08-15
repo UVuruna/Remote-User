@@ -2,10 +2,14 @@
 
 **About:** [description](../__about/traffic_chart.md)
 
-## One drag (T105)
+## One drag (T105; 2D + pan since option B)
 
 ```
 mousePressEvent (left, inside the plot)
+ ├─ view.is_zoomed() → PAN: _pan_from = (x, y, start, end, y_lo, y_hi), closed hand
+ │     mouseMoveEvent → view := press-time view; view.pan(dt, dy) → update()
+ │     mouseReleaseEvent → zoomed.emit() ONCE if anything moved
+ └─ full view → the rectangle:
  │   _drag_x0 = _drag_x1 = x
  ├─ mouseMoveEvent ── _drag_x1 = x ── update()
  │       └─ paintEvent → _paint_drag: band [x0..x1] × plot height,
@@ -13,7 +17,8 @@ mousePressEvent (left, inside the plot)
  └─ mouseReleaseEvent
        ├─ not is_drag(x0, x1)  → nothing (a click)
        └─ is_drag              → t0, t1 := px_to_time(x0 / x1 over the PLOT)
-                                  view.set_view(t0, t1)   (clamped, ≥ MIN_SPAN_S)
+                                  r0, r1 := px_to_rate(y0 / y1) if the rectangle has height
+                                  view.set_view(t0, t1, r0, r1)   (clamped, ≥ floors)
                                   _view_changed() → start/end := view; zoomed.emit()
                                         └─ TrafficWindow._on_zoomed → re-read for the view
 ```

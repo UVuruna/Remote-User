@@ -23,7 +23,7 @@ from gui import traffic_zoom
 from gui.theme import TOKENS, device_color
 from gui.traffic_axis import (
     X_TICK_COUNT, _alpha, _axis_unit, _format_axis_value, _x_label, _x_ticks,
-    _y_ticks, human_rate,
+    _y_ticks, _y_ticks_range, human_rate,
 )
 
 
@@ -124,11 +124,21 @@ class TrafficChart(QWidget):
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
         self.view = traffic_zoom.ViewRange()
-        self._drag_x0: float | None = None   # where the press landed
-        self._drag_x1: float | None = None   # where the mouse is now
+        # The drag: in the FULL view a rectangle (x0,y0 → x1,y1) that will be
+        # zoomed to; ZOOMED, a pan — the press point plus the view it started
+        # from (owner decision 2026-08-15, option B: "zoomed = only move,
+        # full view = only zoom").
+        self._drag_x0: float | None = None
+        self._drag_y0: float | None = None
+        self._drag_x1: float | None = None
+        self._drag_y1: float | None = None
+        self._pan_from: tuple | None = None   # (x, y, start, end, y_lo, y_hi)
+        self._panned = False                   # a pan happened → re-read on release
         self.points: list = []
         self.start = 0.0
         self.end = 0.0
+        self.y_lo = 0.0          # the rate window really drawn (auto or set)
+        self.y_hi = 1.0
         self.span_label = ""
         self.downsampled = False
         self.loading = False
@@ -139,6 +149,7 @@ class TrafficChart(QWidget):
         self.setMinimumSize(CHART_MIN)
         self.setMouseTracking(True)
         self._hover_x: float | None = None
+        self._hover_y: float | None = None
         self._plot = None   # the last painted plot QRect — hit-testing needs it
 
     def set_data(self, points: list, start: float, end: float, span_label: str,
@@ -152,14 +163,14 @@ class TrafficChart(QWidget):
         self.span_label, self.downsampled, self.loading = span_label, downsampled, loading
         self.update()
 
-    # -- zoom (T104 / T105) -------------------------------------------------
+    # -- zoom (T104 / T105, 2D since the owner's option B) -----------------
 
     def zoom_in(self) -> None:
-        if self.view.zoom_in(self._hover_time()):
+        if self.view.zoom_in_at(self._hover_time(), self._hover_rate()):
             self._view_changed()
 
     def zoom_out(self) -> None:
-        if self.view.zoom_out(self._hover_time()):
+        if self.view.zoom_out_at(self._hover_time(), self._hover_rate()):
             self._view_changed()
 
     def zoom_reset(self) -> None:
@@ -172,53 +183,107 @@ class TrafficChart(QWidget):
         return traffic_zoom.px_to_time(self._hover_x, self._plot.left(),
                                        self._plot.right(), self.start, self.end)
 
+    def _hover_rate(self) -> float | None:
+        if self._hover_y is None or self._plot is None:
+            return None
+        return traffic_zoom.px_to_rate(self._hover_y, self._plot.top(),
+                                       self._plot.bottom(), self.y_lo, self.y_hi)
+
     def _view_changed(self) -> None:
         self.start, self.end = self.view.start, self.view.end
         self.update()
         self.zoomed.emit()
 
     def mousePressEvent(self, event) -> None:  # noqa: N802 — Qt override
+        pos = event.position()
         if (event.button() == Qt.MouseButton.LeftButton and self._plot is not None
-                and self._plot.contains(event.position().toPoint())):
-            self._drag_x0 = self._drag_x1 = event.position().x()
+                and self._plot.contains(pos.toPoint())):
+            if self.view.is_zoomed():
+                # ZOOMED: the drag MOVES the slice (option B).
+                v = self.view
+                self._pan_from = (pos.x(), pos.y(), v.start, v.end, v.y_lo, v.y_hi)
+                self._panned = False
+                self.setCursor(Qt.CursorShape.ClosedHandCursor)
+            else:
+                self._drag_x0 = self._drag_x1 = pos.x()
+                self._drag_y0 = self._drag_y1 = pos.y()
             self.update()
         else:
             super().mousePressEvent(event)
 
     def mouseReleaseEvent(self, event) -> None:  # noqa: N802 — Qt override
+        if self._pan_from is not None:
+            self._pan_from = None
+            self._refresh_cursor()
+            if self._panned:
+                self._panned = False
+                self.zoomed.emit()     # ONE re-read per pan, on release
+            return
         if self._drag_x0 is None:
             return super().mouseReleaseEvent(event)
-        x0, x1 = self._drag_x0, event.position().x()
-        self._drag_x0 = self._drag_x1 = None
+        x0, y0 = self._drag_x0, self._drag_y0
+        x1, y1 = event.position().x(), event.position().y()
+        self._drag_x0 = self._drag_x1 = self._drag_y0 = self._drag_y1 = None
         if self._plot is not None and traffic_zoom.is_drag(x0, x1):
-            left, right = self._plot.left(), self._plot.right()
-            t0 = traffic_zoom.px_to_time(x0, left, right, self.start, self.end)
-            t1 = traffic_zoom.px_to_time(x1, left, right, self.start, self.end)
-            if self.view.set_view(t0, t1):
+            plot = self._plot
+            t0 = traffic_zoom.px_to_time(x0, plot.left(), plot.right(), self.start, self.end)
+            t1 = traffic_zoom.px_to_time(x1, plot.left(), plot.right(), self.start, self.end)
+            r0 = r1 = None
+            if traffic_zoom.is_drag(y0, y1):
+                # A rectangle with HEIGHT limits the rate axis too (2D zoom);
+                # a flat one keeps Y automatic.
+                r0 = traffic_zoom.px_to_rate(y0, plot.top(), plot.bottom(), self.y_lo, self.y_hi)
+                r1 = traffic_zoom.px_to_rate(y1, plot.top(), plot.bottom(), self.y_lo, self.y_hi)
+            if self.view.set_view(t0, t1, r0, r1):
                 self._view_changed()
+                self._refresh_cursor()
                 return
         self.update()
 
     def wheelEvent(self, event) -> None:  # noqa: N802 — Qt override
         """The wheel zooms too — toward the mouse, like every map."""
         self._hover_x = event.position().x()
+        self._hover_y = event.position().y()
         delta = event.angleDelta().y()
         if delta > 0:
             self.zoom_in()
         elif delta < 0:
             self.zoom_out()
+        self._refresh_cursor()
         event.accept()
+
+    def _refresh_cursor(self) -> None:
+        """An open hand over a zoomed plot says "this drags"; the arrow over
+        the full view says "this draws"."""
+        if self._pan_from is not None:
+            return
+        self.setCursor(Qt.CursorShape.OpenHandCursor if self.view.is_zoomed()
+                       else Qt.CursorShape.ArrowCursor)
 
     # -- hover ---------------------------------------------------------
 
     def mouseMoveEvent(self, event) -> None:  # noqa: N802 — Qt override
-        self._hover_x = event.position().x()
-        if self._drag_x0 is not None:
-            self._drag_x1 = self._hover_x
+        pos = event.position()
+        self._hover_x, self._hover_y = pos.x(), pos.y()
+        if self._pan_from is not None and self._plot is not None:
+            x, y, start, end, y_lo, y_hi = self._pan_from
+            plot = self._plot
+            dt = -(pos.x() - x) * (end - start) / max(1.0, plot.width())
+            dy = (pos.y() - y) * ((y_hi - y_lo) if y_hi is not None else 0.0) \
+                / max(1.0, plot.height())
+            # Pan from the press-time view, never incrementally — an
+            # incremental pan drifts and can never return to where it began.
+            v = self.view
+            v.start, v.end, v.y_lo, v.y_hi = start, end, y_lo, y_hi
+            if v.pan(dt, dy) or (v.start, v.end) != (start, end):
+                self._panned = True
+            self.start, self.end = v.start, v.end
+        elif self._drag_x0 is not None:
+            self._drag_x1, self._drag_y1 = pos.x(), pos.y()
         self.update()
 
     def leaveEvent(self, event) -> None:  # noqa: N802 — Qt override
-        self._hover_x = None
+        self._hover_x = self._hover_y = None
         self.update()
         super().leaveEvent(event)
 
@@ -270,15 +335,32 @@ class TrafficChart(QWidget):
         # and a zoom out has them at hand.
         visible = [p for p in self.points if self.start <= p.t <= self.end]
         pts = _coalesce(visible, max(1, plot.width()))
-        peak = max(1024.0, self._peak_of(pts))
-        ticks = _y_ticks(peak)
-        axis_max = ticks[-1] if ticks[-1] > 0 else 1.0
+        # THE RATE AXIS: automatic (0 .. the visible peak's top gridline)
+        # until a rectangle set it, then exactly the window he drew (2D zoom,
+        # owner option B). The whole span's own top gridline is the CEILING
+        # a pan or a zoom-out may reach — handed to the view here, since only
+        # this paint knows the ladder.
+        full_ticks = _y_ticks(max(1024.0, self._peak_of(self.points)))
+        self.view.y_cap = full_ticks[-1] if full_ticks[-1] > 0 else 1.0
+        if self.view.has_y():
+            y_lo, y_hi = self.view.y_lo, self.view.y_hi
+            ticks = _y_ticks_range(y_lo, y_hi)
+        else:
+            peak = max(1024.0, self._peak_of(pts))
+            ticks = _y_ticks(peak)
+            y_lo, y_hi = 0.0, (ticks[-1] if ticks[-1] > 0 else 1.0)
+        self.y_lo, self.y_hi = y_lo, y_hi
+        axis_max = y_hi
+        y_span = max(1e-9, y_hi - y_lo)
 
         def x_of(t: float) -> float:
             return plot.left() + plot.width() * max(0.0, min(1.0, (t - self.start) / span))
 
         def y_of(v: float) -> float:
-            return plot.bottom() - plot.height() * min(1.0, v / axis_max)
+            # NOT clamped: a value outside the rate window is drawn outside
+            # the plot and CLIPPED, so the curve keeps its true slope at the
+            # window's edge instead of flattening onto it.
+            return plot.bottom() - plot.height() * ((v - y_lo) / y_span)
 
         # The idle band FIRST, behind everything: it is the reading the
         # owner came here for, so it must be visible under the lines, not
@@ -313,6 +395,8 @@ class TrafficChart(QWidget):
             painter.drawLine(plot.left(), int(y), plot.right(), int(y))
             painter.setPen(QPen(QColor(TOKENS["text2"]), 1))
             label = "0" if tick == 0 else _format_axis_value(tick, axis_div)
+            if y < plot.top() - 1 or y > plot.bottom() + 1:
+                continue
             ly = int(y) + (metrics.ascent() // 2 if tick > 0 else metrics.ascent())
             ly = max(plot.top() + metrics.ascent(), min(ly, plot.bottom()))
             painter.drawText(4, ly, label)
@@ -367,6 +451,8 @@ class TrafficChart(QWidget):
         # `multi_device` is active — no new legend layout needed (task rule),
         # since the two direction items already read "PC → phone" / "phone
         # → PC" and only need one more cue to stay apart from device colour.
+        painter.save()
+        painter.setClipRect(plot)     # the series may leave a zoomed rate window
         for base_color, avg_pick, max_pick, is_out in (
                 (out_color(), lambda p: p.out_avg, lambda p: p.out_max, True),
                 (in_color(), lambda p: p.in_avg, lambda p: p.in_max, False)):
@@ -420,6 +506,7 @@ class TrafficChart(QWidget):
                     mx_color.setAlpha(150)
                     painter.setPen(QPen(mx_color, 1, Qt.PenStyle.DotLine))
                     painter.drawPath(mx_path)
+        painter.restore()
 
         if self._drag_x0 is not None and self._drag_x1 is not None:
             self._paint_drag(painter, plot)
@@ -430,13 +517,20 @@ class TrafficChart(QWidget):
 
     def _paint_drag(self, painter: QPainter, plot) -> None:
         """The rectangle he is drawing (T105) — visible WHILE the button is
-        held: a translucent accent band the full height of the plot, its
-        edges clamped to the plot, so what will be zoomed to is never a
-        guess."""
+        held: a translucent accent rectangle, edges clamped to the plot, so
+        what will be zoomed to is never a guess. A rectangle too flat to set
+        the rate axis (< DRAG_MIN_PX tall) is drawn the full plot height,
+        which is exactly what it will zoom to."""
         x0 = min(max(plot.left(), self._drag_x0), plot.right())
         x1 = min(max(plot.left(), self._drag_x1), plot.right())
         left, right = (x0, x1) if x0 <= x1 else (x1, x0)
-        rect = QRectF(left, plot.top(), max(1.0, right - left), plot.height())
+        y0, y1 = self._drag_y0, self._drag_y1
+        if y0 is not None and y1 is not None and traffic_zoom.is_drag(y0, y1):
+            top = min(max(plot.top(), min(y0, y1)), plot.bottom())
+            bottom = min(max(plot.top(), max(y0, y1)), plot.bottom())
+        else:
+            top, bottom = plot.top(), plot.bottom()
+        rect = QRectF(left, top, max(1.0, right - left), max(1.0, bottom - top))
         painter.setPen(QPen(_alpha(TOKENS["accent"], 200), 1, Qt.PenStyle.DashLine))
         painter.setBrush(_alpha(TOKENS["accent"], 45))
         painter.drawRect(rect)
@@ -445,10 +539,16 @@ class TrafficChart(QWidget):
             t1 = traffic_zoom.px_to_time(right, plot.left(), plot.right(), self.start, self.end)
             label = (time.strftime("%H:%M:%S", time.localtime(t0)) + " – "
                      + time.strftime("%H:%M:%S", time.localtime(t1)))
+            if bottom - top < plot.height():
+                r_lo = traffic_zoom.px_to_rate(bottom, plot.top(), plot.bottom(), self.y_lo, self.y_hi)
+                r_hi = traffic_zoom.px_to_rate(top, plot.top(), plot.bottom(), self.y_lo, self.y_hi)
+                label += f"  ·  {human_rate(r_lo)} – {human_rate(r_hi)}"
             metrics = QFontMetrics(self.font())
             w = metrics.horizontalAdvance(label) + 12
             lx = min(max(plot.left(), (left + right) / 2 - w / 2), plot.right() - w)
-            ly = plot.top() + 6
+            ly = max(plot.top() + 6, top - metrics.height() - 10)
+            if ly + metrics.height() + 6 > bottom and top - metrics.height() - 10 < plot.top():
+                ly = plot.top() + 6
             card = QRectF(lx, ly, w, metrics.height() + 6)
             painter.setPen(QPen(_alpha(TOKENS["text2"], 70), 1))
             painter.setBrush(QColor(TOKENS["surface2"]))
