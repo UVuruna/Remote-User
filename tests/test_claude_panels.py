@@ -77,8 +77,16 @@ OFFICIAL_EFFORTS = [
     ("low", "Low"), ("medium", "Medium"), ("high", "High"),
     ("xhigh", "Extra high"), ("max", "Max"),
 ]
-# The Shift+Tab ring, in the order the key steps it.
-MODE_RING = ["default", "acceptEdits", "plan"]
+# The Shift+Tab ring, in the order the key steps it — the extension's own
+# Modes menu, observed 2026-08-15 off the owner's screenshot; `auto` and
+# `bypassPermissions` joined the first three that day (a live transcript on
+# `bypassPermissions` showed "unknown" on the Mode panel until they did).
+MODE_RING = ["default", "acceptEdits", "plan", "auto", "bypassPermissions"]
+# The owner's own note for each of the two 2026-08-15 additions.
+MODE_NOTES_2026_08_15 = {
+    "auto": "approves safe actions, pauses for risky",
+    "bypassPermissions": "never asks — dangerous commands run",
+}
 
 # Task 219: ONE group, five commands, DESCRIPTIVE labels because the official
 # names "svima plivaju i ne ukazuju na to šta rade".  # lang-ok: owner quote
@@ -378,6 +386,34 @@ def check_the_mode_ring_is_the_key_s_own_order() -> None:
     got = node_run("return CLAUDE_MODES.map(m => m.value);")
     if got != MODE_RING:
         raise AssertionError(f"the Shift+Tab ring drifted: {got} != {MODE_RING}")
+
+
+def check_auto_and_bypass_joined_the_ring() -> None:
+    """2026-08-15: the ring shipped with only three of the extension's five
+    modes, so a live transcript on `bypassPermissions` (the owner's own PC,
+    same day) showed "unknown" on the Mode panel and `claudeModePresses`
+    could not place him on it at all.
+
+    PLANTED DEFECT: drop the two 2026-08-15 rows back out of CLAUDE_MODES in
+    client/claude-state.js (revert to the three-item ring) — this check must
+    fail because `claudeMode('bypassPermissions')` again answers null and the
+    five-long ring shrinks back to three."""
+    got_values = node_run("return CLAUDE_MODES.map(m => m.value);")
+    for value in ("auto", "bypassPermissions"):
+        if value not in got_values:
+            raise AssertionError(
+                f"{value!r} is missing from CLAUDE_MODES — the Mode panel "
+                "cannot recognise a real live mode the PC reports")
+    if len(got_values) != 5:
+        raise AssertionError(
+            f"CLAUDE_MODES has {len(got_values)} rows, wanted 5: {got_values}")
+    got_notes = node_run(
+        "return {auto: claudeMode('auto').note,"
+        " bypassPermissions: claudeMode('bypassPermissions').note};")
+    if got_notes != MODE_NOTES_2026_08_15:
+        raise AssertionError(
+            f"the two new modes' notes drifted: {got_notes} != "
+            f"{MODE_NOTES_2026_08_15}")
 
 
 def check_presses_walk_the_ring_forwards_only() -> None:
@@ -759,6 +795,8 @@ CHECKS = [
      check_only_the_live_answer_lights_a_thinking_row),
     ("the mode ring is the order Shift+Tab really steps",
      check_the_mode_ring_is_the_key_s_own_order),
+    ("auto and bypassPermissions joined the ring 2026-08-15",
+     check_auto_and_bypass_joined_the_ring),
     ("the press count walks the ring forwards and wraps",
      check_presses_walk_the_ring_forwards_only),
     ("an unknown mode buys no computed presses",

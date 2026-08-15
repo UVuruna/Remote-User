@@ -71,12 +71,18 @@ this gets wrong, and it is a far better trade than asking a user to declare
 what his own screen already shows.
 """
 
+import contextlib
 import json
 import logging
+import os
 import re
+import shutil
+import sqlite3
 import subprocess
+import tempfile
 import threading
 import time
+import urllib.parse
 from collections.abc import Iterable
 from pathlib import Path
 
@@ -249,6 +255,27 @@ def _recent_projects(limit: int) -> list[Path]:
     return [slug for _, slug in dated[:limit]]
 
 
+def _first_cwd(transcript: Path) -> str:
+    """The raw `cwd` off a transcript's opening lines, or "". Shared by
+    `folder_of` (which reduces it to a basename) and `project_dir_of` (which
+    needs the whole path — see below)."""
+    try:
+        with transcript.open(encoding="utf-8", errors="replace") as fh:
+            for _ in range(8):
+                line = fh.readline()
+                if not line:
+                    break
+                try:
+                    cwd = json.loads(line).get("cwd")
+                except (json.JSONDecodeError, ValueError, AttributeError):
+                    continue
+                if cwd:
+                    return cwd
+    except OSError:
+        pass
+    return ""
+
+
 def folder_of(slug_dir: Path) -> str:
     """The project's folder name, lowercased — what a VS Code title shows.
 
@@ -264,20 +291,9 @@ def folder_of(slug_dir: Path) -> str:
     except OSError:
         return ""
     for transcript in files[:3]:
-        try:
-            with transcript.open(encoding="utf-8", errors="replace") as fh:
-                for _ in range(8):
-                    line = fh.readline()
-                    if not line:
-                        break
-                    try:
-                        cwd = json.loads(line).get("cwd")
-                    except (json.JSONDecodeError, ValueError, AttributeError):
-                        continue
-                    if cwd:
-                        return Path(cwd).name.lower()
-        except OSError:
-            continue
+        cwd = _first_cwd(transcript)
+        if cwd:
+            return Path(cwd).name.lower()
     return ""
 
 
@@ -327,6 +343,14 @@ def title_folder(title: str) -> str:
     """The project folder a VS Code window title names, lowercased, or ""."""
     match = VSCODE_TITLE_RE.search(title or "")
     return match.group(1).strip().lower() if match else ""
+
+
+def tab_title_of(title: str) -> str:
+    """The tab-title part of a VS Code window title — everything before
+    ` - <folder> - Visual Studio Code`. "" when the title has no such shape
+    (a bare `Visual Studio Code`, an extracted tab titled after itself)."""
+    match = VSCODE_TITLE_RE.search(title or "")
+    return (title or "")[:match.start()].strip() if match else ""
 
 
 def first_folder(titles: Iterable[str]) -> str:
@@ -466,8 +490,9 @@ def claude_settings() -> dict:
 #   * A dedicated `{"type": "mode", "mode": ...}` record exists too, and on this
 #     PC it reads `normal` in all 373 of them across every project — it cannot
 #     currently distinguish plan mode from anything else, so it is deliberately
-#     NOT the source.  `permissionMode` is (default / auto / acceptEdits /
-#     plan), and plan mode is exactly what the phone's Mode button must know.
+#     NOT the source.  `permissionMode` is (default / acceptEdits / plan / auto /
+#     bypassPermissions — the extension's own Modes menu order, 2026-08-15), and
+#     plan mode is exactly what the phone's Mode button must know.
 #
 # Read from the TAIL: a working transcript reaches tens of megabytes, the answer
 # is always in its last few records, and this is asked from a phone panel.
@@ -553,16 +578,218 @@ def newest_transcript(folder: str) -> Path | None:
     return best[1] if best is not None else None
 
 
-def claude_state(folder: str) -> dict:
+def project_dir_of(folder: str) -> str:
+    """The FULL path of the project named `folder`, read from its own newest
+    transcript's raw `cwd` — never reduced to a basename, unlike everything
+    else in this module. Needed only by the active-tab lookup below: VS
+    Code's own `workspaceStorage/<hash>/workspace.json` names a workspace by
+    its whole folder URI, and a bare folder name cannot be matched against
+    it (two projects can share a name — see `session_for_tab`)."""
+    transcript = newest_transcript(folder)
+    return _first_cwd(transcript) if transcript is not None else ""
+
+
+# ═══════════════════════ WHICH TAB IS ACTIVE (owner bug, 2026-08-15) ═══════════════════
+# One VS Code window, two Claude Code tabs on the SAME project — one on Opus/low,
+# the other on Fable/medium. `newest_transcript()` answers whichever conversation
+# wrote LAST, not the one in the tab the owner is actually looking at, so the
+# Model/Thinking panels showed the other tab's values.
+#
+# The owner found the source of truth on his own PC: VS Code keeps a per-window
+# database, `workspaceStorage/<hash>/state.vscdb` (a real SQLite file, table
+# `ItemTable`), holding a memento of the open editor grid under the key
+# `memento/workbench.parts.editor`. Each Claude Code panel in that grid is an
+# editor descriptor with `"viewType": "mainThreadWebview-claudeVSCodePanel"`,
+# `"title"` (the tab's own title, exactly what the window title shows when
+# that tab is focused) and `"state"` — a JSON STRING, not an object, holding
+# `{"sessionID": "<uuid>"}`. `workspace.json` beside it names the window's
+# folder as a `file://` URI, which is how a window is matched to a project at
+# all: the hash directory name carries no information of its own.
+#
+# HONEST LIMIT (state it once, here, not at every call site): VS Code writes
+# this memento LAZILY — its own on-disk cache — so a tab renamed or opened in
+# the last few seconds may still read its OLD title, or be missing outright,
+# until VS Code next flushes it. A miss falls through to the newest-transcript
+# rule rather than answering nothing; see `claude_state()`.
+VSCODE_STORAGE = Path(os.environ.get("APPDATA", "")) / "Code" / "User" / "workspaceStorage"
+CLAUDE_PANEL_VIEW_TYPE = "mainThreadWebview-claudeVSCodePanel"
+
+
+def _url_to_path(url: str) -> str:
+    """`file:///u%3A/Coding/Demo` -> `u:\\coding\\demo` — decoded and
+    lowercased so it can be compared against a plain Windows path regardless
+    of which separators or percent-encoding either side used."""
+    prefix = "file:///"
+    if not url.startswith(prefix):
+        return ""
+    raw = urllib.parse.unquote(url[len(prefix):])
+    return raw.replace("/", "\\").rstrip("\\").lower()
+
+
+def _workspace_storage_dir(project_dir: str) -> Path | None:
+    """The `workspaceStorage/<hash>` folder whose `workspace.json` names
+    `project_dir` — the ONE VS Code window (of possibly several) that has
+    this project open, matched case-insensitively and URL-decoded."""
+    if not project_dir or not VSCODE_STORAGE.is_dir():
+        return None
+    target = str(Path(project_dir)).lower()
+    try:
+        entries = list(VSCODE_STORAGE.iterdir())
+    except OSError:
+        return None
+    for entry in entries:
+        try:
+            data = json.loads((entry / "workspace.json").read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError, ValueError):
+            continue
+        folder = data.get("folder")
+        if isinstance(folder, str) and _url_to_path(folder) == target:
+            return entry
+    return None
+
+
+def _walk_editors(node) -> list[dict]:
+    """Every dict below `node` that carries a `viewType` — walked generically
+    rather than pinned to one exact grid shape (VS Code's `serializedGrid`
+    nests branches and leaves, and the precise depth is not a contract this
+    module wants to hold)."""
+    found: list[dict] = []
+    stack = [node]
+    while stack:
+        cur = stack.pop()
+        if isinstance(cur, dict):
+            if "viewType" in cur:
+                found.append(cur)
+            stack.extend(cur.values())
+        elif isinstance(cur, list):
+            stack.extend(cur)
+    return found
+
+
+@contextlib.contextmanager
+def _readonly_copy(db_path: Path):
+    """A throwaway COPY of a sqlite file, opened read-only from the copy —
+    VS Code holds `state.vscdb` open itself, so this module must never touch
+    the live file."""
+    fd, tmp_name = tempfile.mkstemp(suffix=".vscdb")
+    os.close(fd)
+    tmp_path = Path(tmp_name)
+    try:
+        shutil.copy(db_path, tmp_path)
+        conn = sqlite3.connect(str(tmp_path))
+        try:
+            yield conn
+        finally:
+            conn.close()
+    finally:
+        try:
+            tmp_path.unlink()
+        except OSError:
+            pass
+
+
+def _tabs_from_memento(storage_dir: Path) -> dict[str, str]:
+    """`{tab title: sessionID}` for every Claude Code panel this VS Code
+    window's editor grid remembers, or {} if the database, the key, or the
+    JSON inside it is not there (an old VS Code, a window that has never
+    opened a Claude Code tab, a database mid-write)."""
+    vscdb = storage_dir / "state.vscdb"
+    if not vscdb.is_file():
+        return {}
+    try:
+        with _readonly_copy(vscdb) as conn:
+            row = conn.execute(
+                "SELECT value FROM ItemTable WHERE key = ?",
+                ("memento/workbench.parts.editor",)).fetchone()
+    except (OSError, sqlite3.DatabaseError):
+        return {}
+    if row is None:
+        return {}
+    try:
+        memento = json.loads(row[0])
+    except (json.JSONDecodeError, ValueError, TypeError):
+        return {}
+    grid = memento.get("editorpart.state.serializedGrid") if isinstance(memento, dict) else None
+    out: dict[str, str] = {}
+    for editor in _walk_editors(grid):
+        if editor.get("viewType") != CLAUDE_PANEL_VIEW_TYPE:
+            continue
+        title, state_raw = editor.get("title"), editor.get("state")
+        if not isinstance(title, str) or not isinstance(state_raw, str):
+            continue
+        try:
+            session_id = json.loads(state_raw).get("sessionID")
+        except (json.JSONDecodeError, ValueError, AttributeError):
+            continue
+        if isinstance(session_id, str):
+            out[title] = session_id
+    return out
+
+
+def session_for_tab(project_dir: str, tab_title: str) -> str | None:
+    """The Claude Code session id running in the ACTIVE tab of this project's
+    VS Code window — read from VS Code's own memento of its editor grid,
+    never from "whichever transcript was written last".
+
+    Exact title match first; then a PREFIX match either way, because the
+    live window title can ELIDE a long tab title with `…` while the memento
+    still holds it whole (and vice versa, once VS Code re-writes it)."""
+    if not project_dir or not tab_title:
+        return None
+    storage_dir = _workspace_storage_dir(project_dir)
+    if storage_dir is None:
+        return None
+    tabs = _tabs_from_memento(storage_dir)
+    if tab_title in tabs:
+        return tabs[tab_title]
+    # Elision strips the "…" one side may carry (the live title can elide a
+    # long one, or the memento can re-flush already elided) — compared with
+    # it removed, since the raw character breaks a plain `startswith`.
+    bare_tab = tab_title.rstrip("…").rstrip()
+    for title, session_id in tabs.items():
+        bare_title = title.rstrip("…").rstrip()
+        if bare_title.startswith(bare_tab) or bare_tab.startswith(bare_title):
+            return session_id
+    return None
+
+
+def claude_state(folder: str, tab_title: str = "") -> dict:
     """The `claude_state` frame for the phone — what the conversation in this
     project is running RIGHT NOW, beside what is merely saved.
+
+    `tab_title` (optional) is the ACTIVE tab's own title, off the live window
+    title — when it names a session VS Code's own memento remembers, THAT
+    session's transcript is read (`source: "tab"`), so two Claude Code tabs
+    on one project each report their own model/effort instead of whichever
+    wrote last. A miss (no memento, a title the memento does not know, a
+    session with no transcript on disk) falls back to the previous
+    newest-transcript rule (`source: "newest"`), logged at debug so a silent
+    fallback is never mistaken for a confirmed read.
 
     Every field is independently nullable and nothing here raises: no project,
     no transcript, a transcript whose tail holds no assistant record yet, a
     half-written line — each simply answers `None` for what it could not read.
     A panel that is told nothing shows nothing, which is the honest state; an
     exception here would take the whole message down instead."""
-    transcript = newest_transcript(folder)
+    transcript = None
+    source = None
+    if folder and tab_title:
+        session_id = session_for_tab(project_dir_of(folder), tab_title)
+        if session_id:
+            slug = _project_of(session_id)
+            candidate = slug / f"{session_id}.jsonl" if slug is not None else None
+            if candidate is not None and candidate.exists():
+                transcript, source = candidate, "tab"
+            else:
+                logger.debug("claude_state: tab %r named session %s but its "
+                             "transcript is gone — falling back", tab_title, session_id)
+        else:
+            logger.debug("claude_state: no session found for tab %r in %r — "
+                         "falling back to newest transcript", tab_title, folder)
+    if transcript is None:
+        transcript = newest_transcript(folder)
+        if transcript is not None:
+            source = "newest"
     model_id = effort = mode = None
     if transcript is not None:
         records = _tail_records(transcript)
@@ -583,4 +810,4 @@ def claude_state(folder: str) -> dict:
     return {"type": "claude_state",
             "model": model_family(model_id or "") or None,
             "model_id": model_id, "effort": effort, "mode": mode,
-            "saved": claude_settings()}
+            "saved": claude_settings(), "source": source}

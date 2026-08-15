@@ -66,14 +66,26 @@ const CLAUDE_EFFORTS = [
   { value: "max", label: "Max" },
 ];
 
-// ── THE MODE CYCLE (owner verdict item 4) ──────────────────────────────────
+// ── THE MODE CYCLE (owner verdict item 4; extended 2026-08-15) ─────────────
 // Shift+Tab steps this ring, in this order, and wraps. That is the ONLY way to
 // reach a mode — there is no `/mode` command — so a mode button is arithmetic
 // over the ring plus that many presses of one chord.
+//
+// THE FIVE, IN THIS ORDER, ARE THE EXTENSION'S OWN MENU — observed 2026-08-15
+// off the owner's screenshot of the real Modes picker (Shift+Tab cycles it).
+// The first three shipped 2026-08-11 (task 208's ballot); `auto` and
+// `bypassPermissions` were missing outright, so a live transcript on
+// `bypassPermissions` (the owner's own PC, same day) showed "unknown" on the
+// Mode panel — the ring had no row for the state the PC was really in, and
+// `claudeModePresses` could not place him on it at all.
 const CLAUDE_MODES = [
   { value: "default", label: "Default", note: "asks before it edits" },
   { value: "acceptEdits", label: "Accept edits", note: "edits without asking" },
   { value: "plan", label: "Plan", note: "plans, changes nothing" },
+  { value: "auto", label: "Auto",
+    note: "approves safe actions, pauses for risky" },
+  { value: "bypassPermissions", label: "Bypass permissions",
+    note: "never asks — dangerous commands run" },
 ];
 
 /** How many Shift+Tab presses take the conversation from `current` to

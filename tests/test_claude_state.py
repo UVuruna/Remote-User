@@ -33,8 +33,10 @@ Run:  .venv\\Scripts\\python tests/test_claude_state.py
 import asyncio
 import json
 import shutil
+import sqlite3
 import sys
 import tempfile
+import urllib.parse
 from pathlib import Path
 
 PROJECT = Path(__file__).resolve().parent.parent
@@ -69,6 +71,18 @@ DEFECTS = {
         "— the raw id alone, which is the shipped behaviour this fixes",
     "the phone matches the saved row by FAMILY":
         "restore `claudeSaved.model === m.value` in claude-panels.js",
+    "the active tab's own session is read, not whoever wrote last":
+        "call `newest_transcript(folder)` directly in `claude_state()` "
+        "instead of trying `session_for_tab` first",
+    "a tab title with no memento match falls back to newest, not to null":
+        "return None from `claude_state()`'s transcript lookup instead of "
+        "falling through to `newest_transcript(folder)` when "
+        "`session_for_tab` misses",
+    "an elided tab title still matches by prefix":
+        "drop the `startswith` fallback in `session_for_tab` and keep only "
+        "the exact-match branch",
+    "the source field says which rule answered": "hardcode `source: 'newest'`"
+    " in `claude_state()`'s return regardless of which branch actually ran",
 }
 
 
@@ -145,6 +159,55 @@ class Projects:
             import os
             os.utime(path, (mtime, mtime))
         return path
+
+
+class VSCodeStorage:
+    """A fake `%APPDATA%\\Code\\User\\workspaceStorage` — nothing on the
+    owner's real VS Code install is read or written while this stands."""
+
+    def __init__(self):
+        self.dir = Path(tempfile.mkdtemp(prefix="ru_claude_vscode_"))
+
+    def __enter__(self):
+        self._saved = agents.VSCODE_STORAGE
+        agents.VSCODE_STORAGE = self.dir
+        return self
+
+    def __exit__(self, *_exc):
+        agents.VSCODE_STORAGE = self._saved
+        shutil.rmtree(self.dir, ignore_errors=True)
+        return False
+
+    def window(self, name: str, project_dir: str, tabs: dict[str, str]) -> Path:
+        """One `<hash>` folder: `workspace.json` naming `project_dir` (a
+        `file://` URI, colon percent-encoded exactly as VS Code writes it)
+        and a REAL sqlite `state.vscdb` holding the memento in the shape
+        measured on the owner's own PC — `editorpart.state.serializedGrid`
+        nests editor descriptors, each `state` a JSON STRING one level
+        deeper, never a bare object."""
+        entry = self.dir / name
+        entry.mkdir(parents=True)
+        posix = str(Path(project_dir)).replace("\\", "/")
+        url = "file:///" + urllib.parse.quote(posix, safe="/")
+        (entry / "workspace.json").write_text(
+            json.dumps({"folder": url}), encoding="utf-8")
+        editors = [{"viewType": "mainThreadWebview-claudeVSCodePanel",
+                    "title": title,
+                    "state": json.dumps({"sessionID": sid})}
+                   for title, sid in tabs.items()]
+        grid = {"root": {"type": "leaf",
+                          "data": {"editors": editors, "mru": [0]}}}
+        memento = {"editorpart.state.serializedGrid": grid}
+        conn = sqlite3.connect(str(entry / "state.vscdb"))
+        conn.execute("CREATE TABLE ItemTable (key TEXT UNIQUE, value TEXT)")
+        conn.execute("INSERT INTO ItemTable VALUES (?, ?)",
+                     ("memento/workbench.parts.editor", json.dumps(memento)))
+        conn.commit()
+        conn.close()
+        return entry
+
+
+PROJECT_DIR = r"u:\Coding\Demo"
 
 
 # ═══════════════════════════ THE CHECKS ═══════════════════════════
@@ -393,7 +456,7 @@ def check_the_reader_is_really_wired_to_the_phone() -> bool:
     focused, desktop, stale = ws.sent
     if focused != {"type": "claude_state", "model": "fable",
                    "model_id": "claude-fable-5", "effort": "high", "mode": "plan",
-                   "saved": SAVED}:
+                   "saved": SAVED, "source": "newest"}:
         print(f"    focused frame was {focused}")
         return False
     for frame in (desktop, stale):
@@ -405,6 +468,129 @@ def check_the_reader_is_really_wired_to_the_phone() -> bool:
     web = WEB.read_text(encoding="utf-8")
     if 'kind == "claude_state"' not in web or "claude_api.send_state" not in web:
         print("    web.py never answers claude_state")
+        return False
+    return True
+
+
+def check_the_active_tab_is_read_not_whoever_wrote_last() -> bool:
+    """The owner's exact report (2026-08-15): one VS Code window, two Claude
+    Code tabs on the SAME project — one running Opus/low, the other
+    Fable/medium. `newest_transcript()` alone would answer whoever wrote
+    LAST; VS Code's own memento says which tab is ACTUALLY active, and that
+    is the one the phone must describe.
+
+    PLANTED DEFECT (proof this check can fail): call `newest_transcript`
+    directly in `claude_state()` instead of trying `session_for_tab` first —
+    the mtime-newer "Wrong Tab" wins even though "Right Tab" is what he is
+    looking at."""
+    with Projects() as pj, VSCodeStorage() as vsc:
+        pj.session("u--Coding-Demo", "wrong-id",
+                   [prompt("default"), assistant("claude-opus-5", "low")],
+                   mtime=1_800_000_000, cwd=PROJECT_DIR)
+        pj.session("u--Coding-Demo", "right-id",
+                   [prompt("auto"), assistant("claude-fable-5", "medium")],
+                   mtime=1_700_000_000, cwd=PROJECT_DIR)  # older — must still win
+        vsc.window("hash1", PROJECT_DIR,
+                   {"Wrong Tab": "wrong-id", "Right Tab": "right-id"})
+        state = agents.claude_state("demo", tab_title="Right Tab")
+    if state["source"] != "tab":
+        print(f"    source was {state['source']!r}, wanted 'tab'")
+        return False
+    return (state["model_id"], state["effort"]) == ("claude-fable-5", "medium")
+
+
+def check_a_tab_title_with_no_match_falls_back_to_newest() -> bool:
+    """A tab the memento does not know (renamed seconds ago and not yet
+    flushed — the honest limit stated in `agents.py`) must not answer null:
+    it falls back to the pre-existing newest-transcript rule, exactly as if
+    no tab title had been sent at all.
+
+    PLANTED DEFECT: return `None` from `claude_state()`'s transcript lookup
+    instead of falling through to `newest_transcript(folder)` when
+    `session_for_tab` misses — the panel would go blank instead of showing
+    its old, still-honest answer."""
+    with Projects() as pj, VSCodeStorage() as vsc:
+        pj.session("u--Coding-Demo", "wrong-id",
+                   [prompt("default"), assistant("claude-opus-5", "low")],
+                   mtime=1_800_000_000, cwd=PROJECT_DIR)
+        pj.session("u--Coding-Demo", "right-id",
+                   [prompt("auto"), assistant("claude-fable-5", "medium")],
+                   mtime=1_700_000_000, cwd=PROJECT_DIR)
+        vsc.window("hash1", PROJECT_DIR,
+                   {"Wrong Tab": "wrong-id", "Right Tab": "right-id"})
+        state = agents.claude_state("demo", tab_title="A Tab That Was Just Renamed")
+    if state["source"] != "newest":
+        print(f"    source was {state['source']!r}, wanted 'newest'")
+        return False
+    return (state["model_id"], state["effort"]) == ("claude-opus-5", "low")
+
+
+def check_an_elided_tab_title_still_matches_by_prefix() -> bool:
+    """The live window title can elide a long tab title with `…` while the
+    memento holds it whole — and VS Code can also re-flush the memento with
+    the elision baked in. Either direction must still match.
+
+    PLANTED DEFECT: drop the `startswith` fallback in `session_for_tab` and
+    keep only the exact-match branch."""
+    with Projects() as pj, VSCodeStorage() as vsc:
+        pj.session("u--Coding-Demo", "long-id",
+                   [prompt("default"), assistant("claude-fable-5", "high")],
+                   cwd=PROJECT_DIR)
+        vsc.window("hash1", PROJECT_DIR,
+                   {"A very long conversation title that keeps going": "long-id"})
+        session_id = agents.session_for_tab(
+            PROJECT_DIR, "A very long conversation title that k…")
+    if session_id != "long-id":
+        print(f"    session_for_tab returned {session_id!r}")
+        return False
+    return True
+
+
+def check_the_source_field_says_which_rule_answered() -> bool:
+    """`source` is additive and optional for the phone, but it must actually
+    tell the two rules apart — a chip that always says the same thing is not
+    an inventory, it is decoration.
+
+    PLANTED DEFECT: hardcode `source: 'newest'` in `claude_state()`'s return
+    regardless of which branch actually ran — the "tab" case below fails."""
+    with Projects() as pj, VSCodeStorage() as vsc:
+        pj.session("u--Coding-Demo", "right-id",
+                   [prompt("auto"), assistant("claude-fable-5", "medium")],
+                   cwd=PROJECT_DIR)
+        vsc.window("hash1", PROJECT_DIR, {"Right Tab": "right-id"})
+        tab_state = agents.claude_state("demo", tab_title="Right Tab")
+        newest_state = agents.claude_state("demo")
+    if tab_state["source"] != "tab":
+        print(f"    with a matching tab title, source was {tab_state['source']!r}")
+        return False
+    if newest_state["source"] != "newest":
+        print(f"    with no tab title, source was {newest_state['source']!r}")
+        return False
+    return True
+
+
+def check_bypass_permissions_passes_through_unfiltered() -> bool:
+    """2026-08-15: the owner's live transcript carried
+    `"permissionMode":"bypassPermissions"` and the Mode panel showed
+    "unknown" — the client ring had no row for it, but the SERVER read is
+    supposed to be honest regardless of what the client knows about yet.
+    There is no allow-list in `claude_state()` — it passes whatever string
+    the transcript carries straight through — and this proves it for the
+    fifth real mode too, not only the three the ring had in 2026-08-11.
+
+    PLANTED DEFECT: add `if mode not in ("default", "acceptEdits", "plan"):
+    mode = None` right after the mode is read in `claude_state()` — the kind
+    of allow-list this check exists to keep out."""
+    with Projects() as pj:
+        pj.session("u--Coding-Demo", "s1", [
+            prompt("bypassPermissions"),
+            assistant("claude-sonnet-4-5", "medium"),
+        ])
+        state = agents.claude_state("demo")
+    if state["mode"] != "bypassPermissions":
+        print(f"    got mode {state['mode']!r}, wanted 'bypassPermissions' — "
+              "the server dropped a real live mode the client did not know "
+              "about yet")
         return False
     return True
 
@@ -427,6 +613,16 @@ CHECKS = [
      check_a_saved_1m_id_lights_its_family_row),
     ("the phone matches the saved row by FAMILY",
      check_the_phone_matches_the_saved_row_by_family),
+    ("bypassPermissions passes through with no server-side allow-list",
+     check_bypass_permissions_passes_through_unfiltered),
+    ("the active tab's own session is read, not whoever wrote last",
+     check_the_active_tab_is_read_not_whoever_wrote_last),
+    ("a tab title with no memento match falls back to newest, not to null",
+     check_a_tab_title_with_no_match_falls_back_to_newest),
+    ("an elided tab title still matches by prefix",
+     check_an_elided_tab_title_still_matches_by_prefix),
+    ("the source field says which rule answered",
+     check_the_source_field_says_which_rule_answered),
 ]
 
 
