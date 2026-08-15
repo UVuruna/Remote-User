@@ -10,7 +10,23 @@ app keep running when I lock the phone" could be answered by a reading instead
 of by another assurance.
 
 Modeless on purpose: he watches this window WHILE he locks the phone in his
-other hand.
+other hand. A REAL window since 2026-08-15 (T103): `Qt.Window |
+WindowMinMaxButtonsHint | WindowCloseButtonHint`, so it minimizes and
+maximizes like every other — the chart is the content and he wants it full
+screen for a long span.
+
+**Split 2026-08-15 at THE STRUCTURE LAW's wall:** the chart widget, its
+colours and the live/disk point helpers now live in
+[Traffic Chart](traffic_chart.md) (re-exported here under their old names);
+the zoom's arithmetic in [Traffic Zoom](traffic_zoom.md). This window keeps
+the numbers, the picker, the zoom controls (− / + / Reset zoom, T104, and the
+caption under the control row that reads either the how-to hint or
+"Zoomed: from – to (duration)") and the recording footer, and it decides what
+to READ for a zoomed file-backed span: `_history_key(kind)` is the span alone
+or `kind|start-end`, so a whole-span result is never adopted as the zoomed
+read (the spans gate's own rule), `_on_zoomed` drops the key and re-reads
+`[view.start, view.end]` at the same bucket count — finer, not stretched —
+while the coarse points stay on screen until the fine ones land.
 
 ## What it draws
 - **PC → phone** and **phone → PC**, in bytes per second, as two filled lines
@@ -186,7 +202,9 @@ confirming the crosshair card's edge-flip still holds.
 ### Uses
 - [Traffic Meter](../../__about/traffic.md) — `history()`, `snapshot()`, `reset()`, `PROCESS_START`
 - [Traffic Axis](traffic_axis.md) — `human_bytes`, the gridline ladder, the one-unit axis and the time labels
-- [Traffic History](../../__about/traffic_history.md) — `HistoryJob`, `Point` — the two long spans
+- [Traffic History](../../__about/traffic_history.md) — `HistoryJob`, `Point` — the two long spans, and `until` for a zoomed re-read
+- [Traffic Chart](traffic_chart.md) — the widget, `zoomed`, `view`
+- [Traffic Zoom](traffic_zoom.md) — `ViewRange` (through the chart)
 - [Theme](theme.md) — tokens and the card shadow (chart chrome — gridlines,
   idle band, crosshair, hover card — reads `TOKENS` at paint time, alpha-blended
   via the local `_alpha()` helper, never a hardcoded hex)

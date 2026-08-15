@@ -46,10 +46,10 @@ import time
 from pathlib import Path
 
 from PySide6.QtCore import QPointF, QRectF, QSize, Qt, QTimer
-from PySide6.QtGui import QColor, QFontMetrics, QPainter, QPainterPath, QPen
+from PySide6.QtGui import QColor, QFontMetrics, QPainter, QPen
 from PySide6.QtWidgets import (
     QComboBox, QDialog, QGridLayout, QHBoxLayout, QLabel, QPushButton,
-    QSizePolicy, QVBoxLayout, QWidget,
+    QVBoxLayout, QWidget,
 )
 
 import traffic
@@ -59,9 +59,14 @@ from config import SETTINGS
 from gui.theme import TOKENS, card_shadow, device_color
 from gui.traffic_battery import battery_sentence
 from gui.sizing import WrapLabel, clamp_to_screen, settle_minimum
-from gui.traffic_axis import (
-    X_TICK_COUNT, _alpha, _axis_unit, _format_axis_value, _x_label, _x_ticks,
-    _y_ticks, human_bytes, human_rate,
+from gui.traffic_axis import _alpha, human_bytes, human_rate
+# The chart itself, its colours and its live/disk point helpers moved to
+# `gui/traffic_chart.py` on 2026-08-15 (THE STRUCTURE LAW — this file stood
+# at the wall). Re-exported here so `tests/test_traffic_devices.py` and the
+# theme note keep their `traffic_window.out_color` / `_coalesce` reads.
+from gui.traffic_chart import (  # noqa: F401 — re-exports
+    CHART_MIN, HOVER_MARGIN, TrafficChart, _coalesce, _point_from_sample,
+    in_color, out_color,
 )
 
 logger = logging.getLogger(__name__)
@@ -91,24 +96,8 @@ SPANS = [
     ("All (from file)", "all", None),
 ]
 TEN_HOURS_S = 10 * 3600
-
-def out_color() -> QColor:      # PC -> phone
-    """FUNCTIONS, not constants (build round R3). These were two module-level
-    QColors, and a module-level palette read evaluates ONCE at import — the
-    chart would have kept the dark theme's bright cyan and amber on a white
-    card forever, which is precisely the failure DESIGN.md → Live theme
-    switching names. Everything else in this file already read TOKENS at
-    paint time; these two did not."""
-    return QColor(TOKENS["accent"])
-
-
-def in_color() -> QColor:       # phone -> PC (the warning hue, reused as a
-    return QColor(TOKENS["warning"])      # second series)
-
-
-CHART_MIN = QSize(560, 260)                   # readable at the smallest useful
-#                                                size, with room for the axes
-HOVER_MARGIN = 12       # px between the crosshair and the card
+ZOOM_HINT = ("Zoom: drag a rectangle over the graph, roll the wheel over it, "
+             "or use − / + — Reset zoom shows the whole span again.")
 
 
 def history_since(kind: str, now: float) -> float | None:
@@ -132,64 +121,6 @@ def history_since(kind: str, now: float) -> float | None:
         return time.mktime((lt.tm_year, lt.tm_mon, lt.tm_mday, 0, 0, 0, 0, 0, -1))
     return None      # "all"
 
-
-def _point_from_sample(sample) -> traffic_history.Point:
-    """A raw per-second sample as a `Point` with avg == max (nothing to
-    average — it already IS one second)."""
-    return traffic_history.Point(
-        t=sample.t, out_avg=sample.out_bytes, out_max=sample.out_bytes,
-        in_avg=sample.in_bytes, in_max=sample.in_bytes, clients=sample.clients,
-        device=sample.device)
-
-
-def _coalesce(points: list, target: int) -> list:
-    """At most one point per pixel, enforced HERE regardless of where the
-    points came from: the disk reader already bounds itself to
-    `traffic_history_max_buckets` (a few thousand, comfortably above any
-    real window width), and this is the cheap second pass that turns that
-    into an exact pixel-for-pixel budget for THIS paint — so a window resize
-    never has to re-read the file, only re-run this O(n) merge on an
-    already-small list."""
-    if target <= 0 or len(points) <= target:
-        return points
-    ratio = len(points) / target
-    merged = []
-    n = len(points)
-    i = 0.0
-    while int(i) < n:
-        j = min(n, int(i + ratio))
-        if j <= int(i):
-            j = int(i) + 1
-        chunk = points[int(i):j]
-        # Same "last ACTIVE device wins" rule as the disk reader
-        # (`traffic_history.read_history`) — an idle heartbeat second from a
-        # device about to be replaced must not steal a merged pixel's colour
-        # from the device that actually sent the bytes in it.
-        chunk_device = ""
-        for p in chunk:
-            if p.device and (p.out_avg or p.in_avg or p.out_max or p.in_max):
-                chunk_device = p.device
-        # ...and, exactly like the disk reader, the device CARRIES FORWARD
-        # across a merged pixel that moved no bytes at all. Without this the
-        # live spans have the same defect the long spans had (owner report
-        # 2026-08-14): the line sits at zero most of the time, an all-idle
-        # pixel keeps "", and "" paints as the neutral grey. The two paths
-        # must agree or the same session colours differently depending on
-        # which span happens to be open — which is what
-        # `test_coalesce_agrees_with_the_disk_reader` exists to hold.
-        if not chunk_device and merged:
-            chunk_device = merged[-1].device
-        merged.append(traffic_history.Point(
-            t=chunk[len(chunk) // 2].t,
-            out_avg=sum(p.out_avg for p in chunk) / len(chunk),
-            out_max=max(p.out_max for p in chunk),
-            in_avg=sum(p.in_avg for p in chunk) / len(chunk),
-            in_max=max(p.in_max for p in chunk),
-            clients=max(p.clients for p in chunk),
-            device=chunk_device,
-        ))
-        i += ratio
-    return merged
 
 
 class _LegendMark(QWidget):
@@ -243,295 +174,6 @@ class _LegendMark(QWidget):
         painter.end()
 
 
-class TrafficChart(QWidget):
-    """The graph itself: axes, the idle band, two filled/avg lines, a faint
-    max hairline on downsampled spans, and the hover crosshair + card."""
-
-    def __init__(self, parent: QWidget | None = None):
-        super().__init__(parent)
-        self.points: list = []
-        self.start = 0.0
-        self.end = 0.0
-        self.span_label = ""
-        self.downsampled = False
-        self.loading = False
-        # Grows with the window — the chart IS the content here, so it takes
-        # the free space instead of leaving it empty (THE SPACE & LEGIBILITY
-        # LAW: nothing starves while its window holds slack).
-        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        self.setMinimumSize(CHART_MIN)
-        self.setMouseTracking(True)
-        self._hover_x: float | None = None
-        self._plot = None   # the last painted plot QRect — hit-testing needs it
-
-    def set_data(self, points: list, start: float, end: float, span_label: str,
-                 downsampled: bool, loading: bool = False) -> None:
-        self.points, self.start, self.end = points, start, end
-        self.span_label, self.downsampled, self.loading = span_label, downsampled, loading
-        self.update()
-
-    # -- hover ---------------------------------------------------------
-
-    def mouseMoveEvent(self, event) -> None:  # noqa: N802 — Qt override
-        self._hover_x = event.position().x()
-        self.update()
-
-    def leaveEvent(self, event) -> None:  # noqa: N802 — Qt override
-        self._hover_x = None
-        self.update()
-        super().leaveEvent(event)
-
-    # -- painting --------------------------------------------------------
-
-    def _peak_of(self, points: list) -> float:
-        peak = 0.0
-        for p in points:
-            peak = max(peak, p.out_max, p.in_max)
-        return peak
-
-    def paintEvent(self, event) -> None:  # noqa: N802 — Qt override
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        metrics = QFontMetrics(self.font())
-        # Bare numbers only now — the unit is stated ONCE (below), not per
-        # label — so the left margin only has to fit the widest plain number.
-        pad_l = max(metrics.horizontalAdvance("999.9"),
-                    metrics.horizontalAdvance("GB/s")) + 10
-        pad_t = metrics.height() + 4      # room for that one-time unit label
-        pad_b = metrics.height() + 10
-        plot = self.rect().adjusted(pad_l, pad_t, -10, -pad_b)
-        painter.fillRect(self.rect(), QColor(TOKENS["surface0"]))
-        self._plot = plot
-        if plot.width() < 20 or plot.height() < 20:
-            painter.end()
-            return
-
-        # The plot reads as a PANEL, not as the window's own background — the
-        # confirmed-but-mild finding from the independent grade: filling it
-        # with `surface0` (identical to the fillRect above) left the chart
-        # looking flat, with nothing separating "plot" from "window". One
-        # step up the elevation ladder (surface1, the same step every card in
-        # this app sits on) plus a hairline edge is the cheap fix.
-        painter.fillRect(plot, QColor(TOKENS["surface1"]))
-        painter.setPen(QPen(_alpha(TOKENS["text2"], 35), 1))
-        painter.drawRect(QRectF(plot).adjusted(0.5, 0.5, -0.5, -0.5))
-
-        if self.loading:
-            painter.setPen(QPen(QColor(TOKENS["text2"]), 1))
-            painter.drawText(plot, Qt.AlignmentFlag.AlignCenter,
-                             "Reading traffic.csv…")
-            painter.end()
-            return
-
-        span = max(1e-6, self.end - self.start)
-        pts = _coalesce(self.points, max(1, plot.width()))
-        peak = max(1024.0, self._peak_of(pts))
-        ticks = _y_ticks(peak)
-        axis_max = ticks[-1] if ticks[-1] > 0 else 1.0
-
-        def x_of(t: float) -> float:
-            return plot.left() + plot.width() * max(0.0, min(1.0, (t - self.start) / span))
-
-        def y_of(v: float) -> float:
-            return plot.bottom() - plot.height() * min(1.0, v / axis_max)
-
-        # The idle band FIRST, behind everything: it is the reading the
-        # owner came here for, so it must be visible under the lines, not
-        # over them.
-        idle_color = _alpha(TOKENS["text2"], 26)
-        run_start = None
-        for p in pts:
-            if p.clients == 0 and run_start is None:
-                run_start = p.t
-            elif p.clients > 0 and run_start is not None:
-                painter.fillRect(int(x_of(run_start)), plot.top(),
-                                 max(1, int(x_of(p.t) - x_of(run_start))),
-                                 plot.height(), idle_color)
-                run_start = None
-        if run_start is not None:
-            painter.fillRect(int(x_of(run_start)), plot.top(),
-                             max(1, int(x_of(self.end) - x_of(run_start))),
-                             plot.height(), idle_color)
-
-        # Y gridlines + round-value labels (the 1/2/5 x 10^n ladder), all in
-        # ONE unit read off the axis's own top value (Finding 2, 2026-08-07).
-        # The unit is drawn ONCE, top-left of the plot, in the padding this
-        # paintEvent reserved for it above; every gridline below it is a bare
-        # number in that same unit.
-        grid = _alpha(TOKENS["text2"], 40)
-        axis_unit, axis_div = _axis_unit(axis_max)
-        painter.setPen(QPen(QColor(TOKENS["text2"]), 1))
-        painter.drawText(4, metrics.ascent(), axis_unit)
-        for tick in ticks:
-            y = y_of(tick)
-            painter.setPen(QPen(grid, 1))
-            painter.drawLine(plot.left(), int(y), plot.right(), int(y))
-            painter.setPen(QPen(QColor(TOKENS["text2"]), 1))
-            label = "0" if tick == 0 else _format_axis_value(tick, axis_div)
-            ly = int(y) + (metrics.ascent() // 2 if tick > 0 else metrics.ascent())
-            ly = max(plot.top() + metrics.ascent(), min(ly, plot.bottom()))
-            painter.drawText(4, ly, label)
-
-        # X axis + time labels.
-        painter.setPen(QPen(grid, 1))
-        painter.drawLine(plot.left(), plot.bottom(), plot.right(), plot.bottom())
-        painter.setPen(QPen(QColor(TOKENS["text2"]), 1))
-        for t in _x_ticks(self.start, self.end, X_TICK_COUNT):
-            label = _x_label(t, span)
-            w = metrics.horizontalAdvance(label)
-            lx = min(max(plot.left(), x_of(t) - w / 2), plot.right() - w)
-            painter.drawText(int(lx), plot.bottom() + metrics.ascent() + 3, label)
-
-        # PER-DEVICE COLOUR (owner request 2026-08-13). T75 correction
-        # (2026-08-14, from his own screenshot): the predicate used to be
-        # "does the VISIBLE SPAN hold >1 device" — so a span where only the
-        # phone talked fell back to the plain direction colour (blue) while
-        # the legend beside it already listed two devices and gave the phone
-        # its OWN colour there. Blue meant two things in one window. Rule:
-        # once this PC has EVER seen >1 device, always colour by device.
-        # `traffic_devices.REGISTRY` is the "ever seen" source — it persists
-        # across restarts, which is why the "Devices seen" list can name a
-        # device that sent nothing in the visible span at all.
-        multi_device = len(traffic_devices.REGISTRY.all()) > 1
-
-        def _segment_color(base: QColor, device: str) -> QColor:
-            if not multi_device:
-                return base
-            if not device:
-                # THE DIRECTION'S OWN COLOUR, NEVER GREY (owner order
-                # 2026-08-14: "svaki uredjaj na grafikonu se prikazuje svojom
-                # bojom" — and grey is not a device's colour, it is the
-                # absence of an answer). A stretch reaches here only when the
-                # recording itself never named a device for it: `traffic.csv`
-                # grew its `device` column on 2026-08-13, so every row older
-                # than that carries no attribution at all and no amount of
-                # carrying-forward (see `traffic_history.read_history`) can
-                # invent one. Painting it the first-known device's colour
-                # WOULD invent one. So it falls back to exactly what this
-                # chart drew before device colours existed — the direction's
-                # own blue/orange — which claims nothing about whose traffic
-                # it was. Grey survives for the `Nobody connected` band alone,
-                # which is a different statement and has its own legend row.
-                return base
-            return QColor(device_color(traffic_devices.REGISTRY.index_for(device)))
-
-        # Direction vs identity: once `multi_device` colours BOTH series by
-        # device, colour alone no longer says which direction a segment is.
-        # Direction stays readable via PEN STYLE instead: out is always the
-        # plain solid line this chart has always drawn; in is DASHED whenever
-        # `multi_device` is active — no new legend layout needed (task rule),
-        # since the two direction items already read "PC → phone" / "phone
-        # → PC" and only need one more cue to stay apart from device colour.
-        for base_color, avg_pick, max_pick, is_out in (
-                (out_color(), lambda p: p.out_avg, lambda p: p.out_max, True),
-                (in_color(), lambda p: p.in_avg, lambda p: p.in_max, False)):
-            if not pts:
-                continue
-            line_style = (Qt.PenStyle.SolidLine if (is_out or not multi_device)
-                          else Qt.PenStyle.DashLine)
-            # Split into RUNS of consecutive points sharing one device — a
-            # plain single run, coloured `base_color`, when the span has at
-            # most one device (multi_device is False): identical output to
-            # before this feature existed.
-            runs: list[list] = []
-            for p in pts:
-                key = p.device if multi_device else ""
-                if runs and runs[-1][0] == key:
-                    runs[-1][1].append(p)
-                else:
-                    runs.append([key, [p]])
-            prev_last = None
-            for key, run_pts in runs:
-                color = _segment_color(base_color, key)
-                # A one-point run cannot draw a line — borrow the previous
-                # run's last point so adjacent segments still connect
-                # visually instead of leaving a gap at every device switch.
-                seg = ([prev_last] if prev_last is not None else []) + run_pts
-                prev_last = run_pts[-1]
-                if len(seg) < 2:
-                    continue
-                path = QPainterPath()
-                path.moveTo(QPointF(x_of(seg[0].t), y_of(avg_pick(seg[0]))))
-                for p in seg[1:]:
-                    path.lineTo(QPointF(x_of(p.t), y_of(avg_pick(p))))
-                fill = QPainterPath(path)
-                fill.lineTo(QPointF(x_of(seg[-1].t), plot.bottom()))
-                fill.lineTo(QPointF(x_of(seg[0].t), plot.bottom()))
-                fill.closeSubpath()
-                faded = QColor(color)
-                faded.setAlpha(46)
-                painter.fillPath(fill, faded)
-                painter.setPen(QPen(color, 2, line_style))
-                painter.drawPath(path)
-                if self.downsampled:
-                    # The bucket MAX, as a faint hairline above the average —
-                    # a spike that a wide bucket's average would otherwise
-                    # smooth out of existence stays visible here.
-                    mx_path = QPainterPath()
-                    mx_path.moveTo(QPointF(x_of(seg[0].t), y_of(max_pick(seg[0]))))
-                    for p in seg[1:]:
-                        mx_path.lineTo(QPointF(x_of(p.t), y_of(max_pick(p))))
-                    mx_color = QColor(color)
-                    mx_color.setAlpha(150)
-                    painter.setPen(QPen(mx_color, 1, Qt.PenStyle.DotLine))
-                    painter.drawPath(mx_path)
-
-        if self._hover_x is not None and pts:
-            self._paint_hover(painter, plot, pts, x_of, y_of, metrics)
-
-        painter.end()
-
-    def _paint_hover(self, painter: QPainter, plot, points: list, x_of, y_of,
-                     metrics: QFontMetrics) -> None:
-        x = self._hover_x
-        if x < plot.left() or x > plot.right():
-            return
-        nearest = min(points, key=lambda p: abs(x_of(p.t) - x))
-        px = x_of(nearest.t)
-
-        crosshair = _alpha(TOKENS["text"], 110)
-        painter.setPen(QPen(crosshair, 1, Qt.PenStyle.DashLine))
-        painter.drawLine(int(px), plot.top(), int(px), plot.bottom())
-
-        when = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(nearest.t))
-        out_line = f"PC → phone: {human_rate(nearest.out_avg)}"
-        if self.downsampled and nearest.out_max > nearest.out_avg * 1.05:
-            out_line += f"  (peak {human_rate(nearest.out_max)})"
-        in_line = f"phone → PC: {human_rate(nearest.in_avg)}"
-        if self.downsampled and nearest.in_max > nearest.in_avg * 1.05:
-            in_line += f"  (peak {human_rate(nearest.in_max)})"
-        if nearest.clients == 0:
-            state = "nobody connected"
-        elif nearest.clients == 1:
-            state = "1 client connected"
-        else:
-            state = f"{nearest.clients} clients connected"
-        lines = [when, out_line, in_line, state]
-
-        card_w = max(metrics.horizontalAdvance(line) for line in lines) + 16
-        card_h = len(lines) * (metrics.height() + 2) + 10
-
-        # Flip to the other side of the crosshair whenever the default side
-        # would run the card off the widget — it must never leave the
-        # window (THE SPACE & LEGIBILITY LAW: nothing the user must read is
-        # ever cut off).
-        cx = px + HOVER_MARGIN
-        if cx + card_w > self.width() - 4:
-            cx = px - HOVER_MARGIN - card_w
-        cx = max(4, min(cx, self.width() - card_w - 4))
-        cy = plot.top() + 8
-        cy = max(4, min(cy, self.height() - card_h - 4))
-
-        card_rect = QRectF(cx, cy, card_w, card_h)
-        painter.setPen(QPen(_alpha(TOKENS["text2"], 70), 1))
-        painter.setBrush(QColor(TOKENS["surface2"]))
-        painter.drawRoundedRect(card_rect, 6, 6)
-        painter.setPen(QPen(QColor(TOKENS["text"])))
-        ty = cy + metrics.ascent() + 5
-        for line in lines:
-            painter.drawText(int(cx + 8), int(ty), line)
-            ty += metrics.height() + 2
-
 
 class TrafficWindow(QDialog):
     """Header numbers + the chart + the recording footer."""
@@ -539,6 +181,13 @@ class TrafficWindow(QDialog):
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
         self.setWindowTitle("Traffic — what this PC sends to the phone")
+        # A REAL window (owner request 2026-08-15, T103): minimize and
+        # maximize beside the close button. A QDialog with a parent gets only
+        # ✕ by default; the chart is the content here and he wants it full
+        # screen for a long span.
+        self.setWindowFlags(Qt.WindowType.Window
+                            | Qt.WindowType.WindowMinMaxButtonsHint
+                            | Qt.WindowType.WindowCloseButtonHint)
         self._settled = False   # the minimum is measured on first show
 
         self._history = traffic_history.HistoryJob()
@@ -637,6 +286,7 @@ class TrafficWindow(QDialog):
 
         self.chart = TrafficChart(self)
         card_shadow(self.chart)
+        self.chart.zoomed.connect(self._on_zoomed)
         root.addWidget(self.chart, 1)   # the chart takes every spare pixel
 
         # The legend, as a grid of discrete ITEMS — never a wrapping sentence.
@@ -714,6 +364,21 @@ class TrafficWindow(QDialog):
         record_layout.addWidget(self.record_label)
         record_row.setToolTip(str(SETTINGS.traffic_csv_path))
         controls.addWidget(record_row)
+        # ZOOM (owner request 2026-08-15, T104): − / + / Reset step the
+        # chart's time window; the drag rectangle (T105) and the wheel do
+        # the same on the graph itself. All three ask the chart, which owns
+        # the one `ViewRange` — the window only decides what to READ for it.
+        self.zoom_out_btn = QPushButton("−")
+        self.zoom_out_btn.setToolTip("Zoom out (×2)")
+        self.zoom_out_btn.clicked.connect(self.chart.zoom_out)
+        self.zoom_in_btn = QPushButton("+")
+        self.zoom_in_btn.setToolTip("Zoom in (×2)")
+        self.zoom_in_btn.clicked.connect(self.chart.zoom_in)
+        self.zoom_reset_btn = QPushButton("Reset zoom")
+        self.zoom_reset_btn.clicked.connect(self.chart.zoom_reset)
+        controls.addWidget(self.zoom_out_btn)
+        controls.addWidget(self.zoom_in_btn)
+        controls.addWidget(self.zoom_reset_btn)
         controls.addStretch()
         open_btn = QPushButton("Open the recording")
         open_btn.clicked.connect(self._open_recording)
@@ -722,6 +387,12 @@ class TrafficWindow(QDialog):
         reset_btn.clicked.connect(self._reset)
         controls.addWidget(reset_btn)
         root.addLayout(controls)
+
+        # What the zoom is showing — or how to use it, while it is not.
+        self.zoom_label = QLabel(ZOOM_HINT)
+        self.zoom_label.setObjectName("caption")
+        self.zoom_label.setWordWrap(True)
+        root.addWidget(self.zoom_label)
 
         self.path_label = QLabel(str(SETTINGS.traffic_csv_path))
         self.path_label.setObjectName("caption")
@@ -783,6 +454,10 @@ class TrafficWindow(QDialog):
                         + record_label_w + 20 + 6 + 20   # dot mark + spacing + margins
                         + metrics.horizontalAdvance("Open the recording") + button_pad
                         + metrics.horizontalAdvance("Reset counters") + button_pad
+                        + (self.zoom_out_btn.sizeHint().width()
+                           + self.zoom_in_btn.sizeHint().width()
+                           + self.zoom_reset_btn.sizeHint().width()
+                           + spacing * 3)                     # the zoom trio
                         + 3 * spacing)
         width = max(CHART_MIN.width(), controls_row) + 36
         rows = metrics.height() + 6
@@ -820,6 +495,25 @@ class TrafficWindow(QDialog):
             self._history_next_at = 0.0
         self._refresh()
 
+    def _history_key(self, kind: str) -> str:
+        """The read a file-backed span needs RIGHT NOW: the span itself, or —
+        zoomed — the span plus the view's own bounds, so a result for the
+        whole span is never adopted as the zoomed read and vice versa (the
+        same "a result carries its own key" rule the spans gate holds)."""
+        view = self.chart.view
+        if view.is_zoomed():
+            return f"{kind}|{int(view.start)}-{int(view.end)}"
+        return kind
+
+    def _on_zoomed(self) -> None:
+        """The chart's view changed (drag, wheel, buttons): a file-backed
+        span is re-read for exactly the view — at the same bucket count, so
+        the zoomed picture is FINER, not merely stretched. The coarse points
+        stay on screen until the fine read lands."""
+        self._history_kind = None
+        self._history_next_at = 0.0
+        self._refresh()
+
     def _maybe_start_history(self, kind: str, since: float | None) -> None:
         """Kicks off a background read when the span just changed, or the
         periodic re-read interval elapsed.
@@ -832,11 +526,16 @@ class TrafficWindow(QDialog):
         then landed and was drawn under the new span's label.
         """
         now = time.time()
-        if kind == self._history_kind and now < self._history_next_at:
+        key = self._history_key(kind)
+        if key == self._history_kind and now < self._history_next_at:
             return
-        if self._history.pending_key == kind:
+        if self._history.pending_key == key:
             return
-        self._history.start(kind, since, SETTINGS.traffic_history_max_buckets)
+        until = None
+        view = self.chart.view
+        if view.is_zoomed():
+            since, until = view.start, view.end
+        self._history.start(key, since, SETTINGS.traffic_history_max_buckets, until)
         self._history_next_at = now + SETTINGS.traffic_history_refresh_s
 
     def _rebuild_device_rows(self, known: list[dict]) -> None:
@@ -890,6 +589,7 @@ class TrafficWindow(QDialog):
             else:
                 since = history_since(kind, now)
                 self._maybe_start_history(kind, since)
+                key = self._history_key(kind)
                 result = self._history.poll()
                 if result is not None:
                     got_kind, points = result
@@ -897,19 +597,22 @@ class TrafficWindow(QDialog):
                     # result is adopted only under ITS OWN key. A read for a
                     # span the owner has clicked away from is DROPPED — it is
                     # never re-labelled as the span now selected.
-                    if got_kind == kind:
+                    if got_kind == key:
                         self._history_points = points
-                        self._history_kind = kind
+                        self._history_kind = key
                     else:
                         logger.info("Traffic window: dropped a %r result while "
-                                    "showing %r", got_kind, kind)
+                                    "showing %r", got_kind, key)
                 # The overlay is read off the JOB, never off a flag of our
                 # own: it is up exactly while a read for the SELECTED span is
                 # in flight and we hold nothing for that span yet, so it
                 # cannot outlive the work (the job clears `pending_key` in a
                 # `finally`) and it cannot linger over another span's data.
-                loading = (self._history.pending_key == kind
-                           and self._history_kind != kind)
+                # A zoom re-read keeps the coarse points under it (T104):
+                # nothing to hide, only detail to add.
+                loading = (self._history.pending_key == key
+                           and self._history_kind != key
+                           and not self._history_points)
                 start = since if since is not None else (
                     self._history_points[0].t if self._history_points else now)
                 self.chart.set_data(self._history_points, start, now, name,
@@ -969,10 +672,25 @@ class TrafficWindow(QDialog):
             self.record_label.setText(
                 "Recording to file" if self._recording else "Recording stopped")
             self.record_dot.update()
+            self._refresh_zoom_label()
         except Exception:
             # A diagnostic window may never be the thing that takes the app
             # down — the whole point of it is to survive a bad moment.
             logger.exception("Traffic window refresh failed")
+
+    def _refresh_zoom_label(self) -> None:
+        view = self.chart.view
+        zoomed = view.is_zoomed()
+        self.zoom_reset_btn.setEnabled(zoomed)
+        if not zoomed:
+            text = ZOOM_HINT
+        else:
+            fmt = "%Y-%m-%d %H:%M:%S" if view.span() >= 86400 else "%H:%M:%S"
+            text = ("Zoomed: " + time.strftime(fmt, time.localtime(view.start))
+                    + " – " + time.strftime(fmt, time.localtime(view.end))
+                    + f"  ({traffic_devices.human_duration(view.span())})")
+        if self.zoom_label.text() != text:
+            self.zoom_label.setText(text)
 
     def _open_recording(self) -> None:
         import os

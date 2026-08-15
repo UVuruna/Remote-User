@@ -16,9 +16,10 @@ flowchart TB
     F --> I
     I --> J["Sample(t, out, in, clients) → ring buffer (1 h) + traffic.csv"]
     J --> K["TrafficWindow._refresh, once a second"]
+    Z["chart drag / wheel / − + Reset → chart.view (traffic_zoom.ViewRange) → zoomed"] --> K
     K --> L{"span kind?"}
     L -- "recent (2 min/10 min/1 h)" --> M["chart.set_data(history(span) as Points, downsampled=False)"]
-    L -- "since_start / all" --> N["traffic_history.HistoryJob — see its own flow doc"]
+    L -- "last10h / today / since_start / all" --> N["traffic_history.HistoryJob — see its own flow doc; zoomed: since/until = the view, key kind|start-end"]
     N --> O["chart.set_data(job result, downsampled=True)"]
     H --> P["snapshot()['phone'] and ['away_gap'] → the header lines"]
 ```
