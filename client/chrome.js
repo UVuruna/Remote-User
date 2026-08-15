@@ -91,17 +91,32 @@ function setControlsHidden(hidden) {
 // and the radius is DERIVED from the tokens rather than a retuned constant:
 // two neighbours sit 45° apart, and the chord between two circle points R
 // apart in angle θ is 2R·sin(θ/2); requiring that chord to clear a face's own
-// width plus one `--space-s` of daylight (the same gap `--space-s` names
-// everywhere else on this page) gives R = (corner + gap) / (2·sin(22.5°)).
-// Read from the CSS tokens at load, once — a later retune of `--corner` or
-// `--space-s` carries straight through with no second number to remember.
+// width plus one daylight gives R = (corner + daylight) / (2·sin(22.5°)).
+// The face is read from `--corner` at load, once, so a later retune of the
+// square carries straight through. THE DAYLIGHT IS NO LONGER `--space-s` — it
+// is the owner's own number, tuned by eye; see MINI_GAP below for why the two
+// were separated on 2026-08-15.
 function miniToken(name, fallback) {
   const v = getComputedStyle(document.documentElement).getPropertyValue(name);
   const n = parseFloat(v);
   return Number.isFinite(n) ? n : fallback;
 }
 const MINI_FACE = miniToken("--corner", 58);
-const MINI_GAP = miniToken("--space-s", 8);
+// THE DAYLIGHT IS ITS OWN NUMBER NOW, AND IT IS HIS (owner report 2026-08-15,
+// with two screenshots of the opened Layout and Hide radials). The options sat
+// too close to one another, and he named the fix precisely: do not touch the
+// ANGLES — they stay 0 / 45 / 90 — but raise the distance from the PARENT, and
+// the distance between siblings rises with it. That is exactly this one term,
+// which is why nothing else here changed. He chose 18 off a rendered ballot
+// that drew both radials live against the slider.
+// It used to READ `--space-s` (8), which was the right instinct in the wrong
+// place: that token is the page's ordinary gap between two elements sitting
+// side by side, and this is the daylight between two circles on an arc — a
+// different job, and one the owner has now tuned by eye. Tying them together
+// meant his fan could not be opened up without moving every card's padding
+// with it. The FACE stays a token (`--corner`) because an option IS the
+// parent's square, which is a rule rather than a taste.
+const MINI_GAP = 18;
 const MINI_RADIUS = (MINI_FACE + MINI_GAP) / (2 * Math.sin(Math.PI / 8));
 
 const MINI_EDGE = 8;         // px an option keeps clear of the screen edge
