@@ -108,8 +108,11 @@ became `var(--card)`; `#06212E` and `#06121f` (ink on the accent) became
 `var(--on-accent)`; `#22C55E` became `var(--success)`; the eleven
 `rgb(15 23 42 / ..)` backdrops became `--bar` / `--scrim` / `--scrim-soft` /
 `--dim-out` by what each one IS; the icon and label shadows became
-`--ink-shadow` / `--lbl-shadow`, which is what lets light mode flip them from
-black to white so a dark icon over a dark PC window still reads.
+`--ink-shadow` / `--lbl-shadow`. Those two DID flip to white on the light
+theme, so a dark icon over a dark PC window kept an outline — until the owner
+photographed what the flip really looks like (2026-08-15) and ruled that a
+shadow is always black on both themes; the light override is gone and the
+geometry is his, `0 1px 1px` at 0.80 / 1.0 alpha. See theme.md.
 
 One that was already a bug: `.sets-live.on` painted its ink `var(--surface-0)`
 — correct by accident on dark, and a light badge on a light accent the moment

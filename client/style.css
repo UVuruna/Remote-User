@@ -177,11 +177,16 @@ html, body {
   transition: box-shadow 0.15s ease-out, color 0.15s ease-out, transform 0.15s ease-out;
 }
 
+/* THE SHADOW'S GEOMETRY IS THE OWNER'S, settled 2026-08-15 on a rendered
+   ballot whose sliders drove all eight looks at once: offset 0 / 1 px and a
+   1 px blur — a 3D lift rather than a glow. The 2 px blur it replaces is what
+   read as "blury" once the colour question was answered (the alphas and the
+   always-black rule live with the tokens, client/theme.css). */
 .ctl svg {
   width: 23px;
   height: 23px;
   pointer-events: none;
-  filter: drop-shadow(0 1px 2px var(--ink-shadow));
+  filter: drop-shadow(0 1px 1px var(--ink-shadow));
 }
 
 /* A pool's reserve commands carry longer names than the shipped four
@@ -192,7 +197,7 @@ html, body {
   font: 600 9px/1.15 system-ui, sans-serif;
   letter-spacing: 0.02em;
   color: var(--text-primary);
-  text-shadow: 0 1px 2px var(--lbl-shadow);
+  text-shadow: 0 1px 1px var(--lbl-shadow);
   pointer-events: none;
   max-width: 54px;
   text-align: center;
@@ -829,7 +834,7 @@ body.hidden-controls:not(.hide-sticky) .corner-tr { display: none; }
   justify-content: center;
   touch-action: none;
 }
-.rg-move svg { width: 26px; height: 26px; filter: drop-shadow(0 1px 2px var(--ink-shadow)); }
+.rg-move svg { width: 26px; height: 26px; filter: drop-shadow(0 1px 1px var(--ink-shadow)); }
 
 /* THE BAR WAS NEVER ALLOWED TO BE WIDER THAN HALF THE PHONE (independent
    grader, 2026-08-07 — "Drag the corners, then Send" broken into FOUR lines).

@@ -114,10 +114,23 @@
   --on-warning: #16161f;
   --on-error: #ffffff;       /* 4.83:1 / 6.47:1 across the error gradient */
   /* Controls float over the PC's screen, which can be ANY colour, so their
-     icon and label carry a shadow. On dark ink that shadow is black; on light
-     ink it has to become white, or a dark icon over a dark window vanishes. */
-  --ink-shadow: rgb(0 0 0 / 0.70);
-  --lbl-shadow: rgb(0 0 0 / 0.85);
+     icon and label carry a shadow.
+
+     THE SHADOW IS ALWAYS BLACK, ON BOTH THEMES (owner verdict 2026-08-15,
+     chosen off a rendered ballot showing all eight looks over one background
+     of his own choosing). Until that day the LIGHT theme flipped both values
+     to white — the reasoning was that a dark icon must not vanish over a dark
+     PC window — and what it really produced was a white halo around dark ink,
+     which he photographed and named: "stavio si da se crta beli Shadow umesto
+     crnog pa se dobija efekat blury Prikaza". His ruling, in translation: a
+     shadow is always black, i.e. dark, and if the price is that the light
+     theme's ink is a little less outlined over a dark window, he accepts it —
+     he was shown that exact case staged before he chose.
+     The numbers are his too, settled on the ballot's own sliders: offset
+     0 / 1 px, blur 1 px (see client/style.css, where the geometry lives), and
+     these two alphas. A 3D lift, not a glow. */
+  --ink-shadow: rgb(0 0 0 / 0.80);
+  --lbl-shadow: rgb(0 0 0 / 1);
   --card-shadow: rgb(0 0 0 / 0.45);
   /* What a FILLED button is filled with when `data-colored="false"`.
      RAISED 2026-08-08 (#1e293b -> #334155) on the owner's own choice between
@@ -194,8 +207,11 @@ body[data-theme="light"] {
      Measured: 5.02:1 / 7.09:1 amber, 6.47:1 / 10.02:1 error. */
   --on-warning: #ffffff;
   --on-error: #ffffff;
-  --ink-shadow: rgb(255 255 255 / 0.85);
-  --lbl-shadow: rgb(255 255 255 / 0.90);
+  /* NO SHADOW OVERRIDE HERE — see the dark block's note. The light theme used
+     to flip these two to white and that was the blur the owner reported on
+     2026-08-15; a shadow is always black, so this theme simply inherits the
+     values above. `--card-shadow` is a different thing entirely (a raised
+     card's elevation, not ink legibility) and keeps its own light value. */
   --card-shadow: rgb(22 22 31 / 0.20);
   --fill-solid: #ffffff;
 }

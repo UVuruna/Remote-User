@@ -104,7 +104,7 @@
 #layout-bar .lay-arrow svg {
   width: 30px;
   height: 30px;
-  filter: drop-shadow(0 1px 2px var(--ink-shadow));
+  filter: drop-shadow(0 1px 1px var(--ink-shadow));
 }
 /* The frame is the rectangle: name + ✕ together, and it takes whatever width
    the arrows leave — never more. Same height and same radius as the buttons on

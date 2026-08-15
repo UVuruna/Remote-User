@@ -107,10 +107,16 @@ They are independent, so there are **eight** real renderings of every control
   an override of it.
 - **light** — elevation INVERTS (DESIGN.md): the raised card is the whitest
   thing and the page sits a step below it. The accent is deepened to `#0369a1`
-  because the dark theme's `#38bdf8` sits at 2.2:1 on white. The icon and
-  label shadows flip from black to white — the controls float over the PC's
-  own screen, which can be any colour, so dark ink over a dark window needs a
-  light halo or it vanishes.
+  because the dark theme's `#38bdf8` sits at 2.2:1 on white. **The icon and
+  label shadows do NOT flip** (owner verdict 2026-08-15). They used to: the
+  reasoning was that dark ink over a dark PC window needs a light halo or it
+  vanishes, and it is a real case. What it produced in every other case is a
+  white glow around dark ink, which he photographed in the light COLORED look
+  and named as a blur. He was shown all eight looks over a background of his
+  own choosing, with the dark-window case staged, and ruled that a shadow is
+  always black — so this block declares neither token and simply inherits the
+  `:root` values, and the geometry is `0 1px 1px` at 0.80 (icon) / 1.0 (label),
+  numbers he settled on the ballot's own sliders.
 - **colored (`data-colored="true"`)** — every set wearing its own colour, on
   top of WHICHEVER theme is in force. It shares every surface token with the
   page's own theme (a light page is a light page whether or not the buttons
