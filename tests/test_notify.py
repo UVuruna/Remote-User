@@ -19,6 +19,7 @@ Run:  .venv\\Scripts\\python tests/test_notify.py
 """
 
 import asyncio
+import inspect
 import json
 import re
 import sys
@@ -264,6 +265,45 @@ def main() -> int:
         set(lines) == {"Stop", "Notification"})
     results["only the Notification line carries --asking"] = (
         "--asking" in lines["Notification"] and "--asking" not in lines["Stop"])
+    # …AND A REAL SETTINGS FILE THAT HOLDS ONLY THE OLD `Stop` LINE IS HEALED
+    # (owner report 2026-08-15, top priority: a permission prompt reached his
+    # phone as NOTHING). The two checks above drove `hook_entry` alone and
+    # were green while his settings.json carried no Notification hook at all
+    # — a machine registered before 2026-08-09 read as installed forever. So
+    # this one writes the OLD shape into a temp settings file, asks what is
+    # missing, heals with the SAME python+script the Stop line names, and
+    # reads the file back.
+    with tempfile.TemporaryDirectory() as tmp:
+        settings = Path(tmp) / "settings.json"
+        old_entry = agent_hook.hook_entry(Path(tmp) / "agent_hook.py", "py.exe", "Stop")
+        settings.write_text(json.dumps({"hooks": {"Stop": [old_entry]}}),
+                            encoding="utf-8")
+        saved = agent_hook.SETTINGS
+        agent_hook.SETTINGS = settings
+        # `notify._hook_module()` loads the script FRESH on every call (it
+        # must run under any interpreter), so the override above would never
+        # reach it — hand it this very module for the duration.
+        saved_loader = notify._hook_module
+        notify._hook_module = lambda: agent_hook
+        try:
+            before = agent_hook.missing_events()
+            pair = agent_hook.registered_command()
+            healed = False
+            if pair and agent_hook.is_installed():
+                notify.refresh_agent_hook()      # the REAL start-up path
+                healed = agent_hook.missing_events() == ()
+            data = json.loads(settings.read_text(encoding="utf-8"))
+            note = " ".join(h.get("command", "")
+                            for e in data["hooks"].get("Notification") or []
+                            for h in e.get("hooks") or [])
+        finally:
+            agent_hook.SETTINGS = saved
+            notify._hook_module = saved_loader
+    results["an old settings file names Notification as the missing hook"] = (
+        before == ("Notification",))
+    results["the heal registers it with the SAME python and script"] = (
+        healed and "py.exe" in note and "--asking" in note
+        and str(Path(tmp) / "agent_hook.py") in note)
 
     # --- WHERE it happened (owner 2026-08-08, task 110) --------------------
     # "da klikom na notifikaciju nas odvede do tog layouta." The PC answers

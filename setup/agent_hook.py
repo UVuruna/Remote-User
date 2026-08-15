@@ -273,6 +273,43 @@ def is_installed() -> bool:
     return MARKER in json.dumps(data.get("hooks", {}).get("Stop") or [])
 
 
+def missing_events() -> tuple[str, ...]:
+    """The hook events of HOOK_EVENTS that carry NO copy of ours — the exact
+    gap the desktop's start-up heal closes (owner report 2026-08-15, top
+    priority: an agent stopped to ASK for a permission and his phone, in the
+    background, said nothing — his settings.json carried our `Stop` hook and
+    NO `Notification` hook). The cause is structural: `is_installed()` reads
+    only `Stop` (an older settings file must still count as installed), so a
+    machine registered before 2026-08-09 was "installed" and never got the
+    second event, and nothing ever looked for it. This looks for it."""
+    try:
+        data = json.loads(SETTINGS.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return HOOK_EVENTS
+    hooks = data.get("hooks", {}) or {}
+    return tuple(ev for ev in HOOK_EVENTS
+                 if MARKER not in json.dumps(hooks.get(ev) or []))
+
+
+def registered_command() -> tuple[str, str] | None:
+    """(python, script) exactly as the installed `Stop` entry names them, or
+    None. A heal must re-register with the SAME interpreter and the SAME
+    deployed script the switch chose, never with whatever this process is."""
+    try:
+        data = json.loads(SETTINGS.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    for entry in data.get("hooks", {}).get("Stop") or []:
+        for h in entry.get("hooks") or []:
+            cmd = str(h.get("command", ""))
+            if MARKER not in cmd:
+                continue
+            parts = [p for p in cmd.split('"') if p.strip() and p.strip() != "--asking"]
+            if len(parts) >= 2:
+                return parts[0], parts[1]
+    return None
+
+
 def install(remove: bool = False, script: Path | None = None,
             python: str | None = None) -> int:
     try:

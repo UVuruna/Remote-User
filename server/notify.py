@@ -795,6 +795,23 @@ def refresh_agent_hook() -> None:
     frozen-path: a dev checkout registers the repo file directly and has no
     second copy to age.
     """
+    # THE REGISTRATION is healed first, frozen or not (owner report 2026-08-15,
+    # top priority): a settings file that carries our `Stop` hook and lacks
+    # our `Notification` hook was "installed" by every check this app made
+    # and never announced a permission prompt to his phone. Re-register with
+    # the SAME python and script the switch chose — the file heal below only
+    # rewrites bytes, this rewrites the missing event lines.
+    try:
+        module = _hook_module()
+        gap = module.missing_events() if module.is_installed() else ()
+        if gap:
+            pair = module.registered_command()
+            if pair:
+                module.install(script=pathlib.Path(pair[1]), python=pair[0])
+                logger.info("agent hook re-registered — %s hook(s) were missing",
+                            ", ".join(gap))
+    except OSError as e:
+        logger.warning("agent hook registration heal failed: %s", e)
     if not FROZEN:
         return
     try:
