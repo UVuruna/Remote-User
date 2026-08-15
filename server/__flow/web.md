@@ -139,6 +139,7 @@ Pseudocode:
                  owner.release(); re-raise   # to_thread cannot cancel the thread it started
             first, failures = False, 0
             conn["stream_region"] = req_region   # intention copy for the choke point
+            traffic.METER.note_stream(traffic_stream.from_session(session))  # T106: the CSV learns what this session encodes; note_stream(None) in the finally that closes it
             send config (with the session's parsed codec + stream_region, the
                          even-rounded crop the page maps the video onto)
             WHILE (chunk := queue.get()) is not None:

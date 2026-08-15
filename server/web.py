@@ -50,7 +50,6 @@ import claude_api
 import clipboard
 import clipboard_sync
 import config
-import cursor_shape
 import focus_guard
 import layout_api
 import layout_birth
@@ -62,11 +61,13 @@ import presence
 import agents
 import content
 import traffic
+import traffic_stream
 import uia
 import upload_api
 import window_manager
 from config import SETTINGS
 from config_api import send_config as _send_config
+from cursor_api import send_cursor as _send_cursor
 from input_injector import BUTTON_FLAGS, InputInjector
 from layout_api import toast as _toast
 
@@ -528,6 +529,9 @@ async def _h264_loop(ws: WebSocket, manager, token: str, conn: dict,
         # (session.region is the even-rounded crop — other decimals).
         conn["stream_region"] = req_region
         conn["stream_zoom"] = req_zoom
+        # The traffic recording learns what this session ENCODES (T106): the
+        # descriptor rides every per-second sample until the session closes.
+        traffic.METER.note_stream(traffic_stream.from_session(session))
         try:
             await _send_config(ws, manager, token, codec=session.codec,
                                region=session.region, zoom=session._zoom)
@@ -545,6 +549,7 @@ async def _h264_loop(ws: WebSocket, manager, token: str, conn: dict,
             # disagree about who is gone.
             manager.hold_source(hold)
             owner.release()
+            traffic.METER.note_stream(None)
         # A session dying this fast is an error loop — pace it. Unless WE ended
         # it (see plan_close above): then the youth of the session is the
         # feature, not the symptom.
@@ -552,53 +557,10 @@ async def _h264_loop(ws: WebSocket, manager, token: str, conn: dict,
             await asyncio.sleep(1.0)
 
 
-INPUT_BLOCKED_TOAST = (
-    "The PC is blocking remote input — an administrator window or the lock "
-    "screen has focus on the PC."
-)
-
-async def _send_cursor(ws: WebSocket, injector: InputInjector) -> None:
-    """Streams the PC cursor position AND ITS SHAPE for the client-drawn
-    virtual cursor. Sent only on change, position quantized to 4 decimals
-    (~0.4 px on 4K).
-
-    The shape rides as an OPTIONAL `shape` field on this same message (owner
-    request 2026-08-09, task 142 — a resize cursor at a window edge is how a
-    person knows the edge is grabbable, and one fixed arrow told him nothing).
-    Never its own message type and never an image: a page that predates the
-    field simply ignores it, and a phone that has never heard of a name draws
-    the arrow it always drew. A name the PC cannot read at all (secure
-    desktop) is left OFF the wire rather than guessed.
-
-    Also the delivery path for the injector's self-check alarm: when Windows
-    eats injected input (UIPI — the 2026-07-29 dead-mouse failure), the phone
-    must SAY so instead of looking healthy over a dead session."""
-    interval = 1.0 / SETTINGS.cursor_hz
-    last = None
-    while True:
-        try:
-            if injector.take_input_alarm():
-                await ws.send_text(json.dumps(
-                    {"type": "toast", "text": INPUT_BLOCKED_TOAST}
-                ))
-            pos = injector.cursor_norm()
-            if pos is not None:
-                rounded = (round(pos[0], 4), round(pos[1], 4))
-                shape = cursor_shape.current_cursor_name()
-                # The SHAPE is part of "changed" — hovering a window edge
-                # without moving a pixel still has to reach the phone — but
-                # it never adds a frame: the cadence is this loop's, unchanged.
-                if (rounded, shape) != last:
-                    last = (rounded, shape)
-                    frame = {"type": "cursor", "x": rounded[0], "y": rounded[1]}
-                    if shape:
-                        frame["shape"] = shape
-                    await ws.send_text(json.dumps(frame))
-        except (WebSocketDisconnect, RuntimeError):
-            return  # socket closed under us — normal lifecycle
-        await asyncio.sleep(interval)
-
-
+# The cursor stream (`_send_cursor`, INPUT_BLOCKED_TOAST) lives in
+# `server/cursor_api.py` (moved 2026-08-15, THE STRUCTURE LAW: this file stood
+# at the wall again) — imported under its old name below so its gate and its
+# one call site read unchanged.
 # The actions.json reader and shipped-pool merge live in `server/actions_api.py`
 # (moved 2026-08-11), and the `config` frame in `server/config_api.py` (moved
 # 2026-08-12) — THE STRUCTURE LAW both times: this file stood at the 1,000-line

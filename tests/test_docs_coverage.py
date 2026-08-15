@@ -114,6 +114,13 @@ STANDARD = {
     # modules build and adds two optional ones (codec, stream_region); the
     # region-crop decision it ships lives in h264_streamer/layout_api.
     "server/config_api.py",
+    # New 2026-08-15 (THE STRUCTURE LAW — web.py at the wall a third time): the
+    # `cursor` message's one sender, the config_api precedent. Standard.
+    "server/cursor_api.py",
+    # New 2026-08-15 (T106): the per-second stream descriptor beside every
+    # traffic sample — six CSV cells and the hover card's words. Standard:
+    # a reader/writer pair over values the encoder already resolved.
+    "server/traffic_stream.py",
     "server/window_manager.py",
     # Split out of window_manager.py on 2026-08-09 (THE STRUCTURE LAW — the
     # pos-anchor round pushed it past 1,000 lines). The registry holds the
@@ -480,6 +487,14 @@ ALGORITHMIC = {
     # is algorithmic (a circular measurement that has to converge).
     "server/gui/sizing.py",
     "server/gui/traffic_window.py",
+    # Split off traffic_window.py 2026-08-15 at the structure law's wall, by
+    # responsibility: the window owns numbers/picker/footer, the chart owns
+    # the PICTURE — and now the zoom (drag rectangle, wheel, buttons) and a
+    # hover card that names device + stream. Algorithmic (a widget).
+    "server/gui/traffic_chart.py",
+    # New 2026-08-15 (T104/T105): the chart's time window as pure arithmetic
+    # — clamped, floored, anchored zoom; pixels <-> seconds. Algorithmic.
+    "server/gui/traffic_zoom.py",
     # Split off traffic_window.py 2026-08-14 at the structure law's wall,
     # by responsibility: how a byte count and a moment become the WORDS on
     # an axis. Algorithmic — the 1/2/5 gridline ladder is scored, not
