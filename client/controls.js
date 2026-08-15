@@ -238,13 +238,40 @@ function sendTyped(text) {
   });
 }
 
+// DIAGNOSTIC ONLY — no behaviour change (owner report 2026-08-14: the mic was
+// already ruled out, mobile data / high latency, and the 2026-08-13
+// ghost-suffix bug came back and would not reproduce today). `kbShouldRepin`
+// below is still the whole fix; this only reaches for the server log so the
+// NEXT occurrence leaves evidence instead of vanishing once he stops looking.
+// Rate-limited: a genuine occurrence keeps re-triggering the predicate on
+// every following keystroke (that is the bug), and one log line every 2 s is
+// enough evidence without flooding server.log.
+let kbGhostLastLogAt = 0;
+const KB_GHOST_LOG_MIN_MS = 2000;
+
+function logKbGhostCandidate(prevValue, value, diff, e) {
+  if (!kbGhostCandidate(prevValue, diff)) return;
+  const now = Date.now();
+  if (now - kbGhostLastLogAt < KB_GHOST_LOG_MIN_MS) return;
+  kbGhostLastLogAt = now;
+  const tail = (s) => JSON.stringify(s.slice(-12));
+  send({ type: "client_log", text:
+    `[kb-ghost] prevLen=${prevValue.length} valLen=${value.length} ` +
+    `selStart=${kbInput.selectionStart} selEnd=${kbInput.selectionEnd} ` +
+    `composing=${e.isComposing} inputType=${e.inputType} ` +
+    `prevTail=${tail(prevValue)} valueTail=${tail(value)}` });
+}
+
 kbInput.addEventListener("input", (e) => {
   const value = kbInput.value;
+  const prevValue = kbPrev;
   // client/kb-sync.js: pure, so its own gate can run it whole.
-  const { back, inserted } = kbDiff(kbPrev, value);
+  const diff = kbDiff(prevValue, value);
+  const { back, inserted } = diff;
   for (let i = 0; i < back; i++) send({ type: "key_special", key: "backspace" });
   if (inserted) sendTyped(inserted);
   kbPrev = value;
+  logKbGhostCandidate(prevValue, value, diff, e);
   // RE-PIN the field's own caret to its end (owner report 2026-08-13: typed
   // text landed BEFORE a trailing fragment that no amount of typing or
   // deleting removed, freed only by a blur/refocus). `kbDiff`'s mid-string

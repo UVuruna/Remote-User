@@ -49,7 +49,8 @@ def _node() -> str:
 def _module() -> str:
     text = KB_SYNC.read_text(encoding="utf-8")
     for needed in ("function kbDiff", "function kbCaretAtEnd",
-                   "function kbShouldRepin"):
+                   "function kbShouldRepin", "function kbGhostSuffixLen",
+                   "function kbGhostCandidate"):
         if needed not in text:
             fail(f"{needed!r} left client/kb-sync.js — the gate cannot "
                  "find what it must test")
@@ -218,6 +219,72 @@ console.log(JSON.stringify({ d1, d2 }));
 
 # ── Purity + wiring ─────────────────────────────────────────────────────
 
+def check_ghost_candidate_fires_on_a_multi_char_midstring_retype() -> None:
+    """Tell 1: `back > 0 && inserted.length > 1`. The legitimate autocorrect
+    case above already has this shape — it is also exactly what a stuck
+    fragment produces on every later keystroke, which is the whole reason
+    this is a CANDIDATE and not a certainty (a diagnostic, no behaviour
+    change)."""
+    out = _run("""
+const diff = kbDiff("cant beleive", "can't believe");
+console.log(JSON.stringify({ g: kbGhostCandidate("cant beleive", diff) }));
+""")
+    if out["g"] is not True:
+        fail("a multi-character mid-string retype must read as a ghost "
+             "candidate")
+
+
+def check_ghost_candidate_fires_on_a_repeated_tail() -> None:
+    """Tell 2: `inserted` ends with a real (>=2 char) run matching the TAIL
+    of `prevValue` — the fragment reappearing unearned. PLANTED DEFECT:
+    lower the threshold in `kbGhostSuffixLen` comparison to `>= 1` — this
+    check alone would still pass (2 chars still clears >=1), so it is
+    `check_ghost_candidate_does_not_fire_on_an_ordinary_single_char_append`
+    below that actually catches that defect."""
+    out = _run("""
+const diff = { back: 0, inserted: "xz ok" };
+console.log(JSON.stringify({
+  g: kbGhostCandidate("hello type ok", diff),
+}));
+""")
+    if out["g"] is not True:
+        fail("an inserted run ending in the same 2+ characters already at "
+             "the tail of prevValue must read as a ghost candidate")
+
+
+def check_ghost_candidate_does_not_fire_on_an_ordinary_single_char_append() -> None:
+    """An ordinary keystroke — one character, no mid-string work, and no
+    real suffix overlap with what was already there — must NOT be flagged.
+    A predicate that fires on every keystroke is not a diagnostic, it is
+    noise, and `client_log` is rate-limited but still costs a socket write."""
+    out = _run("""
+const diff = kbDiff("hello", "hello!");
+console.log(JSON.stringify({ g: kbGhostCandidate("hello", diff) }));
+""")
+    if out["g"] is not False:
+        fail("a single ordinary appended character must never read as a "
+             "ghost candidate")
+
+
+def check_a_coincidental_one_char_suffix_match_does_not_fire() -> None:
+    """The real boundary tell 2 is guarding against: ordinary typed text
+    shares its LAST character with whatever was already there constantly —
+    a trailing space, a common letter, a repeated punctuation mark. Only a
+    real (>=2 char) run counts as the ghost's own signature.
+
+    PLANTED DEFECT: drop the `>= 2` threshold to `>= 1` in kbGhostSuffixLen's
+    caller — `inserted` here shares exactly one trailing character with
+    `prevValue` ('x') by pure coincidence, and a threshold of 1 would flag
+    it, which is exactly the false-positive flood tell 2 exists to avoid."""
+    out = _run("""
+const diff = { back: 0, inserted: "yx" };
+console.log(JSON.stringify({ g: kbGhostCandidate("abc x", diff) }));
+""")
+    if out["g"] is not False:
+        fail("a coincidental one-character suffix match must never read as "
+             "a ghost candidate — only a real (>=2 char) repeat does")
+
+
 def check_kb_sync_js_stays_pure() -> None:
     """This gate runs the module WHOLE in node — only possible while
     kb-sync.js touches no DOM, no socket, no Android bridge (the voice.js
@@ -262,6 +329,59 @@ def check_repin_is_gated_on_kbShouldRepin_not_unconditional() -> None:
              "must only run when kbShouldRepin() returns true")
 
 
+def check_controls_js_logs_the_ghost_candidate_diagnostic() -> None:
+    """2026-08-14: no behaviour change, only a diagnostic — the input
+    handler must call `kbGhostCandidate` (directly or through a small
+    wrapper) and, on a hit, send a rate-limited `client_log` naming the
+    fields the owner needs to read the next real occurrence off the server
+    log: prev/value length, selection, isComposing, inputType, and the tails.
+
+    PLANTED DEFECT: delete the `logKbGhostCandidate(...)` call from inside
+    the `input` handler (leave the function defined but unused) — the
+    diagnostic would then never fire on a real device."""
+    text = CONTROLS.read_text(encoding="utf-8")
+    if "kbGhostCandidate(" not in text:
+        fail("client/controls.js no longer references kbGhostCandidate — "
+             "the ghost-suffix diagnostic was removed")
+    m = re.search(r'kbInput\.addEventListener\("input".*?\n\}\);', text, re.S)
+    if not m:
+        fail("kbInput's input handler not found in client/controls.js")
+    body = m.group(0)
+    if "logKbGhostCandidate(" not in body:
+        fail("the input handler no longer calls the ghost-candidate "
+             "diagnostic — it would never run on a real device")
+
+
+def check_the_ghost_log_names_the_fields_and_is_rate_limited() -> None:
+    """The fields the owner needs to diagnose the NEXT real occurrence from
+    the server log alone: prev/value length, selectionStart/End,
+    isComposing, inputType, and the tails of prev/value (escaped, so a
+    stray quote or backslash in the typed text cannot corrupt the log line).
+
+    PLANTED DEFECT: remove the `now - kbGhostLastLogAt < KB_GHOST_LOG_MIN_MS`
+    guard — a genuine occurrence keeps re-triggering the predicate on every
+    following keystroke (that is the bug), so an unthrottled log would spam
+    one line per keystroke for as long as the fragment stays stuck."""
+    text = CONTROLS.read_text(encoding="utf-8")
+    if "logKbGhostCandidate" not in text:
+        fail("no logKbGhostCandidate function found")
+    fn = re.search(r"function logKbGhostCandidate\([^)]*\)\s*\{.*?\n\}",
+                    text, re.S)
+    if not fn:
+        fail("logKbGhostCandidate is referenced but its definition could "
+             "not be found")
+    body = fn.group(0)
+    for needed in ("prevLen", "valLen", "selStart", "selEnd", "composing",
+                   "inputType", "prevTail", "valueTail", "[kb-ghost]"):
+        if needed not in body:
+            fail(f"the ghost-candidate client_log is missing {needed!r} — "
+                 "the owner needs this field to diagnose a real occurrence "
+                 "from the server log alone")
+    if "KB_GHOST_LOG_MIN_MS" not in body or "kbGhostLastLogAt" not in body:
+        fail("the ghost-candidate log has no rate-limit guard — a real "
+             "occurrence would spam one client_log per keystroke")
+
+
 CHECKS = [
     ("plain append sends no backspaces", check_plain_append_sends_no_backspace),
     ("a pure trailing delete sends only backspaces",
@@ -287,6 +407,18 @@ CHECKS = [
      check_controls_js_wires_kb_diff_into_the_input_handler),
     ("the re-pin call is gated on kbShouldRepin, never unconditional",
      check_repin_is_gated_on_kbShouldRepin_not_unconditional),
+    ("a multi-char mid-string retype reads as a ghost candidate",
+     check_ghost_candidate_fires_on_a_multi_char_midstring_retype),
+    ("an inserted run repeating prevValue's tail reads as a ghost candidate",
+     check_ghost_candidate_fires_on_a_repeated_tail),
+    ("an ordinary single-char append is never a ghost candidate",
+     check_ghost_candidate_does_not_fire_on_an_ordinary_single_char_append),
+    ("a coincidental one-char suffix match is never a ghost candidate",
+     check_a_coincidental_one_char_suffix_match_does_not_fire),
+    ("controls.js logs the ghost-candidate diagnostic from the real handler",
+     check_controls_js_logs_the_ghost_candidate_diagnostic),
+    ("the ghost log names every needed field and is rate-limited",
+     check_the_ghost_log_names_the_fields_and_is_rate_limited),
 ]
 
 

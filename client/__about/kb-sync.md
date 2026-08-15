@@ -65,6 +65,34 @@ what makes autocorrect and the double-space-period rule work at all (the
 original comment on `kbDiff`); disabling it outright would silently drop those
 legitimate live edits rather than occasionally mis-place a rare stray one.
 
+## The ghost-suffix diagnostic (2026-08-15, no behaviour change)
+
+He hit the pattern again — mobile data, high latency — and could not
+reproduce it the next day to hand over a live session. `kbGhostCandidate`
+adds a cheap SIGNAL, never a fix (`kbShouldRepin` above is still the whole
+fix and is untouched): a given edit "looks like" the 2026-08-13 pattern when
+either
+
+1. `kbDiff` fired its mid-string branch AND retyped more than one character
+   (`back > 0 && inserted.length > 1` — an ordinary keystroke is a 0-or-1
+   character edit; a stuck fragment produces a multi-character mid-string
+   retype on every later keystroke), or
+2. `inserted` ends with a real (**>=2 character**) run matching the tail of
+   `prevValue` — the fragment reappearing verbatim. One matching character
+   is deliberately not enough: ordinary text shares its last character with
+   whatever came before constantly (a trailing space, a repeated letter),
+   and a threshold of 1 would flag that noise on nearly every keystroke.
+
+`controls.js`'s `logKbGhostCandidate` calls it from the real `input` handler
+and, on a hit, sends one `client_log {text: "[kb-ghost] ..."}` naming
+`prevLen`/`valLen`/`selStart`/`selEnd`/`composing`/`inputType` and the last
+12 characters of `prevValue`/`value` (JSON-escaped, so a stray quote in the
+typed text cannot corrupt the log line) — rate-limited to at most one line
+every 2 s (`KB_GHOST_LOG_MIN_MS`), because a genuine occurrence keeps
+re-triggering the predicate on every following keystroke for as long as the
+fragment stays stuck, and that IS the bug, not a reason to flood
+`server.log`.
+
 ## Connections
 
 ### Uses
@@ -74,6 +102,7 @@ Nothing. The module is pure by design (see above).
 ### Used by
 
 - [Controls](controls.md) — the `kbInput` `input` handler calls `kbDiff` for
-  every edit and `kbShouldRepin` to decide whether to re-pin the caret
+  every edit, `kbShouldRepin` to decide whether to re-pin the caret, and
+  (via `logKbGhostCandidate`) `kbGhostCandidate` for the diagnostic above
 - [Tests (folder)](../../tests/___tests.md) — `tests/test_kb_sync.py` runs
   this module whole in node
