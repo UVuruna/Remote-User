@@ -542,7 +542,7 @@ PANELS = (
     # screenshot 2026-08-15, task 218b follow-up) ──────────────────────────
     # Every check this file staged before this round used a four-or-five-row
     # pool, which is exactly the state where nothing here was ever wrong: the
-    # owner's report was against the real Claude app-set, eleven pool commands
+    # owner's report was against the real Claude app-set, eleven pool commands (nine since Stop and Agents left on his ruling of 2026-08-15)
     # deep (actions.json's own `app_sets` entry, copied here rather than
     # invented — a fixture that drifts from the shipped file proves nothing
     # about it), and "Save on the PC" ran off the bottom of his 1440x3120
@@ -550,7 +550,7 @@ PANELS = (
     # button list below IS that set — same ids, same labels, same order — so
     # this stage breaks the moment a future edit to actions.json's Claude set
     # stops matching it, which is the point.
-    ("Set editor, 11-command pool",
+    ("Set editor, 9-command pool",
      "openSetEditor({name:'Claude', buttons:["
      "{label:'Usage', icon:'usage', text:'/usage', enter:true, focus:'claude'},"
      "{id:'model', label:'Model', icon:'model', panel:'claude-model'},"
@@ -563,7 +563,7 @@ PANELS = (
      "{label:'Context', icon:'gauge', text:'/context', enter:true, focus:'claude'},"
      "{label:'Agents', icon:'agents', text:'/agents', enter:true, focus:'claude'},"
      "{label:'Resume', icon:'reopen', text:'/resume', enter:true, focus:'claude'}],"
-     "active:['model','effort','mode','escape']})",
+     "active:['model','effort','mode','clear']})",
      # closeSetEditor() re-opens the Sets picker (its real exit path); the
      # stage must close that too, or every panel measured after this one is
      # photographed over the picker's veil (found 2026-08-15: 305 audit fails).
@@ -751,7 +751,7 @@ COLOUR_SHOTS = {"Sets picker", "Quality panel", "Dictation card",
                 # follow-up — the Back button and the two-column checklist
                 # are new surfaces this project has never photographed in
                 # every look, and the owner's own report was a picture.
-                "Set editor, 11-command pool"}
+                "Set editor, 9-command pool"}
 
 # The panels SHOT IN LANDSCAPE (2026-08-07). Every phone panel is MEASURED in
 # both orientations and always was; these two are also photographed there,
@@ -786,7 +786,7 @@ LANDSCAPE_SHOTS = {"Creation panel + Name field", "Grid arrangement choice",
                    # card-split reflow already gives it columns there) —
                    # photographed anyway so the two mechanisms are proven to
                    # agree rather than fight (2026-08-15).
-                   "Set editor, 11-command pool"}
+                   "Set editor, 9-command pool"}
 
 # ONE FOLDER, ONE SUBJECT (owner 2026-08-08, his second word on this): a topic
 # folder per ROUND was still a dump — he asked for sub-folders rather than one

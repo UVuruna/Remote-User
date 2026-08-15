@@ -495,11 +495,6 @@
           "panel": "claude-effort"
         },
         {
-          "label": "Stop",
-          "icon": "esc",
-          "key": "escape"
-        },
-        {
           "label": "Menu",
           "icon": "list",
           "text": "/",
@@ -530,13 +525,6 @@
           "label": "Context",
           "icon": "gauge",
           "text": "/context",
-          "enter": true,
-          "focus": "claude"
-        },
-        {
-          "label": "Agents",
-          "icon": "agents",
-          "text": "/agents",
           "enter": true,
           "focus": "claude"
         },
