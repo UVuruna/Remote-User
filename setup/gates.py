@@ -983,3 +983,15 @@ def input_gate(step, run) -> None:
          "phone without a human action, and an unchanged one sends nothing "
          "(tests/test_agents_refresh.py)")
     run([sys.executable, str(PROJECT_DIR / "tests" / "test_agents_refresh.py")])
+
+    # OWNER REQUESTS 2026-08-15 (T103-T106): the Traffic window is a real
+    # window, its graph zooms (a drag rectangle VISIBLE while drawn, the
+    # wheel, - / + / Reset), a zoomed file-backed span is re-read for the
+    # view rather than stretched, and every hover point names the device
+    # and what the encoder was doing (fps / res / bitrate / crop / sent
+    # size / zoom, six CSV columns APPENDED, old rows still read). Fail-
+    # closed because a green pure-arithmetic check says nothing about what
+    # the widget does with a mouse press — the drag is driven end-to-end.
+    step("0b20/6  TRAFFIC ZOOM GATE — the graph zooms to what he drew, and "
+         "every point says what the encoder was doing (tests/test_traffic_zoom.py)")
+    run([sys.executable, str(PROJECT_DIR / "tests" / "test_traffic_zoom.py")])

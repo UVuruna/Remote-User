@@ -121,7 +121,6 @@ def shot_path(name: str):
     return out / f"{name}.png"
 
 
-
 def make_app() -> QApplication:
     """Native platform first (real fonts, real DPI), offscreen if there is no
     desktop to talk to."""
@@ -347,6 +346,8 @@ def make_traffic_window() -> QWidget:
     traffic.METER.since = session_start
 
     SPAN_S = 110          # inside the default "Last 2 minutes" (120 s) span
+    PHONE_STREAM = {"fps": "30", "res": "full", "bitrate": "high", "crop": "3840x2160", "enc": "1920x1080", "zoom": "1"}  # T106
+    TABLET_STREAM = {"fps": "30", "res": "full", "bitrate": "low", "crop": "968x2096", "enc": "968x2096", "zoom": "2"}
     SEGMENTS = 4           # A, B, A, B -> three colour switches
     PHONE_OUT, PHONE_IN = 6_000, 900          # smaller screen, smaller bytes
     TABLET_OUT, TABLET_IN = 42_000, 3_000     # bigger screen, bigger bytes
@@ -367,7 +368,7 @@ def make_traffic_window() -> QWidget:
         on_tablet = segment % 2 == 1
         key = tablet_key_by_segment[segment // 2 % 2] if on_tablet else phone_key
         out_b, in_b = (TABLET_OUT, TABLET_IN) if on_tablet else (PHONE_OUT, PHONE_IN)
-        traffic.METER.samples.append(traffic.Sample(t, out_b, in_b, 1, key))
+        traffic.METER.samples.append(traffic.Sample(t, out_b, in_b, 1, key, TABLET_STREAM if on_tablet else PHONE_STREAM))
         total_out += out_b
         total_in += in_b
     # The session TOTAL is the whole 10 minutes, not just the visible 110 s

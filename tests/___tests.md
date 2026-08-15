@@ -2532,6 +2532,31 @@ step in `build.py` (0av/6). Needs node.
 
 ---
 
+### `test_traffic_zoom.py` — Traffic Zoom Gate (owner requests 2026-08-15, T103–T106)
+Fail-closed in `setup/gates.py` (0b20/6). Sixteen checks over the Traffic
+window's zoom and the per-second stream descriptor, each proven red on its
+own planted defect:
+
+- **The view** ([Traffic Zoom](../server/gui/__about/traffic_zoom.md)) —
+  never leaves the picker's span (a drag past the plot edge means "to the
+  end", never "the whole span"), never narrows past `MIN_SPAN_S`, keeps its
+  anchor under the mouse, survives a sliding live span, and a click is not a
+  drag.
+- **The chart** ([Traffic Chart](../server/gui/__about/traffic_chart.md)) —
+  driven with REAL mouse events: a press at 25 % and release at 75 % of the
+  plot zooms to exactly the middle half and fires `zoomed` once; a click
+  zooms nothing; the rectangle IS visible mid-drag (pixels compared idle vs
+  dragging); only the view's points set the axis.
+- **The window** — carries the minimize/maximize hints (T103); a zoom
+  re-reads the file for `[view.start, view.end]` under its own
+  `kind|start-end` key and never adopts the whole-span result for it;
+  `read_history` honours `until`.
+- **The descriptor** ([Traffic Stream](../server/__about/traffic_stream.md))
+  — reads the session's resolved fields (a scaled session says its SENT
+  size, not the crop's), round-trips the CSV (eleven cells while streaming,
+  `None` on the idle row), 4/5/torn rows still read and say "not recorded",
+  and the hover card names device + quality + slice + zoom.
+
 ### `test_gui_nonblocking.py` — GUI Non-Blocking Gate
 
 `main_window.py`'s own header says "the window never blocks". On 2026-08-12 it
