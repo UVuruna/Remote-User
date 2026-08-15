@@ -22,6 +22,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from gates_desktop import desktop_gates
+
 PROJECT_DIR = Path(__file__).resolve().parent.parent
 
 def input_gate(step, run) -> None:
@@ -745,34 +747,6 @@ def input_gate(step, run) -> None:
          "the session (tests/test_session_residue.py)")
     run([sys.executable, str(PROJECT_DIR / "tests" / "test_session_residue.py")])
 
-    # OWNER REQUEST 2026-08-13: the Traffic window's "this session X MB"
-    # line gains session length, MB/h, and WHICH device(s) sent it — named
-    # where a name was ever learned, else identified by resolution — with
-    # the chart's line coloured differently per device. The identity must
-    # be stable across a reconnect and across a server restart (persisted,
-    # `layout_history.py`'s own precedent), and an older CSV row with no
-    # `device` column must keep reading — the long-term record cannot break
-    # on the day this shipped.
-    step("0b2/6  TRAFFIC DEVICES GATE — a stable per-device identity, "
-         "session length/rate, and the old-CSV-still-reads promise "
-         "(tests/test_traffic_devices.py)")
-    run([sys.executable, str(PROJECT_DIR / "tests" / "test_traffic_devices.py")])
-
-    # OWNER REPORT 2026-08-14: the Traffic window's two long spans "end up
-    # either in an endless loop or in some very long loading loop", and both
-    # drew the SAME four hours — his screenshots have "All (from file)" and
-    # "Since start" reading 11:48 -> 15:42. Measured: his file holds 2.5 days
-    # and reads whole in 0.23 s, so neither the file nor the reader was the
-    # problem — the window's job bookkeeping was. A span switch made while a
-    # read was in flight started no read of its own, and the older read's
-    # data was then stamped with the span selected when it arrived. This gate
-    # is fail-closed because the failure is invisible from the code: both
-    # spans look right, and only the x-axis says otherwise.
-    step("0b15/6  TRAFFIC SPANS GATE — one span's data may never appear under "
-         "another span's label, and the loading overlay may never outlive the "
-         "work (tests/test_traffic_spans.py)")
-    run([sys.executable, str(PROJECT_DIR / "tests" / "test_traffic_spans.py")])
-
     # OWNER ORDER 2026-08-14, in his own words: "ako korisnik odabere 10 fps
     # onda je to dovoljno, nema potrebe 120 puta u sekundi da telefon iscrtava
     # sliku kada se ona menja samo 10 puta u sekundi" (lang-ok: owner quote).
@@ -984,14 +958,8 @@ def input_gate(step, run) -> None:
          "(tests/test_agents_refresh.py)")
     run([sys.executable, str(PROJECT_DIR / "tests" / "test_agents_refresh.py")])
 
-    # OWNER REQUESTS 2026-08-15 (T103-T106): the Traffic window is a real
-    # window, its graph zooms (a drag rectangle VISIBLE while drawn, the
-    # wheel, - / + / Reset), a zoomed file-backed span is re-read for the
-    # view rather than stretched, and every hover point names the device
-    # and what the encoder was doing (fps / res / bitrate / crop / sent
-    # size / zoom, six CSV columns APPENDED, old rows still read). Fail-
-    # closed because a green pure-arithmetic check says nothing about what
-    # the widget does with a mouse press — the drag is driven end-to-end.
-    step("0b20/6  TRAFFIC ZOOM GATE — the graph zooms to what he drew, and "
-         "every point says what the encoder was doing (tests/test_traffic_zoom.py)")
-    run([sys.executable, str(PROJECT_DIR / "tests" / "test_traffic_zoom.py")])
+    # THE DESKTOP-WINDOW GATES — the PC's own Qt windows, split into their own
+    # module by RESPONSIBILITY on 2026-08-16 (see setup/gates_desktop.py):
+    # everything above proves something about the wire and the phone, those
+    # four prove something about windows the owner reaches with a mouse.
+    desktop_gates(step, run)

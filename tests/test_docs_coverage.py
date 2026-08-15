@@ -32,6 +32,13 @@ TRIVIAL = {
 
 # Standard: ordinary module. Needs __about/{name}.md only.
 STANDARD = {
+    # Split out of gates.py on 2026-08-16 (THE STRUCTURE LAW), by
+    # RESPONSIBILITY: the gates that prove the PC's OWN Qt windows, apart from
+    # the ones that prove the wire and the phone. Standard rather than its
+    # parent's Algorithmic tier — it is four subprocess calls in a row, each
+    # explained where it stands; there is no order to reason about and no
+    # state, so a flow page would draw a straight line.
+    "setup/gates_desktop.py",
     # New 2026-08-14 (T94, the version-skew round): the page must not outlive
     # its own protocol — one pure decision (remember the first config's
     # app_version, reload on any different one), no state machine beyond a
