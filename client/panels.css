@@ -325,7 +325,32 @@
   color: var(--text-primary);
   font: inherit;
 }
-.sets-row.dict.lang-group .dict-name { grid-column: 2; }
+/* THE CLOSED ROW STATES THE ACTIVE CHOICE (owner report 2026-08-15):
+   "English — Voice 13 (United States)" / "Serbian — Latin", read without
+   opening the door. Two children, not one interpolated string — task 163's
+   rule for this row is that the language NAME must never be cut in favour of
+   the suffix, and only two independently-shrinking boxes can promise that:
+   the name is fixed width, the suffix is the one that gives up space and
+   ellipses first. `min-width: 0` on the cell is what lets a flex child
+   shrink below its content at all. */
+.sets-row.dict.lang-group .dict-name {
+  grid-column: 2;
+  display: flex;
+  align-items: baseline;
+  min-width: 0;
+  gap: 4px;
+}
+.dict-name-lang { flex: 0 0 auto; }
+.dict-name-sep { flex: 0 0 auto; color: var(--text-secondary); }
+.dict-name-active {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis; /* layout-law: exempt - owner report 2026-08-15: this suffix is the one thing the row is allowed to cut — the language name beside it (.dict-name-lang, flex 0 0 auto) never shrinks, which is task 163's rule for this exact row, and the full count ("N choices") still stands one line below in full */
+  white-space: nowrap;
+  font-weight: 400;
+  color: var(--text-secondary);
+}
 /* How many are inside — the reason this row is a door. It sits under the name
    in the status line's own place, so a group row is exactly as tall as the
    choice rows above and below it. */
@@ -743,6 +768,10 @@
      thing in it. */
   body .sets-card.card-split { padding: 10px 18px; }
   body .sets-card.card-split .sets-done { margin-top: 8px; }
+  /* The set editor's Back+Save row (client/set-editor.css) carries the same
+     margin `.sets-done` used to carry alone — a short landscape screen has no
+     more spare height above the actions row than it has above a bare button. */
+  body .sets-card.card-split .se-actions { margin-top: 8px; }
   body .sets-card.card-split .sets-row { padding: 5px 6px; }
   body .sets-card.card-split .sets-sub { margin-bottom: 6px; }
   body .sets-card.card-split .sets-list { margin-bottom: 4px; }

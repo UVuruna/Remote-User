@@ -73,6 +73,63 @@
   box-shadow: inset 0 0 0 1px var(--accent);
 }
 
+/* ── BACK, BESIDE SAVE (owner screenshot 2026-08-15, task 218b follow-up)
+   The card only ever had one exit and it was "Save on the PC" — a tick made
+   by accident, or just wanting to look, had no way out except sending it.
+   `.se-actions` holds both buttons in one row so neither is the sole thing to
+   reach for; Back is the secondary (outlined in `--border`, not the accent)
+   because the destructive-feeling act here is actually the SAFE one — it
+   throws the draft away and nothing on the PC changes — while Save is the
+   one that reaches out and must stay the one that looks like it does. */
+.se-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 14px;
+}
+.se-actions .sets-done {
+  flex: 1;
+  margin: 0;
+}
+.se-back {
+  flex: 1;
+  display: block;
+  padding: 10px 34px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  background: transparent;
+  font: 600 15px system-ui, sans-serif;
+}
+.se-back:active { background: var(--glass-fill); }
+
+/* ── THE CHECKLIST, IN TWO COLUMNS PAST A HANDFUL OF ROWS (task 218b
+   follow-up, owner screenshot 2026-08-15 — the Claude set's 11 pool
+   commands ran the checklist off the bottom of a 1440x3120 phone and left
+   Save below the fold). A checkbox+icon+word row is exactly the SHORT ITEM
+   panels.css already reflows into two columns for a landscape card-split
+   (see the "TWO COLUMNS ARE A PROPERTY OF THE ROWS" note there) — this is
+   the same rung 2 move, applied unconditionally rather than only past that
+   query, because the pool that overflows is just as tall held upright. */
+.sets-list.se-2col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  column-gap: 16px;
+  row-gap: 2px;
+}
+/* Kin rule (task 163), one level down: a grid puts these rows shoulder to
+   shoulder, so a wrapped label would make one taller than its neighbour —
+   the same defect that rule was written to stop in the layout list. The full
+   command name is never far: it is the same word the D-pad cell itself will
+   show, and that cell (`.se-slot span` above) is free to wrap because there
+   are only ever four of them on screen at once, never eleven side by side. */
+.se-pool-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis; /* layout-law: exempt - task 218b follow-up: kin rows in the two-column checklist must be one line and the same height as their neighbour; the full command name is what the D-pad cell itself shows */
+}
+
 /* THE EDIT DOOR on a row of the Sets picker. A button INSIDE the row's
    `<label>`, so it must never activate the label's checkbox — set-editor.js
    swallows the click; this only makes it look like the separate control it is.

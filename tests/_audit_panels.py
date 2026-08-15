@@ -538,6 +538,36 @@ PANELS = (
      "claudeSaved = {}; claudeState = null;"
      "openClaudePanel({panel:'claude-mode'}); renderClaudeModePanel()",
      "closeClaudePanel()", "#claude-panel .sets-card"),
+    # ── THE SET EDITOR, WITH THE POOL THAT ACTUALLY OVERFLOWED IT (owner
+    # screenshot 2026-08-15, task 218b follow-up) ──────────────────────────
+    # Every check this file staged before this round used a four-or-five-row
+    # pool, which is exactly the state where nothing here was ever wrong: the
+    # owner's report was against the real Claude app-set, eleven pool commands
+    # deep (actions.json's own `app_sets` entry, copied here rather than
+    # invented — a fixture that drifts from the shipped file proves nothing
+    # about it), and "Save on the PC" ran off the bottom of his 1440x3120
+    # phone with no way back except sending an unwanted edit. The literal
+    # button list below IS that set — same ids, same labels, same order — so
+    # this stage breaks the moment a future edit to actions.json's Claude set
+    # stops matching it, which is the point.
+    ("Set editor, 11-command pool",
+     "openSetEditor({name:'Claude', buttons:["
+     "{label:'Usage', icon:'usage', text:'/usage', enter:true, focus:'claude'},"
+     "{id:'model', label:'Model', icon:'model', panel:'claude-model'},"
+     "{id:'effort', label:'Thinking', icon:'thinking', panel:'claude-effort'},"
+     "{label:'Stop', icon:'esc', key:'escape'},"
+     "{label:'Menu', icon:'list', text:'/', enter:false, focus:'claude'},"
+     "{id:'mode', label:'Mode', icon:'cmode', panel:'claude-mode'},"
+     "{label:'New chat', icon:'newchat', text:'/clear', enter:true, focus:'claude'},"
+     "{label:'Rewind', icon:'rewind', text:'/rewind', enter:true, focus:'claude'},"
+     "{label:'Context', icon:'gauge', text:'/context', enter:true, focus:'claude'},"
+     "{label:'Agents', icon:'agents', text:'/agents', enter:true, focus:'claude'},"
+     "{label:'Resume', icon:'reopen', text:'/resume', enter:true, focus:'claude'}],"
+     "active:['model','effort','mode','escape']})",
+     # closeSetEditor() re-opens the Sets picker (its real exit path); the
+     # stage must close that too, or every panel measured after this one is
+     # photographed over the picker's veil (found 2026-08-15: 305 audit fails).
+     "closeSetEditor(); closeSetsPanel()", "#set-editor-panel .sets-card"),
     # ── THE PHONE CARD (owner tasks 161 + 218a) ────────────────────────────
     # Nothing to stage: every row reads a per-device preference that always has
     # an answer, and the card has exactly one state.
@@ -716,7 +746,12 @@ COLOUR_SHOTS = {"Sets picker", "Quality panel", "Dictation card",
                 "Layout list with rename", "Creation list with tabs",
                 "Layout settings sheet", "Layout close chooser warned",
                 "Claude model panel", "Claude thinking panel",
-                "Appearance panel"}
+                "Appearance panel",
+                # Set editor, 11-command pool: joined 2026-08-15, task 218b
+                # follow-up — the Back button and the two-column checklist
+                # are new surfaces this project has never photographed in
+                # every look, and the owner's own report was a picture.
+                "Set editor, 11-command pool"}
 
 # The panels SHOT IN LANDSCAPE (2026-08-07). Every phone panel is MEASURED in
 # both orientations and always was; these two are also photographed there,
@@ -745,7 +780,13 @@ LANDSCAPE_SHOTS = {"Creation panel + Name field", "Grid arrangement choice",
                    "Layout list with rename", "Region grab",
                    "Layout close chooser", "Layout close chooser warned",
                    "Layout settings sheet", "Creation list with tabs",
-                   "Claude thinking panel", "Phone card"}
+                   "Claude thinking panel", "Phone card",
+                   # Set editor, 11-command pool: landscape is where the new
+                   # two-column checklist has the LEAST reason to exist (the
+                   # card-split reflow already gives it columns there) —
+                   # photographed anyway so the two mechanisms are proven to
+                   # agree rather than fight (2026-08-15).
+                   "Set editor, 11-command pool"}
 
 # ONE FOLDER, ONE SUBJECT (owner 2026-08-08, his second word on this): a topic
 # folder per ROUND was still a dump — he asked for sub-folders rather than one
@@ -758,6 +799,7 @@ SHOT_SUBJECTS = (
     ("Controls", "controls"),
     ("ControlsEditor", "desktop-controls-editor"),
     ("Sets_picker", "sets-picker"),
+    ("Set_editor", "set-editor"),
     ("Quality_panel", "quality-panel"),
     ("Appearance_panel", "appearance-panel"),
     ("Dictation_card", "dictation-card"),
