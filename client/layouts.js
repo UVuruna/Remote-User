@@ -211,7 +211,7 @@ function layRow(label, icon, selected, onTap, ...trailing) {
   const name = document.createElement("span");
   name.textContent = label;
   main.appendChild(name);
-  keepFocus(main, onTap);
+  keepRowTap(main, onTap);
   row.appendChild(main);
   trailing.filter(Boolean).forEach((el) => row.appendChild(el));
   return row;
@@ -406,7 +406,7 @@ function openLayoutPicker() {
       // The drawing itself is aria-hidden (it is geometry, not words), so the
       // button would otherwise have no name at all.
       shape.setAttribute("aria-label", "Take one window out");
-      keepFocus(shape, () => openMemberPanel(i));
+      keepRowTap(shape, () => openMemberPanel(i));
     }
     // ONE ⚙ FOR EVERYTHING THIS LAYOUT CAN BE ASKED (owner 2026-08-09, task
     // 175). Every act on an existing layout kept arriving as its own icon on
@@ -432,7 +432,7 @@ function openLayoutPicker() {
     gear.className = "lay-ratio lay-gear";
     gear.innerHTML = svg("settings");
     gear.setAttribute("aria-label", "Settings for this layout");
-    keepFocus(gear, () => openLayoutSettings(i));
+    keepRowTap(gear, () => openLayoutSettings(i));
     // WHERE AND WHEN THE FINGER LANDED. Both the hold timer and the row's own
     // tap are decided from it, so it is declared before either exists.
     let holdTimer = null;
@@ -441,15 +441,18 @@ function openLayoutPicker() {
       if (drag) return;          // the press became a drag — not a tap
       // A TAP IS A TAP, NOT MERELY A TOUCH THAT ENDED (owner 2026-08-09, task
       // 162 — the SECOND, independent path that opened the layout under his
-      // hold). `keepFocus` fires on `pointerup` with no duration test at all,
-      // and its `pointercancel` rescue fires for any cancel under 18 px of
-      // travel — while Chrome on Android hands out a cancel at ~8 dp, the
-      // moment it decides the touch is a scroll. Both land inside that rescue
-      // window, so even with the timer fixed the row would still open under a
-      // long press. keepFocus is NOT touched: it is the one activator the
-      // gamepad shares (CLAUDE.md constraint 12) and the stolen-tap rescue is
-      // constraint 9 — the hold has to live BESIDE it, so the refusal is
-      // here, where the hold's own limits are known.
+      // hold). The row activator fires on `pointerup` with no DURATION test —
+      // it judges travel alone, and a hold does not travel — and its
+      // `pointercancel` rescue fires for any cancel under the row slop, while
+      // Chrome on Android hands out a cancel at ~8 dp, the moment it decides
+      // the touch is a scroll. Both land inside that rescue window, so even
+      // with the timer fixed the row would still open under a long press.
+      // The activator is not given a duration of its own: the stolen-tap
+      // rescue is constraint 9 and belongs to every row on the page, so the
+      // refusal lives HERE, where this list's own hold limits are known.
+      // (Since 2026-08-15 that activator is `keepRowTap` — client/row-tap.js —
+      // and never `keepFocus`, so a finger landing on a row can scroll the
+      // list; the reasoning above is unchanged by the swap.)
       if (press && performance.now() - press.at >= HOLD_DRAG_MS) return;
       closeLayoutPanel();
       focusLayout(i);
@@ -620,7 +623,7 @@ function layChip(label, selected, onTap, icon) {
     el.appendChild(img);
   }
   el.appendChild(document.createTextNode(label));
-  keepFocus(el, onTap);
+  keepRowTap(el, onTap);
   return el;
 }
 
@@ -657,7 +660,7 @@ function chooserBtn(iconName, label, sub, onTap, warn) {
     bad.textContent = warn;
     el.appendChild(bad);
   }
-  keepFocus(el, onTap);
+  keepRowTap(el, onTap);
   return el;
 }
 
@@ -794,7 +797,7 @@ function openMemberPanel(index) {
       eject.className = "lay-ratio lay-eject";
       eject.innerHTML = svg("ejectwin");
       eject.setAttribute("aria-label", "Move to its own layout");
-      keepFocus(eject, () => {
+      keepRowTap(eject, () => {
         closeLayoutPanel();
         send({ type: "layout_member_eject", index, member: k });
         // LOADING: FULL — a member is being thrown out and the rest re-placed

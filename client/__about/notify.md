@@ -303,7 +303,9 @@ the screen the instant the exemption is granted.
 
 ### Uses
 - [Controls](controls.md) — `showToast`, `prefGet`/`prefSet`, `send` (the
-  `client_log` diagnostics channel), `keepFocus`
+  `client_log` diagnostics channel), `keepFocus` for the buttons that are not
+  in a scrolling card and [`keepRowTap`](row-tap.md) for every one that is —
+  the voice list's rows above all (owner report 2026-08-15)
 - [Panels](panels.md) — `ghostClickArmor` for the notice card
 - the shell's bridge — `Android.notify` / `Android.speak` /
   `Android.noticeState` / `Android.noticeSetup`

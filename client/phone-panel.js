@@ -135,7 +135,7 @@ function openPhonePanel() {
   beeps.className = "sets-row dict-more";
   beeps.textContent = "Dictation beeps and language — on the dictation card…";
   beeps.dataset.opensMore = "";   // the audit's declared "there is more" marker
-  keepFocus(beeps, () => {
+  keepRowTap(beeps, () => {
     closePhonePanel();
     openDictationPanel();
   });
@@ -145,7 +145,7 @@ function openPhonePanel() {
   done.type = "button";
   done.className = "sets-done";
   done.textContent = "Done";
-  keepFocus(done, closePhonePanel);
+  keepRowTap(done, closePhonePanel);
   card.appendChild(done);
 
   phonePanel.appendChild(card);

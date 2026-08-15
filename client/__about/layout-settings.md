@@ -41,6 +41,7 @@ a layout built portrait had to be DELETED and made again to become landscape.
 - [Grids](grids.md) / [Grid Icons](grid-icons.md) — `gridSketch`, `soloSketch`,
   `orientChips`, `gridChip`, `gridIconChoices`
 - [Controls](controls.md) — `keepFocus`, `svg`, `showToast`
+- [Row tap](row-tap.md) — since 2026-08-15 every row of every list here, and every control inside the scrolling card, uses `keepRowTap` instead of `keepFocus`, so a finger landing on one can still scroll
 - [State](state.md) — `send`, `layouts`
 
 ### Used by

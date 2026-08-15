@@ -44,17 +44,43 @@ import tempfile
 from pathlib import Path
 
 PROJECT = Path(__file__).resolve().parent.parent
-HOLD_GESTURE = PROJECT / "client" / "hold-gesture.js"
-LAYOUT_CREATE = PROJECT / "client" / "layout-create.js"
+CLIENT = PROJECT / "client"
+HOLD_GESTURE = CLIENT / "hold-gesture.js"
+ROW_TAP = CLIENT / "row-tap.js"
 
 START, END = "// ROW_TAP_GATE_START", "// ROW_TAP_GATE_END"
 
+# EVERY LIST A FINGER MAY SCROLL (owner report 2026-08-15). His ruling was
+# about the process, not the notification-voice card he happened to catch it
+# in: a fix that lands in one panel and not in the four others carrying the
+# same code is not a fix. So the row builders are NAMED here, and a builder
+# that goes back to `keepFocus` fails this gate instead of waiting for him to
+# find it on the device. Each entry: file → the substrings that must appear
+# inside a `keepRowTap(` call somewhere in that file's rows.
+#
+# The rule for adding one: if a finger might legitimately begin a SCROLL on
+# it — a row of any list, or any control inside a card that scrolls — it is a
+# row. Ordinary buttons keep `keepFocus`, and anything needing transient user
+# activation (a file picker, the IME) MUST keep it.
+ROW_SITES = {
+    "layout-create.js": ["keepRowTap(main"],       # the creation lists
+    "layout-new.js": ["keepRowTap(main"],          # the New source's recents
+    "layouts.js": ["keepRowTap(main", "keepRowTap(shape", "keepRowTap(gear"],
+    "layout-settings.js": ["keepRowTap(main"],     # add-member candidates
+    "dictation-card.js": ["keepRowTap(btn", "keepRowTap(more"],
+    "notify.js": ["keepRowTap(btn"],               # the voice list
+    "claude-panels.js": ["keepRowTap(row"],        # model / effort options
+    "panels.js": ["keepRowTap(row", "keepRowTap(b"],
+    "phone-panel.js": ["keepRowTap(beeps"],
+    "set-editor.js": ["keepRowTap(cell"],
+}
+
 
 def _extract_block() -> str:
-    text = LAYOUT_CREATE.read_text(encoding="utf-8")
+    text = ROW_TAP.read_text(encoding="utf-8")
     m = re.search(re.escape(START) + r"(.*?)" + re.escape(END), text, re.S)
     assert m, (
-        f"{LAYOUT_CREATE} no longer carries the {START}/{END} markers — "
+        f"{ROW_TAP} no longer carries the {START}/{END} markers — "
         "this gate would silently stop testing the real keepRowTap")
     return m.group(1)
 
@@ -169,6 +195,40 @@ def test_pointerdown_never_prevents_default():
         "what stops the browser from starting a scroll on the row")
 
 
+def test_every_named_list_uses_the_row_activator():
+    # THE OWNER'S OWN POINT (2026-08-15): "ne mogu da ti dam primedbu na
+    # problem ... a da ga sredite samo na jednom mestu a ne svuda gde se on
+    # provlači u aplikaciji" (lang-ok: owner quote). The arithmetic checks
+    # above prove the RULE; this one proves it is actually WORN by every list
+    # a finger can scroll. A panel that quietly goes back to `keepFocus`
+    # steals the scroll again exactly as the voice card did, and no amount of
+    # green arithmetic would say so.
+    # PLANTED-DEFECT PROOF: change any one of these call sites back to
+    # `keepFocus(` and this check names that file and that call.
+    for name, needles in ROW_SITES.items():
+        text = (CLIENT / name).read_text(encoding="utf-8")
+        calls = [ln.strip() for ln in text.splitlines() if "keepRowTap(" in ln]
+        assert calls, f"client/{name} builds rows but calls keepRowTap nowhere"
+        joined = "\n".join(calls)
+        for needle in needles:
+            assert needle in joined, (
+                f"client/{name}: no keepRowTap call matching {needle!r} — a "
+                "row of a scrollable list went back to keepFocus, which "
+                "preventDefaults on pointerdown and kills the scroll")
+
+
+def test_the_row_activator_lives_in_its_own_module():
+    # It lived inside layout-create.js until 2026-08-15, which is precisely
+    # why four other panels never got it: a rule inside one panel's file is
+    # read only by somebody already in that file (the hold-gesture.js lesson,
+    # repeated). Nothing may define a SECOND copy.
+    definers = [p.name for p in sorted(CLIENT.glob("*.js"))
+                if "function keepRowTap(" in p.read_text(encoding="utf-8")]
+    assert definers == ["row-tap.js"], (
+        f"keepRowTap must be defined once, in client/row-tap.js — found in "
+        f"{definers}")
+
+
 CHECKS = [
     test_a_plain_tap_selects,
     test_a_drag_past_slop_selects_nothing,
@@ -176,6 +236,8 @@ CHECKS = [
     test_pointercancel_under_slop_still_selects,
     test_pointercancel_past_slop_selects_nothing,
     test_pointerdown_never_prevents_default,
+    test_every_named_list_uses_the_row_activator,
+    test_the_row_activator_lives_in_its_own_module,
 ]
 
 

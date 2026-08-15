@@ -33,6 +33,7 @@ everything here composes and frames WINDOWS on it.
 - [Render](render.md) — the `<video>` element / `baseBitmap` as the frame
   source the settle watcher samples
 - [Controls](controls.md) — `keepFocus`, `svg`, `showToast`, `IN_APP`
+- [Row tap](row-tap.md) — since 2026-08-15 every row of every list here, and every control inside the scrolling card, uses `keepRowTap` instead of `keepFocus`, so a finger landing on one can still scroll
 
 ### Used by
 - [Connection](connection.md) — `layout_state` → `settleLayLoading()`,

@@ -122,7 +122,7 @@ function setsEditButton(s) {
   b.innerHTML = svg("edit");
   b.setAttribute("aria-label", `Edit the ${s.name} buttons`);
   b.addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); }, true);
-  keepFocus(b, () => {
+  keepRowTap(b, () => {
     closeSetsPanel();
     openSetEditor(s);
   });
@@ -329,7 +329,7 @@ function openSetsPanel() {
   done.type = "button";
   done.className = "sets-done";
   done.textContent = "Done";
-  keepFocus(done, closeSetsPanel);
+  keepRowTap(done, closeSetsPanel);
   card.appendChild(done);
 
   setsPanel.appendChild(card);
@@ -401,7 +401,7 @@ function openChoicePanel(btn) {
       tag.textContent = "saved";
       row.appendChild(tag);
     }
-    keepFocus(row, () => {
+    keepRowTap(row, () => {
       // `enter` is DATA-DRIVEN (owner round 30, 2026-08-09): this used to be
       // hardcoded true, which made the `enter` field in actions.json dead
       // code for every options-based command — a menu-standing command (one
@@ -431,7 +431,7 @@ function openChoicePanel(btn) {
   cancel.type = "button";
   cancel.className = "sets-done";
   cancel.textContent = "Cancel";
-  keepFocus(cancel, closeChoicePanel);
+  keepRowTap(cancel, closeChoicePanel);
   card.appendChild(cancel);
 
   choicePanel.appendChild(card);

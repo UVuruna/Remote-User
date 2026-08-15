@@ -8,6 +8,11 @@ Navigation: [client folder](../___client.md) · grouping:
 [lang-groups](lang-groups.md) · siblings: [panels](panels.md) ·
 [notify](notify.md)
 
+**Every row here acts on the LIFTED finger** — [`keepRowTap`](row-tap.md),
+never `keepFocus` — so a finger landing on a row can still scroll the list
+(owner report 2026-08-15; the same defect task 227b had fixed inside the
+creation panel alone).
+
 ---
 
 ## Why it is its own file

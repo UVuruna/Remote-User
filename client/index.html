@@ -330,6 +330,13 @@
        HOLD, which the layout list's rows ask on every pointer event (pure, so
        its gate runs it whole — owner report 2026-08-09, task 162). -->
   <script src="/static/hold-gesture.js"></script>
+  <!-- The one row activator: a tap that acts on the LIFTED finger, so a
+       finger landing on a row may still scroll the list it sits in (owner
+       report 2026-08-15 — the same defect task 227b fixed inside the creation
+       panel, met again in the notification-voice card). Loads after
+       hold-gesture.js, whose `pressVerdict` it asks, and before every panel
+       that builds a list. -->
+  <script src="/static/row-tap.js"></script>
   <!-- All load BEFORE layouts.js: it reads their consts at runtime. And
        grid-icons.js loads before grids.js, which delegates its drawings to
        it AT LOAD (`GRID_THREE`) — the shapes live in one pure module now

@@ -4,6 +4,8 @@ Split out of `controls.js` on 2026-08-05 (THE STRUCTURE LAW): `controls.js`
 owns the D-pad groups, the wheel and the button actions; this module owns the
 full-screen card overlays those actions open. Loads right after `controls.js`
 (same global scope — it uses its prefs helpers, wheel state and `keepFocus`).
+Rows of its lists use [`keepRowTap`](row-tap.md) instead, so a finger landing
+on one can still scroll the card (owner report 2026-08-15).
 
 **Two files, one doc** — the `layouts.css`/`layouts.js` precedent.
 `client/panels.css` is the same feature's styling, split out of `style.css` on

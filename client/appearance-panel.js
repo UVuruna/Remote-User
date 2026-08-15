@@ -121,7 +121,7 @@ function openAppearancePanel() {
   done.type = "button";
   done.className = "sets-done";
   done.textContent = "Done";
-  keepFocus(done, closeAppearancePanel);
+  keepRowTap(done, closeAppearancePanel);
   card.appendChild(done);
 
   appearancePanel.appendChild(card);

@@ -4,6 +4,11 @@ New 2026-08-11 (owner **task 161**, ordered again as **218a**). Opened by the
 `phone` built-in action in the Settings set; the same overlay card pattern as
 [Quality](quality.md) and the dictation card.
 
+**Every row here acts on the LIFTED finger** — [`keepRowTap`](row-tap.md),
+never `keepFocus` — so a finger landing on a row can still scroll the list
+(owner report 2026-08-15; the same defect task 227b had fixed inside the
+creation panel alone).
+
 ## Why it exists
 
 Every switch on this card already shipped, and every one of them shipped in

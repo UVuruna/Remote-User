@@ -443,7 +443,7 @@ function openQualityPanel() {
   done.type = "button";
   done.className = "sets-done";
   done.textContent = "Done";
-  keepFocus(done, closeQualityPanel);
+  keepRowTap(done, closeQualityPanel);
   card.appendChild(done);
 
   qualityPanel.appendChild(card);

@@ -264,7 +264,7 @@ function renderAddMemberPanel(msg) {
       note.textContent = "minimized";
       main.appendChild(note);
     }
-    keepFocus(main, () => {
+    keepRowTap(main, () => {
       addingTo.hwnd = e.hwnd;
       addingTo.tab = e.tab || null;
       addingTo.x = e.x;

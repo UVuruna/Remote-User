@@ -10,6 +10,11 @@ Loads after `panels.js` — it uses that file's `ghostClickArmor` and the
 here at runtime from a button's `panel` field in `actions.json`, so nothing
 here is referenced at load time.
 
+**Every row here acts on the LIFTED finger** — [`keepRowTap`](row-tap.md),
+never `keepFocus` — so a finger landing on a row can still scroll the list
+(owner report 2026-08-15; the same defect task 227b had fixed inside the
+creation panel alone).
+
 ## The three cards
 
 | `panel` | Card | What a tap sends |

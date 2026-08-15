@@ -5,6 +5,11 @@ from the edit door on every row of the [Wheel sets picker](panels.md), and it
 does on the phone exactly what the desktop Controls editor does to a set's
 interior: **which pool commands ride the controls, and in which slot.**
 
+**Every row here acts on the LIFTED finger** — [`keepRowTap`](row-tap.md),
+never `keepFocus` — so a finger landing on a row can still scroll the list
+(owner report 2026-08-15; the same defect task 227b had fixed inside the
+creation panel alone).
+
 ## Why it exists — and why so late
 
 His 2026-08-04 spec for the wheel ends with the sentence this feature was owed:

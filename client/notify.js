@@ -327,7 +327,7 @@ function renderNoticeCard(state) {
   allow.type = "button";
   allow.className = "sets-done";
   allow.textContent = "Allow it to run in the background";
-  keepFocus(allow, () => {
+  keepRowTap(allow, () => {
     try {
       window.Android.noticeSetup();
     } catch (err) {
@@ -340,7 +340,7 @@ function renderNoticeCard(state) {
   later.type = "button";
   later.className = "sets-row";
   later.textContent = "Not now";
-  keepFocus(later, closeNoticeCard);
+  keepRowTap(later, closeNoticeCard);
   card.appendChild(later);
 
   noticePanel.appendChild(card);
@@ -573,7 +573,7 @@ function voiceRow(voice, chosen, grouped) {
     // screen-reader user has no heading in view to supply the language.
     btn.setAttribute("aria-label", `Listen to ${voiceLabel(voice)}`);
     btn.title = `Listen to ${voiceLabel(voice)}`;
-    keepFocus(btn, () => voicePreview(voice));
+    keepRowTap(btn, () => voicePreview(voice));
     row.appendChild(btn);
   }
   return row;
@@ -679,7 +679,7 @@ function renderNotifyVoiceCard() {
   done.type = "button";
   done.className = "sets-done";
   done.textContent = "Done";
-  keepFocus(done, closeNotifyVoicePanel);
+  keepRowTap(done, closeNotifyVoicePanel);
   card.appendChild(done);
 
   voicePanel.appendChild(card);
@@ -902,7 +902,7 @@ function renderNoticeModeCard() {
   done.type = "button";
   done.className = "sets-done";
   done.textContent = "Done";
-  keepFocus(done, closeNoticeModePanel);
+  keepRowTap(done, closeNoticeModePanel);
   card.appendChild(done);
 
   noticeModePanel.appendChild(card);

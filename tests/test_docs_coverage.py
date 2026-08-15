@@ -87,6 +87,12 @@ STANDARD = {
     # listener window on focus_hook's proven thread shape, and the held-while-
     # away/echo-guard policy — each promise gated in test_clipboard_sync.py.
     "server/clipboard_sync.py",
+    # New 2026-08-15 (owner report — the Claude wheel stayed silent on a
+    # freshly built layout until Desktop and back). Standard: a per-connection
+    # poll that computes a comparable signature and re-sends layout_state
+    # through the existing choke point only when it moved. Gate:
+    # tests/test_agents_refresh.py.
+    "server/agents_refresh.py",
     # New 2026-08-11 (task 182, page half). Standard: one push handler —
     # Android.setClipboard inside the APK, navigator.clipboard in a browser.
     "client/clipboard.js",
@@ -189,6 +195,11 @@ STANDARD = {
     # jitter sequence — the old rule lived inline in a listener, which is why
     # it was never tested. Standard: one decision, no flow worth a diagram.
     "client/hold-gesture.js",
+    # New 2026-08-15 (owner report — a finger landing on a language row could
+    # not scroll the card): the ONE row activator, moved out of
+    # layout-create.js where task 227b had fixed it for that panel alone.
+    # Standard: one wiring function and the rule about where it belongs.
+    "client/row-tap.js",
     # New 2026-08-09 (owner request, task 142 — the cursor must show what the
     # pixel under it does): the drawn silhouette per cursor name, split into a
     # pure module so tests/test_cursor_shape.py can run it whole (the

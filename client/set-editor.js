@@ -138,12 +138,34 @@ function drawSetEditor() {
   body.appendChild(buildArrangement(column));
   body.appendChild(buildPool());
 
+  const actions = document.createElement("div");
+  actions.className = "se-actions";
+
+  // Back (owner report 2026-08-15, task 218b follow-up): the ONLY way out of
+  // this card used to be Save, so a tick made by accident — or just wanting
+  // to look without committing — had no way back except sending it to the
+  // PC. `closeSetEditor` already discards the whole draft (`edit = null`,
+  // no `send`) because that is what a backdrop tap has done since the panel
+  // was built; this button reaches the same exit through a control he can
+  // actually find, beside Save rather than only behind him. The editor holds
+  // no state of its own once it is gone — `openSetEditor` always reads the
+  // set fresh off the live `actions` frame the NEXT time it opens, never off
+  // this draft, so a discarded tick can never leak into a later open.
+  const back = document.createElement("button");
+  back.type = "button";
+  back.className = "se-back";
+  back.textContent = "Back";
+  keepRowTap(back, closeSetEditor);
+  actions.appendChild(back);
+
   const save = document.createElement("button");
   save.type = "button";
   save.className = "sets-done";
   save.textContent = "Save on the PC";
-  keepFocus(save, saveSetEdit);
-  card.appendChild(save);
+  keepRowTap(save, saveSetEdit);
+  actions.appendChild(save);
+
+  card.appendChild(actions);
 
   setEditorPanel.appendChild(card);
   setEditorPanel.hidden = false;
@@ -177,7 +199,7 @@ function buildArrangement(column) {
     cell.innerHTML = (icon ? svg(icon) : "") +
       `<span>${btn ? poolLabel(btn) : "?"}</span>`;
     if (!column) cell.style.gridArea = SLOT_AREAS[slot];
-    keepFocus(cell, () => tapSlot(slot));
+    keepRowTap(cell, () => tapSlot(slot));
     wrap.appendChild(cell);
   });
   return wrap;
@@ -204,9 +226,21 @@ function tapSlot(slot) {
 // names the four that ride). A ticked row rides; the cap is the D-pad's four
 // arms and a tick past it is refused with a sentence, never silently dropped —
 // the wheel-cap law's own lesson, one level down.
+// A pool longer than a hand of rows (task 218b follow-up, owner screenshot
+// 2026-08-15 — the Claude set's 11 commands ran the checklist off the bottom
+// of a 1440x3120 phone, and "Save on the PC" was never on screen). These
+// rows are exactly the SHORT ITEMS panels.css already reflows for a landscape
+// card-split (checkbox + icon + one word) — the same rung 2 move, just not
+// gated to landscape here: a portrait phone with a long pool needs the same
+// height back. `SE_2COL_MIN` is the point past which one column stops being
+// the honest answer; six rows of this height still fit a short phone in one
+// column, seven does not.
+const SE_2COL_MIN = 7;
+
 function buildPool() {
   const list = document.createElement("div");
-  list.className = "sets-list";
+  list.className = "sets-list" +
+    (edit.pool.length >= SE_2COL_MIN ? " se-2col" : "");
   edit.pool.forEach((btn) => {
     const id = btnId(btn);
     const row = document.createElement("label");
@@ -218,7 +252,15 @@ function buildPool() {
     const ic = document.createElement("span");
     ic.className = "sets-ic";
     ic.innerHTML = svg(poolIcon(btn) || "grid");
-    row.append(cb, ic, document.createTextNode(poolLabel(btn)));
+    // The label is its own element, not a bare text node (task 163's kin
+    // rule): a two-column grid puts these rows shoulder to shoulder, and a
+    // label that wraps to a second line makes ONE row taller than its
+    // neighbour — the exact defect that rule exists to catch, one level down
+    // from the layout list it was written for.
+    const label = document.createElement("span");
+    label.className = "se-pool-label";
+    label.textContent = poolLabel(btn);
+    row.append(cb, ic, label);
     list.appendChild(row);
   });
   return list;

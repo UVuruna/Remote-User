@@ -274,51 +274,10 @@ function armNextTap() {
   showToast("Tap a window or tab on the screen…");
 }
 
-// A ROW MUST NOT STEAL THE SCROLL (owner report 2026-08-11, task 227b — "the
-// owner cannot SCROLL over the rows: the moment a finger lands, the row
-// selects"). `keepFocus` (controls.js) is right for every OTHER button on
-// this page, but wrong for a row inside `.lc-rows.lc-scroll`: it calls
-// `e.preventDefault()` on pointerdown to guarantee touch activation, and that
-// same preventDefault is what stops the browser from ever recognising the
-// touch as a scroll — every drag that started on a row became a selection
-// instead of a scroll, tap or not. And its `pointerup` handler fires
-// regardless of travel, so even a drag that DID scroll past the button still
-// fired a select the instant the finger lifted off it.
-//
-// A row's own tap therefore never calls `preventDefault` (the browser is free
-// to start scrolling) and decides on RELEASE, by travel alone, reusing
-// `pressVerdict` from hold-gesture.js rather than re-deriving the rule
-// (constraint 9: one activator, never a second copy that can drift) — a tap
-// that stayed under `ROW_TAP_SLOP` selects; a drag past it, or already past
-// it when it ends, never does. The pointercancel rescue keeps the Android
-// edge-gesture case from constraint 9 alive: a stolen tap under slop still
-// counts.
-// tests/test_row_tap.py extracts exactly the block between these two
-// markers and runs it, whole, in node against `hold-gesture.js`'s real
-// `pressVerdict` — never a re-typed copy of the logic. Move the markers WITH
-// the code if this ever moves; a gate that silently starts extracting stale
-// text is worse than no gate.
-// ROW_TAP_GATE_START
-const ROW_TAP_SLOP = 12; // CSS px — a still finger's own wander, no more
-function keepRowTap(el, onTap) {
-  let down = null; // {id, x, y}
-  el.addEventListener("pointerdown", (e) => {
-    down = { id: e.pointerId, x: e.clientX, y: e.clientY };
-  });
-  el.addEventListener("pointerup", (e) => {
-    if (!down || e.pointerId !== down.id) return;
-    const at = { x: e.clientX, y: e.clientY };
-    if (pressVerdict(down, at, 0, ROW_TAP_SLOP, Infinity) === PRESS_TAP) onTap(e);
-    down = null;
-  });
-  el.addEventListener("pointercancel", (e) => {
-    const at = { x: e.clientX, y: e.clientY };
-    if (down && e.pointerId === down.id &&
-        pressVerdict(down, at, 0, ROW_TAP_SLOP, Infinity) === PRESS_TAP) onTap(e);
-    down = null;
-  });
-}
-// ROW_TAP_GATE_END
+// The row activator (`keepRowTap`) used to live here, where task 227b fixed
+// this panel's own rows. It is client/row-tap.js now — the owner's 2026-08-15
+// report is the same bug in a card three files away, and a rule kept inside
+// one panel's file is a rule the next panel's author never reads.
 
 function cellsNeeded() {
   return creating.mode === "grid" ? (GRID_CELLS[creating.grid] || 2) : 1;

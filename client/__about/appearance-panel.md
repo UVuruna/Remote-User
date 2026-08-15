@@ -17,7 +17,8 @@ The PC's values are now the DEFAULT. Nothing on the wire changed — `config.ui`
 ### Uses
 - [Theme](theme.md) — `uiLook()`, `uiFollowsPc()`, `uiPcValue()`, `setUiAxis()`, `clearUiAxis()`. Every rule about what a stored choice DOES lives there; this file only asks the question
 - [Panels](panels.md) — `segRow` (the shared segmented row) and `ghostClickArmor`
-- [Controls](controls.md) — `keepFocus` for the Done button, and the `prefGet`/`prefSet` bridge underneath `theme.js`
+- [Controls](controls.md) — the `prefGet`/`prefSet` bridge underneath `theme.js`
+- [Row tap](row-tap.md) — since 2026-08-15 every row of every list here, and every control inside the scrolling card, uses `keepRowTap` instead of `keepFocus`, so a finger landing on one can still scroll
 
 ### Used by
 - [Panels](panels.md) — `PANEL_KINDS.appearance`, opened by the `appearance` action of the Settings set (`actions.json`)

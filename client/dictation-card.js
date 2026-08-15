@@ -291,7 +291,7 @@ function dictListenButton(lang, voice) {
   // over a speaker glyph tells him nothing about which row it belongs to.
   btn.setAttribute("aria-label", `Listen to ${lang.name}`);
   btn.title = `Listen to ${lang.name}`;
-  keepFocus(btn, () => dictListen(lang, voice, btn));
+  keepRowTap(btn, () => dictListen(lang, voice, btn));
   return btn;
 }
 
@@ -335,7 +335,7 @@ function langGroupRow(group, hasChosen, onOpen) {
   arrow.innerHTML = svg("arrowr");
   btn.append(txt, count, arrow);
   btn.setAttribute("aria-label", `${group.name} — ${group.variants.length} to choose from`);
-  keepFocus(btn, onOpen);
+  keepRowTap(btn, onOpen);
   row.appendChild(btn);
   return row;
 }
@@ -359,7 +359,7 @@ function langBackRow(name, onBack) {
   txt.textContent = name;
   btn.append(arrow, txt);
   btn.setAttribute("aria-label", `Back to all languages (leaving ${name})`);
-  keepFocus(btn, onBack);
+  keepRowTap(btn, onBack);
   row.appendChild(btn);
   return row;
 }
@@ -463,7 +463,7 @@ function dictMoreRow(list, extra, chosen, voices) {
     // this marker, so the ONE deliberate ellipsis this app draws is declared
     // in the product instead of being spelled out in a test's allow-list.
     more.dataset.opensMore = "";
-    keepFocus(more, () => {
+    keepRowTap(more, () => {
       dictMoreOpen = true;
       renderDictationCard();
     });
@@ -584,7 +584,7 @@ function renderDictationCard() {
   done.type = "button";
   done.className = "sets-done";
   done.textContent = "Done";
-  keepFocus(done, closeDictationPanel);
+  keepRowTap(done, closeDictationPanel);
   card.appendChild(done);
 
   dictPanel.appendChild(card);

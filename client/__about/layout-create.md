@@ -71,7 +71,7 @@ vocabulary, so the phone never has two competing card styles.
 | `renderCreationPanel()` | The slot panel: mode, orientation, the chosen slots, the name field, Create. |
 | `cancelCreation(silent)` | Ends the session and clears `layoutArm` — the + button's second tap, the backdrop tap, and Cancel all land here. |
 | `refreshNewlayButton()` | Lights the + button while a session or an armed tap is live. |
-| `keepRowTap(el, onTap)` | Task 227b's row activator: selects on RELEASE under 12px travel, reusing `pressVerdict`. Never `preventDefault`s on `pointerdown` — that is what let a row's tap steal the list's own scroll. Used by every row of every creation-panel list (`entryRow`, `recentRow`, `recentHistoryRow`), never `keepFocus`. |
+| `keepRowTap(el, onTap)` | Task 227b's row activator — **now [client/row-tap.js](row-tap.md)**, the whole page's, not this panel's. Used by every row of every creation-panel list (`entryRow`, `recentRow`, `recentHistoryRow`), never `keepFocus`. It was moved out on 2026-08-15: the owner met the identical defect in the notification-voice card, and a rule kept inside one panel's file is read only by somebody already in that file. |
 | `openRecentHistoryPanel()` / `handleLayoutRecent(msg)` | Task 228's Recent source: asks the server for `layout_history` (`layout_recent`) and shows it; a tap sends `layout_recent_use {id}` — matching, creating and the found/missing toast all happen server-side. Off the birth radial since 2026-08-12 (owner), panel and protocol kept whole. |
 
 ## Design Decisions
@@ -325,8 +325,11 @@ slop, so the Android edge-gesture theft (constraint 9) is defended on a row
 exactly as it is on every other button.
 
 Gate: `tests/test_row_tap.py` — extracts the REAL `keepRowTap` source out of
-this file (between `ROW_TAP_GATE_START`/`_END` markers, never a re-typed
-copy) and runs it in node against the real `hold-gesture.js`; caught a real
+`client/row-tap.js` (between `ROW_TAP_GATE_START`/`_END` markers, never a
+re-typed copy; the block lived in THIS file until 2026-08-15) and runs it in
+node against the real `hold-gesture.js`. It also sweeps every named list on
+the page, so a panel that goes back to `keepFocus` fails there instead of on
+his device. It caught a real
 bug during its own writing (`pressVerdict` was called with the raw pointer
 event instead of `{x, y}`, so travel was always `NaN` and every drag
 selected regardless).

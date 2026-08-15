@@ -123,7 +123,7 @@ function claudeOptionRow(label, starsSvg, marks, onPick) {
     tag.textContent = m.text;
     row.appendChild(tag);
   }
-  keepFocus(row, onPick);
+  keepRowTap(row, onPick);
   return row;
 }
 
@@ -163,7 +163,7 @@ function claudeFinish(body, note) {
   cancel.type = "button";
   cancel.className = "sets-done";
   cancel.textContent = "Cancel";
-  keepFocus(cancel, closeClaudePanel);
+  keepRowTap(cancel, closeClaudePanel);
   body.parentElement.appendChild(cancel);
   claudePanel.appendChild(body.parentElement);
   claudePanel.hidden = false;

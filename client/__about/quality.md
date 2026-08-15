@@ -4,7 +4,8 @@ Split out of `controls.js` (prefs) and `panels.js` (panel) on 2026-08-05 —
 THE STRUCTURE LAW: quality is one responsibility whose two halves only make
 sense together, and `controls.js` had reached the 1000-line ceiling. Loads
 after `panels.js` (same global scope: it uses `prefGet`/`prefSet` and the
-wheel's `keepFocus` from controls.js, `ghostClickArmor` from panels.js).
+wheel's `keepFocus` from controls.js, [`keepRowTap`](row-tap.md) for anything
+inside the scrolling card, `ghostClickArmor` from panels.js).
 
 ## The rule: a hierarchy, not two dials
 
