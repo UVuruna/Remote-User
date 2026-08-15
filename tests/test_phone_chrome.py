@@ -633,8 +633,16 @@ def _checks(page, label, out):
       window.send = (m) => seen.push(m);
       const rows = [...document.querySelectorAll('#layout-panel .lay-item')];
       const other = rows.find((r) => r.textContent.includes('1920'));
-      buttonPress(other.querySelector('.lay-item-main'), true);
-      buttonPress(other.querySelector('.lay-item-main'), false);
+      // A row is a keepRowTap target (0.0.220 — a row acts on the LIFTED
+      // finger, never through buttonPress, which is the BUTTON activator the
+      // gamepad drives). Press it exactly as a still finger does: down and
+      // up at one point, so the tap-vs-scroll verdict is a tap.
+      const main = other.querySelector('.lay-item-main');
+      const r = main.getBoundingClientRect();
+      const at = { pointerId: 7, clientX: r.left + r.width / 2,
+                   clientY: r.top + r.height / 2, bubbles: true, isPrimary: true };
+      main.dispatchEvent(new PointerEvent('pointerdown', at));
+      main.dispatchEvent(new PointerEvent('pointerup', at));
       window.send = real;
       return seen;
     }""")
