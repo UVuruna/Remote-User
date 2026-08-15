@@ -252,6 +252,9 @@ def read_history(since: float | None, max_buckets: int) -> list[Point]:
 
 
 # ═══════════════════════════ BACKGROUND JOB ═══════════════════════════
+WATCHDOG_S = 30  # a read that has not landed by then is logged as stuck
+
+
 class HistoryJob:
     """Runs `read_history` on a daemon thread and hands the result to
     whoever polls next. Same shape as `gui/main_window.py`'s `_run_worker` /
@@ -311,8 +314,27 @@ class HistoryJob:
             token = self._token
             self.running = True
             self.pending_key = key
+        # DIAGNOSTIC (owner report 2026-08-15: Today / Since start / All /
+        # Last 10 hours stay "Reading traffic.csv…" FOREVER on his installed
+        # app, while the same file reads in ~0.3 s here and the dev window
+        # adopts the result). Nothing in this path could be made to fail in
+        # the checkout, so the installed app must say where it stops: one
+        # INFO line when a read starts and one when it lands, and an ERROR
+        # from a watchdog if it has not landed after WATCHDOG_S.
+        logger.info("Traffic history: read #%d for %r started (since=%s)",
+                    token, key, since)
         threading.Thread(target=self._run, args=(token, key, since, max_buckets),
                          name="traffic-history", daemon=True).start()
+        threading.Timer(WATCHDOG_S, self._watchdog, args=(token, key)).start()
+
+    def _watchdog(self, token: int, key: str) -> None:
+        with self._lock:
+            stuck = token == self._token and self.running
+        if stuck:
+            logger.error("Traffic history: read #%d for %r has not landed after "
+                         "%d s — thread alive: %s", token, key, WATCHDOG_S,
+                         any(t.name == "traffic-history" and t.is_alive()
+                             for t in threading.enumerate()))
 
     def _run(self, token: int, key: str, since: float | None,
              max_buckets: int) -> None:
@@ -325,6 +347,8 @@ class HistoryJob:
             points = []
         finally:
             elapsed = time.monotonic() - t0
+            logger.info("Traffic history: read #%d for %r landed — %d points in "
+                        "%.2f s", token, key, len(points), elapsed)
             with self._lock:
                 # ONLY the current read owns the flags. A superseded thread
                 # touches nothing — see the class docstring.

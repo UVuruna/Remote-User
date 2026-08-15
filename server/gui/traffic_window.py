@@ -900,6 +900,9 @@ class TrafficWindow(QDialog):
                     if got_kind == kind:
                         self._history_points = points
                         self._history_kind = kind
+                    else:
+                        logger.info("Traffic window: dropped a %r result while "
+                                    "showing %r", got_kind, kind)
                 # The overlay is read off the JOB, never off a flag of our
                 # own: it is up exactly while a read for the SELECTED span is
                 # in flight and we hold nothing for that span yet, so it
