@@ -550,6 +550,17 @@ class TrafficWindow(QDialog):
         every refresh."""
         self.devices_rows_layout.setEnabled(False)
         for widget in self._device_row_widgets:
+            # HIDE BEFORE UNPARENTING (owner report 2026-08-16, "FLASH sa
+            # otvaranjem nekog prozora u sredini"): a parentless QWidget IS a
+            # top-level window. `setParent(None)` on a VISIBLE child makes it
+            # one instantly, and `deleteLater` only fires when the event loop
+            # comes back around — so in that gap Qt hands the row a real
+            # native window and Windows shows it at its default spot, the
+            # centre of the screen. `hide()` clears `WA_WState_Visible` while
+            # the widget is still a child, so the orphan never gets a platform
+            # surface and there is nothing to show. This runs on every 1 s
+            # tick, which is why it flashed repeatedly.
+            widget.hide()
             widget.setParent(None)
             widget.deleteLater()
         self._device_row_widgets = []
