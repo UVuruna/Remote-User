@@ -513,8 +513,10 @@ def test_a_stretch_before_any_device_is_never_grey() -> bool:
 
     PLANTED DEFECT: restore `return QColor(device_color(-1))` for an
     unattributed stretch and this check goes red."""
+    # `_segment_color` lives in the chart module since the 2026-08-15 split
+    # of traffic_window.py (THE STRUCTURE LAW).
     source = (Path(__file__).resolve().parents[1] / "server" / "gui"
-              / "traffic_window.py").read_text(encoding="utf-8")
+              / "traffic_chart.py").read_text(encoding="utf-8")
     marker = "def _segment_color("
     if marker not in source:
         return False
