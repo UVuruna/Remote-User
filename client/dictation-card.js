@@ -311,9 +311,19 @@ function dictListenButton(lang, voice) {
  *  current choice — otherwise opening the card would show him no chosen row
  *  anywhere and read as though his choice had been forgotten.
  *
+ *  `activeLabel` (owner report 2026-08-15, his screenshot of the voice card:
+ *  no way to tell WHICH variant is chosen without opening the door again) is
+ *  that variant's own label — "Latin", "Voice 13 (United States)" — and is
+ *  written on the SAME row as the language name rather than folded into one
+ *  interpolated string, because task 163's rule for this row is that the
+ *  language name must never be cut in favour of the suffix: two spans can
+ *  shrink independently, one string cannot. `lang-groups.js`'s
+ *  `activeGroupVariant` is what finds it — this function only draws what it
+ *  is handed, so a card that never asks the question never shows a stale one.
+ *
  *  Drawn arrow, never a font glyph: the ✥ move handle came out a blunt cross
  *  on his own phone (2026-08-05), and client/icons.js is the answer to that. */
-function langGroupRow(group, hasChosen, onOpen) {
+function langGroupRow(group, hasChosen, activeLabel, onOpen) {
   const row = document.createElement("div");
   row.className = "dict-row";
   const btn = document.createElement("button");
@@ -321,7 +331,19 @@ function langGroupRow(group, hasChosen, onOpen) {
   btn.className = "sets-row dict lang-group" + (hasChosen ? " sel" : "");
   const txt = document.createElement("span");
   txt.className = "dict-name";
-  txt.textContent = group.name;
+  const nameSpan = document.createElement("span");
+  nameSpan.className = "dict-name-lang";
+  nameSpan.textContent = group.name;
+  txt.appendChild(nameSpan);
+  if (hasChosen && activeLabel) {
+    const sep = document.createElement("span");
+    sep.className = "dict-name-sep";
+    sep.textContent = "—";
+    const act = document.createElement("span");
+    act.className = "dict-name-active";
+    act.textContent = activeLabel;
+    txt.append(sep, act);
+  }
   const count = document.createElement("span");
   count.className = "dict-status";
   // A BARE NUMBER IS NOT A SENTENCE. Photographing the card showed "Srpski"
@@ -334,7 +356,9 @@ function langGroupRow(group, hasChosen, onOpen) {
   arrow.className = "lang-arrow";
   arrow.innerHTML = svg("arrowr");
   btn.append(txt, count, arrow);
-  btn.setAttribute("aria-label", `${group.name} — ${group.variants.length} to choose from`);
+  btn.setAttribute("aria-label", hasChosen && activeLabel
+    ? `${group.name} — ${activeLabel} chosen — ${group.variants.length} to choose from`
+    : `${group.name} — ${group.variants.length} to choose from`);
   keepRowTap(btn, onOpen);
   row.appendChild(btn);
   return row;
@@ -529,8 +553,8 @@ function renderDictationCard() {
         list.appendChild(
           dictRow(g.variants[0].row, chosen, voices, "", g.name));
       } else {
-        const holdsChosen = g.variants.some((v) => v.tag === chosen);
-        const row = langGroupRow(g, holdsChosen, () => {
+        const active = activeGroupVariant(g, (v) => v.tag === chosen);
+        const row = langGroupRow(g, !!active, active ? active.label : "", () => {
           dictOpenLang = g.key;
           renderDictationCard();
         });

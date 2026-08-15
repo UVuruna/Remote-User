@@ -90,13 +90,24 @@ DICT_STAGE_JS = (
 # picture of the closed list proves nothing about the open one:
 #   the LIST of languages (groups, counts, the chosen group marked), and
 #   ONE LANGUAGE OPEN (the back row, and the rows wearing variant names only).
+# WHICH voice is CHOSEN (owner report 2026-08-15): the English group's UK
+# female voice — the group also holds a US male and a US female, so this
+# proves the region tie-break ("female 2 (United Kingdom)") survives onto the
+# CLOSED row too, not only the open one. `prefGet`/`prefSet` fall back to
+# localStorage whenever `window.Android.prefGet` is absent (controls.js), and
+# this shim never stubs it — the same path a dev browser takes.
+NOTIFY_VOICE_CHOSEN_JS = (
+    "localStorage.setItem('notifyVoice', 'en-gb-x-gba#female_2');")
+
 NOTIFY_VOICE_STAGE_JS = (
     DICT_STAGE_JS.replace("renderDictationCard()", "")
+    + NOTIFY_VOICE_CHOSEN_JS
     + "voiceOpenLang = ''; openNotifyVoicePanel()"
 )
 
 NOTIFY_VOICE_OPEN_STAGE_JS = (
     DICT_STAGE_JS.replace("renderDictationCard()", "")
+    + NOTIFY_VOICE_CHOSEN_JS
     # English is the group with three voices across two regions — the widest a
     # row here gets, since the region tie-break is appended to the variant.
     + "voiceOpenLang = 'en'; openNotifyVoicePanel()"
@@ -127,11 +138,11 @@ DICT_OPEN_STAGE_JS = (
 # It lives here rather than inline in test_layout_audit.py because that file sits
 # at THE STRUCTURE LAW's wall, and this module is already where the panel stages
 # and their measurements live.
-LANG_GROUP_CHECK_JS = """() => {
+LANG_GROUP_CHECK_JS = """([panelSel, activeSubstr]) => {
                   const bad = [];
                   const card = document.querySelector(
-                    '#dictation-panel .sets-card');
-                  if (!card) return ['the dictation card did not open'];
+                    panelSel || '#dictation-panel .sets-card');
+                  if (!card) return ['the card did not open'];
                   const rows = [...card.querySelectorAll('.dict-row')];
                   const names = rows.map((r) => {
                     const n = r.querySelector('.dict-name');
@@ -195,6 +206,44 @@ LANG_GROUP_CHECK_JS = """() => {
                     bad.push(lit.length + ' doors are marked as holding his ' +
                              'choice — the staged choice is sr-RS, so exactly ' +
                              'one must be');
+                  }
+                  // THE CLOSED ROW STATES THE ACTIVE CHOICE (owner report
+                  // 2026-08-15): "English — Voice 13 (United States)" /
+                  // "Serbian — Latin", read WITHOUT opening the door. Checked
+                  // on the CARD rather than only in the arithmetic's gate,
+                  // because the arithmetic proving `activeGroupVariant`
+                  // correct says nothing about whether the row ever calls it.
+                  if (lit.length === 1 && activeSubstr) {
+                    const nameEl = lit[0].querySelector('.dict-name');
+                    const activeEl = lit[0].querySelector('.dict-name-active');
+                    if (!activeEl || !activeEl.textContent.trim()) {
+                      bad.push('the row holding his choice states no active ' +
+                               'variant — he cannot see what is chosen ' +
+                               'without opening the door');
+                    } else if (activeEl.textContent.indexOf(activeSubstr) < 0) {
+                      bad.push('the active-choice suffix reads "' +
+                               activeEl.textContent + '", expected it to ' +
+                               'name "' + activeSubstr + '"');
+                    }
+                    // The language NAME must survive beside the suffix —
+                    // task 163's rule for this row, not merely a check that
+                    // SOMETHING is written.
+                    const langEl = nameEl && nameEl.querySelector('.dict-name-lang');
+                    if (!langEl || !langEl.textContent.trim()) {
+                      bad.push('the active-choice row lost its own language ' +
+                               'name — the suffix must never replace it');
+                    }
+                  }
+                  // No door is marked lit AND carries a suffix when nothing
+                  // was chosen inside it — a stale or invented suffix on a
+                  // group that does not hold the choice would be worse than
+                  // none.
+                  for (const d of doors) {
+                    if (d.querySelector('.lang-group.sel')) continue;
+                    if (d.querySelector('.dict-name-active')) {
+                      bad.push('a door NOT holding his choice still shows an ' +
+                               'active-choice suffix');
+                    }
                   }
                   // NO ROW-HEIGHT CLAIM IS MADE HERE, deliberately. The
                   // first version of this check asserted every row within 6 px

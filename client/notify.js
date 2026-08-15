@@ -550,6 +550,12 @@ function voiceRow(voice, chosen, grouped) {
   rb.checked = name === chosen;
   rb.addEventListener("change", () => {
     prefSet("notifyVoice", name);
+    // DIAGNOSTIC (owner report 2026-08-15: "it always returns to Voice 1"
+    // — not reproducible from the code, three probes found nothing): what was
+    // SAVED and what the pref READS BACK, in the server log, so the next
+    // report carries evidence instead of a theory.
+    send({ type: "client_log", text: `[voice-pick] saved=${JSON.stringify(name)}`
+      + ` readback=${JSON.stringify(notifyVoicePref())}` });
     renderNotifyVoiceCard();      // the row re-lights, and the caption follows
   });
   const txt = document.createElement("span");
@@ -582,6 +588,11 @@ function voiceRow(voice, chosen, grouped) {
 function renderNotifyVoiceCard() {
   const voices = dictVoices();   // panels.js — the SAME source, never a second
   const chosen = notifyVoicePref();
+  // DIAGNOSTIC (same report): does the saved name stand in today's list?
+  if (chosen && !(voices || []).some((v) => v && String(v.name || "") === chosen)) {
+    send({ type: "client_log", text: `[voice-pick] chosen=${JSON.stringify(chosen)}`
+      + ` NOT in the ${(voices || []).length} voices this device reports now` });
+  }
   voicePanel.innerHTML = "";
   const card = document.createElement("div");
   // `card-split`, not `card-columns`: a voice list is as long as the engine
@@ -641,9 +652,10 @@ function renderNotifyVoiceCard() {
         list.appendChild(voiceRow(only.row, chosen,
                                   `${g.name} — ${only.label}`));
       } else {
-        const holdsChosen = !!chosen
-          && g.variants.some((v) => String(v.row.name || "") === chosen);
-        list.appendChild(langGroupRow(g, holdsChosen, () => {
+        const active = !!chosen
+          && activeGroupVariant(g, (v) => String(v.row.name || "") === chosen);
+        list.appendChild(langGroupRow(g, !!active, active ? active.label : "",
+                                       () => {
           voiceOpenLang = g.key;
           renderNotifyVoiceCard();
         }));

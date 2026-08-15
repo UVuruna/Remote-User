@@ -76,6 +76,7 @@ def _module() -> str:
     for needed in ("function langParts", "function langKey",
                    "function langScript", "function langVariantKey",
                    "function langVariantLabel", "function groupByLanguage",
+                   "function activeGroupVariant",
                    "function voiceVariant", "function voiceVariantReadable",
                    "function voiceGroupLabels",
                    "function groupVoicesByLanguage"):
@@ -240,6 +241,60 @@ console.log(JSON.stringify({ tag: g.variants[0].tag }));
         fail("the tag must be handed back EXACTLY as the platform gave it — "
              f"got {out['tag']!r}; a spelling we invented may simply not be "
              "accepted by the recognizer")
+
+
+def check_active_group_variant_finds_the_chosen_row() -> None:
+    """The closed row's own question (owner report 2026-08-15): which variant
+    inside this group is his current choice, without opening the door.
+
+    PLANTED-DEFECT PROOF: return `group.variants[0]` unconditionally (the
+    naive "just show something" shortcut) and this comes back the WRONG
+    variant — Latin instead of Cyrillic — even though it still returns
+    *something*, which is exactly the kind of defect a truthiness check would
+    miss."""
+    out = _run("""
+const g = groupByLanguage(
+  [{tag:"sr-RS"}, {tag:"sr-Latn-RS"}], (r) => r.tag, () => "")[0];
+const active = activeGroupVariant(g, (v) => v.tag === "sr-Latn-RS");
+console.log(JSON.stringify({ tag: active && active.tag, label: active && active.label }));
+""")
+    if out["tag"] != "sr-Latn-RS":
+        fail(f"activeGroupVariant must find the variant isChosen() actually "
+             f"matches, not merely A variant; got {out['tag']!r}")
+    if out["label"] != "Latin":
+        fail(f"the returned variant must carry its own label; got {out['label']!r}")
+
+
+def check_active_group_variant_is_null_when_nothing_matches() -> None:
+    """No chosen entry in this group is a real, common answer — the language
+    he dictates in today may not be the one open, or he may have chosen
+    nothing at all yet. A row must not invent an active suffix for a group
+    that does not hold his choice."""
+    out = _run("""
+const g = groupByLanguage(
+  [{tag:"sr-RS"}, {tag:"sr-Latn-RS"}], (r) => r.tag, () => "")[0];
+const active = activeGroupVariant(g, (v) => v.tag === "en-US");
+console.log(JSON.stringify({ active: active }));
+""")
+    if out["active"] is not None:
+        fail(f"a group holding none of the chosen variants must answer null; "
+             f"got {out['active']!r}")
+
+
+def check_active_group_variant_survives_a_missing_predicate() -> None:
+    """A defensive null-check, not a promise the callers ever break — the two
+    real call sites always pass a function, but a pure module others may
+    reuse later should not throw on a bad argument."""
+    out = _run("""
+const g = groupByLanguage([{tag:"sr-RS"}], (r) => r.tag, () => "")[0];
+console.log(JSON.stringify({
+  noPredicate: activeGroupVariant(g, null),
+  noGroup: activeGroupVariant(null, () => true),
+}));
+""")
+    if out["noPredicate"] is not None or out["noGroup"] is not None:
+        fail(f"a missing group or predicate must answer null, never throw or "
+             f"guess; got {out}")
 
 
 # --- VOICE: naming, and never losing a voice ------------------------------
@@ -436,6 +491,11 @@ def check_both_cards_drive_the_module() -> None:
     if "groupByLanguage(" not in card:
         fail("the dictation card does not call groupByLanguage — his MIC half "
              "is unfixed")
+    for name, text in (("notify.js", notify), ("dictation-card.js", card)):
+        if "activeGroupVariant(" not in text:
+            fail(f"{name} does not call activeGroupVariant — the closed group "
+                 "row cannot state his active choice (owner report "
+                 "2026-08-15)")
     for name, text, where in (("notify.js", notify, "voiceOpenLang"),
                               ("dictation-card.js", card, "dictOpenLang")):
         if where not in text:
@@ -495,6 +555,12 @@ CHECKS = [
      check_a_lone_variant_is_not_labelled),
     ("the tag handed back is never rewritten",
      check_the_tag_handed_back_is_never_rewritten),
+    ("activeGroupVariant finds the chosen row, not just a row",
+     check_active_group_variant_finds_the_chosen_row),
+    ("activeGroupVariant is null when nothing in the group is chosen",
+     check_active_group_variant_is_null_when_nothing_matches),
+    ("activeGroupVariant never throws on a missing group/predicate",
+     check_active_group_variant_survives_a_missing_predicate),
     ("several voices of one locale ALL survive",
      check_several_voices_of_one_locale_all_survive),
     ("one speaker shipped local+network is ONE row",

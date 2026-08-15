@@ -42,7 +42,7 @@ from _audit_panels import (  # noqa: E402
     PANELS, SHOT_SUBJECTS, UA_MODEL, check_wheel_wrap,
 )
 from _audit_lang import (  # the language cards' own module — noqa: E402
-    DICT_CHECK_JS, LANG_GROUP_CHECK_JS,
+    DICT_CHECK_JS, LANG_GROUP_CHECK_JS, NOTIFY_VOICE_STAGE_JS,
 )
 from _audit_laybar import check_laybar_bottom  # the bottom bar's own module — noqa: E402
 # THE TABLET WAS NEVER MEASURED (owner report 2026-08-08: "do sad nikad nisam
@@ -691,13 +691,34 @@ def main() -> int:
             # MARKED (with the choice one level down, that mark is the only
             # thing saying the card remembers it) and that a language whose
             # variants are real choices says HOW MANY are behind the door.
-            grouping = page.evaluate(LANG_GROUP_CHECK_JS)
+            # The staged choice is 'sr-RS' — Cyrillic by resolution, inside a
+            # group that also holds 'sr-Latn-RS' — so the closed row must
+            # name the SCRIPT (owner report 2026-08-15: "Serbian — Latin").
+            grouping = page.evaluate(LANG_GROUP_CHECK_JS,
+                                     ["#dictation-panel .sets-card", "Cyrillic"])
             results[f"the language list shows one row per language, and marks "
                     f"the one he chose @ {label}"] = not grouping
             if grouping:
                 print(f"  DETAIL grouping @ {label}: {grouping}")
 
             page.evaluate("closeDictationPanel()")
+
+            # THE SAME QUESTION, THE VOICE CARD (owner report 2026-08-15, his
+            # screenshot of Settings -> Voice — "always returns to Voice 1
+            # (United Kingdom)"): the closed English row must name the chosen
+            # voice, "female 2 (United Kingdom)", the region tie-break
+            # surviving onto the row he never opened.
+            page.evaluate(NOTIFY_VOICE_STAGE_JS)
+            page.wait_for_selector("#notify-voice-panel .sets-card",
+                                   state="visible", timeout=4000)
+            voice_grouping = page.evaluate(
+                LANG_GROUP_CHECK_JS,
+                ["#notify-voice-panel .sets-card", "United Kingdom"])
+            results[f"the voice card marks the chosen voice on its closed "
+                    f"row @ {label}"] = not voice_grouping
+            if voice_grouping:
+                print(f"  DETAIL voice grouping @ {label}: {voice_grouping}")
+            page.evaluate("closeNotifyVoicePanel()")
 
             # KIN ROWS ARE THE SAME SIZE — A ROW IS ONE LINE, LIKE A BUTTON
             # (owner 2026-08-09, task 163, with his screenshot: one layout row

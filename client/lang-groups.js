@@ -316,6 +316,29 @@ function groupByLanguage(rows, tagOf, nameOf, idOf) {
   return order;
 }
 
+/** WHICH of a GROUP's variants is the current choice, or null when the group
+ *  does not hold it — the closed row's own question (owner report
+ *  2026-08-15, with his screenshot of the voice card: whichever entry he
+ *  picks, the card gives him no way to tell what is chosen without opening
+ *  the door again; his ask: "English — Voice 13 (United States)" / "Serbian
+ *  — Latin" on the CLOSED row).
+ *
+ *  `isChosen(variant)` decides sameness, because the two cards compare
+ *  different fields — a dictation row IS its tag, a voice is its NAME — and
+ *  this function does not need to know which; it is the same shape
+ *  `groupByLanguage`'s own `idOf` uses, for the same reason. Returns the
+ *  first match, which is also the only one: `groupByLanguage` already
+ *  dedupes a group's variants by that field. */
+function activeGroupVariant(group, isChosen) {
+  if (!group || !Array.isArray(group.variants) || typeof isChosen !== "function") {
+    return null;
+  }
+  for (const v of group.variants) {
+    if (isChosen(v)) return v;
+  }
+  return null;
+}
+
 // --- Voices ---------------------------------------------------------------
 //
 // A voice's variant is the tail of its engine name: "sr-rs-x-sfg#female_1"
@@ -468,7 +491,8 @@ if (typeof module !== "undefined" && module.exports) {
     LANG_DEFAULT_SCRIPT, langParts, langKey, langScript, langVariantKey,
     langGroupName, langBareName, langFullName, langVariantLabel,
     scriptName, regionName,
-    groupByLanguage, voiceVariant, voiceVariantReadable, voiceGroupLabels,
+    groupByLanguage, activeGroupVariant,
+    voiceVariant, voiceVariantReadable, voiceGroupLabels,
     voiceSpeaker, dedupeVoices, groupVoicesByLanguage,
   };
 }
