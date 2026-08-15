@@ -86,12 +86,16 @@ so a stale thread could clear the flag belonging to a newer read).
 
 ### Used by
 - [Traffic Window](../gui/__about/traffic_window.md) — the "Od starta" /
-  "Sve (iz fajla)" spans
+  "Sve (iz fajla)" spans, and — zoomed (T104/T105, 2026-08-15) — a re-read
+  of exactly the view (`until`) so the zoomed picture is finer, not stretched
+- [Traffic Stream](traffic_stream.md) — the descriptor cells after `device`
 
 ## Classes
 ### Point
 One chart point — `t`, `out_avg`/`out_max`, `in_avg`/`in_max`, `clients`,
-`device`. A bucket that moved no bytes INHERITS the device last seen before
+`device`, `stream` (the encoder descriptor of the bucket's last ACTIVE second,
+same rule as `device`; `None` when no recorded second was active — the hover
+card then says "not recorded", T106). A bucket that moved no bytes INHERITS the device last seen before
 it (T87, owner report 2026-08-14): a quiet stretch belongs to whoever was
 connected across it, and leaving it blank painted 96% of his chart the
 neutral grey. `""` therefore means only "no device has been named yet at this
@@ -101,12 +105,14 @@ differ on purpose, so a spike inside a wide bucket is never smoothed into
 invisibility by the average alone.
 
 ### HistoryJob
-The background-thread wrapper: `start(key, since, max_buckets)`, `poll()`
+The background-thread wrapper: `start(key, since, max_buckets, until=None)`, `poll()`
 (the newest ready result, once, as `(key, points)`),
 `running`/`pending_key`/`elapsed_s` (read-only from the GUI side).
 
 ## Functions
-- `read_history(since, max_buckets)`: the streaming downsample itself
+- `read_history(since, max_buckets, until=None)`: the streaming downsample
+  itself; `until` (2026-08-15) closes the window for a zoomed view — rows past
+  it end the scan, since appends are chronological
 - `_csv_paths()`: the rotated backup (if it exists) then the live file,
   oldest data first
 - `_earliest_time(paths)`: the recording's own start, for "Sve" (`since=None`)

@@ -53,6 +53,7 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
+import traffic_stream
 from config import SETTINGS
 
 logger = logging.getLogger(__name__)
@@ -86,6 +87,11 @@ class Point:
                        # answer and, since only one device is ever connected
                        # at a time, is exactly right for every bucket the
                        # session did not switch devices mid-bucket.
+    stream: dict | None = None  # the encoder descriptor of the LAST ACTIVE
+                       # second in the bucket (`traffic_stream`), same rule
+                       # as `device`; None when no recorded second was
+                       # active — the hover card then says "not recorded"
+                       # (T106, owner request 2026-08-15).
 
 
 # ═══════════════════════════ CSV FILES ═══════════════════════════
@@ -139,15 +145,24 @@ def _parse_row(line: str):
     crash on the tail of an old file or throw away everything written before
     the server was updated. A row shorter than 5 columns reads as device ""
     ("unknown device") rather than failing — silently mis-attributing old
-    traffic would be worse than honestly not knowing whose it was."""
+    traffic would be worse than honestly not knowing whose it was.
+
+    Since 2026-08-15 (T106) six MORE columns follow `device` — the encoder
+    descriptor, see `traffic_stream.py`; a row of any width from 4 up is
+    read, and whatever descriptor cells it carries are handed back as a dict
+    (`None` for the two older widths, so a hover over an old second says
+    "not recorded" instead of inventing "full/high")."""
     parts = line.rstrip("\n").split(",")
-    if len(parts) not in (4, 5):
+    if len(parts) < 4:
         return None
     try:
         t, out_b, in_b, clients = (
             _parse_time(parts[0]), int(parts[1]), int(parts[2]), int(parts[3]))
-        device = parts[4] if len(parts) == 5 else ""
-        return t, out_b, in_b, clients, device
+        device = parts[4] if len(parts) >= 5 else ""
+        stream = traffic_stream.from_csv_fields(parts) if len(parts) > 5 else None
+        if stream is not None and not traffic_stream.is_recorded(stream):
+            stream = None
+        return t, out_b, in_b, clients, device, stream
     except (ValueError, IndexError):
         return None
 
@@ -164,10 +179,13 @@ def _earliest_time(paths: list[Path]) -> float | None:
 
 
 # ═══════════════════════════ THE DOWNSAMPLE ═══════════════════════════
-def read_history(since: float | None, max_buckets: int) -> list[Point]:
+def read_history(since: float | None, max_buckets: int,
+                 until: float | None = None) -> list[Point]:
     """Every CSV row from `since` (or the recording's own start when `since`
-    is None — "Sve") to now, folded into at most `max_buckets` evenly-spaced
-    points. `max_buckets` is a ceiling on the DISK read only
+    is None — "Sve") to `until` (now when None — the ZOOM of T104/T105 asks
+    for a closed window, and re-reading just that window at the same bucket
+    count is what makes a zoomed graph FINER instead of merely stretched),
+    folded into at most `max_buckets` evenly-spaced points. `max_buckets` is a ceiling on the DISK read only
     (`SETTINGS.traffic_history_max_buckets`, comfortably above any real
     window width); the chart itself further coalesces down to its actual
     plot width at paint time, so a resize never re-reads the file.
@@ -184,7 +202,7 @@ def read_history(since: float | None, max_buckets: int) -> list[Point]:
     start = since if since is not None else _earliest_time(paths)
     if start is None:
         return []
-    end = time.time()
+    end = until if until is not None else time.time()
     if end <= start:
         return []
     width = max((end - start) / max_buckets, 1e-6)
@@ -195,6 +213,7 @@ def read_history(since: float | None, max_buckets: int) -> list[Point]:
     cur_in: list[int] = []
     cur_clients = 0
     cur_device = ""
+    cur_stream: dict | None = None
     # THE DEVICE CARRIES FORWARD ACROSS QUIET BUCKETS (owner report
     # 2026-08-14, shouted three times: "sad je sivo nije vise u BOJI").
     # Measured on his own file before this line was written: of 652 buckets in
@@ -211,6 +230,7 @@ def read_history(since: float | None, max_buckets: int) -> list[Point]:
 
     def flush() -> None:
         nonlocal cur_idx, cur_out, cur_in, cur_clients, cur_device, last_device
+        nonlocal cur_stream
         if cur_idx is None or not cur_out:
             return
         device = cur_device or last_device
@@ -223,16 +243,20 @@ def read_history(since: float | None, max_buckets: int) -> list[Point]:
             in_max=max(cur_in),
             clients=cur_clients,
             device=device,
+            stream=cur_stream,
         ))
         cur_out, cur_in, cur_clients, cur_device = [], [], 0, ""
+        cur_stream = None
 
     for line in _iter_rows(paths):
         row = _parse_row(line)
         if row is None:
             continue
-        t, out_b, in_b, clients, device = row
+        t, out_b, in_b, clients, device, stream = row
         if t < start:
             continue
+        if t > end:
+            break        # appends are chronological — nothing later can fit
         idx = min(max_buckets - 1, int((t - start) / width))
         if cur_idx is not None and idx != cur_idx:
             flush()
@@ -247,6 +271,8 @@ def read_history(since: float | None, max_buckets: int) -> list[Point]:
         # device that did all the real work in it.
         if device and (out_b or in_b):
             cur_device = device
+        if stream and (out_b or in_b):
+            cur_stream = stream
     flush()
     return points
 
@@ -304,7 +330,8 @@ class HistoryJob:
         self.pending_key: str | None = None
         self.elapsed_s = 0.0
 
-    def start(self, key: str, since: float | None, max_buckets: int) -> None:
+    def start(self, key: str, since: float | None, max_buckets: int,
+              until: float | None = None) -> None:
         """Starts a new read for `key`, superseding any still-running one —
         the older read's result is discarded on arrival (the `_token` check)
         so a slow read for a span the owner already clicked away from can
@@ -323,7 +350,8 @@ class HistoryJob:
         # from a watchdog if it has not landed after WATCHDOG_S.
         logger.info("Traffic history: read #%d for %r started (since=%s)",
                     token, key, since)
-        threading.Thread(target=self._run, args=(token, key, since, max_buckets),
+        threading.Thread(target=self._run,
+                         args=(token, key, since, max_buckets, until),
                          name="traffic-history", daemon=True).start()
         threading.Timer(WATCHDOG_S, self._watchdog, args=(token, key)).start()
 
@@ -337,11 +365,15 @@ class HistoryJob:
                              for t in threading.enumerate()))
 
     def _run(self, token: int, key: str, since: float | None,
-             max_buckets: int) -> None:
+             max_buckets: int, until: float | None = None) -> None:
         t0 = time.monotonic()
         points: list[Point] = []
         try:
-            points = read_history(since, max_buckets)
+            # `until` is passed only when set — the spans gate drives this
+            # job with two-argument stand-in readers, and a full-span read
+            # is exactly the old call.
+            points = (read_history(since, max_buckets, until) if until is not None
+                      else read_history(since, max_buckets))
         except Exception:  # a background reader may never take the GUI down
             logger.exception("Traffic history read failed")
             points = []

@@ -29,14 +29,21 @@ the `is` comparisons that decide which device owns the session, because the
 wrapper is what every one of them sees.
 
 ## The data model
-- **`Sample`** — one second: `t`, `out_bytes`, `in_bytes`, `clients`.
+- **`Sample`** — one second: `t`, `out_bytes`, `in_bytes`, `clients`,
+  `device`, and — since 2026-08-15 (T106) — `stream`, the encoder descriptor
+  of that second ([Traffic Stream](traffic_stream.md): fps / res / bitrate /
+  crop / sent size / zoom), set by `note_stream()` from web.py when an H.264
+  session opens and cleared when it closes; `None` while nobody streams.
   `clients` is part of the reading on purpose: a zero line means nothing until
   you can see whether anybody was connected to produce it.
 - **History** — a ring buffer of `SETTINGS.traffic_history_samples` (3600 = one
   hour) sampled by a daemon thread every `SETTINGS.traffic_sample_s`.
 - **Recording** — every sample is appended to `SETTINGS.traffic_csv_path`
   (`%LOCALAPPDATA%/VibeCoder/traffic.csv`), rotated at
-  `traffic_csv_max_bytes`, so a night can be read back in the morning. A disk
+  `traffic_csv_max_bytes`, so a night can be read back in the morning. The
+  row is `time,out_bytes,in_bytes,clients,device` plus the six stream cells
+  APPENDED (2026-08-15) — columns are only ever added at the end, and the
+  reader accepts every width the file has ever had. A disk
   failure stops the recording and says so **once**; the live graph continues.
 - **The phone's side** — `app_rx/app_tx` (our UID) and `dev_rx/dev_tx` (the
   whole device), cumulative since the phone booted. `snapshot()["phone"]` is

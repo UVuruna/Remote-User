@@ -31,6 +31,7 @@ from collections import deque
 from dataclasses import dataclass
 
 import traffic_devices
+import traffic_stream
 from config import SETTINGS
 
 logger = logging.getLogger(__name__)
@@ -56,6 +57,12 @@ class Sample:
                        # own "one device at a time" rule, 4409 on takeover),
                        # so a plain per-second tag is a complete attribution —
                        # no per-byte split is needed.
+    stream: dict | None = None  # what the encoder was DOING this second —
+                       # `traffic_stream.from_session` (fps / res / bitrate /
+                       # crop / enc / zoom), owner request 2026-08-15 (T106);
+                       # None while nobody streams. Read into the CSV as six
+                       # appended columns; a number without its cause is
+                       # half a measurement.
 
 
 # ═══════════════════════════ METER ═══════════════════════════
@@ -97,6 +104,9 @@ class TrafficMeter:
         # set at `auth`, cleared when the client count drops back to 0. Read
         # into every `Sample` taken while it is set.
         self._device: str = ""
+        # The live H.264 session's descriptor (see `traffic_stream.py`) —
+        # set by web.py when a session opens, cleared when it closes.
+        self._stream: dict | None = None
 
     # -- counting ----------------------------------------------------------
 
@@ -138,6 +148,13 @@ class TrafficMeter:
         the Reset button clears COUNTERS, not who is holding the session."""
         with self._lock:
             self._device = key or ""
+
+    def note_stream(self, info: dict | None) -> None:
+        """web.py's two call sites: the descriptor of the H.264 session that
+        just OPENED (`traffic_stream.from_session(session)`), or None when it
+        closed. Every sample taken in between carries it (T106)."""
+        with self._lock:
+            self._stream = dict(info) if info else None
 
     def note_device(self, w, h, name: str | None) -> str:
         """`web.py`'s ONE call site: registers this connection's device with
@@ -274,7 +291,7 @@ class TrafficMeter:
     def _take_sample(self) -> None:
         with self._lock:
             sample = Sample(time.time(), self._out, self._in, self.clients,
-                             self._device)
+                             self._device, self._stream)
             self._out = self._in = 0
             self.samples.append(sample)
         self._append_csv(sample)
@@ -329,11 +346,16 @@ class TrafficMeter:
                     # and `traffic_history._parse_row` accepts either width so
                     # a file spanning the upgrade never breaks the reader
                     # (owner's own hard rule for this round).
-                    fh.write("time,out_bytes,in_bytes,clients,device\n")
-                fh.write("{},{},{},{},{}\n".format(
+                    # Six more, again APPENDED (T106, 2026-08-15): what the
+                    # encoder was doing — see `traffic_stream.py`. Same rule:
+                    # a reader accepts every width the file ever had.
+                    fh.write("time,out_bytes,in_bytes,clients,device,"
+                             + ",".join(traffic_stream.STREAM_COLUMNS) + "\n")
+                fh.write("{},{},{},{},{},{}\n".format(
                     time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(sample.t)),
                     sample.out_bytes, sample.in_bytes, sample.clients,
-                    sample.device))
+                    sample.device,
+                    ",".join(traffic_stream.to_csv_fields(sample.stream))))
         except OSError as e:
             # Said once, then the graph keeps running from memory: a disk
             # problem must not cost the owner the live measurement too.
