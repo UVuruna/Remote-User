@@ -100,7 +100,7 @@ CLAUDE_TOOLS = {
     # typed command — its second field is None on purpose.
     "tasks": ("Tasks", None),
 }
-CLAUDE_TOOLS_ACTIVE = ["review", "security", "simplify", "compact"]
+CLAUDE_TOOLS_ACTIVE = ["review", "tasks", "simplify", "compact"]
 
 # Characters that would draw a RANKING in someone else's font. None of them may
 # appear anywhere in the client — the capability stars are paths.
