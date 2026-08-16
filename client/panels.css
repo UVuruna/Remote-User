@@ -50,6 +50,7 @@
 #notify-voice-panel,
 #appearance-panel,
 #set-editor-panel,
+#ledger-panel,
 #choice-panel {
   position: fixed;
   inset: 0;
@@ -70,6 +71,7 @@
 #notify-voice-panel[hidden],
 #appearance-panel[hidden],
 #set-editor-panel[hidden],
+#ledger-panel[hidden],
 #choice-panel[hidden] { display: none; }
 
 /* A chooser row is a BUTTON, not a checkbox row — one tap picks and closes

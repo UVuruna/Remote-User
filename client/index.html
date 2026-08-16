@@ -23,6 +23,10 @@
   <link rel="stylesheet" href="/static/set-editor.css">
   <!-- The window chip (task 202): tokens only, no rule of its own. -->
   <link rel="stylesheet" href="/static/window-offer.css">
+  <!-- AFTER panels.css: the Session Ledger panel (T111) reuses .sets-card /
+       .sets-row / .sets-body / .card-split wholesale, same as set-editor.css
+       above. -->
+  <link rel="stylesheet" href="/static/ledger-panel.css">
 </head>
 <body>
   <div id="status" class="connecting">Connecting…</div>
@@ -172,6 +176,7 @@
   <!-- The Claude Code panels — Model, Thinking, Mode (owner ballot verdict
        2026-08-11, tasks 190/191/208). One overlay for all three. -->
   <div id="claude-panel" hidden></div>
+  <div id="ledger-panel" hidden></div>
   <div id="dictation-panel" hidden></div>
   <!-- "Notices while the app is closed" — the one step Android will not let
        the app take for itself (owner decree 2026-08-07); filled by notify.js -->
@@ -317,6 +322,10 @@
   <!-- After panels.js (ghostClickArmor) and quality.js (segRow's home is
        panels.js, but these two cards are its other callers). -->
   <script src="/static/claude-panels.js"></script>
+  <!-- After panels.js (ghostClickArmor, keepRowTap via row-tap.js) and
+       claude-panels.js, whose scaffolding this module (T111) is modelled
+       on. -->
+  <script src="/static/ledger-panel.js"></script>
   <script src="/static/phone-panel.js"></script>
   <!-- After panels.js (segRow, ghostClickArmor) and theme.js (the axis store) -->
   <script src="/static/appearance-panel.js"></script>

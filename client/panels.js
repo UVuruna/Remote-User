@@ -42,6 +42,8 @@ const PANEL_KINDS = {
   // The "anywhere access" banner appears once per device (owner 2026-07-26) —
   // this button is the permanent way back into the wizard.
   anywhere: () => openWizard(),
+  // Session Ledger (T111, 2026-08-17) — client/ledger-panel.js.
+  ledger: () => openLedgerPanel(),
 };
 
 const setsPanel = document.getElementById("sets-panel");

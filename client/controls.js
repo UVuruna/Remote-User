@@ -127,6 +127,10 @@ const BUILTINS = {
   // layout bar position, what Hide means, the D-pad shape per orientation.
   // They used to live in three unrelated cards — client/phone-panel.js.
   phone:    { label: "Phone",  icon: "phone",  kind: "phone" },
+  // Session Ledger (T111, 2026-08-17): Claude Code's own task list for the
+  // focused layout's project, read through the `ledger_hook` it installs.
+  // Opens client/ledger-panel.js, which asks the PC with `ledger_state {}`.
+  ledger:   { label: "Tasks",  icon: "tasks",  kind: "ledger" },
   // WHICH VOICE reads a notice out loud, and how fast (owner 2026-08-12).
   // It left the desktop because he has two devices with two different voice
   // lists — client/notify.js holds the card and the reason.

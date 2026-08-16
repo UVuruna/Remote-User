@@ -1,0 +1,192 @@
+/* The Session Ledger panel (T111, 2026-08-17) — see client/ledger-panel.js.
+   Reuses the whole overlay/card vocabulary from panels.css (.sets-card,
+   .sets-row, .sets-body, .sets-list, .sets-done, .card-split's narrow-screen
+   reflow) exactly as the Claude panels do; this file styles only what is NEW:
+   the state dot, the row anatomy (title/@model/chevron) and the expanded
+   body (desc/question/evidence/children).
+
+   `#ledger-panel` must join panels.css's three shared selector lists
+   (overlay position/scrim, [hidden]) — done there, not here, since that
+   property belongs to the ELEMENT and is one rule shared by every overlay
+   (the set-editor lesson, panels.css's own note). */
+
+.ldg-card { width: min(460px, 100%); }
+
+.ldg-project {
+  font: 400 12px/1.3 ui-monospace, "SFMono-Regular", Consolas, monospace;
+  word-break: break-all;
+}
+
+.ldg-empty { margin-top: var(--space-s); }
+
+.ldg-list { display: flex; flex-direction: column; gap: 6px; }
+
+/* One row = state dot + title (ellipsis, never wraps the list) + @model chip
+   + chevron. `keepRowTap` (row-tap.js), never `keepFocus` — this is a row
+   inside a card that SCROLLS (CLAUDE.md constraint 28). */
+.ldg-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-s);
+  width: 100%;
+}
+
+.ldg-dot {
+  flex: 0 0 auto;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+}
+.ldg-dot.ldg-red    { background: var(--error); }
+.ldg-dot.ldg-orange { background: var(--warning); }
+.ldg-dot.ldg-yellow { background: var(--ledger-yellow); }
+.ldg-dot.ldg-blue   { background: var(--accent); }
+.ldg-dot.ldg-green  { background: var(--success); }
+
+.ldg-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis; /* layout-law: exempt - task 163's kin rule: a COLLAPSED ledger row is one line, same height as its siblings, so the title alone abbreviates there; the moment the row is OPEN, .ldg-title-wrap below overrides this to let the same element read in full — this rule only ever governs the collapsed state, which is the one where kin height matters */
+  white-space: nowrap;
+}
+/* The EXPANDED row's title (grader finding 2026-08-17): the collapsed list
+   above is where the one-line kin rule earns its keep, but a row he has
+   deliberately opened has the whole card's width to itself and nothing
+   beside it competing for space — cutting the one thing he opened the row
+   to read was the bug. Wraps to at most two lines rather than unlimited,
+   so one very long title cannot push the Send button off a short screen. */
+.ldg-title-wrap {
+  /* No line-clamp: a clamp truncates past its line count exactly like the
+     ellipsis this rule exists to undo (THE SPACE & LEGIBILITY LAW caught
+     it). The row typically wraps to one or two lines at this card's width;
+     an unusually long title simply keeps wrapping rather than losing words. */
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+  word-break: break-word;
+}
+
+.ldg-model {
+  flex: 0 0 auto;
+  color: var(--text-secondary);
+  font-size: 0.78em;
+  letter-spacing: 0.02em;
+}
+
+/* The state WORD beside the dot (grader finding 2026-08-17): colour alone is
+   not a legend for a stranger reading this panel for the first time. Muted,
+   small, never competing with the title for the row's attention. */
+.ldg-state-word {
+  flex: 0 0 auto;
+  color: var(--text-secondary);
+  font-size: 0.75em;
+  white-space: nowrap;
+}
+
+/* The tree glyph on a child row (grader finding 2026-08-17: "a 1px line is
+   not a strong enough parent link") — reads beside the dot, in the same
+   muted ink as the state word, so it never competes with the title either. */
+.ldg-branch {
+  flex: 0 0 auto;
+  color: var(--text-secondary);
+  font-size: 0.9em;
+  line-height: 1;
+}
+
+.ldg-chevron {
+  flex: 0 0 auto;
+  color: var(--text-secondary);
+  transition: transform 0.15s ease;
+}
+.ldg-item.open > .ldg-row .ldg-chevron { transform: rotate(90deg); }
+
+/* The expanded body — desc / question+answer / evidence. Left-padded to sit
+   under the title, past the dot's own column, so it reads as belonging to
+   the row above it rather than as a sibling row. */
+.ldg-body {
+  padding: 6px 0 6px calc(12px + var(--space-s));
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ldg-desc {
+  margin: 0;
+  color: var(--text-secondary);
+  font: 400 13px/1.4 system-ui, sans-serif;
+  white-space: pre-wrap;
+}
+
+.ldg-question { display: flex; flex-direction: column; gap: 6px; }
+.ldg-q-text {
+  margin: 0;
+  font: 500 13px/1.4 system-ui, sans-serif;
+}
+/* NOT red (grader finding 2026-08-17): the platform's own ❓ emoji renders in
+   a saturated red on most devices, which reads as this SAME panel's "not
+   started" dot sitting beside a question that has nothing to do with that
+   state. Drawn as plain text instead, coloured with the accent. */
+.ldg-q-mark {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.ldg-answer {
+  display: flex;
+  gap: var(--space-s);
+  align-items: center;
+}
+.ldg-answer-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  background: var(--chip);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text-primary);
+  font: 400 14px system-ui, sans-serif;
+  padding: 8px 10px;
+}
+.ldg-answer-send {
+  flex: 0 0 auto;
+  margin-top: 0;
+  padding: 8px 14px;
+}
+
+.ldg-evidence {
+  margin: 0;
+  color: var(--text-secondary);
+  font: 400 12px/1.4 ui-monospace, "SFMono-Regular", Consolas, monospace;
+  word-break: break-all;
+}
+
+/* Children — indented ONE icon-column, same anatomy as a top-level row (the
+   layout creation list's own rule for a tab under its window, task 168:
+   "a minimal indent is allowed", never the old "↳ " prefix).
+
+   THE PARENT LINK IS STRONGER THAN A RULE NOW (grader finding 2026-08-17): a
+   tinted background BAND ties every child of the same group together —
+   `--chip-2` is already this app's own "a row belongs to a set" wash (the
+   list rows elsewhere use `--chip`) — plus the `.ldg-branch` glyph drawn on
+   each child row itself, so the link still reads in a look with no tint at
+   all (three of the eight looks paint no colour). The left border stays as
+   the band's own edge, not as the whole signal. */
+.ldg-children {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px calc(12px + var(--space-s)) 6px calc(12px + var(--space-s));
+  margin-left: 5px;
+  background: var(--chip-2);
+  border-left: 2px solid var(--border);
+  border-radius: 0 10px 10px 0;
+}
+.ldg-item.ldg-child { width: 100%; }
+
+/* Narrow phones — the answer row is the one new control here that can
+   overflow a ~360px-wide card once an input box and a Send button both
+   want their own space beside each other. */
+@media (max-width: 380px) {
+  .ldg-answer { flex-direction: column; align-items: stretch; }
+  .ldg-answer-send { width: 100%; }
+}

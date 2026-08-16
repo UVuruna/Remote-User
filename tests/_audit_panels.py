@@ -538,6 +538,34 @@ PANELS = (
      "claudeSaved = {}; claudeState = null;"
      "openClaudePanel({panel:'claude-mode'}); renderClaudeModePanel()",
      "closeClaudePanel()", "#claude-panel .sets-card"),
+    # ── THE SESSION LEDGER PANEL (T111, 2026-08-17) ────────────────────────
+    # Staged with three fake tasks — one of every state family the row's dot
+    # draws — and the YELLOW one (the state with the most to show: title,
+    # @model chip, desc, a question AND its answer box, evidence) EXPANDED,
+    # since that is this panel's fullest honest state, the same rule every
+    # other stage in this file follows.
+    ("Session Ledger panel",
+     "ledgerState = {title: 'Session Ledger', project: 'C:\\\\Users\\\\owner"
+     "\\\\Projects\\\\VibeCoder', tasks: ["
+     "{id:'T1', title:'Wire the client panel', model:'sonnet', state:'green',"
+     " desc:'', question:'', evidence:'tests/test_x.py 12/12', children:[]},"
+     "{id:'T2', title:'Decide the question wording for the ledger card',"
+     " model:'opus', state:'yellow',"
+     " desc:'The panel needs one line explaining what a yellow dot means.',"
+     " question:'Should the wording say \\'waits for you\\' or \\'blocked\\'?',"
+     " evidence:'', children:["
+     "{id:'T2a', title:'Draft two options', model:'haiku', state:'blue',"
+     " desc:'', question:'', evidence:'', children:[]}]},"
+     "{id:'T3', title:'Ship it', model:'fable', state:'red',"
+     " desc:'', question:'', evidence:'', children:[]}]};"
+     "ledgerExpanded.add('T2');"
+     # renderLedgerPanel, NOT openLedgerPanel: the open path ASKS the PC and
+     # the audit's real server answers with the desktop's empty ledger, which
+     # overwrote this stage — the first shot of this panel showed the empty
+     # state under a green audit (2026-08-16).
+     "renderLedgerPanel()",
+     "ledgerState = null; ledgerExpanded.clear(); closeLedgerPanel()",
+     "#ledger-panel .sets-card"),
     # ── THE SET EDITOR, WITH THE POOL THAT ACTUALLY OVERFLOWED IT (owner
     # screenshot 2026-08-15, task 218b follow-up) ──────────────────────────
     # Every check this file staged before this round used a four-or-five-row

@@ -338,6 +338,13 @@ function connect() {
         // panels are drawn with "unknown" chips and simply stay that way
         // (client/claude-state.js).
         onClaudeState(msg);
+      } else if (msg.type === "ledger_state") {
+        // Claude Code's own task list for the focused layout's project (T111)
+        // — asked for by the Tasks button, answered only by a PC new enough
+        // to run the ledger hook. Same honesty rule as claude_state above: an
+        // older server or a desktop focus with nothing tracked answers with
+        // no tasks, never an error.
+        onLedgerState(msg);
       } else if (msg.type === "actions") {
         categories = msg.categories || [];
         appSets = msg.app_sets || [];

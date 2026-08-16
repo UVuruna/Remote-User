@@ -197,6 +197,11 @@ const ICONS = {
   security: '<path d="M12 2.5 5 5.7v5.4c0 4.2 2.9 7.7 7 8.6 4.1-.9 7-4.4 7-8.6V5.7z"/><circle cx="12" cy="10.6" r="1.9"/><path d="M12 12.5v3.1"/>',
   simplify: '<path d="M9.5 13.5 3.6 19.4a2 2 0 0 0 2.8 2.8l5.9-5.9z"/><path d="m11.6 11.4 3.4 3.4"/><path d="M17.5 2.5v4M15.5 4.5h4M19.5 13v3M18 14.5h3M6.5 3v3M5 4.5h3"/>',
   initdoc: '<path d="M19 9.5V20a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h6.5z"/><path d="M13 2v6h6"/><line x1="12" y1="11.5" x2="12" y2="18.5"/><line x1="8.5" y1="15" x2="15.5" y2="15"/>',
+  // Session Ledger (T111, 2026-08-17): a checklist — three rows, each a
+  // filled circle (a task's state dot, the panel's own vocabulary) plus a
+  // line for its title. Drawn, never a font glyph (the ✥ lesson of
+  // 2026-08-05).
+  tasks: '<circle cx="5" cy="6" r="2" fill="currentColor" stroke="none"/><line x1="10" y1="6" x2="20" y2="6"/><circle cx="5" cy="12" r="2" fill="currentColor" stroke="none"/><line x1="10" y1="12" x2="20" y2="12"/><circle cx="5" cy="18" r="2" fill="currentColor" stroke="none"/><line x1="10" y1="18" x2="17" y2="18"/>',
   // The Phone card (owner 2026-08-11, task 161/218a): the per-device switches
   // that belong to no other subject, gathered behind one Settings button.
   phone: '<rect x="6" y="2" width="12" height="20" rx="2.6"/><line x1="10.3" y1="5.2" x2="13.7" y2="5.2"/><circle cx="12" cy="18.6" r="1.1" fill="currentColor" stroke="none"/>',

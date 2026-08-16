@@ -113,6 +113,18 @@
      express that. Measured: 8.37:1 / 5.64:1 across this gradient. */
   --on-warning: #16161f;
   --on-error: #ffffff;       /* 4.83:1 / 6.47:1 across the error gradient */
+  /* Session Ledger state dot (T111, 2026-08-17) — five states, five colours:
+     [ ] red, [>] orange, [?] yellow, [~] blue, [x] green. Red/orange/green
+     are the existing --error/--warning/--success (a fifth colour scheme
+     would be one more thing to keep in step with the design system); blue
+     reuses --accent for the same reason. Yellow is new — it must read
+     apart from the warning amber beside it on the SAME row list. Used only
+     as a small filled dot, never as text ink, so DESIGN.md's 4.5:1 floor
+     does not gate it — legibility against the row background is what
+     matters, and both are tuned to read clearly there. */
+  --ledger-yellow: #fde047; /* grader 2026-08-17: too close to --warning's
+     37.7deg hue (7.7deg apart) — moved to 50.4deg AND +13 lightness so it
+     reads as pale lemon yellow beside deep amber, not a shade of it */
   /* Controls float over the PC's screen, which can be ANY colour, so their
      icon and label carry a shadow.
 
@@ -207,6 +219,11 @@ body[data-theme="light"] {
      Measured: 5.02:1 / 7.09:1 amber, 6.47:1 / 10.02:1 error. */
   --on-warning: #ffffff;
   --on-error: #ffffff;
+  /* Session Ledger's fifth colour (T111) — see the dark block's note.
+     Grader 2026-08-17: pushed to 54.7deg hue (28.7deg from --warning's
+     26.0deg here) — an olive-yellow the orange dot next to it cannot be
+     mistaken for. */
+  --ledger-yellow: #ae9f04;
   /* NO SHADOW OVERRIDE HERE — see the dark block's note. The light theme used
      to flip these two to white and that was the blur the owner reported on
      2026-08-15; a shadow is always black, so this theme simply inherits the

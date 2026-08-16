@@ -589,6 +589,12 @@
           "text": "/init",
           "enter": true,
           "focus": "claude"
+        },
+        {
+          "id": "tasks",
+          "label": "Tasks",
+          "icon": "tasks",
+          "action": "ledger"
         }
       ],
       "agent": "claude"
