@@ -14,6 +14,7 @@ The primary streaming path: a live H.264 stream encoded by ffmpeg (hardware when
 - [Config](config.md) — target fps, bitrate, GOP, fragment size, head timeout, queue depth
 - [Encoders](encoders.md) — the chosen encoder name + its low-latency ffmpeg args
 - [Screen Capture](capture.md) — `RawFrameSource`, `FrameSink`
+- [Capture Recovery](capture_recovery.md) — `CaptureGuard`, watching the source's frame clock and running the rebuild ladder when it stalls
 
 ### Used by
 - [Server Core](server_core.md) — constructs `H264Manager(encoder)` when `encoders.detect_encoder()` finds one
@@ -63,6 +64,16 @@ What the [Web Layer](web.md) talks to (duck interface shared with `JpegStreamer`
 - `take_screenshot()`, `width` / `height` / `monitor_index`, `output_count()`: delegated to the source
 - `raise_limits(fps, width)`: THE PHONE MAY RAISE THE CEILING (owner decision, task 131). The desktop Settings card is the DEFAULT this client works from; going BELOW it is free (inside this client's own ffmpeg, touching nobody), going ABOVE it needs the shared camera to grab faster or wider — so every session is ended and capture is rebuilt, and THE PICTURE BLINKS ONCE. The phone's quality panel marks every such step with ↑ and says it will blink, before he taps. Affordable for exactly one reason, and it is a design rule rather than luck: **one device at a time** (4409) — there is never a second client whose picture a raise could disturb. Blocking; call via `asyncio.to_thread`. Gate: [`tests/test_quality_raise.py`](../../tests/___tests.md)
 - `shutdown()`: server teardown — ends every session, **`close()`s** capture (release, not merely stop: dxcam is a singleton per monitor, so a stopped camera is still the one the next server run is handed — task 193, see [Screen Capture](capture.md) → Monitor ownership), and stays ended (`_shut_down`), because a session already inside `session.start()` on its own thread finishes AFTER `shutdown()` returns
+
+### The blue-screen guard (owner report 2026-08-16)
+
+`H264Manager.__init__` starts one [Capture Recovery](capture_recovery.md) `CaptureGuard` on its `RawFrameSource`, for the manager's whole life — capture can die in a way that raises nothing and logs nothing above INFO (dxcam parks in an endless output-recovery loop), and the only symptom the manager can see is that no frame ever arrives while sessions are open and the canvas stays the phone's blue `--canvas-bg`. Wiring:
+
+- `_picture_is_wanted()`: the guard's `is_wanted` — true only when the manager is not shut down, capture is running, AND somebody is actually watching (a live session, or a hold between two sessions — see `hold_source` above). An idle server with capture deliberately stopped is not a stall, and rebuilding there would be a cure for nothing
+- `on_capture_state`: a callable the manager exposes and the **web layer** sets, so the guard's up/down verdicts reach the connected phone's status pill without this module knowing anything about the wire — the same pattern [Capture Recovery](capture_recovery.md)'s `phone_notice` was built for
+- `_announce_capture(ok, detail)`: the guard's `on_state` hook — forwards to `on_capture_state` if the web layer is currently listening, silently drops otherwise (nobody connected to tell)
+
+A blue canvas that says nothing was half of what the owner actually lived through: the control path (layouts, app list) never touches capture, so everything else looked healthy while the one thing he wanted was dead and silent. See [Capture Recovery](capture_recovery.md) for the ladder itself and the full log.
 
 Gates: [`tests/test_stream_lifecycle.py`](../../tests/___tests.md), fail-closed in `build.py` (0g/6), [`tests/test_quality_reset.py`](../../tests/___tests.md) for the hold and the re-open policy, [`tests/test_capture_handover.py`](../../tests/___tests.md) for the dxcam handover (task 193), [`tests/test_quality_raise.py`](../../tests/___tests.md) for the raise (task 131), [`tests/test_raw_pixel_cost.py`](../../tests/___tests.md) for the I420 pipe (task 130) and [`tests/test_return_timing.py`](../../tests/___tests.md) for the one-encoder return (task 203).
 

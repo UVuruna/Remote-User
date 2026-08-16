@@ -10,6 +10,7 @@ Owns dxcam (DXGI Desktop Duplication) — the one place in the project that touc
 
 ### Uses
 - [Config](config.md) — monitor index, target fps, JPEG quality, downscale cap
+- [Capture Recovery](capture_recovery.md) — the abandon/re-enumerate rungs `rebuild_camera()` drives
 
 ### Used by
 - [Server Core](server_core.md) — constructs `JpegStreamer` when no H.264 encoder exists
@@ -21,7 +22,7 @@ Owns dxcam (DXGI Desktop Duplication) — the one place in the project that touc
 Camera lifecycle + the capture thread + the screenshot service. Subclasses implement `_process(frame)`, called from the capture thread for every grabbed frame.
 
 - `width`, `height`, `monitor_index`: native pixel size of the captured monitor (the injector maps coordinates against this — never the stream size)
-- `start()` / `stop()`: dxcam video-mode capture + the `_loop` thread; `start()` resets-and-retries once when dxcam refuses with "Capture is already running" (a `stop()` racing a fast reconnect left the internal flag set and killed the NEW session — live 2026-07-29); `stop()` tolerates dxcam's bare raise on double-stop
+- `start()` / `stop()`: dxcam video-mode capture + the `_loop` thread; `start()` resets-and-retries once when dxcam refuses with "Capture is already running" (a `stop()` racing a fast reconnect left the internal flag set and killed the NEW session — live 2026-07-29); when the RESET itself cannot work — the camera's own thread is parked and cannot be stopped (the owner's blue screen, below) — `start()` escalates straight to `rebuild_camera()` instead of raising the identical error a second time; `stop()` tolerates dxcam's bare raise on double-stop
 - `switch_monitor(index)`: swaps the camera (call while stopped); failure keeps the previous camera
 - `output_count()`: static — how many outputs dxcam sees
 - `take_screenshot(timeout=2.0)`: full-monitor native-resolution copy of the next captured frame; blocking (worker threads only)
@@ -44,6 +45,19 @@ The H.264 front-end: resizes each captured frame once (to `stream_w`×`stream_h`
 - `capture_fps` / `max_width`: the desktop's numbers, or the higher ones a client raised them to
 - `add_sink(sink)` / `remove_sink(sink)`: session registration (lock-guarded list)
 - `stream_w`, `stream_h`: the encoded size, recomputed on monitor switch and on every raise
+
+## The frame clock and the rebuild ladder (owner's blue screen, 2026-08-16)
+
+He connected, built a layout, everything on the control path worked — and the canvas stayed blue the whole time. dxcam's DXGI duplication had lost access (`0x887A0026`) and then parked its own recovery thread in a bare retry loop that never gives up and never checks a stop flag; it reports the failure at INFO to its own logger, so from the outside a dead camera looks exactly like a healthy idle one. Full mechanism and log: [Capture Recovery](capture_recovery.md).
+
+`BaseCapture` now keeps its own honest clock instead of trusting dxcam to say anything:
+
+- `_last_frame_ts`: stamped at every real frame (`_loop`) and at every fresh `start()` — a fresh start is not a stall
+- `frame_age()`: seconds since the last frame really arrived — the one fact [Capture Recovery](capture_recovery.md)'s `CaptureGuard` judges by
+- `rebuild_camera(_already_stopped=False)`: REPLACES the camera without asking the old one for permission. Ends only the local `_loop` thread (never the camera's own `stop()`, which is the ten-second join that cannot succeed against a parked thread — that is exactly what this escapes), then hands the old camera to `capture_recovery.abandon_camera()` and tries a plain reopen; if that fails, `capture_recovery.reenumerate_dxgi()` rebuilds dxcam's factory and it tries once more. Returns True only when a camera that genuinely produced a frame is in place — proven by `_fresh_camera()` calling `grab()`, not merely constructing one. `rebuild_lock`-guarded and safe to call from `start()`'s own escalation or from the guard's thread.
+- `_on_geometry_changed()`: hook for front-ends (`RawFrameSource`) that cache sizes derived from the monitor, so a rebuilt camera's dimensions propagate even though nothing else about the pipeline changed
+
+`CaptureGuard` (in [Capture Recovery](capture_recovery.md)) is the thread that watches `frame_age()` and calls `rebuild_camera()` — owned by [H.264 Streamer](h264_streamer.md)'s `H264Manager`, not by `BaseCapture` itself, so the phone can be told through the same manager that owns the socket.
 
 ## Monitor ownership — `_OWNERS` (task 193)
 dxcam's factory is a **singleton per output**: a second `dxcam.create(0)` does not create anything, it hands back the camera the first caller still holds. That is the desktop half of "changing the bitrate kills the whole app" — `Apply & restart` gives the old server thread 10 s and then builds the new one anyway, so the new `RawFrameSource` inherits the dying run's camera and is then stopped by that run's own `finally`. Dated in his log, 2026-08-11 00:32:48–58.
