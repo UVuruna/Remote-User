@@ -26,6 +26,7 @@ import threading
 
 import config
 import encoders
+import capture_recovery
 from capture import FrameSink, RawFrameSource
 from config import SETTINGS
 
@@ -552,6 +553,37 @@ class H264Manager:
         # open_session that is busy starting an encoder.
         self._holds: set = set()
         self._holds_lock = threading.Lock()
+        # THE BLUE-SCREEN GUARD (owner report 2026-08-16). Capture can die in a
+        # way that raises nothing and logs nothing above INFO — dxcam parks in
+        # an endless output-recovery loop — and the only symptom is that no
+        # frame ever arrives. Every session then fails to open, the phone keeps
+        # its controls and its layouts, and the canvas stays blue. The guard
+        # judges by the frame clock alone and runs the rebuild ladder; see
+        # `capture_recovery`. `on_capture_state` is set by the web layer so the
+        # PHONE is told — a picture that dies silently is half the failure.
+        self.on_capture_state = None
+        self._guard = capture_recovery.CaptureGuard(
+            self._source,
+            is_wanted=self._picture_is_wanted,
+            on_state=lambda ok, detail: self._announce_capture(ok, detail),
+        )
+        self._guard.start()
+
+    def _picture_is_wanted(self) -> bool:
+        """Somebody is really waiting for a picture right now. An idle server
+        with capture deliberately stopped is not a stall, and a rebuild there
+        would be a cure for nothing."""
+        if self._shut_down or not self._source_running:
+            return False
+        if self._sessions:
+            return True
+        with self._holds_lock:
+            return bool(self._holds)
+
+    def _announce_capture(self, ok: bool, detail: str) -> None:
+        callback = self.on_capture_state
+        if callback is not None:
+            callback(ok, detail)
 
     @property
     def width(self) -> int:
@@ -758,6 +790,7 @@ class H264Manager:
         cosmetic: a session already inside `session.start()` on its own thread
         finishes AFTER this returns, and without the flag it would register
         itself into a manager the process has finished with."""
+        self._guard.stop()
         with self._lock:
             self._shut_down = True
             for session in list(self._sessions):

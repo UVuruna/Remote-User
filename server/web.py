@@ -51,6 +51,7 @@ import clipboard
 import clipboard_sync
 import config
 import focus_guard
+import capture_recovery
 import layout_api
 import layout_birth
 import ledger_api
@@ -234,6 +235,18 @@ def create_app(stream, hub: FrameHub | None, injector: InputInjector, token: str
         logger.info("Client authenticated: %s", ws.client)
         prev = active_client["ws"]
         active_client["ws"] = ws
+        # A DEAD PICTURE MUST SAY SO ON THE PHONE (owner report 2026-08-16).
+        # He sat in front of a blue canvas for a whole session with every
+        # control alive — he could build a layout, and the layout really was
+        # built — because capture had died in a way that raises nothing (see
+        # `capture_recovery`). The page had nothing to read, so a dead camera
+        # and a dead app looked identical. The guard runs on a capture thread
+        # and has no socket of its own, so the socket is handed to it here,
+        # for exactly as long as somebody is watching.
+        _capture_notice = capture_recovery.phone_notice(
+            ws, asyncio.get_running_loop(), _toast)
+        if hasattr(stream, "on_capture_state"):
+            stream.on_capture_state = _capture_notice
         if prev is not None:
             # Bounded, and never inline-blocking: the previous socket is very
             # often THIS SAME PHONE on a route that has died, so its 4409 may
@@ -349,6 +362,8 @@ def create_app(stream, hub: FrameHub | None, injector: InputInjector, token: str
         finally:
             stats.clients -= 1
             traffic.METER.set_clients(stats.clients)
+            if getattr(stream, "on_capture_state", None) is _capture_notice:
+                stream.on_capture_state = None  # nobody left to tell
             if active_client["ws"] is ws:
                 active_client["ws"] = None
                 # Nobody is watching any layout now. Only the LAST socket does

@@ -17,10 +17,12 @@ exist per process; main.py picks JPEG or H.264 at startup.
 
 import logging
 import threading
+import time
 
 import cv2
 import dxcam
 
+import capture_recovery
 from config import SETTINGS
 
 logger = logging.getLogger(__name__)
@@ -78,6 +80,13 @@ class BaseCapture:
         self._shot_request = threading.Event()
         self._shot_ready = threading.Event()
         self._shot_frame = None
+        # THE FRAME CLOCK — the only honest evidence that capture is alive
+        # (owner's blue screen, 2026-08-16). dxcam reports the failure that
+        # kills it at INFO level to its own logger and otherwise looks exactly
+        # like a healthy idle camera, so nothing but "did a picture arrive"
+        # can tell the two apart. See `capture_recovery`.
+        self._last_frame_ts = time.monotonic()
+        self._rebuild_lock = threading.Lock()
         logger.info("%s ready — monitor %d (%dx%d)",
                     type(self).__name__, self.monitor_index, self.width, self.height)
 
@@ -189,14 +198,30 @@ class BaseCapture:
             # dxcam keeps its internal "capturing" flag when a stop raced a
             # fast reconnect ("Capture is already running. Call stop()
             # first.") — the NEW session died instead of the stale capture
-            # (live 2026-07-29 02:30:45). Reset once and retry; a second
-            # failure raises loudly (No Error Masking, rules/CODE.md).
+            # (live 2026-07-29 02:30:45). Reset once and retry.
             logger.warning("dxcam start refused (%s) — resetting capture and retrying", e)
             try:
                 self._camera.stop()
             except Exception as stop_err:  # dxcam raises bare on double-stop
                 logger.warning("Camera reset stop: %s", stop_err)
-            self._camera.start(target_fps=fps, video_mode=True)
+            try:
+                self._camera.start(target_fps=fps, video_mode=True)
+            except Exception as second:
+                # AND WHEN THE RESET ITSELF CANNOT WORK, ESCALATE — never
+                # raise the same error again (owner's blue screen,
+                # 2026-08-16). The 2026-07-29 reset above assumes `stop()` can
+                # stop the camera; when dxcam's thread is parked in its
+                # infinite output-recovery loop it cannot, so `stop()` joins
+                # for ten seconds, gives up, leaves the "capturing" flag
+                # standing, and this second `start()` raises the identical
+                # error. His log shows exactly that cycle repeating every ~12 s
+                # for 3.8 hours while the phone stared at a blue canvas. A
+                # camera that will not start is a camera to REPLACE.
+                logger.error("dxcam refused to start twice (%s) — the camera's own "
+                             "thread cannot be stopped; replacing the camera", second)
+                self.rebuild_camera(_already_stopped=True)
+                self._camera.start(target_fps=fps, video_mode=True)
+        self._last_frame_ts = time.monotonic()  # a fresh start is not a stall
         self._running = True
         self._thread = threading.Thread(target=self._loop, name="capture", daemon=True)
         self._thread.start()
@@ -211,6 +236,80 @@ class BaseCapture:
                 self._camera.stop()
         except Exception as e:  # dxcam raises bare on double-stop; log, don't crash shutdown
             logger.warning("Camera stop: %s", e)
+
+    def frame_age(self) -> float:
+        """Seconds since the last frame really arrived. The one honest measure
+        of whether capture is alive — see `capture_recovery`."""
+        return time.monotonic() - self._last_frame_ts
+
+    def _on_geometry_changed(self) -> None:
+        """Hook for front-ends that cache sizes derived from the monitor."""
+
+    def rebuild_camera(self, _already_stopped: bool = False) -> bool:
+        """REPLACE the camera, without asking the old one for permission.
+
+        This is the ladder of `capture_recovery`, driven from the capture that
+        owns the monitor. It exists because the failure it answers cannot be
+        talked out of: dxcam's capture thread parks inside an infinite
+        output-recovery loop, `stop()` cannot end it, and every later
+        `create()` hands back the same stale output (the four mechanisms are
+        named in `capture_recovery`'s own docstring, with the owner's log).
+
+        MEASURED on his machine while the loop was still failing: a fresh
+        camera built after a re-enumeration grabs full-resolution frames at
+        once. Returns True when a camera that really produced a frame is in
+        place."""
+        if self._closed:
+            return False
+        with self._rebuild_lock:
+            if not _already_stopped:
+                # End OUR loop thread only. `stop()` would also call the
+                # camera's own `stop()`, which is the ten-second join that
+                # cannot succeed here and is exactly what we are escaping.
+                self._running = False
+                if self._thread is not None:
+                    self._thread.join(timeout=2)
+                    self._thread = None
+            old, self._camera = self._camera, None
+            capture_recovery.abandon_camera(old)
+
+            camera = self._fresh_camera("reopen")
+            if camera is None and capture_recovery.reenumerate_dxgi():
+                camera = self._fresh_camera("re-enumerate")
+            if camera is None:
+                # Put the old object back so every other path keeps a camera to
+                # talk to; the guard will come round again after its cooldown.
+                self._camera = old
+                logger.error("Capture rebuild FAILED — the picture is still dead. "
+                             "The recovery ladder will try again.")
+                return False
+
+            self._camera = camera
+            self._claim(self.monitor_index)
+            self.width, self.height = camera.width, camera.height
+            self._on_geometry_changed()
+            self._last_frame_ts = time.monotonic()
+            logger.info("Capture rebuilt — monitor %d (%dx%d); the picture is back",
+                        self.monitor_index, self.width, self.height)
+            return True
+
+    def _fresh_camera(self, rung: str):
+        """One rung of the ladder: build a camera and PROVE it makes a picture.
+
+        The proof is the whole point — a camera that constructs happily and
+        then never yields a frame is precisely the state this module exists to
+        escape, and accepting one would report the blue screen as fixed."""
+        try:
+            camera = dxcam.create(output_idx=self.monitor_index, output_color="BGR")
+            if camera is None:
+                raise RuntimeError("dxcam returned no camera")
+            if camera.grab() is None:
+                raise RuntimeError("the new camera produced no frame")
+        except Exception as e:
+            logger.warning("Capture rebuild rung '%s' did not work: %s", rung, e)
+            return None
+        logger.info("Capture rebuild rung '%s' produced a live camera", rung)
+        return camera
 
     def _loop(self) -> None:
         while self._running:
@@ -227,6 +326,7 @@ class BaseCapture:
                     return
                 logger.error("Capture grab failed: %s", e)
                 raise
+            self._last_frame_ts = time.monotonic()
             if self._shot_request.is_set():
                 self._shot_request.clear()
                 self._shot_frame = frame.copy()  # dxcam reuses its ring buffer
@@ -403,8 +503,13 @@ class RawFrameSource(BaseCapture):
     def switch_monitor(self, index: int) -> bool:
         ok = super().switch_monitor(index)
         if ok:
-            self.stream_w, self.stream_h = self._stream_size()
+            self._on_geometry_changed()
         return ok
+
+    def _on_geometry_changed(self) -> None:
+        """A rebuilt camera may come back at a different size — a display that
+        detached and returned is exactly the case where that happens."""
+        self.stream_w, self.stream_h = self._stream_size()
 
     def add_sink(self, sink: FrameSink) -> None:
         with self._sinks_lock:
