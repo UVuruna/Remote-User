@@ -269,8 +269,9 @@ def test_the_model_and_thinking_buttons_become_written_panels():
         "the `agent` field taught this project about")
     assert tools.get("agent") == "claude" and tools.get("process") == "code", (
         f"Claude Tools must ride on the same detection as Claude: {tools}")
-    assert [b.get("text") for b in tools["buttons"]] == [
+    assert [b.get("text") or b.get("action") for b in tools["buttons"]] == [
         "/code-review", "/security-review", "/simplify", "/compact", "/init",
+        "ledger",   # Tasks — the session ledger panel (constraint 29, 2026-08-16)
     ], f"the group's commands did not arrive intact: {tools['buttons']}"
 
 
