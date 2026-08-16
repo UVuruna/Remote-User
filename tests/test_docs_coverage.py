@@ -32,6 +32,12 @@ TRIVIAL = {
 
 # Standard: ordinary module. Needs __about/{name}.md only.
 STANDARD = {
+    # New 2026-08-16 (the owner's blue-screen report): a bounded three-rung
+    # ladder (abandon -> reopen -> re-enumerate) plus one guard thread that
+    # judges a single fact (did a frame arrive). No branching state machine
+    # worth its own diagram — the ladder's order IS the whole flow, and it
+    # reads straight off the __about doc.
+    "server/capture_recovery.py",
     # Split out of gates.py on 2026-08-16 (THE STRUCTURE LAW), by
     # RESPONSIBILITY: the gates that prove the PC's OWN Qt windows, apart from
     # the ones that prove the wire and the phone. Standard rather than its
@@ -39,6 +45,14 @@ STANDARD = {
     # explained where it stands; there is no order to reason about and no
     # state, so a flow page would draw a straight line.
     "setup/gates_desktop.py",
+    # Split out of gates.py the SAME day (THE STRUCTURE LAW), by
+    # RESPONSIBILITY: the gates that prove the CAPTURE/ENCODE/DECODE/DRAW
+    # path — that the owner actually sees a picture — apart from the ones
+    # that prove protocol/layout/input/actions/docs. Standard rather than
+    # its parent's Algorithmic tier for the same reason as its sibling
+    # above: seven subprocess calls in a row, each explained in place, no
+    # order to reason about and no state.
+    "setup/gates_picture.py",
     # New 2026-08-14 (T94, the version-skew round): the page must not outlive
     # its own protocol — one pure decision (remember the first config's
     # app_version, reload on any different one), no state machine beyond a
@@ -66,6 +80,20 @@ STANDARD = {
     # transport only — the keystrokes live in content.py and the transcript
     # read in agents.py, each already covered.
     "server/claude_api.py",
+    # New 2026-08-17 (T111 — the session ledger). Standard, exactly like
+    # claude_api.py right above: the project comes from Layout.project(),
+    # measured live, and this module is transport only — one message
+    # answered from what session_ledger.py already parsed. No state machine
+    # of its own to draw.
+    "server/ledger_api.py",
+    # New 2026-08-17 (T111). The parser is a single-pass stack walk over
+    # indented lines (task line, then its own >/?/! annotations one level
+    # deeper) — a real loop, but a straight one: no branching state machine,
+    # no backtracking, and the frozen grammar in server/__about/session_ledger.md
+    # already narrates it end to end in prose. A flowchart here would restate
+    # the code (DOCS.md's own test for the flow tier), so Standard, not
+    # Algorithmic — matching this file's own doc, which carries no Flow link.
+    "server/session_ledger.py",
     # New 2026-08-11 (task 184 — a layout from a window that is not open yet).
     # Standard: three READS of places other apps keep their own recent lists,
     # plus a launch and a wait. The one rule with teeth — only a handle that
@@ -304,6 +332,14 @@ STANDARD = {
     # sends; every rule it obeys lives in claude-state.js below, which is where
     # the flow is.
     "client/claude-panels.js",
+    # New 2026-08-17 (T111). Two files, one doc — the panels.js/panels.css
+    # precedent, and here it falls out for free: both files share the
+    # basename "ledger-panel". Standard, same reading as claude-panels.js
+    # right above: it draws a card, its rows and an answer field, and sends
+    # one message; the grammar/state rules it renders live in
+    # server/__about/session_ledger.md, which this doc links to.
+    "client/ledger-panel.js",
+    "client/ledger-panel.css",
     # New 2026-08-11 (owner tasks 161 + 218a): one card gathering the switches
     # that describe THIS device. Standard without argument — five rows over
     # helpers that already exist, and not one decision of its own.
@@ -326,6 +362,14 @@ STANDARD = {
     "client/set-editor.css",
     "setup/create_cert.py",
     "setup/agent_hook.py",
+    # New 2026-08-17 (T111). Standard, same reading as agent_hook.py right
+    # above it: a self-contained, dependency-free hook script with two modes
+    # (prompt/stop) and a grammar-validity check that mirrors
+    # session_ledger.py's parser — duplicated on purpose (this script must
+    # run with nothing on sys.path but the standard library) rather than a
+    # second algorithm. No new decision logic beyond what session_ledger.py
+    # already documents.
+    "setup/ledger_hook.py",
     "android/app/src/main/java/com/uvuruna/vibecoder/Notifier.kt",
     "android/app/src/main/java/com/uvuruna/vibecoder/OnboardingActivity.kt",
     "android/app/src/main/java/com/uvuruna/vibecoder/VoiceInput.kt",
