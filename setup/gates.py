@@ -23,6 +23,7 @@ import sys
 from pathlib import Path
 
 from gates_desktop import desktop_gates
+from gates_picture import picture_gates
 
 PROJECT_DIR = Path(__file__).resolve().parent.parent
 
@@ -133,24 +134,14 @@ def input_gate(step, run) -> None:
     step("0f/6  LAYOUT DRAG GATE — a row dropped on another makes a grid "
          "(tests/test_layout_drag.py)")
     run([sys.executable, str(PROJECT_DIR / "tests" / "test_layout_drag.py")])
-    # And that a phone which has GONE takes its encoder with it (live failure
-    # 2026-08-07). Cancelling `asyncio.to_thread(open_session)` does not stop
-    # the thread, so one leaked session ran four hours at native 4K with
-    # nobody watching — 12,924 s of ffmpeg CPU, 1,890 "stream backlog"
-    # warnings, and the owner's own mouse juddering at his desk. Nothing in
-    # the suite walked a connection's END, which is why every gate was green
-    # over it for three days.
-    step("0g/6  STREAM LIFECYCLE GATE — a client that is gone leaves nothing "
-         "behind (tests/test_stream_lifecycle.py)")
-    run([sys.executable, str(PROJECT_DIR / "tests" / "test_stream_lifecycle.py")])
-    # …and the same connection's OTHER end: a quality change (owner's #1 report
-    # 2026-08-10). A bitrate can only be applied by a new encoder, and closing
-    # the old one used to tear dxcam down with it — the new ffmpeg then had no
-    # frame to encode, wrote no init segment, and the failed RE-open closed a
-    # socket that also carries input, layouts and dictation.
-    step("0r/6  QUALITY RESET GATE — changing the bitrate cannot kill the app "
-         "(tests/test_quality_reset.py)")
-    run([sys.executable, str(PROJECT_DIR / "tests" / "test_quality_reset.py")])
+    # THE PICTURE GATES — moved into their own module by RESPONSIBILITY on
+    # 2026-08-16 (see setup/gates_picture.py): everything else in this
+    # function proves protocol/layout/input/actions/docs, while these seven
+    # prove the capture/encode/decode/draw path — that the owner actually
+    # SEES something, the exact failure class of the same day's blue-canvas
+    # report. Called HERE, in place, so the overall gate order the build
+    # runs in does not change.
+    picture_gates(step, run)
     # …and its sibling one layer up: a whole server RUN that outlives the stop
     # that gave up on it. His log of 2026-08-09 has run A finishing 38 s after
     # run B was already serving, and writing state="stopped" over it — the
@@ -562,36 +553,6 @@ def input_gate(step, run) -> None:
          "(tests/test_creation_footer.py)")
     run([sys.executable, str(PROJECT_DIR / "tests" / "test_creation_footer.py")])
 
-    # THE DEVICE'S OWN DECODER IS A WALL (owner report 2026-08-12: "native
-    # 20 Mbps still sends no picture"). His log: 3840x2160@30 played smoothly
-    # (jumps=0 for two minutes); the moment the PC card went to 60 fps every
-    # session opened level 5.2 and the same tablet threw the picture forward
-    # ten times every 15 s — a decoder drowning, not a network, and nothing
-    # anywhere asked the device what it can decode. The rules are a pure
-    # module (client/decode-caps.js): probe mediaCapabilities per resolution
-    # step, cap the requested fps at the device's smooth ceiling, SAY the cap,
-    # and a runtime backstop lowers a session's ceiling when the live windows
-    # keep counting jumps that the spec sheet promised away. Driven whole in
-    # node with the codec strings from his real sessions. Needs node, like
-    # 0j/0k/0o/0p/0q/0y — never skip it silently.
-    step("0ao/6  DECODE CAPS GATE — the phone never requests a stream its "
-         "own decoder cannot drink (tests/test_decode_caps.py)")
-    run([sys.executable, str(PROJECT_DIR / "tests" / "test_decode_caps.py")])
-
-    # THE PHONE NEVER DECODES PIXELS IT DOES NOT SHOW (owner order
-    # 2026-08-12, his own words — lang-ok: owner quote: "zašto bi telefon
-    # dekodirao nešto što ne vidi"). H.264 used to stream the FULL monitor
-    # always: a quarter-width layout still cost a full 4K@60 decode with
-    # three quarters cropped away on the canvas. The per-client ffmpeg now
-    # crops to the focused layout's region, `config.stream_region` tells the
-    # page what the video covers, and a region change ends the mismatched
-    # session at the layout choke point. Driven with the REAL session and
-    # the REAL choke point, and the crop case is his own live layout from
-    # his own log.
-    step("0ap/6  REGION STREAM GATE — the encoder crops to the focused "
-         "layout, and the page maps it back (tests/test_region_stream.py)")
-    run([sys.executable, str(PROJECT_DIR / "tests" / "test_region_stream.py")])
-
     # APPEARANCE IS PER DEVICE (owner ballot 2026-08-12). Theme, coloured or
     # plain controls, outlined or filled left the PC's Settings window for the
     # handset — he uses a tablet AND a phone, and one desktop dropdown could
@@ -747,19 +708,6 @@ def input_gate(step, run) -> None:
          "the session (tests/test_session_residue.py)")
     run([sys.executable, str(PROJECT_DIR / "tests" / "test_session_residue.py")])
 
-    # OWNER ORDER 2026-08-14, in his own words: "ako korisnik odabere 10 fps
-    # onda je to dovoljno, nema potrebe 120 puta u sekundi da telefon iscrtava
-    # sliku kada se ona menja samo 10 puta u sekundi" (lang-ok: owner quote).
-    # render.js drew on EVERY animation frame — 120 Hz on his S25 Ultra against
-    # a stream he may have set to 10 fps, so eleven of every twelve full-canvas
-    # composites redrew a picture already on the screen. It draws on frame
-    # ARRIVAL now, so the rate follows the encoder by construction and never a
-    # number the panel claims about itself. A RATE cannot be read off a diff,
-    # so this gate counts real redraws in real Chromium over a real second.
-    step("0b18/6  REDRAW RATE GATE — the phone draws when there is a new "
-         "picture, not when the panel blinks (tests/test_redraw_rate.py)")
-    run([sys.executable, str(PROJECT_DIR / "tests" / "test_redraw_rate.py")])
-
     # OWNER REPORT 2026-08-13, the correction of the round above: `focus()`
     # ignored `lay.adopted` entirely, and every path that stopped a layout
     # being shown (another layout focused, Desktop chosen) called
@@ -884,41 +832,6 @@ def input_gate(step, run) -> None:
     step("0b11/6  KEY SPECIAL LOSS GATE — a Backspace/arrow/Tab/Esc that "
          "lands nowhere is TOLD to the phone (tests/test_key_special_loss.py)")
     run([sys.executable, str(PROJECT_DIR / "tests" / "test_key_special_loss.py")])
-
-    # T76 + T79, owner report 2026-08-14, and he is angry because he asked for
-    # this at the very start and was told yes. In translation: "why is
-    # downscaling done even when the picture is zoomed — when we zoom on the
-    # phone we are enlarging that downscaled resolution so the picture is
-    # blurry, even though the whole screen does not need to be sent then
-    # either, because we are in a slice just like in layout mode".
-    #
-    # The gap was one missing wire, not a missing feature: `H264Session`
-    # cropped only from a region fed by a focused LAYOUT, and the `viewport`
-    # message the pinch has always sent was DISCARDED in H.264 mode — a rule
-    # the docs stated as deliberate ("JPEG mode only"), which is what made it
-    # unfindable for a whole round. Fix: the settled visible rect feeds the
-    # SAME region path (client/zoom-crop.js's floor + settle, pure and driven
-    # whole here; `layout_api.stream_crop`, the ONE derivation both the
-    # session opener and the choke point ask), with the focused layout's
-    # region as a FLOOR the crop may never widen past.
-    #
-    # T79 rides the same function because T76 is what makes it matter: a crop
-    # below the panel is sent at its own small size, where a flat `-b:v` spent
-    # ~2.2x the reference's bits per pixel — an edge case until the zoom made
-    # it the normal one. On cellular ONLY (read off the saving profile the
-    # phone already sends — never a new field), the number follows the pixels,
-    # downward only, with a floor.
-    #
-    # Fail-closed because every defect here is invisible in code review and
-    # obvious on his screen: a blurry zoom looks exactly like a working one in
-    # a diff, a crop that widens past a layout leaks windows he chose not to
-    # show, a settle that fires mid-gesture is a blink storm nobody can read
-    # off a variable, and a bitrate that is capped looks precisely like a
-    # bitrate that was simply not spent.
-    step("0b13/6  ZOOM CROP GATE — the zoom crops the encoder (never wider "
-         "than the layout), settles before it blinks, and on cellular the "
-         "bitrate follows the pixels (tests/test_zoom_crop.py)")
-    run([sys.executable, str(PROJECT_DIR / "tests" / "test_zoom_crop.py")])
 
     # T74, owner decision 2026-08-13. The Traffic window printed `SM-S938B`
     # and `23073RPBFG` and he asked for the real model names. He rejected a

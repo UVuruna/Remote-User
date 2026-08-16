@@ -16,6 +16,7 @@ That is two responsibilities with two completely different rates of change shari
 - Every `tests/test_*.py` gate, run as a subprocess under the same interpreter
 - `PROJECT_DIR`, computed from this file's own path
 - [Gates — desktop windows](gates_desktop.md) — `desktop_gates(step, run)`, the last thing `input_gate` calls. Split out on 2026-08-16 by RESPONSIBILITY: everything here proves something about the wire and the phone, those four prove something about the PC's own Qt windows
+- [Gates — the picture](gates_picture.md) — `picture_gates(step, run)`, called from inside `input_gate`. Split out the same day by RESPONSIBILITY: those seven prove the capture/encode/decode/draw path — that the owner actually sees a picture
 
 ### Used by
 - [Build](build.md) — `input_gate(step, run)`, called before anything is generated. `step` and `run` are PASSED IN rather than imported: `build.py` owns the console's voice and the subprocess policy (masking, failure handling), and importing them back would be a cycle for no gain
