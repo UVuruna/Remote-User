@@ -96,6 +96,9 @@ CLAUDE_TOOLS = {
     "simplify": ("Clean up", "/simplify"),
     "compact": ("Compact", "/compact"),
     "init": ("Init CLAUDE", "/init"),
+    # Tasks is an ACTION (the session ledger panel, constraint 29), not a
+    # typed command — its second field is None on purpose.
+    "tasks": ("Tasks", None),
 }
 CLAUDE_TOOLS_ACTIVE = ["review", "security", "simplify", "compact"]
 
@@ -613,6 +616,8 @@ def check_the_claude_tools_group() -> None:
         raise AssertionError(f"the group's commands drifted:\n  got  {got}\n"
                              f"  want {CLAUDE_TOOLS}")
     for b in s["buttons"]:
+        if b.get("action"):        # a page action (Tasks) types nothing
+            continue
         if b.get("enter") is not True:
             raise AssertionError(f"{b.get('id')!r} must run, not just type it")
     if s.get("active") != CLAUDE_TOOLS_ACTIVE:
@@ -813,7 +818,7 @@ CHECKS = [
      check_the_page_loads_both_halves),
     ("the rules module stays pure, so this gate runs it whole",
      check_the_module_stays_pure),
-    ("the Claude Tools group is his five, named for what they do",
+    ("the Claude Tools group is his five plus Tasks, named for what they do",
      check_the_claude_tools_group),
     ("Compact moved into the group and did not multiply",
      check_compact_moved_and_did_not_multiply),
