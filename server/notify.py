@@ -775,6 +775,18 @@ def _hook_module():
     return module
 
 
+def _ledger_hook_source() -> pathlib.Path:
+    """`setup/ledger_hook.py` beside `agent_hook.py` — the session-ledger
+    Stop/UserPromptSubmit hook (T111). Never imported (it needs nothing from
+    this module), only copied — same reasoning as `_hook_module`'s own path
+    fallback: a dev checkout has the repo file, a frozen build has it bundled
+    beside the exe."""
+    path = PROJECT_ROOT / "setup" / "ledger_hook.py"
+    if not path.exists():
+        path = BUNDLE_DIR / "setup" / "ledger_hook.py"
+    return path
+
+
 def agent_hook_installed() -> bool:
     try:
         return bool(_hook_module().is_installed())
@@ -807,7 +819,9 @@ def refresh_agent_hook() -> None:
         if gap:
             pair = module.registered_command()
             if pair:
-                module.install(script=pathlib.Path(pair[1]), python=pair[0])
+                ledger_script = (USER_DIR / "ledger_hook.py") if FROZEN else None
+                module.install(script=pathlib.Path(pair[1]), python=pair[0],
+                                ledger_script=ledger_script)
                 logger.info("agent hook re-registered — %s hook(s) were missing",
                             ", ".join(gap))
     except OSError as e:
@@ -819,11 +833,22 @@ def refresh_agent_hook() -> None:
             return
         source = pathlib.Path(_hook_module().__file__)
         target = USER_DIR / "agent_hook.py"
-        if target.exists() and target.read_bytes() == source.read_bytes():
-            return
-        USER_DIR.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(source, target)
-        logger.info("agent hook refreshed to the bundled version (%s)", target)
+        if not (target.exists() and target.read_bytes() == source.read_bytes()):
+            USER_DIR.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(source, target)
+            logger.info("agent hook refreshed to the bundled version (%s)", target)
+        # The ledger hook rides beside it — same reasoning, same staleness
+        # risk (T111): an update ships a newer ledger_hook.py and nothing
+        # re-toggles the switch to pick it up otherwise.
+        ledger_source = _ledger_hook_source()
+        if ledger_source.exists():
+            ledger_target = USER_DIR / "ledger_hook.py"
+            if not (ledger_target.exists() and
+                    ledger_target.read_bytes() == ledger_source.read_bytes()):
+                USER_DIR.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(ledger_source, ledger_target)
+                logger.info("ledger hook refreshed to the bundled version (%s)",
+                            ledger_target)
     except OSError as e:
         # A locked file or a permissions error must never stop the server —
         # the stale hook still works, it merely names agents the old way.
@@ -845,15 +870,21 @@ def set_agent_hook(on: bool) -> tuple[bool, str]:
             return True, ""
         script = pathlib.Path(module.__file__)
         python = sys.executable
+        ledger_script = None
         if FROZEN:
             target = USER_DIR / "agent_hook.py"
             USER_DIR.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(script, target)
             script = target
+            ledger_source = _ledger_hook_source()
+            if ledger_source.exists():
+                ledger_target = USER_DIR / "ledger_hook.py"
+                shutil.copyfile(ledger_source, ledger_target)
+                ledger_script = ledger_target
             python = shutil.which("python") or shutil.which("py") or ""
             if not python:
                 return False, NO_PYTHON_TEXT
-        module.install(script=script, python=python)
+        module.install(script=script, python=python, ledger_script=ledger_script)
     except OSError as e:
         # Anything from here down (a locked target file, a full disk, a
         # permissions error writing ~/.claude/settings.json inside

@@ -958,6 +958,20 @@ def input_gate(step, run) -> None:
          "(tests/test_agents_refresh.py)")
     run([sys.executable, str(PROJECT_DIR / "tests" / "test_agents_refresh.py")])
 
+    # T111, 2026-08-17: the session ledger — a plain-Markdown to-do list an
+    # agent keeps beside its project (`server/session_ledger.py` +
+    # `server/ledger_api.py`), fed and kept honest by the UserPromptSubmit /
+    # Stop hook pair in `setup/ledger_hook.py`, and read by the phone through
+    # `ledger_state {}`. This proves the grammar (states, model, `>`/`?`/`!`
+    # annotations, two levels of nesting), the `[x]`-without-`!` downgrade
+    # rule, the newest-matching-project file lookup, the end-to-end phone
+    # answer (focused layout vs. desktop, never a crash), and both hook
+    # modes — each check proven against its own planted defect.
+    step("0b22/6  SESSION LEDGER GATE — the agent's own to-do list parses, "
+         "downgrades unbacked [x] claims, is found by project, reaches the "
+         "phone, and the hook keeps it honest (tests/test_session_ledger.py)")
+    run([sys.executable, str(PROJECT_DIR / "tests" / "test_session_ledger.py")])
+
     # THE DESKTOP-WINDOW GATES — the PC's own Qt windows, split into their own
     # module by RESPONSIBILITY on 2026-08-16 (see setup/gates_desktop.py):
     # everything above proves something about the wire and the phone, those

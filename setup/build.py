@@ -55,6 +55,7 @@ PASSWORD_PATH = SETUP_DIR / "cert" / "password.txt"
 NSI_PATH = SETUP_DIR / "installer.nsi"
 APP_INFO_PATH = SETUP_DIR / "app_info.json"
 AGENT_HOOK_PATH = SETUP_DIR / "agent_hook.py"
+LEDGER_HOOK_PATH = SETUP_DIR / "ledger_hook.py"
 COMPANY_JSON_PATH = PROJECT_DIR.parent.parent / "company.json"
 VERSION_INFO_PATH = SETUP_DIR / "version_info.txt"
 
@@ -265,6 +266,9 @@ def build_pyinstaller() -> Path:
         # …\\_internal\\setup\\agent_hook.py" and stayed off (owner screenshot
         # 2026-08-06). notify._hook_module() looks for exactly this path.
         "--add-data", f"{AGENT_HOOK_PATH};setup",
+        # The session-ledger hook (T111) — same bundling reason, same
+        # notify._ledger_hook_source() lookup path.
+        "--add-data", f"{LEDGER_HOOK_PATH};setup",
     ]
     for mod in HIDDEN_IMPORTS:
         cmd += ["--hidden-import", mod]
@@ -303,7 +307,8 @@ def build_pyinstaller() -> Path:
                                # buttons and nobody would know why.
                                "assets/icon-controls.svg", "assets/icon-traffic.svg",
                                "assets/icon-settings.svg",
-                               "setup/app_info.json", "setup/agent_hook.py")
+                               "setup/app_info.json", "setup/agent_hook.py",
+                               "setup/ledger_hook.py")
                if not (app_dir / "_internal" / rel).exists()]
     if missing:
         print("  ERROR: bundled payload missing — the installed app would fail "

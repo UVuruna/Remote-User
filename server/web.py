@@ -53,6 +53,7 @@ import config
 import focus_guard
 import layout_api
 import layout_birth
+import ledger_api
 import layout_popup
 import monitor_api
 import monitors
@@ -859,6 +860,10 @@ async def _receive_input(ws: WebSocket, injector: InputInjector, stream, token: 
             # What the focused layout's conversation is running NOW (task 208)
             # — read from its own transcript, never from a phone-side memory.
             await claude_api.send_state(ws, layouts, conn)
+        elif kind == "ledger_state":
+            # The focused layout's project ledger (T111) — read fresh from
+            # disk every ask, never cached; see ledger_api's own docstring.
+            await ledger_api.send_ledger(ws, layouts, conn)
         elif kind == "actions_update":
             # THE PHONE EDITS A SET'S INTERIOR (owner 2026-08-04, task 218b):
             # which pool commands ride the D-pad and in which slots. It writes

@@ -2585,6 +2585,47 @@ stub, because it is the scheduling under test, not Qt.
 Run: `.venv\Scripts\python tests/test_gui_nonblocking.py` — also a fail-closed
 step in `build.py` (0aw/6).
 
+### `test_session_ledger.py` — Session Ledger Gate
+
+T111 (2026-08-17), contract frozen in `.claude/ledger-plan.md`: the session
+ledger is a plain-Markdown to-do list an agent keeps beside its project
+(`server/session_ledger.py` parser + file lookup, `server/ledger_api.py`
+transport), fed and kept honest by the `UserPromptSubmit`/`Stop` hook pair in
+`setup/ledger_hook.py`, and read by the phone through `ledger_state {}`.
+
+Six checks, each proven by planting its own defect — piece A's checks patch
+the real module's SOURCE TEXT and reload it under a scratch module name
+(never touching the already-imported real module); piece B's checks write a
+patched COPY of the standalone hook script and run it as a real subprocess,
+exactly as Claude Code itself would invoke it:
+
+1. **parse** — title, project, all five states → colors, `@model`, `>`/`?`/`!`
+   annotation lines, two levels of nested children. Plant: swap the orange
+   and yellow entries in `STATE_COLORS`.
+2. **the downgrade rule** — `[x]` with no `!` evidence reads blue, `[x]` with
+   `!` stays green. Plant: short-circuit the rule in `_finalize`.
+3. **`ledger_for_project`** — the NEWEST file whose `project:` line matches,
+   case/slash-insensitive (Windows path comparison), ignores non-matching
+   files, `None` when nothing matches. Plant: make `_normalized` the identity
+   function.
+4. **`send_ledger` end-to-end** — a fake ws + fake layouts/conn (harness
+   modeled on `test_claude_state.py`): a focused layout's project ledger
+   arrives with its tasks; desktop focus (`active: None`) and a stale index
+   both answer empty tasks, never crash. Plant: drop the bounds guard so a
+   desktop conn indexes `layouts.layouts[None]`.
+5. **hook `prompt` mode**, via real subprocess with `VIBECODER_SESSIONS_DIR`
+   set — creates `<id>.md` with the title from the prompt's first line and
+   `project:` = cwd, prints the grammar plus the current file to stdout; a
+   SECOND prompt in the same session must NOT overwrite an agent's own edits.
+   Plant: remove the `md_path.exists()` guard in `cmd_prompt`.
+6. **hook `stop` mode** — an unchanged file blocks (`decision: "block"`); a
+   grammar-valid modification does not; a `[?]` task with no `?` line blocks;
+   `stop_hook_active: true` never blocks even over an otherwise-blocking
+   file. Plant: remove the `stop_hook_active` early return in `cmd_stop`.
+
+Run: `.venv\Scripts\python tests/test_session_ledger.py` — also a fail-closed
+step in `build.py` (0b22/6).
+
 ---
 
 ## Instruments a person runs by hand — [tests/manual/](manual/___manual.md)

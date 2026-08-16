@@ -310,8 +310,36 @@ def registered_command() -> tuple[str, str] | None:
     return None
 
 
+
+# The SESSION LEDGER hook (T111, 2026-08-17) — `setup/ledger_hook.py`, a
+# separate script with its own marker, registered by the SAME `install()`
+# call rather than a second entry point: one Settings switch, one file the
+# owner never has to open twice. It rides two DIFFERENT Claude Code events
+# because it does two different jobs — `UserPromptSubmit` stamps the turn
+# and hands the agent the ledger's grammar, `Stop` refuses to let the turn
+# end if the ledger was not kept up — so the event name IS the mode argument
+# `ledger_hook.py` reads off argv, translated here rather than guessed there.
+LEDGER_MARKER = "ledger_hook.py"
+LEDGER_EVENT_MODES = {"UserPromptSubmit": "prompt", "Stop": "stop"}
+
+
+def ledger_script_path() -> Path:
+    """`ledger_hook.py` lives beside this file in a dev checkout; the
+    packaged app's own installer copies both scripts together and passes
+    the deployed path through `install(ledger_script=...)`."""
+    return Path(__file__).resolve().parent / "ledger_hook.py"
+
+
+def ledger_hook_entry(script: Path | None = None, python: str | None = None,
+                       event: str = "Stop") -> dict:
+    mode = LEDGER_EVENT_MODES[event]
+    command = (f'"{python or sys.executable}" '
+               f'"{(script or ledger_script_path()).resolve()}" {mode}')
+    return {"matcher": "*", "hooks": [{"type": "command", "command": command}]}
+
+
 def install(remove: bool = False, script: Path | None = None,
-            python: str | None = None) -> int:
+            python: str | None = None, ledger_script: Path | None = None) -> int:
     try:
         data = json.loads(SETTINGS.read_text(encoding="utf-8")) if SETTINGS.exists() else {}
     except (OSError, json.JSONDecodeError) as e:
@@ -324,6 +352,14 @@ def install(remove: bool = False, script: Path | None = None,
         kept = [h for h in hooks.get(event) or [] if MARKER not in json.dumps(h)]
         if not remove:
             kept.append(hook_entry(script, python, event))
+        if kept:
+            hooks[event] = kept
+        else:
+            hooks.pop(event, None)
+    for event in LEDGER_EVENT_MODES:
+        kept = [h for h in hooks.get(event) or [] if LEDGER_MARKER not in json.dumps(h)]
+        if not remove:
+            kept.append(ledger_hook_entry(ledger_script, python, event))
         if kept:
             hooks[event] = kept
         else:
