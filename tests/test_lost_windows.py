@@ -44,6 +44,13 @@ from _focus_fakes import fresh_conn, run_checks, window_manager  # noqa: E402
 
 import layout_popup  # noqa: E402
 import lost_windows  # noqa: E402
+# `sweep_lost` moved from layout_popup.py to window_rescue.py on 2026-08-17
+# (THE STRUCTURE LAW split, by responsibility: layout_popup asks WHOSE window
+# this is, window_rescue asks whether he can REACH it). The gate follows the
+# code — it kept calling `layout_popup.sweep_lost` and died on the attribute,
+# which `tests/run_guards.py` never showed because this file is driven from
+# `setup/gates.py`, i.e. only a real BUILD ran it. That gap is the finding.
+import window_rescue  # noqa: E402
 
 # Captured BEFORE any check ever runs: `install()`'s `lost_windows.wm.place_window
 # = _place` overwrites the ATTRIBUTE on the `window_manager` module itself —
@@ -344,7 +351,7 @@ def _armed_conn():
     """A connection with one rescue chip out for the stranded window."""
     conn = fresh_conn()
     conn["mon_rect"] = lambda: (0, 0, 1920, 1080)
-    layout_popup.sweep_lost(None, conn)
+    window_rescue.sweep_lost(None, conn)
     sent = conn.get("popup_send") or []
     return conn, sent
 
