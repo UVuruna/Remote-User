@@ -36,6 +36,18 @@ WHAT THIS GATE EXISTS TO PREVENT, and it is not "the combo has more items".
   * "Today" quietly meaning "the last 24 hours" — his day starts at local
     midnight, and a rolling window is a different question than the one he
     asked. And the two new spans being anything other than file-backed.
+  * T110 (owner report 2026-08-16, his THIRD on this window): a read keyed
+    on a view that MOVES WITH THE CLOCK. A file-backed span may slide
+    ("Last 10 hours" is `now - 10h .. now`), and `ViewRange._clamp` then
+    pushes a zoomed view forward one second per second — so a key built from
+    the raw bounds is a new key every tick, every tick supersedes the read
+    before it, no read ever finishes and the "Reading traffic.csv…" overlay
+    never comes down. His own log, one line per second, both bounds +1 and
+    the span staying exactly 36000 s — which is the give-away that the view
+    was zoomed on the RATE axis and never narrowed in time at all. Two
+    defences, one check each: a rate zoom does not key a file read (the key
+    stays the bare span name), and a real time zoom is keyed to a PLOT
+    COLUMN, so a shift that cannot move a pixel is not a different read.
   * The picker growing past the width the window's own computed minimum
     reserves for it (THE SPACE & LEGIBILITY LAW: nothing the user must read
     is ever cut off).
@@ -111,7 +123,12 @@ class _StagedReader:
         if delay:
             self.gate.set()
 
-    def __call__(self, since, max_buckets):
+    def __call__(self, since, max_buckets, until=None):
+        # `until` is optional because a ZOOMED read passes it (the window
+        # narrows the read to the view) while a whole-span read does not.
+        # Without it here the stub raised inside the worker thread, the job
+        # surfaced nothing, and a check about the overlay would have been
+        # blaming the window for the fixture's own signature.
         self.started.append(since)
         self.entered.set()
         if self.delay:
@@ -517,6 +534,187 @@ def check_picker_fits_its_widest_name() -> bool:
     return True
 
 
+def check_a_sliding_zoomed_span_keeps_one_key() -> bool:
+    """T110, METHOD BOUNDARY (owner report 2026-08-16, his THIRD on this
+    window). A file-backed span whose end tracks the clock ("Last 10 hours"
+    is `now - 10h .. now`) slides one second per second, and `ViewRange`
+    correctly clamps a ZOOMED view forward inside it. Keyed on the raw view
+    bounds, that invented a new key every tick — his own server log, one
+    line per second, both bounds incrementing by exactly 1:
+
+        dropped 'last10h|1786797517-1786833517' while showing
+                'last10h|1786797518-1786833518'
+
+    Nothing in flight could ever match the key by the time it landed, so
+    every result was dropped and the overlay could never come down.
+
+    WHAT IS STAGED IS A RATE-AXIS (Y) ZOOM, and getting that right is the
+    whole check. The give-away in his own log is the arithmetic: 1786833517
+    - 1786797517 is exactly 36000 — the whole ten hours — so the view was
+    never narrowed in TIME at all. A Y zoom still made `is_zoomed()` true,
+    which sent `set_full` down its clamping path, and the clamp drags a view
+    sitting on the full span forward one second per second.
+
+    The first draft of this check staged a TIME zoom instead and the plant
+    below did not fail it — a view genuinely narrowed in time sits INSIDE the
+    span and the clamp never touches it, so there was no drift to measure.
+    That correction is the check.
+
+    PLANTED: `_history_key` asking `is_zoomed()` instead of `is_time_zoomed()`
+    — three distinct keys, one per second, exactly his log.
+
+    Why the earlier round's harness could not see any of it: it drove
+    FIXED-start spans, where the end does not track the clock and nothing
+    moves however it is zoomed.
+    """
+    with _isolated():
+        window = tw.TrafficWindow()
+        try:
+            now = time.time()
+            view = window.chart.view
+            view.set_full(now - 10 * 3600, now)
+            view.y_lo, view.y_hi = 0.0, 1000.0     # HIS zoom: the rate axis
+            keys = []
+            for tick in range(60):
+                t = now + tick
+                view.set_full(t - 10 * 3600, t)    # the span slides, as it does
+                keys.append(window._history_key("last10h"))
+            zoomed = view.is_zoomed() and not view.is_time_zoomed()
+        finally:
+            window.close()
+    if not zoomed:
+        print("  FAIL: the staged view was not Y-only-zoomed — the check "
+              "would be measuring the wrong thing")
+        return False
+    # The key must be the BARE span name — no bounds in it at all. Asserting
+    # merely "one key" would be satisfied by a coarse quantum swallowing the
+    # drift, which is a different defence and is checked separately below;
+    # this one is about a rate zoom not narrowing a file read in the first
+    # place. Planting `is_zoomed()` was green against "one key" and is red
+    # against this, which is why the check is written this way.
+    if set(keys) != {"last10h"}:
+        print(f"  FAIL: a Y-only zoom keyed the read on the view: "
+              f"{sorted(set(keys))[:3]} … ({len(set(keys))} distinct)")
+        return False
+    print("  ok: 60 s of slide under a rate zoom, the key stays 'last10h'")
+    return True
+
+
+def check_the_overlay_comes_down_on_a_sliding_zoomed_span() -> bool:
+    """T110 END-TO-END, which is the state he actually sat in front of:
+    "Reading traffic.csv…" forever. The method-boundary check above says the
+    key is stable; only this one says the WINDOW recovers — the overlay is
+    derived from the job's `pending_key` against the selected key, so a key
+    that drifts leaves it up whatever the reader does.
+
+    PLANTED (both halves, separately):
+      * `_history_key` asking `is_zoomed()` — the overlay never comes down
+        and the reads pile up, which is the state he sat in front of;
+      * `_refresh` recomputing `key = self._history_key(kind)` after the read
+        started instead of reading `self._requested_key` — same symptom the
+        moment the view moves mid-read.
+    """
+    with _isolated():
+        # A read SLOWER THAN A TICK, which is the whole point: his
+        # `traffic.csv` is 3.7 MB and reads in ~0.23 s while the key drifted
+        # once a second, so the read could never land under a key still
+        # valid. A fast stub finishes inside one second, no drift ever
+        # happens, and this check silently measures nothing — the first draft
+        # used 0.02 s and stayed green under the true pre-fix code.
+        reader = _StagedReader(delay=1.2)
+        original, traffic_history.read_history = traffic_history.read_history, reader
+        try:
+            window = tw.TrafficWindow()
+            window.show()
+            window.span_combo.setCurrentIndex(_index_of("last10h"))
+            APP.processEvents()
+            now = time.time()
+            view = window.chart.view
+            view.set_full(now - 10 * 3600, now)
+            view.y_lo, view.y_hi = 0.0, 1000.0     # his zoom: the rate axis
+            settled = False
+            end = time.time() + 8.0
+            while time.time() < end:
+                APP.processEvents()
+                window._refresh()          # each tick slides the span's end
+                if window._history_points and not window.chart.loading:
+                    settled = True
+                    break
+                time.sleep(0.02)
+            reads = len(reader.started)
+        finally:
+            traffic_history.read_history = original
+            window.close()
+    if not settled:
+        print(f"  FAIL: the overlay never came down on a sliding zoomed span "
+              f"({reads} reads started in 3 s — the read storm, his log)")
+        return False
+    print(f"  ok: the overlay came down and the data landed ({reads} read(s))")
+    return True
+
+
+def check_a_zoom_on_the_oldest_slice_recovers() -> bool:
+    """T110's OTHER drifting view — a plain TIME zoom, and the reason
+    adoption may not recompute the key.
+
+    The Y zoom above is the one his log caught. A time zoom drifts too, on
+    the OLDEST part of a sliding span: "Last 10 hours" slides its START
+    forward as well as its end, so a view zoomed onto the oldest hour falls
+    out through the left edge and `ViewRange._clamp` pushes it forward one
+    second per second. `is_time_zoomed()` does not save that case and is not
+    meant to — the view really IS time-zoomed and its bounds really do move,
+    so re-reading is CORRECT. What must not happen is that the answer we
+    ASKED for is thrown away as foreign the moment it lands, which is what a
+    key recomputed after the asking does: with a read slower than the drift
+    it never converges, and the overlay never comes down.
+
+    So this is an END-TO-END check and not a check on the key: the question
+    is whether the WINDOW recovers, and only the window can answer it.
+
+    PLANTED: `_refresh` computing `key = self._history_key(kind)` instead of
+    reading `self._requested_key` — the overlay stays up and the reads pile
+    up, his own symptom.
+    """
+    with _isolated():
+        reader = _StagedReader(delay=1.2)   # slower than the drift, as his file is
+        original, traffic_history.read_history = traffic_history.read_history, reader
+        try:
+            window = tw.TrafficWindow()
+            window.show()
+            window.span_combo.setCurrentIndex(_index_of("last10h"))
+            APP.processEvents()
+            now = time.time()
+            view = window.chart.view
+            view.set_full(now - 10 * 3600, now)
+            # The oldest hour — deliberately AT the left edge, where the
+            # slide pushes a view out.
+            view.set_view(now - 10 * 3600, now - 9 * 3600)
+            settled = False
+            end = time.time() + 8.0
+            while time.time() < end:
+                APP.processEvents()
+                window._refresh()
+                if window._history_points and not window.chart.loading:
+                    settled = True
+                    break
+                time.sleep(0.02)
+            drifted = view.start > now - 10 * 3600 + 1.0
+            reads = len(reader.started)
+        finally:
+            traffic_history.read_history = original
+            window.close()
+    if not drifted:
+        print("  FAIL: the staged view never drifted — the check would be "
+              "measuring nothing")
+        return False
+    if not settled:
+        print(f"  FAIL: the overlay never came down on a drifting time zoom "
+              f"({reads} reads started)")
+        return False
+    print(f"  ok: a drifting time zoom recovered ({reads} read(s))")
+    return True
+
+
 CHECKS = [
     ("a result carries its own span key", check_result_carries_its_key),
     ("a superseded read clears nothing", check_superseded_read_keeps_its_hands_off),
@@ -528,6 +726,12 @@ CHECKS = [
     ("Today is local midnight", check_today_is_local_midnight),
     ("the new spans are file-backed", check_new_spans_are_file_backed_and_offered),
     ("the picker fits its widest name", check_picker_fits_its_widest_name),
+    ("a sliding zoomed span keeps ONE key",
+     check_a_sliding_zoomed_span_keeps_one_key),
+    ("a zoom on the oldest slice recovers",
+     check_a_zoom_on_the_oldest_slice_recovers),
+    ("the overlay comes down on a sliding zoomed span",
+     check_the_overlay_comes_down_on_a_sliding_zoomed_span),
 ]
 
 

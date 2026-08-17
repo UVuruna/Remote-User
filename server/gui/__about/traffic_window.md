@@ -381,3 +381,57 @@ own defect, fail-closed in `setup/gates.py` (0b17/6). The Kotlin half is
 asserted by READING the shell's source — there is no JVM test runner in this
 repo and no device attached — so what a real handset reports is proven only on
 a real handset.
+
+## T110 — "Reading traffic.csv…" that never came down
+
+His THIRD report on this window (2026-08-16), after two rounds closed it
+wrongly: the first fixed a symptom, the second put the right hypothesis and
+then declared it refuted because its harness could not reproduce it.
+
+**Reproduced from his own `server.log`**, which had named the mechanism all
+along — consecutive lines one second apart, both bounds incrementing by
+exactly 1:
+
+```
+dropped 'last10h|1786797517-1786833517' while showing 'last10h|1786797518-1786833518'
+```
+
+`_history_key` built a zoomed read's key out of the chart view's own bounds.
+A file-backed span may SLIDE with the clock ("Last 10 hours" is
+`now - 10h .. now`), `_refresh` hands that moving end to the chart on every
+tick, and `ViewRange._clamp` correctly pushes a view that has fallen out of
+the span forward with it. So the key changed every second; every tick started
+a read that superseded the one before it, no read ever finished, no result
+was ever surfaced, and the overlay — which is up exactly while a read for the
+selected key is pending and nothing is held for it — could never come down.
+
+**The arithmetic in his log says which zoom it was**: `1786833517 - 1786797517`
+is exactly 36000, the whole ten hours. The view was never narrowed in TIME at
+all — he had zoomed the RATE axis, and `is_zoomed()` answers yes to that too.
+
+Two defences, and each is load-bearing (proven by planting the other's fix
+back and watching only its own check fail):
+
+- **A rate zoom does not key — or narrow — a file read.** `ViewRange` grew
+  `is_time_zoomed()`, and `_history_key` / `_maybe_start_history` ask that
+  one. Which rows are read from `traffic.csv` is a question about time; the
+  rate axis is a window on the picture, not on the file.
+- **A real time zoom is keyed to a PLOT COLUMN** (`PLOT_COLUMNS`), not to
+  raw seconds. A time zoom drifts too — on the OLDEST slice of a sliding
+  span, where the view falls out through the left edge — and there the
+  re-read is CORRECT; what must not happen is a fresh read per second, each
+  killing the last. A shift that cannot move one pixel of the picture he
+  judges is not a different read.
+
+Why two rounds missed it: their harnesses drove FIXED-start spans, where
+nothing moves however it is zoomed. The defect needs a span whose end tracks
+the clock AND a zoom — and, for the overlay half, a read slower than one
+tick, which his 3.7 MB file is and a fast stub is not.
+
+`ViewRange.set_full` deliberately still asks `is_zoomed()`: whether a view
+that is the whole span FOLLOWS a slide is a different question, the clamp
+answers it identically, and a change there could not be proven by a check.
+
+Gate: `tests/test_traffic_spans.py` — three checks (the rate-zoom key, the
+oldest-slice recovery end-to-end, the sliding-span overlay end-to-end), each
+proven by planting its own defect.

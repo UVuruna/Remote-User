@@ -58,10 +58,38 @@ class ViewRange:
         else:
             self._clamp()
 
-    def is_zoomed(self) -> bool:
+    def is_time_zoomed(self) -> bool:
+        """TIME only — deliberately NOT `is_zoomed()`, which also answers yes
+        to a rate-axis (Y) zoom.
+
+        This distinction is the T110 fix (owner report 2026-08-16, his third
+        on the Traffic window: "Reading traffic.csv…" forever). A Y zoom
+        changes nothing about WHICH ROWS are read from `traffic.csv` — it is
+        a window on the rate axis — but the reader was narrowed, and the read
+        was KEYED, on `is_zoomed()`. On a span whose end tracks the clock
+        ("Last 10 hours"), a Y-only zoom therefore took this path: the view's
+        bounds still equal the full span, `set_full` sees `was_whole` False
+        and clamps, and the clamp drags both bounds forward one second per
+        second. Every tick invented a new key, nothing in flight could match
+        it by the time it landed, every result was dropped and the overlay
+        could never come down. His own log, one line per second:
+
+            dropped 'last10h|1786797517-1786833517' while showing
+                    'last10h|1786797518-1786833518'
+
+        — and the give-away that says Y and not time: 1786833517 - 1786797517
+        is exactly 36000, the whole ten hours. The view was never narrowed in
+        time at all.
+
+        Ask this one wherever the question is "what should be READ"; ask
+        `is_zoomed()` where the question is "has he changed the view at all"
+        (the Reset button, the zoom-out floor).
+        """
         return (self.start > self.full_start + 1e-6
-                or self.end < self.full_end - 1e-6
-                or self.has_y())
+                or self.end < self.full_end - 1e-6)
+
+    def is_zoomed(self) -> bool:
+        return self.is_time_zoomed() or self.has_y()
 
     def has_y(self) -> bool:
         return self.y_lo is not None and self.y_hi is not None
