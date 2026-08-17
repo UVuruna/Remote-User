@@ -85,6 +85,8 @@ import time
 
 import dxcam
 
+import session_log
+
 logger = logging.getLogger(__name__)
 
 # No frame for this long, while capture is RUNNING and someone is watching,
@@ -313,6 +315,13 @@ class CaptureGuard:
         self._capture.rebuild_camera()
 
     def _announce(self, ok: bool, detail: str) -> None:
+        # The use log's own evidence for a bug (owner ruling 2026-08-16): the
+        # ONE place capture's health flips, so a dead-then-recovered picture
+        # is exactly two lines in his file, never zero and never four.
+        try:
+            session_log.LOG.record("fault.capture", ok=ok, detail=detail)
+        except Exception:
+            logger.exception("Capture guard could not log its own state")
         if self._on_state is None:
             return
         try:

@@ -268,6 +268,7 @@ def create_app(stream, hub: FrameHub | None, injector: InputInjector, token: str
         except (TypeError, ValueError):
             ratio = 9 / 16
         traffic.METER.note_device(w, h, screen.get("model"))  # traffic_devices.py
+        presence.log_connect(ws, first, screen)  # the use log's session.connect
         # THE PHONE'S OWN OVERRIDES, KNOWN BEFORE THE FIRST ENCODER EXISTS
         # (task 203). Carried on `auth` since 2026-08-11; a page that predates
         # the field says nothing and gets exactly the old behaviour.
@@ -286,7 +287,11 @@ def create_app(stream, hub: FrameHub | None, injector: InputInjector, token: str
                 "seen": time.monotonic(), "away": None, "left": False,
                 # focus_guard: which window this connection's typed input goes
                 # to. Stale = the next key re-reads the foreground and arms it.
-                "pin": None, "pin_stale": True}
+                "pin": None, "pin_stale": True,
+                # the use log's own idea of "which device" — the same field
+                # `session.connect` above was logged with, carried on `conn`
+                # so `presence.leave_session` can log the matching leave.
+                "device": screen.get("model")}
         tasks: list = []
         queue = None
         # EVERYTHING that can raise a window lives inside this try (audit
@@ -379,7 +384,7 @@ def create_app(stream, hub: FrameHub | None, injector: InputInjector, token: str
                     holds.add(hold)
                     hold.add_done_callback(holds.discard)
                 else:
-                    await presence.leave_session(layouts, conn)
+                    await presence.leave_session(layouts, conn, reason="disconnect")
             for task in tasks:
                 task.cancel()
             if queue is not None:
@@ -678,7 +683,8 @@ async def _receive_input(ws: WebSocket, injector: InputInjector, stream, token: 
                 conn["away"] = None   # a leave is not served by the long budget
                 logger.info("Phone left (%s) — the desk gets its windows back",
                             msg.get("reason") or "no reason given")
-                await presence.leave_session(layouts, conn)
+                await presence.leave_session(layouts, conn,
+                                             reason=msg.get("reason"))
             continue
         # WHERE typed input lands is decided HERE, before a single key is
         # injected — never by whatever window happened to take focus while the

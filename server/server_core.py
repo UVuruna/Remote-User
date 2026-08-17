@@ -18,18 +18,24 @@ from dataclasses import dataclass, field
 
 import uvicorn
 
+import config
+import display_watch
 import encoders
 import focus_hook
 import foreground_lock
 import layout_popup
+import log_shipper
+import log_summary
 import notify
 import recents
 import monitors
 import pairing
+import session_log
 import traffic
 import update_handover
 import window_manager
 from config import SETTINGS
+from session_log import LOG
 from input_injector import InputInjector
 from web import FrameHub, ServerStats, create_app
 
@@ -73,6 +79,15 @@ class ServerController:
         # recognise that it is no longer the live one.
         self._generation = 0
         self.info: ServerInfo | None = None
+        # THE USE LOG (owner request 2026-08-16). Its file belongs to the
+        # PROCESS, not to a server run — `session_log.py`'s own ruling — so the
+        # controller owns it here rather than any one `_serve`. `_log_lock`
+        # makes closing IDEMPOTENT across the four ways out (tray Quit, Qt
+        # aboutToQuit, atexit, the console handler): all four reach
+        # `release_windows()`, and four exits must not footer one file four
+        # times.
+        self._log_lock = threading.Lock()
+        self._display_watch: display_watch.DisplayWatch | None = None
         # One registry for the PROCESS, not per server run: "Apply & restart"
         # used to build a fresh empty one, which threw away the owner's
         # layouts and the only list of windows still standing always-on-top.
@@ -123,6 +138,117 @@ class ServerController:
                                         name=f"server-core-{gen}", daemon=True)
         self._thread.start()
 
+    # -- the displays ------------------------------------------------------
+
+    @property
+    def display_watch(self) -> display_watch.DisplayWatch:
+        """The process's ONE display watch, created on first ask.
+
+        A property and not a `_serve` local because two of its consumers are
+        not the server: the Settings window subscribes while it is open (its
+        monitor list is otherwise filled once, from an enumeration dxcam made
+        at import — constraint 30), and capture re-enumerates DXGI on it. It
+        is created before the server runs so a Settings window opened against
+        a STOPPED server still has something to subscribe to; `start()` and
+        `stop()` are both idempotent, so asking for it costs nothing.
+        """
+        if self._display_watch is None:
+            self._display_watch = display_watch.DisplayWatch()
+        return self._display_watch
+
+    # -- the use log -------------------------------------------------------
+
+    def _start_use_log(self, info: "ServerInfo") -> None:
+        """Repair, sweep, THEN open — and the order is load-bearing.
+
+        A run that ended without us leaves a file with no footer, and that
+        missing footer is the ONLY way the next start can recognise it
+        (`session_log.is_unclosed`). Both the repair and the shipper's sweep
+        therefore have to finish BEFORE a new file exists, or the sweep would
+        pick up the file we just opened and ship a log that is still being
+        written. `skip=` is belt and braces on top of the ordering: at this
+        point `LOG.path` is None anyway, so nothing can match it — but a later
+        edit that moved `LOG.start()` up would otherwise fail SILENTLY, and
+        this feature exists precisely for failures nothing reports.
+
+        The header carries ONLY what cannot change while this process lives.
+        No monitors, no encoder, no quality — those are facts WITH A DURATION
+        and go through `LOG.state()`, which writes them again whenever they
+        move. A header claiming "the PC is X" is `Layout.arranged_ratio`
+        (constraint 13) in a new place: a note of what was once true, read
+        forever after as if it still were.
+        """
+        try:
+            session_log.repair_unclosed(SETTINGS, log_shipper.SHIPPER,
+                                        skip=LOG.path)
+            log_shipper.SHIPPER.sweep(SETTINGS)
+        except Exception:  # a use log may never break the app it observes
+            logger.exception("Use log: the start-up repair/sweep failed")
+        try:
+            LOG.start(
+                app_version=config.app_version(),
+                install_id=log_shipper.install_id(),
+                process_start=time.time(),
+            )
+            # The first observable facts, as STATE and never as header: what
+            # this PC's displays are right now, and what this run decided to
+            # be. `display_watch.snapshot()` is read fresh (constraint 13) and
+            # every later change re-writes it through `_on_display_change`.
+            LOG.state("pc", monitors=[
+                {"index": d.index, "w": d.width, "h": d.height,
+                 "primary": d.primary, "scale_pct": d.scale_pct}
+                for d in display_watch.snapshot()])
+            # Elevation and the bundled ffmpeg's version are deliberately NOT
+            # here: neither is readable at this point without inventing a
+            # probe, and a guessed value in an evidence log is worse than a
+            # missing one.
+            LOG.state("app", mode=info.mode, encoder=info.encoder,
+                      monitor_w=info.monitor_width,
+                      monitor_h=info.monitor_height)
+        except Exception:
+            logger.exception("Use log: could not be opened")
+
+    def _on_display_change(self, diff) -> None:
+        """The displays moved: write the new truth, never a delta. `state()`
+        dedupes by itself, so an event that changed nothing observable costs
+        the file nothing."""
+        try:
+            LOG.state("pc", monitors=[
+                {"index": d.index, "w": d.width, "h": d.height,
+                 "primary": d.primary, "scale_pct": d.scale_pct}
+                for d in diff.snapshot])
+        except Exception:
+            logger.exception("Use log: recording a display change failed")
+
+    def close_use_log(self, reason: str = "stop") -> None:
+        """Footer the file, summarise it, and hand BOTH to the shipper.
+
+        IDEMPOTENT by construction and by lock: `LOG.close()` returns None
+        when nothing is open, so the four exit paths that all reach
+        `release_windows()` cannot footer one file four times."""
+        with self._log_lock:
+            try:
+                path = LOG.close(reason)
+            except Exception:
+                logger.exception("Use log: closing failed")
+                return
+            if path is None:
+                return
+            try:
+                summary = log_summary.write_summary(path)
+            except Exception:
+                logger.exception("Use log: could not summarise %s", path)
+                summary = None
+            # `LOG.close` already offered the log itself to its own shipper;
+            # offering both here is what makes the SUMMARY travel with it, and
+            # `offer()` on an already-shipped file is a no-op by design.
+            for item in (path, summary):
+                if item is not None:
+                    try:
+                        log_shipper.SHIPPER.offer(item)
+                    except Exception:
+                        logger.exception("Use log: could not ship %s", item)
+
     def release_windows(self) -> None:
         """THE exit call: hand every window we raised back to the normal
         z-band and stop the foreground-hook thread, NOW, on the calling
@@ -154,6 +280,32 @@ class ServerController:
             notify.close_channels()
         except Exception:
             logger.exception("Ending the notice channels failed")
+        # The display watch is a thread (or a set of Qt connections) of ours,
+        # so it goes out the same funnel every other Win32 resource does. The
+        # OBJECT is kept (the Settings window may still be holding it, and a
+        # next start re-subscribes to the same one); only its event source is
+        # released. Honest limit, stated where it bites: `stop()` clears EVERY
+        # subscriber by its own contract, so a Settings window open across a
+        # server stop stops being repopulated until it is reopened — which is
+        # exactly the behaviour it had before this wiring existed.
+        # Defensive: this funnel runs on paths where self may be incomplete
+        # (e.g. called unbound during tests, or from process-exit handlers where
+        # __init__ may not have finished). Use getattr to tolerate a missing
+        # attribute.
+        watch = getattr(self, "_display_watch", None)
+        if watch is not None:
+            try:
+                watch.unsubscribe(self._on_display_change)
+                watch.stop()
+            except Exception:
+                logger.exception("Stopping the display watch failed")
+        # LAST of the funnel: the footer is the file's own record that we got
+        # to run code on the way out, so everything above has already happened
+        # by the time it is written. Idempotent — see close_use_log.
+        # Defensive: self may be incomplete on some exit paths (constraint 10
+        # names them). Only call if self is not None and has _log_lock.
+        if self is not None and hasattr(self, "_log_lock"):
+            self.close_use_log("stop")
 
     def stop(self, timeout: float = 10.0) -> None:
         """Stops uvicorn and waits for the thread to unwind.
@@ -281,6 +433,23 @@ class ServerController:
         # a stopped server has to read as a line of zeros on the owner's
         # graph, never as a hole where anything could have happened.
         traffic.METER.start()
+        # The use log, beside the traffic meter and for the same reason: both
+        # are records of what this installation did, and both belong to the
+        # process rather than to one phone.
+        self._start_use_log(info)
+        # ONE display watch for the process (constraint 30: dxcam enumerates
+        # its outputs once at import, so nothing notices a monitor arriving).
+        # Owned here because every consumer of it — the use log, the Settings
+        # window's monitor list, capture's re-enumeration — is downstream of
+        # this controller, and `release_windows()` stops it.
+        watch = self.display_watch
+        watch.subscribe(self._on_display_change)
+        try:
+            from capture import on_display_change as capture_on_display_change
+            watch.subscribe(capture_on_display_change)
+        except Exception:
+            logger.exception("Capture could not subscribe to the display watch")
+        watch.start()
         if self._console_pairing:
             pairing.show_pairing(token)
 

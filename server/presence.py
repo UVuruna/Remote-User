@@ -30,6 +30,9 @@ import asyncio
 import logging
 import time
 
+import config
+import pairing
+import session_log
 import window_manager
 from input_injector import last_input_tick, tick_now
 
@@ -131,8 +134,55 @@ async def hand_over(prev) -> None:
         pass
 
 
+def log_connect(ws, auth: dict, screen: dict) -> None:
+    """The use log's `session.connect` — who just arrived, and over what.
+
+    It lives HERE, in the module that owns "is a phone with us", rather than
+    in `web.py`: web.py stands at the structure law's 1,000-line wall, and a
+    phone arriving is a presence fact in any case — its twin `session.leave`
+    is written by `leave_session` a few lines below, which is the whole point
+    of putting them in one module.
+
+    Every field is something ALREADY on the wire — nothing is probed and
+    nothing is invented:
+      * `device` / `screen` / `panel` — the phone's own `auth` message.
+      * `link` — which of the PC's two addresses this socket really came in
+        on, read off the Host header and compared with the live Tailscale
+        address (measured now, never remembered — constraint 13). That is the
+        LAN-vs-anywhere distinction the whole pairing story turns on.
+      * `data_saver` — this server's ONE notion of "on cellular"
+        (`config.is_data_saver`, T79). A separate `transport` field is
+        deliberately NOT invented here: it would be a second answer to one
+        question, and the two would drift the first time either moved. That
+        reasoning is `config.is_data_saver`'s own, applied.
+
+    Never raises: a use log may not break the connection it observes."""
+    try:
+        try:
+            host = (ws.headers.get("host") or "").split(":")[0]
+        except Exception:
+            host = ""
+        tailscale = pairing.get_tailscale_ip()
+        if host and tailscale and host == tailscale:
+            link = "tailscale"
+        elif host:
+            link = "lan"
+        else:
+            link = "unknown"
+        quality = auth.get("quality") or {}
+        session_log.LOG.record(
+            "session.connect",
+            device=screen.get("model"),
+            screen={"w": screen.get("w"), "h": screen.get("h")},
+            panel=auth.get("panel"),
+            link=link, host=host or None,
+            data_saver=config.is_data_saver(quality.get("bitrate")))
+    except Exception:
+        logger.exception("Use log: could not record a phone connection")
+
+
 # ═══════════════════════════ LEAVING ═══════════════════════════
-async def leave_session(layouts, conn: dict) -> None:
+async def leave_session(layouts, conn: dict, reason: str | None = None) -> None:
     """The phone stopped working with us — screen locked, app closed, killed,
     network gone. Everything the layouts hold on the PC is handed back to the
     desk: every member leaves the always-on-top band and gets minimized,
@@ -144,12 +194,20 @@ async def leave_session(layouts, conn: dict) -> None:
     (closed, cloaked, extracted as a tab) is released too — that is the one no
     member list can still name, and the one that used to stay stranded.
 
+    `reason` is whatever the caller already knows (the phone's own `away`
+    reason, or "disconnect" for an ordinary socket end) — never guessed here.
+
     Idempotent: the watchdog and the socket's own teardown both call it."""
     if conn.get("left"):
         return
     conn["left"] = True
     conn["active"], conn["region"] = None, None
     logger.info("Phone left work mode — layout members minimized")
+    try:
+        session_log.LOG.record("session.leave", device=conn.get("device"),
+                               reason=reason or "unspecified")
+    except Exception:
+        logger.exception("Use log: could not record a session leave")
     # session_end=True (defect 1, 2026-08-13): this IS constraint 23's real
     # session ending, unlike a plain Desktop tap — any adopted popup goes back
     # where Windows had it and is forgotten, not merely lowered for later.

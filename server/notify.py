@@ -45,6 +45,7 @@ from fastapi import Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from config import BUNDLE_DIR, FROZEN, PROJECT_ROOT, SETTINGS, USER_DIR
+import session_log
 import window_manager as wm  # the same live-title read `layout_state` already
                               # uses (layout_registry.py's member_titles) — no
                               # second copy of how a member's title is read
@@ -467,6 +468,35 @@ def waiting_devices() -> int:
 
 
 async def deliver(notice: dict) -> str:
+    """The one choke every notice passes — so the use log's `notice.*` record
+    is written HERE and nowhere else.
+
+    A record per carrier at each `return` inside `_carry` would be three
+    copies of one fact, and three copies drift. `waited_s` is measured from
+    the notice's own `at` stamp, which is what tells a held notice apart from
+    one that landed the second it was raised — the exact distinction the
+    phone's own "8 min ago" suffix exists for.
+
+    Never raises: a use log may not break a notice."""
+    carrier = await _carry(notice)
+    try:
+        at = notice.get("at")
+        waited_s = (round(max(0.0, time.time() - at), 1)
+                    if isinstance(at, (int, float)) else None)
+        session_log.LOG.record(
+            f"notice.{carrier}",
+            agent=notice.get("agent"), event=notice.get("event"),
+            waited_s=waited_s,
+            # HAD it waited — a notice raised now and delivered now, versus one
+            # drained out of the queue on a later connection. A second of slack
+            # so an ordinary round trip is never reported as a wait.
+            waited=bool(waited_s is not None and waited_s > 1.0))
+    except Exception:
+        logger.exception("Use log: could not record a notice")
+    return carrier
+
+
+async def _carry(notice: dict) -> str:
     """Hand one notice to EXACTLY ONE CARRIER TYPE. Returns which took it.
 
     The order is the rule that makes a double notice impossible — it is a
