@@ -48,6 +48,13 @@ import tempfile
 from pathlib import Path
 
 PROJECT = Path(__file__).resolve().parent.parent
+# cube.js was extracted out of loading.js (2026-08-17) so the full-screen
+# overlay and the update card's badge could share one cube instead of two.
+# loading.js now calls createCube() at module scope — any harness that runs
+# loading.js as a CONSUMER must load cube.js first, in the page's own order
+# (index.html loads cube.js before loading.js), or the ReferenceError has
+# nothing to do with what the gate is actually testing. Load it here too.
+CUBE = PROJECT / "client" / "cube.js"
 LOADING = PROJECT / "client" / "loading.js"
 MOTION = PROJECT / "client" / "settle-motion.js"
 RENDER = (PROJECT / "client" / "render.js").read_text(encoding="utf-8")
@@ -183,7 +190,7 @@ def drive(scenario: str) -> dict:
     script.write_text(DRIVER, encoding="utf-8")
     try:
         out = subprocess.run(
-            [node, str(script), scenario, str(MOTION), str(LOADING)],
+            [node, str(script), scenario, str(MOTION), str(CUBE), str(LOADING)],
             capture_output=True, text=True, timeout=120)
         assert out.returncode == 0, f"node failed: {out.stderr.strip()}"
         return json.loads(out.stdout.strip().splitlines()[-1])
