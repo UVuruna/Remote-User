@@ -59,10 +59,7 @@ joins the layout is his tap, never ours.
 """
 
 import logging
-import os
-import subprocess
 import time
-from pathlib import Path
 
 import clipboard_sync
 import content
@@ -75,12 +72,43 @@ logger = logging.getLogger(__name__)
 
 
 # ═══════════════════════════ RULES ═══════════════════════════
-# The palette command that starts a fresh conversation, READ from the Claude
-# Code extension's own `package.json` on 2026-08-13 (`claude-vscode.
-# newConversation`), never invented — the same standard `CLAUDE_FOCUS_COMMAND`
-# was held to, and for the same reason: a mis-typed name run by the palette's
-# Enter is an arbitrary VS Code command.
-CLAUDE_NEW_COMMAND = "Claude Code: New Conversation"
+# The palette command that starts a fresh conversation IN ITS OWN EDITOR TAB,
+# READ from the Claude Code extension's own `package.json` (`claude-vscode.
+# editor.open`), never invented — the same standard `CLAUDE_FOCUS_COMMAND` was
+# held to, and for the same reason: a mis-typed name run by the palette's Enter
+# is an arbitrary VS Code command.
+#
+# IT WAS `claude-vscode.newConversation` UNTIL 2026-08-17, AND THAT WAS THE
+# WRONG DOOR (owner report, his picture 3). "New Conversation" opens the
+# conversation wherever the extension currently lives, which on his PC is the
+# SECONDARY SIDE BAR — and a side bar is not a window: it cannot be torn into
+# one, so it cannot become a layout member, which is the only reason he taps
+# this row at all. He pointed at the extension's own tab button (his picture 4)
+# and the command behind it is this one. Both names exist in the same
+# `package.json` and only one of them produces something this product can use,
+# so the gate below pins the ID as well as the title — the READING was correct
+# in 2026-08-13 and the CHOICE was not, which no check on "is this name real"
+# could ever have caught.
+CLAUDE_NEW_COMMAND = "Claude Code: Open in New Tab"
+
+# The VS Code core command that puts a SECOND window on the folder this one
+# already holds. Read from the installed VS Code's own workbench bundle on
+# 2026-08-17 (`workbench.action.duplicateWorkspaceInNewWindow`), the same
+# standard every other palette name here is held to.
+#
+# IT REPLACES A LAUNCH THAT COULD NEVER HAVE WORKED (owner report 2026-08-17,
+# and MEASURED before it was believed). The act used to run
+# `Code.exe -n <path>`, and `-n` on a folder VS Code ALREADY HAS OPEN does not
+# open a second window — it focuses the existing one. The layout's folder is by
+# definition already open, so this row was unsatisfiable from the day it
+# shipped: his own log says so twice in one minute ("code.exe opened no window
+# within 25s"), and a controlled run on his PC confirmed both halves — the same
+# call against a folder that was NOT open produced a window immediately.
+#
+# The palette route needs no path at all, which retires the whole
+# title-to-path recovery this act used to depend on: nothing is looked up, so
+# nothing can be looked up wrongly.
+VSCODE_DUPLICATE_COMMAND = "Duplicate As Workspace in New Window"
 
 # How long a window an act LAUNCHES may take to appear before we stop watching
 # for it. Only used to mark it as ours (see the module docstring) — nothing is
@@ -117,14 +145,23 @@ def catalogue(process: str) -> list[dict]:
     `sub` is not decoration: every row whose act does NOT create a member says
     so there, because every other row in that panel does create one and a
     surprise about which is which is the class of defect constraint 18 is
-    about."""
+    about.
+
+    `opens` is the machine-readable half of the same statement, added
+    2026-08-17: TRUE on the one act whose whole point is that a new WINDOW
+    appears on the PC. The phone reads it to choose which loading animation
+    covers the wait (owner's answer this round: FULL for that one, because the
+    desk really rearranges itself; CUBE for the acts that happen inside one
+    window and are worth watching happen — constraint 16). It is a FIELD and
+    never an id the phone matches on: a second act that opens a window one day
+    must not need the page reissued to be covered."""
     app = app_of(process)
     if app == "vscode":
         return [
             {"id": "vscode|claude", "label": "New Claude Code",
-             "sub": "a new conversation in this window"},
+             "sub": "a new conversation, in its own tab"},
             {"id": "vscode|window", "label": "New window, same folder",
-             "sub": "a second VS Code on this project"},
+             "sub": "a second VS Code on this project", "opens": True},
         ]
     if app == "chrome":
         return [
@@ -173,22 +210,15 @@ def _secured(app: str, guard, process_of=None) -> tuple[int, str]:
     return target, ""
 
 
-def _vscode_folder_path(folder: str) -> str:
-    """The full path of the project whose folder is NAMED `folder`.
-
-    A foreign window's title carries a name and never a path, so the path is
-    recovered from the list VS Code itself keeps (`recents.vscode_recents()`,
-    the live `state.vscdb` read). No match is a REFUSAL upstream and never a
-    guess: handing a constructed path to a launcher opens a stranger's folder
-    or nothing at all, and both are worse than a sentence saying we do not
-    know where this project lives."""
-    want = (folder or "").strip().lower()
-    if not want:
-        return ""
-    for rec in recents.vscode_recents():
-        if (Path(rec["target"]).name or "").lower() == want:
-            return rec["target"]
-    return ""
+# A PATH IS NO LONGER RECOVERED HERE, AND THAT IS THE POINT (2026-08-17).
+# `_vscode_folder_path` used to match a window title's folder NAME against VS
+# Code's own recent list to find where the project lives on disk, because the
+# act launched `Code.exe -n <path>`. That launch could not do what the row
+# promised (see `VSCODE_DUPLICATE_COMMAND`), and VS Code duplicating its own
+# window needs no path at all — so the lookup, its refusal sentence, and the
+# whole class of "we guessed the wrong folder" went with it. The two projects
+# sharing one folder NAME that the New source still has to live with
+# (constraint 26) simply cannot arise on this path any more.
 
 
 def _pasted(injector, text: str, guard) -> str:
@@ -232,8 +262,7 @@ def _watch_and_claim(process: str, before: set[int]) -> None:
                    process, LAUNCH_WATCH_S)
 
 
-def run(act_id: str, injector, guard=None, folder: str = "",
-        process_of=None) -> str:
+def run(act_id: str, injector, guard=None, process_of=None) -> str:
     """Do it. `""` = it was done; anything else is the sentence for the phone,
     and in every refusal NOTHING was injected.
 
@@ -241,8 +270,11 @@ def run(act_id: str, injector, guard=None, folder: str = "",
     injecting path in this project: the fence check, the chord and the paste
     have to happen in that order.
 
-    `folder` is the layout's project folder NAME (`Layout.project()`), needed
-    only by the VS Code act that opens a second window on it."""
+    IT TAKES NO `folder` SINCE 2026-08-17. It used to, for the one act that
+    opened a second VS Code on the layout's project BY PATH; that act is a
+    palette command now and asks VS Code to duplicate the window it is already
+    standing in, so the project is never named — by us, or by anything of ours
+    that could name it wrongly."""
     app, _, rest = act_id.partition("|")
     act, _, target_path = rest.partition("|")
     if app not in PROCESS_OF_APP:
@@ -264,19 +296,17 @@ def run(act_id: str, injector, guard=None, folder: str = "",
             wrong_app=_refuse("vscode", ""), what="New Claude Code")
 
     if app == "vscode" and act == "window":
-        path = _vscode_folder_path(folder)
-        if not path:
-            return ("Nothing was opened — the PC could not tell where "
-                    f"{folder or 'this project'} lives on disk")
-        exe = recents.app_exe("vscode")
-        if not exe:
-            return "Nothing was opened — VS Code is not installed on the PC"
+        # VS Code duplicating its OWN window needs no path and no launcher —
+        # see `VSCODE_DUPLICATE_COMMAND` for why the launcher could never have
+        # worked here. The window list is taken BEFORE the command goes out, so
+        # the watcher's newness rule cannot race the window it is waiting for.
         before = {w["hwnd"] for w in wm.list_windows()}
-        try:
-            subprocess.Popen([exe, "-n", path], close_fds=True)
-        except OSError as e:
-            logger.error("Could not start %s: %s", exe, e)
-            return f"Could not start {os.path.basename(exe)}"
+        problem = content.palette_command(
+            injector, VSCODE_DUPLICATE_COMMAND, guard, PROCESS_OF_APP["vscode"],
+            process_of=process_of,
+            wrong_app=_refuse("vscode", ""), what="New VS Code window")
+        if problem:
+            return problem
         _watch_and_claim(PROCESS_OF_APP["vscode"], before)
         return ""
 

@@ -51,28 +51,52 @@ standing over nothing.
 
 | App | Act | How it is done | The honest cost |
 |-----|-----|----------------|-----------------|
-| VS Code | New Claude Code | palette `Claude Code: New Conversation` | lands in the SAME window — a conversation, not a member, and the row says so |
-| VS Code | New window, same folder | `code -n <path>` | needs the project's PATH; refused, never guessed, when it cannot be found |
+| VS Code | New Claude Code | palette `Claude Code: Open in New Tab` | lands in the SAME window — a conversation in its own editor tab, not a member, and the row says so |
+| VS Code | New window, same folder | palette `Duplicate As Workspace in New Window` | the new window is an untitled WORKSPACE on the same folder — VS Code's own wording, not ours |
 | Chrome | New tab | `Ctrl+T` | nothing new appears on the desk — deliberate, and the row says so |
 | Chrome | Reopen the closed tab | `Ctrl+Shift+T` | — |
 | Chrome | New tab from the clipboard | `Ctrl+T` + paste + Enter | an empty clipboard is a refusal, not an empty tab |
 | Explorer | New tab · Up one folder | `Ctrl+T` · `Alt+↑` | — |
 | Explorer | Open a Quick Access folder | `Ctrl+L` + the path + Enter | navigates THIS window, instead of opening a second Explorer |
 
-**The palette command name is READ, never invented.** `Claude Code: New
-Conversation` (`claude-vscode.newConversation`) was read from the extension's
-own `package.json` on this PC, 2026-08-13, held to exactly the standard
-`CLAUDE_FOCUS_COMMAND` is: the palette's Enter runs whatever its filter left
-standing, so a wrong name is an arbitrary VS Code command. The gate pins both.
+**The palette command name is READ, never invented**, and since 2026-08-17
+the gate pins WHICH name and not merely that the name is real — because both
+of this round's defects were commands that existed.
 
-**A window title carries a NAME, never a path.** So "New window, same folder"
-recovers the path by matching the layout's project name against VS Code's own
-recent list (`recents.vscode_recents()`, the live `state.vscdb` read). No match
-is a sentence on the phone — handing a constructed path to a launcher opens a
-stranger's folder or nothing at all, and both are worse than saying we do not
-know where that project lives.
+**The Claude row opened the SIDE BAR** (owner report 2026-08-17, his picture 3).
+`claude-vscode.newConversation` was read correctly from the extension's own
+`package.json` in 2026-08-13, and it starts the conversation wherever the
+extension currently lives — on his PC, the secondary side bar. A side bar is
+not a window: it cannot be torn into one, so it can never become a layout
+member, which is the only reason this row exists. He pointed at the extension's
+own tab button (his picture 4) and the command behind it is
+`claude-vscode.editor.open`. The reading was right in 2026-08-13 and the
+CHOICE was not, which no check on "is this name the extension's own" could ever
+have caught.
+
+**The second-window row could never have worked, and that was MEASURED**
+(same report). It ran `Code.exe -n <path>`, and `-n` on a folder VS Code
+ALREADY HAS OPEN does not open a second window — it focuses the existing one.
+A layout's folder is by definition already open, so the act was unsatisfiable
+from the day it shipped; his own log says so twice inside one minute
+(`code.exe opened no window within 25s`), and a controlled run on his PC
+confirmed both halves — the same call against a folder that was NOT open
+produced a window at once. It is a palette command now
+(`workbench.action.duplicateWorkspaceInNewWindow`, read from the installed VS
+Code's own workbench bundle), which asks VS Code to duplicate the window the
+fence has just proved we are standing in.
+
+**So no path is recovered any more, and that is the point.** The old act
+matched the layout's project NAME against VS Code's own recent list, because a
+window title carries a name and never a path. Duplicating a window needs
+neither, so the lookup, its refusal sentence and the whole class of "we found
+the wrong folder of that name" went with the launcher.
 
 ## What this module may NOT do
+
+**And it never runs inside the receive loop** — that half lives one door
+further out, in [Layout Acts API](layout_acts_api.md), which is also where the
+25 seconds of silence that ended his session are written down.
 
 It never creates, removes or re-places a layout, and it never puts a window
 INTO one. A window an act of ours opens (VS Code's new window) is marked

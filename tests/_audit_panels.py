@@ -346,9 +346,9 @@ NEW_SOURCE_STAGE_JS = (
     r" id:'explorer|recent|3', open:true, why:'already open'}"
     "], {in_layout:true, app:'vscode', name:'VS Code', entries:["
     " {id:'vscode|claude', label:'New Claude Code',"
-    "  sub:'a new conversation in this window'},"
+    "  sub:'a new conversation, in its own tab'},"
     " {id:'vscode|window', label:'New window, same folder',"
-    "  sub:'a second VS Code on this project'}]})"
+    "  sub:'a second VS Code on this project', opens:true}]})"
 )
 NEW_SOURCE_CLOSE_JS = "cancelCreation(true)"
 

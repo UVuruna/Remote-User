@@ -115,6 +115,14 @@ STANDARD = {
     # content.palette_command already makes, and is gated in
     # tests/test_new_source.py.
     "server/layout_acts.py",
+    # Split out of layout_api.py on 2026-08-17 at the structure law's wall, by
+    # RESPONSIBILITY: layout_api answers what layouts exist and what may be
+    # done TO them, while these two handlers ask what the program a layout is
+    # MADE OF can be asked to do — which touches no layout and creates no
+    # member. Standard: two handlers and one rule with teeth (the act runs OFF
+    # the receive loop, or it starves this connection's own heartbeat), gated
+    # in tests/test_new_source.py.
+    "server/layout_acts_api.py",
     # Split out of web.py on 2026-08-13 at the structure law's wall, by
     # responsibility: web.py's subject is the live SOCKET, and an upload is a
     # plain request/response that happens to end in one injected Ctrl+V.

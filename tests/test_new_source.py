@@ -45,7 +45,9 @@ recorded, and the injector counts its chords instead of firing them.
 Run:  .venv\\Scripts\\python tests/test_new_source.py
 """
 
+import asyncio
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -56,6 +58,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import content  # noqa: E402
 import clipboard_sync  # noqa: E402
 import layout_acts  # noqa: E402
+import layout_acts_api  # noqa: E402
 import layout_popup  # noqa: E402
 import recents  # noqa: E402
 import window_manager as wm  # noqa: E402
@@ -322,30 +325,75 @@ def check_the_three_apps_each_offer_their_own_acts() -> bool:
             and {"explorer|tab", "explorer|up"} <= set(ids["explorer"]))
 
 
-def check_a_project_whose_path_is_unknown_is_refused_not_guessed() -> bool:
-    """A window title carries a folder's NAME and never its path. When VS
-    Code's own recent list cannot say where that project lives, the honest act
-    is a sentence — a constructed path handed to a launcher opens a stranger's
-    folder or nothing, and both are worse."""
+def check_the_second_window_act_asks_vs_code_to_duplicate_its_own() -> bool:
+    """IT MAY NEVER GO BACK TO A LAUNCHER (owner report 2026-08-17, MEASURED on
+    his PC before it was believed).
+
+    The act used to run `Code.exe -n <path>`, and `-n` on a folder VS Code
+    ALREADY HAS OPEN does not open a second window — it focuses the existing
+    one. A layout's folder is always already open, so the row could never have
+    worked: his log says "code.exe opened no window within 25s" twice in one
+    minute, and a controlled run reproduced it exactly (the same call against a
+    folder that was NOT open produced a window at once).
+
+    So this asserts the MECHANISM and not merely the outcome: the act asks VS
+    Code, through its own palette, to duplicate the window the fence has just
+    proved we are standing in. A path is never looked up, which is why the act
+    now takes no folder at all — the whole class of "we guessed the wrong
+    project" is gone rather than guarded."""
     injector = Injector()
-    real = recents.vscode_recents
-    recents.vscode_recents = lambda: []          # nothing to match against
+    seen = []
+    real_palette, real_list = content.palette_command, wm.list_windows
+    content.palette_command = (
+        lambda inj, command, guard=None, want=None, **k:
+        seen.append((command, want)) or "")
+    wm.list_windows = lambda: []          # nothing new ever appears; give up
+    real_watch = layout_acts.LAUNCH_WATCH_S
+    layout_acts.LAUNCH_WATCH_S = 0.05     # the give-up point, not a wait
     try:
         problem = layout_acts.run(
             "vscode|window", injector, guard_for(0x77),
-            folder="vibecoder", process_of=process_of({0x77: "code.exe"}))
+            process_of=process_of({0x77: "code.exe"}))
     finally:
-        recents.vscode_recents = real
-    return bool(problem) and injector.total == 0
+        content.palette_command, wm.list_windows = real_palette, real_list
+        layout_acts.LAUNCH_WATCH_S = real_watch
+    return (problem == ""
+            and seen == [(layout_acts.VSCODE_DUPLICATE_COMMAND, "code.exe")]
+            # Nothing of ours may type the command by hand: the palette drive
+            # is content.py's, one copy, and a second one would drift.
+            and injector.total == 0)
 
 
-def check_the_claude_command_is_the_extension_s_real_one() -> bool:
-    """READ from the extension's own package.json on 2026-08-13
-    (`claude-vscode.newConversation`), never invented — the palette's Enter
-    runs whatever the filter left standing, so a wrong name is an arbitrary VS
-    Code command. Held to the same standard `CLAUDE_FOCUS_COMMAND` is."""
-    return (layout_acts.CLAUDE_NEW_COMMAND == "Claude Code: New Conversation"
+def check_the_claude_act_opens_a_tab_and_not_the_side_bar() -> bool:
+    """THE NAME WAS REAL AND THE CHOICE WAS WRONG (owner report 2026-08-17, his
+    picture 3), which is why this check pins WHICH command and not merely that
+    the command exists.
+
+    `claude-vscode.newConversation` was read correctly from the extension's own
+    package.json in 2026-08-13 — and it opens the conversation wherever the
+    extension currently lives, which on his PC is the SECONDARY SIDE BAR. A
+    side bar is not a window: it cannot be torn into one, so it can never
+    become a layout member, which is the only reason this row exists. Its
+    sibling `claude-vscode.editor.open` is the extension's own tab button (his
+    picture 4) and is the one this product can use.
+
+    Both names are real, so the earlier check — "is this name the extension's
+    own" — was green throughout the defect. This one names the loser too."""
+    return (layout_acts.CLAUDE_NEW_COMMAND == "Claude Code: Open in New Tab"
+            and layout_acts.CLAUDE_NEW_COMMAND != "Claude Code: New Conversation"
             and content.CLAUDE_FOCUS_COMMAND == "Claude Code: Focus input")
+
+
+def check_the_window_act_says_it_opens_one() -> bool:
+    """The phone chooses FULL over CUBE from this field and never from an id
+    (owner's answer 2026-08-17, constraint 16): a veil belongs over a desk that
+    rearranges itself, a bare cube over a tab worth watching open. A second
+    window-opening act one day must be covered without reissuing the page."""
+    rows = {r["id"]: r for r in layout_acts.catalogue("code.exe")}
+    return (rows["vscode|window"].get("opens") is True
+            and not rows["vscode|claude"].get("opens")
+            and not any(r.get("opens")
+                        for r in layout_acts.catalogue("chrome.exe")))
 
 
 
@@ -468,13 +516,102 @@ def check_an_act_at_the_desktop_is_refused_and_not_injected() -> bool:
     chord at whatever holds the keyboard (constraint 11)."""
     proto.install_fakes()
     fired = []
-    real_run = proto.layout_api.layout_acts_mod.run
-    proto.layout_api.layout_acts_mod.run = lambda *a, **k: fired.append(a) or ""
+    # PATCHED WHERE THE HANDLER REALLY READS IT (2026-08-17). The handlers moved
+    # to `layout_acts_api` when layout_api crossed the structure law's wall, and
+    # this line went on patching `layout_api`'s own copy of the same import —
+    # which the dispatcher no longer consults, so the check would have gone on
+    # passing while measuring nothing at all.
+    real_run = layout_acts_api.layout_acts_mod.run
+    layout_acts_api.layout_acts_mod.run = lambda *a, **k: fired.append(a) or ""
     try:
         ws, _, _ = proto.drive([{"type": "layout_act", "id": "chrome|tab"}])
     finally:
-        proto.layout_api.layout_acts_mod.run = real_run
-    return not fired and len(proto.sent_of(ws, "toast")) == 1
+        layout_acts_api.layout_acts_mod.run = real_run
+    # The overlay's end is owed even to a refusal that never began (the phone
+    # raised it on the tap), and it is the ONE message that ends it.
+    return (not fired and len(proto.sent_of(ws, "toast")) == 1
+            and len(proto.sent_of(ws, "layout_act_done")) == 1)
+
+
+# ═════════ 19-20. THE ACT MUST NOT STARVE THE CONNECTION ═════════
+# THE DEFECT HIS OWN LOG DATED (owner report 2026-08-17). `layout_act` awaited
+# its work inside web.py's receive loop, so an act that watches for a window —
+# up to 25 s — read no `hb` for those 25 s, and presence did exactly what it is
+# built to do: ended the session and MINIMIZED his layout under him, mid-act.
+# His "blockade and a slight disconnect" was our own handler starving our own
+# watchdog.
+#
+# Neither of the two checks above could see it: they drive acts that return at
+# once, so "does the handler return" and "does the handler return PROMPTLY"
+# looked like the same question. They are not, and only the second one is the
+# feature.
+def _drive_settled(messages, blocker=None):
+    """`proto.drive`, plus the two things this subject needs: how long the
+    DISPATCHER itself took, and a chance for the act's own task to finish
+    afterwards (asyncio.run cancels what is still pending, which would make
+    `layout_act_done` unobservable)."""
+    conn = proto.fresh_conn()
+    layouts = proto.window_manager.LayoutRegistry()
+    ws = proto.FakeWs(messages)
+    took = []
+
+    async def run():
+        start = time.monotonic()
+        try:
+            await proto.web._receive_input(ws, injector=None,
+                                           stream=proto.FakeStream(),
+                                           token="t", layouts=layouts, conn=conn)
+        except proto.web.WebSocketDisconnect:
+            pass
+        took.append(time.monotonic() - start)
+        if blocker is not None:
+            blocker.set()
+        # Let every task the dispatcher spawned run to its end.
+        pending = [t for t in asyncio.all_tasks()
+                   if t is not asyncio.current_task()]
+        if pending:
+            await asyncio.gather(*pending, return_exceptions=True)
+
+    asyncio.run(run())
+    return ws, took[0]
+
+
+def _one_act_in_a_layout(blocker):
+    """A layout of the fake desk's own window, then one act into it — with
+    `layout_acts.run` replaced by something that really blocks, which is what
+    the 25-second window watch is."""
+    proto.install_fakes()
+    real_run = layout_acts_api.layout_acts_mod.run
+    layout_acts_api.layout_acts_mod.run = lambda *a, **k: blocker.wait(5) or ""
+    try:
+        return _drive_settled([
+            {"type": "layout_list"},
+            {"type": "layout_create", "mode": "solo", "orient": "landscape",
+             "slots": [{"hwnd": proto.WIN_A, "tab": None, "x": 0.5, "y": 0.5}]},
+            {"type": "layout_act", "id": "chrome|tab"},
+        ], blocker)
+    finally:
+        layout_acts_api.layout_acts_mod.run = real_run
+
+
+def check_a_slow_act_never_blocks_the_receive_loop() -> bool:
+    """The dispatcher must come back for the next message while the act is
+    still working. The act here blocks until the dispatcher has returned and
+    released it, so a handler that awaits it inline cannot finish at all — it
+    would sit on the 5 s give-up, exactly as his 25 s did."""
+    blocker = threading.Event()
+    _, took = _one_act_in_a_layout(blocker)
+    return took < 1.0
+
+
+def check_a_slow_act_still_answers_when_it_is_really_done() -> bool:
+    """And the overlay's end is not lost by moving the work off the loop: the
+    phone holds a veil until this arrives (constraint 15 — the end is a fact,
+    never a timer), so an act that runs late must still answer late rather than
+    never."""
+    blocker = threading.Event()
+    ws, _ = _one_act_in_a_layout(blocker)
+    return len(proto.sent_of(ws, "layout_act_done")) == 1
 
 
 CHECKS = [
@@ -498,10 +635,12 @@ CHECKS = [
      check_an_app_with_no_acts_offers_no_group),
     ("each of the three apps offers its own acts",
      check_the_three_apps_each_offer_their_own_acts),
-    ("a project whose path is unknown is refused, never guessed",
-     check_a_project_whose_path_is_unknown_is_refused_not_guessed),
-    ("the Claude command is the extension's real one",
-     check_the_claude_command_is_the_extension_s_real_one),
+    ("the second-window act asks VS Code to duplicate its own",
+     check_the_second_window_act_asks_vs_code_to_duplicate_its_own),
+    ("the Claude act opens a tab and not the side bar",
+     check_the_claude_act_opens_a_tab_and_not_the_side_bar),
+    ("the window act says it opens one",
+     check_the_window_act_says_it_opens_one),
     ("the Explorer folder act opens the address band FIRST",
      check_the_explorer_folder_act_opens_the_address_band_first),
     ("the Chrome clipboard act opens a tab FIRST",
@@ -514,6 +653,10 @@ CHECKS = [
      check_layout_acts_answers_inside_a_layout),
     ("an act at the desktop is refused, and injects nothing",
      check_an_act_at_the_desktop_is_refused_and_not_injected),
+    ("a slow act never blocks the receive loop",
+     check_a_slow_act_never_blocks_the_receive_loop),
+    ("a slow act still answers when it is really done",
+     check_a_slow_act_still_answers_when_it_is_really_done),
 ]
 
 

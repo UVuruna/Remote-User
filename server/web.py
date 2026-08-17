@@ -52,6 +52,7 @@ import clipboard_sync
 import config
 import focus_guard
 import capture_recovery
+import layout_acts_api
 import layout_api
 import layout_birth
 import ledger_api
@@ -816,9 +817,9 @@ async def _receive_input(ws: WebSocket, injector: InputInjector, stream, token: 
             # Asked by the New panel when it opens INSIDE a layout — from the
             # desktop there is no member to act on and the answer is empty,
             # which is what makes the panel draw one group instead of two.
-            await layout_api.layout_acts(ws, layouts, conn)
+            await layout_acts_api.layout_acts(ws, layouts, conn)
         elif kind == "layout_act":
-            await layout_api.layout_act(ws, layouts, conn, injector, msg)
+            await layout_acts_api.layout_act(ws, layouts, conn, injector, msg)
         elif kind == "layout_recent":
             # The FOURTH creation source (task 228): every layout previously
             # created on this PC, persisted across restarts.
