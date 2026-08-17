@@ -2626,6 +2626,85 @@ exactly as Claude Code itself would invoke it:
 Run: `.venv\Scripts\python tests/test_session_ledger.py` — also a fail-closed
 step in `build.py` (0b22/6).
 
+### `test_log_wiring.py` — Log Wiring Gate
+
+T113 (2026-08-17). `session_log.py`, `log_shipper.py`, `log_summary.py` and
+`display_watch.py` each have their own gate proving they WORK. This one
+proves nothing about them: it proves they are **CALLED** — the actions.json
+lesson of 2026-08-07 restated, since a pure module nobody calls is a feature
+that does not exist, and all four of those gates would stay green while the
+app never wrote a line.
+
+No real dxcam and no real desktop: `sys.modules["dxcam"]` is replaced before
+`capture` imports it (the `test_capture_recovery.py` rule), and
+`display_watch.snapshot` is faked per check.
+
+Fourteen checks, each proven by planting its own defect:
+
+| # | check | plant |
+|---|-------|-------|
+| 1 | repair + sweep run BEFORE the new file is opened, and the header carries ONLY app version / install id / process start | move `LOG.start()` above the repair; add `monitors=` to the header |
+| 2 | `skip=LOG.path` is really passed to `repair_unclosed` | drop the `skip=` argument |
+| 3 | closing is idempotent across the four exits — four calls, one footer, one summary, two files offered | let a second close re-summarise |
+| 4 | `release_windows()` — the funnel tray Quit, Qt `aboutToQuit`, `atexit` and the console handler all reach — closes the use log | remove the `close_use_log` call |
+| 5 | a display change re-enumerates DXGI | disable the `reenumerate_dxgi` call |
+| 6 | capture is really subscribed to the watch at the composition root | remove `watch.subscribe(capture_on_display_change)` |
+| 7 | the OPEN Settings window repopulates on a diff (marshalled by a Qt signal) and UNSUBSCRIBES on close | remove the unsubscribe |
+| 8 | one watch delivers one diff to BOTH subscribers | deliver to the first only |
+| 9 | the captured monitor vanishing moves capture to a SURVIVOR | skip the move |
+| 10 | a change that spares the captured monitor moves nothing | move every owner |
+| 11 | `session.connect` on auth, with the link MEASURED off the Host header against the live Tailscale address | call every host with a tunnel "tailscale" |
+| 12 | `web.py` really calls `presence.log_connect` on auth | delete the call |
+| 13 | `session.leave` carries its caller's reason, exactly once | hardcode the reason |
+| 14 | `notify.deliver` writes ONE `notice.*` record naming the carrier | add a second record |
+
+**Check 2 was measuring nothing until it was planted.** Its first version
+named `skip` as a defaulted spy parameter and compared it with `LOG.path` —
+both `None` at that point in a fresh process — so deleting the argument from
+the product passed just as happily. The spy now takes `**kw` and asks whether
+the KEY was there at all.
+
+Run: `.venv\Scripts\python tests/test_log_wiring.py` — also a fail-closed
+step in `setup/gates.py` (0b24/6).
+
+### `test_session_log.py` — Session Log Gate
+
+The missing gate for `server/session_log.py` — the module `test_log_wiring.py`
+proves is CALLED, this proves WORKS on its own: the header is written once,
+at open, and carries only what is stable for the process; `record()` writes
+one flushed JSON line per call and counts it under both its full `kind` and
+its `group`; the file rolls at the local day boundary
+(`session_log_roll_hours`) AND at the byte ceiling (`session_log_max_bytes`),
+and the rolled file's header carries `rolled_from`; `close()` writes exactly
+one footer and returns the closed path; `is_unclosed()` reads only the
+file's TAIL and is true for a missing or half-written footer, false for a
+real one; `repair_unclosed()` footers an abandoned file with
+`reason: "unclosed"`, invents no end time, offers it to the shipper, and
+skips the file named by `skip`; `session_log_enabled = False` makes every
+entry point a silent no-op; and a write failure closes the log instead of
+raising into the caller.
+
+Ten checks, each proven by planting its own defect — the
+`test_session_ledger.py` technique: the real module's source text is read,
+one exact substitution applied (each `old` string must appear exactly once),
+and the patched text exec'd as a fresh module under a scratch name, so the
+real, already-imported `session_log` is never touched. Every filesystem
+touch happens inside a fresh `tempfile.mkdtemp()` tree — never `USER_DIR`.
+
+Honest note from planting by hand on the real file rather than only through
+the gate's own in-memory patch: the byte-ceiling and day-boundary roll
+share one physical `if` line in `_record_locked`, so externally breaking
+one on disk also stops the OTHER check's own internal patch step from
+finding its target text — both rows report red together in that one
+manual scenario, though each is independently proven correct against a
+clean file (the gate's actual, automated form). The `is_unclosed()` invert
+plant reddens all three checks that consume `is_unclosed()`
+(`is_unclosed` itself, the tail-read check and `repair_unclosed()`) — a
+real shared-function effect, not a test artifact.
+
+Run: `.venv\Scripts\python tests/test_session_log.py` — also a fail-closed
+step in `setup/gates.py` (0b25/6).
+
 ---
 
 ## Instruments a person runs by hand — [tests/manual/](manual/___manual.md)

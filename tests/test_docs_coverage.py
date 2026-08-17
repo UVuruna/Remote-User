@@ -38,6 +38,14 @@ STANDARD = {
     # worth its own diagram — the ladder's order IS the whole flow, and it
     # reads straight off the __about doc.
     "server/capture_recovery.py",
+    # New 2026-08-16/17 (constraint 30's other half — react to the display
+    # EVENT instead of polling). Standard, not Algorithmic: the same
+    # message-only-window thread shape focus_hook.py already carries at
+    # Standard (see its own tier note below), plus a Qt-first/winapi-fallback
+    # pick and a straightforward tuple diff — no real state machine, no
+    # branching worth a picture; the __about doc reads it straight off the
+    # code, same as its sibling.
+    "server/display_watch.py",
     # Split out of gates.py on 2026-08-16 (THE STRUCTURE LAW), by
     # RESPONSIBILITY: the gates that prove the PC's OWN Qt windows, apart from
     # the ones that prove the wire and the phone. Standard rather than its
@@ -179,6 +187,25 @@ STANDARD = {
     "server/window_icons.py",
     "server/clipboard.py",
     "server/updates.py",
+    # New 2026-08-16 (owner request — the use log's evidence-and-behaviour
+    # record). Standard, not Algorithmic: rolling by day boundary or size and
+    # footer-on-close are each one straightforward rule, explained in prose in
+    # its __about — no state machine, no background thread, nothing a diagram
+    # would tell better than the code.
+    "server/session_log.py",
+    # New 2026-08-16 (owner ruling — spans/totals arithmetic over one
+    # session_log.py file, split out by RESPONSIBILITY: writing lines
+    # correctly is session_log.py's job, reading them back into spans is a
+    # different one with its own honest edge cases). Standard, not
+    # Algorithmic: `spans()` is one straightforward walk-and-compare loop,
+    # explained in prose in its __about — no state machine worth a diagram.
+    "server/log_summary.py",
+    # New 2026-08-16 (owner request — a finished log leaves the user's disk).
+    # Standard, not Algorithmic: copy-verify-delete is one straightforward
+    # ordering rule, explained in prose in its __about — no state machine
+    # complex enough to need a diagram, just a rule that must never be
+    # reordered.
+    "server/log_shipper.py",
     "server/traffic.py",
     # New 2026-08-13 (owner request — the Traffic window's per-device list
     # and per-device chart colour). Standard, not Algorithmic: the one real

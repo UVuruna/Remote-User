@@ -47,7 +47,45 @@ def test_ratchet_entries_reference_existing_files():
     assert not missing, f"RATCHET entries for files that no longer exist: {missing}"
 
 
+def test_no_log_file_lands_in_the_project_root():
+    """Owner ruling 2026-08-16: a log may NEVER end up in the project root,
+    and `.gitignore` is deliberately NOT the answer.
+
+    WHAT HAPPENED, measured rather than assumed. Twelve files (`out.log`,
+    `out2-4`, `outP`, `outR1-3`, `err.log`, `err2-4`) sat in the root, all
+    written between 02:00 and 02:06 on 2026-08-16. Nothing in this repo writes
+    them — the app's own `log_dir` is `USER_DIR` when frozen and `logs/` in a
+    checkout, never the root. Their CONTENT names their author: the headings
+    `=== a. file-backed span, no zoom ===` and `=== d. during/after a pan ===`
+    are exactly the four states the T110 reproduction agent measured that
+    night, and the run counts match its own record. An agent wrote a throwaway
+    probe and captured it with a shell redirect from the project directory.
+
+    WHY A GUARD AND NOT AN IGNORE RULE, which is the owner's point and the
+    better one: `*.log` in `.gitignore` would have made these invisible
+    instead of absent. They would still be written, still accumulate, and the
+    next person to look would find a root full of files git had been told to
+    pretend were not there. The rule he actually wants is that they must not
+    be CREATED here, so the check fails the build and names the file — the
+    only thing an ignore rule cannot do.
+
+    Scoped to the ROOT on purpose: `logs/` is where a dev run is supposed to
+    write, and a test that captures output into its own temp directory is
+    fine. It is the root that must stay clean.
+    """
+    strays = sorted(p.name for p in PROJECT_ROOT.glob("*.log"))
+    assert not strays, (
+        "Log file(s) in the project root: " + ", ".join(strays) + "\n"
+        "Nothing here may write a log to the project root. The app writes to "
+        "USER_DIR (frozen) or logs/ (checkout); a probe or a harness must "
+        "capture its output into its own temp directory. Delete these and "
+        "redirect the writer — do NOT add them to .gitignore (owner ruling "
+        "2026-08-16: an ignored log is hidden, not prevented)."
+    )
+
+
 if __name__ == "__main__":
     test_no_file_exceeds_structure_law_threshold()
     test_ratchet_entries_reference_existing_files()
+    test_no_log_file_lands_in_the_project_root()
     print("PASS — test_structure_law")
