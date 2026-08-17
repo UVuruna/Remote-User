@@ -8,6 +8,27 @@ windows, and the watcher that decides when it may go. Split out of
 module knows nothing about layouts — only "work is happening" and "the
 streamed picture has stopped moving".
 
+**The cube's own motion moved to [cube.js](cube.md) on 2026-08-17.** This
+file still owns `#lay-loading` — the overlay, the two kinds below, and the
+settle watcher — and delegates the actual spin to one `createCube()` handle
+bound to `#lay-cube`. Every name a caller already depends on
+(`showLayLoading`, `hideLayLoading`, `settleLayLoading`, `settleStreamReset`,
+`cubeNext`) kept its signature and behaviour exactly — the split moved WHERE
+the maths live, not what any of them do.
+
+**A second cube exists now, and it is NOT a third loading kind.** The
+in-app update card ([Update Banner](update-banner.md)) also spins a
+`cube.js` cube — the owner's own logo — as a small BADGE while an APK
+downloads or installs. It is deliberately outside this file's two-kind
+inventory below: it never calls `showLayLoading`/`LOADING_FULL`/
+`LOADING_CUBE`, it is not `#lay-loading`, and `tests/test_loading_kind.py`'s
+sweep (which scans every OTHER client file for `showLayLoading(...)` calls)
+correctly never sees it, because it is not one. If a later reader greps for
+every place the cube spins and finds `update-banner.js` in the results
+without also finding a `showLayLoading` call there, this paragraph is why:
+the CUBE is a shared gadget now (`cube.js`); the TWO LOADING KINDS below are
+a classification of `#lay-loading` sites only, and remain exactly two.
+
 ## The two kinds (owner decree 2026-08-12)
 
 He named both himself: *"1. vrsta je loading full screen / 2. vrsta je loading

@@ -1,0 +1,188 @@
+/* The in-app APK update card — split off style.css 2026-08-17 (THE
+   STRUCTURE LAW: style.css crossed 1,000 lines the round this card grew
+   from a one-shot indeterminate stripe into five states + a cube badge +
+   real progress). Same pairing pattern `window-offer.js` + `window-offer.css`
+   already use — one file per feature's own visual rules, loaded right after
+   style.css. Documented with `update-banner.js` in
+   [about](__about/update-banner.md). */
+
+/* In-app update offer — pill under the status, shown when the PC server
+   carries a newer APK than this shell */
+#update-banner {
+  position: fixed;
+  /* MEASURED, not a constant (constraint 35, "nothing may overlap
+     anything"). `--update-top` is written by update-banner.js's own
+     ResizeObserver off the real bottom edge of #status / #window-offer,
+     whichever stands lower; the `calc(...)` is only the fallback for
+     before that observer has fired, or a page with neither element. */
+  top: var(--update-top, calc(var(--topbar) + 44px));
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 8px 16px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border);
+  background: var(--bar);
+  color: var(--accent);
+  font: 600 13px system-ui, sans-serif;
+  z-index: 24;
+  -webkit-tap-highlight-color: transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  /* IT SPENDS THE BAND IT STANDS IN (BUG A of THE SPACE & LEGIBILITY LAW,
+     grader 2026-08-11). `inline-flex` with no width is shrink-to-fit, which was
+     harmless while the label was five words — then task 207's downloading
+     sentence arrived and the same pill broke it over FIVE ragged lines at
+     209 px while 203 px of the identical band stood empty. Free space first,
+     reflow second: the banner now takes the band (the same `min(92vw, …)`
+     shape the window chip and the wizard card use), and the sentence sits on
+     one or two lines. */
+  width: min(92vw, 560px);
+}
+/* Grading round 2026-08-17 (first photo of this card): content sat squeezed
+   left of a large empty area — SPACE & LEGIBILITY LAW's "nothing starves"
+   half. `body` GROWS (`flex:1 1 auto`) instead of shrink-wrapping, so the
+   bar can take real width instead of a short stub. */
+#update-banner-body {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch; /* was flex-start — the progress row must be free to grow full width */
+  flex: 1 1 auto;
+  gap: 6px;
+  min-width: 0; /* lets the text wrap instead of stretching the pill */
+}
+#update-banner-text { text-align: left; }
+/* Bar + percentage READ AS ONE THING (same round: "100%" hung far right of
+   the bar it describes, a separate child of the whole button). One row. */
+#update-banner-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+#update-banner svg { width: 16px; height: 16px; flex: none; }
+#update-banner[hidden] { display: none; }
+body.hidden-controls #update-banner { display: none; }
+
+/* Busy states (downloading, installing) refuse a second tap — a real job is
+   in flight and a repeat tap would only start a redundant one (task 207's
+   own rule, generalised from its old one-shot `.downloading` class, which
+   the FALLBACK path below still sets for exactly the same reason). */
+#update-banner.busy,
+#update-banner.downloading { pointer-events: none; }
+
+/* Grading round 2026-08-17: the reload icon was still drawn beside the
+   spinning cube — `updateBannerIcon.hidden` fired in JS but plain `hidden`
+   did not take it off this row, unlike every other toggled child below,
+   which already had its own `[hidden]` rule. Keep this — it is the fix. */
+#update-banner-icon[hidden] { display: none; }
+
+/* THE CUBE BADGE — the owner's own logo (cube.js), reusing the overlay's
+   `.cube-scene`/`.cube`/`.cube-face`/`cf-*` markup and colours (priority C:
+   drawn ONCE). The scene keeps its native 110px box (layouts.css) and is
+   shrunk + recentred through `--cube-scale` on the shared `cube-bob`
+   keyframe, the same mechanism `#lay-loading.cube-only` uses. Absolute +
+   negative half-box margin because a transform never shrinks the LAYOUT box.
+   Grading round 2026-08-17: the cube's right face nearly touched the "D" of
+   "Downloading" (the overflow hazard #lay-loading's own gap comment already
+   documents). Wrapper grew 22px -> 30px for real air around the ~22px paint
+   (110 * 0.2); `margin-right` on top of the row's gap, not a bigger shared
+   `gap` (which would shove the percentage away from its bar). */
+#update-banner-cube {
+  position: relative;
+  width: 30px;
+  height: 30px;
+  margin-right: 6px;
+  flex: none;
+  overflow: visible; /* the bob keyframe moves the cube a few px; clipping it would stutter */
+}
+#update-banner-cube .cube-scene {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  /* EXACT half of the fixed 110px box on both axes — this is the geometric
+     centre of the UNSCALED scene, which is also the SCALED cube's visual
+     centre: `--cube-scale` is a `transform: scale()` in the shared
+     `cube-bob` keyframe, and a CSS transform shrinks a box around a fixed
+     point (its own default 50%/50% origin) rather than moving that point —
+     so whatever this margin places at the wrapper's centre stays at the
+     wrapper's centre no matter the scale factor.
+     A PREVIOUS ROUND (2026-08-17, first grading pass) hand-tuned this to
+     `-40px 0 0 -55px` to counter the cube's rotated tilt reading as
+     "sitting above the text". That constant did not survive a second
+     photograph: the arithmetic behind it was wrong (a margin change here
+     shifts the visual centre by the SAME number of real pixels, not that
+     number divided by --cube-scale — the derivation above explains why),
+     so the "fix" put the cube's centre 15 raw px below the wrapper's own
+     centre, inside a 30px-tall wrapper — nearly its whole height, which is
+     exactly the "cube rides the card's bottom edge" the second photograph
+     showed. It is also structurally the wrong KIND of fix: a constant
+     tuned against the two-row "downloading" content block silently breaks
+     the one-row "installing" block, because the two states do not share a
+     content height. CENTRING AGAINST THE CONTENT IS THIS ELEMENT'S OWN
+     ROW'S JOB, not this margin's: `#update-banner`'s `align-items: center`
+     (below) centres this 30px wrapper against whichever sibling is
+     tallest — `#update-banner-body`, the text+bar block in "downloading",
+     the text alone in "installing" — automatically, in BOTH states, with
+     no constant to go stale when either state's content changes. This
+     margin's only job is to make the thing flex is centring be honestly
+     centred in ITS OWN box; do not reintroduce a hand-tuned offset here to
+     chase the rotated cube's own visual weight — that is what broke it. */
+  margin: -55px 0 0 -55px;
+  --cube-scale: 0.2;
+}
+#update-banner-cube[hidden] { display: none; }
+
+/* The bar the tap turns the banner into (task 207, owner decree 2026-08-10:
+   "ne znam da li je blokirao ili radi"). INDETERMINATE by default (the
+   FALLBACK path, and "downloading" before the first byte count arrives).
+   `.determinate` (2026-08-17) is added the instant a REAL `total` is known
+   (`__updateProgress`) and drives a real width via `--upd-pct`.
+   `flex:1 1 auto`, not a fixed px width (grading round 2026-08-17: was a
+   140px stub under a far wider sentence) — now the real width the card has. */
+#update-banner-bar {
+  flex: 1 1 auto;
+  min-width: 40px;
+  height: 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  overflow: hidden;
+}
+#update-banner-bar[hidden] { display: none; }
+#update-banner-fill {
+  width: 40%;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--accent);
+  animation: update-bar-sweep 1.1s ease-in-out infinite;
+}
+@keyframes update-bar-sweep {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(250%); }
+}
+/* Real progress: the sweep is dropped, width driven by `--upd-pct` (written
+   by update-banner.js per tick). This transition is for SMALL steps only —
+   see `setDeterminateFill()` there, which decides per tick if it may run. */
+#update-banner-bar.determinate #update-banner-fill {
+  width: var(--upd-pct, 0%);
+  animation: none;
+  transition: width 200ms linear;
+}
+/* Grading round 2026-08-17: `__updateProgress(100,100)` correctly read
+   "100%" while the fill was caught mid-transition at half the track — the
+   same shape of bug this repo already paid for once (the status pill's 0.2s
+   slide, ruled INSTANT never merely fast — constraint 35). The transition
+   still earns its keep on small real-download ticks; the rule is PER JUMP,
+   decided in JS before the width is written: entering "downloading" fresh,
+   or any step past `UPDATE_PCT_JUMP_THRESHOLD`, gets `.no-transition` for
+   that one write. Declared AFTER `.determinate` — same specificity, so
+   source order (not a specificity trick) is what makes it win. */
+#update-banner-bar.determinate.no-transition #update-banner-fill {
+  transition: none;
+}
+#update-banner-pct {
+  font-variant-numeric: tabular-nums; /* a changing digit count must not reflow the row */
+  flex: none;
+}
+#update-banner-pct[hidden] { display: none; }

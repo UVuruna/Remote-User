@@ -110,6 +110,10 @@ const FILES = [
   // listed here, so a load-time error in the creation wizard — the whole point
   // of this test — would have passed green. This file's own header says the
   // order must match index.html EXACTLY; it does again.
+  // The cube's own motion (2026-08-17), split out of loading.js — loaded
+  // before BOTH of its callers: update-banner.js right below (a small
+  // badge) and loading.js further down (the full-screen overlay).
+  "cube.js",
   // This round's new modules, in index.html's own order (2026-08-11): the
   // update banner split out of controls.js (task 207), and the window-offer
   // chip (task 202) — both loaded before chrome.js exactly as the page does.

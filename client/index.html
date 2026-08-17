@@ -27,6 +27,9 @@
        .sets-row / .sets-body / .card-split wholesale, same as set-editor.css
        above. -->
   <link rel="stylesheet" href="/static/ledger-panel.css">
+  <!-- AFTER layouts.css: the update card's cube badge reuses its
+       `.cube-scene`/`cube-bob` keyframe wholesale (2026-08-17). -->
+  <link rel="stylesheet" href="/static/update-banner.css">
 </head>
 <body>
   <div id="status" class="connecting">Connecting…</div>
@@ -122,21 +125,77 @@
     Use from anywhere — set up
   </button>
 
-  <!-- Shown inside the app when the PC carries a newer app version — one tap
-       downloads /app.apk from this same PC (the phone never checks the web).
-       Drawn icon (icons.js "reload"), not the ⬆️ emoji it used to carry.
-       After the tap, update-banner.js swaps the icon for an INDETERMINATE bar
-       (task 207, owner decree 2026-08-10): the download runs in Android's
-       own DownloadManager, so this page can never see real bytes — the
-       honest answer is an animated bar plus a sentence telling him where the
-       download actually lives, never a frozen ellipsis pretending to track
-       it. -->
+  <!-- Shown inside the app when the PC carries a newer app version.
+       States (update-banner.js owns the transitions, all driven by the
+       Android bridge — see that file's header for the full contract):
+         offer       — the reload icon, tap starts the update
+         permission  — Android needs a one-time OK to install from this PC
+         downloading — REAL progress now (2026-08-17): the shell downloads
+                       the APK itself and reports bytes, so the cube badge
+                       (cube.js, the SAME gadget #lay-loading spins — see
+                       constraint 16 in the root CLAUDE.md: this is a BADGE
+                       inside a card, never the full-screen overlay) spins
+                       with a determinate fill + percentage
+         installing  — the cube keeps spinning; Android's own installer is
+                       running and will reopen the app on success — there is
+                       no "done" state to render, because a successful
+                       install kills this page before it could ever be told
+         failed      — the reason, and the card becomes tappable again
+       An older shell (no Android.updateInApp) gets the ORIGINAL indeterminate
+       behaviour untouched — see the FALLBACK comment in update-banner.js. -->
   <button id="update-banner" type="button" hidden>
     <svg id="update-banner-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <path d="M20.5 12a8.5 8.5 0 1 1-2.6-6.1"/><polyline points="20.5 4.2 20.5 9.4 15.3 9.4"/>
     </svg>
-    <div id="update-banner-bar" hidden><div id="update-banner-fill"></div></div>
-    <span id="update-banner-text">Update the app — new version is ready</span>
+    <!-- The cube badge: hidden except while downloading/installing, when it
+         takes the icon's place (both at once would compete for the same
+         handful of pixels for no reason). Reuses the overlay's own
+         `.cube-scene`/`.cube`/`.cube-face`/`cf-*` markup and colours
+         (layouts.css) so the owner's logo is drawn ONCE — the wrapper around
+         it (update-banner.css, targeted by ID, not a class — no
+         `.upd-cube-wrap` rule exists) shrinks it to badge size. -->
+    <div id="update-banner-cube" hidden>
+      <div class="cube-scene">
+        <div class="cube" id="update-cube">
+          <div class="cube-face cf-front"></div>
+          <div class="cube-face cf-back"></div>
+          <div class="cube-face cf-left"></div>
+          <div class="cube-face cf-right"></div>
+          <div class="cube-face cf-top"></div>
+          <div class="cube-face cf-bottom"></div>
+        </div>
+      </div>
+    </div>
+    <div id="update-banner-body">
+      <!-- `data-in-progress` (grading round 2026-08-17, the audit's
+           truncation tooth): "Downloading the update…" is a complete
+           sentence whose ellipsis means "still happening", not a clipped
+           string — the SAME declaration loading.js's own `#lay-loading`
+           span already carries, for the identical reason. Present at all
+           times: only the "downloading" state's text actually ends in an
+           ellipsis, but the attribute is a standing declaration about what
+           this element MAY show, not a per-state toggle, and its presence
+           during "offer"/"permission"/"failed" text (no ellipsis) is inert. -->
+      <span id="update-banner-text" data-in-progress>Update the app — new version is ready</span>
+      <!-- Bar + percentage share ONE row (grading round 2026-08-17: the
+           percentage used to sit outside `body` entirely, hanging far right
+           of the bar it describes) — see update-banner.css's own comment on
+           `#update-banner-progress`. -->
+      <div id="update-banner-progress">
+        <!-- The fill starts INDETERMINATE (the sweep animation, unchanged
+             from before this round) and update-banner.js adds
+             `.determinate` plus a measured width the instant a real `total`
+             is known — never the other way around, so a byte count that
+             never arrives (an older shell, or a server with no
+             Content-Length) still shows honest motion instead of a fill
+             stuck at 0%. -->
+        <div id="update-banner-bar" hidden><div id="update-banner-fill"></div></div>
+        <!-- Only shown when the byte total is KNOWN (never print a
+             percentage you do not have) — see `__updateProgress` in
+             update-banner.js. -->
+        <span id="update-banner-pct" hidden></span>
+      </div>
+    </div>
   </button>
 
   <!-- Something opened on the PC while he is watching a layout — HE decides
@@ -295,11 +354,18 @@
        rules (pure, so its gate runs it whole — owner report 2026-08-13). -->
   <script src="/static/kb-sync.js"></script>
   <script src="/static/controls.js"></script>
+  <!-- The cube's own motion (split out of loading.js 2026-08-17), before
+       BOTH of its callers: update-banner.js right below (the update card's
+       small spinning badge) and loading.js further down (the full-screen
+       overlay's #lay-cube). No DOM dependency of its own — createCube()
+       only needs the element it is handed at call time. -->
+  <script src="/static/cube.js"></script>
   <!-- After controls.js: reads its `IN_APP` and `keepFocus` globals at
        load time. `showToast` (chrome.js, loaded next) is only called from
        inside a tap handler, by which point every script has run — split
        out of controls.js, task 207, to keep that file under THE STRUCTURE
-       LAW's line ceiling. -->
+       LAW's line ceiling. Also after cube.js, above — the download/install
+       states spin a small badge with the SAME gadget the overlay uses. -->
   <script src="/static/update-banner.js"></script>
   <!-- After controls.js (it reads `token`) and before connection.js, which
        calls its showWindowOffer() — task 202. -->

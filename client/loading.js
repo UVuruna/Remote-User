@@ -13,9 +13,10 @@
 // screen actually stands still, so the user never watches windows climb out
 // of the taskbar.
 //
-// Loaded AFTER settle-motion.js (its pure `changedFraction`/`isSettled`,
-// task 194) and BEFORE layouts.js — `showLayLoading`/`hideLayLoading`/
-// `settleLayLoading`/`cubeNext` are called from there and from connection.js.
+// Loaded AFTER cube.js (its `createCube` factory, 2026-08-17) and
+// settle-motion.js (its pure `changedFraction`/`isSettled`, task 194), and
+// BEFORE layouts.js — `showLayLoading`/`hideLayLoading`/`settleLayLoading`/
+// `cubeNext` are called from there and from connection.js.
 "use strict";
 
 const layLoading = document.getElementById("lay-loading");
@@ -27,44 +28,27 @@ let loadingTimer = null;
 // sketch 2026-08-02). Every layout_progress (one per window the server
 // creates) injects a momentum burst: each new window visibly whips it
 // onward, decaying back to the idle spin.
+//
+// THE MOTION ITSELF LIVES IN cube.js NOW (split out 2026-08-17, when the
+// update card needed the SAME cube spinning as a small badge — priority C,
+// "never write the same function twice"). This file keeps every name a
+// caller already depends on (`cubeNext`, `showLayLoading`, `hideLayLoading`,
+// `settleLayLoading`, `settleStreamReset`) and delegates the actual spin to
+// one `createCube()` handle bound to `#lay-cube`. Nothing about the overlay's
+// appearance or timing changed in this split — only where the maths live.
 const layCube = document.getElementById("lay-cube");
-const CUBE_BASE_SPEED = 70;  // deg/s idle spin
-const CUBE_BURST = 300;      // extra degrees granted per created window
+const layCubeHandle = createCube(layCube);
 const LOADING_FADE_MS = 500; // must match #lay-loading's CSS transition
-
-// Every showing opens on the NEXT face, in the owner's order
-// (top → left → back → right → front → bottom, looping — owner 2026-08-03:
-// "each next time from a different angle"). Each entry is the corner view
-// that makes its face dominant: dead-on plus a ~30° tilt on both axes, so
-// the cube still reads as a cube instead of a flat coloured square.
-const CUBE_VIEWS = [
-  { face: "top",    x: -62, y: 40 },
-  { face: "left",   x: -28, y: 130 },
-  { face: "back",   x: -28, y: 220 },
-  { face: "right",  x: -28, y: 310 },
-  { face: "front",  x: -28, y: 40 },
-  { face: "bottom", x: 62,  y: 40 },
-];
-let cubeView = -1;
-let cubeTilt = -28;
-let cubeAngle = 40;
-let cubeBurst = 0;
-let cubeRaf = null;
+// Delays STOPPING the spin until the fade-out finishes — see hideLayLoading.
+// A plain `let`, same as before the split: this timer belongs to the
+// overlay's own show/hide bookkeeping, not to the cube gadget itself.
 let cubeStopTimer = null;
-let cubeLast = 0;
 
-function cubeFrame(now) {
-  const dt = Math.min(100, now - cubeLast) / 1000;
-  cubeLast = now;
-  const burstSpeed = Math.min(cubeBurst * 3, 720);
-  cubeAngle = (cubeAngle + (CUBE_BASE_SPEED + burstSpeed) * dt) % 360;
-  cubeBurst = Math.max(0, cubeBurst - burstSpeed * dt);
-  layCube.style.transform = `rotateX(${cubeTilt}deg) rotateY(${cubeAngle}deg)`;
-  cubeRaf = requestAnimationFrame(cubeFrame);
-}
-
+// Public name every caller (connection.js) already uses — one turn per
+// window the server creates. Kept as its own function, not an alias, so a
+// caller reading this file sees the same name it has always called.
 function cubeNext() {
-  cubeBurst += CUBE_BURST;
+  layCubeHandle.whip();
 }
 
 // THE OVERLAY IS THE FRONT — the work happens behind it (owner rule, said
@@ -309,17 +293,10 @@ function showLayLoading(text, kind) {
   if (layLoadingOpen) return;
   layLoadingOpen = true;
   loadingSince = performance.now();
-  cubeView = (cubeView + 1) % CUBE_VIEWS.length;
-  cubeTilt = CUBE_VIEWS[cubeView].x;
-  cubeAngle = CUBE_VIEWS[cubeView].y;
-  cubeBurst = 0;
-  layCube.style.transform = `rotateX(${cubeTilt}deg) rotateY(${cubeAngle}deg)`;
+  layCubeHandle.nextFace();
   layLoading.classList.add("open");
   clearTimeout(cubeStopTimer);
-  if (!cubeRaf) {
-    cubeLast = performance.now();
-    cubeRaf = requestAnimationFrame(cubeFrame);
-  }
+  layCubeHandle.start(); // idempotent — safe even if the fade-out timer below never fired
 }
 
 function hideLayLoading(why) {
@@ -345,9 +322,8 @@ function hideLayLoading(why) {
   // exactly the stutter the smooth exit is meant to remove.
   clearTimeout(cubeStopTimer);
   cubeStopTimer = setTimeout(() => {
-    if (layLoadingOpen || !cubeRaf) return;
-    cancelAnimationFrame(cubeRaf);
-    cubeRaf = null;
+    if (layLoadingOpen || !layCubeHandle.isSpinning()) return;
+    layCubeHandle.stop();
   }, LOADING_FADE_MS);
 }
 
