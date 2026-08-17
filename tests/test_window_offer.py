@@ -294,6 +294,33 @@ def check_his_create_tap_moves_nothing_and_is_not_a_refusal() -> bool:
             and STRANGER not in conn.get("popup_declined", set()))
 
 
+def check_his_create_tap_is_not_asked_again_a_second_later() -> bool:
+    """AN INDEPENDENT ADVERSARIAL AGENT REPORTED THIS AS A CONFIRMED DEFECT and
+    it is NOT one — the check stays because the question it asks is real and
+    nothing in this file had ever asked it.
+
+    Its reasoning was sound as far as it went: `pick` discards `popup_asked`,
+    which only ever means "a chip is out right now", and the sweep runs every
+    second — so the same window would be offered again while he stands in the
+    creation panel, four more copies of a question he has answered. What it
+    missed is that `_offer` is preceded by `_judged`, which files the window as
+    no longer NEW, and the catch-all rule requires newness. Measured, not
+    argued: with the proposed fix (a `popup_creating` record consulted by the
+    sweep) REMOVED ENTIRELY, this check still passes — so the fix would have
+    been dead code, and dead code that looks like a defence is worse than none.
+
+    The defence this really pins is `_judged`, which is what planting breaks."""
+    reg, conn = _fresh()
+    _stranger_appears(conn)
+    layout_popup.wm.user32.alive.add(STRANGER)
+    first = _sweep(reg, conn)
+    if len(first) != 1:
+        return False
+    conn["popup_send"].clear()
+    layout_popup.pick(first[0]["id"], "layout_new")
+    return _sweep(reg, conn) == []
+
+
 def check_the_page_really_wires_the_create_answer() -> bool:
     """A SERVER FIELD NO PAGE READS IS NOT A FEATURE (the actions.json lesson
     of 2026-08-07, and the `wheel_order` one after it). This reads the shipped
@@ -338,6 +365,8 @@ CHECKS = [
      check_the_chip_offers_a_layout_of_its_own),
     ("his create tap moves nothing and is not a refusal",
      check_his_create_tap_moves_nothing_and_is_not_a_refusal),
+    ("his create tap is not asked again a second later",
+     check_his_create_tap_is_not_asked_again_a_second_later),
     ("the page really wires the create answer",
      check_the_page_really_wires_the_create_answer),
 ]
