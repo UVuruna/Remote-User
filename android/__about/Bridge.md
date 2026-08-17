@@ -54,6 +54,7 @@ because Activity Result launchers are the Activity's own —
 | Notices | `setNoticeChannel(on)`, `noticeChannelOn()` — T80b, 2026-08-14 |
 | Dictation | `startVoice`, `stopVoice`, `voiceLangs`, `voiceChosen`, `voiceSetLang`, `voiceState`, `voiceMuteBeeps`, `voiceSetMuteBeeps` |
 | Notices | `notify`, `speak`, `speakAs`, `ttsVoices`, `noticeState`, `noticeSetup` |
+| Updates | `update` (legacy — opens `/app.apk` in the system browser), `updateInApp`, `updateInstallAllowed`, `updateAllowInstall` — [Updater](Updater.md) |
 
 ## `linkLost` — the one thing the page cannot do for itself (owner 2026-08-07)
 
@@ -107,6 +108,7 @@ manual, in chat, or in a toast.
 - [Notifier](Notifier.md) — banners and speech
 - [NoticeService](NoticeService.md) — `running` / `batteryExempt` /
   `batteryIntent` for the page's notice card
+- [Updater](Updater.md) — `host.updater`, the in-app update job
 - `Prefs` — the two stored addresses and the page's own preference store
 
 ### Used by

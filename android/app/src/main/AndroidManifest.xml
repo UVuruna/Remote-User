@@ -54,6 +54,14 @@
          opens the system dialog, and never pretends to have it. -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
+    <!-- In-app update (Updater.kt): this app installs a new version of
+         ITSELF, downloaded from its own paired PC, over a PackageInstaller
+         session it opens for itself. This is a SIDELOAD-ONLY permission —
+         the Google Play distribution rules forbid an app requesting it — but
+         this project ships its own APK by decision, not by accident (see
+         ROADMAP.md → Distribution): the trade is accepted on purpose. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
     <!-- Package visibility (Android 11+): without this, the system pretends
          Tailscale is not installed, so the error card could never tell
          "not installed" from "installed but off" — the two states whose

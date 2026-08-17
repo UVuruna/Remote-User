@@ -10,6 +10,7 @@ import android.net.TrafficStats
 import android.os.BatteryManager
 import android.net.Uri
 import android.os.Build
+import android.provider.Settings
 import android.webkit.JavascriptInterface
 import org.json.JSONObject
 
@@ -464,6 +465,54 @@ class Bridge(private val host: MainActivity) {
                     // truly nothing to hand the download to — the page's
                     // toast already told the user what should have happened
                 }
+            }
+        }
+    }
+
+    // ── In-app update (Updater.kt) ────────────────────────────────────────
+    // `update(url)` above STAYS exactly as it is — the fallback for a page
+    // served by a PC too old to know about this path. These three are new,
+    // never a change to an existing signature, for the standing reason every
+    // method on this page repeats: the page is served by the PC while this
+    // shell is installed separately, so a changed arity would simply stop
+    // resolving on a phone that has not been re-served yet.
+
+    /** Starts the download+install job (see Updater.kt for why it streams
+     *  straight into a PackageInstaller session with no file ever written to
+     *  disk). Returns whether THIS call put a job in flight — false when one
+     *  already is, or when "install unknown apps" is not granted, in which
+     *  case `__updateState("permission", "")` fires instead and nothing is
+     *  downloaded. There is deliberately no success callback: a successful
+     *  install replaces this very process, so no later call could ever
+     *  reach a page that no longer has a process to run in. */
+    @JavascriptInterface
+    fun updateInApp(url: String): Boolean = host.updater.start(url)
+
+    /** `PackageManager.canRequestPackageInstalls()` — whether THIS app may
+     *  install a package it downloaded itself ("unknown sources", scoped per
+     *  app since Android 8). */
+    @JavascriptInterface
+    fun updateInstallAllowed(): Boolean = host.packageManager.canRequestPackageInstalls()
+
+    /** Opens the system screen that grants it, scoped to OUR OWN package —
+     *  never the general "unknown sources" list, which would hand the user a
+     *  search through every app on the device for the one row that matters.
+     *  `MainActivity.onResume` re-checks the grant and CONTINUES the pending
+     *  download by itself the moment he comes back having flipped it — never
+     *  a second tap he has to remember to make ("everything is guided IN the
+     *  app, with automatic continuation" — project CLAUDE.md). */
+    @JavascriptInterface
+    fun updateAllowInstall() {
+        host.runOnUiThread {
+            val intent = Intent(
+                Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                Uri.parse("package:${host.packageName}"),
+            )
+            try {
+                host.startActivity(intent)
+            } catch (e: Exception) {
+                // No such screen on this build — logged only; the page's own
+                // card already explains what to look for in Settings.
             }
         }
     }

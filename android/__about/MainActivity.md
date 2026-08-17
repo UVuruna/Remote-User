@@ -41,6 +41,9 @@ alone undersells it.
 - [Prefs (script)](../app/src/main/java/com/uvuruna/vibecoder/Prefs.kt) — reads both stored URLs every
   `resolveAndLoad`; writes the Tailscale URL from the JS bridge; read by
   `Client.shouldOverrideUrlLoading` to recognize "our server" by port
+- [ConnectionError](ConnectionError.md) — the error-card diagnosis, as
+  extension functions on this class
+- [Updater](Updater.md) — the in-app update job, via `updater`
 - [Gamepad](Gamepad.md) — every pad key and stick event is offered to it
   before the view hierarchy sees it; released on `onPause`
 - [Onboarding Activity](OnboardingActivity.md) — `repair()` launches it
@@ -69,13 +72,12 @@ error overlay views, the network callback, and the resolve/retry state
 (`resolveEpoch`, `pageAlive`, `lastLoadFailed`, `onWifi`,
 `warnedForeignWifi`). Key methods: `resolveAndLoad(silent)` (the probe/
 failover core — see the flow doc), `scheduleRetry(epoch)`, `pingOk(url)`
-(the strict-204 `/ping` probe), `showErrorCard()` / `renderErrorCard()` /
-`classifyFailure()` and the actions they bind (`openTailscale()`,
-`installTailscale()`, with `hasNetwork()` / `tunnelUp()` /
-`tailscaleLauncher()` as the three readings behind the diagnosis),
-`warnIfForeignWifi()`, `hideSystemBars()`,
+(the strict-204 `/ping` probe), `hideSystemBars()`,
 `repair()` (hands off to `OnboardingActivity`), `onResume()` /
-`onPause()` / `onDestroy()` lifecycle wiring.
+`onPause()` / `onDestroy()` lifecycle wiring. The error-card diagnosis
+(`showErrorCard()`, `classifyFailure()`, `openTailscale()`,
+`installTailscale()`, `warnIfForeignWifi()`, …) lives in
+[ConnectionError](ConnectionError.md) as extension functions on this class.
 
 ### The game controller — claimed before the WebView (build round G1, 2026-08-07)
 
@@ -223,13 +225,27 @@ the manifest declares it for the QR scanner); `multiple` →
 type. Voice input lives in [VoiceInput](VoiceInput.md) (the `voice` field,
 destroyed in `onDestroy`).
 
-### Fail (private enum)
-The five causes the phone can honestly distinguish, in decision order:
-`NO_NET` (no network at all) → `PC_NO_TUNNEL` (no Tailscale address was ever
-reported by the PC — the missing step is on the PC) → `TS_MISSING`
-(Tailscale not installed here) → `TS_OFF` (installed, no VPN up) →
-`PC_DOWN` (tunnel up, so the PC itself is not answering). `showErrorCard()`
-maps each to its own title/body and its own primary button.
+### The error-card diagnosis — moved out 2026-08-17
+`ConnectionFail` (the five causes: `NO_NET` → `PC_NO_TUNNEL` → `TS_MISSING` →
+`TS_OFF` → `PC_DOWN`), `showErrorCard()`, `classifyFailure()`, the
+`ConnectivityManager` reads and the two Tailscale actions used to live here
+and now live in [ConnectionError](ConnectionError.md) (THE STRUCTURE LAW —
+the in-app update feature's addition pushed this file past 1,000 lines). The
+handful of members that split needs (`errorTitle`/`errorBody`/`errorAction`,
+`connectivity`, `warnedForeignWifi`, `resolveAndLoad()`, the companion's
+`TAILSCALE_PKG`) were promoted from `private` to `internal` for it — nothing
+about their behaviour changed, only who may reach them.
+
+### Updater — the in-app update job
+`internal val updater by lazy { Updater.attach(this) }` (2026-08-17). Kept a
+one-liner here on purpose: [Updater](Updater.md) owns the whole job,
+including building its own `evaluateJavascript` callback wiring against this
+Activity (`Updater.attach`), so this file stays the WINDOW and the update
+machinery stays entirely where its responsibility already lives.
+`onResume()` calls `updater.onAppResumed()` unconditionally (cheap when
+nothing is pending) so a permission grant made in Settings continues the
+download BY ITSELF; `onDestroy()` calls `updater.release()` so a download in
+flight never outlives the Activity as a leaked thread, socket or session.
 
 ### Companion object
 `PING_TIMEOUT_MS` (3000), `RETRY_INTERVAL_MS` (4000) — the two tunables

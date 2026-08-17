@@ -14,7 +14,9 @@ scanner). Package `com.uvuruna.vibecoder`, min Android 8 (API 26).
 | `MainActivity.kt` | Algorithmic | WebView shell — dual-address resolve/failover state machine, self-healing error card, network callbacks, immersive UI — [about](__about/MainActivity.md) · [flow](__flow/MainActivity.md) |
 | `Insets.kt` | Standard | what the window's EDGES do — the immersive system bars, and the keyboard inset only the shell can measure (edge-to-edge broke `adjustResize`); split off `MainActivity.kt` 2026-08-09 — [about](__about/Insets.md) |
 | `ScreenAwake.kt` | Standard | which layer is on screen (error card / loader / page) and whether `FLAG_KEEP_SCREEN_ON` may be held — one owner instead of the page alone, which could not clear it while the error card was up (T80a, 2026-08-14) — [about](__about/ScreenAwake.md) |
+| `ConnectionError.kt` | Standard | why the PC can't be reached, and the one button that fixes it — the five-cause diagnosis and the error card's own actions; split off `MainActivity.kt` 2026-08-17 — [about](__about/ConnectionError.md) |
 | `Bridge.kt` | Standard | `window.Android` — every name the PAGE calls; the shell's compatibility surface (split from MainActivity 2026-08-07) — [about](__about/Bridge.md) |
+| `Updater.kt` | Algorithmic | the in-app update job — streams `/app.apk` straight into a `PackageInstaller` session with no file ever written to disk, throttled progress, automatic continuation once "install unknown apps" is granted — [about](__about/Updater.md) |
 | `Gamepad.kt` | Standard | the Bluetooth game controller — keys and sticks captured before the WebView sees them and forwarded to the page, which owns the whole mapping (build round G1, 2026-08-07) — [about](__about/Gamepad.md) |
 | `OnboardingActivity.kt` | Standard | first-run pairing screen — automatic funnel handoff + manual QR-scan/paste fallback — [about](__about/OnboardingActivity.md) |
 | `VoiceInput.kt` | Standard | dictation subsystem — user-chosen language, engine choice, silent model download, silent diagnostics (split from MainActivity 2026-08-05) — [about](__about/VoiceInput.md) |
@@ -57,7 +59,10 @@ always-on-top over the owner's desk. See
   device, the owner's PC (`dataSync` is deprecated in Android 15 with a
   six-hour cap; `specialUse` is for things with no honest type) — plus
   `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_CONNECTED_DEVICE` and
-  `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`
+  `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`; since 2026-08-17 also
+  `REQUEST_INSTALL_PACKAGES` — a sideload-only permission Google Play
+  forbids, accepted on purpose since this project ships its own APK by
+  decision (see [Updater](__about/Updater.md))
 - `build.gradle.kts` / `settings.gradle.kts` — AGP 8.7, Kotlin 2.0, SDK 35;
   version comes from `setup/app_info.json` via build properties; release
   signing from environment variables (never committed)
@@ -207,9 +212,17 @@ not just what:
   "tap to scan the new QR" and the shell reopens the scanner.
 - **In-app updates from the PC**: the page compares `config.app_version`
   with `Android.appVersion()` and, when the PC is newer, shows an update
-  banner; `Android.update(url)` opens `/app.apk` (same PC) in the system
-  browser — download, install over, done. The phone never checks the
-  internet; the desktop app is the one that watches GitHub Releases.
+  banner. Two paths now exist. `Android.update(url)` — the original,
+  unchanged fallback — opens `/app.apk` (same PC) in the system browser:
+  download, install over, done. `Android.updateInApp(url)` (2026-08-17,
+  [Updater](__about/Updater.md)) streams the same `/app.apk` straight into a
+  `PackageInstaller` session with no file ever touched on disk, reports
+  progress and state back to the page (`__updateProgress`/`__updateState`),
+  and — missing the one-time "install unknown apps" grant — remembers the
+  request and finishes it BY ITSELF the moment the user grants it in
+  Settings (`updateAllowInstall()` → `MainActivity.onResume()`), never a
+  second tap. The phone never checks the internet either way; the desktop
+  app is the one that watches GitHub Releases.
 - **Immersive — system bars hidden** (2026-07-26): `targetSdk 35` draws the
   WebView edge-to-edge, so the navigation bar sat ON TOP of the page's bottom
   controls and the system stole touches near the edges ("no button works").
