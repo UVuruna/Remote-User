@@ -386,13 +386,33 @@ class TrafficWindow(QDialog):
         controls.addWidget(self.zoom_in_btn)
         controls.addWidget(self.zoom_reset_btn)
         controls.addStretch()
+        root.addLayout(controls)
+
+        # THE TWO WIDE BUTTONS SIT ON THEIR OWN ROW (ladder step 2 — REFLOW,
+        # never widen). Together with the span picker, the recording pill and
+        # the zoom trio they made ONE unwrappable row 1,292 px wide, which is
+        # what drove this window's declared minimum to 1328 — past the 1280
+        # floor every other window in this app fits inside
+        # (`.claude/layout-frame.json`). A QHBoxLayout cannot wrap, so the
+        # width was not a measurement of anything the user needs to see at
+        # once; it was six controls told they must share a line.
+        #
+        # They are the right two to move: both are whole-window ACTS (open
+        # the file, zero the counters) while everything left above reads or
+        # changes what the chart is SHOWING, so the split falls on a seam
+        # that already existed. Nothing shrank, nothing wraps, and no label
+        # was shortened to make room — this window's minimum is now 8xx wide
+        # instead of 1328.
+        acts = QHBoxLayout()
+        acts.setSpacing(8)
+        acts.addStretch()
         open_btn = QPushButton("Open the recording")
         open_btn.clicked.connect(self._open_recording)
-        controls.addWidget(open_btn)
+        acts.addWidget(open_btn)
         reset_btn = QPushButton("Reset counters")
         reset_btn.clicked.connect(self._reset)
-        controls.addWidget(reset_btn)
-        root.addLayout(controls)
+        acts.addWidget(reset_btn)
+        root.addLayout(acts)
 
         # What the zoom is showing — or how to use it, while it is not.
         self.zoom_label = QLabel(ZOOM_HINT)
@@ -448,24 +468,33 @@ class TrafficWindow(QDialog):
 
         Width = the widest real row this window can show — the recording
         path wraps and the legend is now a 2-column grid of short items, so
-        the floor is the control row, which cannot wrap. Height = the four
+        the floor is the control row, which cannot wrap. The two whole-window
+        acts were split off it (see the constructor): six controls on one
+        unwrappable line demanded 1,292 px and pushed the declared minimum to
+        1328, past the 1280 floor `.claude/layout-frame.json` sets for every
+        window in this app. Height = the four
         header lines, the chart's own minimum, the legend grid + its
         explanatory note, and the footer."""
         metrics = QFontMetrics(self.font())
         button_pad, spacing = 40, 8
         record_label_w = max(metrics.horizontalAdvance("Recording to file"),
                              metrics.horizontalAdvance("Recording stopped"))
+        # The two whole-window ACTS live on their own row now (ladder step 2),
+        # so they are measured as their own row instead of being added onto
+        # the row above — that sum is what pushed this window's minimum past
+        # the 1280 floor.
+        acts_row = (metrics.horizontalAdvance("Open the recording") + button_pad
+                    + metrics.horizontalAdvance("Reset counters") + button_pad
+                    + spacing)
         controls_row = (metrics.horizontalAdvance(max((n for n, _, _ in SPANS), key=len))
                         + 56
                         + record_label_w + 20 + 6 + 20   # dot mark + spacing + margins
-                        + metrics.horizontalAdvance("Open the recording") + button_pad
-                        + metrics.horizontalAdvance("Reset counters") + button_pad
                         + (self.zoom_out_btn.sizeHint().width()
                            + self.zoom_in_btn.sizeHint().width()
                            + self.zoom_reset_btn.sizeHint().width()
                            + spacing * 3)                     # the zoom trio
                         + 3 * spacing)
-        width = max(CHART_MIN.width(), controls_row) + 36
+        width = max(CHART_MIN.width(), controls_row, acts_row) + 36
         rows = metrics.height() + 6
         height = (rows * 6            # out/in/duration/phone/gap/battery: one
                                       # line each
@@ -480,7 +509,7 @@ class TrafficWindow(QDialog):
                   + CHART_MIN.height()
                   + rows * 2          # legend grid (two rows of marks)
                   + rows * 2          # legend note (wraps to two at the floor)
-                  + rows * 2          # control row + the path line
+                  + rows * 3          # control row, the acts row, the path line
                   + 60)               # margins and spacings
         return QSize(width, height)
 
