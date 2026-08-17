@@ -25,7 +25,7 @@ That is the owner's rule for the creation list (constraint 21) applied here
   ┌────────────────────────────┐     ┌────────────────────────┐
   │ Open a window              │     │ Open a window          │
   │ IN THIS LAYOUT — VS Code   │     │ VS Code                │
-  │  ▸ New Claude Code         │     │  ▸ New window          │
+  │  ▸ New Claude Code    ⟳    │     │  ▸ New window          │
   │  ▸ New window, same folder │     │    ▸ VibeCoder  ALREADY OPEN
   │ VS Code                    │     │    ▸ PromptPainter     │
   │  ▸ New window              │     │ Chrome …               │
@@ -59,9 +59,29 @@ so the folder name stays readable — knowing WHICH project it is, is the point.
 
 ## What an act row does, and what it deliberately does not
 
-A tap sends one `layout_act` and closes the wizard silently. None of these acts
-produces a SLOT (a conversation, a tab, a folder), so leaving the creation
-panel standing would promise a **Create** button with nothing to create.
+A tap sends one `layout_act`, closes the wizard silently and raises a loading
+overlay. None of these acts produces a SLOT (a conversation, a tab, a folder),
+so leaving the creation panel standing would promise a **Create** button with
+nothing to create.
+
+**The overlay is new in 2026-08-17** and it is his report: the tap used to send
+one message and close, so the phone looked frozen over a screen where the PC
+really was working ("it has a lot to do in the background — to open it, to move
+it down"). WHICH animation is his answer this round, and it splits along
+constraint 16's own line: **FULL** for the act that opens a WINDOW, because the
+desk rearranges itself and there is nothing worth watching; **CUBE** for the
+acts that happen inside one window, where the only thing to see IS it opening.
+The panel reads which case it is in from the row's own `opens` field and never
+from its id, so a second window-opening act one day is covered without the page
+being reissued.
+
+**Its end is a fact, never a timer** (constraint 15). The server sends one
+`layout_act_done` for every ending an act can have — done, refused, crashed —
+and `connection.js`'s close path adds the one ending that message cannot have,
+a socket that died owing it. See
+[Layout Acts API](../../server/__about/layout_acts_api.md), which is also where
+the 25 seconds of blocked receive loop that ended his session are written
+down.
 
 The one act that really opens a window — VS Code's "New window, same folder" —
 still does not join the layout by itself. That is his tap on the ordinary

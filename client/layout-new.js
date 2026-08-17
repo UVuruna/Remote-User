@@ -225,9 +225,43 @@ function actRow(e, app) {
   keepRowTap(main, () => {
     send({ type: "layout_act", id: e.id });
     cancelCreation(true);
+    runLayoutAct(e);
   });
   row.appendChild(main);
   return row;
+}
+
+// THE ACT IS COVERED WHILE IT RUNS (owner report 2026-08-17, and his sentence
+// names the reason: the PC "has a lot of work to do in the background — to
+// open it, to move it down"). Until this round the tap sent one message and
+// the panel simply closed: the phone looked frozen over a screen where the PC
+// really was working, which is the complaint the loading rule exists for.
+//
+// WHICH ANIMATION IS HIS ANSWER THIS ROUND, and it splits exactly along
+// constraint 16's line: FULL for the act that opens a WINDOW, because the desk
+// rearranges itself and there is nothing worth watching happen; CUBE for the
+// acts that happen inside one window — a conversation, a tab — because there
+// the only thing to see IS it opening. The panel reads which case it is in
+// from the row's own `opens` field rather than matching its id, so a second
+// window-opening act one day is covered without the page being reissued.
+//
+// THE OVERLAY ENDS ON A FACT, NEVER A TIMER (constraint 15). `layout_act_done`
+// is the server's one answer for every ending an act can have — done, refused,
+// crashed — so there is nothing here to estimate about how long another
+// program needs. A connection that dies takes the overlay with it (see
+// `endLayoutAct`, called from connection.js's close path), because the one
+// thing worse than a veil that comes down early is one that never does.
+function runLayoutAct(e) {
+  // LOADING: FULL — a new window climbs onto the desk and the PC re-places it
+  // LOADING: CUBE — a tab or a conversation opening is worth seeing open
+  showLayLoading(`${e.label}…`, e.opens ? LOADING_FULL : LOADING_CUBE);
+}
+
+// The server's answer, routed here by connection.js. It carries no result: a
+// refusal has already arrived as its own toast, which is the sentence he can
+// act on, while this message says only that the waiting is over.
+function endLayoutAct() {
+  hideLayLoading();
 }
 
 // The chosen thing OPENS, and the window that appears becomes the slot — the

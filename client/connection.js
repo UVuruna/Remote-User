@@ -542,6 +542,12 @@ function connect() {
         // a layout. Routed here like every other layout-panel reply; the
         // render lives in layout-create.js, which owns the wizard's panels.
         handleLayoutActs(msg);
+      } else if (msg.type === "layout_act_done") {
+        // The act is over — done, refused or failed (owner 2026-08-17). It is
+        // the ONE end of the overlay the tap raised: a refusal has already
+        // arrived as its own toast, so this message carries no result and only
+        // says that the waiting stopped.
+        endLayoutAct();
       } else if (msg.type === "layout_recent") {
         // The Recent creation source's answer (task 228) — routed here like
         // every other layout-panel reply; the render itself lives in
@@ -561,6 +567,13 @@ function connect() {
     clearTimeout(servedTimer);
     if (sock !== ws) return; // an abandoned socket must not touch the live one
     teardownMse(); // free the decoder; reconnect starts a fresh stream
+    // A layout act's overlay ends on the server's own `layout_act_done` and on
+    // nothing else (constraint 15 — we never estimate how long the PC needs).
+    // This is the one ending that message cannot have: the socket that owed it
+    // is gone, so the veil would stand over his screen until he reloaded the
+    // page. Harmless when no act is running — `hideLayLoading` on nothing is
+    // nothing.
+    endLayoutAct();
     if (e.code === 4401) {
       // The token is refused — retrying with the same one only hammers the
       // server and stomps this message every 2 s. Stop until re-paired.
