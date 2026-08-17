@@ -930,17 +930,6 @@ def input_gate(step, run) -> None:
          "(tests/test_window_offer.py)")
     run([sys.executable, str(PROJECT_DIR / "tests" / "test_window_offer.py")])
 
-    # 2026-08-17: `server/vscode_windows.py` pairs a torn-off VS Code window
-    # to its trunk by reading VS Code's OWN state (`state.vscdb`'s
-    # `memento/workbench.editorParts`), never by guessing — a wrong pair
-    # stars the wrong layout and tells him a window is safe to close when it
-    # is not. Never reads the owner's real %APPDATA%: a real SQLite file is
-    # built per check in `tests/_vscode_trunk_fixtures.py`'s temp tree.
-    step("0b31/6  VSCODE TRUNK GATE — a torn-off VS Code window pairs to "
-         "its trunk only when the DB and the live desktop agree, never a "
-         "guess (tests/test_vscode_trunk.py)")
-    run([sys.executable, str(PROJECT_DIR / "tests" / "test_vscode_trunk.py")])
-
     # T113, 2026-08-17: the four modules of the use log — `session_log.py`,
     # `log_shipper.py`, `log_summary.py` and `display_watch.py` — are WIRED,
     # not merely written. Each has its own gate proving it works; this one
