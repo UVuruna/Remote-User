@@ -85,6 +85,55 @@ python setup/agent_hook.py --test        # one notice now, no agent needed
 `--install` is idempotent: an earlier copy of this hook is dropped before the
 current one is written, so re-running after a move never leaves two.
 
+## Three events, and why the third one exists (owner report 2026-08-17)
+
+| Event | Matcher | Flag | The sentence |
+|---|---|---|---|
+| `Stop` | `*` | — | a turn ENDED — "&lt;agent&gt; needs you" |
+| `Notification` | `*` | `--asking` | Claude Code stopped to ask |
+| `PreToolUse` | `AskUserQuestion` | `--asking` | a QUESTION is blocking the agent |
+
+The third is the one that actually reaches him, and the reason is worth
+keeping because three rounds closed this bug while it was live:
+**`Notification` does not fire in the VS Code extension host his sessions run
+in, while `Stop` does.** Everything else about the feature was healthy, which
+is exactly why it survived so long — the pipe answered every probe:
+
+* driving this script by hand delivered the notice end-to-end (his
+  `server.log`, 09:52:22, matched to a live layout);
+* of 528 notices in his logs — 163 AFTER the `Notification` hook was
+  registered — every one was a `Stop` "needs you", not one "is asking you";
+* a scratch harness firing the events for real got three "is asking you"
+  notices through, from TERMINAL sessions.
+
+Two theories died on the way to that answer and are recorded so they are not
+tried again: `"matcher": "*"` is NOT the culprit (a harness ran `"*"` and a
+bare matcher side by side; both fired in the same second with byte-identical
+payloads), and `PreToolUse` DOES match `AskUserQuestion` (a documentation
+agent claimed it cannot — his own screenshot shows `communication_guard.py`
+blocking exactly that event in a VS Code session).
+
+`PreToolUse` is also the better carrier on its own merits: it fires the
+INSTANT the question is raised instead of ~6 s later, it fires in both hosts,
+and its payload carries the whole `tool_input`, so the notice can say WHAT is
+being asked. A `Notification` payload carries only "Claude needs your
+permission" and no tool name at all — that carrier structurally cannot.
+
+Because both fire in a terminal session, one question would make two notices;
+`claim_question()` gives the question to whichever carrier arrives first,
+keyed on the SESSION so two agents asking at once never silence each other.
+It fails OPEN by design — a duplicate is an annoyance, silence is the bug
+this whole round exists to end.
+
+An existing installation is healed at the next server start: `missing_events()`
+now looks for all three, so a machine registered before this round receives the
+new carrier without the owner touching anything (`server/notify.py` →
+`register()`).
+
+Gate: `tests/test_ask_carrier.py`. Its honest limit is named there — it runs no
+host, so it cannot prove the VS Code extension fires `PreToolUse`; that was
+measured on his machine, and what the gate holds is everything downstream.
+
 ## Connections
 
 ### Uses

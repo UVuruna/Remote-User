@@ -203,6 +203,74 @@ def agent_project(payload: dict) -> str:
     return str(payload.get("cwd") or os.getcwd())[:260]
 
 
+# ═══════════════════════════ THE QUESTION ═══════════════════════════
+
+# How long after one carrier's notice the OTHER carrier's copy of the same
+# question is still a duplicate. The measured gap between them is ~6 s; 60 s
+# is generous enough to absorb a slow host and still far shorter than any
+# plausible gap between two real questions, and the claim is keyed on the
+# SESSION so two agents asking at once never silence each other.
+ASK_DEDUP_S = 60.0
+ASK_STAMP = USER_DIR / "asking.json"
+
+
+def asking_text(payload: dict) -> str:
+    """What is being asked, for the phone's notice.
+
+    A `PreToolUse` payload carries the whole `tool_input` — the question and
+    its options — so the phone can say WHAT it is being asked instead of only
+    that something is. A `Notification` payload carries neither the tool name
+    nor the question, only "Claude needs your permission", which is why it is
+    the weaker carrier and the fallback here rather than the source."""
+    tool_input = payload.get("tool_input") or {}
+    questions = tool_input.get("questions") or []
+    if questions and isinstance(questions[0], dict):
+        first = questions[0]
+        question = str(first.get("question") or first.get("header") or "").strip()
+        labels = [str(o.get("label") or "").strip()
+                  for o in (first.get("options") or [])
+                  if isinstance(o, dict) and o.get("label")]
+        # The options are the half he can act on — a question with its choices
+        # can be answered from the notification's own text.
+        if question and labels:
+            return f"{question} — {' / '.join(labels)}"[:200]
+        if question:
+            return question[:200]
+    return str(payload.get("message") or "")[:200]
+
+
+def claim_question(payload: dict) -> bool:
+    """Whether THIS invocation owns the question, or a sibling carrier already
+    reported it (see the note at the call site). Fail OPEN: a stamp file that
+    cannot be read or written must never cost him a notice — a duplicate is an
+    annoyance, silence is the bug this whole round exists to end."""
+    import time
+    session = str(payload.get("session_id") or "")
+    if not session:
+        return True
+    now = time.time()
+    try:
+        stamps = json.loads(ASK_STAMP.read_text(encoding="utf-8"))
+        if not isinstance(stamps, dict):
+            stamps = {}
+    except (OSError, json.JSONDecodeError, ValueError):
+        stamps = {}
+    last = stamps.get(session)
+    if isinstance(last, (int, float)) and 0 <= now - last < ASK_DEDUP_S:
+        return False
+    # Sessions that have gone quiet are dropped here rather than by a sweeper:
+    # the file must not grow for the life of the machine.
+    stamps = {s: t for s, t in stamps.items()
+              if isinstance(t, (int, float)) and 0 <= now - t < ASK_DEDUP_S}
+    stamps[session] = now
+    try:
+        ASK_STAMP.parent.mkdir(parents=True, exist_ok=True)
+        ASK_STAMP.write_text(json.dumps(stamps), encoding="utf-8")
+    except OSError:
+        pass
+    return True
+
+
 def send(agent: str, event: str, text: str, project: str = "",
          title: str = "") -> bool:
     token = read_token()
@@ -240,13 +308,53 @@ MARKER = "agent_hook.py"
 # move is his ("<agent> needs you").
 #
 # `Notification` fires when Claude Code stops to ASK — a permission, a choice,
+# lang-ok: owner quote
 # one of the votes on screen (owner 2026-08-09: "kada Claude nešto da na
+# lang-ok: owner quote
 # glasanje, da li možemo i to da izgovorimo"). It is a different event and it
 # deserves a different sentence: a turn that ended can wait, a question has
 # stopped everything until he answers. Same script, same delivery, one
 # argument apart — `--asking` is passed on the hook's command line, because
 # the payload does not name which hook invoked it.
-HOOK_EVENTS = ("Stop", "Notification")
+#
+# `PreToolUse` with the matcher `AskUserQuestion` is the THIRD event and the
+# one that actually reaches him (owner report 2026-08-17, his third on this
+# lang-ok: owner quote
+# feature: "notifikacija i dalje ne stize za ovakve stvari ... agent ne radi
+# lang-ok: owner quote
+# dok se ne odgovori"). MEASURED on his own machine, and every earlier round
+# missed it because the pipe tested healthy every single time:
+#
+#   * driving this script by hand delivered the notice end-to-end (his
+#     server.log, 09:52:22, matched to a live layout), so nothing downstream
+#     was ever broken;
+#   * of 528 notices in his logs — 163 of them AFTER the `Notification` hook
+#     was registered — every one was a `Stop` "needs you" and not one was
+#     "is asking you";
+#   * a scratch harness firing the events for real got THREE "is asking you"
+#     notices through (10:15:30, 10:19:23, 10:22:37) — from TERMINAL sessions.
+#
+# The one variable left is the HOST: his real sessions run in the VS Code
+# extension, where `Notification` does not fire, while `Stop` does — which is
+# why the feature looked installed, looked delivered, and said nothing. Two
+# theories died on the way here and both are recorded so they are not tried
+# again: `"matcher": "*"` is NOT the culprit (a harness ran `"*"` and a bare
+# matcher side by side and both fired in the same second with byte-identical
+# payloads), and `PreToolUse` DOES match `AskUserQuestion` (a documentation
+# agent claimed it cannot; his own screenshot shows `communication_guard.py`
+# blocking exactly that event in a VS Code session).
+#
+# `PreToolUse` is a better carrier on its own merits, not merely a workaround:
+# it fires the INSTANT the question is raised rather than ~6 s later, it fires
+# in both hosts, and its payload carries `tool_name` and the whole `tool_input`
+# — so the phone can say WHAT it is being asked. The `Notification` payload
+# carries only "Claude needs your permission" and no tool name at all, so that
+# carrier structurally cannot.
+HOOK_EVENTS = ("Stop", "Notification", "PreToolUse")
+
+# The tool whose call IS the question. A matcher, not a filter in our code:
+# a hook that ran on every tool call would post a notice per Read.
+ASK_TOOL = "AskUserQuestion"
 
 
 def hook_entry(script: Path | None = None, python: str | None = None,
@@ -255,9 +363,13 @@ def hook_entry(script: Path | None = None, python: str | None = None,
     own switch (ROADMAP H2): the packaged EXE has no interpreter inside it, so
     it copies this file somewhere permanent and names a real python."""
     command = f'"{python or sys.executable}" "{(script or Path(__file__)).resolve()}"'
-    if event == "Notification":
+    if event in ("Notification", "PreToolUse"):
         command += " --asking"
-    return {"matcher": "*", "hooks": [{"type": "command", "command": command}]}
+    # `PreToolUse` matches on the TOOL NAME, so ours must name the one tool
+    # that means "he is being asked something"; `"*"` there would fire on
+    # every Read and Bash in the session.
+    matcher = ASK_TOOL if event == "PreToolUse" else "*"
+    return {"matcher": matcher, "hooks": [{"type": "command", "command": command}]}
 
 
 def is_installed() -> bool:
@@ -401,8 +513,14 @@ def main() -> int:
     # Passing it through means the phone can say WHAT is being asked instead
     # of only that something is. A Stop hook carries no such text — instead
     # the transcript's own last reply says WHAT the agent just did (task 198).
-    text = (str(payload.get("message") or "")[:200] if asking
+    text = (asking_text(payload) if asking
             else (transcript_summary(payload) or ""))
+    # Both asking carriers can fire for ONE question in a terminal session:
+    # `PreToolUse` the instant it is raised and `Notification` ~6 s later
+    # (measured 10:22:31 -> 10:22:37). One question must be one notice, so the
+    # first carrier through claims it and the second is dropped.
+    if asking and not claim_question(payload):
+        return 0
     # The conversation's own title, sent SEPARATELY from `agent_name` (owner
     # ruling 2026-08-13, "notifications choose the layout the conversation
     # was created in"): `agent_name` may return this SAME title cut to 60

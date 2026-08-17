@@ -261,10 +261,19 @@ def main() -> int:
     # script which event it is answering — the payload does not say.
     lines = {e: agent_hook.hook_entry(None, "py.exe", e)["hooks"][0]["command"]
              for e in agent_hook.HOOK_EVENTS}
-    results["the hook installs for Stop AND Notification"] = (
-        set(lines) == {"Stop", "Notification"})
-    results["only the Notification line carries --asking"] = (
-        "--asking" in lines["Notification"] and "--asking" not in lines["Stop"])
+    # A THIRD event joined them on 2026-08-17 — `PreToolUse` matched on
+    # `AskUserQuestion` — because `Notification` does not fire in the VS Code
+    # extension host his sessions actually run in, so the two events above
+    # announced a question to nobody for 31 hours. The carrier itself is
+    # gated in `tests/test_ask_carrier.py`; what stays here is the promise
+    # this file has always made — every asking event carries the flag that
+    # tells this one script which event it is answering, and the turn-ended
+    # event never does.
+    results["the hook installs for Stop AND both asking events"] = (
+        set(lines) == {"Stop", "Notification", "PreToolUse"})
+    results["only the asking lines carry --asking"] = (
+        "--asking" in lines["Notification"] and "--asking" in lines["PreToolUse"]
+        and "--asking" not in lines["Stop"])
     # …AND A REAL SETTINGS FILE THAT HOLDS ONLY THE OLD `Stop` LINE IS HEALED
     # (owner report 2026-08-15, top priority: a permission prompt reached his
     # phone as NOTHING). The two checks above drove `hook_entry` alone and
@@ -299,8 +308,11 @@ def main() -> int:
         finally:
             agent_hook.SETTINGS = saved
             notify._hook_module = saved_loader
-    results["an old settings file names Notification as the missing hook"] = (
-        before == ("Notification",))
+    # An old file holds ONLY the `Stop` line, so both asking carriers are
+    # missing from it — and the heal must name both, not just the one that
+    # existed when this check was written.
+    results["an old settings file names both asking hooks as missing"] = (
+        before == ("Notification", "PreToolUse"))
     results["the heal registers it with the SAME python and script"] = (
         healed and "py.exe" in note and "--asking" in note
         and str(Path(tmp) / "agent_hook.py") in note)

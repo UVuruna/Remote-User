@@ -73,6 +73,21 @@ def input_gate(step, run) -> None:
     step("0d/6  NOTICE CHANNEL GATE — it reaches a closed page, once "
          "(tests/test_notice_channel.py)")
     run([sys.executable, str(PROJECT_DIR / "tests" / "test_notice_channel.py")])
+    # ...and that a question which BLOCKS the agent is carried by an event
+    # that actually fires where he works (owner report 2026-08-17, his THIRD
+    # on this one feature: the agent does no work at all until he answers, so
+    # a missed notice costs him the whole session's time, not a banner).
+    # The two gates above could not have caught it and that is the point of a
+    # third: they prove DELIVERY, and delivery was healthy the entire time —
+    # driving the hook by hand landed a notice on his phone, while 163 real
+    # notices in a row were `Stop` "needs you" and not one was "is asking
+    # you". What was broken sat one layer higher: `Notification` does not
+    # fire in the VS Code extension host his sessions run in. So this gate
+    # asks whether the CARRIER is registered, on the right tool, and whether
+    # one question makes exactly one notice that says what is being asked.
+    step("0d/6  ASK CARRIER GATE — a blocking question reaches his phone "
+         "(tests/test_ask_carrier.py)")
+    run([sys.executable, str(PROJECT_DIR / "tests" / "test_ask_carrier.py")])
     # T80a + T80b, owner-approved 2026-08-14. What this shell spends while
     # nobody is looking at it, and both defects were invisible from the
     # outside: FLAG_KEEP_SCREEN_ON was owned by the PAGE alone, so the native

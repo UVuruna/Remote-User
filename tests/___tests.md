@@ -541,6 +541,40 @@ the PC's half of the contract and the exact bytes the shell must read.
 
 Run: `.venv\Scripts\python tests/test_notice_channel.py`
 
+### `test_ask_carrier.py` — Ask Carrier Gate
+A question that BLOCKS the agent must reach his phone (owner report
+2026-08-17, his THIRD on this one feature — the agent does no work at all
+until he answers, so a missed notice costs the session's whole time, not a
+banner).
+
+Its own file, and the reason IS the finding: `test_notify.py` and
+`test_notice_channel.py` prove DELIVERY, and delivery was healthy the entire
+time the feature was broken — driving the hook by hand landed a notice on his
+phone, while 163 consecutive real notices were `Stop` "needs you" and not one
+was "is asking you". What was broken sat one layer above anything either gate
+can see: the `Notification` event does not fire in the VS Code extension host
+his sessions run in, while `Stop` does. A gate that measures delivery cannot
+see a carrier that never fires — which is how three rounds closed this while
+it was live.
+
+So this file asks the question the other two cannot: is the notice carried by
+an event that fires where he works? It holds that `PreToolUse` is registered
+on the `AskUserQuestion` matcher (never `*`, which would post a notice for
+every Read), that installing joins a stranger's hooks instead of replacing
+them, that the start-up heal LOOKS for the new carrier on an older machine,
+that the notice carries the question AND its options, that one question makes
+exactly one notice, and — the check planting proved was missing — that the
+SUPPRESSED path still exits 0, because a `PreToolUse` hook that fails blocks
+the very question it exists to announce.
+
+Honest limit, named rather than discovered later: it runs no host, so it
+cannot prove the VS Code extension fires `PreToolUse`. That was measured on
+his machine (his screenshot of `communication_guard.py` blocking exactly that
+event, plus harness traces carrying `tool_name: AskUserQuestion`); the gate
+holds everything downstream of it.
+
+Run: `.venv\Scripts\python tests/test_ask_carrier.py`
+
 ### `test_shell_battery.py` — Shell Battery Gate
 Two owner-approved changes of 2026-08-14 (T80a + T80b), in one file because
 they are one question: what this shell spends while **no page of ours is on
