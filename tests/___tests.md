@@ -2739,6 +2739,45 @@ real shared-function effect, not a test artifact.
 Run: `.venv\Scripts\python tests/test_session_log.py` — also a fail-closed
 step in `setup/gates.py` (0b25/6).
 
+### `test_apk_update.py` — APK Update Gate
+
+The in-app update, replacing a detour through the system browser
+(2026-08-17): the shell now streams `/app.apk` straight from the PC into a
+`PackageInstaller` session's own `OutputStream` (`Updater.kt`) and reports
+real progress to the page (`client/update-banner.js`), through three new
+bridge methods (`Bridge.kt`).
+
+Eight checks, each proven by planting its own defect: the old
+`Bridge.update(url)` ACTION_VIEW fallback still exists and the page still
+falls back to it when `updateInApp` is absent (a page served by this PC can
+meet a shell older than this round); the new bridge surface is exactly
+`updateInApp`/`updateInstallAllowed`/`updateAllowInstall`, spelled exactly
+and each `@JavascriptInterface` (a renamed method is a silently dead
+feature — the page is served by the PC while the shell installs
+separately); `REQUEST_INSTALL_PACKAGES` is declared; no file-based install
+path came back — `Updater.kt` streams via `openWrite`/a `PackageInstaller`
+session, and neither `DownloadManager` nor a FileProvider-shared APK exist
+anywhere real code touches (an install carries elevated trust, and a
+shareable copy of the APK is a surface this feature does not need); the
+url is validated by PARSED scheme/host/port against this shell's own two
+paired addresses, never a raw-string prefix (a `startsWith` check is
+exactly what `http://1.2.3.4.evil.com/app.apk` and a decoy carried in a
+query parameter are built to defeat); no state string beyond the agreed
+`permission`/`downloading`/`installing`/`failed` ever reaches the page —
+`"success"`/`"done"`/`"installed"` can never legitimately exist, since a
+completed install kills this very process before any such call could be
+made; the cube's face table and burst/decay arithmetic live only in
+`client/cube.js`, with `loading.js` and the update card both going through
+`createCube()` (priority C — never write the same function twice); and
+`__updateProgress` cannot compute a percentage before checking `total > 0`
+— a fabricated number from an unknown denominator is exactly the frozen-
+ellipsis failure task 207's own comment warns against.
+
+Kotlin checks read the SOURCE (the `test_shell_battery.py`/
+`test_battery_report.py` shape) — Kotlin cannot be executed in this repo.
+
+Run: `.venv\Scripts\python tests/test_apk_update.py`
+
 ---
 
 ## Instruments a person runs by hand — [tests/manual/](manual/___manual.md)

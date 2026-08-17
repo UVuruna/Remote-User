@@ -24,6 +24,14 @@ fits none of the sweeps next door. The circle check moved here with the
 collision one for the same reason it was written in the first place — a toast
 that lives outside every panel was never handed to any of them.
 
+EXTENDED 2026-08-17 to the update card: it shares the same top-of-screen real
+estate with both the pill and the chip and positions itself with a MEASURED
+`--update-top`, exactly the mechanism the pill/chip collision check above
+already exists to hold accountable. A gate on the arithmetic (does the
+formula read the right rects) proves nothing about whether the resulting
+picture actually overlaps — the whole reason this file measures live
+intersections instead of trusting a CSS custom property to have landed.
+
 It measures the live rects, deliberately — `--status-top` can be written and
 still be wrong, and "the variable is set" is exactly the kind of proof this
 project keeps being burned by.
@@ -58,6 +66,49 @@ def check_chip_clear_of_toast(page, label: str) -> bool:
                   " setStatus('connected', 'Connected'); }")
     if overlap:
         print(f"  DETAIL chip/pill overlap @ {label}: {overlap}")
+    return not overlap
+
+
+def check_update_card_clear_of_others(page, label: str) -> bool:
+    """NOTHING MAY OVERLAP ANYTHING (constraint 35) — extended to the update
+    card (2026-08-17). The card shares the top of the screen with both the
+    status pill and the window-offer chip and positions itself with a
+    MEASURED `--update-top` (`update-banner.js` -> `syncUpdateBannerTop`),
+    the very mechanism `syncToastShift()` already uses for the pill against
+    the chip. A measured variable can still be wrong — "the variable is set"
+    is exactly the kind of proof this project keeps being burned by — so
+    this stages all THREE at once (the chip, a toast, and the update card)
+    and checks real intersections rather than trusting the CSS custom
+    property to have landed correctly.
+
+    The chip is staged in its THREE-ANSWER shape (`WIN_OFFER_NEW_STAGE_JS`)
+    because that is its tallest state — the one most likely to still be
+    standing under the update card's own measured top."""
+    from _audit_panels import WIN_OFFER_NEW_STAGE_JS
+    from _audit_update import UPDATE_CLOSE_JS, UPDATE_DOWNLOADING_STAGE_JS
+
+    page.evaluate(WIN_OFFER_NEW_STAGE_JS)
+    page.wait_for_selector("#window-offer", state="visible", timeout=2000)
+    page.evaluate("() => showToast('Tap a window or tab on the screen…')")
+    page.wait_for_selector("#status.connecting", state="visible", timeout=2000)
+    page.evaluate(UPDATE_DOWNLOADING_STAGE_JS)
+    page.wait_for_selector("#update-banner", state="visible", timeout=2000)
+    overlap = page.evaluate(
+        "() => { const rect = (id) => document.getElementById(id)"
+        ".getBoundingClientRect();"
+        " const hit = (a, b) => !(a.right <= b.left || b.right <= a.left"
+        " || a.bottom <= b.top || b.bottom <= a.top);"
+        " const pill = rect('status'), chip = rect('window-offer'),"
+        " update = rect('update-banner');"
+        " const bad = {};"
+        " if (hit(pill, update)) bad.pill_update = [pill, update];"
+        " if (hit(chip, update)) bad.chip_update = [chip, update];"
+        " return Object.keys(bad).length ? bad : null; }")
+    page.evaluate(UPDATE_CLOSE_JS)
+    page.evaluate("() => { hideWindowOffer();"
+                  " setStatus('connected', 'Connected'); }")
+    if overlap:
+        print(f"  DETAIL update card overlap @ {label}: {overlap}")
     return not overlap
 
 
@@ -101,4 +152,6 @@ def check_status_pill(page, label: str) -> dict:
             _check_never_a_circle(page, label),
         f"the toast never covers the window chip @ {label}":
             check_chip_clear_of_toast(page, label),
+        f"the update card never overlaps the pill or the chip @ {label}":
+            check_update_card_clear_of_others(page, label),
     }

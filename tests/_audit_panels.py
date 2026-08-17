@@ -29,6 +29,10 @@ from _audit_lang import (  # the language cards' own module
     DICT_OPEN_STAGE_JS, DICT_STAGE_JS, NOTIFY_VOICE_OPEN_STAGE_JS,
     NOTIFY_VOICE_STAGE_JS,
 )
+from _audit_update import (  # the update card's own module (2026-08-17)
+    UPDATE_CLOSE_JS, UPDATE_DOWNLOADING_STAGE_JS, UPDATE_FAILED_STAGE_JS,
+    UPDATE_INSTALLING_STAGE_JS, UPDATE_PERMISSION_STAGE_JS,
+)
 
 
 # THE DICTATION CARD, STAGED IN EVERY STATE A ROW CAN BE IN (owner 2026-08-09,
@@ -753,6 +757,22 @@ PANELS = (
      " process:'chrome.exe', icon:null, tab:null, x:0.5, y:0.5}];"
      "renderCreationPanel()",
      CREATION_CLOSE_JS, "#layout-panel .lay-card"),
+    # THE UPDATE CARD (2026-08-17) — five states, four of them live and
+    # worth their own row here ("offer" is the card's own resting state,
+    # already reachable through every other shot of the working screen).
+    # `#update-banner` is not a classic overlay panel — it sits pinned to
+    # the top of the page rather than opening over it — but the same fit /
+    # clip / contrast / truncation walk applies to it exactly as it does to
+    # every card in this list, so it rides the same sweep rather than a
+    # bespoke check.
+    ("Update card downloading", UPDATE_DOWNLOADING_STAGE_JS,
+     UPDATE_CLOSE_JS, "#update-banner"),
+    ("Update card installing", UPDATE_INSTALLING_STAGE_JS,
+     UPDATE_CLOSE_JS, "#update-banner"),
+    ("Update card failed", UPDATE_FAILED_STAGE_JS,
+     UPDATE_CLOSE_JS, "#update-banner"),
+    ("Update card permission", UPDATE_PERMISSION_STAGE_JS,
+     UPDATE_CLOSE_JS, "#update-banner"),
 )
 
 # The panels SHOT in a non-default look. Shooting all thirteen in all eight
@@ -790,7 +810,14 @@ COLOUR_SHOTS = {"Sets picker", "Quality panel", "Dictation card",
                 # follow-up — the Back button and the two-column checklist
                 # are new surfaces this project has never photographed in
                 # every look, and the owner's own report was a picture.
-                "Set editor, 9-command pool"}
+                "Set editor, 9-command pool",
+                # The update card joined 2026-08-17: its cube badge is the
+                # same coloured gadget the loading overlay wears, and its
+                # "failed" state is the one place in this app a `--warning`-
+                # adjacent sentence can appear outside the layout close
+                # chooser — whether either reads on a light card is not a
+                # thing geometry can answer.
+                "Update card downloading", "Update card failed"}
 
 # The panels SHOT IN LANDSCAPE (2026-08-07). Every phone panel is MEASURED in
 # both orientations and always was; these two are also photographed there,
@@ -825,7 +852,12 @@ LANDSCAPE_SHOTS = {"Creation panel + Name field", "Grid arrangement choice",
                    # card-split reflow already gives it columns there) —
                    # photographed anyway so the two mechanisms are proven to
                    # agree rather than fight (2026-08-15).
-                   "Set editor, 9-command pool"}
+                   "Set editor, 9-command pool",
+                   # The update card joined 2026-08-17: its progress bar and
+                   # percentage label are exactly the shape landscape
+                   # squeezes — a wide, short card with a fill that must
+                   # still fit beside its own number.
+                   "Update card downloading"}
 
 # ONE FOLDER, ONE SUBJECT (owner 2026-08-08, his second word on this): a topic
 # folder per ROUND was still a dump — he asked for sub-folders rather than one

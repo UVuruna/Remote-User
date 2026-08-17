@@ -354,6 +354,15 @@ STANDARD = {
     # one comparison and one DOM swap, no flow worth a diagram — the WHY
     # lives in its header and its __about.
     "client/update-banner.js",
+    "client/update-banner.css",
+    # New 2026-08-17: the loading cube's motion, extracted out of loading.js
+    # so the update card's badge cube and the full overlay's cube can each
+    # spin independently without a second copy of the face table and the
+    # burst/decay maths (priority C — never write the same function twice).
+    # Standard, not Algorithmic: one state object (view/tilt/angle/burst) and
+    # one requestAnimationFrame step, no flow worth a diagram — the WHY lives
+    # in its header and its __about.
+    "client/cube.js",
     # New 2026-08-11 (owner amendment to task 202): the two-button chip that
     # asks where a window that just opened on the PC should go — show it in
     # the layout, or leave it on the desktop. Its own pair of files rather
@@ -452,6 +461,21 @@ STANDARD = {
     # ownership rule, not an algorithm worth a flow diagram.
     "android/app/src/main/java/com/uvuruna/vibecoder/ScreenAwake.kt",
     "android/app/src/main/java/com/uvuruna/vibecoder/Bridge.kt",
+    # New 2026-08-17: streams the PC's own /app.apk straight into a
+    # PackageInstaller session's OutputStream — no file, no FileProvider, no
+    # DownloadManager (see its __about for why). Standard, not Algorithmic:
+    # one download loop plus one broadcast receiver reading the installer's
+    # own status codes into a short sentence — no branching worth a diagram,
+    # the ladder is the installer's own contract rather than one this file
+    # invents.
+    "android/app/src/main/java/com/uvuruna/vibecoder/Updater.kt",
+    # Split out of MainActivity.kt on 2026-08-17 (THE STRUCTURE LAW): the
+    # error card / network diagnosis moved verbatim as extension functions.
+    # Standard: no NEW decision logic beyond what MainActivity's own doc
+    # already carried — the diagnosis (no network / PC not on Tailscale /
+    # Tailscale missing / Tailscale off / PC down) is read straight off the
+    # code, and this is a pure structure-law move, not an algorithm change.
+    "android/app/src/main/java/com/uvuruna/vibecoder/ConnectionError.kt",
     # New 2026-08-07 (build round G1 — the game controller): an ADAPTER, the
     # same reading as Bridge. Platform events in, three page callbacks out; the
     # whole mapping (which button, which curve) lives on the page, so this

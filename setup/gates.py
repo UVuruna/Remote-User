@@ -942,6 +942,17 @@ def input_gate(step, run) -> None:
          "guess (tests/test_vscode_trunk.py)")
     run([sys.executable, str(PROJECT_DIR / "tests" / "test_vscode_trunk.py")])
 
+    # 2026-08-17: in-app APK update on Android. The shell downloads and
+    # installs `/app.apk` directly via `PackageInstaller` instead of the
+    # browser fallback. Eight fail-closed checks: the old fallback still works,
+    # bridge method names are exact, manifest permission declared, no legacy
+    # file-install paths, URLs parsed not guessed, no success claimed after
+    # process termination, loading cube not duplicated, and percentages only
+    # when size is known.
+    step("0b32/6  APK UPDATE GATE — the shell installs the APK directly and "
+         "eight fail-closed checks hold (tests/test_apk_update.py)")
+    run([sys.executable, str(PROJECT_DIR / "tests" / "test_apk_update.py")])
+
     # THE USE-LOG GATES — the record the app keeps of its own run, split into
     # their own module by RESPONSIBILITY on 2026-08-17 (see setup/gates_log.py):
     # everything above proves something about the wire and the phone, those
