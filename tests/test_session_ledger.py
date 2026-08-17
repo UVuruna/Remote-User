@@ -210,6 +210,17 @@ def check_ledger_for_project() -> bool:
         os.utime(older, (1_700_000_000, 1_700_000_000))
         os.utime(newer, (1_800_000_000, 1_800_000_000))
 
+        # THE OWNER'S OWN QUERY (his report 2026-08-17, the panel empty from
+        # the day it shipped). `Layout.project()` reads a VS Code window
+        # TITLE, and a title names a project without ever naming its path —
+        # `agents.title_folder` hands back a lowercased BASENAME. That, not
+        # a path, is what this lookup is really asked, and until this round
+        # no check in this file had ever asked it that way.
+        if session_ledger.ledger_for_project("demo") is None:
+            print("    a bare folder name — what Layout.project() really "
+                  "returns — matched nothing")
+            return False
+
         found = session_ledger.ledger_for_project("U:/Coding/Demo")
         if found is None:
             print("    expected a match, got None")
@@ -227,21 +238,23 @@ def check_ledger_for_project() -> bool:
         import shutil
         shutil.rmtree(tmp, ignore_errors=True)
 
-    # Prove the plant matters: an identity _normalized breaks case/slash
-    # insensitivity, so the newer file (different case/slash) is never seen
-    # as the same project as the query.
+    # Prove the plant matters: an identity _normalized reproduces the
+    # owner's bug exactly — the ledger's absolute `project:` path can never
+    # equal the folder NAME a window title yields, so nothing ever matches.
     patched = _load_patched(
         LEDGER_PY,
-        [('    return str(Path(path)).replace("\\\\", "/").casefold()',
-          '    return path')],
+        [("    return Path(str(path).strip()).name.casefold()",
+          "    return path")],
         "session_ledger_plant_normalize")
     tmp2 = Path(tempfile.mkdtemp(prefix="ru_ledger_plant_"))
     try:
         patched.sessions_dir = lambda: tmp2
         f = tmp2 / "s.md"
         f.write_text("# T\nproject: U:/CODING/demo\n- [ ] x\n", encoding="utf-8")
-        broken = patched.ledger_for_project("U:/Coding/Demo")
-        if broken is not None:
+        if patched.ledger_for_project("demo") is not None:
+            print("    plant did not break the folder-name query — check proves nothing")
+            return False
+        if patched.ledger_for_project("U:/Coding/Demo") is not None:
             print("    plant did not break case/slash insensitivity — check proves nothing")
             return False
     finally:
@@ -285,7 +298,14 @@ def check_send_ledger_end_to_end() -> bool:
             "- [>] T1 Working on it @fable\n", encoding="utf-8")
 
         ws = FakeWs()
-        layouts = FakeLayouts("U:/Coding/Other", "U:/Coding/Demo")
+        # What a REAL `Layout.project()` hands `send_ledger`: the lowercased
+        # folder NAME off a VS Code window title, never a path. This fake
+        # used to answer with full paths, which is why every check in this
+        # file passed while the owner's panel was empty every single day —
+        # the gate was proving the lookup to a fake nothing on his PC could
+        # produce (the `user = copy(shipped)` failure of 2026-08-07, one
+        # layer up).
+        layouts = FakeLayouts("other", "demo")
         asyncio.run(ledger_api.send_ledger(ws, layouts, {"active": 1}))
         asyncio.run(ledger_api.send_ledger(ws, layouts, {"active": None}))
         asyncio.run(ledger_api.send_ledger(ws, layouts, {"active": 99}))  # stale index

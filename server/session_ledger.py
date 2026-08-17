@@ -142,9 +142,26 @@ def sessions_dir() -> Path:
 
 
 def _normalized(path: str) -> str:
-    """Case-insensitive, separator-normalized — Windows paths compare equal
-    whatever slashes or casing the two sides used to write them."""
-    return str(Path(path)).replace("\\", "/").casefold()
+    """The FOLDER NAME both sides can really produce, casefolded (owner
+    report 2026-08-17 — the panel had never once shown a ledger).
+
+    The two sides of this comparison are not the same kind of string and
+    never were. A ledger's `project:` line is an absolute cwd, written by
+    the hook out of Claude Code's own working directory; the other side is
+    `Layout.project()`, which reads a VS Code WINDOW TITLE, and a title
+    carries a project's NAME and never its path (`agents.title_folder`,
+    lowercased). Comparing a path against a name can only ever be false, so
+    the panel answered EMPTY for every layout, every session, from the day
+    it shipped — exactly what the owner photographed.
+
+    So the comparison is made on the one thing both sides can produce: the
+    basename, which is the SAME rule `notify.layout_of` has always matched a
+    finishing agent to a layout with. Its honest limit is that rule's too,
+    and is accepted here for the same reason: two projects sharing a folder
+    name are one project to this lookup. The cost is a ledger from the wrong
+    `src` — never a wrong window, since nothing here acts on the PC.
+    """
+    return Path(str(path).strip()).name.casefold()
 
 
 def ledger_for_project(folder: str) -> tuple[str, Path, dict] | None:
