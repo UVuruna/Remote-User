@@ -383,6 +383,46 @@ class Settings:
     log_max_bytes: int = 1_000_000
     log_backups: int = 3
 
+    # Session ledger of USE (owner request 2026-08-16) — a background record of
+    # what this installation did, serving TWO purposes he named: evidence for a
+    # future bug (what the PC was, which encoder, what failed and how it
+    # recovered) and behaviour (what he actually uses the app for, so scenarios
+    # can be adapted). The user never reads it; nothing here is a feature he
+    # taps. JSONL rather than CSV because the event kinds carry different
+    # fields, so a new kind touches no old row (his correction 2026-08-16).
+    #
+    # THE CUT IS THE PROCESS, NOT THE PHONE (his correction 2026-08-16): this
+    # app sits in the tray all day, so a phone leaving is not the end of
+    # anything — a 20-second excursion would otherwise cut fifty files an
+    # evening. A file therefore lives as long as the PROCESS does, rolled at
+    # the local day boundary so a PC left on for a week does not grow one
+    # enormous file, and so the use log and the traffic file share ONE
+    # boundary: his working day.
+    session_log_enabled: bool = True
+    session_log_dir: Path = USER_DIR / "sessions_log"
+    session_log_roll_hours: float = 24.0     # the day boundary; also the ceiling
+    session_log_max_bytes: int = 8_000_000   # a runaway file can never fill a disk
+
+    # Where a finished file goes. TODAY this is a folder on another disk and
+    # the shipper copies into it; TOMORROW it is meant to be an HTTP endpoint.
+    # It is a SETTING and not a constant precisely because `V:` is the owner's
+    # own machine and the root constitution forbids a product feature leaning
+    # on it (Universal Conduct — "we build for OTHERS"). An empty string means
+    # "no destination configured": nothing is shipped and nothing is deleted,
+    # which is what a stranger's fresh install gets until someone sets one.
+    log_upload_target: str = "V:/VibeCoder"
+    # A copy to another disk can land short, so a transfer is not believed
+    # until the arrived bytes are re-read and hashed. Only then is the local
+    # file deleted — the ordering is the whole point, since deleting first
+    # loses exactly the evidence the log exists for.
+    log_upload_verify: bool = True
+    # Debug mode is the owner's own carve-out: with it ON the shipped file is
+    # NOT deleted, so the last few days can be looked at locally. It is never
+    # unbounded — "we will definitely not give the user files he does not need
+    # in 99% of cases" — so this many are kept and the oldest is dropped.
+    log_debug_mode: bool = False
+    log_debug_keep_files: int = 10
+
     # Client files (bundled read-only in the installed app)
     client_dir: Path = BUNDLE_DIR / "client" if FROZEN else PROJECT_ROOT / "client"
     favicon_path: Path = (BUNDLE_DIR if FROZEN else PROJECT_ROOT) / "assets" / "logo.svg"
