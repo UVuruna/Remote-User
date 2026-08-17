@@ -43,6 +43,7 @@ from _focus_fakes import (  # noqa: E402
 )
 
 import layout_popup  # noqa: E402
+import window_claim  # noqa: E402
 
 # The desk: two members side by side, and the windows that appear on top of it.
 DIALOG = 0x30          # "Open this link?" — owned by MEMBER_A
@@ -75,6 +76,17 @@ HOME = {MEMBER_A: (100, 100, 600, 800), MEMBER_B: (700, 100, 600, 800),
 # no chip may name it (owner report 2026-08-13, his point 3). A TOOL window is
 # the honest case — Windows really does hand these a title and real geometry.
 NOT_LISTABLE = {TOOLWIN}
+# The exe each fake window belongs to. `window_claim.expect()` claims by
+# PROCESS — a claim cannot name a handle that does not exist yet — so a fake
+# desk without these could not drive that rule at all.
+PROCESS_OF_STRANGER = "agent.exe"
+PROCESS_OF_MEMBER = "code.exe"
+PROCESS_NAMES = {MEMBER_A: PROCESS_OF_MEMBER, MEMBER_B: PROCESS_OF_MEMBER,
+                 DIALOG: PROCESS_OF_MEMBER, POPUP: PROCESS_OF_MEMBER,
+                 BIG: PROCESS_OF_MEMBER, OLD_TWIN: PROCESS_OF_MEMBER,
+                 TOOLWIN: PROCESS_OF_MEMBER, OURS: PROCESS_OF_MEMBER,
+                 STRANGER: PROCESS_OF_STRANGER, CLICKED: PROCESS_OF_STRANGER,
+                 CHILD: "child.exe"}
 # What a window REFUSES to shrink below — how a minimum size looks from here.
 MINSIZE = {BIG: (1400, 900)}
 
@@ -153,7 +165,19 @@ def desk(fg, alive=None, owner=None):
     DESK_WINDOWS.update(alive)
     layout_popup._top_level_hwnds = lambda: set(DESK_WINDOWS)
     window_manager.is_listable = lambda hwnd: hwnd not in NOT_LISTABLE
-    layout_popup._OURS.clear()
+    # THE MAKER'S CLAIM lives in its own module since 2026-08-17
+    # (server/window_claim.py). Both records are cleared, and the process
+    # NAME is faked too — `expect()` claims by process, so a fake desk whose
+    # windows have no process name could not exercise that rule at all.
+    window_claim._OURS.clear()
+    window_claim._EXPECT.clear()
+    # The remembered desk is module-level BY DESIGN — its whole job is to
+    # outlive a connection (server/layout_popup.py → `remember_desk`) — so a
+    # fake desk that did not reset it would carry one check's windows into the
+    # next one's baseline and quietly make them old. Found by this file's own
+    # watcher check going silent.
+    layout_popup._DESK = None
+    window_manager._process_name = lambda hwnd: PROCESS_NAMES.get(hwnd, "")
 
     reg = layout_with([MEMBER_A, MEMBER_B], last_member=MEMBER_A)
     conn = fresh_conn(active=0)
@@ -682,33 +706,40 @@ def check_the_sweep_is_silent_at_the_desktop_and_while_he_is_away() -> bool:
     return not offers(conn)
 
 
-def check_a_stranger_is_never_offered_by_the_sweep_either() -> bool:
-    """The sweep enumerates the whole desk, so it is the place where a wrong
-    attribution would cost the owner another agent's window. Its rules are the
-    foreground path's, unchanged: a stranger and his OTHER window of the same
-    app are refused — and a refusal is not taken so early that a window which
-    was merely slow to identify itself can never be attributed (SWEEP_GRACE_S).
-    """
+def check_the_sweep_offers_a_stranger_but_still_moves_nothing() -> bool:
+    """A STRANGER IS NOW OFFERED, AND THAT IS THE OWNER'S OWN DECISION
+    (2026-08-17, off a ballot) — this check used to assert the opposite and is
+    rewritten rather than deleted, because the reversal is the point.
+
+    His report: the app asked him only about windows HE had just made and was
+    silent about the ones somebody else made, "and there I DO want a layout
+    from it". A stranger — its own process, no ancestry, no click — is exactly
+    an agent's report window, and refusing it was the silence he reported. The
+    catch-all that offers it lives in `sweep` and has its own gate
+    (tests/test_window_offer.py).
+
+    WHAT MUST NOT CHANGE is the half this file has always been about, and it is
+    what is asserted here: an offer is a QUESTION. Nothing is placed, raised,
+    resized or moved before his tap — a wrong guess must cost him a chip he can
+    decline and never a window that has been taken."""
     reg, conn = desk(fg=MEMBER_A,
                      alive=(MEMBER_A, MEMBER_B, OLD_TWIN, STRANGER))
     layout_popup.sweep(reg, conn)
-    if offers(conn) or PLACED:
-        print(f"  DETAIL a stranger was offered: {offers(conn)}")
+    queued = offers(conn)
+    if len(queued) != 1 or queued[0].get("process") != PROCESS_OF_STRANGER:
+        print(f"  DETAIL the stranger was not offered: {queued}")
         return False
-    # Slow to identify itself: it enumerates before its process does anything
-    # that ties it to a member. Within the grace it is NOT written off.
-    if STRANGER in conn["popup_known"]:
-        print("  DETAIL judged on the first look — a window that identifies "
-              "itself a moment later could never be attributed")
+    if PLACED or LEDGER or MOVED:
+        print(f"  DETAIL the chip MOVED something: {PLACED} {LEDGER} {MOVED}")
         return False
-    PIDS[STRANGER] = MEMBER_PID               # …and a moment later it does
+    # And he is asked ONCE. A window that keeps failing to be attributed must
+    # not be re-offered on every pass — the rule the old grace protected.
     conn["popup_swept"] = 0.0
     layout_popup.sweep(reg, conn)
-    ok = len(offers(conn)) == 1
-    PIDS[STRANGER] = OTHER_PID
-    if not ok:
-        print("  DETAIL the second look was never taken")
-    return ok
+    if len(offers(conn)) != 1:
+        print(f"  DETAIL re-asked on the next pass: {offers(conn)}")
+        return False
+    return True
 
 
 def check_a_members_dialog_is_swept_however_old_it_is() -> bool:
@@ -863,7 +894,7 @@ def check_a_window_we_made_ourselves_is_never_offered() -> bool:
               f"{offers(conn)}")
         return False
     reg, conn = desk(fg=MEMBER_A, alive=(MEMBER_A, MEMBER_B, OURS))
-    layout_popup._OURS[OURS] = time.monotonic() - layout_popup.OURS_TTL_S - 1
+    window_claim._OURS[OURS] = time.monotonic() - window_claim.OURS_TTL_S - 1
     layout_popup.sweep(reg, conn)
     if not offers(conn):
         print("  DETAIL a long-expired record still silences the chip — a "
@@ -928,8 +959,8 @@ CHECKS = [
      check_the_watcher_itself_runs_the_sweep_and_the_chip_reaches_him),
     ("the sweep is silent at the desktop, while away, and with no baseline",
      check_the_sweep_is_silent_at_the_desktop_and_while_he_is_away),
-    ("the sweep refuses a stranger, but not before it could identify itself",
-     check_a_stranger_is_never_offered_by_the_sweep_either),
+    ("the sweep offers a stranger, but still moves nothing",
+     check_the_sweep_offers_a_stranger_but_still_moves_nothing),
     ("a member's own dialog is swept however old it is, his twin still is not",
      check_a_members_dialog_is_swept_however_old_it_is),
     ("a window after his click is offered with no process tie (task 240)",

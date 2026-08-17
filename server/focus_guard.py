@@ -73,6 +73,7 @@ import focus_hook
 import layout_birth
 import layout_popup
 import window_manager
+import window_rescue
 
 logger = logging.getLogger(__name__)
 
@@ -584,7 +585,7 @@ async def watch(layouts, conn: dict, injector=None) -> None:
                 # case he reported HAPPENED while nothing was connected —
                 # which is why no rule built on the baseline could see it
                 # (server/lost_windows.py).
-                await asyncio.to_thread(layout_popup.sweep_lost, layouts, conn)
+                await asyncio.to_thread(window_rescue.sweep_lost, layouts, conn)
                 await layout_popup.flush_offers(conn)
             if not _defending(conn):
                 continue
@@ -616,3 +617,20 @@ async def watch(layouts, conn: dict, injector=None) -> None:
         # costs microseconds: the listener thread only signals, so it is
         # always sitting in GetMessage ready to take WM_QUIT.
         focus_hook.release(_foreground_changed)
+        # …AND THE DESK IS WRITTEN DOWN AS HE LEAVES IT (owner decision
+        # 2026-08-17). This is the moment after which anything that appears on
+        # the PC is news he has not seen, and the next connection's baseline
+        # reads exactly this. Before this line the baseline enumerated the LIVE
+        # desk instead, which filed every window born in his absence as already
+        # known — so an agent's report window, which is born precisely then,
+        # could never be new again and he was never asked about it.
+        #
+        # Synchronous like everything else in this block, and for the same
+        # reason: nothing here gets another turn of the event loop.
+        try:
+            layout_popup.remember_desk()
+        except Exception:
+            # A desk we failed to write down must not take the teardown with
+            # it — the cost is one connection's worth of over-asking, and the
+            # cost of raising here is a leaked hook.
+            logger.exception("Could not remember the desk on the way out")

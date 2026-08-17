@@ -901,6 +901,20 @@ def input_gate(step, run) -> None:
          "palette (tests/test_ink_shadow.py)")
     run([sys.executable, str(PROJECT_DIR / "tests" / "test_ink_shadow.py")])
 
+    # Owner report 2026-08-17: "the app asks me only where it has nothing to
+    # ask me — where I make the window myself — and not where somebody else
+    # made it, where I DO want a layout from it." Exactly inverted, and two
+    # independent agents found the two mechanisms: `mine()` was always called
+    # AFTER the window existed while the sweep runs every second on its own
+    # thread (measured: 6-8 s of exposure on the tear-off), and `_attribute`'s
+    # four rules all ask "does this belong to the layout", mostly by process —
+    # which an agent's report window can never satisfy. `baseline()` compounded
+    # it by filing every window born in his absence as already known.
+    step("0b29/6  WINDOW OFFER GATE — he is asked about what he has not "
+         "placed, and never about what he just asked for "
+         "(tests/test_window_offer.py)")
+    run([sys.executable, str(PROJECT_DIR / "tests" / "test_window_offer.py")])
+
     # T113, 2026-08-17: the four modules of the use log — `session_log.py`,
     # `log_shipper.py`, `log_summary.py` and `display_watch.py` — are WIRED,
     # not merely written. Each has its own gate proving it works; this one

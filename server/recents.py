@@ -467,6 +467,12 @@ def open_entry(entry_id: str) -> dict:
     # the answer is always yes. It decides only how long we are willing to
     # wait and what the phone is told (see RUNNING_TIMEOUT_S).
     was_running = any(process == want for process in before.values())
+    # ARMED BEFORE THE LAUNCH (owner report 2026-08-17): the poll below only
+    # calls `mine()` once it has FOUND the window, and a cold app start leaves
+    # the window standing for as long as it takes the poll's next tick to come
+    # round — while the popup sweep runs every second on its own thread. The
+    # claim covers that gap by process; `mine()` still names the handle.
+    layout_popup.expect(want)
     try:
         # No shell, no console, and NO foreground call of our own: the app
         # raises its own window, which is what he asked for, and nothing here

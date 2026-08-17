@@ -60,6 +60,7 @@ import clipboard_sync  # noqa: E402
 import layout_acts  # noqa: E402
 import layout_acts_api  # noqa: E402
 import layout_popup  # noqa: E402
+import window_claim  # noqa: E402
 import recents  # noqa: E402
 import window_manager as wm  # noqa: E402
 
@@ -267,7 +268,8 @@ def check_a_window_the_new_source_opens_is_marked_as_ours() -> bool:
     meets a brand-new top-level window of a known app and asks him about a
     window he asked US to open, seconds earlier."""
     desk = Desk([win(VSCODE_WIN, "Code.exe", "x - Other - Visual Studio Code")]).install()
-    layout_popup._OURS.clear()
+    window_claim._OURS.clear()
+    window_claim._EXPECT.clear()
 
     def popen(*a, **k):
         # The launch really produces a window, which is the case the mark is
@@ -283,7 +285,7 @@ def check_a_window_the_new_source_opens_is_marked_as_ours() -> bool:
     if info.get("hwnd") != NEW_WIN:
         return False
     return layout_popup.is_mine(NEW_WIN) if hasattr(layout_popup, "is_mine") \
-        else NEW_WIN in layout_popup._OURS
+        else NEW_WIN in window_claim._OURS
 
 
 # ═══════════════════════════ 7-9. THE LAYOUT'S OWN ACTS ══════════════

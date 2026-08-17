@@ -118,6 +118,7 @@ from fastapi.responses import JSONResponse
 
 import lost_windows
 import notify
+import window_claim
 import window_manager as wm
 from grids import PLACE_TOLERANCE_PX
 
@@ -230,6 +231,30 @@ def _top_level_hwnds() -> set[int]:
 
 
 # ═══════════════════════════ THE BASELINE ═══════════════════════════
+# THE DESK AS THE PHONE LAST LEFT IT (owner decision 2026-08-17). Module-level
+# and not per-connection, deliberately: its whole job is to outlive the
+# connection, because the windows he wants to hear about are the ones born
+# while there was no connection at all. None = this server has never had a
+# phone watching, and then the live desk is the honest answer.
+_DESK: set[int] | None = None
+
+
+def remember_desk() -> None:
+    """Write down what stands on the desk right now, as the answer the NEXT
+    connection's baseline will use. Called when a session stops watching
+    ([Focus Guard](focus_guard.py)'s watcher teardown) — the moment after
+    which anything that appears is news he has not seen.
+
+    Blocking Win32 (EnumWindows); the watcher's teardown already runs off the
+    event loop. Cheap — once per session, not per tick."""
+    global _DESK
+    _DESK = _top_level_hwnds()
+
+
+def _remembered_desk() -> set[int]:
+    return set(_DESK) if _DESK is not None else _top_level_hwnds()
+
+
 def baseline(conn: dict) -> None:
     """Write down which windows already existed, so a window that appears
     LATER can be told apart from the owner's own second VS Code window.
@@ -237,8 +262,33 @@ def baseline(conn: dict) -> None:
     Called once per connection from `focus_guard.watch`. Blocking (EnumWindows)
     — the caller runs it on a worker thread. Before it has run, `_is_new`
     answers False for everything and this whole module does nothing: a guard
-    that adopted windows on a missing baseline would adopt his entire desk."""
-    known = _top_level_hwnds()
+    that adopted windows on a missing baseline would adopt his entire desk.
+
+    IT NO LONGER FILES HIS ABSENCE AS HISTORY (owner decision 2026-08-17, and
+    the mechanism was named by an independent agent before it was believed).
+    This function used to enumerate the LIVE desk on every connection, which
+    quietly answered the wrong question: a window born while NO phone was
+    connected — screen locked, app in the background, session ended by presence
+    — is standing there by the time the next connection looks, so the very
+    connection that comes looking for it files it as already known, and it can
+    never be new again. An agent's report window is born at exactly that
+    moment, every time. That is why the phone was silent about precisely the
+    windows he wanted to hear about, and it is constraint 17's lesson restated
+    one layer up: a feature whose trigger is a connection can never answer for
+    what happened while there was none.
+
+    So the baseline is what the desk looked like the LAST TIME A PHONE WAS
+    WATCHING, remembered in this process across connections. On the first
+    connection after the server starts there is no such memory and the live
+    desk is the honest answer — those windows really are his desk, not news.
+
+    His choice, asked and answered: he wants to be asked about them when he
+    comes back, with no time limit ("ask me for them when I return"), rather
+    than have anything older than a few minutes silently absorbed. The honest
+    cost is stated where it lands: after a long absence several windows can be
+    waiting, and they arrive one chip at a time through the existing queue —
+    never two strips, never two at once (constraint 18)."""
+    known = _remembered_desk()
     conn["popup_known"] = known
     # THE SECOND SET, and it must be a second one (task 185). `popup_known` is
     # also the JUDGED set — a window it has ruled on stops being "new" for the
@@ -262,46 +312,14 @@ def _judged(conn: dict, hwnd: int) -> None:
         known.add(hwnd)
 
 
-# ═══════════════════ WINDOWS WE MADE OURSELVES ═══════════════════
-# OWNER REPORT 2026-08-13, his point 4A: inside a layout he taps "create a
-# layout from a tap", picks a TAB of that layout, and the moment the layout is
-# built the phone asks him whether to show the brand-new window in the layout.
-#
-# It is new, it does belong to a member's process, and every rule above is
-# therefore RIGHT about it — which is the point: no attribution rule can save
-# us here, because the window genuinely is the layout's work. What none of them
-# can know is that the layout's work in this case was OURS. We tore that tab
-# off ourselves, seconds ago, on his instruction.
-#
-# And he named the general case before we hit it: "it will probably happen
-# every time a tab is separated from its original window". So this is not a
-# patch on the creation path — it is a fact every pass in this module has to be
-# told, once, by whoever makes a window: `mine(hwnd)`.
-#
-# MODULE-LEVEL and not per-connection, because the maker does not have a `conn`
-# — `uia.extract_tab` is called from the layout API on a worker thread — and
-# because a window we made is ours on every connection, not just the one that
-# happened to be open. Bounded in time: a handle is a number Windows re-uses,
-# and a permanent set would one day silence a chip about a stranger's window
-# that inherited the number.
-OURS_TTL_S = 60.0
-_OURS: dict[int, float] = {}
-
-
-def mine(hwnd: int) -> None:
-    """Record that WE created this window. Called by every path that makes one
-    (today: tab extraction). Cheap and safe to call with a 0/None hwnd."""
-    if not hwnd:
-        return
-    now = time.monotonic()
-    for dead in [h for h, t in _OURS.items() if now - t > OURS_TTL_S]:
-        del _OURS[dead]
-    _OURS[int(hwnd)] = now
-
-
-def _is_ours(hwnd: int) -> bool:
-    made = _OURS.get(int(hwnd))
-    return made is not None and time.monotonic() - made <= OURS_TTL_S
+# THE MAKER'S OWN STATEMENT lives in its own module now
+# ([Window Claim](window_claim.py), split out 2026-08-17 at the structure law's
+# wall). These two names stay because every maker in this codebase already
+# calls them through this module, and because a window we made is not an
+# attribution at all — it is the one statement here that is not a guess.
+mine = window_claim.mine
+expect = window_claim.expect
+_is_ours = window_claim.is_ours
 
 
 # ═══════════════════════════ ATTRIBUTION ═══════════════════════════
@@ -597,70 +615,6 @@ async def flush_offers(conn: dict) -> int:
     return sent
 
 
-# ═══════════════════ AND THE WINDOW NOBODY CAN REACH ═══════════════════
-# Owner report 2026-08-12, the FIFTH on one failure: a window that opened while
-# his phone was LOCKED sits off every screen and can never be shown again.
-#
-# Everything above this line asks WHO opened a window, and every one of those
-# rules is built on `baseline` — which is exactly why none of them could ever
-# see his case: a window born while no phone was connected is filed as KNOWN by
-# the next connection's baseline and is never new again. See
-# [Lost Windows](lost_windows.py) for the whole diagnosis.
-#
-# So this pass asks a different question — CAN HE REACH IT — which is geometry,
-# measured now, and needs no history at all. It therefore answers for a window
-# opened by an agent, by Windows, or hours before the phone ever connected.
-#
-# It rides the SAME chip as everything else here (one strip of screen, one
-# dismissal rule) and, unlike every other pass in this module, it runs at the
-# DESKTOP as well as inside a layout: a lost window is lost either way.
-LOST_EVERY_S = 4.0
-
-
-def _offer_lost(conn: dict, win: dict) -> None:
-    """Queue the "bring it back?" chip for a window nobody can reach."""
-    hwnd = win["hwnd"]
-    queue_offer(conn, hwnd, "l", {"lay": None, "lost": True},
-                {"act": "rescue", "title": win.get("title", ""),
-                 "process": win.get("process", ""), "hwnd": hwnd,
-                 "icon": win.get("icon")}, "lost_asked")
-    logger.warning("Window %s is off every screen (%s%s) — rescue offered",
-                   _describe(hwnd), win.get("rect"),
-                   ", minimized" if win.get("minimized") else "")
-
-
-def sweep_lost(layouts, conn: dict) -> None:
-    """One pass over the unreachable. Blocking Win32 — the watcher runs it on
-    a worker thread, on its own slow cadence.
-
-    ONE CHIP PER WINDOW PER CONNECTION (`lost_asked`), and ignoring it is an
-    answer — but a DELIBERATE decline is remembered separately (`lost_left`),
-    because the two mean different things: an unanswered chip may simply have
-    been missed while he was reading the PC screen, and the next connection
-    asking again is the behaviour that makes this a guarantee rather than a
-    lottery. A window he actually said "leave it" about is never raised again
-    on this connection."""
-    if conn.get("away") or conn.get("left"):
-        return
-    now = time.monotonic()
-    if now - conn.get("lost_swept", 0.0) < LOST_EVERY_S:
-        return
-    conn["lost_swept"] = now
-    # A layout's own windows are where the layout put them and the layout can
-    # move them; offering a rescue there would fight it.
-    held: set[int] = set()
-    for lay in getattr(layouts, "layouts", []) if layouts is not None else []:
-        held.update(lay.members)
-        held.update(getattr(lay, "adopted", ()))
-    asked = conn.get("lost_asked", ())
-    left = conn.get("lost_left", ())
-    for win in lost_windows.lost(held):
-        hwnd = win["hwnd"]
-        if hwnd in asked or hwnd in left:
-            continue
-        _offer_lost(conn, win)
-
-
 def pick(offer_id: str, act: str) -> bool:
     """His tap. `act` is "layout" (place it by the rules above) or anything
     else, which is "leave it on the desktop" — the safe answer, so an act we
@@ -862,6 +816,20 @@ def _focused(layouts, conn: dict):
     return lay if lay.members else None
 
 
+def _held_by_any(layouts) -> set[int] | None:
+    """Every window any layout holds — members and adopted alike — or None
+    when there is no registry to ask. The SAME reading `sweep_lost` makes, and
+    for the same reason: a window a layout is already responsible for is not a
+    window nobody has placed."""
+    if layouts is None:
+        return None
+    held: set[int] = set()
+    for lay in getattr(layouts, "layouts", []):
+        held.update(lay.members)
+        held.update(getattr(lay, "adopted", ()))
+    return held
+
+
 def sweep(layouts, conn: dict) -> None:
     """One enumeration pass: has a window of THIS layout's work appeared,
     whether or not it ever took the foreground? Blocking Win32 — the watcher
@@ -881,6 +849,11 @@ def sweep(layouts, conn: dict) -> None:
     pending = conn.setdefault("popup_pending", {})
     asked = conn.get("popup_asked", ())
     declined = conn.get("popup_declined", ())
+    # Every window ANY layout holds — not just this one's. The catch-all rule
+    # at the bottom of the loop is about windows nobody has placed, and a
+    # window sitting in the layout one step along the bar has been placed.
+    # Read fresh on every sweep, like everything else here (constraint 13).
+    held = _held_by_any(layouts)
     for hwnd in _top_level_hwnds():
         # A WINDOW OWNED BY A MEMBER IS THE LAYOUT'S WORK WHATEVER ITS AGE
         # (owner reasoning 2026-08-12, and he was right): "if the desktop
@@ -918,6 +891,40 @@ def sweep(layouts, conn: dict) -> None:
                 # a question the app cannot honour (his point 3).
                 continue
             _offer(lay, hwnd, conn, f"{reason}, seen by the sweep")
+            continue
+        # NOBODY HAS PLACED THIS WINDOW ANYWHERE — and that is now a reason of
+        # its own (owner decision 2026-08-17, chosen off a ballot).
+        #
+        # THE QUESTION THIS MODULE ASKED WAS THE WRONG ONE, and his report is
+        # what named it: "it asks me only where it has nothing to ask me — where
+        # I make the window myself — and not where somebody else made it, where
+        # I DO want a layout from it." Every rule in `_attribute` answers "does
+        # this window BELONG to this layout", and answers it mostly by process
+        # identity — so his own second VS Code window (same exe as a member)
+        # was reported to him as an intrusion, while an agent's report window
+        # (its own exe, no ancestry, no click of his anywhere near it) fell
+        # through all four rules and was filed as a stranger to be ignored.
+        # Exactly inverted from what he wants, by construction.
+        #
+        # He chose the other question: is this a window I have not put anywhere
+        # yet? So a NEW, listable, unheld window earns its chip on that alone,
+        # with no evidence about who made it — because "who made it" is what we
+        # cannot read, and what we CAN read is that it is standing on his PC
+        # unplaced while he is looking at a layout from across the room.
+        #
+        # THE THREE THINGS THAT STILL SILENCE IT, and they are the whole safety
+        # of this rule: a window WE made on his own tap (`_is_ours` above —
+        # armed BEFORE the act since this round, see window_claim.py), a window
+        # some layout already holds (`held` below), and a window no layout
+        # could hold anyway (`is_listable`). The honest cost he was told about
+        # and accepted: every unrelated new window — an installer, a browser he
+        # started at the desk — is now a chip he can decline. Declining is
+        # remembered for the connection, and nothing ever moves before his tap.
+        if held is not None and _is_new(conn, hwnd) and hwnd not in held \
+                and wm.is_listable(hwnd):
+            pending.pop(hwnd, None)
+            _judged(conn, hwnd)
+            _offer(lay, hwnd, conn, "a window nobody has placed, seen by the sweep")
             continue
         # Not yet attributable. Give it the grace above before writing it off
         # for good — `_judged` cannot be taken back.

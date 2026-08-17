@@ -101,8 +101,28 @@ def scan(layouts, conn: dict) -> None:
     seen = conn.get("birth_seen")
     if seen is None or conn.get("away") or conn.get("left"):
         return
-    if not _double_clicked(conn):
-        return
+    # THE DOUBLE-CLICK IS NO LONGER REQUIRED (owner decision 2026-08-17, off a
+    # ballot). It used to be the whole trigger: a new window earned "a layout
+    # with it?" only within `BIRTH_AFTER_CLICK_S` of a click the PHONE had
+    # injected — which answers "did HE open this", and that is not the question
+    # he wants asked. His report: the app asks him only where he made the
+    # window himself and stays silent where somebody else did, "and there I DO
+    # want a layout from it". An agent's report window arrives with no click of
+    # his anywhere near it, and under the old rule could never be offered at
+    # the desktop at all.
+    #
+    # So the pass now runs on every tick and the click evidence is gone. What
+    # still silences it is unchanged and is the whole safety of the rule: a
+    # window WE made on his tap (`_is_ours`, armed BEFORE the act since this
+    # round — window_claim.py), a window some layout already holds, a dialog of
+    # something else, and a window already asked about. Nothing moves before
+    # his tap, and a decline is remembered.
+    #
+    # The honest cost, which he was told and accepted: at the desktop every new
+    # window is now a chip. `wm.list_windows()` on every tick is the price —
+    # the "cheap in the common case" note above no longer holds, and this pass
+    # is deliberately the one that pays it, because the alternative is the
+    # silence he reported.
     members: set[int] = set()
     for other in getattr(layouts, "layouts", []):
         members.update(other.members)

@@ -123,6 +123,19 @@ STANDARD = {
     # content.palette_command already makes, and is gated in
     # tests/test_new_source.py.
     "server/layout_acts.py",
+    # Split out of layout_popup.py on 2026-08-17 at the structure law's wall,
+    # by RESPONSIBILITY: every other rule there is a GUESS about a window
+    # nobody told us anything about, while this is the maker's own statement
+    # that a window is ours. Standard: two records and one question, whose one
+    # rule with teeth — the claim is armed BEFORE the act, never after — is
+    # what closed the race the owner reported.
+    "server/window_claim.py",
+    # Split out of layout_popup.py in the same round, also by responsibility:
+    # this pass asks whether he can REACH a window, which geometry answers
+    # outright and which therefore needs no history — the one pass that can
+    # speak for a window opened before the phone ever connected. Standard: a
+    # throttled sweep over lost_windows.py's own measurement.
+    "server/window_rescue.py",
     # Split out of layout_api.py on 2026-08-17 at the structure law's wall, by
     # RESPONSIBILITY: layout_api answers what layouts exist and what may be
     # done TO them, while these two handlers ask what the program a layout is

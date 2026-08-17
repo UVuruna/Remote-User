@@ -1,5 +1,10 @@
 # Layout Popup
 
+**Split out of this module on 2026-08-17, both by responsibility:**
+[Window Claim](window_claim.md) — the maker's own statement that a window
+is ours, which is the one statement here that is not a guess · [Window Rescue](window_rescue.md) — can he REACH it, which geometry
+answers outright and which therefore needs no history at all.
+
 **Script:** [Layout Popup (script)](../layout_popup.py) ·
 **Flow:** [flow](../__flow/layout_popup.md)
 
@@ -210,3 +215,32 @@ picture) never depends on the anchor succeeding.
 
 Gate: `tests/test_layout_popup.py` — the three new checks plus the rewritten
 dialog checks, every one proven by planting its own defect.
+
+## THE QUESTION CHANGED (owner decision 2026-08-17)
+
+Every rule below asks **does this window belong to this layout**, and answers
+it mostly by process name. His report says that is the wrong question: the app
+asked him only about windows HE had just made — his own second VS Code window
+shares a member's exe — and stayed silent about the ones somebody else made,
+which is where he actually wants a layout offered.
+
+So `sweep` now carries a final rule after all four below: **a NEW, listable
+window that no layout holds earns a chip on that alone**, with no evidence
+about who made it. What silences a chip is the safety of the whole feature and
+is asserted as such in [`tests/test_window_offer.py`](../../tests/test_window_offer.py):
+
+* a window WE made on his own tap — [Window Claim](window_claim.md), and since
+  this round the claim is armed BEFORE the act, because `mine()` could not be
+  early enough (6–8 s of exposure on the tear-off, measured);
+* a window some layout already holds — his own placement, any layout, not only
+  the focused one;
+* a window no layout could hold — `is_listable`, his point 3 of 2026-08-13.
+
+And an offer is still only ever a QUESTION: nothing is placed, raised, resized
+or moved before his tap. The honest cost, named to him before he chose: every
+unrelated new window is now a chip he can decline.
+
+`baseline()` changed with it — see its own docstring. It is the desk as the
+phone LAST LEFT IT rather than the live desk, because a window born while
+nobody was connected used to be filed as already known by the very connection
+that came looking for it.

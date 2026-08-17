@@ -44,6 +44,7 @@ from _focus_fakes import (  # noqa: E402
 
 import layout_birth  # noqa: E402
 import layout_popup  # noqa: E402
+import window_claim  # noqa: E402
 import recents  # noqa: E402
 
 # The desk for the 185 checks: two members, plus what appears on top of it.
@@ -73,7 +74,8 @@ def desk(windows, owner=None, clicks=2, active=None):
     # "Windows we made ourselves" is MODULE state (a maker has no `conn`), so a
     # fresh desk must forget it — otherwise one check's record silences the
     # next one's chip and the gate reads green for the wrong reason.
-    layout_popup._OURS.clear()
+    window_claim._OURS.clear()
+    window_claim._EXPECT.clear()
     reg = layout_with([MEMBER_A, MEMBER_B])
     conn = fresh_conn(active=active)
     # The baseline the phone's connection took: MEMBER_A/B and OLD were up.
@@ -144,32 +146,40 @@ def check_nothing_on_the_pc_is_touched_by_the_question() -> bool:
     return True
 
 
-def check_no_double_click_means_no_question() -> bool:
-    """The correlation is the WHOLE attribution. This PC is never quiet —
-    background agents open GUI windows all day — so a window appearing is not
-    evidence of anything, and without two injected clicks moments before there
-    is nothing to ask about."""
-    for clicks in (0, 1):
-        reg, conn, _ = desk([MEMBER_A, MEMBER_B, OLD, NEWWIN], clicks=clicks)
-        layout_birth.scan(reg, conn)
-        if chips(conn):
-            print(f"  DETAIL asked after {clicks} click(s): {chips(conn)}")
-            return False
-    # …and two clicks far apart are two single clicks, not a double.
+def check_a_window_nobody_placed_is_offered_with_no_click_at_all() -> bool:
+    """THE RULE REVERSED ITSELF ON THE OWNER'S OWN DECISION (2026-08-17), and
+    this check is rewritten rather than deleted, because the reversal is the
+    point and the old reasoning is the evidence.
+
+    It used to assert that an injected double-click is the WHOLE attribution:
+    "this PC is never quiet — background agents open GUI windows all day — so a
+    window appearing is not evidence of anything". That reasoning answers the
+    question "did HE open this", and his report of 2026-08-17 is that it is the
+    wrong question — the app asked him only where he had made the window
+    himself and stayed silent where somebody else had, "and there I DO want a
+    layout from it". The very windows the old rule dismissed, a background
+    agent's, are the ones he wants offered.
+
+    So a new window earns its chip with NO click anywhere near it. What still
+    silences it is asserted by the checks below and in
+    tests/test_window_offer.py, because that is now the whole safety of the
+    rule."""
     reg, conn, _ = desk([MEMBER_A, MEMBER_B, OLD, NEWWIN], clicks=0)
-    layout_birth.note_click(conn)
-    conn["click_times"][-1] -= layout_birth.DOUBLE_CLICK_S * 2
-    layout_birth.note_click(conn)
     layout_birth.scan(reg, conn)
-    if chips(conn):
-        print("  DETAIL two clicks a second apart counted as a double-click")
+    asked = chips(conn)
+    if len(asked) != 1:
+        print(f"  DETAIL a window nobody placed was not offered: {asked}")
         return False
-    # …and a double-click LONG ago cannot explain a window opening now.
+    # …and a click LONG ago neither adds nor removes anything: the evidence is
+    # gone from the rule entirely, rather than merely widened.
     reg, conn, _ = desk([MEMBER_A, MEMBER_B, OLD, NEWWIN])
     conn["click_times"] = [t - layout_birth.BIRTH_AFTER_CLICK_S - 5
                            for t in conn["click_times"]]
     layout_birth.scan(reg, conn)
-    return not chips(conn)
+    if len(chips(conn)) != 1:
+        print("  DETAIL a stale click changed the answer — it still decides")
+        return False
+    return True
 
 
 def check_a_dialog_is_never_offered() -> bool:
@@ -527,8 +537,8 @@ CHECKS = [
      check_a_window_he_opened_is_offered_as_a_layout),
     ("185: asking (and answering) moves and raises NOTHING on the PC",
      check_nothing_on_the_pc_is_touched_by_the_question),
-    ("185: no injected double-click, no question",
-     check_no_double_click_means_no_question),
+    ("185: a window nobody placed is offered with no click at all",
+     check_a_window_nobody_placed_is_offered_with_no_click_at_all),
     ("185: a dialog is never offered", check_a_dialog_is_never_offered),
     ("185: a window that was already open is never offered",
      check_a_window_that_was_already_open_is_never_offered),

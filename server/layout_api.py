@@ -519,6 +519,14 @@ async def resolve_slot(ws, stream, slot: dict) -> tuple[int, str | None, int] | 
     info = await asyncio.to_thread(window_manager.window_at_hwnd, hwnd)
     if info is None:
         return None
+    # ARMED BEFORE THE TEAR-OFF (owner report 2026-08-17). The `mine()` below
+    # names the exact handle, but it cannot run until `extract_tab` RETURNS —
+    # and an independent agent measured what that costs: the torn-off window
+    # stands on the desk for up to 6-8 seconds first, while the tear-off waits
+    # for the rect to settle, for the address band, for the foreground. The
+    # popup sweep runs every second in that gap. The claim covers it; the
+    # `mine()` below is what survives past it. See server/window_claim.py.
+    layout_popup.expect(info.get("process", ""))
     extracted = await asyncio.to_thread(
         uia.extract_tab, mon_rect(stream),
         float(slot.get("x", 0.5)), float(slot.get("y", 0.5)),

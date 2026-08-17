@@ -301,6 +301,15 @@ def run(act_id: str, injector, guard=None, process_of=None) -> str:
         # worked here. The window list is taken BEFORE the command goes out, so
         # the watcher's newness rule cannot race the window it is waiting for.
         before = {w["hwnd"] for w in wm.list_windows()}
+        # ARMED BEFORE THE ACT, never after (owner report 2026-08-17). VS Code
+        # can raise the duplicate the instant the palette's Enter lands, while
+        # `_watch_and_claim` below cannot start looking until this call
+        # RETURNS — and the popup sweep runs every second on its own thread
+        # with no grace at all for a window it can tie to a member. The claim
+        # closes that gap structurally instead of hoping to win the race; the
+        # exact handle is still marked by `_watch_and_claim`, which is what
+        # outlives the claim's short life. See server/window_claim.py.
+        layout_popup.expect(PROCESS_OF_APP["vscode"])
         problem = content.palette_command(
             injector, VSCODE_DUPLICATE_COMMAND, guard, PROCESS_OF_APP["vscode"],
             process_of=process_of,
