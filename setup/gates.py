@@ -885,6 +885,22 @@ def input_gate(step, run) -> None:
          "phone, and the hook keeps it honest (tests/test_session_ledger.py)")
     run([sys.executable, str(PROJECT_DIR / "tests" / "test_session_ledger.py")])
 
+    # Owner report 2026-08-17, his picture 5: Attach and Claude Tools drew
+    # BLACK icons and labels with a BLACK shadow under them — "a shadow the
+    # same colour as the letters looks bad and blurred". The verdict of two
+    # days earlier ("the shadow is always black") is true of exactly one of the
+    # two inks this page draws, and the page had never been asked which one it
+    # was using; a light set fill correctly takes black ink, on the DARK theme,
+    # which is why no theme-level token could ever have covered his case. The
+    # rule is now the ink's OPPOSITE, decided where the ink is decided. Nothing
+    # in this repo could have caught the old one: the phone audit measures ink
+    # against SURFACE — correct in all eight looks throughout — and a shadow is
+    # neither of those two things.
+    step("0b24/6  INK SHADOW GATE — a shadow is never the colour of its own "
+         "ink, in either fill, on either theme, across the whole shipped "
+         "palette (tests/test_ink_shadow.py)")
+    run([sys.executable, str(PROJECT_DIR / "tests" / "test_ink_shadow.py")])
+
     # T113, 2026-08-17: the four modules of the use log — `session_log.py`,
     # `log_shipper.py`, `log_summary.py` and `display_watch.py` — are WIRED,
     # not merely written. Each has its own gate proving it works; this one

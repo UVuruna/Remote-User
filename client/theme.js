@@ -150,6 +150,42 @@ const FILL_INK_TARGET = 4.5;
 // is the binding constraint: a plain `.ctl` has no opacity at all, so
 // whatever clears AA after this dilution clears it before too.
 const CAT_OPACITY = 0.85;
+// THE SHADOW IS THE INK'S OPPOSITE, NEVER THE THEME'S (owner report
+// 2026-08-17, his picture 5 — and it CORRECTS the always-black verdict of
+// 2026-08-15 rather than quietly setting it aside).
+//
+// What he ruled on 2026-08-15 was a rendered ballot in which the LIGHT theme
+// flipped both shadow tokens to white, and he rejected it in the same words he
+// used again now: a shadow the same colour as the ink reads "blury". Both
+// readings are his and both are right, because they are about DIFFERENT
+// pairings — the ballot's white shadow sat under a 2 px blur (replaced in that
+// very round by the 0/1 px, 1 px-blur lift the geometry has today), and what
+// he was really naming both times is a shadow that cannot be told apart from
+// what it is behind. His own words this round, and then the rule that follows
+// them:
+//   "kada je senka iste boje kao i slova to izgleda loše i mutno"   lang-ok: owner quote
+//   black letters and icons "prate sva ista pravila samo sada sa belim senkama"   lang-ok: owner quote
+//
+// The cases he photographed are not a theme at all, which is why an
+// always-black token could never have covered them: Attach and Claude Tools
+// are COLOURED sets whose fills are light, so `inkOn` correctly hands them
+// BLACK ink — on the DARK theme — and the page then drew a black shadow under
+// it. So the decision belongs where the ink is decided (`paintSet`), per
+// element and per fill, and the theme tokens are only the case where the ink
+// is `--text-primary`. ONE rule applied at every place an ink is chosen, so
+// the further cases he warned were coming are answered in advance rather than
+// one screenshot at a time.
+//
+// The GEOMETRY and the two ALPHAS stay exactly as his 2026-08-15 sliders left
+// them (client/style.css, client/theme.css) — only the COLOUR now follows the
+// ink, and a 3D lift is still a lift and never a glow.
+const SHADOW_DARK = "0 0 0";
+const SHADOW_LIGHT = "255 255 255";
+// The icon's shadow and the label's, unchanged from his ballot: an icon is a
+// solid shape that owes less, a 9 px label is the thing that must be read.
+const INK_SHADOW_ALPHA = 0.8;
+const LBL_SHADOW_ALPHA = 1;
+
 // Steps the lift walks. 40 rather than 20 (owner correction 2026-08-07): the
 // walk now moves LIGHTNESS, and a coarse step there is a visible jump in how
 // pale the ink comes out — the finer sweep returns the SMALLEST lift that
@@ -338,6 +374,18 @@ function lineOn(rgb, surface) {
   return lift(rgb, up, (c) => contrast(c, surface) >= INK_TARGET).rgb;
 }
 
+// Which shadow an ink of THIS colour must wear, and at which of the two
+// alphas. Decided by the ink's own luminance against the same 0.179 crossover
+// `inkOn` uses, so the two answers can never disagree: a light ink gets the
+// dark shadow it has always had, a dark ink gets the white one his report
+// asked for. It is deliberately NOT a contrast walk — the shadow's job is a
+// 1 px lift under the shape, not readable text, and the two extremes are the
+// only candidates there have ever been.
+function shadowFor(rgb, alpha) {
+  const base = luminance(rgb) > 0.179 ? SHADOW_DARK : SHADOW_LIGHT;
+  return `rgb(${base} / ${alpha})`;
+}
+
 // The halo an ACTIVE toggle wears (Keys on, Scroll on). It is fed the LIFTED
 // colour, not the raw one (owner correction 2026-08-07): "switched on" is a
 // signal, and a signal drawn in a #1C3878 navy on a #0f172a page is no signal
@@ -409,6 +457,10 @@ function paintSet(el, name, surfaceVar) {
     el.style.removeProperty("--set-fill");
     el.style.removeProperty("--set-ink");
     el.style.removeProperty("--set-line");
+    el.style.removeProperty("--set-ink-shadow");
+    el.style.removeProperty("--set-ink-lbl-shadow");
+    el.style.removeProperty("--set-line-shadow");
+    el.style.removeProperty("--set-line-lbl-shadow");
     el.style.removeProperty("--set-on");
     el.style.removeProperty("--set-glow");
     return;
@@ -422,10 +474,27 @@ function paintSet(el, name, surfaceVar) {
   // against that same surface, never the raw hue.
   const fillRgb = fillOn(over([...rgb, 1], page));
   el.style.setProperty("--set-fill", css(fillRgb));
-  el.style.setProperty("--set-ink", inkOn(fillRgb));
+  const inkHex = inkOn(fillRgb);
+  el.style.setProperty("--set-ink", inkHex);
+  // …and its shadow is that ink's opposite (owner 2026-08-17). This is the
+  // pair he photographed: a light fill takes BLACK ink, and until now the
+  // always-black token drew a black shadow under it — Attach and Claude Tools,
+  // on the DARK theme, which no theme-level rule could ever have reached.
+  const inkRgb = parseHex(inkHex);
+  el.style.setProperty("--set-ink-shadow", shadowFor(inkRgb, INK_SHADOW_ALPHA));
+  el.style.setProperty("--set-ink-lbl-shadow",
+                       shadowFor(inkRgb, LBL_SHADOW_ALPHA));
   // OUTLINED: the colour is the ink, and it lands on the button's own tint.
   const lineRgb = lineOn(rgb, tokenSurface(surfaceVar || "--glass-fill"));
   el.style.setProperty("--set-line", css(lineRgb));
+  // The outlined ink is the SET's own lifted colour, so its shadow is decided
+  // from that colour and not from the filled look's black-or-white — a set
+  // lifted pale on a dark page is a light ink and keeps the dark shadow, while
+  // one walked dark on the light page now stops drawing black on black.
+  el.style.setProperty("--set-line-shadow",
+                       shadowFor(lineRgb, INK_SHADOW_ALPHA));
+  el.style.setProperty("--set-line-lbl-shadow",
+                       shadowFor(lineRgb, LBL_SHADOW_ALPHA));
   // SWITCHED ON: the button's face flips to the far end of the theme's
   // luminance range (client/style.css → `.ctl.active`, owner 2026-08-09 task
   // 179) — and the set's identity has to survive that flip, so its colour

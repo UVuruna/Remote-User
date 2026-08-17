@@ -128,6 +128,16 @@
   /* Controls float over the PC's screen, which can be ANY colour, so their
      icon and label carry a shadow.
 
+     SUPERSEDED 2026-08-17 — READ THIS FIRST. The verdict below held for two
+     days and is now the SECOND half of the rule rather than the whole of it:
+     the shadow is the INK's opposite, so white ink keeps exactly the black
+     shadow he chose here, and dark ink takes a white one (his picture 5, the
+     Attach and Claude Tools buttons drawing black on black on THIS theme). The
+     numbers and the geometry he settled on that ballot are untouched; only the
+     rule that picks between two colours changed. See the light block and
+     client/theme.js → `shadowFor`. The original reasoning is kept whole below
+     because a verdict that was later narrowed is evidence, not clutter.
+
      THE SHADOW IS ALWAYS BLACK, ON BOTH THEMES (owner verdict 2026-08-15,
      chosen off a rendered ballot showing all eight looks over one background
      of his own choosing). Until that day the LIGHT theme flipped both values
@@ -224,11 +234,29 @@ body[data-theme="light"] {
      26.0deg here) — an olive-yellow the orange dot next to it cannot be
      mistaken for. */
   --ledger-yellow: #ae9f04;
-  /* NO SHADOW OVERRIDE HERE — see the dark block's note. The light theme used
-     to flip these two to white and that was the blur the owner reported on
-     2026-08-15; a shadow is always black, so this theme simply inherits the
-     values above. `--card-shadow` is a different thing entirely (a raised
-     card's elevation, not ink legibility) and keeps its own light value. */
+  /* THE SHADOW IS THE INK'S OPPOSITE, AND HERE THE INK IS DARK (owner report
+     2026-08-17, correcting his own 2026-08-15 verdict — the correction is
+     recorded rather than the old sentence deleted, because the reasoning that
+     was wrong is the evidence).
+
+     This block DID flip to white before 2026-08-15, he photographed it and
+     called it "blury", and the always-black rule replaced it. What that
+     reading missed is that the very same round also replaced the shadow's
+     GEOMETRY — a 2 px blur became the 0/1 px, 1 px lift it has today — so the
+     white halo he rejected was never measured under the geometry that shipped.
+     His report of 2026-08-17 names the real rule with the same word in both
+     directions: a shadow the colour of its own ink is what reads blurred, and
+     dark ink therefore takes a WHITE shadow. The flip returns, under the tight
+     geometry and with his alphas untouched.
+
+     The COLOURED looks do not read these two at all — `paintSet` writes a
+     shadow per element from the ink it just chose (client/theme.js), which is
+     the half no theme token could ever have reached: a light set fill takes
+     black ink on the DARK theme too. `--card-shadow` is a different thing
+     entirely (a raised card's elevation, not ink legibility) and keeps its own
+     light value. */
+  --ink-shadow: rgb(255 255 255 / 0.80);
+  --lbl-shadow: rgb(255 255 255 / 1);
   --card-shadow: rgb(22 22 31 / 0.20);
   --fill-solid: #ffffff;
 }
@@ -297,6 +325,18 @@ body[data-colored="true"] .wheel-item {
 body[data-colored="true"] .ctl .lbl {
   color: var(--set-line, var(--set-color, var(--text-primary)));
 }
+/* THE SHADOW FOLLOWS THE INK (owner report 2026-08-17, his picture 5). These
+   two rules do not draw anything — they re-point the SAME `--ink-shadow` /
+   `--lbl-shadow` the icon and label rules have always read (client/style.css),
+   so there is exactly one place where a shadow is drawn and this decides only
+   its colour. `paintSet` writes the four values per element from the ink it
+   just chose (client/theme.js → `shadowFor`), which is why the fallback here
+   is the theme token: an element no set owns keeps the theme's answer. */
+body[data-colored="true"] .ctl,
+body[data-colored="true"] .wheel-item {
+  --ink-shadow: var(--set-line-shadow, rgb(0 0 0 / 0.80));
+  --lbl-shadow: var(--set-line-lbl-shadow, rgb(0 0 0 / 1));
+}
 body[data-colored="true"][data-fill="full"] .ctl,
 body[data-colored="true"][data-fill="full"] .wheel-item {
   /* --set-fill is --set-color with its lightness nudged the shorter way ONLY
@@ -308,6 +348,15 @@ body[data-colored="true"][data-fill="full"] .wheel-item {
 }
 body[data-colored="true"][data-fill="full"] .ctl .lbl {
   color: var(--set-ink, var(--text-primary));
+}
+/* FILLED: the ink is black-or-white against the fill, so the shadow is the
+   other one of the two. This is the exact pair his picture 5 names — Attach
+   and Claude Tools are light fills, therefore black ink, therefore a WHITE
+   shadow, and they were drawing black on black on the dark theme. */
+body[data-colored="true"][data-fill="full"] .ctl,
+body[data-colored="true"][data-fill="full"] .wheel-item {
+  --ink-shadow: var(--set-ink-shadow, rgb(0 0 0 / 0.80));
+  --lbl-shadow: var(--set-ink-lbl-shadow, rgb(0 0 0 / 1));
 }
 /* A PRESSED button (a finger holding Click down) glows in the set's own
    colour rather than the one accent. It is a momentary, pressed-in feel and

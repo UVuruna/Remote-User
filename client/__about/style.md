@@ -108,11 +108,22 @@ became `var(--card)`; `#06212E` and `#06121f` (ink on the accent) became
 `var(--on-accent)`; `#22C55E` became `var(--success)`; the eleven
 `rgb(15 23 42 / ..)` backdrops became `--bar` / `--scrim` / `--scrim-soft` /
 `--dim-out` by what each one IS; the icon and label shadows became
-`--ink-shadow` / `--lbl-shadow`. Those two DID flip to white on the light
-theme, so a dark icon over a dark PC window kept an outline — until the owner
-photographed what the flip really looks like (2026-08-15) and ruled that a
-shadow is always black on both themes; the light override is gone and the
-geometry is his, `0 1px 1px` at 0.80 / 1.0 alpha. See theme.md.
+`--ink-shadow` / `--lbl-shadow`. Those two are the INK'S OPPOSITE, and the
+rule took two owner reports to reach: on 2026-08-15 he photographed a WHITE
+shadow under white-ish ink and ruled the shadow always black; on 2026-08-17 he
+photographed the mirror image — Attach and Claude Tools drawing BLACK icons and
+labels with a black shadow — and named the rule both reports were really about:
+a shadow the same colour as its own ink reads as blur. So white ink keeps his
+black shadow and dark ink takes a white one, with his geometry untouched
+(`0 1px 1px` at 0.80 / 1.0 alpha — and it was that round's OTHER change, a 2 px
+blur becoming 1 px, that made the first verdict read the way it did).
+
+The two rules HERE are only the case where the ink is `--text-primary`. In the
+coloured looks a set's ink is computed per element, so its shadow is too
+(`client/theme.js` → `shadowFor`, written by `paintSet` and re-pointed onto
+these same two variables by `client/theme.css`) — which is the half no theme
+token could ever have covered, since a light set fill correctly takes black ink
+on the DARK theme. Gate: `tests/test_ink_shadow.py`. See theme.md.
 
 One that was already a bug: `.sets-live.on` painted its ink `var(--surface-0)`
 — correct by accident on dark, and a light badge on a light accent the moment
