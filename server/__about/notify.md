@@ -400,3 +400,19 @@ routine caption grey every other sentence in that window uses; the fixture in
 text as its "worst case" caption now imports `NO_PYTHON_TEXT` (the longest
 sentence this module can produce today, 125 chars) so the audit can never
 drift back to sizing the window for text the product no longer emits.
+
+## One notice, one use-log record (T113, 2026-08-17)
+
+`deliver()` is now a thin wrapper over `_carry()`, which holds the unchanged
+three-carrier chain of returns. The wrapper exists for one reason: the use
+log's `notice.<carrier>` record is written THERE and nowhere else. A record at
+each of `_carry`'s three returns would be three copies of one fact, and three
+copies drift — the same rule the carrier chain itself is built on.
+
+The record carries the agent, the event, `waited_s` (measured from the
+notice's own `at` stamp) and `waited` — whether it had really been held for a
+later connection rather than landing the second it was raised, which is the
+exact distinction the phone's own "8 min ago" suffix exists for. A second of
+slack keeps an ordinary round trip from being reported as a wait.
+
+Never raises. Gate: `tests/test_log_wiring.py` (0b24/6).

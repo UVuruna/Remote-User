@@ -119,3 +119,32 @@ member list can still name is exactly the one that used to stay stranded.
 
 ### Flow
 - [Presence — Flow](../__flow/presence.md)
+
+## `log_connect(ws, auth, screen)` — the use log's `session.connect`
+
+Lives here, in the module that owns "is a phone with us", rather than in
+[Web Layer](web.md): web.py stands at THE STRUCTURE LAW's 1,000-line wall, and
+a phone arriving is a presence fact in any case — its twin `session.leave` is
+written inside `leave_session()`, which is the whole point of putting the two
+in one module (three callers, one record).
+
+Every field is already on the wire; nothing is probed and nothing invented:
+
+- **`device` / `screen` / `panel`** — the phone's own `auth` message.
+- **`link`** — `"tailscale"` / `"lan"` / `"unknown"`, MEASURED off the socket's
+  Host header against the live Tailscale address (constraint 13 — read now,
+  never remembered). That is the LAN-vs-anywhere distinction the whole pairing
+  story turns on.
+- **`data_saver`** — this server's ONE notion of "on cellular"
+  (`config.is_data_saver`, T79). A separate `transport` field is deliberately
+  NOT invented: it would be a second answer to one question, and the two would
+  drift the first time either moved. That reasoning is `is_data_saver`'s own,
+  applied here.
+
+`leave_session(layouts, conn, reason)` takes the reason its **caller** already
+knew — the phone's own `away` reason, or the socket's end — rather than
+guessing one here, and writes `session.leave` exactly once (the function is
+idempotent, and a use log must not turn one leave into two).
+
+Neither may raise: a use log that can break the connection it observes has no
+business existing. Gate: `tests/test_log_wiring.py` (0b24/6).

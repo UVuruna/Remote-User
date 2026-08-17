@@ -73,3 +73,61 @@ One instance per process; states `"stopped" → "starting" → "running" → "st
   graph, never as a hole where anything could have happened.
 - **Capture is on demand in both modes.** The unconditional `stream.start()`
   for JPEG is gone; [Web Layer](web.md)'s `FrameHub.subscribers` owns it now.
+
+## The use log, and the one display watch (T113, 2026-08-17)
+
+Both belong to the **process**, not to a server run, so the controller owns
+them and `release_windows()` — the funnel every documented exit passes — puts
+them down.
+
+### `_start_use_log(info)` — repair, sweep, THEN open
+
+The order is load-bearing, and it is why this lives at the composition root
+rather than inside [Session Log](session_log.md). A run that ended without us
+leaves a file with **no footer**, and that missing footer is the only way the
+next start can recognise it (`session_log.is_unclosed`). So `repair_unclosed()`
+and `LogShipper.sweep()` must both finish BEFORE a new file exists — open
+first and the sweep ships a log that is still being written. `skip=LOG.path`
+is belt to those braces: `LOG.path` is `None` at that point so nothing can
+match it, but a later edit that moved `LOG.start()` up would otherwise fail
+**silently**, which is exactly the class of failure this feature exists to
+make visible.
+
+**The header carries only what cannot change while the process lives** — app
+version, the install id the shipper owns, the process start. Everything
+observable is a fact WITH A DURATION and goes through `LOG.state(...)`: the
+monitors (from `display_watch.snapshot()`, read fresh — constraint 13) and the
+run's own mode / encoder / monitor size. A header claiming "the PC is X" is
+`Layout.arranged_ratio` (constraint 13) in a new place — a note of what was
+once true, read forever after as if it still were.
+
+Two facts are **deliberately absent**: whether the process is elevated, and
+the bundled ffmpeg's version. Neither is readable at that point without
+inventing a probe, and a guessed value in an evidence log is worse than a
+missing one.
+
+### `close_use_log(reason)` — idempotent by construction
+
+Footer, then `log_summary.write_summary()`, then both files to the shipper.
+`LOG.close()` returns `None` when nothing is open, so the four exits that all
+reach `release_windows()` (tray Quit, Qt `aboutToQuit`, `atexit`, the console
+handler — constraint 10) cannot footer one file four times; `_log_lock`
+serialises them. It sits LAST in that funnel: the footer is the file's own
+record that we got to run code on the way out, so everything else has already
+happened by the time it is written.
+
+### `display_watch` — one watch, three consumers
+
+A **property**, created on first ask, because two of its consumers are not the
+server: the Settings window subscribes while it is open, and
+[Capture](capture.md) re-enumerates DXGI on it. `_serve` subscribes
+`_on_display_change` (which re-writes `state.pc`) and
+`capture.on_display_change`, then starts it.
+
+`release_windows()` keeps the OBJECT and releases only its event source.
+Honest limit, stated where it bites: `DisplayWatch.stop()` clears EVERY
+subscriber by its own contract, so a Settings window open across a server stop
+stops being repopulated until it is reopened — which is exactly the behaviour
+it had before this wiring existed.
+
+Gate: `tests/test_log_wiring.py` (0b24/6).

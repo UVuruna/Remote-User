@@ -66,3 +66,34 @@ So ownership is explicit: `_open()` **evicts** whoever still holds the monitor b
 
 - `close()`: stop AND release, idempotent, safe from any thread. Distinct from `stop()`, which is the IDLE cycle (nobody watching; the instance is deliberately kept for the client seconds away).
 - `start()` on a closed capture raises — a superseded run must never steal the monitor back from the live server.
+
+## `on_display_change(diff)` — a monitor arrived, or the one we capture left
+
+Subscribed by [Server Core](server_core.md) to the process's one
+[Display Watch](display_watch.md). Two duties, and neither is the other's:
+
+1. **Re-enumerate.** `dxcam.DXFactory` builds its `Output` objects ONCE, at
+   import, for the life of the process (constraint 30, measured — it cost a
+   3.8-hour dead picture). A monitor plugged in after start is therefore
+   invisible to every `dxcam.create()` this process will ever make until the
+   factory is rebuilt. `capture_recovery.reenumerate_dxgi()` is that rebuild
+   and it already existed for constraint 30 — this is its second **caller**,
+   never a second copy. A re-enumeration that does not happen is logged rather
+   than swallowed: the new monitor stays invisible until a restart, and that
+   is worth a line in his log.
+
+2. **Move the picture.** When the monitor being CAPTURED is one of the ones
+   that vanished, waiting for [Capture Recovery](capture_recovery.md)'s
+   `CaptureGuard` means waiting out `STALL_SECONDS` on a camera whose output
+   is never coming back. Capture is moved to a surviving monitor instead —
+   never to an index that just went — and WHICH monitor is said out loud,
+   because a picture that silently changes what it shows is its own bug
+   report. `switch_monitor` documents "must be called while stopped", so the
+   JPEG front-end's own `switch_to` is used where it exists and the same three
+   steps are taken around it where it does not.
+
+Never raises: one bad subscriber must not silence the others
+(`display_watch`'s own rule).
+
+Gate: `tests/test_log_wiring.py` (0b24/6) — including the other half, that a
+change sparing the captured monitor moves nothing at all.

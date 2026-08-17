@@ -159,3 +159,31 @@ The search also changed DIRECTION, and that fixed a typography defect the old
 shape hid: it takes the **smallest width whose measured height fits the screen
 floor**, instead of the widest width that minimises height. At 1,175 px the
 guidance ran about 150 characters to the line; DESIGN.md calls 60–80 readable.
+
+## The monitor list follows the real monitors (T113, 2026-08-17)
+
+`_populate_monitors` asks `BaseCapture.output_count()` -> `dxcam.output_info()`,
+and dxcam enumerates its outputs **once per process** (`dxcam.DXFactory` is an
+import-time singleton — project CLAUDE.md constraint 30, measured; it cost a
+3.8-hour dead picture). The list was therefore filled when the window was
+BUILT and frozen for the life of the app: a monitor plugged in mid-run never
+appeared, and reopening the window did not help — only a restart did.
+
+The open window now subscribes to the process's one Display Watch, reached
+through `controller.display_watch`, and refills the combo on a real change.
+
+Three rules hold it together:
+
+- **The callback arrives off the GUI thread** (a message-only window, or Qt's
+  screen signals), so `_emit_displays_changed` only EMITS the
+  `displays_changed` signal; the repopulate runs on the GUI thread through
+  Qt's queued delivery. A widget touched from a foreign thread is a crash, not
+  a glitch.
+- **A closed window lets go.** `done()` — QDialog's one exit, which `accept()`,
+  `reject()` and the window's own close button all pass through —
+  unsubscribes. A dead window's callback held by the watch would keep the
+  dialog alive and emit into a destroyed widget.
+- **A repopulate never re-points the owner's choice.** The current selection is
+  restored by data, not by index, whenever the monitor it names still exists.
+
+Gate: `tests/test_log_wiring.py` (0b24/6).
