@@ -181,10 +181,23 @@ class SettingsWindow(QDialog):
     """Modeless, like the Traffic window: the owner watches the main window's
     status pill while a stream change restarts the server."""
 
+    # A display change arrives on the watch's own thread (a WM_DISPLAYCHANGE
+    # message window, or Qt's screen signals). A Qt signal is the marshal:
+    # emitted from there, delivered on the GUI thread, so `_repopulate` never
+    # touches a widget from a foreign thread.
+    displays_changed = Signal()
+
     def __init__(self, controller, restart, parent: QWidget | None = None):
         super().__init__(parent)
         self.controller = controller
         self._restart = restart
+        # The combo the monitor list lives in, kept so a monitor plugged in
+        # while this window is OPEN can refill it (constraint 30: dxcam
+        # enumerates its outputs once per process, so the list built when this
+        # window was constructed is frozen — reopening the window never
+        # helped, only restarting the app did).
+        self._monitor_combo: QComboBox | None = None
+        self._watching_displays = False
         self._settled = False   # the minimum is measured on first show
         self._form_label_widgets: list[QLabel] = []   # aligned on first show
 
@@ -544,16 +557,88 @@ class SettingsWindow(QDialog):
 
     def _populate_monitors(self, combo: QComboBox) -> None:
         """Enumeration stays HERE — it asks the capture layer a question about
-        this PC, which is this window's subject, not the stream card's."""
+        this PC, which is this window's subject, not the stream card's.
+
+        The combo is REMEMBERED and the window subscribes to the display
+        watch: `BaseCapture.output_count()` reads `dxcam.output_info()`, whose
+        outputs were enumerated ONCE at import for the life of the process
+        (constraint 30, measured — it cost a 3.8-hour dead picture), so a
+        monitor plugged in mid-run never appeared here and reopening the
+        window did not help. Now a real display change re-enumerates DXGI
+        (`capture.on_display_change`) and re-asks this question."""
+        self._monitor_combo = combo
+        self._watch_displays()
+        self._fill_monitors(combo)
+
+    def _fill_monitors(self, combo: QComboBox) -> None:
         from capture import BaseCapture
         try:
             count = BaseCapture.output_count()
         except Exception as e:  # enumeration is cosmetic — never kill the window
             logger.error("Monitor enumeration failed: %s", e)
             count = 1
+        chosen = combo.currentData()
         combo.clear()
         for i in range(max(1, count)):
             combo.addItem(f"Monitor {i + 1}", i)
+        # A repopulate must not silently re-point the owner's choice at
+        # monitor 1; his pick is restored when it still exists.
+        if chosen is not None:
+            index = combo.findData(chosen)
+            if index >= 0:
+                combo.setCurrentIndex(index)
+
+    # -- displays that come and go ------------------------------------------
+
+    def _watch_displays(self) -> None:
+        """Subscribe the OPEN window to the process's one display watch.
+
+        The callback arrives on the watch's own thread (a message-only window,
+        or Qt's screen signals), so it only EMITS — the repopulate itself runs
+        on the GUI thread through the queued signal. A widget touched from
+        another thread is a crash, not a glitch."""
+        if self._watching_displays:
+            return
+        try:
+            watch = self.controller.display_watch
+        except Exception:  # a controller without one (a test double) is fine
+            return
+        self.displays_changed.connect(self._on_displays_changed)
+        watch.subscribe(self._emit_displays_changed)
+        self._watching_displays = True
+
+    def _emit_displays_changed(self, _diff) -> None:
+        """The watch's callback — the ONE thing it may do off the GUI thread."""
+        try:
+            self.displays_changed.emit()
+        except RuntimeError:
+            pass  # the window went away between the change and the emit
+
+    def _on_displays_changed(self) -> None:
+        if self._monitor_combo is not None:
+            self._fill_monitors(self._monitor_combo)
+
+    def _unwatch_displays(self) -> None:
+        """A closed window's callback must not be held — the watch would keep
+        this dialog alive and emit into a dead widget."""
+        if not self._watching_displays:
+            return
+        self._watching_displays = False
+        try:
+            self.controller.display_watch.unsubscribe(self._emit_displays_changed)
+        except Exception:
+            logger.exception("Unsubscribing from the display watch failed")
+        try:
+            self.displays_changed.disconnect(self._on_displays_changed)
+        except (RuntimeError, TypeError):
+            pass
+
+    def done(self, result: int) -> None:
+        """QDialog's ONE exit — `accept()`, `reject()` and the window's own ✕
+        all end here, which is why the unsubscribe sits here and not in
+        `closeEvent` alone."""
+        self._unwatch_displays()
+        super().done(result)
 
     # -- notifications ------------------------------------------------------
 

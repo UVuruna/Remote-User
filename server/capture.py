@@ -64,6 +64,80 @@ def _even(n: int) -> int:
     return n - (n % 2)  # H.264 yuv420 needs even dimensions
 
 
+def on_display_change(diff) -> None:
+    """A monitor arrived, left or changed — make dxcam able to see it, and
+    never leave the picture on a monitor that is gone.
+
+    Subscribed by `server_core.py` to the one `display_watch.DisplayWatch`.
+    Two separate duties, and neither is the other's:
+
+    1. RE-ENUMERATE. `dxcam.DXFactory` builds its `Output` objects ONCE, at
+       import, for the life of the process (constraint 30, measured — it cost
+       a 3.8-hour dead picture). So a monitor plugged in after start is
+       invisible to every `dxcam.create()` this process will ever make until
+       the factory is rebuilt. `capture_recovery.reenumerate_dxgi()` is that
+       rebuild and it already exists — this calls it, it does not own a
+       second copy of it.
+
+    2. MOVE THE PICTURE. When the monitor being CAPTURED is one of the ones
+       that vanished, waiting for the recovery ladder means waiting out a
+       stall on a camera whose output is never coming back. The capture is
+       moved to a surviving monitor instead, and WHICH monitor is said out
+       loud — a picture that silently changes what it shows is its own bug
+       report.
+
+    Never raises: this runs on the display-watch's callback path, and one bad
+    subscriber must not silence the rest (`display_watch`'s own rule)."""
+    try:
+        gone = {d.index for d in getattr(diff, "removed", ())}
+        with _OWNERS_LOCK:
+            owners = dict(_OWNERS)
+        logger.info("Displays changed (%d added, %d removed, %d changed) — "
+                    "re-enumerating DXGI so a new monitor can be opened",
+                    len(getattr(diff, "added", ())), len(gone),
+                    len(getattr(diff, "changed", ())))
+        if not capture_recovery.reenumerate_dxgi():
+            logger.warning("Display change: DXGI was NOT re-enumerated — a "
+                           "monitor plugged in now stays invisible to dxcam "
+                           "until the app restarts")
+        if not gone:
+            return
+        survivors = sorted(d.index for d in getattr(diff, "snapshot", ())
+                           if d.index not in gone)
+        for index, owner in owners.items():
+            if index not in gone:
+                continue
+            if not survivors:
+                logger.error("Monitor %d went away and NO monitor is left — "
+                             "the picture cannot be moved anywhere", index)
+                continue
+            target = survivors[0]
+            logger.warning("Monitor %d — the one being captured — went away; "
+                           "moving capture to monitor %d rather than waiting "
+                           "for the recovery ladder", index, target)
+            # `switch_monitor` documents "must be called while stopped", so a
+            # running capture is stopped around it — the JPEG front-end has
+            # that as `switch_to`, and anything else gets the same three steps
+            # here rather than a second copy of the switch itself.
+            switch = getattr(owner, "switch_to", None)
+            if switch is None:
+                was_running = owner._running
+                owner.stop()
+                moved = owner.switch_monitor(target)
+                if was_running:
+                    owner.start()
+            else:
+                moved = switch(target)
+            if moved:
+                logger.info("Capture moved to monitor %d after monitor %d "
+                            "went away", target, index)
+            else:
+                logger.error("Capture could NOT be moved to monitor %d — the "
+                             "recovery ladder is the remaining way back", target)
+    except Exception:
+        logger.exception("Reacting to a display change failed")
+
+
 class BaseCapture:
     """Camera lifecycle + capture thread + screenshot service shared by all
     streaming front-ends. Subclasses implement `_process(frame)`, called from
