@@ -42,7 +42,17 @@ html, body {
 
 #status {
   position: fixed;
-  top: var(--topbar);
+  /* NOTHING MAY OVERLAP ANYTHING (owner decree 2026-08-17, after seeing the
+     pill sitting over the window-offer chip's own title in the audit shots —
+     the sentence that names WHICH window he is being asked about). The pill is
+     the one that gives way, and that is the rule rather than an accident of
+     which one drew last: the chip is a QUESTION he must answer and must read
+     whole; the toast is a notice that leaves by itself. `--status-top` is
+     written by client/window-offer.js from the chip's MEASURED bottom edge —
+     measured, never a constant, because the chip's height depends on its
+     wording, on whether it carries the create answer, and on how many lines
+     the window's title takes. */
+  top: var(--status-top, var(--topbar));
   left: 50%;
   transform: translateX(-50%);
   padding: var(--space-s) 20px;
@@ -59,6 +69,12 @@ html, body {
   border-radius: min(var(--radius-pill), 24px);
   font: 600 14px system-ui, sans-serif;
   z-index: 40;
+  /* OPACITY ONLY — the move is INSTANT (measured 2026-08-17, not reasoned).
+     A 0.2 s slide read well in principle and photographed badly: the audit's
+     screenshot caught the pill mid-flight, sitting inside the chip it was in
+     the act of leaving, which is exactly the picture his decree is about. A
+     pill that is simply already out of the way cannot be caught anywhere
+     else, and nobody was ever going to admire the slide. */
   transition: opacity 0.4s;
   /* THE CIRCLE (owner screenshot, v0.0.107): a notify toast's text is long
      enough to wrap but not long enough to fill the viewport, so unconstrained

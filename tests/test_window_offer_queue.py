@@ -134,16 +134,27 @@ const btn = () => ({ textContent: "", hidden: false, addEventListener: () => {} 
 // merely swallowed the call would let a page that never set it pass here.
 const classes = new Set();
 const chip = { hidden: true,
+               getBoundingClientRect: () => ({ bottom: 200, height: 136 }),
                classList: { toggle: (c, on) => on ? classes.add(c) : classes.delete(c),
                             contains: (c) => classes.has(c) } };
 const els = { "window-offer": chip, "window-offer-text": text,
               "window-offer-in": btn(), "window-offer-out": btn(),
               "window-offer-new": btn() };
 
+const rootVars = {};
+const rootStyle = { setProperty: (k, v) => { rootVars[k] = v; },
+                    removeProperty: (k) => { delete rootVars[k]; } };
 const posted = [];
 const ctx = {
   console, setTimeout, clearTimeout, Date,
-  document: { getElementById: (id) => els[id] || btn() },
+  // `documentElement.style` is MODELLED, not stubbed away (owner decree
+  // 2026-08-17): the chip pushes the status pill below itself through
+  // `--status-top`, and the shift is measured off the chip's real box. Here
+  // the box is a fake with a known height, so the arithmetic is checkable —
+  // a fake that swallowed the call would let a page that never moves the pill
+  // pass this gate.
+  document: { getElementById: (id) => els[id] || btn(),
+              documentElement: { style: rootStyle } },
   fetch: (url, opt) => { posted.push(JSON.parse(opt.body)); return Promise.resolve({}); },
   token: "t",
   showToast: () => {},
@@ -175,6 +186,12 @@ async function main() {
   // Only then does the next question get its turn.
   out.next = shown[shown.length - 1];
   out.queued = posted.length;
+  // NOTHING MAY OVERLAP ANYTHING (owner decree 2026-08-17): while a chip
+  // stands, the status pill is pushed BELOW its measured bottom edge, and
+  // the shift is dropped the moment the chip goes.
+  out.shiftedWhileUp = rootVars["--status-top"] || null;
+  ctx.hideWindowOffer();
+  out.shiftedWhenGone = rootVars["--status-top"] || null;
   console.log(JSON.stringify(out));
   // The chip's own 30 s auto-dismiss timer would otherwise hold node
   // open long past the answer — and a driver that hangs is a gate that
@@ -223,6 +240,28 @@ def check_his_tap_answers_the_question_he_read():
     return r["answered"] == ["a"] and r["next"] != r["first"]
 
 
+def check_the_chip_pushes_the_status_pill_out_of_its_way():
+    """NOTHING MAY OVERLAP ANYTHING (owner decree 2026-08-17, after the audit
+    shots showed the amber status pill sitting over the chip's own title — the
+    sentence naming WHICH window he is being asked about).
+
+    Two halves, and the second is the one that rots quietly: while the chip
+    stands the pill is pushed below its MEASURED bottom edge (the fake box's
+    bottom is 200, plus the 10 px gap), and the moment the chip goes the shift
+    goes with it — a pill left pinned halfway down the screen for the rest of
+    the session would be this fix's own bug."""
+    r = _drive()
+    return r["shiftedWhileUp"] == "210px" and r["shiftedWhenGone"] is None
+
+
+def check_the_page_really_reads_the_shift():
+    """A CSS VARIABLE NOBODY READS IS NOT A FEATURE. The pill's own rule must
+    take `--status-top`, or the JS above writes a value into a page that goes
+    on drawing the pill exactly where it always did."""
+    css = (CLIENT.parent / "style.css").read_text(encoding="utf-8")
+    return "var(--status-top" in css
+
+
 CHECKS = [
     ("one window is never asked about twice",
      check_one_window_is_never_asked_about_twice),
@@ -232,6 +271,10 @@ CHECKS = [
      check_a_standing_chip_is_not_replaced),
     ("his tap answers the question he read, and the next one follows",
      check_his_tap_answers_the_question_he_read),
+    ("the chip pushes the status pill out of its way",
+     check_the_chip_pushes_the_status_pill_out_of_its_way),
+    ("the page really reads the shift",
+     check_the_page_really_reads_the_shift),
 ]
 
 

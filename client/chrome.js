@@ -702,6 +702,35 @@ layBar.addEventListener("pointercancel", () => { swipeFrom = null; }, true);
 // invisible pill is switched back to the connected state.
 let toastTimer = null;
 let toastFadeTimer = null;
+
+// HOW LONG IT STANDS DEPENDS ON HOW MUCH THERE IS TO READ (owner decision
+// 2026-08-17, and it is his own idea: *"koliko stoji vidljiv zavisi od
+// količine teksta u njemu"* — lang-ok: owner quote).
+//
+// Every toast used to stand 2500 ms and then fade for 450 ms — just under
+// three seconds for "Reconnecting…" and the same three seconds for a whole
+// sentence naming a window and what the PC refused to do with it. One number
+// cannot be right for both: it is generous for two words and it is a sentence
+// half-read for twenty.
+//
+// So: a fixed part (noticing it at all, while his eyes are on the streamed PC
+// screen and not on the pill) plus a per-character part (reading it). The
+// per-character number is deliberately below a comfortable reading pace — the
+// pill is a glance, not a page — and both ends are CLAMPED, because a rule
+// with no ceiling turns one long refusal into a pill that sits over his
+// controls for half a minute. The floor is the old 2500 ms exactly, so no
+// message this app already sends got SHORTER this round.
+const TOAST_NOTICE_MS = 1600;   // seeing that the pill changed at all
+const TOAST_PER_CHAR_MS = 55;   // ~18 characters a second
+const TOAST_MIN_MS = 2500;      // the old constant, kept as the floor
+const TOAST_MAX_MS = 9000;      // it is a glance, never a page
+
+function toastDuration(text) {
+  const len = (text || "").length;
+  return Math.min(TOAST_MAX_MS,
+                  Math.max(TOAST_MIN_MS, TOAST_NOTICE_MS + len * TOAST_PER_CHAR_MS));
+}
+
 function showToast(text) {
   setStatus("connecting", text);   // clears .fade — a new toast always shows
   clearTimeout(toastTimer);
@@ -710,7 +739,7 @@ function showToast(text) {
     if (!ws || ws.readyState !== WebSocket.OPEN) return;  // not connected: the real state must stay visible
     statusEl.classList.add("fade");
     toastFadeTimer = setTimeout(() => setStatus("connected", "Connected"), 450);
-  }, 2500);
+  }, toastDuration(text));
 }
 
 // WHICH side is open right now, so the ring can be re-laid out when the screen

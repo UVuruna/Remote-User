@@ -64,12 +64,40 @@ const WIN_OFFER_WORDS = {
 // controls under it.
 const WINDOW_OFFER_MS = 30000;
 
+// THE STATUS PILL GIVES WAY TO THE CHIP (owner decree 2026-08-17: nothing may
+// overlap anything). Both live at the top centre, the pill at `--topbar` and
+// the chip just under it, and a toast arriving while a chip stands landed
+// straight over the chip's own title — the sentence naming WHICH window he is
+// being asked about, which is exactly what makes the three answers meaningful
+// rather than a guess.
+//
+// The pill moves, not the chip: the chip is a question he must answer, the
+// toast is a notice that leaves by itself. The shift is MEASURED off the
+// chip's real bottom edge every time it is shown (constraint 13's rule applied
+// to our own page): the chip's height depends on its wording, on whether it
+// carries the create answer, and on how many lines the title wraps to, so any
+// constant here would be wrong for some real chip.
+const TOAST_GAP_PX = 10;
+
+function syncToastShift() {
+  const root = document.documentElement.style;
+  if (winOffer.hidden) {
+    root.removeProperty("--status-top");
+    return;
+  }
+  const box = winOffer.getBoundingClientRect();
+  if (box.height > 0) {
+    root.setProperty("--status-top", `${Math.round(box.bottom + TOAST_GAP_PX)}px`);
+  }
+}
+
 function hideWindowOffer() {
   clearTimeout(winOfferTimer);
   winOfferTimer = null;
   winOfferId = null;
   winOfferWindow = null;
   winOffer.hidden = true;
+  syncToastShift();
 }
 
 // The server names the window (title + process). The title is what he
@@ -133,6 +161,10 @@ function showWindowOffer(msg, dequeued) {
   winOfferOut.textContent = words.no;
   winOfferText.title = name;
   winOffer.hidden = false;
+  // AFTER it is visible and after its words are in: a hidden element measures
+  // zero, and a chip measured before its title was written would move the pill
+  // by the height of the wrong sentence.
+  syncToastShift();
   clearTimeout(winOfferTimer);
   // No answer is the desktop answer — the chip simply goes, and whatever was
   // waiting behind it gets its turn.

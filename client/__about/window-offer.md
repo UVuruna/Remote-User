@@ -191,3 +191,34 @@ identical mechanics happen as if I were making it through any other mode"*.
 The server moves nothing on that answer and does not file the window as left
 on the desktop; the creation that follows makes it a member, which silences
 the sweep by itself.
+
+
+## Nothing may overlap anything (owner decree 2026-08-17)
+
+His words on seeing the audit shots: *sredi to, ne sme da se preklapa ništa*
+(lang-ok: owner quote). The status pill and this chip both live at the top
+centre — the pill at `--topbar`, the chip just under it — and a toast arriving
+while a chip stood landed straight over the chip's TITLE, which is the sentence
+naming WHICH window he is being asked about. Without it the three answers are a
+guess.
+
+**The pill gives way, not the chip**, and that is a rule rather than an accident
+of which one drew last: the chip is a question he must answer and must read
+whole; the toast is a notice that leaves by itself. `syncToastShift()` writes
+`--status-top` from the chip's MEASURED bottom edge on every show and clears it
+on every hide — measured, because the chip's height depends on its wording, on
+whether it carries the create answer, and on how many lines the title wraps to,
+so any constant would be wrong for some real chip.
+
+**The move is INSTANT, and that was measured rather than reasoned.** The first
+version slid the pill over 0.2 s, which reads well in principle and photographed
+badly: the audit's screenshot caught it mid-flight, sitting inside the chip it
+was in the act of leaving — the exact picture the decree is about. Nobody was
+going to admire the slide.
+
+Gates: `tests/test_window_offer_queue.py` (the shift is written from the
+measured box and dropped when the chip goes; the pill's own CSS really reads
+it) and the phone audit's `the toast never covers the window chip`, which
+measures a real rect intersection with both up at once, on all four screens —
+the first tooth in that file to ask whether two independent overlays intersect
+at all, which is why this shipped in its own screenshots for two rounds unseen.

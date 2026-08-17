@@ -143,3 +143,25 @@ def picture_gates(step, run) -> None:
          "asking the owner's desktop, and the phone is told "
          "(tests/test_capture_recovery.py)")
     run([sys.executable, str(PROJECT_DIR / "tests" / "test_capture_recovery.py")])
+
+    # Owner decision 2026-08-17, and the rule is his own idea: "how long it
+    # stands visible depends on how much text is in it". Every toast used to
+    # stand exactly 2500 ms — a glance's worth for "Reconnecting…" and half a
+    # read for a sentence naming a window and what the PC refused to do with
+    # it, so the cost fell entirely on the notices that actually say
+    # something.
+    #
+    # IT LIVES WITH THE PICTURE GATES BY RESPONSIBILITY, not because gates.py
+    # stood at the structure law's wall (it did, and that is not a reason to
+    # put a gate anywhere in particular): these are the checks that prove he
+    # actually SEES something, and a sentence that leaves the screen before it
+    # can be finished is unseen exactly like a frame that never arrived.
+    #
+    # The gate holds the SHAPE of the curve and never its exact numbers —
+    # longer text never means less time, a floor at the old constant so
+    # nothing this app already says got shorter, and a ceiling because a pill
+    # is a glance and not a page. The numbers are his to tune on the real
+    # device, the same discipline the gamepad's stick curve is held with.
+    step("0b30/6  TOAST TIMING GATE — a notice stands as long as there is to "
+         "read (tests/test_toast_timing.py)")
+    run([sys.executable, str(PROJECT_DIR / "tests" / "test_toast_timing.py")])
