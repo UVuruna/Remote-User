@@ -43,6 +43,18 @@ orientation, `member_titles`, `member_hwnds`, `dependents`, `ratio` and `pos`.
   Explorer tab moved out is an independent window and closing the origin
   destroys nothing.
 
+  **The ⭐ has TWO sources now** (owner GO 2026-08-17). `Layout.sources` is
+  our own memory — written only when THIS server tore a tab off during
+  creation — and it always wins where it has an answer. Where a `code.exe`
+  member carries no such record (a restart, a layout built from windows that
+  were already open, the owner tearing a tab off by hand), [VS Code Windows](
+  vscode_windows.md) is asked instead, off VS Code's own on-disk record of
+  which window a torn-off editor belongs to. It is asked ONLY when it can
+  matter — fewer than two layouts, or a desk where every `code.exe` member
+  already has its own record, reads nothing — and its answer is merged in
+  under the same rule the file itself keeps: a miss is never a guess, so a
+  member neither source can explain simply carries no star.
+
 ## Reads
 
 - [Layout Registry](layout_registry.md) — the layouts themselves
@@ -50,3 +62,5 @@ orientation, `member_titles`, `member_hwnds`, `dependents`, `ratio` and `pos`.
   layout
 - [Window Manager](window_manager.md) — live titles, lazily through the module
   object for the reason that module's own doc gives
+- [VS Code Windows](vscode_windows.md) — the ⭐'s second source, for a trunk
+  we did not watch get built

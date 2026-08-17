@@ -13,6 +13,7 @@ learn a new name in the same commit that moved the code.
 """
 
 import agents
+import vscode_windows
 import window_manager as wm
 
 
@@ -75,7 +76,34 @@ def state(reg, active: int | None, region: dict | None) -> dict:
     # true only where the torn-out content still depends on its origin.
     # Judged by the BRANCH's app (the tab and its origin are the same
     # app), so no extra Win32 call rides the state frame.
+    # THE SECOND SOURCE — WHERE WE DID NOT WATCH IT HAPPEN (owner GO
+    # 2026-08-17). `Layout.sources` is only ever written when THIS server
+    # tore a tab off during creation; a restart, a layout built from
+    # windows that were already open, or the owner tearing a tab off BY
+    # HAND all leave no record, and the star never appeared for any of
+    # them. `vscode_windows.trunk_map` reads the same fact off VS Code's
+    # own storage instead of our own memory of what we did.
+    #
+    # Called ONLY when it can matter (vscode_windows.py's READ POLICY: no
+    # read unless asked) — fewer than two layouts means there is nothing
+    # for a trunk to be a trunk OF, and a desk where every code.exe member
+    # already carries its own record has nothing left for the file to
+    # answer. Our own record WINS over the file for any member that has
+    # one — we watched ourselves do that extraction; the file is only the
+    # answer for what we did not do.
+    extra_sources: dict[int, int] = {}
+    if len(reg.layouts) >= 2:
+        known = {m for lay in reg.layouts for m in lay.sources}
+        unresolved_code_members = [
+            m for lay in reg.layouts for m in lay.members
+            if m not in known and (wm._process_name(m) or "").lower() == "code.exe"]
+        if unresolved_code_members:
+            all_members = [m for lay in reg.layouts for m in lay.members]
+            extra_sources = vscode_windows.trunk_map(all_members)
+
     owners = [(lay, src) for lay in reg.layouts for src in lay.sources.values()]
+    owners += [(lay, extra_sources[m]) for lay in reg.layouts for m in lay.members
+               if m in extra_sources and m not in lay.sources]
     dependents = {
         id(lay): [other.name for other, src in owners
                   if other is not lay and src in lay.members

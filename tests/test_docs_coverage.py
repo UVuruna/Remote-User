@@ -69,6 +69,14 @@ STANDARD = {
     # above: seven subprocess calls in a row, each explained in place, no
     # order to reason about and no state.
     "setup/gates_picture.py",
+    # Split out of gates.py on 2026-08-17 (THE STRUCTURE LAW, the third time
+    # that file crossed the wall), by RESPONSIBILITY: the five gates that prove
+    # the app can ACCOUNT FOR ITS OWN RUN — the use log opened, written, rolled,
+    # closed, shipped and summed — apart from the ones that prove the wire and
+    # the phone. Standard rather than its parent's Algorithmic tier for exactly
+    # the reason its two siblings above are: five subprocess calls in a row,
+    # each explained where it stands, no order to reason about and no state.
+    "setup/gates_log.py",
     # New 2026-08-14 (T94, the version-skew round): the page must not outlive
     # its own protocol — one pure decision (remember the first config's
     # app_version, reload on any different one), no state machine beyond a
@@ -585,6 +593,10 @@ ALGORITHMIC = {
     # project. Algorithmic — a process table read, a session-id -> transcript
     # -> project mapping, and a cache, all of which have to be explained.
     "server/agents.py",
+    # New 2026-08-17: the ⭐'s second source. Algorithmic — a SQLite memento
+    # read, a generic grid walk, a title-then-bounds tie-break and a
+    # remainder rule, all of which have to be explained.
+    "server/vscode_windows.py",
     "server/grids.py",
     "client/loading.js",
     "server/gui/theme.py",
