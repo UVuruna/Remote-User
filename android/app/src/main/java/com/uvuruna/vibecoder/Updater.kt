@@ -121,21 +121,22 @@ class Updater(
          *  including its callback wiring, is entirely this class's
          *  responsibility. Every callback fires from a background thread
          *  (see `downloadAndInstall`), so each one hops to the UI thread
-         *  itself before touching the WebView — `host::web.isInitialized`
-         *  is the same lateinit guard the rest of the shell uses, checked
-         *  through a property reference since `web` is not this class's own
-         *  field. */
+         *  itself before touching the WebView — `host.webReady()` is the
+         *  same lateinit guard the rest of the shell uses, asked of `host`
+         *  because a `lateinit` initialization check can only be made from
+         *  the property's OWN declaring class, never across a class
+         *  boundary like this one, however visible the property is marked. */
         fun attach(host: MainActivity): Updater = Updater(
             host,
             onProgress = { received, total ->
                 host.runOnUiThread {
-                    if (host::web.isInitialized) host.web.evaluateJavascript(
+                    if (host.webReady()) host.web.evaluateJavascript(
                         "window.__updateProgress && __updateProgress($received, $total)", null)
                 }
             },
             onState = { state, detail ->
                 host.runOnUiThread {
-                    if (host::web.isInitialized) host.web.evaluateJavascript(
+                    if (host.webReady()) host.web.evaluateJavascript(
                         "window.__updateState && __updateState(" +
                             "${JSONObject.quote(state)}, ${JSONObject.quote(detail)})",
                         null)

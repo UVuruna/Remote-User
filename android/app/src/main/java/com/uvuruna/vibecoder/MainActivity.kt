@@ -397,6 +397,14 @@ class MainActivity : AppCompatActivity() {
     // In-app update — lives whole in Updater.kt, `attach` included.
     internal val updater by lazy { Updater.attach(this) }
 
+    /** `::web.isInitialized` only compiles from a scope that can reach the
+     *  property's BACKING FIELD — this class itself, never a caller in
+     *  another file, even with `web` marked `internal`. Updater.kt's
+     *  callbacks fire from a background thread and can arrive before or
+     *  after the WebView exists, so the guard is real; it just has to be
+     *  asked HERE, on the property's own owner, instead of at the call site. */
+    internal fun webReady(): Boolean = ::web.isInitialized
+
     private fun launchCamera() {
         val dir = File(cacheDir, "camera").apply { mkdirs() }
         val file = File(dir, "shot.jpg")
