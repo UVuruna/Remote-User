@@ -128,10 +128,17 @@ const vm = require("vm");
 const shown = [];
 const text = { set textContent(v) { shown.push(v); }, get textContent() {
   return shown[shown.length - 1] || ""; }, title: "" };
-const btn = () => ({ textContent: "", addEventListener: () => {} });
-const chip = { hidden: true };
+const btn = () => ({ textContent: "", hidden: false, addEventListener: () => {} });
+// `classList` is modelled rather than stubbed away (owner report 2026-08-17):
+// the chip now wears `has-new` when its create answer is up, and a fake that
+// merely swallowed the call would let a page that never set it pass here.
+const classes = new Set();
+const chip = { hidden: true,
+               classList: { toggle: (c, on) => on ? classes.add(c) : classes.delete(c),
+                            contains: (c) => classes.has(c) } };
 const els = { "window-offer": chip, "window-offer-text": text,
-              "window-offer-in": btn(), "window-offer-out": btn() };
+              "window-offer-in": btn(), "window-offer-out": btn(),
+              "window-offer-new": btn() };
 
 const posted = [];
 const ctx = {
