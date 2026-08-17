@@ -236,8 +236,31 @@ def check_the_screen_is_released_when_no_session_is_shown() -> bool:
               file=sys.stderr)
         ok = False
 
-    card = re.search(r"private fun showErrorCard\(\)(?:.|\n)*?\n    }", main)
-    if not card or "showLayer(error = true" not in card.group(0):
+    # showErrorCard may live in either MainActivity.kt (a plain private method,
+    # closing on the 4-space class indent) or ConnectionError.kt (the shape it
+    # took on 2026-08-14 when the structure-law split moved the error-card /
+    # network-diagnosis code out of MainActivity.kt into its own file, as an
+    # `internal fun MainActivity.showErrorCard()` extension — a TOP-LEVEL
+    # declaration, so its closing brace has no indent at all. Whichever file it
+    # is in next, look in both and match both shapes — a regex tuned to one
+    # file's indent silently stops finding its subject the next time this code
+    # moves, which is worse than no check at all.
+    connerr = (SRC / "ConnectionError.kt").read_text(encoding="utf-8") \
+        if (SRC / "ConnectionError.kt").exists() else ""
+    card = (
+        re.search(r"private fun showErrorCard\(\)(?:.|\n)*?\n    }", main)
+        or re.search(r"internal fun MainActivity\.showErrorCard\(\)(?:.|\n)*?\n}",
+                     main)
+        or re.search(r"private fun showErrorCard\(\)(?:.|\n)*?\n    }", connerr)
+        or re.search(r"internal fun MainActivity\.showErrorCard\(\)(?:.|\n)*?\n}",
+                     connerr)
+    )
+    if not card:
+        print("    showErrorCard was not found in any shell file — checked "
+              "MainActivity.kt and ConnectionError.kt for both the method and "
+              "extension-function shapes", file=sys.stderr)
+        ok = False
+    elif "showLayer(error = true" not in card.group(0):
         print("    showErrorCard does not go through the funnel — no page is "
               "running there, so nothing else can release the screen",
               file=sys.stderr)
