@@ -445,7 +445,7 @@ async def _h264_loop(ws: WebSocket, manager, token: str, conn: dict,
     write an init segment), and a failed RE-open is retried, never closing a
     socket that carries input, layouts and dictation too."""
     loop = asyncio.get_running_loop()
-    first, failures = True, 0
+    first, failures, ladder_run = True, 0, False   # ladder: once per connection (T135)
     while True:
         # The phone said it is gone. Capture, ffmpeg and the socket all stay
         # idle until it says otherwise — a stream nobody can see is exactly
@@ -531,6 +531,18 @@ async def _h264_loop(ws: WebSocket, manager, token: str, conn: dict,
             # A RE-open is not: a quality change forces one, and closing takes
             # input, layouts and dictation down with the picture. Bounded, so
             # this can never become the 2026-07-29 loop (171 failures in 90 s).
+            if first and not ladder_run:
+                # T135: a dead camera fails the FIRST open, this branch closed
+                # the socket, the phone returned to the same dead camera. His
+                # log lines and why the ladder could not reach him:
+                # `capture_recovery.recover_for_open`.
+                ladder_run = True
+                if await asyncio.to_thread(manager.recover_capture, e):
+                    continue
+                await _toast(ws, "The PC lost its picture and could not get it "
+                                 "back — restart Vibe Coder on the PC")
+                await ws.close(code=1011)
+                return
             if first or failures >= SETTINGS.h264_reopen_tries:
                 logger.error("H.264 session failed to open: %s", e)
                 await _toast(ws, "Stream failed to start — see server log")

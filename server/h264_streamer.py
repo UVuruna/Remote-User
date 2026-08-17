@@ -569,6 +569,13 @@ class H264Manager:
         )
         self._guard.start()
 
+    def recover_capture(self, error: Exception) -> bool:
+        """Run the recovery ladder because a session failed to OPEN (T135).
+        The manager owns the source, so it is the one that hands it over; the
+        ladder itself and the owner's log that made it necessary are in
+        `capture_recovery.recover_for_open`."""
+        return capture_recovery.recover_for_open(self._source, error)
+
     def _picture_is_wanted(self) -> bool:
         """Somebody is really waiting for a picture right now. An idle server
         with capture deliberately stopped is not a stall, and a rebuild there

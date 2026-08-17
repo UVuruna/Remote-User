@@ -328,3 +328,77 @@ class CaptureGuard:
             self._on_state(ok, detail)
         except Exception:
             logger.exception("Capture guard could not announce its state")
+
+
+def recover_for_open(capture, error: Exception) -> bool:
+    """Run the ladder because a session FAILED TO OPEN, and say whether a
+    camera that really produces frames is back.
+
+    WHY THIS ENTRY POINT EXISTS (owner report 2026-08-17, T135). His report:
+    he lifted the laptop and the tablet "just span connected, disconnected,
+    connected, disconnected"; it only came back after he installed an update
+    on the PC. Read out of his own `server.log` rather than asked about — six
+    cycles, one every six seconds, 09:24:02 to 09:24:26:
+
+        dxcam: AttributeError: 'NoneType' object has no 'AcquireNextFrame'
+        web:   H.264 session failed to open: ffmpeg produced no init segment
+        web:   Client disconnected
+        web:   Client authenticated          <- one second later, and again
+
+    The camera was dead (the DXGI duplicator's COM object gone), so ffmpeg was
+    fed nothing, so the FIRST session could not open — and `web.py` closed the
+    socket for it. The phone reconnects a second later, meets the same dead
+    camera, and the loop cannot break itself: a new CONNECTION has never fixed
+    DXGI. What finally "fixed" it was installing an update, which RESTARTED
+    the process — the only thing in that whole sequence that was clearing the
+    stale COM objects. The new version had nothing to do with it, and that is
+    worth writing down, because "it started working after the update" is
+    exactly the evidence that would send the next round looking at the wrong
+    release.
+
+    WHY THE LADDER COULD NOT ALREADY REACH HIM, which is the structural half:
+    `CaptureGuard` judges by the FRAME CLOCK while a client is watching — did
+    a picture arrive — and that is the right question for the blue-screen
+    failure it was built for (constraint 30), where the session opens fine and
+    then goes quiet. Here no session ever opens, so there is no stream to
+    measure, no frame age to compare, and the guard's whole premise is absent.
+    A dead camera at open time is the SAME dead camera; it simply has no
+    stream for the guard to watch it through. So the ladder needs a second
+    door, and this is it.
+
+    Bounded on purpose: `web.py` calls this at most once per connection. It is
+    a real rebuild of the camera — abandon, reopen, re-enumerate — not a retry
+    knob, and running it per failed attempt would be its own storm.
+
+    The capture is passed IN rather than looked up, for the same reason
+    `phone_notice` takes its toast: this module owns the LADDER and holds no
+    opinion about who owns the camera. `H264Manager` does, and it is the one
+    that calls in here.
+
+    Returns True when a camera that PROVED itself (it produced a frame) is
+    installed, so the caller may retry the session; False when it could not,
+    in which case the caller closes the socket and the phone is told the PC
+    lost its picture — the honest end, and one the owner can act on, instead
+    of a flap with no message.
+    """
+    logger.error("H.264 session failed to open (%s) — running the capture "
+                 "recovery ladder before giving up", error)
+    try:
+        healed = bool(capture is not None and capture.rebuild_camera())
+    except Exception:
+        logger.exception("The capture recovery ladder raised while answering a "
+                         "failed session open")
+        healed = False
+    if healed:
+        logger.info("Capture rebuilt after a failed session open — retrying")
+    else:
+        logger.error("The capture could not be rebuilt — the PC has no picture "
+                     "to send, and the phone is being told so instead of being "
+                     "left to reconnect into the same failure")
+    try:
+        session_log.LOG.record("fault.capture", ok=healed,
+                               detail="session open failed; ladder "
+                                      + ("recovered" if healed else "could not recover"))
+    except Exception:
+        logger.exception("Capture recovery could not log the open-failure ladder")
+    return healed

@@ -467,6 +467,117 @@ def check_phone_notice_sends_and_swallows_errors() -> bool:
         loop.close()
 
 
+def check_a_failed_open_runs_the_ladder_and_reports_honestly() -> bool:
+    """T135 — HIS RECONNECT LOOP (owner report 2026-08-17), at the boundary
+    the loop actually ran through.
+
+    His server.log, six cycles one every six seconds, 09:24:02 to 09:24:26:
+    a dead camera (`AttributeError: 'NoneType' has no 'AcquireNextFrame'`),
+    then `H.264 session failed to open`, then `Client disconnected`, then
+    `Client authenticated` a second later — forever, because a new CONNECTION
+    has never fixed DXGI. `CaptureGuard` could not save him: it judges by the
+    frame clock while a session STREAMS, and here no session ever opened.
+
+    So the ladder needed a second door, and this drives it: a failed open must
+    RUN the ladder, and must report what really happened — True only when a
+    camera that produced a frame is installed, False when it could not, so the
+    caller closes the socket and the phone is told instead of being left to
+    flap.
+
+    PLANTED, separately:
+      * `recover_for_open` returning True unconditionally — the false True is
+        caught, which matters more than the false False: it would send the
+        caller back to retry a session against a camera that still cannot
+        grab, i.e. rebuild his loop with an extra step in it.
+      * `rebuild_camera` never called at all (the pre-fix state, where the
+        open-failure path simply closed the socket) — the ladder-ran check
+        fails.
+    """
+    _reset()
+    cap = _new_dummy()
+    calls = []
+    real = cap.rebuild_camera
+    cap.rebuild_camera = lambda *a, **k: (calls.append(1), real(*a, **k))[1]
+
+    # (a) the ladder finds a camera that really grabs -> True, and it RAN.
+    FACTORY.queue = [FakeCamera(will_grab=True)]
+    healed = capture_recovery.recover_for_open(cap, RuntimeError("no init segment"))
+    ran = bool(calls)
+
+    # (b) every rung fails -> False, never an optimistic True.
+    FACTORY.queue = [FakeCamera(will_grab=False), FakeCamera(will_grab=False)]
+    hopeless = capture_recovery.recover_for_open(cap, RuntimeError("no init segment"))
+
+    # (c) a capture that RAISES must not take the connection down with it.
+    class _Raiser:
+        def rebuild_camera(self):
+            raise OSError("device removed")
+    raised = capture_recovery.recover_for_open(_Raiser(), RuntimeError("x"))
+
+    # (d) no capture at all is False, not a crash.
+    none_case = capture_recovery.recover_for_open(None, RuntimeError("x"))
+    cap.close()
+
+    if not ran:
+        print("    the ladder was never run on a failed open")
+        return False
+    if healed is not True:
+        print(f"    a recovered camera reported {healed!r}, not True")
+        return False
+    if hopeless is not False:
+        print(f"    an unrecoverable camera reported {hopeless!r} — a false True "
+              f"sends the caller back into the owner's own loop")
+        return False
+    if raised is not False or none_case is not False:
+        print("    a raising or missing capture must be False, never an exception")
+        return False
+    return True
+
+
+def check_the_open_failure_path_calls_the_ladder_before_closing() -> bool:
+    """The WIRING, at the method boundary — because the check above proves the
+    ladder works and says nothing about whether anything calls it, which is
+    exactly the state that shipped: the ladder existed for months while the
+    open-failure path closed the socket without ever asking it.
+
+    PLANTED: `H264Manager.recover_capture` removed, or wired to something
+    other than its own source — this fails at the attribute or on the source
+    identity.
+    """
+    import h264_streamer
+    if not hasattr(h264_streamer.H264Manager, "recover_capture"):
+        print("    H264Manager has no recover_capture — the open-failure path "
+              "has nothing to call")
+        return False
+    seen = {}
+    real = capture_recovery.recover_for_open
+    def _spy(cap, err):
+        seen["cap"] = cap
+        return True
+    capture_recovery.recover_for_open = _spy
+    try:
+        mgr = object.__new__(h264_streamer.H264Manager)
+        sentinel = object()
+        mgr._source = sentinel
+        out = h264_streamer.H264Manager.recover_capture(mgr, RuntimeError("x"))
+    finally:
+        capture_recovery.recover_for_open = real
+    if seen.get("cap") is not sentinel:
+        print("    the manager handed the ladder something other than its own source")
+        return False
+    if out is not True:
+        print("    the manager did not return the ladder's own verdict")
+        return False
+    # And web.py must actually call it on the first failed open, before close.
+    web = (Path(__file__).resolve().parent.parent / "server" / "web.py").read_text(
+        encoding="utf-8")
+    if "manager.recover_capture" not in web:
+        print("    web.py never calls recover_capture — the ladder has no door "
+              "onto the failure the owner actually hit")
+        return False
+    return True
+
+
 CHECKS = [
     ("a healthy capture never rebuilds", check_healthy_never_rebuilds),
     ("a stall while watched rebuilds and announces ok=False once",
@@ -490,6 +601,10 @@ CHECKS = [
     ("H264Manager.shutdown() stops the guard", check_guard_stopped_by_shutdown),
     ("phone_notice sends both states and swallows a raising toast",
      check_phone_notice_sends_and_swallows_errors),
+    ("a failed OPEN runs the ladder and reports honestly (T135)",
+     check_a_failed_open_runs_the_ladder_and_reports_honestly),
+    ("the open-failure path really calls the ladder (T135 wiring)",
+     check_the_open_failure_path_calls_the_ladder_before_closing),
 ]
 
 

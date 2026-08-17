@@ -81,3 +81,52 @@ Watches ONE capture's frame clock (`capture.frame_age()`) and runs the ladder wh
 - **A defect found by RUNNING the fix, not reading it.** The first version of `abandon_camera` dropped the camera without attempting a real release, and DXGI's one-duplication-per-output rule meant the replacement's `DuplicateOutput` failed with `E_INVALIDARG` — against a HEALTHY camera, in the module's own smoke test. That is why rung 1 waits briefly for a real release before giving up on it.
 - **`_fresh_camera` proves a camera by grabbing a frame from it**, not by whether it constructed — a camera that constructs and never yields would report the blue screen as fixed while changing nothing the owner can see.
 - **The phone is told.** A blue canvas that says nothing is half of what he actually lived through — he could not tell a dead capture from a dead app, and there was nothing on the page to read. `phone_notice` exists so a lost picture and its return both reach the status pill.
+
+## T135 — the reconnect loop, and the door the ladder was missing
+
+Owner report 2026-08-17: he lifted the laptop and the tablet "just span
+connected, disconnected, connected, disconnected"; it only came back after he
+installed an update on the PC.
+
+**Read out of his own `server.log`, not asked about** — six cycles, one every
+six seconds, 09:24:02 to 09:24:26:
+
+```
+dxcam: AttributeError: 'NoneType' object has no attribute 'AcquireNextFrame'
+web:   H.264 session failed to open: ffmpeg produced no init segment in time
+web:   Client disconnected
+web:   Client authenticated          <- one second later, and again
+```
+
+The DXGI duplicator's COM object was gone, so ffmpeg was fed nothing, so the
+FIRST session could not open — and `web.py` closed the socket for it. The
+phone reconnects a second later, meets the same dead camera, and **the loop
+cannot break itself: a new connection has never fixed DXGI.**
+
+What "fixed" it was installing an update, which RESTARTED the process — the
+only thing in that sequence that cleared the stale COM objects. The new
+version had nothing to do with it. That is worth stating plainly, because "it
+started working after the update" is exactly the evidence that would send the
+next round to the wrong release.
+
+**Why the ladder on this page could not already reach him**, and it is
+structural rather than a missing line: `CaptureGuard` judges by the FRAME
+CLOCK while a client is watching — did a picture arrive. That is the right
+question for the blue-screen failure it was built for, where the session opens
+and then goes quiet. Here no session ever opened, so there is no stream to
+measure and no frame age to compare; the guard's whole premise is absent. A
+dead camera at open time is the same dead camera — it simply has no stream to
+be watched through.
+
+So the ladder has a second door: `recover_for_open(capture, error)`, called by
+`H264Manager.recover_capture` from `web.py`'s open-failure branch, **once per
+connection** (it is a real rebuild, not a retry knob). If a camera that proved
+itself comes back, the session is retried. If not, the socket still closes —
+but the phone is told the PC lost its picture and could not get it back, which
+is an end he can act on instead of a silent flap.
+
+Gate: two checks in `tests/test_capture_recovery.py` — one for the ladder's
+own honesty (a false True would send the caller back into his loop with an
+extra step in it) and one at the WIRING boundary, because the first proves the
+ladder works and says nothing about whether anything calls it, which is
+exactly the state that shipped. Each proven by planting its own defect.
