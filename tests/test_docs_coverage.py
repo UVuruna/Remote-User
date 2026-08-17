@@ -38,6 +38,14 @@ STANDARD = {
     # worth its own diagram — the ladder's order IS the whole flow, and it
     # reads straight off the __about doc.
     "server/capture_recovery.py",
+    # New 2026-08-17 (his ruling on the UIPI alarm: "why would we have things
+    # that do not do what they are supposed to do" — measure, or delete).
+    # Standard: four independent readings of the environment (our own token,
+    # the foreground window, its process, its integrity level) plus one
+    # sentence built out of what was found. Every field is nullable and no
+    # branch invents a cause, so there is no flow to draw — the __about doc
+    # carries what is measured and what is deliberately left unknown.
+    "server/elevation.py",
     # New 2026-08-16/17 (constraint 30's other half — react to the display
     # EVENT instead of polling). Standard, not Algorithmic: the same
     # message-only-window thread shape focus_hook.py already carries at

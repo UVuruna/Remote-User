@@ -20,6 +20,7 @@ import logging
 import math
 from collections.abc import Callable
 
+import elevation
 from config import SETTINGS
 
 logger = logging.getLogger(__name__)
@@ -363,10 +364,21 @@ class InputInjector:
             prev_target, prev_jump = self._pending
             if self._verify.note(prev_target, actual, prev_jump):
                 self._input_alarm = True
+                # WHAT WAS MEASURED, never what was assumed (owner ruling
+                # 2026-08-17). This line used to end with a fixed
+                # parenthesis naming UIPI and asserting "this process is not
+                # elevated" — a hypothesis the code never tested, printed in
+                # the voice of a finding. It was then read back out of the
+                # log as evidence and reported to him as the cause of a
+                # failure it had nothing to do with (2026-08-16 19:19, where
+                # the real defect was a dead capture). `elevation.describe()`
+                # reads our own token, the foreground window and ITS
+                # integrity level, and says only what it found — including
+                # "unknown" where a field cannot be read.
                 logger.error(
                     "Injected input is being DISCARDED by Windows — commanded "
-                    "cursor jumps do not land (UIPI: an elevated window or the "
-                    "lock screen has focus, and this process is not elevated)."
+                    "cursor jumps do not land. Measured: %s",
+                    elevation.describe(),
                 )
         mon_left, mon_top, mon_w, mon_h = self.monitor_rect
         target = (mon_left + x_norm * mon_w, mon_top + y_norm * mon_h)
