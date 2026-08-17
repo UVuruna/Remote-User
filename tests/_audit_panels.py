@@ -409,6 +409,15 @@ APPEARANCE_STAGE_JS = "openAppearancePanel()"
 WIN_OFFER_STAGE_JS = (
     "showWindowOffer({id:'audit', act:'rescue', hwnd:1, process:'chrome.exe',"
     " title:'Plan Android i desktop aplikacije - Google Chrome'})")
+# THE THREE-ANSWER CHIP (owner report 2026-08-17): inside a layout the sweep's
+# chip now carries "Make a layout" on a row of its own above the pair. It is
+# the TALLEST state the strip can take and the one his finger meets every day,
+# so it is photographed rather than trusted — the rescue stage above is the
+# widest, this one the tallest, and neither says anything about the other.
+WIN_OFFER_NEW_STAGE_JS = (
+    "showWindowOffer({id:'audit2', act:'layout', hwnd:1, new_ok:true,"
+    " process:'chrome.exe',"
+    " title:'Plan Android i desktop aplikacije - Google Chrome'})")
 APPEARANCE_CLOSE_JS = "closeAppearancePanel()"
 
 # THE LOADING OVERLAY HAD NEVER BEEN PHOTOGRAPHED (2026-08-12). It is the
@@ -607,6 +616,8 @@ PANELS = (
     # that had shipped all along. Staged in its LONGEST state: the rescue words
     # over a real window title, which is the strip's worst case for width.
     ("Window offer chip, rescue", WIN_OFFER_STAGE_JS,
+     "hideWindowOffer()", "#window-offer"),
+    ("Window offer chip, three answers", WIN_OFFER_NEW_STAGE_JS,
      "hideWindowOffer()", "#window-offer"),
     ("Loading full screen", LOADING_FULL_JS,
      LOADING_CLOSE_JS, "#lay-loading"),

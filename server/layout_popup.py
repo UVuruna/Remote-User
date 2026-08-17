@@ -577,9 +577,30 @@ def _offer(lay, hwnd: int, conn: dict, reason: str) -> str:
     ONE PROMPT PER WINDOW (`popup_asked`): the watcher runs four times a
     second, and a chip that reappeared on every tick would be worse than the
     bug it answers."""
+    # THE CHIP CARRIES BOTH ACTS (owner report 2026-08-17, and he has reported
+    # this one more times than any other bug in this project). While a layout
+    # is focused this sweep is the ONLY question a new window can raise —
+    # `layout_birth.scan` stands down for anything this module can claim, which
+    # is the one-window-one-question rule of constraint 18 — so "Move it in"
+    # was the only thing the app could ever offer him there. His case is the
+    # one that happens every day: an agent finishes, its HTML report opens in
+    # Chrome, and what he wants from that window is a LAYOUT, not a corner of
+    # the one he is already in. The old shape could not express it, whatever he
+    # tapped.
+    #
+    # The answer is NOT a second chip — that is exactly what cost him a moved
+    # window on 2026-08-12 (constraint 18: one strip, one live offer id, so a
+    # second question silently replaces the first under his finger). It is one
+    # chip with three answers: Make a layout · Move it in · Leave. The window's
+    # own identity rides along (`hwnd`/`icon`), because "Make a layout" seeds
+    # the ORDINARY creation panel with it — the identical mechanics of Tap,
+    # List and New, and not a path of its own.
     key = queue_offer(conn, hwnd, "", {"lay": lay},
                       {"title": wm._title(hwnd),
                        "process": wm._process_name(hwnd),
+                       "hwnd": hwnd,
+                       "new_ok": True,
+                       "icon": wm.icon_data_uri(wm._process_path(hwnd)),
                        "layout": lay.name}, "popup_asked")
     logger.info("Popup %s offered to the phone as %s (%s)",
                 _describe(hwnd), key, reason)
@@ -660,6 +681,17 @@ def pick(offer_id: str, act: str) -> bool:
     # of `lay.adopted` for the layout. Keeping it here instead would make the
     # decline record dead code and hide the day it stopped working.
     conn.get("popup_asked", set()).discard(hwnd)
+    if act == "layout_new":
+        # "MAKE A LAYOUT" ON THE SWEEP'S OWN CHIP (owner report 2026-08-17).
+        # Nothing on the PC moves here, exactly as on task 185's birth chip:
+        # the phone opens the ordinary creation panel seeded with this window
+        # and every later step is the creation flow that already exists. It is
+        # deliberately NOT recorded in `popup_declined` — he has not left the
+        # window on the desktop, he has taken it somewhere, and the creation
+        # that follows makes it a member, which silences the sweep by itself.
+        logger.info("Popup %s goes into a NEW layout — his choice",
+                    _describe(hwnd))
+        return bool(wm.user32.IsWindow(hwnd))
     if act != "layout":
         # Remembered, so the watcher does not ask again and never places it:
         # he has answered this window.

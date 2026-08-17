@@ -71,6 +71,26 @@
   flex: 1 1 100%;
 }
 
+/* The create answer takes the whole row above the pair (owner report
+   2026-08-17). `1 / -1` and not `span 2`, so it stays a full row whatever the
+   grid is ever given. */
+#window-offer #window-offer-new {
+  grid-column: 1 / -1;
+  border-color: var(--accent);
+  background: var(--accent-wash);
+}
+
+#window-offer button[hidden] { display: none; }
+
+/* ONE PRIMARY, NEVER TWO. When the create answer is up it is the accented one,
+   so "Move it in" steps back to the plain chip fill — written more specific
+   (2,1,0) than the accent rule below (2,0,0), the same specificity-not-
+   `!important` discipline that rule was fixed with on 2026-08-11. */
+#window-offer.has-new #window-offer-in {
+  border-color: var(--border);
+  background: var(--chip);
+}
+
 #window-offer button {
   min-width: 0;
   padding: 8px 12px;

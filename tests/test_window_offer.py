@@ -251,6 +251,70 @@ def check_a_server_that_has_never_been_watched_treats_the_desk_as_his() -> bool:
     return not layout_popup._is_new(first, STRANGER)
 
 
+# ═══════════ 10-12. THE ANSWER HE ASKED FOR IS ON THE CHIP ═══════════
+# OWNER REPORT 2026-08-17, the one he has made more often than any other: an
+# agent's HTML report opened in Chrome while he was watching a layout, and the
+# phone offered to MOVE IT IN — never to make a layout of it. It was structural
+# and not a slip: inside a focused layout this sweep is the only question a new
+# window can raise (`layout_birth.scan` stands down for anything this module
+# can claim — constraint 18), and its chip had exactly two answers, neither of
+# them the one he wants. Three checks, each proven by planting its own defect.
+def check_the_chip_offers_a_layout_of_its_own() -> bool:
+    """His agent-report window, inside a focused layout: the chip must carry
+    the create answer AND the window's identity, because "Make a layout" seeds
+    the ordinary creation panel with that exact window."""
+    reg, conn = _fresh()
+    _stranger_appears(conn)
+    queued = _sweep(reg, conn)
+    if len(queued) != 1:
+        return False
+    chip = queued[0]
+    return chip.get("new_ok") is True and chip.get("hwnd") == STRANGER
+
+
+def check_his_create_tap_moves_nothing_and_is_not_a_refusal() -> bool:
+    """The tap comes back through the REAL `pick()` — the one the HTTP route
+    calls. Two promises: the PC moves nothing (the creation flow does every
+    later step, exactly as task 185's chip does), and the window is NOT filed
+    as left on the desktop, since he has not left it anywhere."""
+    reg, conn = _fresh()
+    _stranger_appears(conn)
+    # The fake's ENUMERATION and its IsWindow are two different sets, exactly
+    # as Windows' own EnumWindows and IsWindow are: this is the only check here
+    # that reaches `pick`, which refuses a window that has closed meanwhile.
+    layout_popup.wm.user32.alive.add(STRANGER)
+    queued = _sweep(reg, conn)
+    if len(queued) != 1:
+        return False
+    lay = reg.layouts[0]
+    before = list(base.PLACED)
+    ok = layout_popup.pick(queued[0]["id"], "layout_new")
+    return (ok and list(base.PLACED) == before
+            and STRANGER not in lay.adopted
+            and STRANGER not in conn.get("popup_declined", set()))
+
+
+def check_the_page_really_wires_the_create_answer() -> bool:
+    """A SERVER FIELD NO PAGE READS IS NOT A FEATURE (the actions.json lesson
+    of 2026-08-07, and the `wheel_order` one after it). This reads the shipped
+    client: the button must exist, it must post the act the server is waiting
+    for, and it must seed the creation panel through `startFromWindow` — the
+    same function Tap, List and New already end in, which is his whole point.
+
+    The CSS row is checked too: a third answer squeezed into the pair's grid
+    would shrink all three below a thumb (THE SPACE & LEGIBILITY LAW)."""
+    client = PROJECT_DIR / "client"
+    html = (client / "index.html").read_text(encoding="utf-8")
+    js = (client / "window-offer.js").read_text(encoding="utf-8")
+    css = (client / "window-offer.css").read_text(encoding="utf-8")
+    return ('id="window-offer-new"' in html
+            and "window-offer-new" in js
+            and 'answerWindowOffer("layout_new")' in js
+            and "new_ok" in js
+            and "startFromWindow" in js
+            and "grid-column: 1 / -1" in css)
+
+
 CHECKS = [
     ("a claim armed before the act silences the chip",
      check_a_claim_armed_before_the_act_silences_the_chip),
@@ -270,6 +334,12 @@ CHECKS = [
      check_a_window_born_while_he_was_gone_is_new_on_his_return),
     ("a server that has never been watched treats the desk as his",
      check_a_server_that_has_never_been_watched_treats_the_desk_as_his),
+    ("the chip offers a layout of its own",
+     check_the_chip_offers_a_layout_of_its_own),
+    ("his create tap moves nothing and is not a refusal",
+     check_his_create_tap_moves_nothing_and_is_not_a_refusal),
+    ("the page really wires the create answer",
+     check_the_page_really_wires_the_create_answer),
 ]
 
 

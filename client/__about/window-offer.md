@@ -158,3 +158,36 @@ birth one, because "make a new layout out of the layout's own work" was never
 a sensible offer to begin with (the same reasoning that moved the sweep's
 attribution ahead of the birth scan's on 2026-08-12). A third button on this
 chip would violate that rule directly.
+
+## THE THIRD ANSWER (owner report 2026-08-17) — and why the paragraph above was wrong
+
+Corrected in place rather than deleted, because the wrong reasoning is the
+evidence: it is the sentence that made this the bug he has reported more times
+than any other in this project, and it read as a settled decision, so round
+after round walked past it.
+
+Its two claims fail separately.
+
+* **"A third CHIP"** is what constraint 18 forbids, and nobody was asking for
+  one. Constraint 18 is about the STRIP: one live offer id, so a second chip
+  silently replaces the first under his finger and his tap answers a question
+  he never read. Three answers on ONE chip about ONE window is the exact
+  opposite of that failure — one question, asked once, fully written down
+  before he touches it.
+* **"The layout's own work"** describes rules 1-4 of `_attribute`, and since
+  2026-08-17 the sweep also offers a window under a rule that says nothing
+  about the layout at all: *nobody has placed this anywhere*. His agent's HTML
+  report is that window every single day, and what he wants from it is a
+  LAYOUT. So the premise ("a new layout out of the layout's own work") is not
+  even true of the window this chip is usually about.
+
+The shape: `new_ok` on the frame, and the page draws **Make a layout** on a row
+of its OWN above the pair — not a third column, which would put all three
+below a thumb's width (THE SPACE & LEGIBILITY LAW). It is the accented one and
+"Move it in" steps back to the plain fill, so there is still exactly one
+primary. Its tap runs `startFromWindow(win)` — the SAME function task 185's
+chip, Tap, List and New all end in, which is his own requirement: *"let the
+identical mechanics happen as if I were making it through any other mode"*.
+The server moves nothing on that answer and does not file the window as left
+on the desktop; the creation that follows makes it a member, which silences
+the sweep by itself.

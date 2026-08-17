@@ -236,6 +236,30 @@ is asserted as such in [`tests/test_window_offer.py`](../../tests/test_window_of
   the focused one;
 * a window no layout could hold — `is_listable`, his point 3 of 2026-08-13.
 
+### The chip carries the act he actually wants (owner report 2026-08-17, same day)
+
+The rule above answered WHICH windows are offered; it did not change what the
+offer OFFERS, and that half was still wrong. Inside a focused layout this
+sweep is the ONLY question a new window can raise — `layout_birth.scan` stands
+down for anything this module can claim (constraint 18) — and its chip had two
+answers: *Move it in* and *Leave on desktop*. Neither is the one he asks for.
+His case, and he has reported it more often than any other bug here: an agent
+finishes, its HTML report opens in Chrome, and what he wants of that window is
+a LAYOUT of its own.
+
+`_offer` therefore sends `new_ok` plus the window's own `hwnd`/`icon`, and the
+page draws a third answer — **Make a layout** — on a row of its own. `pick`
+answers `"layout_new"` by moving NOTHING and by NOT recording a decline: the
+phone opens the ordinary creation panel seeded with that window, and every
+step after that is the flow Tap, List and New already use. One chip, one
+window, three answers — constraint 18 is about two CHIPS racing for one strip,
+which this deliberately is not.
+
+Gate: the three chip checks in
+[`tests/test_window_offer.py`](../../tests/test_window_offer.py), one of which
+reads the shipped client, because a server field no page reads is not a
+feature.
+
 And an offer is still only ever a QUESTION: nothing is placed, raised, resized
 or moved before his tap. The honest cost, named to him before he chose: every
 unrelated new window is now a chip he can decline.

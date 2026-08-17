@@ -23,6 +23,9 @@ const winOffer = document.getElementById("window-offer");
 const winOfferText = document.getElementById("window-offer-text");
 const winOfferIn = document.getElementById("window-offer-in");
 const winOfferOut = document.getElementById("window-offer-out");
+// The third answer, hidden unless the server says this window can become a
+// layout of its own (owner report 2026-08-17 — see WIN_OFFER_WORDS below).
+const winOfferNew = document.getElementById("window-offer-new");
 
 let winOfferId = null;
 let winOfferTimer = null;
@@ -110,9 +113,20 @@ function showWindowOffer(msg, dequeued) {
   // the older question, and a PC newer than the page is a real state.
   winOfferAct = WIN_OFFER_WORDS[msg.act] ? msg.act : "layout";
   const words = WIN_OFFER_WORDS[winOfferAct];
-  winOfferWindow = winOfferAct === "layout_new"
+  // THE WINDOW'S IDENTITY IS KEPT WHENEVER A CREATE ANSWER IS ON THE CHIP —
+  // task 185's own chip, and now the sweep's `new_ok` one too (owner report
+  // 2026-08-17). Both seed the SAME creation panel with the SAME slot, which
+  // is the whole point of his report: the mechanics after the tap must be the
+  // ones Tap / List / New already use.
+  const canNew = winOfferAct === "layout_new" || !!msg.new_ok;
+  winOfferWindow = canNew && msg.hwnd
     ? { hwnd: msg.hwnd, title: msg.title, process: msg.process, icon: msg.icon }
     : null;
+  // A `layout` chip that carries the create answer shows it as its own row;
+  // a `layout_new` chip's create answer IS its yes, so it never doubles.
+  const showNew = canNew && winOfferAct === "layout" && !!winOfferWindow;
+  winOfferNew.hidden = !showNew;
+  winOffer.classList.toggle("has-new", showNew);
   const name = (msg.title || msg.process || "A window").trim();
   winOfferText.textContent = words.text(name);
   winOfferIn.textContent = words.yes;
@@ -138,7 +152,12 @@ async function answerWindowOffer(act) {
   // (the PC moves nothing either way here), and making him watch a round trip
   // to open a card would be a wait for nothing. The POST still goes, because
   // it is what stops the PC asking about this window again.
-  if (act === "layout" && winOfferAct === "layout_new") {
+  if (act === "layout_new") {
+    // The sweep's own create answer (owner report 2026-08-17). Same two lines
+    // as task 185's yes below and deliberately so: one seeding path, so the
+    // two chips can never drift into two different creation flows.
+    startFromWindow(win);
+  } else if (act === "layout" && winOfferAct === "layout_new") {
     startFromWindow(win);
     act = "layout_new";
   } else if (act === "layout" && winOfferAct === "rescue") {
@@ -159,5 +178,6 @@ async function answerWindowOffer(act) {
   nextWindowOffer();
 }
 
+winOfferNew.addEventListener("click", () => answerWindowOffer("layout_new"));
 winOfferIn.addEventListener("click", () => answerWindowOffer("layout"));
 winOfferOut.addEventListener("click", () => answerWindowOffer("desktop"));
