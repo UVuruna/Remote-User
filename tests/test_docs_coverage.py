@@ -38,6 +38,10 @@ STANDARD = {
     # worth its own diagram — the ladder's order IS the whole flow, and it
     # reads straight off the __about doc.
     "server/capture_recovery.py",
+    # Split out of MainActivity.kt 2026-08-18 (VC-R7): the default-network
+    # callback, mirroring Updater's watch/release shape. Standard — one
+    # callback with two overrides; the reasoning is prose, not a diagram.
+    "android/app/src/main/java/com/uvuruna/vibecoder/ConnectivityWatcher.kt",
     # Split out of layout_api.py 2026-08-18 (VC-R6): the T76 zoom
     # arithmetic, pure and callerless. Standard — two derivations and three
     # guards; what a diagram would have to draw is the owner's five rounds,

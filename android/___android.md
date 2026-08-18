@@ -12,6 +12,7 @@ scanner). Package `com.uvuruna.vibecoder`, min Android 8 (API 26).
 | File | Tier | One line |
 |------|------|----------|
 | `MainActivity.kt` | Algorithmic | WebView shell — dual-address resolve/failover state machine, self-healing error card, network callbacks, immersive UI — [about](__about/MainActivity.md) · [flow](__flow/MainActivity.md) |
+| `ConnectivityWatcher.kt` | Standard | what network the phone is on and when it changes — the default-network callback that re-resolves the address on EVERY new network (not only behind the error card: that `if` is the 2026-08-07 report) and tracks the transport for auto-quality and the foreign-Wi-Fi notice; split off `MainActivity.kt` 2026-08-18 — [about](__about/ConnectivityWatcher.md) |
 | `Insets.kt` | Standard | what the window's EDGES do — the immersive system bars, and the keyboard inset only the shell can measure (edge-to-edge broke `adjustResize`); split off `MainActivity.kt` 2026-08-09 — [about](__about/Insets.md) |
 | `ScreenAwake.kt` | Standard | which layer is on screen (error card / loader / page) and whether `FLAG_KEEP_SCREEN_ON` may be held — one owner instead of the page alone, which could not clear it while the error card was up (T80a, 2026-08-14) — [about](__about/ScreenAwake.md) |
 | `ConnectionError.kt` | Standard | why the PC can't be reached, and the one button that fixes it — the five-cause diagnosis and the error card's own actions; split off `MainActivity.kt` 2026-08-17 — [about](__about/ConnectionError.md) |

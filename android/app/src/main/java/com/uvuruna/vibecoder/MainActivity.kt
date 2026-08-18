@@ -7,8 +7,6 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.net.ConnectivityManager
-import android.net.Network
-import android.net.NetworkCapabilities
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -85,6 +83,10 @@ class MainActivity : AppCompatActivity() {
     private var fileCallback: ValueCallback<Array<Uri>>? = null
 
     private val handler = Handler(Looper.getMainLooper())
+    /** What network we are on, and when it changes — ConnectivityWatcher.kt
+     *  (split 2026-08-18). It owns the callback; the fields below stay here,
+     *  because Bridge.kt and ConnectionError.kt read them off the activity. */
+    private val netWatch = ConnectivityWatcher(this)
     // internal, not private: ConnectionError.kt's activeCaps() reads it.
     internal var connectivity: ConnectivityManager? = null
     private var resolveEpoch = 0 // UI thread only — voids stale resolver threads and timers
@@ -118,50 +120,6 @@ class MainActivity : AppCompatActivity() {
      *  screen to load a page into. */
     internal var started = false
 
-
-    /** Reconnect the moment the phone actually has a network again. Foreign
-     *  Wi-Fi drops and re-grants connectivity constantly (AP kicks, power
-     *  save, captive re-auth) — leaving recovery to a finger on "Try again"
-     *  is what made the error card feel dead. Also tracks whether the default
-     *  network is Wi-Fi at all: the foreign-Wi-Fi notice needs the transport,
-     *  and a VPN network (Tailscale) lists its underlying transports in its
-     *  capabilities. */
-    private val netCallback = object : ConnectivityManager.NetworkCallback() {
-        /** A NEW default network. This is the moment the loaded address may
-         *  have stopped being the right one — home Wi-Fi to mobile data, a
-         *  tunnel coming up, a foreign AP re-granting connectivity.
-         *
-         *  It used to re-resolve only `if (errorView.visibility == VISIBLE)`,
-         *  and THAT is the owner's 2026-08-07 report. The error card is a
-         *  cold-start state: it means no address answered before a page ever
-         *  loaded. The state he is actually in is the opposite one — a page
-         *  that loaded perfectly on the home Wi-Fi and is now retrying a
-         *  192.168 host from a mobile network. In that state nothing here ran,
-         *  nothing in the page could move it (its socket can only reach
-         *  `location.host`), and the only code path that re-probes both
-         *  addresses was a fresh process. So he killed the app, and it worked,
-         *  every time — which is what made "Try again" look broken.
-         *
-         *  Resolving with a live page is safe by construction: `sessionHealthy`
-         *  keeps a document whose own address still answers. */
-        override fun onAvailable(network: Network) {
-            runOnUiThread {
-                if (isFinishing || isDestroyed) return@runOnUiThread
-                resolveAndLoad(silent = true)
-            }
-        }
-
-        override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) {
-            val wifi = caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
-            onCellular = caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)
-            runOnUiThread {
-                if (wifi != onWifi) {
-                    onWifi = wifi
-                    if (!wifi) warnedForeignWifi = false // the next foreign Wi-Fi warns again
-                }
-            }
-        }
-    }
 
     /** The page says it has lost the PC (Bridge.linkLost). Re-probe both
      *  addresses and move the document only if the other one is the live one.
@@ -338,8 +296,7 @@ class MainActivity : AppCompatActivity() {
             }
         })
 
-        connectivity = (getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager)
-            .also { it.registerDefaultNetworkCallback(netCallback) }
+        netWatch.watch()
 
         // A COLD start begun by tapping a notification: the layout to jump to
         // is on the intent that launched us, and it is parked here until the
@@ -350,8 +307,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
-        connectivity?.unregisterNetworkCallback(netCallback)
-        connectivity = null
+        netWatch.release()
         voice.destroy()
         notifier.release()
         updater.release() // never leak the session/thread/receiver — Updater.kt

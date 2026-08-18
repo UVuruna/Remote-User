@@ -1,5 +1,12 @@
 # Main Activity
 
+**Split 2026-08-18 (THE STRUCTURE LAW, VC-R7):** the default-network callback
+and its registration moved to
+[ConnectivityWatcher](ConnectivityWatcher.md) — one field, `watch()` in
+`onCreate`, `release()` in `onDestroy`. The four network FIELDS
+(`onWifi`, `onCellular`, `warnedForeignWifi`, `connectivity`) stay here,
+because `Bridge.kt` and `ConnectionError.kt` read them off the activity.
+
 **Script:** [Main Activity (script)](../app/src/main/java/com/uvuruna/vibecoder/MainActivity.kt) ·
 **Flow:** [diagram](../__flow/MainActivity.md)
 
