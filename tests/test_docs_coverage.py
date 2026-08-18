@@ -38,6 +38,16 @@ STANDARD = {
     # worth its own diagram — the ladder's order IS the whole flow, and it
     # reads straight off the __about doc.
     "server/capture_recovery.py",
+    # Split out of gui/main_window.py 2026-08-18 (VC-R3) on its own banner:
+    # the window's power over the server it wraps. Standard — four methods
+    # and a worker rule; the DIAGRAM that matters is the exit funnel, and it
+    # is drawn once, in server_core's flow.
+    "server/gui/main_window_server.py",
+    # Split out of gui/main_window.py 2026-08-18 (VC-R3) on its own banner:
+    # the update state machine. Standard rather than Algorithmic — the
+    # states are a straight line (found -> downloading -> ready -> launched),
+    # and the handover THEY end in already carries its own flow doc.
+    "server/gui/main_window_updates.py",
     # Split out of layout_popup.py 2026-08-18 (VC-R5): the cheap Windows
     # readings the popup rules are decided on, and the seam every popup gate
     # replaces. Standard — three readings, no logic beyond the reading.

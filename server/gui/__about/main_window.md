@@ -5,6 +5,15 @@
 
 ## Purpose
 
+**Split 2026-08-18 (THE STRUCTURE LAW, VC-R3)** on two of this file's own
+banner sections, as COMPOSITION — mixins that keep `self`, because every
+method in them drives this window's own widgets:
+[Server Control](main_window_server.md) (start / stop / restart / quit) and
+[Update Flow](main_window_updates.md) (the update state machine). The class is
+`MainWindow(ServerControl, UpdateFlow, QMainWindow)`; what stayed here is the
+window itself — its computed minimum, its layout builders, the actions, the
+refresh loop and its window behaviour.
+
 The one desktop window plus the system tray icon: status, in-window pairing
 QR, Start/Stop, Tailscale helper, the three doors (Controls, Traffic,
 Settings) and the self-update button. A single column of soft-shadowed cards

@@ -294,8 +294,11 @@ def check_every_exit_path_stops_the_listener() -> bool:
         ("server/gui_main.py", "main",
          "app.aboutToQuit.connect(controller.release_windows)"),
         ("server/gui_main.py", "main", "atexit.register(controller.release_windows)"),
-        # tray Quit
-        ("server/gui/main_window.py", "_quit", "self.controller.release_windows()"),
+        # tray Quit — in the ServerControl mixin since 2026-08-18 (VC-R3);
+        # the exit path is the same one, it simply lives with the rest of this
+        # window's power over the server it wraps
+        ("server/gui/main_window_server.py", "_quit",
+         "self.controller.release_windows()"),
     ]
     return all(_calls_inside(rel, func, needle) for rel, func, needle in exits)
 
