@@ -355,7 +355,7 @@ class ControlsEditor(QDialog):
         reset_row.addWidget(reset)
         acol.addLayout(reset_row)
         # THE REFLOW (task 232 — closes the 1662x598 floor debt Round 40
-        # raised; full history in .claude/layout-frame.json). The 2026-08-07
+        # raised). The 2026-08-07
         # layout put Arrangement in the LEFT column with the set list — two
         # OrderLists side by side there, each carrying a right-aligned slot
         # column plus the widest button label, drove the window past 1662
@@ -655,9 +655,10 @@ class ControlsEditor(QDialog):
 
     # How many set rows the window's minimum makes room for. The cap plays
     # exactly the part `CommandTable.ROWS_SHOWN` plays for the pool: the ladder
-    # says RAISE THE MINIMUM before you scroll, and it also says the minimum
-    # must fit the declared 1280x1000 frame — so the raise has to stop
-    # somewhere. It is the shipped file's own fullest list — FOURTEEN sets
+    # says RAISE THE MINIMUM before you scroll, and a raise has to stop
+    # somewhere: the window is judged on the DEVICE PROFILES it is shot
+    # against (owner decision 2026-08-18 — the hand-picked 1280x1000 frame
+    # this line used to name is gone). It is the shipped file's own fullest list — FOURTEEN sets
     # plus two section headings since 2026-08-11, when `Claude Tools` joined
     # (task 219). That one extra row is why this number is not a constant to
     # leave alone: at fifteen the list scrolled while the pool table beside it

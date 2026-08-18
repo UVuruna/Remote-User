@@ -2,6 +2,28 @@
 
 **Script:** [Settings Window (script)](../settings_window.py) · **Flow:** [flow](../__flow/settings_window.md)
 
+
+## THE FIXED FLOOR IS GONE (owner decision 2026-08-18)
+
+This window's `_computed_minimum` used to SEARCH: it walked widths from the
+content's own floor up to a hand-picked **1280x1000** screen frame and took the
+first width whose measured height fitted underneath — deliberately WIDENING the
+window to make it shorter, so it would fit a screen size nobody had measured.
+
+His ruling ends that everywhere: a window is judged on the DEVICE PROFILES it
+is shot against (`rules/devices.json`), and **a window taller than a screen
+scrolls**. The minimum is now the honest one — the narrowest width the
+unwrappable content really needs, and the height the layout really takes at
+that width. `FLOOR_WIDTH` / `FLOOR_HEIGHT`, `CAPTION_STEP` and the search that
+used them are gone, and so is `.claude/layout-frame.json`.
+
+The frame's own history is kept here rather than thrown away with the file it
+lived in, because it records two real decisions (a raise and its reversal) that
+still explain why the ControlsEditor is shaped the way it is:
+
+> Desktop-only app, single column by design, and the height floor is set by the two densest windows rather than by the main one. Since build round R2 (2026-08-07) the main window carries only what pairing needs - a QR at scan size (216 px fixed, exempted on its own line), the three-step guided pairing text THE SPACE & LEGIBILITY LAW forbids truncating, two short button rows and the update offer - and its measured minimum is 404x703, comfortably inside 1280x720. What needs the taller floor is the ControlsEditor and the Settings window (644x874: four cards of switches whose guidance captions wrap rather than truncate). Both stay far under the 1280 WIDTH; only the height needs the room, and no element in either holds slack. Reflowing a settings form into two columns was considered and rejected: it would put unrelated cards side by side and leave the shorter column empty, which is the very pattern this law calls a bug. RAISED WIDTH 1280->1700 (2026-08-11, Round 40) then LOWERED BACK 1700->1280 (task 232): the ControlsEditor had grown into a genuine three-pane tool (sets list | command table | selected-command form, plus the R5 wheel-order/mode row) whose honest measured minimum was 1662x598 - the earlier note called stacking the panes 'burying the command table', but the actual width driver was never the three panes, it was the Arrangement box's two OrderLists (D-pad + Stack orientation ladders) sitting SIDE BY SIDE inside the narrow LEFT column (sets list + arrangement), each carrying its own right-aligned slot column and the widest button label in the set. Moving the Arrangement box into the RIGHT column - under the command pool and the selected-command form, still with its two OrderLists side by side - let it share the width the pool/detail form already needs instead of adding a second demand on top of the set list's narrower column; nothing shrank or wrapped. New declared minimum: 881x806 (server/gui/controls_editor.py). This is the debt task 232 closes; a real narrow-screen (sub-1280) reflow, if ever wanted, is still a separate task.
+
+
 ## Purpose
 Everything the owner can change about this PC, in the third window beside Controls and Traffic (round R2, owner 2026-08-07).
 

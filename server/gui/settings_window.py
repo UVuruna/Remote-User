@@ -106,20 +106,18 @@ logger = logging.getLogger(__name__)
 # edge instead of each card finding its own.
 FORM_LABELS = ("Monitor", "Quality", "Exact", "Port", "JPEG quality")
 
-# The granularity of the width search the computed minimum runs (see
-# `_computed_minimum`). It walks UP from the widest unwrappable row and stops
-# at the first width whose measured height fits the screen floor, so a coarser
-# step costs a few pixels of extra width and a finer one costs a few more
-# layout measurements — neither is load-bearing.
-CAPTION_STEP = 16
-
-# THE SCREEN FLOOR this window must fit inside (.claude/layout-frame.json).
-# Named here because `_computed_minimum` SEARCHES against it: it takes the
-# smallest width whose measured height fits, rather than the widest width that
-# minimises height. Declaring a bigger floor instead would be widening our way
-# out of the exact bug the ladder exists to prevent — and the owner's screen
-# does not grow to match a declaration.
-FLOOR_WIDTH, FLOOR_HEIGHT = 1280, 1000
+# THE FIXED FLOOR IS GONE (owner decision 2026-08-18). This window used to
+# SEARCH widths from its content floor up to a hand-picked 1280x1000 screen
+# frame, taking the first width whose measured height fitted underneath it —
+# i.e. deliberately WIDENING the window to make it shorter, so that it would
+# fit a screen size nobody had measured. His ruling ends that everywhere: a
+# window is judged on the DEVICE PROFILES it is shot against
+# (`rules/devices.json`), and a window taller than a screen SCROLLS.
+#
+# So the minimum is now simply the honest one: the narrowest width the
+# unwrappable content really needs, and the height the layout really takes at
+# that width. Nothing is widened to buy height, and nothing is declared that
+# the owner's screen has to grow to match.
 
 # The notify caption sits BETWEEN two checkboxes ("Tell my phone…" above,
 # "Say it out loud" below), so a plain full-width line under it reads at a
@@ -219,9 +217,10 @@ class SettingsWindow(QDialog):
         Round R3 inserted APPEARANCE at the top — and paid for it with a
         REFLOW at the bottom, not with a taller window. A fifth card put the
         measured minimum at 614x1048, past the 1000 px height this project
-        declares in `.claude/layout-frame.json`; raising that frame is the
-        owner's decision, and the ladder says reflow first anyway
-        (rules/GUI.md — free space → reflow → minimum → scroll).
+        declared at the time; the ladder says reflow first in any case
+        (rules/GUI.md — free space → reflow → minimum → scroll), and that
+        remains the reason the reflow was right even though the fixed floor
+        it was measured against is gone (owner decision 2026-08-18).
 
         FOCUS and STARTUP therefore shared one row from R3 onward. That bought
         one rung and it was not enough: by 2026-08-12 the measured minimum had
@@ -874,9 +873,8 @@ class SettingsWindow(QDialog):
         floor = max(label_col + combo_col, exact_row, head_row,
                     2 * (column_need + card_pad) + 12) + card_pad + root_pad
 
+        # No search any more (owner decision 2026-08-18 — see the note where
+        # the old FLOOR constants stood): the narrowest width the content
+        # honestly needs, and the height the layout honestly takes there.
         layout = self.layout()
-        widths = list(range(floor, max(floor, FLOOR_WIDTH) + 1, CAPTION_STEP))
-        heights = {w: layout.totalHeightForWidth(w) for w in widths}
-        fits = [w for w in widths if heights[w] <= FLOOR_HEIGHT]
-        best = fits[0] if fits else min(widths, key=lambda w: (heights[w], w))
-        return QSize(best, heights[best])
+        return QSize(floor, layout.totalHeightForWidth(floor))

@@ -292,9 +292,9 @@ class TrafficWindow(QDialog):
         # THE TWO WIDE BUTTONS SIT ON THEIR OWN ROW (ladder step 2 — REFLOW,
         # never widen). Together with the span picker, the recording pill and
         # the zoom trio they made ONE unwrappable row 1,292 px wide, which is
-        # what drove this window's declared minimum to 1328 — past the 1280
-        # floor every other window in this app fits inside
-        # (`.claude/layout-frame.json`). A QHBoxLayout cannot wrap, so the
+        # what drove this window's declared minimum to 1328 — wider than any
+        # other window in this app, and wider than the laptop profile it is
+        # judged on. A QHBoxLayout cannot wrap, so the
         # width was not a measurement of anything the user needs to see at
         # once; it was six controls told they must share a line.
         #
@@ -372,8 +372,8 @@ class TrafficWindow(QDialog):
         the floor is the control row, which cannot wrap. The two whole-window
         acts were split off it (see the constructor): six controls on one
         unwrappable line demanded 1,292 px and pushed the declared minimum to
-        1328, past the 1280 floor `.claude/layout-frame.json` sets for every
-        window in this app. Height = the four
+        1328 — wider than any other window here and wider than the laptop
+        profile this one is judged on. Height = the four
         header lines, the chart's own minimum, the legend grid + its
         explanatory note, and the footer."""
         metrics = QFontMetrics(self.font())
@@ -383,7 +383,7 @@ class TrafficWindow(QDialog):
         # The two whole-window ACTS live on their own row now (ladder step 2),
         # so they are measured as their own row instead of being added onto
         # the row above — that sum is what pushed this window's minimum past
-        # the 1280 floor.
+        # every screen it is shot on.
         acts_row = (metrics.horizontalAdvance("Open the recording") + button_pad
                     + metrics.horizontalAdvance("Reset counters") + button_pad
                     + spacing)
