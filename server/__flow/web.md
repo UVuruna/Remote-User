@@ -24,42 +24,10 @@ flowchart TB
 
 ## Algorithm — _receive_input dispatch
 
-```mermaid
-flowchart TB
-    A["msg = json.loads(ws.receive_text())"] --> A2{"kind in TYPING_KINDS?"}
-    A2 -- yes --> A3["focus_guard.guard — the target is decided BEFORE the keys<br/>(layout = fence · desktop = pin · thief named in the log)"]
-    A2 -- "no, in RETARGET_KINDS" --> A4["focus_guard.retarget — the owner chose a window himself"]
-    A3 --> B{msg.type}
-    A4 --> B
-    B -- pointer_down/up/click --> C{button in BUTTON_FLAGS?}
-    C -- no --> Z[log error, ignore]
-    C -- yes, click --> D["injector.click(button) — current cursor position"]
-    C -- yes, down/up --> E["injector.button_down/up(x, y, button)"]
-    B -- pointer_move --> F["injector.move(x, y)"]
-    B -- scroll --> G["injector.wheel(x, y, ticks, hticks=msg.get('hticks', 0))"]
-    B -- key_text --> H["injector.type_text(text, focus_guard.typist(...))<br/>on a thread, foreground re-checked every 40 characters"]
-    B -- key_special --> I["injector.press_key(key)"]
-    B -- paste_text --> I2["_paste_text: clipboard.copy_text → ctrl+v → Enter"]
-    B -- viewport --> J{stream.mode == jpeg?}
-    J -- yes --> K["stream.set_viewport(x, y, w, h)"]
-    J -- no --> L["ignored — H.264 always streams the full frame"]
-    B -- chord --> M["injector.press_chord(chord)"]
-    B -- monitor_switch --> N["_switch_monitor(...)"]
-    B -- screenshot --> O["_screenshot(...)"]
-    B -- unknown --> Z
-    D --> A
-    E --> A
-    F --> A
-    G --> A
-    H --> A
-    I --> A
-    I2 --> A
-    K --> A
-    L --> A
-    M --> A
-    N --> A
-    O --> A
-```
+The per-`kind` branches moved to a registry on 2026-08-18 (VC-R2) and the
+picture moved with them: [WS Commands — Flow](ws_commands.md). What this loop
+still does before every dispatch — presence bookkeeping, the focus prelude,
+the double-click note — is the first diagram there.
 
 ## Algorithm — _stream_h264 per-connection loop
 

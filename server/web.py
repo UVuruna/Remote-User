@@ -45,18 +45,14 @@ from fastapi.staticfiles import StaticFiles
 import actions_api
 import agents_refresh
 import caret
-import claude_api
 import clipboard
 import clipboard_sync
 import config
 import focus_guard
 import capture_recovery
-import layout_acts_api
 import layout_api
 import layout_birth
-import ledger_api
 import layout_popup
-import monitor_api
 import notice_channel
 import notify
 import presence
@@ -64,13 +60,13 @@ import agents
 import content
 import traffic
 import traffic_stream
-import uia
 import upload_api
+import ws_commands
 import window_manager
 from config import SETTINGS
 from config_api import send_config as _send_config
 from cursor_api import send_cursor as _send_cursor
-from input_injector import BUTTON_FLAGS, InputInjector
+from input_injector import InputInjector
 from layout_api import toast as _toast
 
 logger = logging.getLogger(__name__)
@@ -601,25 +597,6 @@ async def _h264_loop(ws: WebSocket, manager, token: str, conn: dict,
 # second sender can ever carry different fields.
 
 
-async def _screenshot(ws: WebSocket, stream, injector: InputInjector, msg: dict) -> None:
-    """PC screenshot into the PC clipboard. The Attach set's Shot button sends
-    the REGION the phone currently views (owner 2026-08-04 — zoomed = that
-    part, layout focus = the layout's rect, never the whole desktop) plus
-    paste=true, and the server injects Ctrl+V itself; the legacy snap action
-    sends neither and only fills the clipboard."""
-    frame = await asyncio.to_thread(stream.take_screenshot)
-    if frame is None:
-        await _toast(ws, "Screenshot failed — see server log")
-        return
-    ok = await asyncio.to_thread(clipboard.copy_image, content.crop_to_region(frame, msg))
-    if ok and msg.get("paste"):
-        await asyncio.to_thread(injector.press_chord, "ctrl+v")
-        await _toast(ws, "Screenshot pasted on the PC")
-    else:
-        await _toast(ws, "Screenshot in PC clipboard — paste with right-click" if ok
-                     else "Clipboard busy — try again")
-
-
 # Which messages TYPE (their effect lands in whatever window holds the
 # keyboard) and which ones legitimately CHOOSE a window. The focus guard needs
 # both lists: it fences the first and re-arms on the second (owner 2026-08-06
@@ -647,57 +624,6 @@ async def _receive_input(ws: WebSocket, injector: InputInjector, stream, token: 
         if kind not in ("away", "hb"):
             conn["left"] = False   # real work on this socket = the phone is back
             conn["paused"] = False  # ...so the stream may run again
-        if kind == "hb":
-            # The timestamp above IS the heartbeat. It may carry the phone's
-            # own traffic counters (Android TrafficStats — what OUR app spent
-            # and what the whole device spent); the desktop graph shows both
-            # sides so "does it run while the screen is off" stops being an
-            # argument (owner 2026-08-05).
-            if msg.get("net"):
-                traffic.METER.note_phone(msg["net"])
-            # ...and the phone's own battery (T80d), riding this SAME beat
-            # exactly as `net` does. Absent whenever the device will not say,
-            # and absent must never become zero — see `traffic.note_battery`.
-            if msg.get("bat"):
-                traffic.METER.note_battery(msg["bat"])
-            continue
-        if kind == "away":
-            # The page is about to be hidden, and it says WHY. An EXCURSION
-            # (image picker, camera, voice, a permission dialog) means the
-            # owner is still working with us and comes straight back — hold
-            # everything. Anything else, above all a LOCK, hands the desk its
-            # windows back immediately.
-            #
-            # The word comes from the Android shell, which reads the screen
-            # and keyguard state and knows whether it launched the picker
-            # itself. It replaces a 90-second timer in the page that guessed
-            # — and guessed "excursion" for a tablet locked seconds after
-            # dictating, which is the whole 2026-08-05 topmost failure.
-            if msg.get("net"):
-                traffic.METER.note_phone(msg["net"])
-            # The session's LAST battery reading (T80d): the parting word is
-            # the only moment a closing level exists.
-            if msg.get("bat"):
-                traffic.METER.note_battery(msg["bat"])
-            # Nothing may be SENT to a phone that has gone: the page normally
-            # closes the socket right behind this message, but when its Wi-Fi
-            # falls asleep first the socket lingers — and the encoder was
-            # happily filling it for as long as the hold lasted (audit
-            # 2026-08-05). The stream stops here, on every kind of away; only
-            # the LAYOUT rides the excursion timer.
-            conn["paused"] = True
-            if conn.get("reset_stream"):
-                conn["reset_stream"]()
-            if presence.is_excursion(msg):
-                conn["away"] = True
-                logger.info("Phone announced an excursion — layout held")
-            else:
-                conn["away"] = None   # a leave is not served by the long budget
-                logger.info("Phone left (%s) — the desk gets its windows back",
-                            msg.get("reason") or "no reason given")
-                await presence.leave_session(layouts, conn,
-                                             reason=msg.get("reason"))
-            continue
         # WHERE typed input lands is decided HERE, before a single key is
         # injected — never by whatever window happened to take focus while the
         # owner was speaking (owner 2026-08-06). In a layout the fence is the
@@ -713,287 +639,9 @@ async def _receive_input(ws: WebSocket, injector: InputInjector, stream, token: 
             # task 185 has, and the reason a background agent's window is never
             # mistaken for it (server/layout_popup.py).
             layout_birth.note_click(conn)
-        if kind in ("pointer_down", "pointer_up", "click"):
-            button = msg.get("button", "left")
-            if button not in BUTTON_FLAGS:
-                logger.error("Unknown button %r from client", button)
-                continue
-            if kind == "click":
-                injector.click(button)  # at the current cursor — no coordinates
-                continue
-            x, y = float(msg["x"]), float(msg["y"])
-            if kind == "pointer_down":
-                injector.button_down(x, y, button)
-            else:
-                injector.button_up(x, y, button)
-        elif kind == "press":
-            # CLICK/HOLD mouse buttons (owner 2026-08-04): down when the
-            # finger lands, up when it lifts — at the current cursor.
-            button = msg.get("button", "left")
-            if button not in BUTTON_FLAGS:
-                logger.error("Unknown button %r from client", button)
-                continue
-            injector.press(button, bool(msg.get("down")))
-        elif kind == "pointer_move":
-            injector.move(float(msg["x"]), float(msg["y"]))
-        elif kind == "scroll":
-            # `hticks` is optional (backward compat: an older page that sends
-            # only `ticks` scrolls exactly as before — absent means zero, no
-            # horizontal event at all, see InputInjector.wheel).
-            injector.wheel(float(msg["x"]), float(msg["y"]), float(msg["ticks"]),
-                            float(msg.get("hticks", 0.0)))
-        elif kind == "key_text":
-            # The fence goes INTO the injection, not just before it: typing a
-            # dictated sentence takes ~1.1 s of SendInput, and whatever a thief
-            # still costs us is TOLD to the phone (focus_guard, round R1).
-            lost = await asyncio.to_thread(injector.type_text, str(msg["text"]),
-                                           focus_guard.typist(layouts, conn))
-            if lost:
-                await _toast(ws, focus_guard.loss_notice(lost))
-        elif kind == "key_special":
-            # HALF 2 of the 2026-08-13 measured defect: `key_text` and
-            # `paste_text` both toast a loss when the fence is lost —
-            # `key_special` (Backspace, Enter's chord sibling, arrows…) had
-            # no check at all, so a key that landed nowhere was invisible to
-            # the owner ("buttons randomly stopped working" instead of a
-            # named error, constitution priority D). `focus_guard.typist()`
-            # is the SAME checkpoint `type_text`'s chunk loop uses between
-            # characters — a single key has no chunks, so it is checked once,
-            # verified (a bare foreground read on the happy path, a settled
-            # retry only when it disagrees) — never the un-verified `guard()`
-            # call a few lines above, which only ATTEMPTS a refocus and
-            # returns its target regardless of whether it landed.
-            ok = await asyncio.to_thread(focus_guard.typist(layouts, conn))
-            if ok:
-                injector.press_key(str(msg["key"]))
-            else:
-                await _toast(ws, focus_guard.loss_notice(
-                    str(msg["key"]), unit="key press"))
-        elif kind == "paste_text":
-            # A TYPED command button (owner 2026-08-05 — the Claude set's
-            # /usage, /model, /effort). The text goes through the CLIPBOARD
-            # and one Ctrl+V rather than key-by-key: a slash command types
-            # into an autocomplete menu that re-filters on every character,
-            # and one atomic insert cannot be raced by it. Enter is a separate
-            # press so `enter: false` can leave the menu standing for the
-            # finger to pick from. `focus: "claude"` puts the caret in the
-            # Claude prompt first (owner order 2026-08-11) — a refusal there
-            # injects NOTHING and has already toasted, so nothing is typed
-            # into whatever window really held the keyboard.
-            if msg.get("focus") == "claude" and not await claude_api.focus_prompt(
-                    ws, injector, focus_guard.typist(layouts, conn)):
-                continue
-            lost = await asyncio.to_thread(
-                content.paste_text, injector, str(msg.get("text", "")),
-                bool(msg.get("enter", True)), focus_guard.typist(layouts, conn))
-            if lost:
-                await _toast(ws, focus_guard.loss_notice(lost))
-        elif kind == "viewport":
-            if stream.mode == "jpeg":
-                stream.set_viewport(
-                    float(msg["x"]), float(msg["y"]), float(msg["w"]), float(msg["h"])
-                )
-            else:
-                # THE ZOOM RAISES THE ENCODED RESOLUTION (owner design,
-                # round 3 of T76): the settled rect earns a quantized step
-                # (layout_api.zoom_step), the crop never moves, a pan never
-                # rebuilds — only a step crossing resets the session.
-                await layout_api.zoom_region(ws, layouts, conn, msg)
-        elif kind == "chord":
-            chord_text = str(msg["chord"])
-            injector.press_chord(chord_text)
-            # A chord is guarded on the way IN (Ctrl+V must land in his box)
-            # but may itself MOVE the window — Alt+Tab, Win+arrow, Ctrl+W. So
-            # the target is re-read on the next key instead of being dragged
-            # back to where the chord just left (focus_guard).
-            focus_guard.retarget(conn)
-            # THE CLIPBOARD LIVES ON BOTH DEVICES (task 182): Copy/Cut push
-            # what they just filled the PC clipboard with to the phone.
-            await clipboard_sync.after_copy_chord(ws, conn, chord_text)
-        elif kind == "monitor_switch":
-            # `index` is the monitor the phone's layout list asked for (task
-            # 155) and is optional — absent means the cycle this message has
-            # always been (server/monitor_api.py).
-            await monitor_api.switch(
-                ws, injector, stream, layouts, conn, msg.get("index"),
-                lambda: _send_config(ws, stream, token))
-        elif kind == "screenshot":
-            await _screenshot(ws, stream, injector, msg)
-        elif kind == "layout_pick":
-            await layout_api.layout_pick(ws, layouts, stream, msg)
-        elif kind == "layout_list":
-            await layout_api.layout_list(ws, layouts, stream, conn)
-        elif kind == "layout_acts":
-            # WHAT THE LAYOUT'S OWN APP CAN DO (owner ballot 2026-08-13, T29).
-            # Asked by the New panel when it opens INSIDE a layout — from the
-            # desktop there is no member to act on and the answer is empty,
-            # which is what makes the panel draw one group instead of two.
-            await layout_acts_api.layout_acts(ws, layouts, conn)
-        elif kind == "layout_act":
-            await layout_acts_api.layout_act(ws, layouts, conn, injector, msg)
-        elif kind == "layout_recent":
-            # The FOURTH creation source (task 228): every layout previously
-            # created on this PC, persisted across restarts.
-            await layout_api.layout_recent(ws)
-        elif kind == "layout_recent_use":
-            await layout_api.layout_recent_use(ws, layouts, stream, conn, msg)
-        elif kind == "next_input":
-            # Scope follows the view (owner spec): layout focus → only its
-            # member windows; full desktop → every visible window.
-            hwnds = None
-            if conn["active"] is not None and 0 <= conn["active"] < len(layouts.layouts):
-                hwnds = list(layouts.layouts[conn["active"]].members)
-            name = await asyncio.to_thread(uia.focus_next_input, hwnds)
-            label = (name or "")[:40]
-            await _toast(ws, f"→ {label}" if name else "No text boxes found")
-        elif kind == "quality":
-            # Per-client quality overrides (owner spec 2026-08-05: the phone's
-            # panel picks fps / resolution / bitrate level, or auto-reduces on
-            # mobile data — the CLIENT decides when and sends the EFFECTIVE
-            # values). H.264: the running session is reset and reopens with
-            # the new encoder settings. Legacy `reduced: true` (older client
-            # pages) maps to the auto-save profile.
-            # Parsed in config.quality_override — the SAME function that reads
-            # the `auth` message's copy, so the phone's restatement on connect
-            # compares equal to what the first session already opened with and
-            # cannot force a second encoder (task 203).
-            quality = config.quality_override(msg)
-            changed = quality != conn.get("quality")
-            # RAISING past the desktop's own numbers rebuilds capture and the
-            # picture blinks (owner decision, task 131 — the panel says so
-            # before he taps). Lowering never reaches here: it lives inside
-            # this client's ffmpeg. Safe with one client by rule (4409).
-            raise_fps = int(msg.get("raise_fps") or 0) or None
-            raise_width = int(msg.get("raise_width") or 0) or None
-            if (raise_fps or raise_width or conn.get("raised")) and \
-                    hasattr(stream, "raise_limits"):
-                conn["raised"] = bool(raise_fps or raise_width)
-                await asyncio.to_thread(stream.raise_limits, raise_fps, raise_width)
-            conn["quality"] = quality
-            if changed:
-                # SAID OUT LOUD, because it forces an encoder re-open and a
-                # re-open is what used to kill the whole socket. His 2026-08-10
-                # crash could not be dated in his own log: this branch was the
-                # only unlogged cause of a close-and-reopen.
-                logger.info("Quality change from the phone: %s", quality)
-            if changed and stream.mode == "h264" and conn.get("reset_stream"):
-                conn["reset_stream"]()
-            if changed:
-                await _toast(ws, "Stream: " + (
-                    "default quality" if quality is None else
-                    f"{quality['fps'] or 'max'} fps · {quality['res']} res · "
-                    f"{quality['bitrate']} bitrate"))
-        elif kind == "tts_info":
-            # The phone lists the text-to-speech voices IT has, once per
-            # connection (owner round R2, 2026-08-07). The PC cannot
-            # enumerate another device's TTS engine, so this is the only
-            # source the desktop Settings window's "Voice" dropdown can have.
-            notify.set_voices(msg.get("voices"))
-        elif kind == "claude_state":
-            # What the focused layout's conversation is running NOW (task 208)
-            # — read from its own transcript, never from a phone-side memory.
-            await claude_api.send_state(ws, layouts, conn)
-        elif kind == "ledger_state":
-            # The focused layout's project ledger (T111) — read fresh from
-            # disk every ask, never cached; see ledger_api's own docstring.
-            await ledger_api.send_ledger(ws, layouts, conn)
-        elif kind == "actions_update":
-            # THE PHONE EDITS A SET'S INTERIOR (owner 2026-08-04, task 218b):
-            # which pool commands ride the D-pad and in which slots. It writes
-            # the SAME actions.json the desktop Controls editor writes, through
-            # a validator that accepts only the owner-owned keys — the whole
-            # handler lives in actions_api with the file's other reader.
-            await actions_api.actions_update(ws, msg, agents.claude_settings())
-        elif kind == "client_log":
-            # Silent phone-side diagnostics (owner round 2, 2026-08-05: voice
-            # evidence goes to THIS log, never to a panel on the phone).
-            logger.info("Phone: %s", str(msg.get("text", ""))[:500])
-        elif kind == "layout_create":
-            await layout_api.layout_create(ws, layouts, stream, conn, msg)
-        elif kind == "layout_aspect":
-            await layout_api.layout_aspect(ws, layouts, stream, conn, msg)
-        elif kind == "layout_focus":
-            index = int(msg["index"])
-            if index < 0:
-                # A DELIBERATE desktop choice is the state to resume into —
-                # nothing to come back to (owner 2026-08-05).
-                await asyncio.to_thread(layouts.forget_focus)
-            await layout_api.layout_focus(ws, layouts, stream, conn, index)
-        elif kind == "layout_rename":
-            # The owner's own name for a layout (owner 2026-08-05) — the window
-            # title is only the default the creation panel offers.
-            if not await asyncio.to_thread(
-                    layouts.rename, int(msg["index"]), str(msg.get("name", ""))):
-                await _toast(ws, "That layout is gone")
-            await layout_api.send_layout_state(ws, layouts, conn)
-        # `layout_apps` lived here — the owner re-ticking which app-aware sets
-        # a layout carries. Removed 2026-08-07 with the ticks themselves: the
-        # PC reads what is running (server/agents.py) on every state frame, so
-        # there is nothing left for anyone to declare.
-        elif kind == "layout_grid":
-            # The grid's ARRANGEMENT (owner 2026-08-07): a three-window layout
-            # picks which edge its single window takes; two and four may only
-            # change portrait/landscape. Lives beside the name and the aspect.
-            if not await asyncio.to_thread(
-                    layouts.set_grid, int(msg["index"]),
-                    str(msg.get("grid", "")), msg.get("orient")):
-                await _toast(ws, "That layout is gone")
-                await layout_api.send_layout_state(ws, layouts, conn)
-            else:
-                await layout_api.layout_focus(ws, layouts, stream, conn,
-                                              int(msg["index"]))
-        elif kind == "layout_merge":
-            # One layout dragged ONTO another becomes a grid of the two; the
-            # dragged one disappears (owner 2026-08-07).
-            src, dst = int(msg["source"]), int(msg["target"])
-            if not await asyncio.to_thread(layouts.merge, src, dst,
-                                           msg.get("grid")):
-                await _toast(ws, "Those two cannot make a grid")
-                await layout_api.send_layout_state(ws, layouts, conn)
-            else:
-                # The target's index slides down when the source sat above it.
-                await layout_api.layout_focus(ws, layouts, stream, conn,
-                                              dst - 1 if src < dst else dst)
-        elif kind == "layout_member_remove":
-            # ONE window out of a grid (owner request 2026-08-09, task 165) —
-            # a four becomes a three, a three a two, a two a single. The whole
-            # handler lives in layout_api with the rest of the layout
-            # protocol; web.py stands at the 1,000-line wall.
-            await layout_api.layout_member_remove(ws, layouts, stream, conn, msg)
-        elif kind == "layout_member_list":  # task 195, "Add a window" list
-            await layout_api.layout_member_list(ws, layouts, stream, msg)
-        elif kind == "layout_member_add":  # task 195, grows a layout by one
-            await layout_api.layout_member_add(ws, layouts, stream, conn, msg)
-        elif kind == "layout_split":  # task 197a, one solo layout per member
-            await layout_api.layout_split(ws, layouts, stream, conn, msg)
-        elif kind == "layout_member_eject":  # task 197b, member -> own layout
-            await layout_api.layout_member_eject(ws, layouts, stream, conn, msg)
-        elif kind == "layout_reorder":
-            # Dropping BETWEEN two rows — the list's own order, nothing moves
-            # on the PC (owner 2026-08-07). In layout_api because it must also
-            # correct `conn["active"]`: the focus rides on an INDEX and a
-            # reorder moves indices (see there), and web.py is at the wall.
-            await layout_api.layout_reorder(ws, layouts, conn, msg)
-        elif kind == "layout_remove":
-            index = int(msg["index"])
-            # `close` is the owner's second act (2026-08-08, task 116): the
-            # layout leaves AND its windows are asked to close. Read with an
-            # explicit `is True` — the destructive half may only ever be
-            # reached by a page that MEANT it, never by a truthy accident.
-            close = msg.get("close") is True
-            standing = await asyncio.to_thread(layouts.remove, index, close)
-            if conn["active"] is not None:
-                if conn["active"] == index:
-                    conn["active"], conn["region"] = None, None
-                elif conn["active"] > index:
-                    conn["active"] -= 1
-            await layout_api.send_layout_state(ws, layouts, conn)
-            if standing:
-                # An app with unsaved work put up its own dialog and is still
-                # there. The phone SAYS so — the alternative is the layout
-                # vanishing off the bar while a window he expected to close
-                # sits waiting for an answer he never saw asked.
-                await _toast(ws, f"{len(standing)} window(s) still open — "
-                                 f"answer the app on the PC")
-        else:
+        handler = ws_commands.HANDLERS.get(kind)
+        if handler is None:
             logger.warning("Unknown message type %r from client", kind)
+            continue
+        await handler(ws_commands.Wire(ws, injector, stream, token,
+                                       layouts, conn, msg))

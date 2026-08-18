@@ -4,6 +4,13 @@
 **Flow:** [diagram](../__flow/web.md)
 
 ## Purpose
+
+**Split 2026-08-18 (THE STRUCTURE LAW + ONE KIND ONE CLASS, VC-R2).** The 36
+`elif kind == ...` branches this file dispatched every client message through
+are now a registry next door: [WS Commands](ws_commands.md). What stayed here
+is the connection, the auth handshake, the HTTP routes, the H.264 send loop and
+the receive LOOP - the frame a command arrives in. The dispatch itself is one
+dict lookup.
 The FastAPI application: serves the client page and static files, authenticates the WebSocket, runs the per-client stream loop (H.264 sessions or the JPEG hub fan-out), streams the cursor position, and dispatches input messages to the injector. This is THE protocol file — [CLAUDE.md](../../CLAUDE.md) is the authoritative record of every message type; this doc and its flow diagram describe how this module implements that contract. API docs endpoints are disabled (`docs_url`/`redoc_url`/`openapi_url=None`) — nothing is exposed beyond the routes below.
 
 HTTP routes: `GET /` — the client page ONLY for the APK's WebView (User-Agent carries the `VibeCoderApp` marker); every other browser, on every device, gets `install.html`, the full-screen install funnel (owner rule, hardened 2026-08-02: NO browser ever shows the client — Chrome on Android tablets presents a desktop-Linux User-Agent with no `Android` token, so detect-Android routing served a tablet the live client). Sole exception: no APK built (dev checkout) — the funnel would have nothing to offer, so the client is served. `GET /favicon.ico` (the SVG logo — otherwise every fresh load logs a 404). `GET /ping` (auth-free 204 — the phone's reachability probe for the Tailscale wizard AND the Android shell's start-up address resolver; reveals nothing but "server exists"). `GET /app.apk` (the APK for the funnel's Install button, 404 JSON when unbuilt). `GET /static/*` (client assets, mounted from `SETTINGS.client_dir`). `POST /upload?token=…` (phone → PC image: decodes the upload — Pillow first, with the HEIF opener registered for phone-camera HEIC, EXIF-orientation-corrected; OpenCV is the fallback decoder — puts it in the Windows clipboard, and injects Ctrl+V so the image lands in the focused box by itself). A `no_cache` middleware forces `Cache-Control: no-store` on every response — client files are served straight from disk and a cached `index.html` paired with a fresh `app.js` would crash the page before it ever connects.

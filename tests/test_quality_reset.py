@@ -347,7 +347,10 @@ def check_the_quality_change_is_logged_end_to_end() -> bool:
     quality branch was the one path that reset the stream in silence."""
     manager = fresh([0.0])
     watch = LogWatch()
-    web_log = logging.getLogger("web")
+    # The sentence is emitted by the module that OWNS the quality command.
+    # It moved from web.py to ws_commands.py with its handler on 2026-08-18
+    # (VC-R2); the words are unchanged, the logger name is not.
+    web_log = logging.getLogger("ws_commands")
     web_log.addHandler(watch)
     # ...and it must be ALLOWED to speak: the root logger defaults to WARNING,
     # so an unraised `web` logger drops every INFO before a handler sees it —

@@ -538,6 +538,11 @@ ALGORITHMIC = {
     "server/encoders.py",
     "server/input_injector.py",
     "server/web.py",
+    # Split out of web.py 2026-08-18 (VC-R2): the phone's command registry,
+    # one handler per `kind`, replacing a 366-line elif chain. Algorithmic —
+    # it IS the protocol's dispatch table, and its flow doc is what the
+    # chain's own diagram in __flow/web.md used to be.
+    "server/ws_commands.py",
     # Split out of controls.js on 2026-08-06 (THE STRUCTURE LAW): which sets
     # ride the wheel is a rule set of its own — the cap of 8, the per-process
     # reserve, and the owner's per-layout app ticks.
