@@ -37,6 +37,7 @@ Run:  .venv\\Scripts\\python tests/test_ask_carrier.py
 """
 
 import json
+import shutil
 import sys
 import time
 from pathlib import Path
@@ -233,6 +234,17 @@ def main() -> int:
         agent_hook.send, sys.stdin, sys.argv = real_send, real_stdin, real_argv
     results["a suppressed duplicate still exits 0"] = code == 0
     results["a suppressed duplicate sends nothing"] = sent == []
+
+    # THE GATE CLEANS UP AFTER ITSELF (owner instruction 2026-08-18). Every
+    # run used to leave `tests/_ask_carrier_tmp/` standing in the working tree
+    # — four scratch files that git reported as untracked forever, and that he
+    # had to ask about. The whole folder is this function's own, made three
+    # lines above, so removing it takes nothing that was not made here.
+    #
+    # AFTER the results are collected and BEFORE they are printed, so a failing
+    # check still leaves a clean tree: the evidence of what failed is the
+    # printed line, never a directory left behind.
+    shutil.rmtree(tmp, ignore_errors=True)
 
     print("\n=== ASK CARRIER GATE ===")
     for name, ok in results.items():
