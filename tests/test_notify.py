@@ -429,12 +429,12 @@ def main() -> int:
                 seen.append((record.levelno, record.getMessage()))
 
         sink = _Sink()
-        notify.logger.addHandler(sink)
-        notify.logger.setLevel(_logging.INFO)
+        notify_layout.logger.addHandler(sink)
+        notify_layout.logger.setLevel(_logging.INFO)
         try:
             missed = notify_layout.layout_of(r"U:\Coding\UVuruna\Applications\VibeCoder")
         finally:
-            notify.logger.removeHandler(sink)
+            notify_layout.logger.removeHandler(sink)
         info = [m for lvl, m in seen if lvl >= _logging.INFO]
         results["a miss is LOGGED at INFO, never silent"] = (
             missed is None and len(info) == 1)
@@ -583,7 +583,7 @@ def main() -> int:
 
     # …and a notice older than the queue's own patience is dropped instead of
     # arriving as stale news.
-    import notify as notify_mod
+    import notice_channel as notify_mod
     notify_mod.queue({"type": "notify", "agent": "Ancient", "title": "Ancient",
                       "text": "", "at": time.time() - notify_mod.QUEUE_TTL_S - 60})
     results["a notice too old to matter is dropped, not delivered"] = (

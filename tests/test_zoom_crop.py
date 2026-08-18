@@ -73,6 +73,10 @@ import h264_streamer  # noqa: E402
 import layout_api  # noqa: E402
 
 WEB = (PROJECT / "server" / "web.py").read_text(encoding="utf-8")
+# The per-`kind` branches left web.py for the command registry on
+# 2026-08-18 (VC-R2). The `viewport` routing this gate reads is one of
+# them; the H.264 session open it also reads is still in web.py.
+COMMANDS = (PROJECT / "server" / "ws_commands.py").read_text(encoding="utf-8")
 H264_SRC = (PROJECT / "server" / "h264_streamer.py").read_text(encoding="utf-8")
 CONFIG_API = (PROJECT / "server" / "config_api.py").read_text(encoding="utf-8")
 CONN_JS = (PROJECT / "client" / "connection.js").read_text(encoding="utf-8")
@@ -406,7 +410,7 @@ def check_web_py_derives_and_records_the_zoom_step() -> None:
         "open_session is no longer handed the derived zoom step"
     assert re.search(r'^\s*conn\["stream_zoom"\] = req_zoom\s*$', WEB, re.M), \
         "the opened session's zoom step is no longer recorded on the connection"
-    assert "await layout_api.zoom_region(ws, layouts, conn, msg)" in WEB, \
+    assert "await layout_api.zoom_region(ws, layouts, conn, msg)" in COMMANDS, \
         "the H.264 viewport branch no longer routes through zoom_region"
     print("  web.py: zoom_step derived once, handed to open_session, and recorded")
 

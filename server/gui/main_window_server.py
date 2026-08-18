@@ -15,6 +15,7 @@ does the blocking work never touches a widget.
 import logging
 
 from PySide6.QtCore import QTimer
+from PySide6.QtGui import QGuiApplication
 
 from gui import offthread
 

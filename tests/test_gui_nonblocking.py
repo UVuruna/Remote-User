@@ -39,6 +39,11 @@ sys.path.insert(0, str(PROJECT / "server"))
 
 from gui import offthread  # noqa: E402
 
+# Server control (start / stop / restart / quit) became a MIXIN on
+# 2026-08-18 (VC-R3). This gate reads whichever file now holds each call
+# site: the pairing worker is still the window's, the quit is the mixin's.
+MAIN_WINDOW_SERVER = (PROJECT / "server" / "gui" / "main_window_server.py"
+                      ).read_text(encoding="utf-8")
 MAIN_WINDOW = (PROJECT / "server" / "gui" / "main_window.py").read_text(
     encoding="utf-8")
 
@@ -134,11 +139,15 @@ def check_the_pairing_probe_does_not_run_on_the_gui_thread():
 
 def check_quit_does_not_wait_for_the_server_on_the_gui_thread():
     import gui.main_window as mw
+    # `_quit` reads QTimer and QGuiApplication out of the ServerControl
+    # mixin's own globals since 2026-08-18 (VC-R3) — patching main_window's
+    # would silently stop patching what the code under test reads.
+    import gui.main_window_server as mws
 
     quit_called = []
-    real_timer, real_app = mw.QTimer, mw.QGuiApplication
-    mw.QTimer = _FakeTimer
-    mw.QGuiApplication = types.SimpleNamespace(
+    real_timer, real_app = mws.QTimer, mws.QGuiApplication
+    mws.QTimer = _FakeTimer
+    mws.QGuiApplication = types.SimpleNamespace(
         instance=lambda: types.SimpleNamespace(
             quit=lambda: quit_called.append(time.monotonic())))
     try:
@@ -169,7 +178,7 @@ def check_quit_does_not_wait_for_the_server_on_the_gui_thread():
         mw.MainWindow._quit(win)
         assert len(win.order) == before, "a second Quit re-ran the shutdown"
     finally:
-        mw.QTimer, mw.QGuiApplication = real_timer, real_app
+        mws.QTimer, mws.QGuiApplication = real_timer, real_app
     print(f"  Quit returns in {took * 1000:.0f} ms and leaves when the server "
           "is really down")
 
@@ -202,13 +211,13 @@ def check_nothing_slow_is_left_inline():
     assert "pairing.pairing_urls" not in MAIN_WINDOW, \
         "main_window calls pairing_urls directly again — that is up to 4 s on " \
         "the GUI thread, every fifth tick"
-    quit_body = MAIN_WINDOW[MAIN_WINDOW.index("    def _quit(self)"):
-                            MAIN_WINDOW.index("    # -- actions ---")]
+    quit_body = MAIN_WINDOW_SERVER[
+        MAIN_WINDOW_SERVER.index("    def _quit(self)"):]
     assert "self.controller.stop()" not in quit_body, \
         "the quit joins the server thread inline again — up to 10 s of frozen " \
         "window after he has asked to leave. (The restart WORKER may call it: " \
         "it is already on a thread.)"
-    assert "offthread.stop_server(self.controller)" in MAIN_WINDOW
+    assert "offthread.stop_server(self.controller)" in MAIN_WINDOW_SERVER
     # And the header may not go back to claiming something untrue.
     head = MAIN_WINDOW[:MAIN_WINDOW.index('"""', 3)]
     assert "offthread" in head, \
