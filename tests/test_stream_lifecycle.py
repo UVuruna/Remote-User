@@ -250,7 +250,27 @@ class ResetWatch(logging.Handler):
 
 # ── Harness ─────────────────────────────────────────────────────────────────
 
+# WHAT WAS REAL BEFORE THE FIRST FAKE WENT IN (task VC-T, 2026-08-18). Every
+# name `install_fakes` replaces is process-wide — `h264_streamer.subprocess` IS
+# the interpreter's one subprocess module, so faking `Popen` there fakes it for
+# node, playwright and adb too — and until this round nothing put any of them
+# back. That single line cost the whole suite about forty failures that every
+# file passed alone. The originals are captured on the FIRST install only, so a
+# second install (test_quality_reset layers its own ffmpeg on top of this one)
+# cannot record a fake as the truth.
+_REAL: dict = {}
+# The frozen SETTINGS fields a stream test tunes, and what they were.
+_REAL_SETTINGS: dict = {}
+_TUNED = ("h264_queue_chunks", "h264_head_timeout",
+          "h264_reopen_tries", "h264_reopen_pause_s")
+
+
 def install_fakes() -> None:
+    if not _REAL:
+        _REAL.update(popen=h264_streamer.subprocess.Popen,
+                     source=h264_streamer.RawFrameSource,
+                     tailscale=config_api.pairing.get_tailscale_ip)
+        _REAL_SETTINGS.update({k: getattr(SETTINGS, k) for k in _TUNED})
     h264_streamer.subprocess.Popen = FakeFfmpeg
     h264_streamer.RawFrameSource = FakeSource
     # `_send_config` asks Windows for the Tailscale address (a subprocess) --
@@ -263,6 +283,19 @@ def install_fakes() -> None:
     # a test may use it.
     object.__setattr__(SETTINGS, "h264_queue_chunks", 4)
     object.__setattr__(SETTINGS, "h264_head_timeout", 3.0)
+
+
+def remove_fakes() -> None:
+    """Put every one of them back. Idempotent, and a no-op before the first
+    install — `tests/conftest.py` calls it after EVERY test in the suite, not
+    only after the ones that faked anything."""
+    if not _REAL:
+        return
+    h264_streamer.subprocess.Popen = _REAL["popen"]
+    h264_streamer.RawFrameSource = _REAL["source"]
+    config_api.pairing.get_tailscale_ip = _REAL["tailscale"]
+    for key, value in _REAL_SETTINGS.items():
+        object.__setattr__(SETTINGS, key, value)
 
 
 def fresh_manager() -> h264_streamer.H264Manager:

@@ -1828,6 +1828,25 @@ four installed 2026-08-01 alongside the MD-First 2.0 docs migration, the fifth
   detector (ONE KIND, ONE CLASS) against `tests/clone_ratchet.json`, the
   structure guard against `tests/structure_ratchet.json`, and the rules-size
   guard over `CLAUDE.md`.
+- `conftest.py` — **ONE TEST MAY NOT POISON THE NEXT ONE** (task VC-T,
+  2026-08-18). Running the suite whole produced about forty failures that every
+  one of those files passed alone, and it was not forty causes — it was four
+  leaks of one shape, a fake left installed on a process-wide name:
+
+  | leaked | by | what it broke |
+  |--------|----|---------------|
+  | `subprocess.Popen` | `test_stream_lifecycle` / `test_quality_reset` (`h264_streamer.subprocess` IS the one module) | every gate that shells out — node, playwright, adb |
+  | `LOCALAPPDATA` | `test_layout_history` (at import) | playwright's browser registry lives there on Windows — six browser gates |
+  | `PORT` / `server_ready` / `server_error` | `test_input_pipeline`, the shared browser harness | one bind failure raised by five later gates (`SystemExit: 3`) |
+  | `window_manager.user32`, `list_windows`, `desk_facts.top_level_hwnds`, `notice_channel._page`, … | every desk gate | a desk assembled out of six tests' fakes |
+
+  The fixture is autouse and blind to which test it wraps — a fake that
+  outlives its own test is a defect whoever installed it. After every test it
+  restores `subprocess.Popen`, hands `test_stream_lifecycle` its own
+  `remove_fakes()`, resets the gate harness's three globals, restores the
+  ENVIRONMENT whole, and restores the globals of every already-imported module
+  under `server/`. Result: **45 failures -> 3**, and the three left are named
+  in the report rather than papered over.
 - `clone_ratchet.json` — the clone groups this project is allowed to keep.
   Written on 2026-08-18 with `clone_guard.py --write-ratchet` and it came out
   **empty**: this project has no un-ratcheted duplicate. It may only stay empty

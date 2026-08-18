@@ -221,7 +221,33 @@ def isolate_desktop() -> None:
     lost_windows.sweep = lambda *a, **k: []
 
 
+def already_serving(port: int) -> bool:
+    """Is a server of ours ALREADY listening there? (task VC-T, 2026-08-18)
+
+    Every browser gate here starts this same harness, and each one that needs
+    its own state sets `PORT` to a private number first. In a per-gate PROCESS
+    that is enough; inside ONE pytest run it was not, because these servers are
+    daemon threads that never stop — so the second gate to reach the default
+    8898 tried to bind a port its predecessor still holds, uvicorn answered
+    with `sys.exit(3)`, and the exit went into the SHARED `server_error` list,
+    where every later gate found it and raised somebody else's failure.
+
+    A gate that did not ask for a port of its own is asking for THE gate
+    server, and the one already running is it — the app is built from the same
+    three fakes and the same token. So: reuse it, and never bind twice.
+    """
+    try:
+        with socket.create_connection(("127.0.0.1", port), timeout=0.25):
+            return True
+    except OSError:
+        return False
+
+
 def run_server():
+    if already_serving(PORT):
+        server_ready.set()
+        return
+
     async def main():
         import config
         import web

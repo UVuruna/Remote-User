@@ -130,8 +130,21 @@ import capture  # noqa: E402
 import capture_recovery  # noqa: E402
 import h264_streamer  # noqa: E402
 
+# ONE PROCESS, TWO FAKE DXCAMS (task VC-T, 2026-08-18). `sys.modules["dxcam"]`
+# is set here BEFORE `capture` is imported, which is right — but its sibling
+# gate does the same with a fake of its own, and `capture.py` does
+# `import dxcam` at module level, so whichever gate imported `capture` FIRST
+# binds its fake into it for the whole run. Alone, each gate passes; together,
+# one of them drove its own factory while `capture` used the other's.
+#
+# Re-binding the module attribute is the fix and it costs nothing: this gate's
+# fake is the one `capture` uses while this gate runs, and `tests/conftest.py`
+# puts back whatever was there when the test ends.
+_MY_DXCAM = sys.modules["dxcam"]
+
 
 def _reset():
+    capture.dxcam = capture_recovery.dxcam = _MY_DXCAM  # see the note above _MY_DXCAM
     FACTORY.reset()
     capture._OWNERS.clear()
     _SingletonMeta._instances.clear()

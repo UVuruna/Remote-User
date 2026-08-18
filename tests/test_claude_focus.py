@@ -65,7 +65,9 @@ sys.path.insert(0, str(PROJECT / "server"))
 
 import content  # noqa: E402
 
-WEB = PROJECT / "server" / "web.py"
+# The `paste_text` branch moved to the command registry on 2026-08-18
+# (VC-R2) — the handler is what this gate reads, so it follows it.
+WEB = PROJECT / "server" / "ws_commands.py"
 CLAUDE_API = PROJECT / "server" / "claude_api.py"
 
 # Which planted defect each check catches — written down so a later round can
@@ -493,21 +495,24 @@ def check_an_unguarded_paste_behaves_exactly_as_before() -> bool:
 
 
 def check_the_server_really_wires_the_field() -> bool:
-    """The feature is reachable only through `web.py`'s `paste_text` branch,
+    """The feature is reachable only through the `paste_text` handler,
     and only for `focus == "claude"`. Read as source because the alternative —
     trusting that a handler calls a helper — is exactly how `wheel_order`
     shipped as a no-op for every user."""
     web = WEB.read_text(encoding="utf-8")
     api = CLAUDE_API.read_text(encoding="utf-8")
     if 'msg.get("focus") == "claude"' not in web:
-        print("    web.py never reads the focus field")
+        print("    ws_commands.py never reads the focus field")
         return False
     if "claude_api.focus_prompt" not in web:
-        print("    web.py never asks for the prompt to be focused")
+        print("    ws_commands.py never asks for the prompt to be focused")
         return False
     # The refusal must SKIP the paste, not merely report it.
     branch = web.split('msg.get("focus") == "claude"', 1)[1][:400]
-    if "continue" not in branch:
+    # `return` since 2026-08-18 (VC-R2): the branch became a handler, and the
+    # `continue` that ended the loop iteration IS this `return`. What the check
+    # asserts has not moved — a refused focus must SKIP the paste.
+    if "return" not in branch:
         print("    a refused focus still falls through to the paste")
         return False
     if "content.focus_claude_prompt" not in api or "toast" not in api:

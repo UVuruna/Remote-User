@@ -208,7 +208,9 @@ def check_it_rides_the_existing_beat() -> bool:
         print("    a new message type was invented — this rides `hb`/`away` "
               "the way `net` does", file=sys.stderr)
         ok = False
-    web = (PROJECT / "server/web.py").read_text(encoding="utf-8")
+    # The `hb` and `away` handlers moved to the command registry on
+    # 2026-08-18 (VC-R2); the assertion is the same one.
+    web = (PROJECT / "server/ws_commands.py").read_text(encoding="utf-8")
     if web.count('msg.get("bat")') != 2:
         print("    the server does not read `bat` on BOTH `hb` and `away`",
               file=sys.stderr)

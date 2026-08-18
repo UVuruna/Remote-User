@@ -45,7 +45,9 @@ sys.path.insert(0, str(PROJECT / "server"))
 import agents  # noqa: E402
 import claude_api  # noqa: E402
 
-WEB = PROJECT / "server" / "web.py"
+# The `claude_state` branch moved to the command registry on 2026-08-18
+# (VC-R2) — the handler is what this gate reads, so it follows it.
+WEB = PROJECT / "server" / "ws_commands.py"
 CLIENT = PROJECT / "client"
 
 DEFECTS = {
@@ -466,8 +468,8 @@ def check_the_reader_is_really_wired_to_the_phone() -> bool:
         if frame["saved"] != SAVED:
             return False
     web = WEB.read_text(encoding="utf-8")
-    if 'kind == "claude_state"' not in web or "claude_api.send_state" not in web:
-        print("    web.py never answers claude_state")
+    if '@on("claude_state")' not in web or "claude_api.send_state" not in web:
+        print("    nothing answers claude_state")
         return False
     return True
 

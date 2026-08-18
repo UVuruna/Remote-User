@@ -525,11 +525,14 @@ def check_shell_reprobes_on_a_network_change() -> None:
     native error card was on screen — a cold-start state. The state he is in
     is a LOADED page on an address that stopped reaching the PC, and there
     that condition is false, so nothing ever re-chose."""
-    src = _strip_comments(_kotlin("MainActivity.kt"))
+    # The default-network callback moved to ConnectivityWatcher.kt on
+    # 2026-08-18 (VC-R7). The gate reads whichever file now holds it; what it
+    # asserts is unchanged.
+    src = _strip_comments(_kotlin("ConnectivityWatcher.kt"))
     body = re.search(r"override fun onAvailable\([^)]*\)\s*\{(.*?)\n        \}",
                      src, flags=re.S)
     if body is None:
-        fail("MainActivity has no onAvailable — nothing reacts to a new network")
+        fail("ConnectivityWatcher has no onAvailable — nothing reacts to a new network")
     text = body.group(1)
     if "resolveAndLoad" not in text:
         fail("a new default network does not re-probe the stored addresses")
