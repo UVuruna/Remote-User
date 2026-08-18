@@ -199,6 +199,7 @@ The CLI prints the pairing URL and a QR (console + image viewer). Dev note: H.26
 - [AI Guidance](CLAUDE.md) — stack, entry points and the project's own laws for coding sessions
 - [Decisions](docs/DECISIONS.md) — every architecture constraint and owner decree, dated
 - [Protocol](docs/PROTOCOL.md) — the wire frames, streaming, controls, keyboard and panels
+- [OOP Audit 2026-08-18](docs/AUDIT-OOP-2026-08-18.md) — one-off ONE KIND, ONE CLASS + structure audit and refactor plan (task F4)
 - [Server (folder)](server/___server.md) — PC-side components (core, GUI, streaming)
 - [Client (folder)](client/___client.md) — tablet-side web client
 - [Android (folder)](android/___android.md) — the phone app (shell around the client)
