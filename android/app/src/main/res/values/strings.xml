@@ -49,5 +49,11 @@
          idle, and why the line is there at all. -->
     <string name="notice_service_title">Waiting for your PC</string>
     <string name="notice_service_body">Ready to tell you the moment an agent on your PC finishes or needs you — even with this app closed. Nothing is being streamed and nothing is being sent; the phone is only listening. Android requires this line to be shown.</string>
+    <!-- After the app has installed a new version of ITSELF (UpdateReturn.kt).
+         Android replaces the process, the app disappears off the screen, and
+         a background receiver is normally forbidden from opening an activity
+         — so this notice is the way back in, and it says so plainly. -->
+    <string name="update_done_title">Vibe Coder is up to date</string>
+    <string name="update_done_body">The new version is installed. Android closed the app to replace it — tap here to open it again.</string>
     <string name="notice_battery_no_screen">This phone has no battery-optimisation screen to open. Look for Battery → Vibe Coder in Settings and allow it to run in the background.</string>
 </resources>

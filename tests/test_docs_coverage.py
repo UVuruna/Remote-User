@@ -482,6 +482,15 @@ STANDARD = {
     # already carried — the diagnosis (no network / PC not on Tailscale /
     # Tailscale missing / Tailscale off / PC down) is read straight off the
     # code, and this is a pure structure-law move, not an algorithm change.
+    # New 2026-08-18 (the owner's report: a successful self-update left him
+    # hunting for the app on the home screen). A manifest-declared receiver
+    # for MY_PACKAGE_REPLACED — its own responsibility precisely because it
+    # runs when Updater.kt's process no longer exists. Standard, not
+    # Algorithmic: two acts in a fixed order (a best-effort activity start,
+    # then the notification that always goes out), no branching and no state
+    # — the __about doc carries the WHY (the background-activity-start
+    # restriction), which is the only thing here worth reading twice.
+    "android/app/src/main/java/com/uvuruna/vibecoder/UpdateReturn.kt",
     "android/app/src/main/java/com/uvuruna/vibecoder/ConnectionError.kt",
     # New 2026-08-07 (build round G1 — the game controller): an ADAPTER, the
     # same reading as Bridge. Platform events in, three page callbacks out; the

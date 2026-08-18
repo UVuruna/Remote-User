@@ -52,6 +52,27 @@ EIGHT PROMISES, each proven by planting its own defect:
      number is exactly the "frozen ellipsis pretending to track it" failure
      task 207's own comment in that file warns against.
 
+THREE MORE (2026-08-18 — THE WAY BACK IN). A successful install replaces our
+process and the app disappears off the screen; the owner had to reopen it by
+hand. `UpdateReturn.kt` is a manifest-declared receiver for
+`MY_PACKAGE_REPLACED` that tries to open the app and ALWAYS posts a
+"tap to return" notification. Its three promises:
+
+  9. THE RECEIVER IS DECLARED IN THE MANIFEST, `exported="false"`, filtering
+     MY_PACKAGE_REPLACED. A runtime registration cannot work here — our
+     process is dead at that moment, which is the whole point — so the
+     manifest entry IS the feature. Losing it, or widening it to the broad
+     `ACTION_PACKAGE_REPLACED`, is a silent failure: nothing would ever say
+     that the way back in is gone.
+ 10. IT POSTS THROUGH `Notifier` AND BUILDS NO NOTIFICATION OF ITS OWN
+     (monorepo priority C — inheritance over duplication). A second builder
+     here would mean a second channel, a second PendingIntent shape and a
+     second place for the tap target to drift away from `MainActivity`.
+ 11. THE ACTIVITY START IS INSIDE A `catch`. On Android 10+ a background
+     activity start is normally FORBIDDEN, so the direct start is best effort
+     ONLY; a throwing refusal must never crash the receiver and cost him the
+     notification, which is the carrier that actually works.
+
 Kotlin checks read the SOURCE and assert the structural promises — the same
 shape test_shell_battery.py and test_battery_report.py use for the parts of
 this app that cannot run here. What the shell really does on a real handset
@@ -62,6 +83,7 @@ Run:  .venv\\Scripts\\python tests/test_apk_update.py
 
 import re
 import sys
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 PROJECT = Path(__file__).resolve().parent.parent
@@ -70,6 +92,7 @@ CLIENT = PROJECT / "client"
 KOTLIN_DIR = ANDROID / "app" / "src" / "main" / "java" / "com" / "uvuruna" / "vibecoder"
 
 UPDATER_KT = KOTLIN_DIR / "Updater.kt"
+UPDATE_RETURN_KT = KOTLIN_DIR / "UpdateReturn.kt"
 BRIDGE_KT = KOTLIN_DIR / "Bridge.kt"
 MANIFEST = ANDROID / "app" / "src" / "main" / "AndroidManifest.xml"
 UPDATE_BANNER_JS = CLIENT / "update-banner.js"
@@ -499,6 +522,141 @@ def check_the_progress_shown_is_never_invented(problems: list[str]) -> None:
             "number could be left showing while the total is unknown")
 
 
+# ─────────────────────────────────────────────────────────────────────────
+# 9. THE WAY BACK IN IS DECLARED IN THE MANIFEST
+# ─────────────────────────────────────────────────────────────────────────
+
+ANDROID_NS = "http://schemas.android.com/apk/res/android"
+_RECEIVER_NAME = ".UpdateReturn"
+_MY_PACKAGE_REPLACED = "android.intent.action.MY_PACKAGE_REPLACED"
+
+
+def _attr(element, name: str) -> str | None:
+    return element.get(f"{{{ANDROID_NS}}}{name}")
+
+
+def check_the_way_back_in_is_declared(problems: list[str]) -> None:
+    # Parsed, not grepped: the promise is about a real <receiver> element with
+    # a real <intent-filter> inside <application>, and a string search would
+    # be satisfied by the word appearing in one of this manifest's comments.
+    tree = ET.fromstring(_text(MANIFEST))
+    receivers = [r for r in tree.iter("receiver") if _attr(r, "name") == _RECEIVER_NAME]
+    if not receivers:
+        problems.append(
+            f"android/.../AndroidManifest.xml: no <receiver "
+            f"android:name=\"{_RECEIVER_NAME}\"> — the way back into the app "
+            f"after it replaces itself is gone, and a runtime registration "
+            f"cannot stand in for it: our process is DEAD at the moment that "
+            f"broadcast is sent")
+        return
+    receiver = receivers[0]
+
+    if _attr(receiver, "exported") != "false":
+        problems.append(
+            f"android/.../AndroidManifest.xml: {_RECEIVER_NAME} is not "
+            f"android:exported=\"false\" — nothing outside this app has any "
+            f"business reaching it, and the system delivers this protected "
+            f"broadcast regardless")
+
+    actions = [
+        _attr(a, "name")
+        for f in receiver.iter("intent-filter")
+        for a in f.iter("action")
+    ]
+    if _MY_PACKAGE_REPLACED not in actions:
+        problems.append(
+            f"android/.../AndroidManifest.xml: {_RECEIVER_NAME} does not "
+            f"filter {_MY_PACKAGE_REPLACED} — that is the action delivered to "
+            f"our OWN package when this app is the one replaced, and it is "
+            f"the only signal the app has that it must bring the owner back")
+    stray = [a for a in actions if a != _MY_PACKAGE_REPLACED]
+    if stray:
+        problems.append(
+            f"android/.../AndroidManifest.xml: {_RECEIVER_NAME} filters more "
+            f"than MY_PACKAGE_REPLACED ({stray}) — ACTION_PACKAGE_REPLACED in "
+            f"particular is the BROAD one and fires for every app the device "
+            f"updates, none of which is this receiver's business")
+
+
+# ─────────────────────────────────────────────────────────────────────────
+# 10. THE RETURN NOTICE GOES THROUGH Notifier, AND IS NOT BUILT A SECOND TIME
+# ─────────────────────────────────────────────────────────────────────────
+
+# The markers of a SECOND notification implementation. Any of these inside
+# UpdateReturn.kt means the app has grown a second builder, a second channel
+# and a second tap target that can drift away from MainActivity.
+_OWN_NOTIFICATION_MARKERS = (
+    "NotificationCompat.Builder",
+    "Notification.Builder",
+    "NotificationChannel",
+    "NotificationManagerCompat",
+    "NotificationManager",
+)
+
+
+def check_the_return_notice_goes_through_notifier(problems: list[str]) -> None:
+    code = _strip_kotlin_comments(_text(UPDATE_RETURN_KT))
+    if not re.search(r"Notifier\s*\(\s*ctx\s*\)", code):
+        problems.append(
+            "android/.../UpdateReturn.kt: does not build a Notifier — the "
+            "return notice is the ONLY carrier that reliably works here "
+            "(a background activity start is normally refused on Android 10+)")
+    if not re.search(r"\.post\s*\(", code):
+        problems.append(
+            "android/.../UpdateReturn.kt: never calls Notifier.post — the "
+            "receiver would fire and leave the owner with nothing to tap")
+    for marker in _OWN_NOTIFICATION_MARKERS:
+        if marker in code:
+            problems.append(
+                f"android/.../UpdateReturn.kt: references {marker} — this "
+                f"file must post through Notifier and build no notification "
+                f"of its own (monorepo priority C: a second builder is a "
+                f"second channel and a second tap target)")
+
+
+# ─────────────────────────────────────────────────────────────────────────
+# 11. THE BEST-EFFORT ACTIVITY START CAN NEVER CRASH THE RECEIVER
+# ─────────────────────────────────────────────────────────────────────────
+
+def _guarded_try_bodies(src: str) -> list[str]:
+    """Every `try { … }` body in `src` that is actually followed by a
+    `catch`. Brace-matched rather than regexed, because the body contains
+    braces of its own (the Intent chain, a lambda) and a lazy pattern would
+    stop at the first one."""
+    bodies = []
+    for match in re.finditer(r"\btry\s*\{", src):
+        depth = 0
+        for i in range(match.end() - 1, len(src)):
+            if src[i] == "{":
+                depth += 1
+            elif src[i] == "}":
+                depth -= 1
+                if depth == 0:
+                    body = src[match.end():i]
+                    tail = src[i + 1:i + 40]
+                    if re.match(r"\s*catch\s*\(", tail):
+                        bodies.append(body)
+                    break
+    return bodies
+
+
+def check_the_activity_start_cannot_crash_the_receiver(problems: list[str]) -> None:
+    code = _strip_kotlin_comments(_text(UPDATE_RETURN_KT))
+    if "startActivity" not in code:
+        problems.append(
+            "android/.../UpdateReturn.kt: no startActivity at all — the "
+            "best-effort direct return is gone; the notification alone is "
+            "the fallback, not the whole feature")
+        return
+    if not any("startActivity" in body for body in _guarded_try_bodies(code)):
+        problems.append(
+            "android/.../UpdateReturn.kt: startActivity is not inside a "
+            "try/catch — on Android 10+ a background activity start is "
+            "normally REFUSED, and a throwing refusal here would kill the "
+            "receiver before it could post the notification, which is the "
+            "carrier that actually works")
+
+
 CHECKS = [
     ("the old fallback still exists",
      check_the_old_fallback_still_exists),
@@ -516,6 +674,12 @@ CHECKS = [
      check_the_cube_is_not_written_twice),
     ("the progress shown is never invented",
      check_the_progress_shown_is_never_invented),
+    ("the way back in is declared in the manifest",
+     check_the_way_back_in_is_declared),
+    ("the return notice goes through Notifier, and is not built a second time",
+     check_the_return_notice_goes_through_notifier),
+    ("the best-effort activity start can never crash the receiver",
+     check_the_activity_start_cannot_crash_the_receiver),
 ]
 
 
@@ -535,14 +699,18 @@ def main() -> int:
               "started is one that must never be handed an untrusted url, "
               "never claim a success it cannot know, and never leave a "
               "downloaded copy of itself somewhere a stray grant could "
-              "reach.")
+              "reach — and one that succeeds must never leave the owner "
+              "hunting for his own app on the home screen.")
         return 1
     print("\nAPK UPDATE GATE PASSED — the fallback survives, the bridge "
           "surface is exact, the permission is declared, nothing touches "
           "disk outside the install session, the url is checked by parsed "
           "components, no state claims a success this page could never "
-          "honestly know, the cube is written once, and progress is never "
-          "invented.")
+          "honestly know, the cube is written once, progress is never "
+          "invented, and the way back into the app after it replaces itself "
+          "is declared where a dead process can still be reached, posts "
+          "through the one Notifier, and cannot be crashed by a refused "
+          "activity start.")
     return 0
 
 

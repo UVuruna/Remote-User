@@ -949,8 +949,9 @@ def input_gate(step, run) -> None:
     # file-install paths, URLs parsed not guessed, no success claimed after
     # process termination, loading cube not duplicated, and percentages only
     # when size is known.
-    step("0b32/6  APK UPDATE GATE — the shell installs the APK directly and "
-         "eight fail-closed checks hold (tests/test_apk_update.py)")
+    step("0b32/6  APK UPDATE GATE — the shell installs the APK directly, "
+         "brings him back into the app afterwards, and eleven fail-closed "
+         "checks hold (tests/test_apk_update.py)")
     run([sys.executable, str(PROJECT_DIR / "tests" / "test_apk_update.py")])
 
     # THE USE-LOG GATES — the record the app keeps of its own run, split into

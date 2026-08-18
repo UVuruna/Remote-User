@@ -17,6 +17,7 @@ scanner). Package `com.uvuruna.vibecoder`, min Android 8 (API 26).
 | `ConnectionError.kt` | Standard | why the PC can't be reached, and the one button that fixes it — the five-cause diagnosis and the error card's own actions; split off `MainActivity.kt` 2026-08-17 — [about](__about/ConnectionError.md) |
 | `Bridge.kt` | Standard | `window.Android` — every name the PAGE calls; the shell's compatibility surface (split from MainActivity 2026-08-07) — [about](__about/Bridge.md) |
 | `Updater.kt` | Algorithmic | the in-app update job — streams `/app.apk` straight into a `PackageInstaller` session with no file ever written to disk, throttled progress, automatic continuation once "install unknown apps" is granted — [about](__about/Updater.md) |
+| `UpdateReturn.kt` | Standard | the way back IN after the app installs a new version of itself — a manifest receiver for `MY_PACKAGE_REPLACED` that tries to reopen the app (best effort; Android 10+ normally refuses a background activity start) and ALWAYS posts a one-tap "you are up to date" notice through `Notifier` (owner report 2026-08-18) — [about](__about/UpdateReturn.md) |
 | `Gamepad.kt` | Standard | the Bluetooth game controller — keys and sticks captured before the WebView sees them and forwarded to the page, which owns the whole mapping (build round G1, 2026-08-07) — [about](__about/Gamepad.md) |
 | `OnboardingActivity.kt` | Standard | first-run pairing screen — automatic funnel handoff + manual QR-scan/paste fallback — [about](__about/OnboardingActivity.md) |
 | `VoiceInput.kt` | Standard | dictation subsystem — user-chosen language, engine choice, silent model download, silent diagnostics (split from MainActivity 2026-08-05) — [about](__about/VoiceInput.md) |
@@ -62,7 +63,13 @@ always-on-top over the owner's desk. See
   `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`; since 2026-08-17 also
   `REQUEST_INSTALL_PACKAGES` — a sideload-only permission Google Play
   forbids, accepted on purpose since this project ships its own APK by
-  decision (see [Updater](__about/Updater.md))
+  decision (see [Updater](__about/Updater.md)); since 2026-08-18 a
+  `<receiver android:name=".UpdateReturn" android:exported="false">` filtering
+  exactly `android.intent.action.MY_PACKAGE_REPLACED` — declared here and
+  never registered at runtime, because at the moment that broadcast is sent
+  our process is dead (the install killed it), and only a manifest entry can
+  bring the package back from nothing (see
+  [UpdateReturn](__about/UpdateReturn.md))
 - `build.gradle.kts` / `settings.gradle.kts` — AGP 8.7, Kotlin 2.0, SDK 35;
   version comes from `setup/app_info.json` via build properties; release
   signing from environment variables (never committed)
@@ -223,6 +230,14 @@ not just what:
   Settings (`updateAllowInstall()` → `MainActivity.onResume()`), never a
   second tap. The phone never checks the internet either way; the desktop
   app is the one that watches GitHub Releases.
+- **After the update, he is brought back** (2026-08-18,
+  [UpdateReturn](__about/UpdateReturn.md)): a successful install replaces the
+  process and the app vanishes off the screen, so a manifest receiver for
+  `MY_PACKAGE_REPLACED` — the one action delivered to our OWN package —
+  attempts to reopen the app and ALWAYS posts a "tap to open it again"
+  notice. The attempt is best effort only (Android 10+ normally refuses a
+  background activity start, and refuses it silently); the notice is the
+  carrier that works, which is why it is never an `else`.
 - **Immersive — system bars hidden** (2026-07-26): `targetSdk 35` draws the
   WebView edge-to-edge, so the navigation bar sat ON TOP of the page's bottom
   controls and the system stole touches near the edges ("no button works").

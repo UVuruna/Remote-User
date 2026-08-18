@@ -124,6 +124,32 @@
             android:exported="false"
             android:foregroundServiceType="connectedDevice" />
 
+        <!-- The way back in after this app installs a new version of ITSELF
+             (UpdateReturn.kt, owner report 2026-08-18): the install replaces
+             our process, the app vanishes off the screen, and he had to find
+             and open it by hand.
+
+             DECLARED HERE, NEVER REGISTERED AT RUNTIME — and that is not a
+             preference. A runtime-registered receiver lives inside a running
+             process, and at the moment this broadcast is sent our process is
+             DEAD: it is the very thing the install killed. Only a manifest
+             entry can bring the package back from nothing.
+
+             MY_PACKAGE_REPLACED and nothing else: it is delivered to our OWN
+             package only, exactly when this app was the one replaced.
+             ACTION_PACKAGE_REPLACED is the broad one — it fires for every app
+             the device updates, and none of those are our business.
+
+             exported="false": nothing outside this app may ever reach it; the
+             system delivers a protected broadcast regardless. -->
+        <receiver
+            android:name=".UpdateReturn"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+
         <!-- Camera capture target (the Attach set's Camera button): the shot
              is written into this app's cache and handed to the page — no
              storage permission, nothing left in the user's gallery. -->
