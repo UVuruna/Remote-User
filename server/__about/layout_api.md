@@ -3,6 +3,13 @@
 **Script:** [Layout API (script)](../layout_api.py)
 
 ## Purpose
+
+**Split 2026-08-18 (THE STRUCTURE LAW, VC-R6).** The T76 zoom arithmetic —
+`stream_crop`, `zoom_step` and their guards, the numbers the owner corrected
+across five rounds — moved to [Layout Zoom](layout_zoom.md), where nothing
+calls them and nothing they call exists. The HANDLER `zoom_region` stayed here
+on purpose: it re-enters `send_layout_state`, and a caller of that choke point
+living outside the module that owns it would be a second teardown path.
 The protocol handlers for the phone's LAYOUT commands — pick, list, create,
 focus, aspect, state — with [Window Manager](window_manager.md) as their
 engine and [UIA](uia.md) as the tab layer underneath.

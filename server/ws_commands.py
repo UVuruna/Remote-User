@@ -299,7 +299,7 @@ async def _viewport(w: Wire) -> None:
     else:
         # THE ZOOM RAISES THE ENCODED RESOLUTION (owner design,
         # round 3 of T76): the settled rect earns a quantized step
-        # (layout_api.zoom_step), the crop never moves, a pan never
+        # (layout_zoom.zoom_step), the crop never moves, a pan never
         # rebuilds — only a step crossing resets the session.
         await layout_api.zoom_region(ws, layouts, conn, msg)
 

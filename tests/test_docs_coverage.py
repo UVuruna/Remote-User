@@ -38,6 +38,11 @@ STANDARD = {
     # worth its own diagram — the ladder's order IS the whole flow, and it
     # reads straight off the __about doc.
     "server/capture_recovery.py",
+    # Split out of layout_api.py 2026-08-18 (VC-R6): the T76 zoom
+    # arithmetic, pure and callerless. Standard — two derivations and three
+    # guards; what a diagram would have to draw is the owner's five rounds,
+    # and those are prose in docs/DECISIONS.md section 27.
+    "server/layout_zoom.py",
     # Split out of gui/main_window.py 2026-08-18 (VC-R3) on its own banner:
     # the window's power over the server it wraps. Standard — four methods
     # and a worker rule; the DIAGRAM that matters is the exit funnel, and it

@@ -95,7 +95,7 @@ class H264Session:
         PC sending 4K if the Android device cannot receive it"). It is a
         CEILING on the encoded size — see `_scale_size`. None (an older page,
         a browser that sends no panel) means exactly the old behaviour.
-        zoom = the settled pinch's resolution step (layout_api.zoom_step,
+        zoom = the settled pinch's resolution step (layout_zoom.zoom_step,
         owner design round 3 of T76): the panel ceiling is RAISED by this
         factor because a zoomed phone shows only part of the picture, so the
         panel-pixels argument no longer binds — capped at native inside

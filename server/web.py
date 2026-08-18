@@ -51,6 +51,7 @@ import config
 import focus_guard
 import capture_recovery
 import layout_api
+import layout_zoom
 import layout_birth
 import layout_popup
 import notice_channel
@@ -503,8 +504,8 @@ async def _h264_loop(ws: WebSocket, manager, token: str, conn: dict,
         # the crop = the focused layout's region; the zoom = the settled
         # pinch's RESOLUTION step (owner design, round 3 of T76 — the pinch
         # raises the encoded resolution, never the crop; a pan rebuilds nothing).
-        req_region = layout_api.stream_crop(conn)
-        req_zoom = layout_api.zoom_step(conn)
+        req_region = layout_zoom.stream_crop(conn)
+        req_zoom = layout_zoom.zoom_step(conn)
         try:
             # Default args bind THIS iteration's push — `push` itself rebinds
             # next iteration, and a late callback from a dying session must

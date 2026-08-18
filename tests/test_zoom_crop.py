@@ -21,7 +21,7 @@ sections 1–2 still hold for a page that sends no `drawn`.
 
 THE THREE PIECES THIS GATE PROVES, one per file the round-3 design touched:
 
-  1. `layout_api.zoom_step(conn)` — the ONE derivation of the step, read from
+  1. `layout_zoom.zoom_step(conn)` — the ONE derivation of the step, read from
      the settled `conn["zoom"]` rect against the base picture (the focused
      layout's region, or the full frame): the LARGER-fraction axis decides,
      quantized to a power of two, capped at ZOOM_MAX_STEP. `stream_crop`
@@ -71,6 +71,7 @@ sys.path.insert(0, str(PROJECT / "server"))
 import config  # noqa: E402
 import h264_streamer  # noqa: E402
 import layout_api  # noqa: E402
+import layout_zoom  # noqa: E402
 
 WEB = (PROJECT / "server" / "web.py").read_text(encoding="utf-8")
 # The per-`kind` branches left web.py for the command registry on
@@ -99,7 +100,7 @@ def check_zoom_step_arithmetic_at_the_desktop() -> None:
     axis fractions decides, quantized to a power of two, capped at
     ZOOM_MAX_STEP; and past the cap the step never moves again."""
     def step(zoom):
-        return layout_api.zoom_step({"active": None, "region": None, "zoom": zoom})
+        return layout_zoom.zoom_step({"active": None, "region": None, "zoom": zoom})
 
     assert step(None) == 1, "no zoom at all must be the old world — step 1"
     assert step({"x": 0.25, "y": 0.25, "w": 0.5, "h": 0.5}) == 2, \
@@ -110,8 +111,8 @@ def check_zoom_step_arithmetic_at_the_desktop() -> None:
         "an eighth per axis did not reach the x8 cap"
     for w in (0.08, 0.03, 0.01, 0.001):
         assert step({"x": 0.4, "y": 0.4, "w": w, "h": w}) == \
-            layout_api.ZOOM_MAX_STEP, \
-            f"a deeper pinch (w={w}) exceeded the cap of {layout_api.ZOOM_MAX_STEP}"
+            layout_zoom.ZOOM_MAX_STEP, \
+            f"a deeper pinch (w={w}) exceeded the cap of {layout_zoom.ZOOM_MAX_STEP}"
     assert step({"x": 0.2, "y": 0.2, "w": 0.6, "h": 0.6}) == 1, \
         "0.6 of an axis earned a step above 1 — it should not cross the x2 boundary"
     # Asymmetric: the LARGER fraction decides, so a narrow-but-tall rect earns
@@ -128,7 +129,7 @@ def check_zoom_step_arithmetic_inside_a_layout() -> None:
     region = {"x": 0.375, "y": 0.0, "w": 0.25, "h": 1.0}
 
     def step(zoom):
-        return layout_api.zoom_step(
+        return layout_zoom.zoom_step(
             {"active": 0, "region": region, "zoom": zoom})
 
     # Half the region's WIDTH, full height: the width fraction is 0.5, the
@@ -170,14 +171,14 @@ def check_stream_crop_never_reads_the_zoom() -> None:
     existed, whatever the zoom rect says."""
     lay = {"active": 0, "region": dict(HIS_REGION),
            "zoom": {"x": 0.4, "y": 0.1, "w": 0.05, "h": 0.05}}
-    assert layout_api.stream_crop(lay) == HIS_REGION, \
+    assert layout_zoom.stream_crop(lay) == HIS_REGION, \
         "stream_crop moved for a zoomed-in layout — the crop must never narrow"
     lay["zoom"] = dict(FULL)
-    assert layout_api.stream_crop(lay) == HIS_REGION, \
+    assert layout_zoom.stream_crop(lay) == HIS_REGION, \
         "a full-frame zoom rect changed the layout's own crop"
     desk = {"active": None, "region": None,
            "zoom": {"x": 0.25, "y": 0.25, "w": 0.5, "h": 0.5}}
-    assert layout_api.stream_crop(desk) is None, \
+    assert layout_zoom.stream_crop(desk) is None, \
         "a desktop zoom produced a crop — the desktop is never cropped by a pinch"
     print("  stream_crop ignores the zoom entirely, in a layout and at the desktop")
 
@@ -220,7 +221,7 @@ def check_a_pan_never_rebuilds_the_session() -> None:
                "zoom": {"x": 0.25, "y": 0.25, "w": 0.5, "h": 0.5},
                "stream_zoom": 2}
         pan_rect = {"x": 0.35, "y": 0.25, "w": 0.5, "h": 0.5}  # moved, same size
-        assert layout_api._rect_delta(pan_rect, conn["zoom"]) >= layout_api.ZOOM_MIN_DELTA
+        assert layout_zoom._rect_delta(pan_rect, conn["zoom"]) >= layout_zoom.ZOOM_MIN_DELTA
         asyncio.run(layout_api.zoom_region(_WS(), _Layouts(), conn, pan_rect))
         assert not calls, "a pure pan reached the choke point — a rebuild for nothing"
         assert conn["zoom"] == pan_rect, \
@@ -263,7 +264,7 @@ def check_the_choke_point_resets_on_a_step_mismatch_alone() -> None:
     assert fired, "a step mismatch with an unchanged region never reset the stream"
 
     fired.clear()
-    conn["stream_zoom"] = layout_api.zoom_step(conn)  # now they agree
+    conn["stream_zoom"] = layout_zoom.zoom_step(conn)  # now they agree
     asyncio.run(layout_api.send_layout_state(_WS(), _Layouts(), conn))
     assert not fired, \
         "matching region AND matching step still reset the stream — a needless blink"
@@ -295,8 +296,8 @@ def check_a_focus_change_drops_the_zoom_it_was_measured_in() -> None:
     longer exists."""
     conn = {"active": 0, "region": dict(HIS_REGION),
            "zoom": {"x": 0.4, "y": 0.2, "w": 0.1, "h": 0.3}}
-    conn["stream_region"] = layout_api.stream_crop(conn)
-    conn["stream_zoom"] = layout_api.zoom_step(conn)
+    conn["stream_region"] = layout_zoom.stream_crop(conn)
+    conn["stream_zoom"] = layout_zoom.zoom_step(conn)
 
     class _Moved:
         def state(self, active, region):
@@ -402,7 +403,7 @@ def check_wi_fi_bitrate_is_untouched_by_zoom() -> None:
 
 # ═══════════════════════════ 9. THE WIRING ═══════════════════════════
 def check_web_py_derives_and_records_the_zoom_step() -> None:
-    assert "req_zoom = layout_api.zoom_step(conn)" in WEB, \
+    assert "req_zoom = layout_zoom.zoom_step(conn)" in WEB, \
         "web.py no longer derives the zoom step through the one shared function"
     assert re.search(
         r"manager\.open_session,[\s\S]*?req_region,[\s\S]*?req_zoom,\n\s*\)",
@@ -822,7 +823,7 @@ def check_a_letterboxed_picture_earns_its_step_from_the_drawn_size() -> None:
     and that IS the blur he photographed; the drawn/panel ratio answers 2,
     which `_scale_size` turns into native. Below ~1.6x one encoded pixel still
     covers one panel pixel, so nothing is raised — the step is never eager."""
-    step = layout_api.zoom_step
+    step = layout_zoom.zoom_step
     assert step(_his_tablet(1.0)) == 1, "the fitted view earned a step"
     assert step(_his_tablet(1.5)) == 1, \
         "1.5x (ratio 0.94 — still no magnification) earned a step for nothing"
@@ -843,11 +844,11 @@ def check_the_layout_region_scales_the_drawn_base() -> None:
     conn["region"] = {"x": 0.25, "y": 0.0, "w": 0.5, "h": 1.0}
     # base drawn = 1800 x 2025; long/long = 2025/1920 = 1.05, short/short =
     # 1800/1200 = 1.5 -> ratio 1.5 -> step 2 (a full-frame 3x was 3.75 -> 4).
-    assert layout_api.zoom_step(conn) == 2, \
+    assert layout_zoom.zoom_step(conn) == 2, \
         "the region did not scale the drawn base (expected x2 for a half-width layout at 3x)"
     conn["region"] = {"x": 0.25, "y": 0.25, "w": 0.5, "h": 0.5}
     # 1800 x 1012: 1800/1920 = 0.94, 1012/1200 = 0.84 -> no magnification
-    assert layout_api.zoom_step(conn) == 1, \
+    assert layout_zoom.zoom_step(conn) == 1, \
         "a quarter region at 3x is not magnified on his panel — expected x1"
     print("  a layout region scales the drawn base before it meets the panel")
 
@@ -871,7 +872,7 @@ def check_a_pinch_that_keeps_the_rect_full_still_reaches_the_choke_point() -> No
         assert len(calls) == 1, \
             "a 1.2x pinch with a full rect never reached the choke point"
         assert conn["zoom_drawn"] == {"w": 2304.0, "h": 1296.0}
-        assert layout_api.zoom_step(conn) == 2
+        assert layout_zoom.zoom_step(conn) == 2
         calls.clear()
         asyncio.run(layout_api.zoom_region(
             _WS(), _Layouts(), conn,
