@@ -117,7 +117,7 @@ from fastapi import Request
 from fastapi.responses import JSONResponse
 
 import lost_windows
-import notify
+import notice_channel
 import window_claim
 import window_manager as wm
 from grids import PLACE_TOLERANCE_PX
@@ -611,7 +611,7 @@ async def flush_offers(conn: dict) -> int:
     """Send whatever the watcher queued, over the page's own socket. Returns
     how many went out.
 
-    The socket comes from [Notify](notify.py)'s one-device slot — the web
+    The socket comes from [Notice Channel](notice_channel.py)'s one-device slot — the web
     layer's own registry, which this project deliberately keeps only one of.
     A phone that is gone simply drops the chip: an offer is about a window
     that opened just now, and a chip arriving after the next connection would
@@ -619,7 +619,7 @@ async def flush_offers(conn: dict) -> int:
     pending = conn.get("popup_send")
     if not pending:
         return 0
-    ws = notify.page_socket()
+    ws = notice_channel.page_socket()
     if ws is None:
         pending.clear()
         return 0

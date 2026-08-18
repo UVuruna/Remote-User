@@ -45,8 +45,8 @@ import logging
 import time
 from pathlib import Path
 
-from PySide6.QtCore import QPointF, QRectF, QSize, Qt, QTimer
-from PySide6.QtGui import QColor, QFontMetrics, QPainter, QPen
+from PySide6.QtCore import QSize, Qt, QTimer
+from PySide6.QtGui import QColor, QFontMetrics
 from PySide6.QtWidgets import (
     QComboBox, QDialog, QGridLayout, QHBoxLayout, QLabel, QPushButton,
     QVBoxLayout, QWidget,
@@ -60,6 +60,11 @@ from gui.theme import TOKENS, card_shadow, device_color
 from gui.traffic_battery import battery_sentence
 from gui.sizing import WrapLabel, clamp_to_screen, settle_minimum
 from gui.traffic_axis import _alpha, human_bytes, human_rate
+from gui.traffic_legend import LegendMark
+# The spans and the read-key math are pure functions of their
+# arguments and live next door (2026-08-18, THE STRUCTURE LAW) —
+# imported as a MODULE so a gate can swap `SPANS` in place.
+from gui import traffic_spans
 # The chart itself, its colours and its live/disk point helpers moved to
 # `gui/traffic_chart.py` on 2026-08-15 (THE STRUCTURE LAW — this file stood
 # at the wall). Re-exported here so `tests/test_traffic_devices.py` and the
@@ -72,113 +77,9 @@ from gui.traffic_chart import (  # noqa: F401 — re-exports
 logger = logging.getLogger(__name__)
 
 REFRESH_MS = 1000
-# The spans the owner picks between. "recent" spans read the live in-memory
-# ring buffer (traffic.METER.history); every other kind reads traffic.csv
-# through traffic_history.HistoryJob — a slower, off-thread path, so they
-# carry no `seconds` (their own start time is computed, not fixed: see
-# `_history_since`).
-#
-# "Last 10 hours" and "Today" are the owner's own request (2026-08-14): the
-# live ring buffer stops at one hour and the next step up was his whole
-# server session, so an evening's work had no picture between the two. They
-# are file-backed like the two long spans and cost the same read — a short
-# span is NOT a cheaper read, because `read_history` still scans past every
-# row before its `since` (measured numbers in `traffic_history.py`'s
-# docstring). What they buy is a picture at a readable time resolution, not
-# a faster one.
-SPANS = [
-    ("Last 2 minutes", "recent", 120),
-    ("Last 10 minutes", "recent", 600),
-    ("Last hour", "recent", 3600),
-    ("Last 10 hours", "last10h", None),
-    ("Today", "today", None),
-    ("Since start", "since_start", None),
-    ("All (from file)", "all", None),
-]
-TEN_HOURS_S = 10 * 3600
-# How finely a zoomed view is keyed for the file read (T110). One plot
-# column: wider than any chart this window can be shown at, so the key can
-# never be coarser than what the owner can actually see, and never finer
-# than a difference the picture could carry.
-PLOT_COLUMNS = 2048
 ZOOM_HINT = ("Zoom: drag a rectangle over the graph (time and rate), roll the wheel "
              "over it, or use − / +. Once zoomed, dragging MOVES the slice — "
              "Reset zoom shows the whole span again.")
-
-
-def history_since(kind: str, now: float) -> float | None:
-    """Where a file-backed span STARTS, as unix time — `None` for "All",
-    which means "the recording's own beginning" to `read_history`.
-
-    A pure function of (kind, now) on purpose: it is the one place a span's
-    meaning is written down, so its gate can assert "Today" really is local
-    midnight (never `now - 86400`) without building a window.
-    """
-    if kind == "since_start":
-        return traffic.PROCESS_START
-    if kind == "last10h":
-        return now - TEN_HOURS_S
-    if kind == "today":
-        # LOCAL midnight — the owner's own day, not UTC's and not a rolling
-        # 24 hours: "Today" that starts at 04:17 because that is when the
-        # clock was 24 hours ago would be a different question than the one
-        # he asked.
-        lt = time.localtime(now)
-        return time.mktime((lt.tm_year, lt.tm_mon, lt.tm_mday, 0, 0, 0, 0, 0, -1))
-    return None      # "all"
-
-
-
-class _LegendMark(QWidget):
-    """One legend/status swatch — DRAWN with QPainter, never a font glyph or
-    emoji. This project's rule holds on desktop exactly as it does on the
-    phone: the owner's phone once rendered a glyph mark (✥) as a blunt
-    cross, and DESIGN.md's icon rule ("a mark is drawn, never a font
-    character") applies here too, not just to SVG toolbar icons.
-
-    `color_fn` is a CALLABLE, not a QColor — same reason `out_color()` /
-    `in_color()` above are functions: a color captured once at construction
-    would freeze whichever palette was active when the window was built and
-    never follow a runtime theme flip (DESIGN.md → Live theme switching).
-    """
-
-    def __init__(self, color_fn, kind: str, parent: QWidget | None = None):
-        super().__init__(parent)
-        self._color_fn = color_fn
-        self._kind = kind
-        self.setFixedSize(20, 14)  # layout-law: exempt - a fixed-size decorative colour swatch, never a text-carrying widget; its sibling QLabel carries the real content and wraps freely
-
-    def paintEvent(self, event) -> None:  # noqa: N802 — Qt override
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        color = self._color_fn()
-        rect = QRectF(self.rect()).adjusted(1, 2, -1, -2)
-        if self._kind == "series":
-            # Mirrors what the chart itself draws for this series — a faded
-            # fill under a solid line — so the swatch reads as "this IS that
-            # line's colour", not an arbitrary decoration.
-            fill = QColor(color)
-            fill.setAlpha(46)
-            painter.fillRect(rect, fill)
-            painter.setPen(QPen(color, 2))
-            top = rect.top() + 2
-            painter.drawLine(QPointF(rect.left(), top), QPointF(rect.right(), top))
-        elif self._kind == "band":
-            painter.fillRect(rect, color)
-            painter.setPen(QPen(_alpha(TOKENS["text2"], 60), 1))
-            painter.drawRect(rect)
-        elif self._kind == "dotted":
-            painter.setPen(QPen(color, 2, Qt.PenStyle.DotLine))
-            y = rect.center().y()
-            painter.drawLine(QPointF(rect.left(), y), QPointF(rect.right(), y))
-        elif self._kind == "dot":
-            d = min(rect.width(), rect.height())
-            circle = QRectF(rect.center().x() - d / 2, rect.center().y() - d / 2, d, d)
-            painter.setBrush(color)
-            painter.setPen(Qt.PenStyle.NoPen)
-            painter.drawEllipse(circle)
-        painter.end()
-
 
 
 class TrafficWindow(QDialog):
@@ -219,7 +120,7 @@ class TrafficWindow(QDialog):
         # WHICH DEVICES (owner's own refinement of the same request): "list
         # them — a device with this resolution, a device with that
         # resolution — and even better with a name". ONE ROW PER DEVICE, a
-        # DRAWN swatch (`_LegendMark`, same as the legend below — DESIGN.md:
+        # DRAWN swatch (`LegendMark`, same as the legend below — DESIGN.md:
         # marks are drawn, not painted characters) beside a PLAIN, single-
         # line QLabel — never a rich-text paragraph that wraps.
         #
@@ -324,7 +225,7 @@ class TrafficWindow(QDialog):
             row, col = divmod(i, 2)
             item = QHBoxLayout()
             item.setSpacing(6)
-            item.addWidget(_LegendMark(color_fn, kind))
+            item.addWidget(LegendMark(color_fn, kind))
             label = QLabel(text)
             label.setObjectName("caption")
             item.addWidget(label)
@@ -345,7 +246,7 @@ class TrafficWindow(QDialog):
 
         controls = QHBoxLayout()
         self.span_combo = QComboBox()
-        for i, (name, _, _) in enumerate(SPANS):
+        for i, (name, _, _) in enumerate(traffic_spans.SPANS):
             self.span_combo.addItem(name, i)
         self.span_combo.currentIndexChanged.connect(self._on_span_changed)
         controls.addWidget(self.span_combo)
@@ -361,7 +262,7 @@ class TrafficWindow(QDialog):
         record_layout = QHBoxLayout(record_row)
         record_layout.setContentsMargins(0, 0, 0, 0)
         record_layout.setSpacing(6)
-        self.record_dot = _LegendMark(
+        self.record_dot = LegendMark(
             lambda: QColor(TOKENS["success"] if self._recording else TOKENS["error"]),
             "dot")
         self.record_label = QLabel("Recording to file")
@@ -486,7 +387,7 @@ class TrafficWindow(QDialog):
         acts_row = (metrics.horizontalAdvance("Open the recording") + button_pad
                     + metrics.horizontalAdvance("Reset counters") + button_pad
                     + spacing)
-        controls_row = (metrics.horizontalAdvance(max((n for n, _, _ in SPANS), key=len))
+        controls_row = (metrics.horizontalAdvance(max((n for n, _, _ in traffic_spans.SPANS), key=len))
                         + 56
                         + record_label_w + 20 + 6 + 20   # dot mark + spacing + margins
                         + (self.zoom_out_btn.sizeHint().width()
@@ -523,74 +424,12 @@ class TrafficWindow(QDialog):
         idx = self.span_combo.currentData()
         if idx is None:
             return
-        _, kind, _ = SPANS[idx]
+        _, kind, _ = traffic_spans.SPANS[idx]
         if kind != "recent":
             self._history_points = []
             self._history_kind = None
             self._history_next_at = 0.0
         self._refresh()
-
-    def _history_key(self, kind: str) -> str:
-        """The read a file-backed span needs RIGHT NOW: the span itself, or —
-        zoomed — the span plus the view's own bounds, so a result for the
-        whole span is never adopted as the zoomed read and vice versa (the
-        same "a result carries its own key" rule the spans gate holds).
-
-        THE BOUNDS ARE QUANTIZED TO THE READ'S OWN BUCKET, and that is the
-        fix for the owner's report 2026-08-16 (T110, his THIRD on this
-        window: "Reading traffic.csv…" forever on a file-backed span). His
-        own server log named the mechanism, one line per second, both bounds
-        incrementing by exactly 1:
-
-            dropped 'last10h|1786797517-1786833517' while showing
-                    'last10h|1786797518-1786833518'
-
-        A file-backed span may SLIDE with the clock ("Last 10 hours" is
-        `now - 10h .. now`), `_refresh` hands that moving end to
-        `set_data` every tick, and `ViewRange.set_full` correctly clamps a
-        zoomed view forward inside it — so the view's own bounds move one
-        second per second. Keyed on the raw bounds, every tick invented a
-        NEW key: the read in flight could never match the key by the time it
-        landed (it takes longer than a tick), so every result was dropped, a
-        fresh read was started in its place, and `loading` — which is true
-        exactly while a read for the selected key is pending and nothing is
-        held for it — could never come down. A read storm and a permanently
-        stuck overlay, from one expression.
-
-        Quantizing is the honest rule and not a fudge: the read returns at
-        most `traffic_history_max_buckets` buckets across the view, so two
-        views differing by less than one bucket produce the SAME picture.
-        A key that changes when the answer cannot is not identifying the
-        read, it is identifying the clock.
-
-        Why the earlier round could not reproduce it: its harness drove
-        FIXED-start spans ("Today", "Since start" measured from a frozen
-        clock), where the bounds never move and this expression is stable.
-        The defect needs a span whose end tracks `now` AND a zoom.
-        """
-        view = self.chart.view
-        if not view.is_time_zoomed():
-            return kind
-        # QUANTIZED TO A PLOT COLUMN, and that is the T110 fix's second half.
-        # A zoomed view on a span that slides with the clock keeps MOVING —
-        # `ViewRange._clamp` pushes a view that has fallen out of the span
-        # forward one second per second — so a key built from the raw bounds
-        # is a new key every tick. Every tick then started a fresh read that
-        # superseded the one before it, so no read ever finished, no result
-        # was ever surfaced, and the "Reading traffic.csv…" overlay could
-        # never come down. His log, one line per second, both bounds +1:
-        #
-        #     dropped 'last10h|1786797517-1786833517' while showing
-        #             'last10h|1786797518-1786833518'
-        #
-        # The quantum is one PLOT COLUMN, not one read bucket: the picture is
-        # what he judges, and a shift that cannot move a single pixel of it
-        # must not count as a different read. Below that the view is the same
-        # question and the answer already in flight is the answer.
-        width = max(1.0, view.span() / PLOT_COLUMNS)
-        lo = int(view.start // width)
-        hi = int(view.end // width)
-        return f"{kind}|{lo}-{hi}@{int(width)}"
 
     def _on_zoomed(self) -> None:
         """The chart's view changed (drag, wheel, buttons): a file-backed
@@ -613,7 +452,7 @@ class TrafficWindow(QDialog):
         then landed and was drawn under the new span's label.
         """
         now = time.time()
-        key = self._history_key(kind)
+        key = traffic_spans.history_key(kind, self.chart.view)
         if key == self._history_kind and now < self._history_next_at:
             return
         if self._history.pending_key == key:
@@ -630,7 +469,7 @@ class TrafficWindow(QDialog):
         self._history_next_at = now + SETTINGS.traffic_history_refresh_s
 
     def _rebuild_device_rows(self, known: list[dict]) -> None:
-        """One row per device — a DRAWN colour swatch (`_LegendMark`) + a
+        """One row per device — a DRAWN colour swatch (`LegendMark`) + a
         PLAIN, single-line `QLabel` — never the wrapping rich-text paragraph
         this used to be (see the constructor's own note on why: three
         different Qt/audit measurers disagreed about how tall one wrapping
@@ -666,7 +505,7 @@ class TrafficWindow(QDialog):
                 row_layout.setContentsMargins(0, 0, 0, 0)
                 row_layout.setSpacing(6)
                 color = device_color(entry["index"])
-                mark = _LegendMark(lambda c=color: QColor(c), "dot")
+                mark = LegendMark(lambda c=color: QColor(c), "dot")
                 label = QLabel(entry["label"])
                 label.setObjectName("caption")
                 row_layout.addWidget(mark)
@@ -681,7 +520,7 @@ class TrafficWindow(QDialog):
             snap = traffic.METER.snapshot()
             idx = self.span_combo.currentData()
             idx = idx if idx is not None else 0
-            name, kind, seconds = SPANS[idx]
+            name, kind, seconds = traffic_spans.SPANS[idx]
             now = time.time()
 
             if kind == "recent":
@@ -689,9 +528,9 @@ class TrafficWindow(QDialog):
                 points = [_point_from_sample(s) for s in samples]
                 self.chart.set_data(points, now - seconds, now, name, downsampled=False)
             else:
-                since = history_since(kind, now)
+                since = traffic_spans.history_since(kind, now)
                 self._maybe_start_history(kind, since)
-                key = self._history_key(kind)
+                key = traffic_spans.history_key(kind, self.chart.view)
                 result = self._history.poll()
                 if result is not None:
                     got_kind, points = result

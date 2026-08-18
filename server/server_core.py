@@ -26,7 +26,7 @@ import foreground_lock
 import layout_popup
 import log_shipper
 import log_summary
-import notify
+import notice_channel
 import recents
 import monitors
 import pairing
@@ -277,7 +277,7 @@ class ServerController:
         # old thread. Sits in this funnel because every documented way out
         # already runs it, idempotently.
         try:
-            notify.close_channels()
+            notice_channel.close_channels()
         except Exception:
             logger.exception("Ending the notice channels failed")
         # The display watch is a thread (or a set of Qt connections) of ours,

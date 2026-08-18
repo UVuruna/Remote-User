@@ -50,7 +50,10 @@ def post(port: int, payload: dict, token: str) -> tuple[int, dict]:
 
 
 def main() -> int:
+    import agent_hook_switch
+    import notice_channel
     import notify
+    import notify_layout
 
     results: dict[str, bool] = {}
 
@@ -289,17 +292,17 @@ def main() -> int:
                             encoding="utf-8")
         saved = agent_hook.SETTINGS
         agent_hook.SETTINGS = settings
-        # `notify._hook_module()` loads the script FRESH on every call (it
+        # `agent_hook_switch._hook_module()` loads the script FRESH on every call (it
         # must run under any interpreter), so the override above would never
         # reach it — hand it this very module for the duration.
-        saved_loader = notify._hook_module
-        notify._hook_module = lambda: agent_hook
+        saved_loader = agent_hook_switch._hook_module
+        agent_hook_switch._hook_module = lambda: agent_hook
         try:
             before = agent_hook.missing_events()
             pair = agent_hook.registered_command()
             healed = False
             if pair and agent_hook.is_installed():
-                notify.refresh_agent_hook()      # the REAL start-up path
+                agent_hook_switch.refresh_agent_hook()      # the REAL start-up path
                 healed = agent_hook.missing_events() == ()
             data = json.loads(settings.read_text(encoding="utf-8"))
             note = " ".join(h.get("command", "")
@@ -307,7 +310,7 @@ def main() -> int:
                             for h in e.get("hooks") or [])
         finally:
             agent_hook.SETTINGS = saved
-            notify._hook_module = saved_loader
+            agent_hook_switch._hook_module = saved_loader
     # An old file holds ONLY the `Stop` line, so both asking carriers are
     # missing from it — and the heal must name both, not just the one that
     # existed when this check was written.
@@ -338,13 +341,13 @@ def main() -> int:
             return list(range(len(self.layouts)))
 
     reg = _Reg(_Lay("Chrome", "notes"), _Lay("Claude", "vibecoder"))
-    notify._layouts = reg
+    notify_layout._layouts = reg
     # The hook sends a PATH; the registry speaks folder names, lowercased.
     results["the notice finds the layout by the agent's own cwd"] = (
-        notify.layout_of(r"U:\Coding\UVuruna\Applications\VibeCoder")
+        notify_layout.layout_of(r"U:\Coding\UVuruna\Applications\VibeCoder")
         == {"index": 1, "name": "Claude"})
     results["a bare folder name works too"] = (
-        notify.layout_of("Notes") == {"index": 0, "name": "Chrome"})
+        notify_layout.layout_of("Notes") == {"index": 0, "name": "Chrome"})
     # It PRUNES first, because the index it returns is the one the phone is
     # holding, and layout_state numbers its list after the same prune. Without
     # this the tap would land one layout off whenever a dead one was still in
@@ -353,12 +356,12 @@ def main() -> int:
     # A project nobody is showing offers NO jump. A tap that cannot land is
     # worse than a tap that only opens the app.
     results["a project on no layout offers no jump"] = (
-        notify.layout_of(r"C:\somewhere\else") is None
-        and notify.layout_of("") is None and notify.layout_of(None) is None)
-    notify._layouts = None
+        notify_layout.layout_of(r"C:\somewhere\else") is None
+        and notify_layout.layout_of("") is None and notify_layout.layout_of(None) is None)
+    notify_layout._layouts = None
     results["with no registry at all the feature is absent, not wrong"] = (
-        notify.layout_of("Vibe Coder") is None)
-    notify._layouts = reg
+        notify_layout.layout_of("Vibe Coder") is None)
+    notify_layout._layouts = reg
 
     # --- THE LIFE HE ACTUALLY LIVES (task 236, his THIRD report) -----------
     # Everything above stubs `project()` — so two rounds of green gates proved
@@ -418,7 +421,7 @@ def main() -> int:
             def prune(self):
                 return [0]
 
-        notify._layouts = _Reg2()
+        notify_layout._layouts = _Reg2()
         seen = []
 
         class _Sink(_logging.Handler):
@@ -429,7 +432,7 @@ def main() -> int:
         notify.logger.addHandler(sink)
         notify.logger.setLevel(_logging.INFO)
         try:
-            missed = notify.layout_of(r"U:\Coding\UVuruna\Applications\VibeCoder")
+            missed = notify_layout.layout_of(r"U:\Coding\UVuruna\Applications\VibeCoder")
         finally:
             notify.logger.removeHandler(sink)
         info = [m for lvl, m in seen if lvl >= _logging.INFO]
@@ -441,7 +444,7 @@ def main() -> int:
             bool(info) and "Files" in info[0])
     finally:
         layout_registry.wm.is_alive, layout_registry.wm._title = real_alive, real_title
-        notify._layouts = reg
+        notify_layout._layouts = reg
 
     # The hook itself must actually PUT the title on the wire — a matcher
     # that works in notify.py is worthless if agent_hook.send() never sends
@@ -487,25 +490,25 @@ def main() -> int:
     # parent sits at the lowest index because it exists before anything is
     # torn off it. The fix tries the conversation TITLE first.
     results["title match: exact, VS Code's own furniture stripped"] = (
-        notify._title_matches(
+        notify_layout._title_matches(
             "Ispravka UI dizajna menija",
             "Ispravka UI dizajna menija - Vibe Coder - Visual Studio Code "
             "[Administrator]"))
     results["title match: VS Code's ellipsis is a truncated PREFIX"] = (
-        notify._title_matches(
+        notify_layout._title_matches(
             "Ispravka UI dizajna menija",
             "Ispravka UI dizajna meni… - Vibe Coder - Visual Studio Code"))
     results["title match: a torn-off tab's window carries no folder segment"] = (
-        notify._title_matches("Ispravka UI dizajna menija",
+        notify_layout._title_matches("Ispravka UI dizajna menija",
                               "Ispravka UI dizajna menija - Visual Studio Code"))
     results["title match: two DIFFERENT elided titles never collide"] = not (
-        notify._title_matches(
+        notify_layout._title_matches(
             "Fix login retry",
             "Fix login retriever meni… - Vibe Coder - Visual Studio Code"))
     results["title match: an unrelated window never matches"] = not (
-        notify._title_matches("Ispravka UI dizajna menija", "Docs - Google Chrome"))
+        notify_layout._title_matches("Ispravka UI dizajna menija", "Docs - Google Chrome"))
     results["title match: an empty title never matches by accident"] = not (
-        notify._title_matches("", "Anything - Vibe Coder - Visual Studio Code"))
+        notify_layout._title_matches("", "Anything - Vibe Coder - Visual Studio Code"))
 
     titles2 = {}
     real_alive2 = layout_registry.wm.is_alive
@@ -526,11 +529,11 @@ def main() -> int:
             "VibeCoder", "code.exe", [300, 301], "2-side", "landscape", 1.6)
         target = layout_registry.Layout(
             "Claude", "code.exe", [400], None, "landscape", 1.6)
-        notify._layouts = _Reg(parent, target)
+        notify_layout._layouts = _Reg(parent, target)
 
         results["the conversation title picks the RIGHT layout, "
                 "not the first one sharing the project"] = (
-            notify.layout_of(r"U:\Coding\UVuruna\Applications\VibeCoder",
+            notify_layout.layout_of(r"U:\Coding\UVuruna\Applications\VibeCoder",
                              "Ispravka UI dizajna menija")
             == {"index": 1, "name": "Claude"})
         # AN OLDER HOOK, hard requirement: no `title` sent, `layout_of` gets
@@ -538,18 +541,18 @@ def main() -> int:
         # BYTE-FOR-BYTE what it was before this round — the first layout by
         # project, i.e. the parent.
         results["an older hook (no title) lands exactly where it always did"] = (
-            notify.layout_of(r"U:\Coding\UVuruna\Applications\VibeCoder")
+            notify_layout.layout_of(r"U:\Coding\UVuruna\Applications\VibeCoder")
             == {"index": 0, "name": "VibeCoder"})
         # A title that matches NOTHING live falls back to the project search
         # too — never a guess, never a miss where the old behaviour had a hit.
         results["a title matching no window falls back to the project search"] = (
-            notify.layout_of(r"U:\Coding\UVuruna\Applications\VibeCoder",
+            notify_layout.layout_of(r"U:\Coding\UVuruna\Applications\VibeCoder",
                              "Something nobody ever said")
             == {"index": 0, "name": "VibeCoder"})
     finally:
         layout_registry.wm.is_alive = real_alive2
         layout_registry.wm._title = real_title2
-        notify._layouts = reg
+        notify_layout._layouts = reg
 
     # --- 2 + 3 + 4: the live path ------------------------------------------
     threading.Thread(target=gate.run_server, daemon=True).start()

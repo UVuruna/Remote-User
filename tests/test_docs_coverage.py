@@ -38,6 +38,22 @@ STANDARD = {
     # worth its own diagram — the ladder's order IS the whole flow, and it
     # reads straight off the __about doc.
     "server/capture_recovery.py",
+    # Split out of notify.py 2026-08-18 (VC-R4): WHERE a notice happened.
+    # Standard — a lookup with two ordered fallbacks (conversation title,
+    # then project folder); a diagram would restate the four ifs.
+    "server/notify_layout.py",
+    # Split out of notify.py 2026-08-18 (VC-R4): the desktop switch that
+    # registers Claude Code's hooks. Standard — file copies and a settings
+    # write, plus the four sentences it is allowed to print.
+    "server/agent_hook_switch.py",
+    # Split out of gui/traffic_window.py 2026-08-18 (VC-R4): two pure
+    # functions and the span table. Standard — the quantization rule is
+    # one expression, and its WHY is prose, not a diagram.
+    "server/gui/traffic_spans.py",
+    # Split out of gui/traffic_window.py 2026-08-18 (VC-R4): the drawn
+    # legend swatch. Standard even though it is a widget — nature beats
+    # the band (DOCS.md): four paint branches a diagram would only echo.
+    "server/gui/traffic_legend.py",
     # New 2026-08-17 (his ruling on the UIPI alarm: "why would we have things
     # that do not do what they are supposed to do" — measure, or delete).
     # Standard: four independent readings of the environment (our own token,
@@ -618,6 +634,11 @@ ALGORITHMIC = {
     # whose ORDER and whose withheld Enter are the whole feature.
     "server/content.py",
     "server/notify.py",
+    # Split out of notify.py 2026-08-18 (THE STRUCTURE LAW, VC-R4): HOW a
+    # notice travels. Algorithmic without argument — an ordered carrier
+    # chain whose whole promise is "exactly one", a per-device channel table
+    # displaced by its own sentinel, and an endless generator with a beat.
+    "server/notice_channel.py",
     # New 2026-08-07 (owner report — installing killed the session he was
     # installing FROM). Algorithmic without argument: a sequence that spans a
     # process boundary, with an ordering that is the whole design, a rollback,

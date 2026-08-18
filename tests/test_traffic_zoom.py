@@ -57,7 +57,9 @@ from config import SETTINGS  # noqa: E402
 
 APP = QApplication.instance() or QApplication([])
 
-from gui import traffic_chart, traffic_window as tw, traffic_zoom  # noqa: E402
+from gui import (  # noqa: E402
+    traffic_chart, traffic_spans as spans, traffic_window as tw, traffic_zoom,
+)
 
 
 # ═══════════════════════════ FIXTURES ═══════════════════════════
@@ -269,7 +271,7 @@ def check_window_has_min_max_buttons() -> bool:
 def check_zoom_rereads_the_file_for_the_view() -> bool:
     """A zoomed file-backed span asks the reader for [view.start, view.end]
     under its OWN key, and a whole-span result is not adopted for it.
-    PLANTED DEFECT: `_history_key` returns `kind` regardless of the zoom."""
+    PLANTED DEFECT: `traffic_spans.history_key` returns `kind` regardless of the zoom."""
     calls = []
 
     def reader(since, max_buckets, until=None):
@@ -282,7 +284,7 @@ def check_zoom_rereads_the_file_for_the_view() -> bool:
     try:
         with _isolated():
             w = tw.TrafficWindow()
-            idx = next(i for i, (_, k, _) in enumerate(tw.SPANS) if k == "last10h")
+            idx = next(i for i, (_, k, _) in enumerate(spans.SPANS) if k == "last10h")
             w.span_combo.setCurrentIndex(idx)
             for _ in range(20):
                 APP.processEvents(); w._refresh(); time.sleep(0.02)
@@ -295,7 +297,7 @@ def check_zoom_rereads_the_file_for_the_view() -> bool:
             for _ in range(30):
                 APP.processEvents(); w._refresh(); time.sleep(0.02)
             zoomed_calls = [c for c in calls if c[1] is not None]
-            key = w._history_key("last10h")
+            key = spans.history_key("last10h", w.chart.view)
             return (bool(zoomed_calls)
                     and abs(zoomed_calls[-1][0] - v.start) < 1.0
                     and abs(zoomed_calls[-1][1] - v.end) < 1.0

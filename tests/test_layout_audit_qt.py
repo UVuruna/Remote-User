@@ -155,7 +155,7 @@ def _fake_controller() -> SimpleNamespace:
 # R2's SECOND independent grader (2026-08-07) this constant was the RAW
 # "[Errno 2] No such file or directory: ...\_internal\setup\agent_hook.py"
 # the owner photographed on 2026-08-06 - a real bug at the time, but
-# notify._hook_module() has printed a plain-language sentence for that exact
+# agent_hook_switch._hook_module() has printed a plain-language sentence for that exact
 # case since v0.0.251, so the fixture was sizing the window for a caption the
 # product can no longer produce (and grading it in plain grey, which is what
 # made the STILL-real finding - no failure caption anywhere in this window
@@ -170,7 +170,7 @@ def _fake_controller() -> SimpleNamespace:
 # so no edit to any of them can leave the window sized for a string the
 # product no longer prints.
 from gui.settings_window import NOTIFY_OFF_TEXT, NOTIFY_ON_TEXT  # noqa: E402
-from notify import (  # noqa: E402
+from agent_hook_switch import (  # noqa: E402
     HOOK_CHANGE_FAILED_TEXT, MISSING_SCRIPT_TEXT, NO_PYTHON_TEXT,
     UNLOADABLE_SCRIPT_TEXT,
 )
@@ -406,7 +406,7 @@ def make_settings_window() -> QWidget:
       - a voice is SAVED that the phone did not report, which adds the
         "remembered, phone not connected" entry, longer than any real one;
       - the agent-hook switch is showing a FAILURE — the longest sentence this
-        window can print (`notify.NO_PYTHON_TEXT`), through the SAME
+        window can print (`agent_hook_switch.NO_PYTHON_TEXT`), through the SAME
         `_set_caption` the real toggle handler uses, so the shot proves the
         error COLOUR too, not just the words (round R2's second independent
         grader, 2026-08-07: a raw exception once stood here in plain caption

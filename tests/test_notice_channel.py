@@ -75,13 +75,14 @@ sys.path.insert(0, str(PROJECT / "server"))
 import uvicorn  # noqa: E402
 
 import focus_guard  # noqa: E402
+import notice_channel  # noqa: E402
 import notify  # noqa: E402
 import presence  # noqa: E402
 import web  # noqa: E402
 
 TOKEN = "noticetoken"
 PORT = 8899
-# The real beat is 60 s (notify.BEAT_S). Shortened here so "idle" and "the
+# The real beat is 60 s (notice_channel.BEAT_S). Shortened here so "idle" and "the
 # channel noticed the phone went away" are observable in a few seconds — the
 # VALUE is a tuning number, the BEHAVIOUR is what this gate pins.
 TEST_BEAT_S = 0.4
@@ -278,8 +279,8 @@ def until(pred, timeout: float = 4.0) -> bool:
 
 
 def reset() -> None:
-    notify._pending.clear()
-    notify._page["ws"] = None
+    notice_channel._pending.clear()
+    notice_channel._page["ws"] = None
 
 
 def quiet(chan: Waiting) -> bool:
@@ -314,15 +315,15 @@ def check_a_closed_page_still_gets_the_notice(chan: Waiting) -> bool:
             and "speak" in got and "voice" in got and "rate" in got
             and got["at"] > 0
             # ...and it was NOT also queued for later.
-            and not notify._pending)
+            and not notice_channel._pending)
 
 
 def check_a_waiting_phone_is_not_a_present_phone() -> bool:
     """A notice connection must look like nothing at all to the rest of the
     server. If it ever counted as presence, the owner's own Chrome and VSCode
     would be nailed above his desk by a phone in his pocket."""
-    return (notify.waiting() is True
-            and notify._page["ws"] is None      # the one-device slot, untouched
+    return (notice_channel.waiting() is True
+            and notice_channel._page["ws"] is None      # the one-device slot, untouched
             and stats.clients == 0              # no client, so no traffic session
             and stream.running == 0             # no capture, no encoder
             and layouts.minimized == 0 and layouts.cleared == 0
@@ -343,17 +344,17 @@ def check_an_open_page_takes_it_alone(chan: Waiting) -> bool:
     and the waiting channel hears only its beat."""
     reset()
     page = FakePageWs()
-    notify._page["ws"] = page
+    notice_channel._page["ws"] = page
     _, answer = post({"agent": "Both", "event": "finished", "text": ""})
     delivered = until(lambda: len(page.sent) == 1)
     # Give the waiting channel more than a beat's worth of time to prove it
     # got nothing — an instant check would pass even on a real double.
     time.sleep(TEST_BEAT_S * 3)
-    notify._page["ws"] = None
+    notice_channel._page["ws"] = None
     return (delivered and answer.get("ok") is True
             and page.sent[0]["agent"] == "Both"
             and chan.lines.empty()          # the phone's other ear stayed shut
-            and not notify._pending)        # and nothing was queued either
+            and not notice_channel._pending)        # and nothing was queued either
 
 
 def check_a_dying_page_falls_through_not_into_the_queue(chan: Waiting) -> bool:
@@ -361,12 +362,12 @@ def check_a_dying_page_falls_through_not_into_the_queue(chan: Waiting) -> bool:
     service is already waiting — that notice belongs to it, not to a queue the
     owner has to open the app to empty."""
     reset()
-    notify._page["ws"] = FakePageWs(dead=True)
+    notice_channel._page["ws"] = FakePageWs(dead=True)
     _, answer = post({"agent": "Falling", "event": "finished", "text": ""})
     got = chan.next()
-    notify._page["ws"] = None
+    notice_channel._page["ws"] = None
     return (got is not None and got["agent"] == "Falling"
-            and answer.get("ok") is True and not notify._pending)
+            and answer.get("ok") is True and not notice_channel._pending)
 
 
 def check_the_queue_is_the_last_resort() -> bool:
@@ -374,20 +375,20 @@ def check_the_queue_is_the_last_resort() -> bool:
     does the queue fill — and it hands everything over, oldest first, the
     moment the phone starts waiting again."""
     reset()
-    if not until(lambda: notify.waiting() is False, timeout=6):
+    if not until(lambda: notice_channel.waiting() is False, timeout=6):
         return False                        # the closed channel must detach
     for i in range(3):
         post({"agent": f"Held{i}", "event": "finished", "text": ""})
     status, answer = post({"agent": "Held3", "event": "finished", "text": ""})
     if not (status == 200 and answer.get("ok") is False
             and "held" in str(answer.get("reason", "")).lower()
-            and len(notify._pending) == 4):
+            and len(notice_channel._pending) == 4):
         return False
     chan = Waiting().open()
     try:
         got = [chan.next() for _ in range(4)]
         return ([n["agent"] for n in got if n] == ["Held0", "Held1", "Held2", "Held3"]
-                and not notify._pending)
+                and not notice_channel._pending)
     finally:
         chan.close()
 
@@ -403,7 +404,7 @@ def check_two_devices_each_get_one_copy() -> bool:
     tablet = Waiting(device="tablet-a").open()
     phone = Waiting(device="phone-b").open()
     try:
-        if not until(lambda: notify.waiting_devices() == 2):
+        if not until(lambda: notice_channel.waiting_devices() == 2):
             return False
         _, answer = post({"agent": "Two ears", "event": "finished", "text": ""})
         first, second = tablet.next(), phone.next()
@@ -415,8 +416,8 @@ def check_two_devices_each_get_one_copy() -> bool:
                 and quiet(tablet) and quiet(phone)      # never twice
                 and not tablet.ended.is_set()           # and never kicked
                 and not phone.ended.is_set()
-                and notify.waiting_devices() == 2
-                and not notify._pending)                # nobody was queued
+                and notice_channel.waiting_devices() == 2
+                and not notice_channel._pending)                # nobody was queued
     finally:
         tablet.close()
         phone.close()
@@ -430,7 +431,7 @@ def check_an_old_apk_behaves_exactly_as_before() -> bool:
     reset()
     old = Waiting().open()                     # no `device` parameter at all
     try:
-        if not until(lambda: notify.waiting_devices() == 1):
+        if not until(lambda: notice_channel.waiting_devices() == 1):
             return False
         post({"agent": "Old shell", "event": "finished", "text": ""})
         got = old.next()
@@ -439,7 +440,7 @@ def check_an_old_apk_behaves_exactly_as_before() -> bool:
         newer = Waiting().open()               # a second id-less attach
         try:
             kicked = old.ended.wait(4)
-            if not until(lambda: notify.waiting_devices() == 1):
+            if not until(lambda: notice_channel.waiting_devices() == 1):
                 return False
             post({"agent": "Legacy two", "event": "finished", "text": ""})
             after = newer.next()
@@ -461,14 +462,14 @@ def check_a_reattach_replaces_only_its_own_device() -> bool:
     first = Waiting(device="same-id").open()
     other = Waiting(device="other-id").open()
     try:
-        if not until(lambda: notify.waiting_devices() == 2):
+        if not until(lambda: notice_channel.waiting_devices() == 2):
             return False
         again = Waiting(device="same-id").open()
         try:
             replaced = first.ended.wait(4)
             time.sleep(TEST_BEAT_S * 3)
             if not (replaced and not other.ended.is_set()
-                    and notify.waiting_devices() == 2):
+                    and notice_channel.waiting_devices() == 2):
                 return False
             post({"agent": "After restart", "event": "finished", "text": ""})
             fresh, bystander = again.next(), other.next()
@@ -492,18 +493,18 @@ def check_the_page_still_outranks_every_device() -> bool:
     phone = Waiting(device="phone-b").open()
     page = FakePageWs()
     try:
-        if not until(lambda: notify.waiting_devices() == 2):
+        if not until(lambda: notice_channel.waiting_devices() == 2):
             return False
-        notify._page["ws"] = page
+        notice_channel._page["ws"] = page
         _, answer = post({"agent": "Looking", "event": "finished", "text": ""})
         delivered = until(lambda: len(page.sent) == 1)
         time.sleep(TEST_BEAT_S * 3)
         return (delivered and answer.get("ok") is True
                 and page.sent[0]["agent"] == "Looking"
                 and tablet.lines.empty() and phone.lines.empty()
-                and not notify._pending)
+                and not notice_channel._pending)
     finally:
-        notify._page["ws"] = None
+        notice_channel._page["ws"] = None
         tablet.close()
         phone.close()
 
@@ -515,14 +516,14 @@ def check_one_waiting_device_keeps_the_queue_empty() -> bool:
     reset()
     lone = Waiting(device="lonely").open()
     try:
-        if not until(lambda: notify.waiting_devices() == 1):
+        if not until(lambda: notice_channel.waiting_devices() == 1):
             return False
         _, answer = post({"agent": "Not held", "event": "finished", "text": ""})
         got = lone.next()
         return (got is not None and got["agent"] == "Not held"
                 and answer.get("ok") is True        # not the "held" answer
                 and "held" not in str(answer.get("reason", "")).lower()
-                and not notify._pending)
+                and not notice_channel._pending)
     finally:
         lone.close()
 
@@ -841,28 +842,28 @@ def check_close_channels_ends_the_drain() -> bool:
     """Task 234: `force_exit` stops uvicorn from accepting work, but an
     endless `/notices` generator parked on its queue held the shutdown drain
     for its whole join timeout — every Apply & restart stalled 10 s and left
-    the old thread behind. `notify.close_channels()` — called from the GUI
+    the old thread behind. `notice_channel.close_channels()` — called from the GUI
     thread by `ServerController.stop()`'s exit funnel — must end every
     waiting response NOW, through the same sentinel a displaced channel gets.
     This check IS that call: a real attached connection, close_channels from
     a foreign thread, and the response must END well inside a beat."""
     chan = Waiting("dev-234").open()
-    if not until(lambda: notify.waiting_devices() == 1, timeout=4):
+    if not until(lambda: notice_channel.waiting_devices() == 1, timeout=4):
         print("    the channel never attached", file=sys.stderr)
         chan.close()
         return False
-    notify.close_channels()          # the foreign-thread call under test
+    notice_channel.close_channels()          # the foreign-thread call under test
     ended = chan.ended.wait(2.0)     # far under BEAT_S — the sentinel, not a beat
     chan.close()
     if not ended:
         print("    close_channels did not end the waiting response — the "
               "shutdown drain would wait out its full timeout", file=sys.stderr)
         return False
-    return until(lambda: notify.waiting_devices() == 0, timeout=2)
+    return until(lambda: notice_channel.waiting_devices() == 0, timeout=2)
 
 
 def main() -> int:
-    notify.BEAT_S = TEST_BEAT_S
+    notice_channel.BEAT_S = TEST_BEAT_S
     threading.Thread(target=run_server, daemon=True).start()
     server_ready.wait(15)
     deadline = time.time() + 10
@@ -882,7 +883,7 @@ def main() -> int:
 
     chan = Waiting().open()
     try:
-        if not until(notify.waiting, timeout=4):
+        if not until(notice_channel.waiting, timeout=4):
             results["the phone can attach a waiting channel"] = False
         else:
             results["the phone can attach a waiting channel"] = True
@@ -904,7 +905,7 @@ def main() -> int:
 
     # Task 209 — one channel per device. These run with the single channel
     # above already closed, so each opens exactly the devices it is about.
-    if not until(lambda: notify.waiting_devices() == 0, timeout=6):
+    if not until(lambda: notice_channel.waiting_devices() == 0, timeout=6):
         results["the closed channel really detaches"] = False
     results["the shell sends an id and backs off when kicked"] = (
         check_the_shell_sends_an_id_and_backs_off())

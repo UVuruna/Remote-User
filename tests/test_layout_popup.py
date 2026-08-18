@@ -258,17 +258,17 @@ def check_the_chip_is_sent_once_per_window() -> bool:
         return False
 
     sent: list = []
-    real = layout_popup.notify.page_socket
+    real = layout_popup.notice_channel.page_socket
 
     class Sock:
         async def send_text(self, text):
             sent.append(text)
 
-    layout_popup.notify.page_socket = lambda: Sock()
+    layout_popup.notice_channel.page_socket = lambda: Sock()
     try:
         asyncio.run(layout_popup.flush_offers(conn))
     finally:
-        layout_popup.notify.page_socket = real
+        layout_popup.notice_channel.page_socket = real
     if len(sent) != 1 or "window_offer" not in sent[0]:
         print(f"  DETAIL the chip never reached the phone: {sent}")
         return False
@@ -647,13 +647,13 @@ def check_the_watcher_itself_runs_the_sweep_and_the_chip_reaches_him() -> bool:
     `focus_guard.watch` loop, a window appearing MID-RUN, and the chip arriving
     on the page's own socket. A pure function nobody calls is a feature that
     does not exist — this project has paid for that lesson twice."""
-    import notify
+    import notice_channel
 
     reg, conn = desk(fg=MEMBER_A, alive=(MEMBER_A, MEMBER_B, OLD_TWIN))
     released, restore = fake_listen(lambda _cb: True)
     ws = FakeWs([])
-    was_page = notify._page["ws"]
-    notify._page["ws"] = ws
+    was_page = notice_channel._page["ws"]
+    notice_channel._page["ws"] = ws
 
     async def run():
         task = asyncio.ensure_future(focus_guard.watch(reg, conn))
@@ -669,7 +669,7 @@ def check_the_watcher_itself_runs_the_sweep_and_the_chip_reaches_him() -> bool:
         asyncio.run(run())
     finally:
         restore()
-        notify._page["ws"] = was_page
+        notice_channel._page["ws"] = was_page
 
     chips = [m for m in ws.sent if m.get("type") == "window_offer"]
     if len(chips) != 1 or not chips[0]["id"].startswith(f"{POPUP:x}-"):

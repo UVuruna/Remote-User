@@ -37,7 +37,6 @@ import logging
 import struct
 import time
 from dataclasses import dataclass
-from pathlib import Path
 
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, JSONResponse, Response
@@ -58,7 +57,7 @@ import layout_birth
 import ledger_api
 import layout_popup
 import monitor_api
-import monitors
+import notice_channel
 import notify
 import presence
 import agents
@@ -318,7 +317,7 @@ def create_app(stream, hub: FrameHub | None, injector: InputInjector, token: str
             # and both notices were thrown away. They wait now, briefly, and
             # arrive the moment he comes back — each carrying the time it
             # actually happened.
-            await notify.send_pending(ws)
+            await notice_channel.send_pending(ws)
             # THE PICTURE STARTS FIRST AND RUNS ALONGSIDE THE DESK (task 203):
             # the ffmpeg spawn used to be queued BEHIND the resume focus, which
             # blocks on `wait_landed` — his log, 2026-08-11: auth 14,173 →

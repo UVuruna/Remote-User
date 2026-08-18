@@ -90,7 +90,9 @@ from gui.stream_card import (
 )
 from gui.switch import TRACK_W as THEME_SWITCH_W, ThemeSwitch, choose_theme
 from gui.theme import card, repolish
-from notify import HOOK_CHANGE_FAILED_TEXT, agent_hook_installed, set_agent_hook
+from agent_hook_switch import (
+    HOOK_CHANGE_FAILED_TEXT, agent_hook_installed, set_agent_hook,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -665,7 +667,7 @@ class SettingsWindow(QDialog):
 
         THAT GUARANTEE DOES NOT EXIST, and believing it is what put an
         `OSError` repr on the owner's own screen. `set_agent_hook` does far
-        more than call `notify._hook_module()` (which does raise authored
+        more than call `agent_hook_switch._hook_module()` (which does raise authored
         sentences): it runs `USER_DIR.mkdir`, `shutil.copyfile`, and
         `agent_hook.install()` — and that last one ends in an UNGUARDED
         `SETTINGS.parent.mkdir(...)` + `SETTINGS.write_text(...)` on
@@ -679,14 +681,14 @@ class SettingsWindow(QDialog):
         by `errno`: an OSError raised BY HAND carries a message and no errno,
         one raised by the operating system carries both. Only the first was
         ever written for a person to read, so only the first is shown; the
-        other becomes `notify.HOOK_CHANGE_FAILED_TEXT`, with the technical
+        other becomes `agent_hook_switch.HOOK_CHANGE_FAILED_TEXT`, with the technical
         text going where technical text belongs — the log.
 
-        `notify.set_agent_hook` has since grown its own try/except and phrases
+        `agent_hook_switch.set_agent_hook` has since grown its own try/except and phrases
         that case itself, which makes this the SECOND net rather than the
         first — and it stays, because `_hook_module()` is still called outside
         that guard and any future path added inside it would otherwise reach a
-        person as a repr. The sentence is notify.py's, not a second copy of
+        person as a repr. The sentence is agent_hook_switch.py's, not a second copy of
         it: one failure, one wording, wherever it is caught.
         """
         try:

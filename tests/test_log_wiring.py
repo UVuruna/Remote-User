@@ -460,27 +460,27 @@ def check_leave_carries_its_reason() -> bool:
 
 
 def check_notify_deliver_records_the_carrier_once() -> bool:
-    """`notify.deliver()` is the single choke every notice passes. ONE record,
+    """`notice_channel.deliver()` is the single choke every notice passes. ONE record,
     naming which carrier took it and whether it had waited — never one per
     branch, because three copies of one fact drift."""
     import asyncio
-    import notify
+    import notice_channel
 
     written: list = []
     real = session_log.LOG.record
     try:
         session_log.LOG.record = lambda kind, **f: written.append((kind, f))
-        notify._pending.clear()
+        notice_channel._pending.clear()
         import time as _time
         # No page, no waiting channel → the queue takes it. Raised NOW, so it
         # has not waited; then one raised an hour ago, which has.
-        carrier = asyncio.run(notify.deliver(
+        carrier = asyncio.run(notice_channel.deliver(
             {"agent": "A", "event": "waiting", "at": _time.time()}))
-        asyncio.run(notify.deliver(
+        asyncio.run(notice_channel.deliver(
             {"agent": "B", "event": "finished", "at": _time.time() - 3600}))
     finally:
         session_log.LOG.record = real
-        notify._pending.clear()
+        notice_channel._pending.clear()
     if carrier != "held" or len(written) != 2:
         return False
     kind, fields = written[0]
@@ -512,7 +512,7 @@ CHECKS = [
     ("web.py really calls log_connect on auth", check_web_calls_log_connect_on_auth),
     ("session.leave carries its caller's reason, exactly once",
      check_leave_carries_its_reason),
-    ("notify.deliver writes ONE notice record naming the carrier",
+    ("notice_channel.deliver writes ONE notice record naming the carrier",
      check_notify_deliver_records_the_carrier_once),
 ]
 

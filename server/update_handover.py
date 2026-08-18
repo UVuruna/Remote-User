@@ -68,7 +68,7 @@ import sys
 import time
 from pathlib import Path
 
-import notify
+import notice_channel
 import updates
 from config import SETTINGS, app_version
 
@@ -295,7 +295,7 @@ def announce() -> str:
     ("" when there was no handover to report).
 
     It is queued, not sent: there is no phone attached yet at this point in a
-    start-up, and `notify`'s queue is exactly the carrier for "something the
+    start-up, and `notice_channel`'s queue is exactly the carrier for "something the
     owner should know, held until he is reachable" — it even stamps the time,
     so the phone says "2 min ago" instead of pretending it just happened.
 
@@ -322,7 +322,7 @@ def announce() -> str:
         event = "failed"
         logger.error("Update handover FAILED: wanted v%s, running v%s — see %s",
                      target, running, SETTINGS.update_log_path)
-    notify.queue({
+    notice_channel.queue({
         "type": "notify", "agent": "Vibe Coder", "event": event,
         "title": title, "text": text,
         "speak": SETTINGS.notify_speak, "voice": SETTINGS.notify_voice,
@@ -335,7 +335,7 @@ def announce() -> str:
 def tell_phone(controller, version: str) -> bool:
     """The last thing he hears before the screen goes dark for a minute.
 
-    Sent through `notify.deliver`, so it takes whichever carrier is alive —
+    Sent through `notice_channel.deliver`, so it takes whichever carrier is alive —
     the open page (banner + spoken + toast on the status pill) or, if he has
     already put the phone down, the waiting channel his foreground service
     holds. Both outlive the moment; neither needs him to be looking.
@@ -357,7 +357,7 @@ def tell_phone(controller, version: str) -> bool:
     }
     try:
         carrier = asyncio.run_coroutine_threadsafe(
-            notify.deliver(notice), loop).result(timeout=TELL_TIMEOUT_S)
+            notice_channel.deliver(notice), loop).result(timeout=TELL_TIMEOUT_S)
     except Exception as e:  # noqa: BLE001 — a dying socket must not stop an update
         logger.warning("Could not tell the phone about the update: %s", e)
         return False

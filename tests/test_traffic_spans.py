@@ -84,7 +84,7 @@ from config import SETTINGS  # noqa: E402
 
 APP = QApplication.instance() or QApplication([])
 
-from gui import traffic_window as tw  # noqa: E402
+from gui import traffic_spans as spans, traffic_window as tw  # noqa: E402
 
 
 # ═══════════════════════════ FIXTURES ═══════════════════════════
@@ -143,7 +143,7 @@ class _StagedReader:
 
 
 def _index_of(kind: str) -> int:
-    for i, (_, k, _) in enumerate(tw.SPANS):
+    for i, (_, k, _) in enumerate(spans.SPANS):
         if k == kind:
             return i
     raise AssertionError(f"no span of kind {kind}")
@@ -431,7 +431,7 @@ def check_today_is_local_midnight() -> bool:
     now whose local time-of-day is not 00:00:00).
     """
     now = time.mktime((2026, 8, 14, 15, 42, 7, 0, 0, -1))
-    today = tw.history_since("today", now)
+    today = spans.history_since("today", now)
     lt = time.localtime(today)
     if (lt.tm_hour, lt.tm_min, lt.tm_sec) != (0, 0, 0):
         print(f"  FAIL: 'Today' starts at {time.strftime('%H:%M:%S', lt)}, "
@@ -440,13 +440,13 @@ def check_today_is_local_midnight() -> bool:
     if time.localtime(now).tm_mday != lt.tm_mday:
         print("  FAIL: 'Today' starts on another day")
         return False
-    if tw.history_since("last10h", now) != now - 10 * 3600:
+    if spans.history_since("last10h", now) != now - 10 * 3600:
         print("  FAIL: 'Last 10 hours' is not 10 hours")
         return False
-    if tw.history_since("all", now) is not None:
+    if spans.history_since("all", now) is not None:
         print("  FAIL: 'All' must be None (the recording's own beginning)")
         return False
-    if tw.history_since("since_start", now) != traffic.PROCESS_START:
+    if spans.history_since("since_start", now) != traffic.PROCESS_START:
         print("  FAIL: 'Since start' is not the process start")
         return False
     print("  ok: Today = local midnight, Last 10 hours = now-10h, All = None")
@@ -463,12 +463,12 @@ def check_new_spans_are_file_backed_and_offered() -> bool:
     `traffic_history_samples` (3600) seconds, so a "recent" 10-hour span
     would silently draw one hour under a ten-hour axis.
     """
-    kinds = {k for _, k, _ in tw.SPANS}
+    kinds = {k for _, k, _ in spans.SPANS}
     for kind in ("today", "last10h"):
         if kind not in kinds:
             print(f"  FAIL: span kind {kind!r} is not offered")
             return False
-    for name, kind, seconds in tw.SPANS:
+    for name, kind, seconds in spans.SPANS:
         if kind in ("today", "last10h"):
             if seconds is not None:
                 print(f"  FAIL: {name} carries a fixed seconds={seconds}")
@@ -477,8 +477,8 @@ def check_new_spans_are_file_backed_and_offered() -> bool:
         if kind not in kinds:
             print(f"  FAIL: the pre-existing span kind {kind!r} was dropped")
             return False
-    if len(tw.SPANS) != 7:
-        print(f"  FAIL: expected the five old spans plus two, got {len(tw.SPANS)}")
+    if len(spans.SPANS) != 7:
+        print(f"  FAIL: expected the five old spans plus two, got {len(spans.SPANS)}")
         return False
     print("  ok: Today + Last 10 hours are file-backed, the five old spans stand")
     return True
@@ -508,13 +508,13 @@ def check_picker_fits_its_widest_name() -> bool:
         combo_w = window.span_combo.sizeHint().width()
         combo_floor = window.span_combo.minimumWidth()
         min_w = window._computed_minimum().width()
-        widest = max((n for n, _, _ in tw.SPANS), key=len)
-        original_spans = list(tw.SPANS)
+        widest = max((n for n, _, _ in spans.SPANS), key=len)
+        original_spans = list(spans.SPANS)
         try:
-            tw.SPANS.append((long_name, "all", None))
+            spans.SPANS.append((long_name, "all", None))
             staged_w = window._computed_minimum().width()
         finally:
-            tw.SPANS[:] = original_spans
+            spans.SPANS[:] = original_spans
         window.close()
     if combo_floor < combo_w:
         print(f"  FAIL: the combo's floor {combo_floor} is under what its "
@@ -560,7 +560,7 @@ def check_a_sliding_zoomed_span_keeps_one_key() -> bool:
     span and the clamp never touches it, so there was no drift to measure.
     That correction is the check.
 
-    PLANTED: `_history_key` asking `is_zoomed()` instead of `is_time_zoomed()`
+    PLANTED: `traffic_spans.history_key` asking `is_zoomed()` instead of `is_time_zoomed()`
     — three distinct keys, one per second, exactly his log.
 
     Why the earlier round's harness could not see any of it: it drove
@@ -578,7 +578,7 @@ def check_a_sliding_zoomed_span_keeps_one_key() -> bool:
             for tick in range(60):
                 t = now + tick
                 view.set_full(t - 10 * 3600, t)    # the span slides, as it does
-                keys.append(window._history_key("last10h"))
+                keys.append(spans.history_key("last10h", window.chart.view))
             zoomed = view.is_zoomed() and not view.is_time_zoomed()
         finally:
             window.close()
@@ -608,9 +608,9 @@ def check_the_overlay_comes_down_on_a_sliding_zoomed_span() -> bool:
     that drifts leaves it up whatever the reader does.
 
     PLANTED (both halves, separately):
-      * `_history_key` asking `is_zoomed()` — the overlay never comes down
+      * `traffic_spans.history_key` asking `is_zoomed()` — the overlay never comes down
         and the reads pile up, which is the state he sat in front of;
-      * `_refresh` recomputing `key = self._history_key(kind)` after the read
+      * `_refresh` recomputing `key = traffic_spans.history_key(kind, view)` after the read
         started instead of reading `self._requested_key` — same symptom the
         moment the view moves mid-read.
     """
@@ -671,7 +671,7 @@ def check_a_zoom_on_the_oldest_slice_recovers() -> bool:
     So this is an END-TO-END check and not a check on the key: the question
     is whether the WINDOW recovers, and only the window can answer it.
 
-    PLANTED: `_refresh` computing `key = self._history_key(kind)` instead of
+    PLANTED: `_refresh` computing `key = traffic_spans.history_key(kind, view)` instead of
     reading `self._requested_key` — the overlay stays up and the reads pile
     up, his own symptom.
     """

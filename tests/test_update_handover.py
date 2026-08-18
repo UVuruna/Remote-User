@@ -62,7 +62,7 @@ PROJECT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT / "server"))
 
 import config  # noqa: E402
-import notify  # noqa: E402
+import notice_channel  # noqa: E402
 import update_handover  # noqa: E402
 from config import SETTINGS  # noqa: E402
 
@@ -500,23 +500,23 @@ def check_the_next_start_tells_him_how_it_went() -> bool:
                  update_log_path=folder / "update.log")
     running = config.app_version()
 
-    notify._pending.clear()
+    notice_channel._pending.clear()
     update_handover._write_record(running, folder / "s.exe", folder / "a.exe")
     if not update_handover.announce():
         return False
-    good = notify._pending[-1]
+    good = notice_channel._pending[-1]
     if (good["event"] != "finished" or "updated to" not in good["title"]
             or SETTINGS.update_record_path.exists()):
         return False                          # a record read twice re-announces
 
-    notify._pending.clear()
+    notice_channel._pending.clear()
     update_handover._write_record("9.9.999", folder / "s.exe", folder / "a.exe")
     update_handover.announce()
-    bad = notify._pending[-1]
+    bad = notice_channel._pending[-1]
     return (bad["event"] == "failed" and "9.9.999" in bad["text"]
             and running in bad["title"]
             and not update_handover.announce()   # consumed, never repeated
-            and len(notify._pending) == 1)
+            and len(notice_channel._pending) == 1)
 
 
 # ═══════════════════════════ CLEANING UP AFTER OURSELVES ═══════════════════

@@ -155,7 +155,7 @@ def _normalized(path: str) -> str:
     it shipped — exactly what the owner photographed.
 
     So the comparison is made on the one thing both sides can produce: the
-    basename, which is the SAME rule `notify.layout_of` has always matched a
+    basename, which is the SAME rule `notify_layout.layout_of` has always matched a
     finishing agent to a layout with. Its honest limit is that rule's too,
     and is accepted here for the same reason: two projects sharing a folder
     name are one project to this lookup. The cost is a ledger from the wrong
