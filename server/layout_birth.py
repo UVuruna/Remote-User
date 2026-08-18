@@ -42,6 +42,8 @@ below, where it can be read.
 import logging
 import time
 
+import popup_contain
+import popup_offers
 import layout_popup
 import window_manager as wm
 
@@ -81,14 +83,14 @@ def _double_clicked(conn: dict) -> bool:
 def _offer_birth(conn: dict, win: dict) -> None:
     """Queue the "layout with it?" chip for a window he just opened."""
     hwnd = win["hwnd"]
-    layout_popup.queue_offer(
+    popup_offers.queue_offer(
         conn, hwnd, "b", {"lay": None, "birth": True},
         {"act": "layout_new", "title": win.get("title", ""),
          "process": win.get("process", ""), "hwnd": hwnd,
          "icon": win.get("icon")},
         "birth_asked")
     logger.info("New window %s offered as a layout (task 185)",
-                layout_popup._describe(hwnd))
+                popup_contain.describe(hwnd))
 
 
 def scan(layouts, conn: dict) -> None:

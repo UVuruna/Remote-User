@@ -52,6 +52,7 @@ from _focus_fakes import run_checks  # noqa: E402
 
 import test_layout_popup as popup_gate  # noqa: E402
 import layout_birth  # noqa: E402
+import popup_offers  # noqa: E402
 import layout_popup  # noqa: E402
 import offer_withdraw  # noqa: E402
 
@@ -170,7 +171,7 @@ def check_a_chip_whose_window_closed_is_withdrawn():
         return False
     # …and the offer itself is gone, so a stale tap on a dead handle can never
     # be honoured either.
-    return layout_popup.pick(sent[0], "layout_new") is False
+    return popup_offers.pick(sent[0], "layout_new") is False
 
 
 def check_a_chip_that_never_went_out_is_simply_dropped():

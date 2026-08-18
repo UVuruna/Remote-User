@@ -26,6 +26,7 @@ import logging
 
 import agents
 import layout_history
+import popup_contain
 import layout_popup
 import layout_state
 import window_manager as wm
@@ -218,12 +219,12 @@ class Layout:
 def _recontain_adopted(lay: Layout) -> None:
     """Bring every ADOPTED window back into the picture — and the topmost
     band with it — on every `focus()` of THIS layout. Delegates to
-    `layout_popup._contain` (constraint 13) rather than a local copy; `{}`
+    `popup_contain.contain` (constraint 13) rather than a local copy; `{}`
     stands in for its per-connection retry dict — `focus()` runs once per
     tap, not four times a second, so nothing needs bounding here."""
     for hwnd in lay.adopted:
         if wm.user32.IsWindow(hwnd) and not wm.user32.IsIconic(hwnd):
-            layout_popup._contain(lay, hwnd, {})
+            popup_contain.contain(lay, hwnd, {})
 
 
 

@@ -211,12 +211,13 @@ def isolate_desktop() -> None:
     the same exposure, and a fix in only the file that happened to fail first
     is how the next one gets found the same way in three weeks.
     """
+    import desk_facts
     import layout_popup
     import lost_windows
     import window_manager
 
     window_manager.list_windows = lambda: []
-    layout_popup._top_level_hwnds = lambda: set()
+    desk_facts.top_level_hwnds = lambda: set()
     lost_windows.sweep = lambda *a, **k: []
 
 

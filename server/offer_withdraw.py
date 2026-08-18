@@ -30,6 +30,8 @@ asked, and whose whole job is to unask it.
 
 import logging
 
+import popup_contain
+import popup_offers
 import layout_popup
 import window_manager as wm
 
@@ -53,7 +55,7 @@ _ASKED_KEYS = ("popup_asked", "birth_asked", "lost_asked")
 def withdraw_dead(conn: dict) -> list[str]:
     """Drop every offer of this connection whose window is gone; returns the
     ids withdrawn, with their cancel frames queued for the next
-    `layout_popup.flush_offers`.
+    `popup_offers.flush_offers`.
 
     "Gone" is `window_manager.is_alive` — the same three questions the sweeps
     themselves are built on (a handle that still exists, visible, not cloaked),
@@ -63,18 +65,18 @@ def withdraw_dead(conn: dict) -> list[str]:
     Blocking Win32, a handful of calls per open offer — the watcher runs it on
     a worker thread like every other pass."""
     gone: list[str] = []
-    for key, offer in list(layout_popup.open_offers().items()):
+    for key, offer in list(popup_offers.open_offers().items()):
         if offer.get("conn") is not conn:
             continue
         hwnd = offer["hwnd"]
         if wm.is_alive(hwnd):
             continue
-        layout_popup.drop_offer(key)
+        popup_offers.drop_offer(key)
         for asked in _ASKED_KEYS:
             conn.get(asked, set()).discard(hwnd)
         gone.append(key)
         logger.info("Offer %s withdrawn — %s has closed", key,
-                    layout_popup._describe(hwnd))
+                    popup_contain.describe(hwnd))
     if not gone:
         return gone
     pending = conn.get("popup_send") or []

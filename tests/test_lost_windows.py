@@ -42,6 +42,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from _focus_fakes import fresh_conn, run_checks, window_manager  # noqa: E402
 
+import popup_offers  # noqa: E402
+
 import layout_popup  # noqa: E402
 import lost_windows  # noqa: E402
 # `sweep_lost` moved from layout_popup.py to window_rescue.py on 2026-08-17
@@ -373,7 +375,7 @@ def check_an_unknown_act_leaves_the_window_alone():
     conn, sent = _armed_conn()
     offer = next(m for m in sent if m.get("hwnd") == STRANDED)
     _, placements, raises = install()
-    layout_popup.pick(offer["id"], "wat")
+    popup_offers.pick(offer["id"], "wat")
     return not placements and not raises \
         and STRANDED in conn.get("lost_left", set())
 
@@ -396,7 +398,7 @@ def check_the_monitor_is_read_at_the_tap():
     lost_windows.wm._work_area = lambda rect: (rect[0], rect[1], 1920, 1040)
     _, placements, _ = install()
     lost_windows.wm._work_area = lambda rect: (rect[0], rect[1], 1920, 1040)
-    layout_popup.pick(offer["id"], "rescue")
+    popup_offers.pick(offer["id"], "rescue")
     if not seen or not placements:
         return False
     x = placements[0][1][0]

@@ -38,6 +38,14 @@ STANDARD = {
     # worth its own diagram — the ladder's order IS the whole flow, and it
     # reads straight off the __about doc.
     "server/capture_recovery.py",
+    # Split out of layout_popup.py 2026-08-18 (VC-R5): the cheap Windows
+    # readings the popup rules are decided on, and the seam every popup gate
+    # replaces. Standard — three readings, no logic beyond the reading.
+    "server/desk_facts.py",
+    # Split out of layout_popup.py 2026-08-18 (VC-R5): the offer registry and
+    # `pick()`. Standard — a dictionary with a TTL and one dispatch on the
+    # act he tapped; the DECISIONS it serves are documented next door.
+    "server/popup_offers.py",
     # Split out of notify.py 2026-08-18 (VC-R4): WHERE a notice happened.
     # Standard — a lookup with two ordered fallbacks (conversation title,
     # then project folder); a diagram would restate the four ifs.
@@ -607,6 +615,10 @@ ALGORITHMIC = {
     # named limits (whose window is this?) plus a measured containment
     # decision (does it fit the region, or must it go full screen).
     "server/layout_popup.py",
+    # Split out of layout_popup.py 2026-08-18 (VC-R5): WHERE an adopted
+    # window is put. Algorithmic — the owner's ladder (parent, region, full
+    # screen) is a real decision with a verified placement at every rung.
+    "server/popup_contain.py",
     # Split out of layout_popup.py on 2026-08-13, when the popup module crossed
     # the structure law's wall — and by responsibility, not by line count: its
     # subject is a window HE opened (which nothing may touch until he says so),

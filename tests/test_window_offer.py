@@ -61,6 +61,7 @@ PROJECT_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_DIR / "server"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import popup_offers  # noqa: E402
 import layout_popup  # noqa: E402
 import window_claim  # noqa: E402
 import window_rescue  # noqa: E402
@@ -288,7 +289,7 @@ def check_his_create_tap_moves_nothing_and_is_not_a_refusal() -> bool:
         return False
     lay = reg.layouts[0]
     before = list(base.PLACED)
-    ok = layout_popup.pick(queued[0]["id"], "layout_new")
+    ok = popup_offers.pick(queued[0]["id"], "layout_new")
     return (ok and list(base.PLACED) == before
             and STRANGER not in lay.adopted
             and STRANGER not in conn.get("popup_declined", set()))
@@ -317,7 +318,7 @@ def check_his_create_tap_is_not_asked_again_a_second_later() -> bool:
     if len(first) != 1:
         return False
     conn["popup_send"].clear()
-    layout_popup.pick(first[0]["id"], "layout_new")
+    popup_offers.pick(first[0]["id"], "layout_new")
     return _sweep(reg, conn) == []
 
 

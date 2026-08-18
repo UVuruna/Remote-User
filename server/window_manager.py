@@ -145,7 +145,7 @@ def is_listable(hwnd: int) -> bool:
 
     The test used to live INSIDE `list_windows`'s callback, where nothing else
     could reach it, so every other pass that wanted "a real window" wrote its
-    own weaker version — `layout_popup._top_level_hwnds` is `IsWindowVisible`
+    own weaker version — `desk_facts.top_level_hwnds` is `IsWindowVisible`
     and nothing more, which is how a tool window with a title ended up wearing
     a chip. It is a function now, and the offer paths ask it."""
     if not user32.IsWindowVisible(hwnd):

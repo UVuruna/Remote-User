@@ -534,13 +534,14 @@ def main() -> int:
     # patch has to have taken effect where the sweeps actually run, and a
     # source check would pass just as happily on a call that was moved
     # somewhere it never executes.
+    import desk_facts
     import layout_popup as _lp
     import window_manager as _wm
-    isolated = not _lp._top_level_hwnds() and not _wm.list_windows()
+    isolated = not desk_facts.top_level_hwnds() and not _wm.list_windows()
     results["the harness shows the page an isolated desktop, never his own"] = isolated
     if not isolated:
         print(f"  DETAIL the real desktop is visible to this gate: "
-              f"{len(_lp._top_level_hwnds())} top-level window(s) — a chip "
+              f"{len(desk_facts.top_level_hwnds())} top-level window(s) — a chip "
               f"about one of them lands on a page that staged nothing")
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)

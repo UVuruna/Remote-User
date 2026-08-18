@@ -71,6 +71,7 @@ import time
 
 import focus_hook
 import layout_birth
+import popup_offers
 import layout_popup
 import offer_withdraw
 import window_manager
@@ -595,7 +596,7 @@ async def watch(layouts, conn: dict, injector=None) -> None:
                 # ahead of the flush, so a chip that died before it was ever
                 # sent is dropped rather than delivered (layout_popup.py).
                 await asyncio.to_thread(offer_withdraw.withdraw_dead, conn)
-                await layout_popup.flush_offers(conn)
+                await popup_offers.flush_offers(conn)
             if not _defending(conn):
                 continue
             await asyncio.to_thread(_defend, layouts, conn, announced)
@@ -612,7 +613,7 @@ async def watch(layouts, conn: dict, injector=None) -> None:
             # offered — "Show in layout" / "Leave on desktop" — never taken.
             # Sent from here because this loop is the only async context the
             # guard has, and `_defend` runs on a worker thread.
-            await layout_popup.flush_offers(conn)
+            await popup_offers.flush_offers(conn)
     finally:
         # The connection is over: this listener goes, and with the last one the
         # thread and the hook handle go too (nothing of ours outlives us).

@@ -43,6 +43,8 @@ from _focus_fakes import (  # noqa: E402
 )
 
 import layout_birth  # noqa: E402
+import desk_facts  # noqa: E402
+import popup_offers  # noqa: E402
 import layout_popup  # noqa: E402
 import window_claim  # noqa: E402
 import recents  # noqa: E402
@@ -81,12 +83,12 @@ def desk(windows, owner=None, clicks=2, active=None):
     # The baseline the phone's connection took: MEMBER_A/B and OLD were up.
     # Written the way `baseline()` writes it — TWO sets from one snapshot, the
     # separation the last check below exists to prove.
-    real_scan = layout_popup._top_level_hwnds
-    layout_popup._top_level_hwnds = lambda: {MEMBER_A, MEMBER_B, OLD}
+    real_scan = desk_facts.top_level_hwnds
+    desk_facts.top_level_hwnds = lambda: {MEMBER_A, MEMBER_B, OLD}
     try:
         layout_popup.baseline(conn)
     finally:
-        layout_popup._top_level_hwnds = real_scan
+        desk_facts.top_level_hwnds = real_scan
     for _ in range(clicks):
         layout_birth.note_click(conn)
     return reg, conn, fake
@@ -139,7 +141,7 @@ def check_nothing_on_the_pc_is_touched_by_the_question() -> bool:
         reg, conn, _ = desk([MEMBER_A, MEMBER_B, OLD, NEWWIN])
         raises = Raises().install()
         layout_birth.scan(reg, conn)
-        layout_popup.pick(chips(conn)[0]["id"], act)
+        popup_offers.pick(chips(conn)[0]["id"], act)
         if PLACED or raises:
             print(f"  DETAIL answering '{act}' moved something: {PLACED} {raises}")
             return False

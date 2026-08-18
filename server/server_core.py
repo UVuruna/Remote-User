@@ -23,6 +23,7 @@ import display_watch
 import encoders
 import focus_hook
 import foreground_lock
+import popup_offers
 import layout_popup
 import log_shipper
 import log_summary
@@ -424,7 +425,7 @@ class ServerController:
         # Registered here, at the composition root, beside the app it belongs
         # to — the route itself lives with the rest of that feature in
         # server/layout_popup.py.
-        layout_popup.register(app, token)
+        popup_offers.register(app, token)
         # THE NEW SOURCE of a layout (task 184): the phone asks what the PC can
         # open — VS Code / Chrome / Explorer recents — and asks it to open one.
         # Two plain request/response routes, same reason as the line above.

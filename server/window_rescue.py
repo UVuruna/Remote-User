@@ -19,6 +19,8 @@ between them.
 import logging
 import time
 
+import popup_contain
+import popup_offers
 import layout_popup
 import lost_windows
 
@@ -48,12 +50,12 @@ LOST_EVERY_S = 4.0
 def _offer_lost(conn: dict, win: dict) -> None:
     """Queue the "bring it back?" chip for a window nobody can reach."""
     hwnd = win["hwnd"]
-    layout_popup.queue_offer(conn, hwnd, "l", {"lay": None, "lost": True},
+    popup_offers.queue_offer(conn, hwnd, "l", {"lay": None, "lost": True},
                 {"act": "rescue", "title": win.get("title", ""),
                  "process": win.get("process", ""), "hwnd": hwnd,
                  "icon": win.get("icon")}, "lost_asked")
     logger.warning("Window %s is off every screen (%s%s) — rescue offered",
-                   layout_popup._describe(hwnd), win.get("rect"),
+                   popup_contain.describe(hwnd), win.get("rect"),
                    ", minimized" if win.get("minimized") else "")
 
 

@@ -12,6 +12,19 @@ answers outright and which therefore needs no history at all.
 Decide **whose window just appeared**, and — when it is the layout's own work —
 put it where the phone can operate it.
 
+
+**Split 2026-08-18 (THE STRUCTURE LAW, VC-R5).** This module keeps the RULES —
+whose window it is, whether it is new, and the two eyes that see it. Three
+neighbours own the rest, each named for its own responsibility:
+
+- [Desk Facts](desk_facts.md) — the cheap Windows readings the rules are
+  decided on (a window's process, the parent-PID table, every visible
+  top-level handle)
+- [Popup Contain](popup_contain.md) — WHERE an adopted window is put: on its
+  parent, else inside the region, else full screen
+- [Popup Offers](popup_offers.md) — the CHIP: the offer registry, the frames
+  that carry a question to the phone, and `pick()`, where every answer lands
+
 ## The failure this module exists to prevent
 Owner report 2026-08-10, repeated furiously on 2026-08-11 (task 202,
 escalated). He was watching a LAYOUT on the phone when an agent on the PC
@@ -156,115 +169,3 @@ the rule was not widened into offering every stranger.
 
 ---
 
-## A member's OWN popup is PLACED, never asked about (owner report 2026-08-13)
-
-The round before this one built [Lost Windows](lost_windows.md) — a sweep for
-any window standing off every screen — and shipped it as the answer to his
-report. **It was the wrong target, and he said so plainly.** His case is not
-"a window opened while nobody was watching"; it is:
-
-> lang-ok-begin: owner quote — the correction this section exists for
-> "nekada ja otvaram aplikaciju kada aplikacija otvara aplikaciju"
-> "Dakle kada se otvori popup WINDOWS ga baci VAN GRANICA NAŠEG PROZORA"
-> "Rješenje je da se taj POPUP od MATIČNE APLIKACIJE PRIKAZUJE U NJENOJ SREDINI"
-> lang-ok-end
-
-An agent working inside a layout's VS Code opens a report, a *Record a
-shortcut* window, a permission dialog. Windows places such a window on its
-parent's **restored** geometry, or wherever that app last used — neither of
-which is the quarter of the screen the layout just moved the parent into. The
-popup lands outside the region, under the members' always-on-top band, and a
-phone has no taskbar.
-
-### Why this one alone does not ask
-
-Every other rule here is a **guess about whose window this is**, and a wrong
-guess would move a stranger's window — which is why each of them ends in a chip
-he taps. The owner chain is not a guess. Windows itself says this window was
-raised by that member: it takes it down when the member minimizes, and closes
-it when the member closes. Asking permission to put an application's own dialog
-on that application is asking him to confirm what the application decided.
-
-So **rule 1 places; rules 2–4 still ask.**
-
-### The parent, not the region
-
-A layout of four holds four windows. A VS Code dialog belongs on the VS Code,
-not floating in the middle of a grid over three windows it has nothing to do
-with. `_contain` therefore takes an `anchor`, tried first and at the popup's own
-size.
-
-The anchor is a **preference, never a promise**. A dialog too big for the one
-cell its parent occupies falls through to the region, and then to the full
-screen — so the guarantee he actually cares about (it is inside the streamed
-picture) never depends on the anchor succeeding.
-
-### Two more windows that may never wear a chip
-
-* **A window no layout could hold** (his point 3). The creation list is built
-  by `window_manager.list_windows`; the popup sweep's own eye was
-  `IsWindowVisible` and nothing more. So the phone asked "a layout with it?"
-  about tool windows and shell surfaces that the list would not even carry when
-  he tapped — a question the app cannot honour. The filter is now a function,
-  `window_manager.is_listable`, and both paths ask it.
-* **A window WE made** (his point 4A). Tearing a tab off is a double-click
-  followed by a brand-new top-level window of a member's process: every
-  attribution rule is *correct* about it, which is why none of them could fix
-  it. `layout_popup.mine()` is the maker saying so, once, bounded in time
-  because Windows re-uses handles.
-
-Gate: `tests/test_layout_popup.py` — the three new checks plus the rewritten
-dialog checks, every one proven by planting its own defect.
-
-## THE QUESTION CHANGED (owner decision 2026-08-17)
-
-Every rule below asks **does this window belong to this layout**, and answers
-it mostly by process name. His report says that is the wrong question: the app
-asked him only about windows HE had just made — his own second VS Code window
-shares a member's exe — and stayed silent about the ones somebody else made,
-which is where he actually wants a layout offered.
-
-So `sweep` now carries a final rule after all four below: **a NEW, listable
-window that no layout holds earns a chip on that alone**, with no evidence
-about who made it. What silences a chip is the safety of the whole feature and
-is asserted as such in [`tests/test_window_offer.py`](../../tests/test_window_offer.py):
-
-* a window WE made on his own tap — [Window Claim](window_claim.md), and since
-  this round the claim is armed BEFORE the act, because `mine()` could not be
-  early enough (6–8 s of exposure on the tear-off, measured);
-* a window some layout already holds — his own placement, any layout, not only
-  the focused one;
-* a window no layout could hold — `is_listable`, his point 3 of 2026-08-13.
-
-### The chip carries the act he actually wants (owner report 2026-08-17, same day)
-
-The rule above answered WHICH windows are offered; it did not change what the
-offer OFFERS, and that half was still wrong. Inside a focused layout this
-sweep is the ONLY question a new window can raise — `layout_birth.scan` stands
-down for anything this module can claim (constraint 18) — and its chip had two
-answers: *Move it in* and *Leave on desktop*. Neither is the one he asks for.
-His case, and he has reported it more often than any other bug here: an agent
-finishes, its HTML report opens in Chrome, and what he wants of that window is
-a LAYOUT of its own.
-
-`_offer` therefore sends `new_ok` plus the window's own `hwnd`/`icon`, and the
-page draws a third answer — **Make a layout** — on a row of its own. `pick`
-answers `"layout_new"` by moving NOTHING and by NOT recording a decline: the
-phone opens the ordinary creation panel seeded with that window, and every
-step after that is the flow Tap, List and New already use. One chip, one
-window, three answers — constraint 18 is about two CHIPS racing for one strip,
-which this deliberately is not.
-
-Gate: the three chip checks in
-[`tests/test_window_offer.py`](../../tests/test_window_offer.py), one of which
-reads the shipped client, because a server field no page reads is not a
-feature.
-
-And an offer is still only ever a QUESTION: nothing is placed, raised, resized
-or moved before his tap. The honest cost, named to him before he chose: every
-unrelated new window is now a chip he can decline.
-
-`baseline()` changed with it — see its own docstring. It is the desk as the
-phone LAST LEFT IT rather than the live desk, because a window born while
-nobody was connected used to be filed as already known by the very connection
-that came looking for it.

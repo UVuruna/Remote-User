@@ -42,6 +42,11 @@ from _focus_fakes import (  # noqa: E402
     layout_with, run_checks, window_manager, with_win32,
 )
 
+import desk_facts  # noqa: E402
+
+import popup_contain  # noqa: E402
+import popup_offers  # noqa: E402
+
 import layout_popup  # noqa: E402
 import window_claim  # noqa: E402
 
@@ -159,11 +164,11 @@ def desk(fg, alive=None, owner=None):
     window_manager._ledger_save = lambda: None
     window_manager.wait_minimized = lambda hwnds, timeout_s=0: None
 
-    layout_popup._pid = lambda hwnd: PIDS.get(hwnd, 0)
-    layout_popup._parent_pids = lambda: dict(PARENTS)
+    desk_facts.pid_of = lambda hwnd: PIDS.get(hwnd, 0)
+    desk_facts.parent_pids = lambda: dict(PARENTS)
     DESK_WINDOWS.clear()
     DESK_WINDOWS.update(alive)
-    layout_popup._top_level_hwnds = lambda: set(DESK_WINDOWS)
+    desk_facts.top_level_hwnds = lambda: set(DESK_WINDOWS)
     window_manager.is_listable = lambda hwnd: hwnd not in NOT_LISTABLE
     # THE MAKER'S CLAIM lives in its own module since 2026-08-17
     # (server/window_claim.py). Both records are cleared, and the process
@@ -218,7 +223,7 @@ def ask(reg, conn, act=None):
     focus_guard.guard(reg, conn)
     queued = offers(conn)
     if act is not None and queued:
-        layout_popup.pick(queued[-1]["id"], act)
+        popup_offers.pick(queued[-1]["id"], act)
     return queued
 
 
@@ -258,17 +263,17 @@ def check_the_chip_is_sent_once_per_window() -> bool:
         return False
 
     sent: list = []
-    real = layout_popup.notice_channel.page_socket
+    real = popup_offers.notice_channel.page_socket
 
     class Sock:
         async def send_text(self, text):
             sent.append(text)
 
-    layout_popup.notice_channel.page_socket = lambda: Sock()
+    popup_offers.notice_channel.page_socket = lambda: Sock()
     try:
-        asyncio.run(layout_popup.flush_offers(conn))
+        asyncio.run(popup_offers.flush_offers(conn))
     finally:
-        layout_popup.notice_channel.page_socket = real
+        popup_offers.notice_channel.page_socket = real
     if len(sent) != 1 or "window_offer" not in sent[0]:
         print(f"  DETAIL the chip never reached the phone: {sent}")
         return False
@@ -549,11 +554,11 @@ def check_one_window_is_never_fought_forever() -> bool:
     focus_guard.guard(reg, conn)                  # the chip
     window_manager.place_window = lambda hwnd, rect: (
         PLACED.append((hwnd, tuple(rect))), False)[1]
-    layout_popup.pick(offers(conn)[-1]["id"], "layout")   # he said yes
+    popup_offers.pick(offers(conn)[-1]["id"], "layout")   # he said yes
     for _ in range(10):
         focus_guard.guard(reg, conn)
     # Three tries, each of which asks for the region and then the full screen.
-    if len(PLACED) > layout_popup.MAX_CONTAIN_TRIES * 3:
+    if len(PLACED) > popup_contain.MAX_CONTAIN_TRIES * 3:
         print(f"  DETAIL {len(PLACED)} placement attempts — it is being fought")
         return False
     return len(PLACED) > 0
@@ -632,7 +637,7 @@ def check_it_is_not_asked_twice_when_he_then_switches_layout() -> bool:
         print(f"  DETAIL asked {len(offers(conn))} times, first pass {first}")
         return False
     # And once he has answered, neither eye asks again.
-    layout_popup.pick(offers(conn)[-1]["id"], "desktop")
+    popup_offers.pick(offers(conn)[-1]["id"], "desktop")
     conn["popup_swept"] = 0.0
     layout_popup.sweep(reg, conn)
     focus_guard.guard(reg, conn)
@@ -806,7 +811,7 @@ def check_a_window_after_his_click_is_offered_with_no_process_tie() -> bool:
         print(f"  DETAIL not offered: {queued}")
         return False
     # …and his tap adopts it exactly as any other "Show in layout" answer.
-    layout_popup.pick(queued[0]["id"], "layout")
+    popup_offers.pick(queued[0]["id"], "layout")
     return CLICKED in reg.layouts[0].adopted and PLACED == [
         (CLICKED, centered(HOME[CLICKED]))]
 
