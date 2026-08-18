@@ -222,3 +222,29 @@ it) and the phone audit's `the toast never covers the window chip`, which
 measures a real rect intersection with both up at once, on all four screens —
 the first tooth in that file to ask whether two independent overlays intersect
 at all, which is why this shipped in its own screenshots for two rounds unseen.
+
+## The window closed, so the question goes (owner report 2026-08-18)
+
+His screenshot: a chip asking *"Restore pipeline steps - Glory opened — a layout
+with it?"* about a window an agent had opened and closed again long before he
+picked the phone up. *"Agenti … otvaraju i zatvaraju gomilu prozora i onda meni
+kada koristim telefon moram 1.000 puta da pritisnem no i leave"* (lang-ok: owner
+quote), and his own reading of it is the rule: **a layout cannot be made out of
+a window that does not exist**, so the question should never have still been
+standing.
+
+Until this round a chip was taken down by exactly two things — his tap and the
+30 s timer in this file. Neither of them knows anything about the window. Now
+the PC watches it ([Offer Withdraw](../../server/__about/offer_withdraw.md)) and
+sends `window_offer_cancel {id}` the moment it is gone.
+
+`cancelWindowOffer(id)` is the whole phone half, and it sweeps **both** places a
+question can be:
+
+* the chip on screen — hidden, and whatever was waiting behind it gets its turn
+  immediately, because that window may well still be there;
+* the QUEUE — a withdrawn question that merely moved down the queue is the same
+  tap arriving one beat later, which is exactly what he was complaining about.
+
+An id this page does not know is a no-op: the chip may have faded on its own
+before the PC noticed the window, and the two mechanisms must never fight.

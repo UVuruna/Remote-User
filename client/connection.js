@@ -518,6 +518,10 @@ function connect() {
         // (task 202). HE decides: show it in the layout, or leave it on the
         // desktop — the server moves nothing until he taps.
         showWindowOffer(msg);
+      } else if (msg.type === "window_offer_cancel") {
+        // …and that window has since closed, so the question goes with it
+        // (owner report 2026-08-18) — nothing for him to tap away.
+        cancelWindowOffer(msg.id);
       } else if (msg.type === "layout_offer") {
         // TASK 195 — the ⚙ sheet's "Add a window" reuses the same enumeration
         // (`layout_member_list`) and the same `layout_offer` shape, tagged

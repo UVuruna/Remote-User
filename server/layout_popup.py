@@ -636,6 +636,22 @@ async def flush_offers(conn: dict) -> int:
     return sent
 
 
+# THE OFFERS ARE READABLE FROM OUTSIDE, so a question can be UNASKED
+# (owner report 2026-08-18). [Offer Withdraw](offer_withdraw.py) is the only
+# caller: it takes back the chips whose window has closed, which is a subject
+# of its own and lives in its own file. Two functions rather than a shared
+# dictionary, so the registry keeps one owner and every removal still goes
+# through this module.
+def open_offers() -> dict:
+    """Every unanswered offer, keyed by id."""
+    return _OFFERS
+
+
+def drop_offer(key: str) -> dict | None:
+    """Forget one offer; returns it if it was still open."""
+    return _OFFERS.pop(key, None)
+
+
 def pick(offer_id: str, act: str) -> bool:
     """His tap. `act` is "layout" (place it by the rules above) or anything
     else, which is "leave it on the desktop" — the safe answer, so an act we

@@ -72,6 +72,7 @@ import time
 import focus_hook
 import layout_birth
 import layout_popup
+import offer_withdraw
 import window_manager
 import window_rescue
 
@@ -586,6 +587,14 @@ async def watch(layouts, conn: dict, injector=None) -> None:
                 # which is why no rule built on the baseline could see it
                 # (server/lost_windows.py).
                 await asyncio.to_thread(window_rescue.sweep_lost, layouts, conn)
+                # HAS ANYTHING HE IS BEING ASKED ABOUT CLOSED MEANWHILE?
+                # (owner report 2026-08-18.) Agents open and close windows in
+                # bursts, and a chip whose window is gone is a question he
+                # cannot answer — "Make a layout" out of nothing — that he
+                # still had to tap away, one by one. Beside the two sweeps and
+                # ahead of the flush, so a chip that died before it was ever
+                # sent is dropped rather than delivered (layout_popup.py).
+                await asyncio.to_thread(offer_withdraw.withdraw_dead, conn)
                 await layout_popup.flush_offers(conn)
             if not _defending(conn):
                 continue

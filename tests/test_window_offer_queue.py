@@ -53,6 +53,7 @@ from _focus_fakes import run_checks  # noqa: E402
 import test_layout_popup as popup_gate  # noqa: E402
 import layout_birth  # noqa: E402
 import layout_popup  # noqa: E402
+import offer_withdraw  # noqa: E402
 
 CLIENT = Path(__file__).resolve().parent.parent / "client" / "window-offer.js"
 
@@ -118,6 +119,83 @@ def check_the_desktop_still_gets_the_birth_question():
     layout_birth.note_click(conn)
     layout_birth.scan(reg, conn)
     return any(m.get("act") == "layout_new" for m in popup_gate.offers(conn))
+
+
+# ═══════════════════ 1b. THE SERVER: A QUESTION ABOUT NOTHING ═══════════════
+# His report, 2026-08-18, with a screenshot of the phone: "the agents open and
+# close a heap of windows, and then I have to press No a thousand times". The
+# chip in the shot asks for a layout out of a window that had closed long
+# before he picked the phone up — and the yes could not have worked either,
+# because there is no window behind that handle any more.
+def _desk_with_one_new_window():
+    """The desktop, one window an agent just opened, and the birth chip for
+    it queued — the state every check below starts from."""
+    reg, conn = popup_gate.desk(
+        fg=popup_gate.MEMBER_A,
+        alive=(popup_gate.MEMBER_A, popup_gate.MEMBER_B, popup_gate.STRANGER))
+    conn["active"] = None                # the desktop: nothing is focused
+    conn["birth_seen"] = {popup_gate.MEMBER_A, popup_gate.MEMBER_B}
+    fake = layout_popup.wm.user32
+    # `is_alive` asks three questions and the fake desk only answers one of
+    # them (`FakeWin32.__getattr__` returns 0 for everything else, which would
+    # make EVERY window here look dead and let this gate pass on a lie). The
+    # visibility answer is wired to the same `alive` set the fake already owns.
+    fake.IsWindowVisible = lambda hwnd: 1 if hwnd in fake.alive else 0
+    layout_popup.wm.list_windows = lambda exclude=None: [
+        {"hwnd": popup_gate.STRANGER, "title": "Agent report",
+         "process": "chrome.exe", "icon": None}]
+    layout_birth.scan(reg, conn)
+    sent = [m["id"] for m in popup_gate.offers(conn)
+            if m.get("type") == "window_offer"]
+    return conn, fake, sent
+
+
+def check_a_chip_whose_window_closed_is_withdrawn():
+    """The PC must take the question back — the phone cannot know the window
+    is gone, and a question he cannot answer is one he still has to tap away.
+
+    Defect planted: dropping the `withdraw_dead` call leaves the offer in
+    `_OFFERS` and nothing at all on the wire for the phone."""
+    conn, fake, sent = _desk_with_one_new_window()
+    conn["popup_send"].clear()           # the flush: the chip is on the phone
+    fake.alive.discard(popup_gate.STRANGER)   # …and the agent closed it
+    withdrawn = offer_withdraw.withdraw_dead(conn)
+    if len(sent) != 1 or withdrawn != sent:
+        print(f"  DETAIL asked {sent}, withdrew {withdrawn}")
+        return False
+    cancels = [m["id"] for m in popup_gate.offers(conn)
+               if m.get("type") == "window_offer_cancel"]
+    if cancels != sent:
+        print(f"  DETAIL cancel frames {cancels}, expected {sent}")
+        return False
+    # …and the offer itself is gone, so a stale tap on a dead handle can never
+    # be honoured either.
+    return layout_popup.pick(sent[0], "layout_new") is False
+
+
+def check_a_chip_that_never_went_out_is_simply_dropped():
+    """A window that opened and closed between two ticks must not be SENT and
+    then cancelled — the phone would show it for a frame. The queued offer is
+    dropped where it stands, and no cancel is owed for a chip nobody saw."""
+    conn, fake, sent = _desk_with_one_new_window()
+    fake.alive.discard(popup_gate.STRANGER)   # closed before the flush
+    offer_withdraw.withdraw_dead(conn)
+    if not sent:
+        print("  DETAIL nothing was ever offered")
+        return False
+    return popup_gate.offers(conn) == []
+
+
+def check_a_living_window_keeps_its_question():
+    """The withdrawal may not eat the feature. A chip about a window that is
+    still standing survives every tick until he answers it or it fades."""
+    conn, _fake, sent = _desk_with_one_new_window()
+    conn["popup_send"].clear()
+    for _ in range(4):                   # a second of the watcher's poll
+        if offer_withdraw.withdraw_dead(conn):
+            print("  DETAIL a standing window's chip was withdrawn")
+            return False
+    return bool(sent) and popup_gate.offers(conn) == []
 
 
 # ═══════════════════════ 2. THE PHONE: ONE QUESTION AT A TIME ═══════════════
@@ -192,6 +270,26 @@ async function main() {
   out.shiftedWhileUp = rootVars["--status-top"] || null;
   ctx.hideWindowOffer();
   out.shiftedWhenGone = rootVars["--status-top"] || null;
+  // THE PC TAKES A QUESTION BACK (owner report 2026-08-18). Two chips up —
+  // one showing, one queued behind it — and both their windows close.
+  // The five-offer burst above left c/d/e still waiting behind the strip;
+  // their windows are gone too, and clearing them here is the same withdrawal
+  // this block is about — not a convenience.
+  ["c", "d", "e"].forEach(ctx.cancelWindowOffer);
+  const before = shown.length;
+  offer("f", "layout_new", "Report one");
+  offer("g", "layout_new", "Report two");
+  ctx.cancelWindowOffer("g");            // the one WAITING dies first
+  ctx.cancelWindowOffer("f");            // …and then the one on screen
+  out.afterCancel = shown.length - before;   // "Report two" must never go up
+  out.chipGone = chip.hidden;
+  posted.length = 0;
+  // A LIVE ONE IS UNTOUCHED: the next question still goes up and still posts
+  // its own id, so the withdrawal cannot have eaten the queue itself.
+  offer("h", "layout_new", "Report three");
+  out.afterLive = shown[shown.length - 1];
+  await ctx.answerWindowOffer("desktop");
+  out.livePosted = posted.map(p => p.id);
   console.log(JSON.stringify(out));
   // The chip's own 30 s auto-dismiss timer would otherwise hold node
   // open long past the answer — and a driver that hangs is a gate that
@@ -262,6 +360,24 @@ def check_the_page_really_reads_the_shift():
     return "var(--status-top" in css
 
 
+def check_a_withdrawn_chip_leaves_the_phone():
+    """His thousand taps. When the PC says the window is gone, the chip goes
+    by itself — and the queued question about a window that also closed never
+    goes up at all, or it is the same tap arriving one beat later.
+
+    Defect planted: removing the queue sweep in `cancelWindowOffer` puts
+    'Report two' on screen the moment 'Report one' is withdrawn."""
+    r = _drive()
+    return r["afterCancel"] == 1 and r["chipGone"] is True
+
+
+def check_the_withdrawal_does_not_eat_the_next_question():
+    """A chip about a window that is still there must still be asked, and his
+    tap must still answer it — the cure may not become the disease."""
+    r = _drive()
+    return "Report three" in (r["afterLive"] or "") and r["livePosted"] == ["h"]
+
+
 CHECKS = [
     ("one window is never asked about twice",
      check_one_window_is_never_asked_about_twice),
@@ -275,6 +391,16 @@ CHECKS = [
      check_the_chip_pushes_the_status_pill_out_of_its_way),
     ("the page really reads the shift",
      check_the_page_really_reads_the_shift),
+    ("a chip whose window closed is withdrawn by the PC",
+     check_a_chip_whose_window_closed_is_withdrawn),
+    ("a chip that never went out is simply dropped",
+     check_a_chip_that_never_went_out_is_simply_dropped),
+    ("a living window keeps its question",
+     check_a_living_window_keeps_its_question),
+    ("a withdrawn chip leaves the phone, queue included",
+     check_a_withdrawn_chip_leaves_the_phone),
+    ("the withdrawal does not eat the next question",
+     check_the_withdrawal_does_not_eat_the_next_question),
 ]
 
 

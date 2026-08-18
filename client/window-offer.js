@@ -174,6 +174,28 @@ function showWindowOffer(msg, dequeued) {
   }, WINDOW_OFFER_MS);
 }
 
+// THE WINDOW CLOSED — SO DOES THE QUESTION (owner report 2026-08-18). The PC
+// watches whether the window a chip asks about still exists and sends
+// `window_offer_cancel` with its id the moment it does not. Until this, a
+// burst of agent windows opening and closing left him a queue of unanswerable
+// questions — "Make a layout" out of a window that is gone — and every one of
+// them still had to be tapped away.
+//
+// The queue is cleaned too, and not only the chip on screen: a withdrawn offer
+// waiting behind the current one would otherwise go up the moment that one is
+// answered, which is the same tap he was complaining about, just later.
+function cancelWindowOffer(id) {
+  if (!id) return;
+  for (let i = winOfferQueue.length - 1; i >= 0; i--) {
+    if (winOfferQueue[i].id === id) winOfferQueue.splice(i, 1);
+  }
+  if (winOfferId !== id) return;
+  // Whatever was waiting behind it gets its turn straight away — the strip is
+  // free, and its window may well still be there.
+  hideWindowOffer();
+  nextWindowOffer();
+}
+
 async function answerWindowOffer(act) {
   const id = winOfferId;
   const win = winOfferWindow;

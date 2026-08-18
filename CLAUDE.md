@@ -82,6 +82,8 @@ python u:/Coding/UVuruna/rules/tools/uv.py shot --all    every Qt window × prof
   is proven against the real desktop before it is called done.
 - **Nothing may overlap anything**, and a notice stands as long as there is to
   read.
+- **A question we ask outlives its subject by nothing** — a chip about a window
+  that has closed is withdrawn by the PC, never left for him to tap away.
 - **The phone product must never lean on this monorepo** — `setup/agent_hook.py`
   and `setup/ledger_hook.py` install themselves onto a stranger's machine and
   read nothing of the owner's `rules/`, `CLAUDE.md` or `.claude/`.
@@ -95,7 +97,7 @@ the entry before arguing with the rule.
 ## Docs
 
 - `README.md` — what it is, the name story, the navigation chain root
-- `docs/DECISIONS.md` — the 35 architecture constraints and every owner decree,
+- `docs/DECISIONS.md` — the 36 architecture constraints and every owner decree,
   dated; read the constraint you are about to touch
 - `docs/PROTOCOL.md` — the wire frames, streaming, controls, keyboard, panels
 - `ACTIONS.md` + `actions.json` — the control sets on the phone

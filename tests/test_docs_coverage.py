@@ -118,6 +118,13 @@ STANDARD = {
     # the code (DOCS.md's own test for the flow tier), so Standard, not
     # Algorithmic — matching this file's own doc, which carries no Flow link.
     "server/session_ledger.py",
+    # New 2026-08-18 (his "I have to press No a thousand times" report, and
+    # THE STRUCTURE LAW — layout_popup.py stood at the 1,000-line wall again).
+    # Standard, not Algorithmic: one pass over the open offers asking a single
+    # measured question (is the window still alive), plus the bookkeeping that
+    # follows a yes. No state machine and no geometry — the __about doc reads
+    # the four steps straight off the code.
+    "server/offer_withdraw.py",
     # New 2026-08-11 (task 184 — a layout from a window that is not open yet).
     # Standard: three READS of places other apps keep their own recent lists,
     # plus a launch and a wait. The one rule with teeth — only a handle that
