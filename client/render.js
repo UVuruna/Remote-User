@@ -541,9 +541,21 @@ function scheduleZoomRegion() {
     // Settled. Only a step crossing costs a blink (round 3 of T76) — the
     // server ignores a rect that keeps the step — but a drift too small to
     // see is not worth even the wire, so it is not sent at all.
-    if (lastSentZoom && zoomRectDelta(lastSentZoom, rect) < ZOOM_MIN_DELTA) return;
-    lastSentZoom = rect;
-    send({ type: "viewport", ...rect });
+    // THE DRAWN SIZE RIDES BESIDE THE RECT (round 5 of T76, owner report
+    // 2026-08-18): the rect says WHICH slice is shown, the drawn size says
+    // HOW BIG the whole picture is on this panel — canvas px, which are
+    // panel px — and the step is the server's ratio of that to the panel
+    // (layout_api.zoom_step). On his portrait tablet the rect alone was
+    // blind: a letterboxed 16:9 picture keeps its full height in view up to
+    // 2.84x, so the height fraction read 1.0 and no zoom ever earned a step.
+    // A pinch that changes the drawn size while the (margin-widened) rect
+    // stays full is therefore a send too — the rect guard alone would eat it.
+    const D = drawnRect();
+    const drawn = { w: D.w, h: D.h };
+    if (lastSentZoom && zoomRectDelta(lastSentZoom, rect) < ZOOM_MIN_DELTA
+        && !zoomDrawnMoved(lastSentZoom.drawn, drawn)) return;
+    lastSentZoom = { ...rect, drawn };
+    send({ type: "viewport", ...rect, drawn });
   }, ZOOM_SAMPLE_MS);
 }
 

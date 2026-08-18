@@ -71,6 +71,17 @@ function zoomSettleStep(prev, ev) {
   };
 }
 
+/** Did the DRAWN size (canvas px the whole picture is drawn at) change by
+ *  more than the slack the server's step ignores (layout_api.ZOOM_STEP_SLACK,
+ *  2 %)? A missing size on either side is a whole change. Round 5 of T76: a
+ *  pinch that magnifies the picture while its margin-widened rect still reads
+ *  as the full frame is a real change the rect cannot see. */
+const ZOOM_DRAWN_SLACK = 0.02;
+function zoomDrawnMoved(a, b) {
+  if (!a || !b) return true;
+  return Math.abs(a.w - b.w) > ZOOM_DRAWN_SLACK * Math.max(b.w, 1e-9);
+}
+
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { zoomFloorRect, zoomRectDelta, zoomSettleStep };
+  module.exports = { zoomFloorRect, zoomRectDelta, zoomSettleStep, zoomDrawnMoved };
 }

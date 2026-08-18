@@ -72,6 +72,14 @@ ZOOM_MIN_DELTA = 0.02
 # drawing: past native there is nothing left to raise and the step saturates.
 ZOOM_MAX_STEP = 8
 
+# HOW MUCH MAGNIFICATION IS "NONE" (round 5 of T76, owner report 2026-08-18).
+# The step is earned from the ratio of DRAWN pixels to PANEL pixels (see
+# `zoom_step`); a ratio of 1.0 means one encoded pixel lands on one panel
+# pixel. Float noise in the phone's own canvas arithmetic (1920.0001 / 1920)
+# must never buy a rebuild, and 2 % of magnification is below anything an eye
+# can call blur — so a ratio inside this slack still reads as "no step".
+ZOOM_STEP_SLACK = 0.02
+
 
 def _norm(rect: dict) -> dict:
     """A wire rect clamped into the unit square and never inside-out. The
@@ -111,34 +119,88 @@ def zoom_step(conn: dict) -> int:
     it decides whether the running session still matches (the same two-reads
     rule as `stream_crop`).
 
-    `conn["zoom"]` is the settled monitor-normalized rect the phone really
-    shows, or None. The base picture is the focused layout's region, or the
-    full frame at the desktop; the step is how many times the visible slice
-    fits into the base PER AXIS, floored to a power of two and capped at
-    ZOOM_MAX_STEP. Zoomed fully out (or never zoomed) = 1, byte for byte the
-    old world. The step is what a PAN can never change: moving the same-sized
-    slice around the picture keeps the fraction, so a pan settles, reaches
-    here, computes the same step and rebuilds nothing — the whole point of
-    the owner's design."""
-    zoom = conn.get("zoom")
-    if not zoom:
-        return 1
-    z = _norm(zoom)
+    THE STEP IS MAGNIFICATION, NOT A FRACTION (round 5 of T76, owner report
+    2026-08-18 — his tablet held in PORTRAIT over a 16:9 monitor). Rounds 3
+    and 4 derived the step from the LARGER visible fraction of the two axes
+    of the settled rect: "the step may not exceed what the narrower zoom axis
+    justifies". That sentence is true of a picture that FILLS the screen and
+    false of one that does not: a landscape monitor on a portrait tablet is
+    letterboxed — its full height stands in 675 of 1920 canvas px — so the
+    height fraction reads 1.0 until the pinch passes 2.84x and stays above
+    0.5 until 5.7x, and the step therefore stayed 1 through every zoom he
+    ever used, while the encoded 1922x1080 was being magnified 1.25x, 1.6x,
+    2x on his panel. What blur IS is one thing only: more panel pixels lit
+    per encoded pixel than one. So the phone now sends, beside the rect, the
+    size its picture is DRAWN at (`drawn {w, h}`, canvas = panel px — the
+    measurement rounds 3/4 never asked for), and the step is the smallest
+    power of two that brings the encoded picture up to that drawn size:
+    ratio = drawn base size / panel size, long side to long and short to
+    short — the mirror of `H264Session._scale_size`, which is what decides
+    the encoded size in the first place, so the two cancel exactly (the
+    binding pair there is the binding pair here). Native remains the wall
+    (`_scale_size` clamps the product at 1). A PAN keeps the drawn size,
+    therefore the step, therefore the session — the owner's design unchanged.
+
+    `conn["zoom"]` is the settled monitor-normalized rect (None = the whole
+    picture); `conn["zoom_drawn"]` is the drawn size that came with it. A page
+    that sends no `drawn` (an older page) is decided by the old fraction rule,
+    byte for byte; a connection with no `panel` caps nothing in `_scale_size`
+    and so has nothing to raise. Zoomed fully out (or never zoomed) = 1."""
+    drawn = conn.get("zoom_drawn")
+    panel = conn.get("panel")
     region = conn.get("region")
     if region:
         r = _norm(region)
         bw, bh = max(r["w"], 1e-9), max(r["h"], 1e-9)
     else:
         bw = bh = 1.0
-    # The LARGER visible fraction of the two axes decides: the step may not
-    # exceed what the narrower zoom axis justifies, or the wider axis would
-    # be encoded past what is watched, for nothing.
+    if drawn and panel:
+        base_w = float(drawn.get("w", 0)) * bw
+        base_h = float(drawn.get("h", 0)) * bh
+        pw, ph = float(panel.get("w", 0)), float(panel.get("h", 0))
+        if base_w > 0 and base_h > 0 and pw > 0 and ph > 0:
+            ratio = max(max(base_w, base_h) / max(pw, ph),
+                        min(base_w, base_h) / min(pw, ph))
+            step = 1
+            while step < ZOOM_MAX_STEP and ratio > step * (1.0 + ZOOM_STEP_SLACK):
+                step *= 2
+            return step
+    zoom = conn.get("zoom")
+    if not zoom:
+        return 1
+    z = _norm(zoom)
+    # THE OLD RULE, kept only for a page that sends no `drawn`: the LARGER
+    # visible fraction decides. Wrong on a letterboxed picture (see above),
+    # right on one that fills the screen; an older page gets what it had.
     frac = max(z["w"] / bw, z["h"] / bh)
     frac = min(max(frac, 1e-6), 1.0)
     step = 1
     while step * 2 <= ZOOM_MAX_STEP and step * 2.0 <= 1.0 / frac:
         step *= 2
     return step
+
+
+def _drawn_of(msg: dict) -> dict | None:
+    """The `drawn {w, h}` a viewport message carries — canvas px the phone
+    draws the whole monitor at — or None for a page that sends none."""
+    d = msg.get("drawn")
+    if not isinstance(d, dict):
+        return None
+    try:
+        w, h = float(d.get("w", 0)), float(d.get("h", 0))
+    except (TypeError, ValueError):
+        return None
+    return {"w": w, "h": h} if w > 0 and h > 0 else None
+
+
+def _drawn_moved(a: dict | None, b: dict | None) -> bool:
+    """Did the drawn size change enough to be worth the wire — by more than
+    the slack the step itself ignores? None vs a size is a whole change."""
+    if (a is None) != (b is None):
+        return True
+    if a is None:
+        return False
+    return abs(a["w"] - b["w"]) > ZOOM_STEP_SLACK * max(b["w"], 1e-9)
 
 
 def _rect_delta(a: dict | None, b: dict | None) -> float:
@@ -169,9 +231,17 @@ async def zoom_region(ws, layouts, conn: dict, msg: dict) -> None:
     streamer's own viewport, untouched)."""
     rect = _norm(msg)
     zoom = None if _is_full(rect) else rect
-    if _rect_delta(zoom, conn.get("zoom")) < ZOOM_MIN_DELTA:
+    drawn = _drawn_of(msg)
+    # A pinch that changes the DRAWN size while the rect stays "full" is
+    # still a change (round 5 of T76): a 1.2x zoom on a landscape phone keeps
+    # the whole picture in view (the rect, widened by its margin, clamps to
+    # the full frame) and yet magnifies every encoded pixel 1.2x. The rect's
+    # own guard alone would have swallowed it.
+    if (_rect_delta(zoom, conn.get("zoom")) < ZOOM_MIN_DELTA
+            and not _drawn_moved(drawn, conn.get("zoom_drawn"))):
         return
     conn["zoom"] = zoom
+    conn["zoom_drawn"] = drawn
     if zoom_step(conn) == conn.get("stream_zoom", 1):
         return
     # THE SAME CHOKE POINT, deliberately (owner order 2026-08-12's rule): one
@@ -219,6 +289,7 @@ async def send_layout_state(ws, layouts, conn: dict, resuming=None) -> None:
     # rather than at each of their call sites.
     if state["active"] != was_active:
         conn["zoom"] = None
+        conn["zoom_drawn"] = None
     # THE ENCODER FOLLOWS THE REGION (owner order 2026-08-12: "why would the
     # phone decode something it does not see"). In H.264 the per-client ffmpeg
     # crops to the focused layout's region, and a crop lives inside a running

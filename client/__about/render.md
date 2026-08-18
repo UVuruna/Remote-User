@@ -189,6 +189,13 @@ What the pinch drives instead is a RESOLUTION step
 ceiling toward native — see [H.264 Streamer](../../server/__about/h264_streamer.md)
 and [Zoom Crop](zoom-crop.md) for the mechanism.
 
+**Round 5 (2026-08-18):** the settled H.264 send also carries `drawn
+{w, h}` — `drawnRect()`'s size, canvas px = panel px — and the resend guard
+asks `zoomDrawnMoved` beside the rect delta; the server derives the step from
+drawn/panel, not from the rect's fraction, because a letterboxed picture on
+his portrait tablet kept a height fraction of 1.0 through every zoom he used.
+See [Zoom Crop](zoom-crop.md).
+
 `scheduleViewport()` still has two paths. JPEG: the throttled
 `currentViewport()` send it always had (unchanged — JPEG still crops to the
 viewport it requests). H.264: `scheduleZoomRegion()`, a 60 ms sampler that

@@ -12,6 +12,13 @@ so the crop stays exactly what a focused layout already sends (or the full
 frame at the desktop) and the pinch only raises the ENCODED RESOLUTION, in
 quantized power-of-two steps, up to native and never past it.
 
+ROUND 5 (owner report 2026-08-18): piece 1 below is CORRECTED — the step is
+no longer "the LARGER-fraction axis" but the ratio of the DRAWN picture to the
+PANEL (his portrait tablet letterboxes a 16:9 monitor, so the height fraction
+read 1.0 through every zoom he used and the step never left 1); the sentence
+is kept as the evidence, section 13 holds the new rule with his numbers, and
+sections 1–2 still hold for a page that sends no `drawn`.
+
 THE THREE PIECES THIS GATE PROVES, one per file the round-3 design touched:
 
   1. `layout_api.zoom_step(conn)` — the ONE derivation of the step, read from
@@ -779,6 +786,144 @@ def check_the_config_handler_reloads_before_acting() -> None:
     print("  connection.js reloads on a version skew before acting on the frame")
 
 
+# ═══════ 13. ROUND 5 — THE STEP IS MAGNIFICATION, NOT A FRACTION ═══════
+# Owner report 2026-08-18: his tablet in PORTRAIT over a 16:9 monitor, zoomed
+# ~2x, showed the panel-capped 1922x1080 magnified — "not even a quarter of
+# the resolution the desktop delivers", and it is exactly a quarter of the
+# pixels. His log: not one `zoom` session between 19:35 and 19:41; the step
+# stayed 1. The round-3 rule (the LARGER visible fraction decides) is blind to
+# a LETTERBOXED picture — its full height stays in view up to 2.84x, so the
+# height fraction reads 1.0 and no zoom he ever used earned a step. Round 5:
+# the phone sends the size it DRAWS the picture at, and the step is the ratio
+# of drawn to panel — the mirror of `_scale_size`, so the two cancel.
+HIS_PANEL = {"w": 1200, "h": 1920}      # canvas=1200x1920 in his own log
+
+
+def _his_tablet(z: float, drawn: bool = True) -> dict:
+    """His portrait tablet at zoom z: the 16:9 monitor fits 1200x675 and the
+    margin-widened visible rect the page really computes at that zoom."""
+    w = min(1.0, 1.3 / z)                     # 1/z widened by 2 x 0.15
+    h = min(1.0, 1.3 * 1920 / (675 * z))
+    rect = None if (w >= 1.0 and h >= 1.0) else \
+        {"x": (1 - w) / 2, "y": (1 - h) / 2, "w": w, "h": h}
+    conn = {"active": None, "region": None, "panel": HIS_PANEL, "zoom": rect}
+    if drawn:
+        conn["zoom_drawn"] = {"w": 1200 * z, "h": 675 * z}
+    return conn
+
+
+def check_a_letterboxed_picture_earns_its_step_from_the_drawn_size() -> None:
+    """His exact numbers. At 2.07x (his 19:39:22 caret line, pic width 2485
+    of 1200) the old fraction rule answers 1 — the height fraction is 1.0 —
+    and that IS the blur he photographed; the drawn/panel ratio answers 2,
+    which `_scale_size` turns into native. Below ~1.6x one encoded pixel still
+    covers one panel pixel, so nothing is raised — the step is never eager."""
+    step = layout_api.zoom_step
+    assert step(_his_tablet(1.0)) == 1, "the fitted view earned a step"
+    assert step(_his_tablet(1.5)) == 1, \
+        "1.5x (ratio 0.94 — still no magnification) earned a step for nothing"
+    assert step(_his_tablet(2.07)) == 2, \
+        "his 2.07x zoom on a letterboxed picture earned NO step — the blur he photographed"
+    assert step(_his_tablet(2.07, drawn=False)) == 1, \
+        "the plant: without `drawn` the old fraction rule must still answer 1 — " \
+        "otherwise this check proves nothing about the new derivation"
+    assert step(_his_tablet(3.0)) == 2, "3x (ratio 1.9) is x2, not more"
+    assert step(_his_tablet(6.0)) == 4, "his ZOOM_MAX of 6x (ratio 3.75) is x4"
+    print("  his portrait tablet: 1.5x -> x1, 2.07x -> x2 (old rule: x1), 6x -> x4")
+
+
+def check_the_layout_region_scales_the_drawn_base() -> None:
+    """The region is the base picture: the drawn size of the WHOLE monitor
+    is multiplied by the region before it meets the panel."""
+    conn = _his_tablet(3.0)
+    conn["region"] = {"x": 0.25, "y": 0.0, "w": 0.5, "h": 1.0}
+    # base drawn = 1800 x 2025; long/long = 2025/1920 = 1.05, short/short =
+    # 1800/1200 = 1.5 -> ratio 1.5 -> step 2 (a full-frame 3x was 3.75 -> 4).
+    assert layout_api.zoom_step(conn) == 2, \
+        "the region did not scale the drawn base (expected x2 for a half-width layout at 3x)"
+    conn["region"] = {"x": 0.25, "y": 0.25, "w": 0.5, "h": 0.5}
+    # 1800 x 1012: 1800/1920 = 0.94, 1012/1200 = 0.84 -> no magnification
+    assert layout_api.zoom_step(conn) == 1, \
+        "a quarter region at 3x is not magnified on his panel — expected x1"
+    print("  a layout region scales the drawn base before it meets the panel")
+
+
+def check_a_pinch_that_keeps_the_rect_full_still_reaches_the_choke_point() -> None:
+    """A landscape phone at 1.2x: the margin-widened rect still clamps to the
+    full frame (1/1.2 + 0.25 > 1), so `conn["zoom"]` stays None and the old
+    delta guard would return before recording anything — yet every encoded
+    pixel is now lit 1.2x. The drawn size must carry it through to the step
+    (x2), and a drift within the slack must still not."""
+    calls, original = _install_send_state_stub()
+    try:
+        panel = {"w": 1920, "h": 1200}
+        conn = {"active": None, "region": None, "panel": panel,
+                "zoom": None, "zoom_drawn": {"w": 1920, "h": 1080},
+                "stream_zoom": 1}
+        full = {"x": 0, "y": 0, "w": 1, "h": 1}
+        asyncio.run(layout_api.zoom_region(
+            _WS(), _Layouts(), conn,
+            {**full, "drawn": {"w": 1920 * 1.2, "h": 1080 * 1.2}}))
+        assert len(calls) == 1, \
+            "a 1.2x pinch with a full rect never reached the choke point"
+        assert conn["zoom_drawn"] == {"w": 2304.0, "h": 1296.0}
+        assert layout_api.zoom_step(conn) == 2
+        calls.clear()
+        asyncio.run(layout_api.zoom_region(
+            _WS(), _Layouts(), conn,
+            {**full, "drawn": {"w": 2304 * 1.01, "h": 1296 * 1.01}}))
+        assert not calls and conn["zoom_drawn"] == {"w": 2304.0, "h": 1296.0}, \
+            "a 1 % drift in the drawn size (inside the slack) bought a recompute"
+        # An older page: no `drawn` at all — nothing recorded, old world.
+        conn2 = {"active": None, "region": None, "panel": panel,
+                 "zoom": None, "stream_zoom": 1}
+        asyncio.run(layout_api.zoom_region(_WS(), _Layouts(), conn2, full))
+        assert conn2.get("zoom_drawn") is None and not calls
+    finally:
+        layout_api.send_layout_state = original
+    print("  a full-rect pinch reaches the choke point by its drawn size; a 1 % drift does not")
+
+
+def check_a_focus_change_drops_the_drawn_size_too() -> None:
+    conn = {"active": 0, "region": {"x": 0, "y": 0, "w": 0.5, "h": 1},
+            "zoom": {"x": 0.1, "y": 0.1, "w": 0.2, "h": 0.2},
+            "zoom_drawn": {"w": 4000, "h": 2250}, "stream_region": None,
+            "stream_zoom": 1, "reset_stream": lambda: None}
+
+    class _Moved:
+        def state(self, active, region):
+            return {"type": "layout_state", "layouts": [], "active": 1,
+                    "region": region, "orient": "landscape"}
+
+    asyncio.run(layout_api.send_layout_state(_WS(), _Moved(), conn))
+    assert conn["zoom"] is None and conn["zoom_drawn"] is None, \
+        "a focus change kept the drawn size of the picture he left"
+    print("  a focus change drops the drawn size with the rect")
+
+
+def check_the_page_sends_its_drawn_size_and_guards_on_it() -> None:
+    """The shipped render.js: the settled send carries `drawn` measured from
+    drawnRect() (canvas px = panel px), and the do-not-resend guard asks the
+    drawn size as well as the rect — else the full-rect pinch above is never
+    sent at all. And the pure helper the guard runs, whole, in node."""
+    src = (PROJECT / "client" / "render.js").read_text(encoding="utf-8")
+    assert 'send({ type: "viewport", ...rect, drawn });' in src, \
+        "render.js does not send `drawn` with the settled viewport"
+    assert "const D = drawnRect();\n    const drawn = { w: D.w, h: D.h };" in src, \
+        "`drawn` is not measured from drawnRect()"
+    assert "&& !zoomDrawnMoved(lastSentZoom.drawn, drawn)) return;" in src, \
+        "the resend guard ignores the drawn size — a full-rect pinch is never sent"
+    got = _node("""
+      const a = {w: 1920, h: 1080};
+      console.log(JSON.stringify({
+        same: Z.zoomDrawnMoved(a, {w: 1920 * 1.01, h: 1080}),
+        moved: Z.zoomDrawnMoved(a, {w: 1920 * 1.2, h: 1080 * 1.2}),
+        none: Z.zoomDrawnMoved(null, a),
+      }));""")
+    assert got == {"same": False, "moved": True, "none": True}, got
+    print("  render.js sends `drawn` and guards on it; zoomDrawnMoved is the shipped rule")
+
+
 CHECKS = [
     check_zoom_step_arithmetic_at_the_desktop,
     check_zoom_step_arithmetic_inside_a_layout,
@@ -804,6 +949,11 @@ CHECKS = [
     check_the_floor_rule_is_the_module_the_page_runs,
     check_a_version_skew_reloads_the_page,
     check_the_config_handler_reloads_before_acting,
+    check_a_letterboxed_picture_earns_its_step_from_the_drawn_size,
+    check_the_layout_region_scales_the_drawn_base,
+    check_a_pinch_that_keeps_the_rect_full_still_reaches_the_choke_point,
+    check_a_focus_change_drops_the_drawn_size_too,
+    check_the_page_sends_its_drawn_size_and_guards_on_it,
 ]
 
 

@@ -49,6 +49,35 @@ cap toward native. A pan that stays inside the same step rebuilds nothing —
 only a step CROSSING resets the session, which is what removes round 2's
 per-pan stall and its dependence on a base layer that was never built.
 
+
+**Round 5 (owner report 2026-08-18 — his tablet held in PORTRAIT, and the
+picture at ~2x "not even a quarter of the resolution the desktop delivers",
+which is exactly what it was: 1922x1080 magnified).** The rounds-3/4 rule
+above — "a zoomed phone is looking at only `1/step` of the picture per axis",
+so the step was the LARGER visible fraction of the rect, quantized — is TRUE
+of a picture that fills the screen and FALSE of a letterboxed one: a 16:9
+monitor on a portrait panel stands 1200x675 in a 1200x1920 canvas, so its
+full height is in view up to 2.84x and the height fraction reads 1.0 —
+the step stayed 1 through every zoom he ever used (his log: not one `zoom`
+session between 19:35 and 19:41 while he zoomed and photographed). What
+blur IS is one number: panel pixels lit per encoded pixel, and a fraction of
+the picture cannot say it. So the settled send now carries **`drawn {w, h}`**
+— the canvas px the WHOLE picture is drawn at (canvas px are panel px) — and
+`zoom_step` is the smallest power of two that brings the encoded picture up
+to that drawn size: `ratio = drawn base / panel`, long side to long and short
+to short — the mirror of `_scale_size`, so the two cancel exactly. On his
+tablet: 1.5x → step 1 (ratio 0.94, still one-to-one), 2.07x → step 2 (=
+native — the 4K his desktop delivers), 6x → step 4 (the same wall). The
+`ZOOM_MIN_DELTA` guard on both sides now also asks whether the drawn size
+moved (`zoomDrawnMoved`, 2 % slack), because a 1.2x pinch on a landscape
+phone keeps its margin-widened rect at the full frame — the rect guard alone
+swallowed it — and yet lights every encoded pixel 1.2x. A page that sends no
+`drawn` (older) is decided by the fraction rule, byte for byte. The sentence
+above is kept because it is the evidence: it read as a decision, and a rule
+that measures a FRACTION was never asked what a fraction of a letterboxed
+picture means. Gate: section 13 of `tests/test_zoom_crop.py`, his exact
+numbers, each check proven by planting its own defect.
+
 The two rules below — the floor and the settle — **survive unchanged in
 shape**; only their PURPOSE changed. The rect this module produces is no
 longer a crop request — it is a MEASUREMENT of what the phone is really

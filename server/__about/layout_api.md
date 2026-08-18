@@ -122,6 +122,21 @@ change cleared `conn["zoom"]` in `send_layout_state`.
 Gate: `tests/test_zoom_crop.py`, fail-closed in `setup/gates.py` (0b13/6) —
 now proving the round-3 `zoom_step` semantics, not the intersection above.
 
+**Round 5 (owner report 2026-08-18): the step is MAGNIFICATION, not a
+fraction.** `zoom_step` no longer decides by the LARGER visible fraction of
+the rect (rounds 3/4) — on his portrait tablet a letterboxed 16:9 picture
+keeps its full height in view up to 2.84x, so that fraction read 1.0 and no
+zoom he used ever earned a step while the panel-capped 1922x1080 was being
+magnified 2x. The `viewport` message now also carries `drawn {w, h}` (canvas
+px the whole monitor is drawn at, stored as `conn["zoom_drawn"]`), and the
+step is the smallest power of two ≥ drawn base / panel (long-to-long,
+short-to-short — the mirror of `_scale_size`), inside `ZOOM_STEP_SLACK`
+(2 %). `zoom_region` proceeds when EITHER the rect moved ≥ `ZOOM_MIN_DELTA`
+or the drawn size moved past the slack — a small pinch keeps the rect "full"
+and would otherwise never be recorded. No `drawn` = the old fraction rule.
+Full record in [Zoom Crop](../../client/__about/zoom-crop.md); gate section
+13 of `tests/test_zoom_crop.py`.
+
 ## The encoder is rebuilt BEFORE the phone is told (2026-08-12)
 
 `send_layout_state` ends a session whose crop no longer matches *above* the
