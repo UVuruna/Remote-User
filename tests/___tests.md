@@ -1824,13 +1824,23 @@ four installed 2026-08-01 alongside the MD-First 2.0 docs migration, the fifth
   always means RUN. Inside it the RUNTIME Qt window audit is gated a second
   time on `touched_gui()`: GUI PROVERE SAMO AKO SU MENJANI GUI FAJLOVI (owner
   decree 2026-08-14; lang-ok: owner decree, quoted). The FULL pass also runs
-  two monorepo guards that no longer have a home of their own — the AST clone
-  detector (ONE KIND, ONE CLASS) against `tests/clone_ratchet.json`, and the
-  rules-size guard over `CLAUDE.md`.
+  three monorepo guards that no longer have a home of their own — the AST clone
+  detector (ONE KIND, ONE CLASS) against `tests/clone_ratchet.json`, the
+  structure guard against `tests/structure_ratchet.json`, and the rules-size
+  guard over `CLAUDE.md`.
 - `clone_ratchet.json` — the clone groups this project is allowed to keep.
   Written on 2026-08-18 with `clone_guard.py --write-ratchet` and it came out
   **empty**: this project has no un-ratcheted duplicate. It may only stay empty
   or shrink; growing it needs the owner's word in that session.
+- `structure_ratchet.json` — the machine-readable structure ratchet other
+  tools read (`rules/tools/structure_guard.py`). A Python file over the wall
+  (1000 LOGIC lines — non-blank, non-comment) needs an entry naming WHY it
+  stays whole and WHO owes the split, and a ratcheted file may then only
+  SHRINK; a stale entry (file gone, or back under the wall) fails too. Written
+  on 2026-08-18 with `--write-ratchet` and it came out **empty**: no Python
+  file in this project passes 1000 logic lines. It complements — never
+  replaces — `test_structure_law.py`, which keeps the RAW-line wall over
+  `.py .js .ts .kt .html .css` alike.
 
 These are plain `assert`-based functions (pytest-discoverable, but
 `run_guards.py` calls them directly — no pytest dependency, since neither

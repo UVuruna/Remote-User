@@ -13,8 +13,9 @@ silently disables a law. Inside the FULL pass the RUNTIME window audit is
 gated a second time, on `touched_gui()`: GUI PROVERE SAMO AKO SU MENJANI GUI
 FAJLOVI (owner decree 2026-08-14; lang-ok: owner decree, quoted). The FULL
 pass also runs the monorepo's clone guard against this project's ratchet
-(`tests/clone_ratchet.json`, ONE KIND ONE CLASS) and the rules-size guard
-over `CLAUDE.md`.
+(`tests/clone_ratchet.json`, ONE KIND ONE CLASS), the monorepo's structure
+guard against `tests/structure_ratchet.json` (an over-wall file needs a
+written entry and may only shrink) and the rules-size guard over `CLAUDE.md`.
 
 Exit 2 on any guard failure — that is what makes the hook BLOCK. This runner
 never runs the application's own test suite; guards only, kept fast and
@@ -209,6 +210,20 @@ def _clone_guard() -> None:
                      "tests/clone_ratchet.json with the owner's word")
 
 
+def _structure_ratchet() -> None:
+    """The machine-readable structure ratchet (`tests/structure_ratchet.json`,
+    the monorepo's shared guard): a file over the wall needs a written entry,
+    and a ratcheted file may only SHRINK. This project's own
+    `test_structure_law` keeps the raw-line wall over every language; this one
+    counts LOGIC lines over Python and is the ratchet other tools read."""
+    module = _load("rules/tools/structure_guard.py")
+    if module is None:
+        return
+    ratchet = TESTS_DIR / "structure_ratchet.json"
+    problems = module.check(PROJECT_ROOT, ratchet, 1000)
+    assert not problems, "\n".join(problems)
+
+
 def _rules_size() -> None:
     """CLAUDE.md stays under its 6,000-byte limit."""
     module = _load("rules/tools/rules_size_guard.py")
@@ -255,6 +270,7 @@ FULL_ONLY_CHECKS = [
     ("caret (the PC says where the typing lands)", _caret_server),
     ("focus gate (typed input lands where he is looking)", _focus_gate),
     ("clones (one kind, one class)", _clone_guard),
+    ("structure ratchet (over-wall files only shrink)", _structure_ratchet),
     ("rules size (CLAUDE.md under its limit)", _rules_size),
 ]
 
