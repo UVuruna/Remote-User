@@ -50,9 +50,14 @@ sight — this module is exactly what that test was already exercising.
 - [Controls Widgets](controls_widgets.md) — `CommandTable` uses `button_id`
 - [Controls Order](controls_order.md) — `active_buttons`' sibling constant
   `DPAD_SLOTS` sizes the D-pad ladder's four fixed slots
-- `server/web.py` — `_merge_shipped_actions()` imports `merge_shipped_pools`
-  once per server start (FROZEN only) to keep a phone-visible default change
-  from sitting unmerged until the owner happens to open the editor
+- `server/actions_api.py` — `_merge_shipped_actions()` imports
+  `merge_shipped_pools` FROM HERE once per server start (FROZEN only) to keep
+  a phone-visible default change from sitting unmerged until the owner happens
+  to open the editor. It read the same name off `controls_editor` until
+  2026-08-18, which pulled PySide6 onto the HEADLESS path and left the merge
+  silently skipped when the import failed — this module is Qt-free precisely
+  so that caller does not have to be
+
 - `tests/test_controls_sets.py` — every pure-data guard imports straight
   from here now, not through the dialog module
 

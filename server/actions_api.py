@@ -73,8 +73,14 @@ def _merge_shipped_actions() -> None:
     when the editor is OPENED, so a phone-visible default change (Language
     replacing Anywhere in Settings) never arrived without a desktop click.
     The same merge runs here, once per server start. FROZEN-only: in a dev
-    checkout the repo file IS the shipped file and there is nothing to merge
-    (which also keeps the PySide6 import below out of the headless CLI)."""
+    checkout the repo file IS the shipped file and there is nothing to merge.
+
+    The merge itself comes from `gui.controls_data`, which OWNS it and holds
+    no Qt: this module runs on the headless path too (`main.py` -> `web.py`),
+    and importing it through `gui.controls_editor` — which merely re-imports
+    the same name — dragged PySide6 into a server that may not have it. The
+    ImportError then landed in the broad `except` below, so the merge silently
+    did nothing instead of running."""
     global _shipped_pools_merged
     if _shipped_pools_merged:
         return
@@ -87,7 +93,7 @@ def _merge_shipped_actions() -> None:
     if not user_path.exists() or user_path == shipped_path:
         return
     try:
-        from gui.controls_editor import merge_shipped_pools
+        from gui.controls_data import merge_shipped_pools
         data = json.loads(user_path.read_text(encoding="utf-8"))
         merge_shipped_pools(data, json.loads(shipped_path.read_text(encoding="utf-8")))
         user_path.write_text(json.dumps(data, indent=2), encoding="utf-8")

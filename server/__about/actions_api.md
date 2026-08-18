@@ -66,6 +66,19 @@ built-in or app set the user file's `buttons` IS the shipped pool (the merge
 overwrites it every start, it is OURS under the ownership rule), it is the list
 the phone was actually shown, and a custom set has no shipped pool at all.
 
+## The merge is imported from the Qt-FREE module, never through the dialog
+
+`_merge_shipped_actions()` runs once per server start (FROZEN only) and calls
+`merge_shipped_pools`. It took that name off `gui.controls_editor` until
+2026-08-18 — a dialog module that imports `PySide6.QtCore/QtGui/QtWidgets` at
+module level, and merely re-imports the merge from `gui.controls_data`, where
+it is actually defined. This module runs on the HEADLESS path
+(`main.py` -> `web.py` -> here), so on a server without PySide6 the import
+raised, the broad `except` around the merge caught it and logged a warning,
+and the merge did nothing at all: a phone-visible default change from a new
+release sat unmerged with no failure anyone would read as one. The import now
+names `gui.controls_data`, which owns the function and holds no Qt on purpose.
+
 ## Where it writes
 
 `gui.controls_data.user_actions_path()` — the same file the desktop Controls
