@@ -1,21 +1,35 @@
-"""Fast guard runner — THE STRUCTURE LAW, THE CONFIG SECTION LAW, docs
-coverage, and doc-links, wired into Claude Code hooks (.claude/settings.json).
+"""Guard runner — the project's own guards, wired into `.claude/settings.json`.
 
-Exit 2 on any guard failure (what makes a PostToolUse/Stop hook BLOCKING);
-exit 0 when every guard is green. Never runs the project's own app/test
-suite (tests/test_input_pipeline.py) — guards only, kept fast and
-deterministic per rules/CODE.md -> Enforcement.
+    PostToolUse -> python tests/run_guards.py --fast
+    Stop        -> python tests/run_guards.py
 
-Usage:
-    python tests/run_guards.py           # all four guards
-    python tests/run_guards.py --fast    # structure + config-sections only
-                                          # (the PostToolUse hook's speed budget)
+`--fast` runs only the cheap guards (structure law, config sections, the
+static half of the layout law) — the PostToolUse speed budget.
+
+The FULL pass runs ONLY when `rules/hooks/changed_files.touched_anything()`
+says this session changed something; "cannot tell" (no git, no upstream, an
+import failure) always means RUN, never skip — a broken helper never
+silently disables a law. Inside the FULL pass the RUNTIME window audit is
+gated a second time, on `touched_gui()`: GUI PROVERE SAMO AKO SU MENJANI GUI
+FAJLOVI (owner decree 2026-08-14; lang-ok: owner decree, quoted). The FULL
+pass also runs the monorepo's clone guard against this project's ratchet
+(`tests/clone_ratchet.json`, ONE KIND ONE CLASS) and the rules-size guard
+over `CLAUDE.md`.
+
+Exit 2 on any guard failure — that is what makes the hook BLOCK. This runner
+never runs the application's own test suite; guards only, kept fast and
+deterministic (rules/CODE.md -> Guards).
 """
 
+import importlib.util
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+TESTS_DIR = Path(__file__).resolve().parent
+PROJECT_ROOT = TESTS_DIR.parent
+REPO_ROOT = PROJECT_ROOT.parents[1]      # <Category>/<Project> -> monorepo root
+
+sys.path.insert(0, str(TESTS_DIR))
 
 import test_structure_law as structure_law  # noqa: E402
 import test_config_sections as config_sections  # noqa: E402
@@ -29,7 +43,7 @@ FAST_CHECKS = [
     ("config sections", config_sections.test_config_sections_law),
     # The static half of the layout law is a grep — it costs nothing and
     # belongs where the damage is done (rules/GUI.md → Law — Space &
-    # Legibility; MIGRATE-LAYOUT.md step 5).
+    # Legibility; rules/briefs/MIGRATE-LAYOUT.md step 5).
     ("layout law (static)", layout_law.test_no_banned_layout_patterns),
     ("layout law (ratchet)", layout_law.test_ratchet_entries_still_exist),
 ]
@@ -166,6 +180,45 @@ def _layout_audit_qt() -> None:
     test_layout_audit_qt.test_layout_audit()
 
 
+def _load(rel_path: str):
+    """Load a monorepo-root helper by path; None when it cannot be reached.
+
+    An unreachable helper never silently disables a law: every caller treats
+    None as "assume the worst" and runs the guard anyway."""
+    path = REPO_ROOT / rel_path
+    try:
+        spec = importlib.util.spec_from_file_location(path.stem, path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+    except (OSError, AttributeError, ImportError, SyntaxError):
+        return None
+
+
+def _clone_guard() -> None:
+    """ONE KIND, ONE CLASS — the AST clone detector against this project's
+    ratchet. The ratchet was written for the clones that existed on
+    2026-08-18 (0 groups) and may only shrink."""
+    module = _load("rules/tools/clone_guard.py")
+    if module is None:
+        return
+    ratchet = TESTS_DIR / "clone_ratchet.json"
+    rc = module.run([str(PROJECT_ROOT), "--ratchet", str(ratchet)])
+    assert rc == 0, ("clone_guard found an un-ratcheted duplicate (output "
+                     "above) — extract the shared kind, or extend "
+                     "tests/clone_ratchet.json with the owner's word")
+
+
+def _rules_size() -> None:
+    """CLAUDE.md stays under its 6,000-byte limit."""
+    module = _load("rules/tools/rules_size_guard.py")
+    if module is None:
+        return
+    rows = [r for r in module.check(project=PROJECT_ROOT) if not r[3]]
+    assert not rows, ("over the byte limit: "
+                      + ", ".join(f"{r[0]} {r[1]}B > {r[2]}B" for r in rows))
+
+
 FULL_ONLY_CHECKS = [
     ("docs coverage (classified)", docs_coverage.test_every_source_file_is_classified),
     ("docs coverage (required docs)", docs_coverage.test_standard_and_algorithmic_files_have_required_docs),
@@ -184,8 +237,8 @@ FULL_ONLY_CHECKS = [
     # DESIGN REVIEW's whole evidence (rules/GUI.md: the agent opens the image
     # and grades what it sees). A run of the full guards therefore overwrote
     # good proof with unreadable pictures, which is also where the "the same
-    # windows measure roughly twice as wide inside run_guards" note in
-    # .claude/layout-proof.md came from. Ordering is the whole fix: the audit
+    # windows measure roughly twice as wide inside run_guards" note that
+    # tests/___tests.md still carries. Ordering is the whole fix: the audit
     # builds the QApplication first, on the real platform, and the offscreen
     # default that comes later is a no-op because an application already
     # exists.
@@ -201,12 +254,27 @@ FULL_ONLY_CHECKS = [
     ("caret lift (only if needed, only by the shortfall)", _caret_lift),
     ("caret (the PC says where the typing lands)", _caret_server),
     ("focus gate (typed input lands where he is looking)", _focus_gate),
+    ("clones (one kind, one class)", _clone_guard),
+    ("rules size (CLAUDE.md under its limit)", _rules_size),
 ]
 
 
 def main() -> int:
     fast_only = "--fast" in sys.argv
-    checks = FAST_CHECKS if fast_only else FAST_CHECKS + FULL_ONLY_CHECKS
+    if fast_only:
+        checks = FAST_CHECKS
+    else:
+        changed = _load("rules/hooks/changed_files.py")
+        if changed is not None and not changed.touched_anything(PROJECT_ROOT):
+            print("GUARDS SKIPPED — this session changed no file")
+            return 0
+        checks = FAST_CHECKS + FULL_ONLY_CHECKS
+        # The runtime window audit costs a QApplication and real windows; it
+        # runs only for a session that touched a GUI file (owner decree
+        # 2026-08-14). "Cannot tell" reports touched, so it runs.
+        if changed is not None and not changed.touched_gui(PROJECT_ROOT):
+            checks = [c for c in checks if c[1] is not _layout_audit_qt]
+            print("guards: no GUI file touched — the Qt window audit is skipped")
 
     failures = []
     for name, check in checks:

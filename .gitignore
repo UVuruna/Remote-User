@@ -31,5 +31,11 @@ android/local.properties
 android/keystore/
 android/app/build/
 
-# Claude Code working folder - never tracked (owner decree 2026-08-09)
-.claude/
+# Claude Code working folder - never tracked (owner decree 2026-08-09), with
+# ONE exception: the window registry `uv shot` reads. It is not session
+# residue - it is the list of this project's windows, and a fresh clone that
+# lacks it cannot photograph a single one.
+.claude/*
+!.claude/uv_windows.py
+.claude/sessions/
+.claude/evidence/

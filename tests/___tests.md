@@ -54,7 +54,7 @@ curve at three deflections including the deadzone; the right stick scrolls
 NO button; a short shoulder tap steps the layout bar instead. Because the pad
 is only ever let in through `buttonPress()` — the same activator a finger's
 `pointerup` runs — this block also pins that there is no second button path
-left to drift away from the pointercancel rescue (CLAUDE.md constraint 9).
+left to drift away from the pointercancel rescue (`docs/DECISIONS.md` constraint 9).
 
 The **stick curve is pinned by SHAPE, not by number**: the gate reads
 `PAD_DEADZONE` / `PAD_CURVE` / `PAD_CURSOR_SPEED` out of the page and
@@ -100,7 +100,7 @@ Also checks `grids._fit_rect` purely: the placed region never
 leaves its box and sits centred, at any aspect (`pos` left the server's
 geometry on 2026-08-09 — the phone anchors the letterboxed picture,
 `tests/test_view_anchor.py`). Proof source for
-`.claude/layout-proof.md`. The Name fields are WRAPPING textareas because
+the retired `.claude/layout-proof.md`. The Name fields are WRAPPING textareas because
 this audit caught the one-line version hiding most of a window title behind
 its own horizontal scroll (2026-08-05). Also checks the D-PAD BUTTONS: a set's
 pool may hold reserve commands whose names are longer than the shipped four
@@ -374,7 +374,7 @@ call neither function under an `if (false)` guard turns the wiring check red.
 Run: `.venv\Scripts\python tests/test_layout_audit.py`
 
 ### `test_layout_audit_qt.py` — Layout Audit, Qt windows (THE SPACE & LEGIBILITY LAW)
-The runtime half of the law for the DESKTOP app (MIGRATE-LAYOUT.md step 2,
+The runtime half of the law for the DESKTOP app (rules/briefs/MIGRATE-LAYOUT.md step 2,
 owner go 2026-08-05). Every Qt window the project has — `MainWindow`,
 `ControlsEditor`, `ChordRecorder` — is built offscreen in its FULLEST
 realistic state (a running server with a Tailscale URL and the longest guided
@@ -494,7 +494,7 @@ Proves that a notice reaches the phone while the owner is **not looking at
 it**. His report on 2026-08-07: *"notifikacije mi stižu tek kada podignem
 aplikaciju iako je sve vreme otvorena u pozadini"*. The cause was structural —
 every notice rode the streaming socket, and that socket is closed on purpose
-the moment the page hides (project CLAUDE.md constraint 8), so at the exact
+the moment the page hides (`docs/DECISIONS.md` constraint 8), so at the exact
 moment a notice mattered there was no channel and the server queued it until
 he opened the app himself.
 
@@ -569,7 +569,8 @@ the very question it exists to announce.
 
 Honest limit, named rather than discovered later: it runs no host, so it
 cannot prove the VS Code extension fires `PreToolUse`. That was measured on
-his machine (his screenshot of `communication_guard.py` blocking exactly that
+his machine (his screenshot of the machine-wide communication gate - today
+`rules/hooks/gate.py` - blocking exactly that
 event, plus harness traces carrying `tool_name: AskUserQuestion`); the gate
 holds everything downstream of it.
 
@@ -884,7 +885,7 @@ a layout SHRINKING is a responsibility of its own — the same seam
 - *the window that leaves is NEVER closed* — the safety property, written
   against the real `close_windows` desk model. Only the ✕ chooser closes
   windows, and only when he asked (2026-08-08, task 116).
-- *the window that leaves drops out of the topmost band* — CLAUDE.md
+- *the window that leaves drops out of the topmost band* — `docs/DECISIONS.md`
   constraint 10. It is exactly the window no member list can still name a
   moment later, so the drop has to happen on the way OUT.
 - *removing the LAST member removes the layout* — through the existing
@@ -1169,7 +1170,7 @@ nothing on the PC moves until he taps. Ignoring the chip is a real answer and
 the answer is the desktop.
 
 The hard half is not the placement, it is knowing WHOSE window it is — this PC
-is never quiet, and CLAUDE.md constraint 11 exists because other agents take
+is never quiet, and `docs/DECISIONS.md` constraint 11 exists because other agents take
 the foreground all day. So half the checks are about what must NOT be adopted:
 
 - a new window is OFFERED and never grabbed: nothing is placed, nothing enters
@@ -1812,8 +1813,24 @@ four installed 2026-08-01 alongside the MD-First 2.0 docs migration, the fifth
   structure + config-sections + the static layout law — a grep costs nothing, so it
   belongs in the PostToolUse hook's budget; the Qt audit is full-run only,
   it builds a QApplication); exits 2 on any failure. Wired into
-  `.claude/settings.json` (PostToolUse `--fast`, Stop full). Run directly:
-  `python tests/run_guards.py`.
+  `.claude/settings.json` (PostToolUse `--fast`, Stop full), both through
+  `.venv\Scripts\python.exe` — the system interpreter has no `fastapi`, so the
+  FULL pass would die on an import instead of guarding anything. Run directly:
+  `.venv\Scripts\python.exe tests/run_guards.py`.
+
+  **Two gates decide whether the FULL pass runs at all** (2026-08-18): the
+  monorepo's `rules/hooks/changed_files.py` is the one authority on what this
+  session changed — nothing changed means no full pass, and "cannot tell"
+  always means RUN. Inside it the RUNTIME Qt window audit is gated a second
+  time on `touched_gui()`: GUI PROVERE SAMO AKO SU MENJANI GUI FAJLOVI (owner
+  decree 2026-08-14; lang-ok: owner decree, quoted). The FULL pass also runs
+  two monorepo guards that no longer have a home of their own — the AST clone
+  detector (ONE KIND, ONE CLASS) against `tests/clone_ratchet.json`, and the
+  rules-size guard over `CLAUDE.md`.
+- `clone_ratchet.json` — the clone groups this project is allowed to keep.
+  Written on 2026-08-18 with `clone_guard.py --write-ratchet` and it came out
+  **empty**: this project has no un-ratcheted duplicate. It may only stay empty
+  or shrink; growing it needs the owner's word in that session.
 
 These are plain `assert`-based functions (pytest-discoverable, but
 `run_guards.py` calls them directly — no pytest dependency, since neither
@@ -2793,3 +2810,13 @@ Nothing in it is wired into `run_guards.py` or `build.py`, and nothing in it may
 ever be cited as proof that something works. It exists because rounds were lost
 to guessing what a popup IS, and the next round should reach for the instrument
 instead of guessing again.
+
+## Notes carried over from CLAUDE.md (2026-08-18 diet)
+
+- **The Qt layout audit runs FIRST of the Qt guards** (`tests/run_guards.py`, 2026-08-07). `test_controls_sets` sets `QT_QPA_PLATFORM=offscreen` at import and builds a QApplication with it, so every Qt guard after it inherited a platform with NO SYSTEM FONTS — the audit still measured, but every screenshot it wrote came out as rows of tofu boxes, and those screenshots are the DESIGN REVIEW's entire evidence. It is also the source of the long-standing "windows measure twice as wide inside run_guards" note. Ordering is the whole fix; never move it back, and never grade a picture you did not cause to be written.
+
+- Gesture disambiguation (tap vs drag vs scroll) can only be tuned on a **real touch device** — do not assume defaults are right.
+
+- Test Unicode injection against real targets (VSCode, browser inputs) — VK_PACKET has known quirks in some apps (e.g. Windows Terminal surrogate-pair bugs).
+
+- After long-running capture sessions, verify frame latency fresh — restart before measuring (see [profiling howto](../../../rules/howto/profiling.md)).

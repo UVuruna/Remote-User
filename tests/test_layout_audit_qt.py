@@ -1,6 +1,6 @@
 """Guard test - THE SPACE & LEGIBILITY LAW, runtime half, Qt (rules/GUI.md).
 
-Installed from rules/templates/test_layout_audit_qt.py (MIGRATE-LAYOUT.md
+Installed from rules/templates/test_layout_audit_qt.py (rules/briefs/MIGRATE-LAYOUT.md
 step 2, owner go 2026-08-05). The template's pytest harness is replaced by
 plain functions, because this project's guards run through
 tests/run_guards.py and the venv carries no pytest; the CHECKS are the

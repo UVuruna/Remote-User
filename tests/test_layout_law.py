@@ -1,6 +1,6 @@
 """Guard test - THE SPACE & LEGIBILITY LAW, static half (rules/GUI.md).
 
-Installed from rules/templates/test_layout_law.py (MIGRATE-LAYOUT.md step 1,
+Installed from rules/templates/test_layout_law.py (rules/briefs/MIGRATE-LAYOUT.md step 1,
 owner go 2026-08-05). It is this project's fifth guard test.
 
 What it fails on: GUI sources that cut content off, or that freeze an element

@@ -1,6 +1,6 @@
 """Layout audit for the GUI surfaces this project ships on the PHONE — the
 overlay panels (Sets picker, Quality panel, Aspect panel + Move handle).
-Proof source for .claude/layout-proof.md (THE SPACE & LEGIBILITY LAW,
+Proof source for the round's layout evidence (THE SPACE & LEGIBILITY LAW,
 rules/GUI.md): the REAL page is opened in a REAL headless Chromium at phone
 sizes, each panel is opened, and geometry is checked — nothing clipped, no
 horizontal overflow anywhere, every panel card fully inside the viewport.

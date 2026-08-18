@@ -26,7 +26,9 @@ audit installs into the live page.
 #     parse QSS. Neither can see a CSS rule or an HTML element, so the whole
 #     phone client — the surface he actually photographed — had no radius
 #     instrument of any kind.
-#   * The machine-wide PreToolUse hook (rules/hooks/layout_guard.py) is a
+#   * The machine-wide PreToolUse hook (rules/hooks/gate.py, module
+#     rules/hooks/gate/gui_api.py - it was layout_guard.py until
+#     2026-08-18) is a
 #     PATTERN SCANNER over the text of an edit. Its banned list is elision,
 #     hard sizes, disabled wrapping and forced scrollbars — there is no radius
 #     rule and no sibling rule in it at all, and there could not be: both need a

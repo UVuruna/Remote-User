@@ -180,7 +180,7 @@ def check_laybar_bottom(page, label, portrait, results, shot_path, shot_name):
     # the second is drawn from freshly forced tiles. Only this one size of four
     # shows it. It is therefore a stale raster tile in the headless browser and
     # nothing a user can see — but it is written down here, in
-    # .claude/layout-proof.md and on the open list, because a picture nobody
+    # the round's layout report and on the open list, because a picture nobody
     # can explain is not a picture anyone should quietly grade.
     page.screenshot(
         path=str(shot_path(shot_name(f"Layout_bar_bottom {label}")[:-4])),

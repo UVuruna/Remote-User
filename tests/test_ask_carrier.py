@@ -22,7 +22,7 @@ that answer and are pinned here so nobody re-runs them:
     matcher side by side and both fired in the same second with byte-identical
     payloads;
   * `PreToolUse` DOES match `AskUserQuestion` — a documentation agent claimed
-    it cannot, and his own screenshot shows `communication_guard.py` blocking
+    it cannot, and his own screenshot shows the machine-wide gate blocking
     exactly that event in a VS Code session.
 
 The honest limit of this gate, named rather than discovered later: it cannot
@@ -103,12 +103,13 @@ def main() -> int:
         stop.get("matcher") == "*" and "--asking" not in stop["hooks"][0]["command"])
 
     # --- 5: installing writes it, and leaves a stranger's hook alone ------
-    # His settings.json carries other people's PreToolUse hooks (his own
-    # communication_guard is one). Ours must join them, never replace them.
+    # His settings.json carries other people's PreToolUse hooks (the
+    # machine-wide `rules/hooks/gate.py` is one). Ours must join them,
+    # never replace them.
     settings = tmp / "settings.json"
     settings.write_text(json.dumps({"hooks": {"PreToolUse": [
         {"matcher": "AskUserQuestion", "hooks": [
-            {"type": "command", "command": "python communication_guard.py"}]}]}}),
+            {"type": "command", "command": "python gate.py pre"}]}]}}),
         encoding="utf-8")
     real_settings = agent_hook.SETTINGS
     agent_hook.SETTINGS = settings
@@ -120,7 +121,7 @@ def main() -> int:
         agent_hook.SETTINGS = real_settings
     pre = written.get("hooks", {}).get("PreToolUse") or []
     ours = [h for h in pre if agent_hook.MARKER in json.dumps(h)]
-    theirs = [h for h in pre if "communication_guard" in json.dumps(h)]
+    theirs = [h for h in pre if "gate.py" in json.dumps(h)]
     results["install registers our PreToolUse hook"] = len(ours) == 1
     results["install leaves a stranger's PreToolUse hook standing"] = len(theirs) == 1
 
