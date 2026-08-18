@@ -62,7 +62,7 @@ must never buy.
 The presses go out as ordinary `chord` messages, which is why this button
 could ship on the day the verdict landed: `chord` is in the server's
 `TYPING_KINDS`, so each press passes through `focus_guard.typist()` exactly
-like `/usage` and `/compact` beside it (CLAUDE.md constraint 11). No new focus
+like `/usage` and `/compact` beside it (`docs/DECISIONS.md` constraint 11). No new focus
 field was needed and none was invented.
 
 ## Gate

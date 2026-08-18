@@ -17,7 +17,7 @@ produces (`press`, `click`, `pointer_move`, `scroll`, `key_special`, `chord`,
 Every mapped button goes through `buttonPress()` in
 [Controls](controls.md) — the same activator object the finger's `pointerup`
 runs. There is no second implementation of what a button does, and there must
-never be one: CLAUDE.md constraint 9 exists because a parallel button path is
+never be one: `docs/DECISIONS.md` constraint 9 exists because a parallel button path is
 exactly what died on the real device (an up-only handler that had drifted from
 Android's stolen touches killed every control at once). So:
 

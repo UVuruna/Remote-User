@@ -87,7 +87,7 @@ for the split's general load-order reasoning.
     the rescue copy of a round that died). Runs `voiceDedup`, which flushes
     whatever the settle rule still held and trims off what streaming already
     sent. `window.__voiceResult` stays as the legacy path for a shell too old
-    to call `__voiceHeard` (CLAUDE.md constraint 12).
+    to call `__voiceHeard` (`docs/DECISIONS.md` constraint 12).
   - `micStop()` clears BOTH memories — `voiceLastOut = ""` (a new sentence is
     starting) and `voiceStreamReset()` (the round in flight is abandoned).
     Leaving the second behind would make the next session swallow its own

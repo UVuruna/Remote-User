@@ -102,7 +102,7 @@ No number changed. The minimum moved 395×618 → **395×636** (the foot band),
 still far inside the 1280×1000 floor.
 
 **And the number on the proof line was the real defect of that round.**
-`.claude/layout-proof.md` carried `MIN 790x1236` for this dialog — exactly 2×
+the retired `.claude/layout-proof.md` carried `MIN 790x1236` for this dialog — exactly 2×
 the truth, transcribed off the SHOT's pixel dimensions, since every audit shot
 is rendered at 2× device pixels. It read as an absurd minimum demanding a
 screen nobody owns and nearly bought this window a two-column reflow it did

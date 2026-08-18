@@ -83,7 +83,7 @@ at all.
   controls never leave, on any device with a stylus or a mouse.
 
 - **The gamepad has its own event.** A pad press is neither a touch nor a
-  keydown — the same hole the screen-awake timer fell into (CLAUDE.md
+  keydown — the same hole the screen-awake timer fell into (`docs/DECISIONS.md`
   constraint 12) — and a controller-only session would otherwise sit in front
   of hidden controls it is actively pressing.
 
@@ -120,7 +120,7 @@ two directions serve a thumb on a controller later.
 - **An option is a real `.ctl`.** It is built by `makeButton` from
   [Controls](controls.md) — the same icon size, the same label treatment as the
   D-pad and the corners. There is no second button implementation to drift from
-  them, which is the rule CLAUDE.md constraint 9 exists for.
+  them, which is the rule `docs/DECISIONS.md` constraint 9 exists for.
 - **Its face is 74 px wide, not the corners' 58** (independent grader,
   2026-08-11). A `.ctl` caps its label at 54 px inside a 58 px face, which is a
   2 px inset under a 16 px radius — and ALG-6 ([GUI Rules](../../../../rules/GUI.md))
@@ -231,7 +231,7 @@ now spreads.
 So the ring, `MINI_RING_RADIUS`, `miniRingPoints`, the `body.mini-open::before`
 veil layer and the `.mini-x` ✕ were **deleted** the same day rather than left
 standing unreachable — a second placement nobody opens is exactly the legacy
-CLAUDE.md constraint 6 is about. The pad's pointing followed: `padPointedAt`
+`docs/DECISIONS.md` constraint 6 is about. The pad's pointing followed: `padPointedAt`
 matches the stick against the recorded angles instead of deriving them from
 the count (see [Gamepad](gamepad.md)).
 

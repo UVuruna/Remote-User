@@ -164,7 +164,7 @@ guidance ran about 150 characters to the line; DESIGN.md calls 60–80 readable.
 
 `_populate_monitors` asks `BaseCapture.output_count()` -> `dxcam.output_info()`,
 and dxcam enumerates its outputs **once per process** (`dxcam.DXFactory` is an
-import-time singleton — project CLAUDE.md constraint 30, measured; it cost a
+import-time singleton — `docs/DECISIONS.md` constraint 30, measured; it cost a
 3.8-hour dead picture). The list was therefore filled when the window was
 BUILT and frozen for the life of the app: a monitor plugged in mid-run never
 appeared, and reopening the window did not help — only a restart did.

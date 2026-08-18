@@ -15,7 +15,7 @@ vreme otvorena u pozadini"*.
 
 It was not a bug in the notice code. Every notice rode the **streaming
 socket**, and that socket is closed on purpose the moment the page hides
-(project CLAUDE.md constraint 8 — the session lives only while the owner is
+(`docs/DECISIONS.md` constraint 8 — the session lives only while the owner is
 looking). At the exact moment a notice mattered there was no channel at all,
 so `server/notify.py` queued it until he opened the app himself. The queue was
 built for "he was away"; it was never a delivery mechanism, and it had

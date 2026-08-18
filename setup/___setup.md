@@ -1,6 +1,6 @@
 # setup/
 
-The desktop build pipeline (root SHIP.md's 7-step pipeline) — plus this
+The desktop build pipeline (root rules/howto/ship.md's 7-step pipeline) — plus this
 project's specialty, **dependency bundling**: the user NEVER side-installs
 anything (hard owner requirement), so `build.py` fetches/bundles ffmpeg and
 chain-installs Tailscale itself.
@@ -49,13 +49,13 @@ Config-Section-Law candidate worth a future look.
   filenames; the single version source read by every script here
 
 ### Used by
-- The owner, cutting a release — root SHIP.md's GIT RELEASE procedure
+- The owner, cutting a release — root rules/howto/ship.md's GIT RELEASE procedure
   starts from this folder's `build.py`
 
 ## Design Decisions
 
 - **`--onedir`, never `--onefile`** — lower RAM, faster startup, fewer AV
-  false positives (root SHIP.md Step 3); this project additionally needs
+  false positives (root rules/howto/ship.md Step 3); this project additionally needs
   `--onedir` so `ffmpeg.exe` and the Android APK can sit as plain files next
   to the exe rather than inside a one-file archive.
 - **Fail-closed everywhere a step could otherwise break silently.** Four
@@ -67,7 +67,7 @@ Config-Section-Law candidate worth a future look.
   metadata/signatures). Each one exists because its failure class shipped to
   the owner at least once before it was added — see
   [Build Orchestrator](__about/build.md) Design Decisions.
-- **The exe runs elevated always (`--uac-admin`)** — not the SHIP.md default
+- **The exe runs elevated always (`--uac-admin`)** — not the rules/howto/ship.md default
   ("only when truly required"); here it IS required. Windows UIPI silently
   discards `SendInput` from a non-elevated process whenever an elevated
   window has focus, so a non-elevated Vibe Coder is a dead input device the

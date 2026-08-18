@@ -73,7 +73,7 @@ nothing here currently does.
 * `find(sig)` → one row, or `None`.
 * `match(entry, open_windows)` → `(matched, missing)`.
 
-Protocol (see the project [CLAUDE.md](../../CLAUDE.md) → Protocol): the phone
+Protocol (see [docs/PROTOCOL.md](../../docs/PROTOCOL.md)): the phone
 sends `layout_recent {}`, answered `layout_recent {entries}`
 (`{id, name, project, count}` per row); tapping one sends
 `layout_recent_use {id}`, handled in [Layout API](layout_api.md) —

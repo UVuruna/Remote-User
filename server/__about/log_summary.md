@@ -17,7 +17,7 @@ another, with its own honest edge cases a writer never has to think about.
 In a file that spans a whole day, nothing but the process's own identity is a
 stable fact — everything observable is a fact WITH A DURATION. A header that
 just said "2 monitors" would have been exactly the defect `Layout
-.arranged_ratio` was (project `CLAUDE.md` constraint 13) — a note of what was
+.arranged_ratio` was (`docs/DECISIONS.md` constraint 13) — a note of what was
 once true, read forever after as if it still were. `session_log.SessionLog
 .state()` writes the raw material (a `state.<kind>` record only when the
 value changes); this module turns that material into the answer the owner

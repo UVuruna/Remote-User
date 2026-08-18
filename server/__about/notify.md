@@ -24,7 +24,7 @@ Android notification, speaks it, and toasts if the page is visible.
 His report: *"notifikacije mi stižu tek kada podignem aplikaciju iako je sve
 vreme otvorena u pozadini"*. The cause was structural, not a bug in this file:
 every notice rode the **streaming socket**, and that socket is closed on
-purpose the moment the page hides (project CLAUDE.md constraint 8 — the
+purpose the moment the page hides (`docs/DECISIONS.md` constraint 8 — the
 session lives only while the owner is looking). At the exact moment a notice
 mattered there was no channel, so it was queued until he opened the app
 himself. The queue had silently become the normal path.

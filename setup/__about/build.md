@@ -5,12 +5,12 @@
 
 ## Purpose
 
-The full desktop build pipeline (root SHIP.md's 7-step pipeline, plus two
+The full desktop build pipeline (root rules/howto/ship.md's 7-step pipeline, plus two
 project-specific fail-closed gates layered on top): version info → INPUT
 GATE → icons → vendor payloads → PyInstaller → smoke test → sign exe → NSIS
 installer → sign installer → VERIFY. Produces the signed
 `dist/VibeCoder_Setup.exe` that the owner installs and self-updates through
-(root SHIP.md's Release Law). Always re-execs itself under the project's own
+(the constitution's Law 4 - build and release NEVER automatic). Always re-execs itself under the project's own
 `.venv` first — the only interpreter guaranteed to carry the complete
 dependency set (a system-Python build once shipped v0.0.045 without
 `qrcode` and crashed on first launch).
@@ -46,7 +46,7 @@ Run: `python setup/build.py` (auto re-execs under `.venv`) or directly
   BEFORE this script, by [Build APK](build_apk.md))
 
 ### Used by
-- The owner / a build session — the entry point for root SHIP.md's GIT
+- The owner / a build session — the entry point for root rules/howto/ship.md's GIT
   RELEASE procedure (`.venv\Scripts\python setup/build.py` →
   `dist/VibeCoder_Setup.exe`)
 
@@ -114,18 +114,18 @@ One line each; the full call sequence is in [flow](../__flow/build.md).
   crash); re-execing once, guarded by an env sentinel
   (`RU_BUILD_REEXEC`), makes "wrong interpreter" a build-time
   impossibility instead of a runtime surprise for the owner.
-- **Two extra fail-closed gates beyond SHIP.md's base 7 steps.** The
+- **Two extra fail-closed gates beyond rules/howto/ship.md's base 7 steps.** The
   INPUT GATE (Step 0b) and the frozen-exe smoke test (Step 3b) exist
   because both failure classes shipped to the owner before: a broken
   click path ("left click dead") and a missing bundled module (`qrcode`)
   each looked correct in every file reviewed. Both turn an invisible
   runtime failure into a loud, un-shippable build failure.
 - **`verify_build` asserts on OUTPUT, not on "did the steps run."**
-  Matches SHIP.md Step 7's rationale exactly: PyInstaller without
+  Matches rules/howto/ship.md Step 7's rationale exactly: PyInstaller without
   `--version-file` still produces an exe; a skipped signing step still
   produces a file. Only reading the finished artifact's actual
   metadata/signature catches a silently degraded build.
-- **The exe runs elevated always (`--uac-admin`).** Not the SHIP.md
+- **The exe runs elevated always (`--uac-admin`).** Not the rules/howto/ship.md
   default ("only when truly required") — here it IS required. Windows
   UIPI silently discards `SendInput` from a non-elevated process whenever
   an elevated window has focus, so a non-elevated Vibe Coder becomes a

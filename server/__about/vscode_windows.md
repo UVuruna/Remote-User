@@ -74,7 +74,7 @@ file's own `(st_mtime, st_size)`:
   file open, plus two SQL queries).
 
 The hwnd matching itself is pure and re-runs fresh on every call
-(CLAUDE.md constraint 13 — never remember geometry); nothing is cached
+(`docs/DECISIONS.md` constraint 13 — never remember geometry); nothing is cached
 against a window handle, because Windows reuses handles.
 
 ## Honest limits

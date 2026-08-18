@@ -4,7 +4,7 @@
 
 ## Purpose
 
-One-time self-signed code-signing certificate generator (root SHIP.md
+One-time self-signed code-signing certificate generator (root rules/howto/ship.md
 Certificate Management). Run manually, once, before the first build:
 `python setup/create_cert.py`. Produces `setup/cert/{app_name}.pfx` and
 `setup/cert/password.txt` — both gitignored, both consumed later by

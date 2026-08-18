@@ -56,8 +56,8 @@ def log_gates(step, run) -> None:
     # proves the four modules are CALLED, these four prove each one WORKS on
     # its own. Wired the same night they were written — `test_phone_chrome.py`
     # sat in neither gates.py nor build.py and a real portrait-layout defect
-    # shipped over four releases before anyone noticed (see the T89 entry in
-    # `.claude/session-tasks.md`); a gate not in the build is not enforcement.
+    # shipped over four releases before anyone noticed (see the T89 entry in the
+    # round's ledger); a gate not in the build is not enforcement.
     step("0b25/6  SESSION LOG GATE — the header carries only what cannot "
          "change while the process lives, a record is counted under both its "
          "kind and its group, the file rolls at the day boundary and the "

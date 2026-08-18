@@ -136,6 +136,8 @@ The CLI prints the pairing URL and a QR (console + image viewer). Dev note: H.26
   📝 README.md         ← You are here
   📁 docs/             ← Long-form documents that are CONTENT, not index
     📝 GUIDE.md        ← Step-by-step setup guide (mirrored by the in-app guidance)
+    📝 DECISIONS.md    ← Architecture constraints and owner decrees, dated
+    📝 PROTOCOL.md     ← Wire frames, streaming, controls, keyboard, panels
   📝 ROADMAP.md        ← Development phases and status
   📝 CLAUDE.md         ← AI session guidance
   📝 ACTIONS.md        ← Owner-edited control categories (actions.json)
@@ -194,7 +196,9 @@ The CLI prints the pairing URL and a QR (console + image viewer). Dev note: H.26
 - [Setup Guide](docs/GUIDE.md) — step-by-step install & pairing (the in-app guidance mirrors it)
 - [Roadmap](ROADMAP.md) — development phases, current status, future ideas
 - [Verification](docs/VERIFICATION.md) — the owner's live checklist: everything delivered on 2026-08-11 and every point he verifies
-- [AI Guidance](CLAUDE.md) — architecture constraints and pitfalls for coding sessions
+- [AI Guidance](CLAUDE.md) — stack, entry points and the project's own laws for coding sessions
+- [Decisions](docs/DECISIONS.md) — every architecture constraint and owner decree, dated
+- [Protocol](docs/PROTOCOL.md) — the wire frames, streaming, controls, keyboard and panels
 - [Server (folder)](server/___server.md) — PC-side components (core, GUI, streaming)
 - [Client (folder)](client/___client.md) — tablet-side web client
 - [Android (folder)](android/___android.md) — the phone app (shell around the client)

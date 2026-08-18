@@ -6,7 +6,7 @@
 ## Purpose
 
 Renders the project's SVG logo(s) into multi-resolution Windows `.ico` files
-(root SHIP.md pipeline Step 1): `assets/logo.svg` → `setup/icon.ico`
+(root rules/howto/ship.md pipeline Step 1): `assets/logo.svg` → `setup/icon.ico`
 (EXE icon, taskbar, Add/Remove Programs) and `assets/logo-setup.svg`
 (falling back to `logo.svg` when the setup-specific variant doesn't exist)
 → `setup/icon-setup.ico` (the NSIS installer wizard icon). Runs standalone

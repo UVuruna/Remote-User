@@ -50,7 +50,7 @@ the whole screen.*
    * a **dialog of a member** — the owner chain (`GW_OWNER`) walked up, exactly
      as the guard already walks it. The "Open this link?" prompt is his case.
    * a **NEW top-level window of a member's process**. `NEW` is load-bearing:
-     process identity may never decide alone (CLAUDE.md constraint 11 — every
+     process identity may never decide alone (`docs/DECISIONS.md` constraint 11 — every
      VS Code window shares one process, and his other project's window is
      exactly the thief). A window that already existed when the phone connected
      is refused however well its process matches.

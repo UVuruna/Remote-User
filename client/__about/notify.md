@@ -237,7 +237,7 @@ His THIRD report of this feature, and the page's half of it. The app is in the
 BACKGROUND on another layout when the notification is tapped, so
 `MainActivity.onNewIntent` nudges the page **at once** — before `onResume`,
 while the page is still hidden and its socket is closed by rule (project
-CLAUDE.md constraint 8). The old `__noticeJump` pulled the jump out of the
+`docs/DECISIONS.md` constraint 8). The old `__noticeJump` pulled the jump out of the
 shell right there (the pull CLEARS it), `applyNoticeJump` called
 `focusLayout`, and `state.js` dropped that message on the dead socket. A second
 later the reconnect landed, the SERVER resumed the layout it remembered, and

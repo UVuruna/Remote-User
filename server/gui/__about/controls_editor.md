@@ -259,7 +259,7 @@ shorter, since three shallow columns need less height than two taller ones).
 `.claude/layout-frame.json` `floor_width` restored **1700 → 1280**; `floor_
 height` untouched at 1000. Audited by `tests/test_layout_audit_qt.py` at
 minimum and +50%, both palettes, PASS. Proof and shots:
-[.claude/layout-proof.md](../../../.claude/layout-proof.md) → "task 232 — the
+the retired `.claude/layout-proof.md` (2026-08-18) → "task 232 — the
 ControlsEditor reflow".
 
 ## Connections

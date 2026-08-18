@@ -41,7 +41,7 @@ three are not equally knowable:
 4. **Only a handle that was NOT standing before the launch may be handed
    back.** This is the correctness argument, and it is this project's oldest
    lesson in a new place: every VS Code window shares one process
-   (CLAUDE.md constraint 11), so "a window of the app I started" would very
+   (`docs/DECISIONS.md` constraint 11), so "a window of the app I started" would very
    likely be the one he was already working in. The handles are written down
    before the launch and only a new one is returned.
 5. **Nothing here ever takes the foreground.** Launching an app naturally makes

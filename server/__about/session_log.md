@@ -44,7 +44,7 @@ the header could name THE PHONE. A file that spans a whole day spans many
 connections, several devices and several sets of settings, so a header
 claiming "the phone" would be a fact that quietly stops being true an hour
 later — the same class of defect as `Layout.arranged_ratio` (project
-`CLAUDE.md` constraint 13), a note of what was once true, read forever after
+`docs/DECISIONS.md` constraint 13), a note of what was once true, read forever after
 as if it still were. So the header written by `_open()`/`start()` carries only
 what is stable for the process — this app, this PC, this install — and every
 phone connection is expected to write its own `session.connect` event

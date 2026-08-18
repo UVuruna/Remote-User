@@ -511,7 +511,9 @@ full width regardless) and is centered under a ~560 px cap.
   his tablet fits in-row at the bottom, and landscape honors Bottom. Their
   exact numbers were re-decided on 2026-08-12; see below.
   `tests/test_layout_audit.py` and `tests/run_guards.py` stay green; visual
-  proof in `.claude/layout-proof.md` → "ROUND 44".
+  proof in that round's layout report (ROUND 44) — the file itself was
+  retired on 2026-08-18; screenshots now land in `.claude/evidence/` via
+  `uv shot`.
 
 ## One maximum, one bottom row, and no bar means no row (owner 2026-08-12)
 

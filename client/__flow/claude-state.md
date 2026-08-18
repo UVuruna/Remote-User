@@ -111,7 +111,7 @@ THINKING  only claude_state.effort lights a row.
 **Why plain `chord` is safe enough to ship without a focus contract of its
 own:** `chord` is in the server's `TYPING_KINDS`, so every press passes
 through `focus_guard.typist()` exactly like `/usage` and `/compact` beside it
-(CLAUDE.md constraint 11). The Mode button is no more exposed than the buttons
+(`docs/DECISIONS.md` constraint 11). The Mode button is no more exposed than the buttons
 it sits with. The gate holds that membership
 (`check_the_mode_presses_ride_the_guarded_chord_path`) — if `chord` ever
 leaves `TYPING_KINDS`, this button's presses stop being fenced and the gate

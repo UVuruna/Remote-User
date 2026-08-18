@@ -4,7 +4,7 @@
 
 ## Pipeline
 
-Maps onto root SHIP.md's 7-step pipeline (SVG→ICO, Version Info, PyInstaller,
+Maps onto root rules/howto/ship.md's 7-step pipeline (SVG→ICO, Version Info, PyInstaller,
 Sign EXE, NSIS Installer, Sign Installer, Verify) with two project-specific
 fail-closed gates inserted — Step 0b and Step 3b (see
 [about](../__about/build.md) Design Decisions for why each exists):

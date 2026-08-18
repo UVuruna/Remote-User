@@ -108,7 +108,7 @@ Three details that are load-bearing:
   `startListening` actually fires, cleared by `end()`, `cancel()` and
   `onBackground()`.
 - **`onBackground()` does NOT flush the held tail.** It would be typed into a
-  dead socket — the page closes the WebSocket the moment it hides (CLAUDE.md
+  dead socket — the page closes the WebSocket the moment it hides (`docs/DECISIONS.md`
   constraint 8), `send()` drops the message behind a "Reconnecting…" pill, and
   the page would have recorded those words as sent. Losing them for good is
   worse than at worst re-hearing them. Streaming is what makes this cheap:

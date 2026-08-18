@@ -39,7 +39,7 @@ and the list only executes what enters it.
 
 **A rename is deliberately not here**, although the desktop allows it. This
 page's typing goes through the invisible full-width capture textarea that feeds
-`key_text` to the PC (CLAUDE.md constraint 5), so a real text field in an
+`key_text` to the PC (`docs/DECISIONS.md` constraint 5), so a real text field in an
 overlay would be fighting the one element the whole input pipeline depends on
 holding focus. A rename is a desk job; an arrangement is not.
 

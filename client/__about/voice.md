@@ -21,7 +21,7 @@ rule.
 Two reasons, and both are lessons this project already paid for:
 
 - a rule that ships with the PAGE reaches him with the PC's next release, not
-  with a new APK (CLAUDE.md constraint 12's own reasoning for the gamepad
+  with a new APK (`docs/DECISIONS.md` constraint 12's own reasoning for the gamepad
   mapping);
 - this repo has **no JVM test runner**, so a rule written in
   `VoiceInput.kt` cannot be proven by a fail-closed gate — which is exactly

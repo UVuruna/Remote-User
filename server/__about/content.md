@@ -86,7 +86,7 @@ machinery (the palette command NAME), never his text.
 
 The paste and the Enter are two separate injections with 120 ms of nothing
 between them, and 120 ms is a whole window for the thief
-[constraint 11](../../CLAUDE.md) was written about: an app finishing its start,
+[constraint 11](../../docs/DECISIONS.md) was written about: an app finishing its start,
 a dialog, another agent's editor taking the foreground. `InputInjector.type_text`
 re-checks before **every character** for exactly that reason — and the one key
 that *submits* was the only one still crossing an unguarded gap.
