@@ -282,8 +282,29 @@ html, body {
   overflow-wrap: anywhere;
 }
 
-/* Chord buttons carry no icon — the label is the whole face */
-.ctl.text .lbl { font-size: var(--ctl-label-text); }
+/* A CHORD FACE IS A STACK OF KEYS (owner 2026-08-19, with the picture of what
+   it was: "Ctrl+Shi / ft+P", a key name cut in half). This label has no icon
+   above it, so it takes the WHOLE face rather than `--ctl-label-max` — that
+   cap exists to keep a name from crowding the icon beside it, and here there
+   is no icon to crowd. 5px of inset on each side keeps it off the border.
+
+   `white-space: pre-line` is what makes it a STACK rather than a wrap that
+   happens to land well: controls.js writes a newline after every "+"
+   (`chordFace`) and this reads it, so the same three lines come out at every
+   width instead of the browser packing two keys onto one line when they
+   happen to fit.
+
+   `overflow-wrap: break-word` and NOT `anywhere` is the floor under that: a
+   single key too long for the face is broken only because it cannot fit on a
+   line of its own at all. `anywhere` — the value the rest of the labels use,
+   where a name is a real word and a mid-word break is the lesser evil — is
+   exactly what cut "Shift" in two. */
+.ctl.text .lbl {
+  font-size: var(--ctl-label-text);
+  max-width: calc(100% - 10px);
+  white-space: pre-line;
+  overflow-wrap: break-word;
+}
 
 /* ON IS A LUMINANCE EVENT, IN ALL EIGHT LOOKS (owner 2026-08-09, task 179,
    ROUND TWO, with a screenshot of the Mic switched on in the COLOURED look).

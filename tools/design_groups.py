@@ -226,15 +226,20 @@ GROUPS = [
              "pic": "label", "demo": ".ctl .lbl",
              "min": 6, "max": 18, "step": 1, "unit": "px"},
             {"kind": "shape", "token": "--ctl-label-max", "label": "Label width",
-             "help": "How wide the word may run before it wraps onto a second "
-                     "line. Wider means fewer wraps and a broader button row.",
+             "help": "How wide the word under an ICON may run before it wraps "
+                     "onto a second line. Wider means fewer wraps and a "
+                     "broader button row. It does NOT cap a button with no "
+                     "icon: there the label is the whole face and takes the "
+                     "whole width.",
              "pic": "width", "demo": ".ctl .lbl",
              "min": 30, "max": 120, "step": 1, "unit": "px"},
             {"kind": "shape", "token": "--ctl-label-text", "label": "Chord button text",
              "help": "A key combination — Ctrl+Shift+P — has no icon, so its "
                      "text IS the whole face of the button and gets its own "
-                     "size. Watch the chord specimen while you move it: too "
-                     "large and a long combination breaks mid-word.",
+                     "size. It breaks after a \"+\" and nowhere else, one key "
+                     "per line, so raising this only ever costs LINES, never "
+                     "half a key name. Watch the chord specimen: when the "
+                     "stack grows past the face, come back down.",
              "pic": "label", "demo": ".ctl.text",
              "min": 8, "max": 24, "step": 1, "unit": "px"},
             {"kind": "shape", "token": "--cat-size", "label": "Set switcher — size",

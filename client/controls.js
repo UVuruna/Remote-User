@@ -658,11 +658,30 @@ function keepFocus(el, onTap) {
   });
 }
 
+// A KEY NAME IS NEVER CUT IN HALF (owner 2026-08-19 — "ctrl+shif / t+p" on
+// his picture, a stack of whole keys on the one beside it). Only an ICONLESS
+// button reaches this: a CUSTOM command the desktop editor has just created
+// and its author has not yet named, whose face is the shortcut itself. The
+// newline is HARD, not an offered break — `white-space: pre-line` in
+// style.css reads it, so the stack is the same at every width — and under an
+// icon `.ctl .lbl` stays `white-space: normal` and collapses it to a space,
+// leaving the other 90 buttons exactly as they were.
+// docs/DECISIONS.md 41 · tests/test_chord_face.py measures both.
+function chordFace(label) {
+  return String(label).replace(/\+/g, "+\n").replace(/\n$/, "");
+}
+
 function makeButton(cls, iconName, label) {
   const el = document.createElement("button");
   el.type = "button";
   el.className = cls;
-  el.innerHTML = (iconName ? svg(iconName) : "") + `<span class="lbl">${label}</span>`;
+  // The label is a TEXT NODE and never markup: it can arrive from the desktop
+  // editor's free-text Name field, and a face is to read, never to run.
+  el.innerHTML = iconName ? svg(iconName) : "";
+  const lbl = document.createElement("span");
+  lbl.className = "lbl";
+  lbl.textContent = chordFace(label);
+  el.appendChild(lbl);
   return el;
 }
 

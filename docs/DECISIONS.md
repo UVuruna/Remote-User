@@ -396,3 +396,66 @@ Three things every row carries, and each is one way "what does this do" is answe
 **The window is still measured against all three captions.** THE SPACE & LEGIBILITY LAW measures the fullest real content, not the state that happens to be on screen: a minimum taken from two buttons is a minimum the row outgrows the moment he opens the door. `tests/_audit_windows.py` photographs the open state too (`make_main_window_developer`), and puts the setting back before it returns — `SETTINGS` is one process-wide object and a factory that left the suite in developer mode is the leak `tests/conftest.py` exists for.
 
 Gate: `tests/test_developer_tools.py` — nine checks, each proven by planting its own defect (marking Traffic an ordinary door fails three of them at once).
+
+### 41. A KEY NAME IS NEVER CUT IN HALF — and the button that showed one belongs to a stranger, not to us
+
+**Owner report 2026-08-19,** two pictures beside each other: a control reading
+`ctrl+shif` / `t+p`, and the same shortcut drawn as a stack — `CTRL +`,
+`SHIFT +`, `P` — across the whole face. With them came the question that
+matters more than the fix:
+<!-- lang-ok-begin: owner quote, the dated record of the question -->
+*"koji je to dugme jel to nešto zamišljeno za budućeg korisnika koji će raditi
+CUSTOM? Koliko ja znam to mi nemamo nigdje? … korisnik treba da dostavi EMOJI
+ili SVG za logo i TEXT a ne da mu na DUGMETU piše SHORTCUT komandi koji je
+sačuvao."*
+<!-- lang-ok-end -->
+
+**He is right, and the honest answer is "nowhere yet, and only for a
+stranger".** All 90 commands in the shipped `actions.json` carry an icon, so
+no set the app installs with can draw this face. It is reached one way: the
+desktop Controls editor creates a custom command as
+`{"label": "Command N", "chord": ""}` with **"(no icon)"** selected
+(`server/gui/controls_editor.py` → `_add_command`), and `makeActionButton`
+draws an iconless button as `ctl text` wearing `btn.label || btn.chord`. So
+the face belongs to a user who has added his own shortcut and has not yet
+named it — and until he does, the shortcut string is the only true thing the
+button can say about itself. **It is a fallback, never a design**, and this
+entry exists so nobody later reads it as one.
+
+**What was fixed, and what is only proposed.** Fixed: the fallback no longer
+cuts a key in half. `chordFace` in `client/controls.js` ends the line after
+every `"+"` and `.ctl.text .lbl` reads it with `white-space: pre-line`, so the
+stack is the same three lines at every width instead of a wrap that happens to
+land well — the first shape of this fix offered a *break opportunity* after
+each `"+"`, and the browser used it only when it had to (`ctrl+` / `shift+p`:
+nothing cut, but not the picture he drew). The face also stopped wearing
+`--ctl-label-max`, which caps a name sitting **under an icon** so it cannot
+crowd it; there is no icon here to crowd, and that cap is what forced the
+break early enough to land mid-word. `overflow-wrap` went from `anywhere` to
+`break-word`, so a single key too long for the face is still broken — but only
+because it cannot fit on a line of its own at all. **Not fixed, and named
+here so it is not mistaken for done: a user cannot supply his own EMOJI or
+SVG.** The editor offers a Name and a dropdown of the *shipped* icon set
+(`client/icons.js`) and nothing else. That is a feature — editor field,
+`actions.json` schema, sanitising an uploaded SVG, rendering it on the phone —
+and it is his call whether it is the next round.
+
+**The label became a text node in the same change.** `makeButton` interpolated
+it into `innerHTML`; the Name field in the desktop editor is free text, and a
+face is a thing to read, never a thing to run.
+
+**The other 90 buttons are untouched, by construction.** `chordFace` runs over
+every label because a name without a `"+"` is unchanged by it — one rule
+rather than a second code path that must be asked which kind of face it is
+looking at — and under an icon `.ctl .lbl` stays `white-space: normal`, which
+collapses the newline to a space. The design lab draws its own specimen and
+cannot import `controls.js`; its one mirrored line is **measured**, not
+trusted.
+
+Gate: `tests/test_chord_face.py` — seven checks in a real browser, every line
+reconstructed character by character off real client rects rather than
+reasoned out of a stylesheet. Its fifth check renders the OLD styling on the
+same page and fails if *that* comes out whole, so the other six cannot pass
+vacuously; making `chordFace` the identity function turns the first red,
+removing `pre-line` the fourth. `client/controls.js` stands at 992 lines after
+it — the next thing added there splits the file.

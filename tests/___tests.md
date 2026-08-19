@@ -1993,6 +1993,27 @@ their held counterparts into `.claude/shots/round32-on-state/`.
 Run: `.venv\Scripts\python tests/test_on_state.py` (needs playwright +
 chromium + Pillow; binds its own port 8897).
 
+### `test_chord_face.py` — Chord Face Gate
+
+A KEY NAME IS NEVER CUT IN HALF (owner report 2026-08-19, two pictures: a
+control reading `ctrl+shif` / `t+p`, and the stack it must be). The face this
+guards belongs to nobody who has not built a CUSTOM command — all 90 shipped
+commands carry an icon — so the gate's docstring says whose button it is
+before it says what is asserted about it. Seven checks: the transform ends a
+line after every `"+"` and touches nothing else; the rendered chord comes out
+exactly one key per line; it stays inside the button's own edge; a name with
+no `"+"` still wraps at its spaces under an icon and a `"+"` inside a NAMED
+button collapses to a space rather than stacking; the design lab's mirrored
+copy of the rule still matches the product's; and — the check that keeps the
+rest honest — the OLD styling is rendered on the same page and the gate fails
+if that comes out whole too. Every line is reconstructed CHARACTER BY
+CHARACTER off real client rects; a gate that reasons about line breaking from
+a stylesheet proves only that it agrees with itself. The probe page is served
+from memory, never written into `client/`.
+
+Run: `.venv\Scripts\python -m pytest tests/test_chord_face.py` (needs
+playwright + chromium; binds an ephemeral port).
+
 ### `test_live_clock.py` — Live Clock Gate
 
 THE PICTURE NEVER GOES BLANK, AND WHEN IT STOPS IT STARTS AGAIN BY ITSELF

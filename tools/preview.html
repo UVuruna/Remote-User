@@ -123,7 +123,16 @@ function svg(name) {
 function ctl(icon, label, cls) {
   const el = document.createElement("button");
   el.className = "ctl" + (cls ? " " + cls : "");
-  el.innerHTML = svg(icon) + '<span class="lbl">' + label + "</span>";
+  el.innerHTML = svg(icon);
+  const lbl = document.createElement("span");
+  lbl.className = "lbl";
+  // The same break the product puts in — client/controls.js -> `chordFace`.
+  // The page cannot import controls.js (it opens on the live DOM the moment
+  // it loads), so this one line is mirrored rather than shared, and
+  // tests/test_chord_face.py measures BOTH renderings so the mirror can
+  // never quietly go out of true.
+  lbl.textContent = String(label).replace(/\+/g, "+\n").replace(/\n$/, "");
+  el.appendChild(lbl);
   return el;
 }
 
