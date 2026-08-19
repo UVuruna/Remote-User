@@ -201,7 +201,11 @@ def create_app(stream, hub: FrameHub | None, injector: InputInjector, token: str
     # One device at a time (owner 2026-08-02 — tablet and phone must never
     # drive the PC together): the newest authenticated socket wins, the
     # previous one is closed with 4409 and its client stops auto-reconnecting.
+    # Published on `app.state` for the same reason `layouts` is, two lines up
+    # — so anything that only holds the app (not this closure) can still
+    # reach the one live slot (`tests/conftest.py`'s `_reset_gate_harness`).
     active_client: dict = {"ws": None}
+    app.state.active_client = active_client
     # "The PC calls you" (ROADMAP Phase H, owner 2026-08-05): anything on this
     # machine that finishes a job POSTs /notify, and the phone raises a real
     # notification naming the AGENT. It rides the same one-device slot above,

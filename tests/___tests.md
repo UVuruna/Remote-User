@@ -1809,6 +1809,16 @@ four installed 2026-08-01 alongside the MD-First 2.0 docs migration, the fifth
   arithmetic and miss the law. Skipped, not failed, when node is absent.
   Self-tested by re-enabling `Cursor` in the shipped file — "the shipped
   actions.json ticks 9 sets by default".
+- `test_gates_are_collectable.py` — the regression fence for the class of bug
+  that hid THIRTY script-style gates from pytest entirely (2026-08-19, commit
+  560379d then its follow-up): a `tests/test_x.py` with a `main()`/`check_*()`
+  body and an `if __name__ == "__main__":` entry but no `def test_*` is
+  imported by pytest, yields nothing, and every "N/N green" count silently
+  excludes it — which is exactly how a refactor broke three of them unnoticed.
+  Runs pytest's own `--collect-only` as a real subprocess (never re-imports
+  this project's own gate modules into the guard's process — a collected item
+  can have import-time side effects) and fails if any `tests/test_*.py` on
+  disk contributes zero collected items. Full-run only.
 - `run_guards.py` — runs all guards plus the focus gate (or, with `--fast`,
   structure + config-sections + the static layout law — a grep costs nothing, so it
   belongs in the PostToolUse hook's budget; the Qt audit is full-run only,
@@ -1847,6 +1857,25 @@ four installed 2026-08-01 alongside the MD-First 2.0 docs migration, the fifth
   ENVIRONMENT whole, and restores the globals of every already-imported module
   under `server/`. Result: **45 failures -> 3**, and the three left are named
   in the report rather than papered over.
+
+  **A fourth leak, the inverse of the third, found 2026-08-19 making
+  `test_notify.py` pytest-collectable (task F5-VC).** `notice_channel._page`
+  and `notify_layout._layouts` are not always per-test fakes — `notify.
+  register()` sets both to the REAL `active_client`/`layouts` of the ONE
+  shared server every browser gate reuses, built once by whichever gate
+  reaches the port first. That registration happens to run inside the FIRST
+  gate's own test, so the blind restore above reverted it to `None` the
+  instant that gate's test ended — a later gate's `_carry()` then read a
+  `_page["ws"]` that could never be anything but `None`, silently fell
+  through to the "held" queue, and `test_notify.py`'s own browser page never
+  heard a thing. `_resync_shared_gate_state()` runs LAST, after the blind
+  restore: `test_input_pipeline.app` (published only once that module
+  actually builds a server) carries `app.state.active_client` and
+  `app.state.layouts`, and this step re-points `_page`/`_layouts` at them
+  every time — so a gate that deliberately builds its OWN throwaway app
+  (`test_link_recovery.py`, testing `presence.watchdog` in isolation) still
+  gets cleaned up by the blind restore first, and the shared server's real
+  state is never left overwritten by it either way.
 - `clone_ratchet.json` — the clone groups this project is allowed to keep.
   Written on 2026-08-18 with `clone_guard.py --write-ratchet` and it came out
   **empty**: this project has no un-ratcheted duplicate. It may only stay empty

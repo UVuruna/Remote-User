@@ -37,6 +37,7 @@ import test_config_sections as config_sections  # noqa: E402
 import test_docs_coverage as docs_coverage  # noqa: E402
 import test_doc_links as doc_links  # noqa: E402
 import test_layout_law as layout_law  # noqa: E402
+import test_gates_are_collectable as gates_collectable  # noqa: E402
 
 FAST_CHECKS = [
     ("structure law", structure_law.test_no_file_exceeds_structure_law_threshold),
@@ -272,6 +273,8 @@ FULL_ONLY_CHECKS = [
     ("clones (one kind, one class)", _clone_guard),
     ("structure ratchet (over-wall files only shrink)", _structure_ratchet),
     ("rules size (CLAUDE.md under its limit)", _rules_size),
+    ("gates are collectable (no test_*.py collects zero pytest items)",
+     gates_collectable.check_no_test_file_collects_zero_items),
 ]
 
 

@@ -118,6 +118,13 @@ CHECKS = [
 ]
 
 
+def test_gate():
+    assert run_checks(
+        "DEAD MEMBER FENCE GATE", CHECKS,
+        "a member destroyed outside every removal path never leaves the "
+        "keyboard fenced to a window that no longer exists") == 0
+
+
 if __name__ == "__main__":
     sys.exit(run_checks(
         "DEAD MEMBER FENCE GATE", CHECKS,

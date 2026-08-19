@@ -122,6 +122,13 @@ CHECKS = [
 ]
 
 
+def test_gate():
+    assert run_checks(
+        "KEY SPECIAL LOSS GATE", CHECKS,
+        "a Backspace/arrow/Tab/Esc that lands nowhere is now TOLD to the "
+        "phone, on the same toast machinery key_text and paste_text use") == 0
+
+
 if __name__ == "__main__":
     sys.exit(run_checks(
         "KEY SPECIAL LOSS GATE", CHECKS,

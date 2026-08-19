@@ -137,6 +137,11 @@ CHECKS = [
 ]
 
 
+def test_gate():
+    assert run_checks("SESSION RESIDUE", CHECKS,
+                       "what our leave sequence leaves behind") == 0
+
+
 if __name__ == "__main__":
     raise SystemExit(run_checks("SESSION RESIDUE", CHECKS,
                                 "what our leave sequence leaves behind"))

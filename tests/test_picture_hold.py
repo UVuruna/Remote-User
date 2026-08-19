@@ -296,5 +296,9 @@ def main():
     print("OK - all picture hold checks passed")
 
 
+def test_gate():
+    main()
+
+
 if __name__ == "__main__":
     sys.exit(main())

@@ -214,6 +214,13 @@ CHECKS = [
 ]
 
 
+def test_gate():
+    assert run_checks(
+        "LAYOUT ADOPTION LIFECYCLE", CHECKS,
+        "an adopted window across a layout switch, Desktop, and the chip "
+        "that creates the adoption") == 0
+
+
 if __name__ == "__main__":
     raise SystemExit(run_checks(
         "LAYOUT ADOPTION LIFECYCLE", CHECKS,

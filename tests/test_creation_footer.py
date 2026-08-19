@@ -129,5 +129,9 @@ def run() -> int:
     return 0
 
 
+def test_gate():
+    assert run() == 0
+
+
 if __name__ == "__main__":
     sys.exit(run())

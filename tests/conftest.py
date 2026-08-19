@@ -93,6 +93,7 @@ def restore_process_wide_fakes():
     _reset_gate_harness()
     _restore_environ()
     _restore_server_modules(snapshot)
+    _resync_shared_gate_state()
 
 
 def _reset_gate_harness() -> None:
@@ -165,12 +166,11 @@ def _restore_server_modules(snapshot: dict) -> None:
 
     The gates fake the DESK by assignment, straight onto the product's module
     globals — `window_manager.user32`, `window_manager.list_windows`,
-    `desk_facts.top_level_hwnds`, `lost_windows.sweep`,
-    `notice_channel._page`, `layout_popup._DESK` — and none of them ever put
-    the real one back. Each is correct on its own (a gate must never touch the
-    owner's real desktop); together, in one process, they are a desk assembled
-    out of six different tests' fakes, and the gate that runs into it fails
-    describing a defect that is not there.
+    `desk_facts.top_level_hwnds`, `lost_windows.sweep`, `layout_popup._DESK`
+    — and none of them ever put the real one back. Each is correct on its own
+    (a gate must never touch the owner's real desktop); together, in one
+    process, they are a desk assembled out of six different tests' fakes, and
+    the gate that runs into it fails describing a defect that is not there.
 
     So: what a test changed in one of OUR modules is changed back, and what it
     added is removed. Whole-module and not a named list, for the same reason
@@ -188,6 +188,62 @@ def _restore_server_modules(snapshot: dict) -> None:
         for key, value in before.items():
             if current.get(key, _MISSING) is not value:
                 current[key] = value
+
+
+def _resync_shared_gate_state() -> None:
+    """THE FOURTH LEAK OF THE SAME SHAPE, and the inverse of the first three
+    (2026-08-19, found making test_notify.py pytest-collectable — task F5-VC).
+
+    `notice_channel._page` and `notify_layout._layouts` are not always
+    per-test fakes — `notify.register()` sets both to the REAL `active_client`
+    / `layouts` of the ONE shared server every browser gate reuses (see
+    `test_input_pipeline.already_serving`, task VC-T): built once, by
+    whichever gate reaches the port first, and reused by every gate after it
+    for the rest of the session. That registration is real product wiring
+    that happens to run inside the FIRST gate's own test — so the blind
+    restore above, right after that first gate's own test ends, reverts both
+    back to their pre-registration defaults (`None`), and nothing ever sets
+    them again: the shared server keeps running, real, but every later gate
+    reads a `_page`/`_layouts` that can only ever be empty. `test_notify.py`
+    got nothing: `_carry()` read a `_page["ws"]` that could never be anything
+    but `None`, silently fell through to the "held" queue, and the phone in
+    the test never heard a thing.
+
+    It runs the OTHER way too: `tests/test_link_recovery.py` builds its OWN
+    throwaway app (its own `notify.register()` call, its own `active_client`)
+    to test `presence.watchdog` in isolation — a deliberate, correct fake, and
+    the blind restore above already puts it back afterward. But while that
+    gate's OWN test is running, its throwaway registration OVERWRITES the
+    SAME process-wide `_page`/`_layouts` the shared server's registration set
+    — and a naive "only ever restore, never resync" fix (tried first; see
+    git history) would leave the shared server's real state permanently
+    replaced by whatever the last such throwaway gate installed, the exact
+    inverse failure.
+
+    So: after the blind per-test restore above has already undone anything a
+    test faked directly, this step authoritatively RESYNCS both to the one
+    real shared server — `test_input_pipeline.app`, published once that
+    module actually builds a server (`app.state.active_client` /
+    `app.state.layouts`, next to `app` itself). A gate that never touches the
+    shared server leaves `app` `None` and this is a no-op. Proven by planting:
+    skipping this call reproduces the exact failure (`tests/test_layout_
+    rename_live.py` + `tests/test_link_recovery.py` + `tests/test_notify.py`,
+    in that order, one process — `Page.wait_for_function` on
+    `window.__calls.length >= 3` never resolves)."""
+    gate = sys.modules.get("test_input_pipeline")
+    app = getattr(gate, "app", None) if gate is not None else None
+    if app is None:
+        return
+    notice_channel = sys.modules.get("notice_channel")
+    if notice_channel is not None:
+        live = getattr(app.state, "active_client", None)
+        if live is not None and notice_channel._page is not live:
+            notice_channel._page = live
+    notify_layout = sys.modules.get("notify_layout")
+    if notify_layout is not None:
+        live_layouts = getattr(app.state, "layouts", None)
+        if live_layouts is not None and notify_layout._layouts is not live_layouts:
+            notify_layout._layouts = live_layouts
 
 
 _MISSING = object()

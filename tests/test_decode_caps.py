@@ -182,5 +182,9 @@ def main():
     print("OK - all decode caps checks passed")
 
 
+def test_gate():
+    main()
+
+
 if __name__ == "__main__":
     sys.exit(main())

@@ -233,7 +233,7 @@ CHECKS = [
 ]
 
 
-if __name__ == "__main__":
+def main() -> int:
     print("=== REDRAW RATE GATE ===")
     failed = 0
     for name, fn in CHECKS:
@@ -246,6 +246,15 @@ if __name__ == "__main__":
         failed += 0 if ok else 1
     if failed:
         print(f"\nREDRAW RATE GATE FAILED — {failed} check(s).")
-        sys.exit(1)
+        return 1
     print("\nREDRAW RATE GATE PASSED — the phone draws when there is a new "
           "picture, not when the panel blinks.")
+    return 0
+
+
+def test_gate():
+    assert main() == 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

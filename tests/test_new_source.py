@@ -667,5 +667,9 @@ def main() -> int:
                       "what is open, what an app can do, and whose window it is")
 
 
+def test_gate():
+    assert main() == 0
+
+
 if __name__ == "__main__":
     raise SystemExit(main())

@@ -188,5 +188,9 @@ def main():
     print("OK - all region stream checks passed")
 
 
+def test_gate():
+    main()
+
+
 if __name__ == "__main__":
     sys.exit(main())

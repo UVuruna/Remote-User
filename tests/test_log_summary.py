@@ -359,6 +359,10 @@ def run_all() -> bool:
     return not FAILURES
 
 
+def test_gate():
+    assert run_all()
+
+
 if __name__ == "__main__":
     ok = run_all()
     print()

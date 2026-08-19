@@ -179,6 +179,12 @@ class FakeStream:
 
 server_ready = threading.Event()
 server_error = []
+# The built FastAPI app, once `run_server()` has actually built one — None on
+# a gate that only ever found the port already serving. `app.state.layouts`
+# and `app.state.active_client` are how `tests/conftest.py`'s
+# `_reset_gate_harness` reaches the ONE real server's own state without a
+# closure of its own (task F5-VC, 2026-08-19 — see that function's docstring).
+app = None
 
 
 def isolate_desktop() -> None:
@@ -265,9 +271,11 @@ def run_server():
 
         loop.set_exception_handler(quiet_reset)
         hub = web.FrameHub(loop)
-        app = web.create_app(FakeStream(), hub, FakeInjector(), TOKEN)
+        built_app = web.create_app(FakeStream(), hub, FakeInjector(), TOKEN)
+        global app
+        app = built_app
         server = uvicorn.Server(uvicorn.Config(
-            app, host="127.0.0.1", port=PORT,
+            built_app, host="127.0.0.1", port=PORT,
             log_level="warning", log_config=None, lifespan="off",
         ))
         server_ready.set()
@@ -979,6 +987,10 @@ def main():
         print("\nGATE FAILED — the input pipeline is broken; do not ship.")
         sys.exit(1)
     print("\nGATE PASSED — touch -> protocol -> injection verified end-to-end.")
+
+
+def test_gate():
+    main()
 
 
 if __name__ == "__main__":
