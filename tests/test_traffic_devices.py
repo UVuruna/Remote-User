@@ -617,7 +617,19 @@ def _staged_chart_widget():
     for i in range(SPAN_S):
         t = now - SPAN_S + i + 1
         on_tablet = (i // seg_len) % 2 == 1
-        key = "2560x1600" if on_tablet else "1080x2400"
+        # THE KEY THE PRODUCT REALLY WRITES, taken from the registry itself
+        # and never spelled out here. `traffic.METER.note_device` arms every
+        # sample with `entry["key"]`, and that key is ORIENTATION-INVARIANT
+        # (traffic_devices.device_key, 2026-08-13) — the two dimensions
+        # sorted. This fixture used to stage the literal "2560x1600", which
+        # is a LANDSCAPE tablet's raw resolution and a string the product
+        # cannot emit: it normalises to "1600x2560". So the paint check below
+        # looked its colour up, got -1, and drew the unknown-device grey —
+        # the gate was staging a picture the app never paints, and only the
+        # tablet showed it because a portrait phone's key normalises to
+        # itself. Read from the entry and the question cannot be asked
+        # wrongly again.
+        key = tablet["key"] if on_tablet else phone["key"]
         out_b, in_b = (42_000, 3_000) if on_tablet else (6_000, 900)
         traffic.METER.samples.append(traffic.Sample(t, out_b, in_b, 1, key))
         total_out += out_b
@@ -649,33 +661,48 @@ def test_chart_line_is_actually_coloured_per_device() -> bool:
         try:
             chart = window.chart
             plot = chart._plot
-            idx_a = td.REGISTRY.index_for("1080x2400")
-            idx_b = td.REGISTRY.index_for("2560x1600")
+            idx_a = td.REGISTRY.index_for(td.device_key(1080, 2400))
+            idx_b = td.REGISTRY.index_for(td.device_key(2560, 1600))
+            assert idx_a >= 0 and idx_b >= 0, (
+                "a staged device holds no colour slot — the fixture and the "
+                "registry disagree about what this device is CALLED, and a "
+                "readback against the unknown-device grey proves nothing")
             color_a, color_b = device_color(idx_a), device_color(idx_b)
             pixmap = chart.grab()
             image = pixmap.toImage()
 
-            def line_color_at(frac: float):
-                from PySide6.QtGui import QColor
-                x = int(plot.left() + plot.width() * frac)
-                best, best_d = None, 1e9
+            # THE WHOLE PLOT IS SWEPT, never two magic fractions. The old
+            # shape of this check read one pixel column at 0.12 and another
+            # at 0.37 "well inside each segment" — but WHERE a segment lands
+            # depends on how much of the visible window the staged span fills
+            # and on the second of wall-clock the fixture started in, and
+            # both of those sampled columns had drifted into the SAME
+            # device's stretch. A check that has to be told where to look is
+            # a check that goes quietly blind when the picture shifts; the
+            # claim it is making — "the line is coloured PER DEVICE" — is
+            # about the whole line, so the whole line is what is read.
+            from PySide6.QtGui import QColor
+            want = {"A": QColor(color_a), "B": QColor(color_b)}
+            columns = {"A": [], "B": []}
+            for x in range(plot.left(), plot.right()):
                 for y in range(plot.top(), plot.bottom()):
                     c = image.pixelColor(x, y)
-                    for cand in (color_a, color_b):
-                        tc = QColor(cand)
-                        d = ((c.red() - tc.red()) ** 2 + (c.green() - tc.green()) ** 2
+                    for name, tc in want.items():
+                        d = ((c.red() - tc.red()) ** 2
+                             + (c.green() - tc.green()) ** 2
                              + (c.blue() - tc.blue()) ** 2)
-                        if d < best_d:
-                            best_d, best = d, cand
-                return best if best_d < 900 else None
+                        if d < 900:
+                            columns[name].append(x)
+                            break
 
-            # Segment 1 (device A) is the first quarter, segment 2 (device B)
-            # the second quarter of the visible span — sampled well inside
-            # each, away from the transition.
-            seen_a = line_color_at(0.12)
-            seen_b = line_color_at(0.37)
-            return (seen_a is not None and seen_b is not None
-                    and seen_a != seen_b)
+            # Both devices must own a real stretch of the line — a stray
+            # antialiased pixel or a legend swatch is not a coloured segment
+            # — and the two stretches must be somewhere DIFFERENT, or one
+            # colour has simply been painted over everything.
+            a, b = sorted(set(columns["A"])), sorted(set(columns["B"]))
+            if len(a) < 10 or len(b) < 10:
+                return False
+            return not (set(a) & set(b))
         finally:
             window.close()
 
@@ -793,7 +820,7 @@ def _staged_single_device_span_widget():
         # them fully opaque, exactly like every other staged fixture here.
         out_b, in_b = 6_000 + (i % 7) * 40, 900 + (i % 5) * 10
         traffic.METER.samples.append(
-            traffic.Sample(t, out_b, in_b, 1, "1080x2400"))  # phone ONLY
+            traffic.Sample(t, out_b, in_b, 1, phone["key"]))  # phone ONLY
         total_out += out_b
         total_in += in_b
     traffic.METER.total_out = total_out
@@ -825,7 +852,8 @@ def test_ever_seen_device_colours_a_single_device_span() -> bool:
         try:
             chart = window.chart
             plot = chart._plot
-            idx_phone = td.REGISTRY.index_for("1080x2400")
+            idx_phone = td.REGISTRY.index_for(td.device_key(1080, 2400))
+            assert idx_phone >= 0, "the staged phone holds no colour slot"
             phone_color = device_color(idx_phone)
             out_blue = tw.out_color()
             pixmap = chart.grab()
