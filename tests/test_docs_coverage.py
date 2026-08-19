@@ -51,6 +51,19 @@ STANDARD = {
     "tools/design_lab.css",
     "tools/preview.html",
     "tools/design_tokens.py",
+    # Round 2 (2026-08-19). The catalogue split away from the engine at the
+    # structure wall: `design_tokens.py` says where a value lives and how it is
+    # written, `design_groups.py` says which knobs exist, in which group, what
+    # each one is FOR and which specimen it points at. Two questions, two docs.
+    "tools/design_groups.py",
+    # The mini diagrams — one picture per KIND of number (a radius, a gap, a
+    # halo). Its own doc rather than a paragraph inside design_lab.md, because
+    # what a reader wants from it is the VOCABULARY: which ids exist and what
+    # each one is supposed to be saying.
+    "tools/design_pics.js",
+    # Developer tools (owner 2026-08-19): the five taps on the title, and the
+    # rule about what may and may not sit behind them.
+    "server/gui/developer_mode.py",
     # New 2026-08-16 (the owner's blue-screen report): a bounded three-rung
     # ladder (abandon -> reopen -> re-enumerate) plus one guard thread that
     # judges a single fact (did a frame arrive). No branching state machine

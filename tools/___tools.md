@@ -20,13 +20,23 @@ into the file it came from** — `client/theme.css`, `client/style.css`,
 `client/theme.js` or `server/config.py` — as a value, in place, with every
 comment around it untouched.
 
+Every knob carries a **sentence**, a **little diagram**, and a way for the page
+to **point at what it touches**: hover a row and every element that value
+reaches is outlined in all eight frames at once. There is a search box, because
+a list of eleven groups is a list you scroll past — that was the round-2 lesson
+(owner, 2026-08-19), along with the three the layout learned: the sidebar is
+draggable and clips nothing, the eight cards fill the screen without any of them
+scrolling, and no cell is left empty.
+
 | File | Role | Doc |
 |------|------|-----|
-| [design_tokens.py](design_tokens.py) | the registry: which value is tunable, which group, which file — and the reader/writer | [__about/design_tokens.md](__about/design_tokens.md) |
+| [design_groups.py](design_groups.py) | the catalogue: which knobs exist, in which group, what each is for, which specimen it points at | [__about/design_groups.md](__about/design_groups.md) |
+| [design_tokens.py](design_tokens.py) | the engine: where each value lives on disk, and how it is read and written back | [__about/design_tokens.md](__about/design_tokens.md) |
 | [design_lab.py](design_lab.py) | the local server: `/tokens`, `/save`, the two folders it will serve | [__about/design_lab.md](__about/design_lab.md) |
 | [design_lab.js](design_lab.js) | the page: builds the knobs, pushes every turn into the frames, posts the save | [__about/design_lab.md](__about/design_lab.md) |
 | [design_lab.html](design_lab.html) | the scaffold the script fills | — |
 | [design_lab.css](design_lab.css) | the workshop's own chrome — never a specimen's | — |
+| [design_pics.js](design_pics.js) | the mini diagrams — one picture per KIND of number | [__about/design_pics.md](__about/design_pics.md) |
 | [preview.html](preview.html) | the specimen board, drawn with the product's own files | [__about/preview.md](__about/preview.md) |
 
 Back to [the project README](../README.md) · the colours it tunes:

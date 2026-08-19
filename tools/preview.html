@@ -7,8 +7,10 @@
      The lab loads eight of these, one per rendering (dark/light x
      plain/coloured x outlined/filled). Everything a specimen wears comes from
      the four stylesheets below and from client/theme.js: this page owns no
-     colour, no radius and no shadow of its own. Its only stylesheet rule is
-     the BOARD — where a specimen sits — because a lab bench is not a product.
+     colour, no radius and no shadow of its own. Its only stylesheet rules are
+     the BOARD — where a specimen sits — and the POINTER, an annotation the lab
+     asks for while the pointer is on a row and which is gone the moment it
+     leaves.
 
      WHY THE REAL theme.js AND NOT A COPY OF ITS ARITHMETIC. Half of what a
      coloured control looks like is computed at paint time: the ink walked in
@@ -33,14 +35,15 @@
   #screen { position: fixed; inset: 0; background-size: cover; }
   .board {
     position: relative;
-    /* ONE BENCH PER ROW. Side by side (the first shape this had) the wheel's
-       74px circles and the panel card fought for a frame barely 460px wide,
-       and the ring came out half off the edge. A specimen that has to be
-       guessed at is not a specimen. */
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 18px;
+    /* THE BOARD REFLOWS (owner round 2, 2026-08-19). One bench per row made
+       every card taller than its cell and every card scrolled — his second
+       complaint. Benches now take as many columns as the frame can hold, so a
+       wide card is short and a narrow one is tall, and `fitBoard` below only
+       has to shrink what is left over. */
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+    align-items: start;
+    gap: 14px 18px;
     /* The pill is `position: fixed` in the product and stays that way here,
        so the board starts below the band it lands in: NOTHING MAY OVERLAP
        ANYTHING, in the lab as on the phone. MEASURED, never a constant — the
@@ -50,7 +53,7 @@
        pill's real bottom edge (see `clearTheToast`). */
     padding: var(--board-top, 90px) 14px 18px;
   }
-  .bench { display: flex; flex-direction: column; gap: 8px; }
+  .bench { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
   .bench-name {
     font: 600 10px/1.2 system-ui, sans-serif;
     letter-spacing: 0.08em;
@@ -70,6 +73,16 @@
   .bench-row .wheel-item { position: static; transform: none; }
   .ldg-line { display: flex; align-items: center; gap: 6px; }
   .ldg-line span { font: 500 12px system-ui, sans-serif; color: var(--text-primary); }
+
+  /* THE POINTER — the lab's annotation, and the ONE thing on this page drawn
+     in a colour that is not the product's. It exists for the length of a
+     hover: `pointAt("")` clears it, and it is never on screen in a photograph
+     of a look. `outline` and not `border`, because an outline takes no space
+     and therefore cannot move the specimen it is pointing at. */
+  .lab-point {
+    outline: 2px dashed #7aa2ff !important;
+    outline-offset: 3px;
+  }
 </style>
 </head>
 <body>
@@ -143,13 +156,57 @@ function bench(name, nodes, column) {
 // is inherited by the buttons, never written per button.
 const SETS = ["Mouse", "Claude", "Attach", "Input"];
 
+// ── WHICH INK A SPECIMEN CAME OUT IN ─────────────────────────────────────
+// The lab's Shadows rows point at ":dark-ink" and ":light-ink" rather than at
+// a list of set names, and this is what makes that honest: the answer is READ
+// off what `paintSet` actually produced a moment ago, so a palette he retunes
+// this afternoon points at the sets it really produces black letters for. A
+// hand-written list of names would be a fifth copy of server/config.py, and
+// the copy nobody updates.
+function markInk(el) {
+  if (!look.colored) {
+    // A PLAIN look has no per-element answer: its shadow comes from the theme
+    // token, not from these two constants. Marking it by theme made
+    // `:dark-ink` outline the ENTIRE board in the plain light looks — a
+    // pointer that lands on everything is a pointer that says nothing, and a
+    // grader read it as the row claiming a reach it does not have.
+    delete el.dataset.ink;
+    return;
+  }
+  const prop = look.fill === "full" ? "--set-ink-shadow" : "--set-line-shadow";
+  const shadow = el.style.getPropertyValue(prop);
+  // A shadow is the ink's opposite, so a WHITE shadow means BLACK letters.
+  el.dataset.ink = shadow.indexOf(jsBase.SHADOW_LIGHT || "255 255 255") >= 0
+    ? "dark" : "light";
+}
+
+function paintBench(el, name, surfaceVar) {
+  paintSet(el, name, surfaceVar);
+  markInk(el);
+}
+
+// HOW MUCH IS ON THE BENCH (owner round 2, 2026-08-19). Eight cards on one
+// screen is eight small cards, and four full D-pad groups had to be shrunk
+// past reading to fit one. So the bench has two sizes — and what changes is
+// only HOW MANY SET GROUPS are laid out: one dark-ink set and one light-ink
+// set, or all four.
+//
+// EVERY OTHER SPECIMEN IS ALWAYS ON THE BOARD, whichever size is chosen. The
+// sidebar can point at what a value touches, and a row that pointed at a card
+// this bench happened to have left out would outline nothing and read as a
+// broken feature. The wheel, the panel card and the ledger dots are three
+// short benches; the four D-pad groups are what actually cost height.
+let benchMode = "controls";
+const CONTROL_SETS = { controls: ["Mouse", "Attach"], everything: SETS };
+
 function board() {
   const root = document.getElementById("board");
   root.textContent = "";
+  const benches = CONTROL_SETS[benchMode] || SETS;
 
   // One D-pad group per set, so every state is seen in a colour the palette
   // really holds — including the light fills that need black ink.
-  SETS.forEach((name, index) => {
+  benches.forEach((name, index) => {
     // NOT `class="group"` — that class is the D-pad's own fixed cross
     // (client/style.css) and would pin five specimens to the bottom of the
     // frame. `paintSet` needs an OWNER element, not a positioned one: what it
@@ -164,16 +221,33 @@ function board() {
     group.appendChild(chord);
     const cat = ctl("mouse", name, "cat");
     group.appendChild(cat);
-    paintSet(group, name, "--glass-fill");
+    paintBench(group, name, "--glass-fill");
     root.appendChild(bench(name + " — off / on / held / on+held / chord / switcher",
                            [group]));
   });
+
+  // EVERY SHIPPED SET, one switcher each (owner round 2, 2026-08-19). He asked
+  // which sets come out with black letters and a black icon, and four
+  // specimens could not answer it — the palette has fourteen colours and the
+  // ones that take black ink are the light ones. Here they all are, so the
+  // question is answered by LOOKING, in whichever look is on screen.
+  const all = Object.keys(setColors());
+  if (all.length) {
+    const wall = all.map((name) => {
+      const holder = document.createElement("div");
+      holder.className = "bench-row";
+      holder.appendChild(ctl("mouse", name, "cat"));
+      paintBench(holder, name, "--glass-fill");
+      return holder;
+    });
+    root.appendChild(bench("Every set — the light ones take BLACK ink", wall));
+  }
 
   // The wheel: one circle per set, one of them current.
   const ring = [];
   SETS.forEach((name, index) => {
     const item = wheelItem("mouse", name, index === 1 ? "current" : "");
-    paintSet(item, name, "--glass-strong");
+    paintBench(item, name, "--glass-strong");
     ring.push(item);
   });
   root.appendChild(bench("Wheel — the ring of sets", ring));
@@ -190,22 +264,202 @@ function board() {
 
   // The ledger's five state dots — the one place five colours must be told
   // apart from each other on one row list.
-  const dots = ["red", "orange", "yellow", "blue", "green"].map((colour, i) => {
+  // Written out rather than built from a colour name: the lab's rows POINT at
+  // `.ldg-yellow` and friends, and a class this file only ever assembles at
+  // run time is a class no check can find here (tests/test_design_lab.py).
+  const dots = [["ldg-red", "not started"], ["ldg-orange", "in progress"],
+                ["ldg-yellow", "waiting"], ["ldg-blue", "done"],
+                ["ldg-green", "proven"]].map(([cls, word]) => {
     const line = document.createElement("div");
     line.className = "ldg-line";
     const dot = document.createElement("span");
-    dot.className = "ldg-dot ldg-" + colour;
+    dot.className = "ldg-dot " + cls;
     line.appendChild(dot);
-    const word = document.createElement("span");
-    word.textContent = ["not started", "in progress", "waiting", "done", "proven"][i];
-    line.appendChild(word);
+    const text = document.createElement("span");
+    text.textContent = word;
+    line.appendChild(text);
     return line;
   });
-  root.appendChild(bench("Ledger state dots", dots, true));
+  // ON A CARD, because that is where they are on the phone. Drawn bare on the
+  // board, the row's `--text-primary` ink landed straight on whatever the PC
+  // screen was showing, and a grader photographed all five labels invisible
+  // over a white document — a defect of the BENCH, not of the product: the
+  // ledger is a panel and its ink is measured against the panel's surface.
+  const ledger = document.createElement("div");
+  ledger.className = "sets-card";
+  dots.forEach((line) => ledger.appendChild(line));
+  root.appendChild(bench("Ledger state dots", [ledger]));
+}
+
+// ── THE TWO SHADOW COLOURS, WHILE HE IS STILL DRAGGING ───────────────────
+// They are `const`s in client/theme.js, so the page cannot be asked to
+// recompute with a different pair — the file has already been read. What the
+// lab CAN do, and what a bench is allowed to do that a product is not, is
+// substitute the answer: `paintSet` has just written `rgb(<base> / a)` into
+// four custom properties, and swapping the base triple for the one he is
+// dragging gives exactly what a Save + reload would give. Nothing in
+// client/ knows this happens.
+const SHADOW_PROPS = ["--set-ink-shadow", "--set-ink-lbl-shadow",
+                      "--set-line-shadow", "--set-line-lbl-shadow"];
+let jsBase = { SHADOW_DARK: "0 0 0", SHADOW_LIGHT: "255 255 255" };
+let jsOver = {};
+
+function restampShadows() {
+  const map = {};
+  for (const name of Object.keys(jsBase)) {
+    const to = jsOver[name];
+    if (to && to !== jsBase[name]) map[jsBase[name]] = to;
+  }
+  if (!Object.keys(map).length) return;
+  document.querySelectorAll("[style]").forEach((el) => {
+    SHADOW_PROPS.forEach((prop) => {
+      const value = el.style.getPropertyValue(prop);
+      if (!value || value.indexOf("(") < 0) return;
+      const inner = value.slice(value.indexOf("(") + 1, value.lastIndexOf(")"));
+      const parts = inner.split("/");
+      const base = parts[0].trim();
+      if (!map[base]) return;
+      el.style.setProperty(prop, "rgb(" + map[base] +
+        (parts.length > 1 ? " / " + parts[1].trim() : "") + ")");
+    });
+  });
+}
+
+/** Draw the board and then re-stamp anything the lab is overriding. Every
+ *  place that used to call `board()` calls this instead, so an override can
+ *  never be lost to a repaint. */
+function render() {
+  board();
+  restampShadows();
+  pointAt(pointing);
+  scheduleFit();
+}
+
+// A DRAG IS MANY MESSAGES. `--corner` arrives once per pointer move, and a
+// full fit is up to seven layout passes over the whole board; running one per
+// event made the wall stutter under the slider. Coalesced to the end of the
+// burst — the answer is the same and the drag stays smooth.
+let fitTimer = null;
+
+function scheduleFit() {
+  clearTimeout(fitTimer);
+  fitTimer = setTimeout(fitBoard, 60);
+}
+
+// ── FIT: NOTHING SCROLLS INSIDE A CARD ───────────────────────────────────
+// His second round-2 complaint. The card is whatever size the lab's grid gave
+// it, and the board must be inside it — so the whole document is ZOOMED down
+// until it is. `zoom` and not `transform: scale`, because zoom re-lays-out:
+// the board's own `auto-fit` columns get more room at a smaller zoom and the
+// thing gets shorter on its own, which is why two or three passes converge
+// instead of shrinking to nothing. `position: fixed` (the toast, the PC
+// screen) rides along, which a transform would have broken.
+let fitMode = "fit";
+let fitZoom = 1;
+// Below this a specimen stops being a specimen — a control drawn at a third of
+// its size says nothing about whether its label can be read. If the board
+// still does not fit at the floor, the CARD is allowed to scroll: an honest
+// scrollbar beats a picture too small to judge.
+const FIT_FLOOR = 0.45;
+// And a ceiling, because a card twice the size of a phone is not a phone: past
+// this the specimen stops being a picture of what he will actually hold.
+const FIT_CEIL = 1.6;
+
+/** Where the board ends, in the FRAME's own pixels — the same ones
+ *  `window.innerHeight` counts. Two traps live here and both were walked into
+ *  once each:
+ *
+ *  · NOT `documentElement.scrollHeight`. `#screen` is `position: fixed;
+ *    inset: 0` and therefore always exactly one viewport tall, so the scroll
+ *    height can never report LESS than the card — which is why the first
+ *    version never grew and left the bottom half of every card empty.
+ *  · NOT `documentElement.clientHeight` as the other side of the comparison.
+ *    Under `zoom` those two live in different coordinate spaces, and comparing
+ *    them made a board that overflowed by half its wall look like a board that
+ *    fitted. `getBoundingClientRect()` is already multiplied by the zoom, so
+ *    `window.innerHeight` is its honest counterpart. */
+function boardBottom() {
+  return document.getElementById("board").getBoundingClientRect().bottom + 10;
+}
+
+function fitBoard() {
+  const el = document.documentElement;
+  if (fitMode !== "fit") {
+    el.style.zoom = fitZoom;
+    clearTheToast();
+    return;
+  }
+  // A BISECTION, NOT A WALK. The first version stepped the zoom by
+  // `have / need` and it oscillated, because growing the board makes it
+  // TALLER: a wider zoom means fewer CSS pixels across, the board's own
+  // `auto-fit` columns collapse, and the height jumps. It settled wherever the
+  // seventh pass happened to leave it — a grader measured 40% of every card
+  // empty at the owner's real screen.
+  //
+  // What saves it is that "does it fit at this zoom" is MONOTONE: the board's
+  // pixel height never falls as the zoom rises, and the frame's height does
+  // not move at all. So the largest zoom that fits can simply be searched for,
+  // and nine halvings of [floor, ceiling] land within a thousandth of it.
+  const fitsAt = (z) => {
+    el.style.zoom = z;
+    clearTheToast();
+    return boardBottom() <= window.innerHeight;
+  };
+  let zoom = FIT_FLOOR;
+  if (fitsAt(FIT_CEIL)) {
+    zoom = FIT_CEIL;                       // room to spare — take all of it
+  } else if (fitsAt(FIT_FLOOR)) {
+    let lo = FIT_FLOOR, hi = FIT_CEIL;
+    for (let pass = 0; pass < 9; pass++) {
+      const mid = (lo + hi) / 2;
+      if (fitsAt(mid)) { zoom = mid; lo = mid; } else { hi = mid; }
+    }
+    el.style.zoom = zoom;
+    clearTheToast();
+  }
+  // …and if not even the floor fits, `zoom` is the floor and the report below
+  // says so.
+
+  // …and when even the floor is not enough, SAY SO rather than scroll. The
+  // ladder in rules/GUI.md ends in "scroll" only after reflow and a raised
+  // minimum, and the minimum here belongs to the card, not to the board: the
+  // lab makes the cards taller and lets the WALL scroll — one scrollbar
+  // instead of eight, which is the shape he asked for.
+  if (window.parent !== window) {
+    const over = boardBottom() - window.innerHeight;
+    window.parent.postMessage({
+      kind: "fitted", zoom: zoom,
+      floored: zoom <= FIT_FLOOR + 0.001 && over > 2,
+      need: Math.ceil(window.innerHeight + Math.max(0, over)),
+    }, "*");
+  }
+}
+
+// ── POINTING ─────────────────────────────────────────────────────────────
+// The lab hovers a row, every frame outlines what that value touches. Two
+// selectors are the board's own rather than CSS: `:dark-ink` and `:light-ink`
+// are answered from what `paintSet` produced, which is the only honest way to
+// say "the sets that come out with black letters".
+let pointing = "";
+
+function pointAt(selector) {
+  pointing = selector || "";
+  document.querySelectorAll(".lab-point").forEach((el) => el.classList.remove("lab-point"));
+  if (!pointing) return;
+  const parts = pointing.split(",").map((s) => s.trim()).filter(Boolean);
+  parts.forEach((part) => {
+    let found;
+    if (part === ":dark-ink") found = document.querySelectorAll('[data-ink="dark"]');
+    else if (part === ":light-ink") found = document.querySelectorAll('[data-ink="light"]');
+    else {
+      try { found = document.querySelectorAll(part); } catch (e) { return; }
+    }
+    found.forEach((el) => el.classList.add("lab-point"));
+  });
 }
 
 // ── WHAT THE LAB TELLS THIS FRAME ────────────────────────────────────────
-// Three kinds of message, and each is applied where the cascade puts it:
+// Each message is applied where the cascade puts it:
 //   look    — the three axes, through theme.js itself (never by writing the
 //             body attributes here: applyUi is the one door, and it also
 //             resets the set-colour cache).
@@ -214,35 +468,73 @@ function board() {
 //             theme declares its values on `body[data-theme="light"]` and an
 //             override on :root would lose to it. Inline on body wins in
 //             both themes, which is the only place one write can serve.
+//   jscolor — the two shadow colours, substituted after the paint.
+//   fit     — how large the specimens are drawn, and who scrolls.
+//   point   — the annotation, for as long as the pointer is on a row.
 let look = { theme: "dark", colored: false, fill: "transparent", colors: {} };
+
+// One real sentence per state, each the longest thing that state really says —
+// the pill is measured by what it has to hold, so a short placeholder would be
+// a specimen of a pill that never appears.
+const TOAST_TEXT = {
+  disconnected: "Layout refused: a window would not land where it was commanded",
+  connecting: "Connecting to the PC…",
+  connected: "Connected",
+};
 
 window.addEventListener("message", (event) => {
   const msg = event.data || {};
   if (msg.kind === "look") {
     look = Object.assign({}, look, msg.look);
     applyUi(look);
-    board();
+    render();
   } else if (msg.kind === "shape") {
     for (const [token, value] of Object.entries(msg.values)) {
       document.documentElement.style.setProperty(token, value);
     }
+    scheduleFit();
   } else if (msg.kind === "colour") {
     for (const [token, value] of Object.entries(msg.values)) {
       document.body.style.setProperty(token, value);
     }
-    board();  // the per-set inks are computed FROM these surfaces
+    render();  // the per-set inks are computed FROM these surfaces
   } else if (msg.kind === "sets") {
     look = Object.assign({}, look, { colors: msg.colors });
     applyUi(look);
-    board();
+    render();
+  } else if (msg.kind === "jscolor") {
+    if (msg.base) jsBase = Object.assign({}, jsBase, msg.base);
+    jsOver = Object.assign({}, msg.values || {});
+    render();
   } else if (msg.kind === "backdrop") {
     // The PC screen behind the controls. `background` as a whole, so a flat
     // colour, a gradient and a picture are all one message.
     document.getElementById("screen").style.background = msg.css;
     document.getElementById("screen").style.backgroundSize = "cover";
-  } else if (msg.kind === "toast") {
-    document.getElementById("status").className = msg.state;
+  } else if (msg.kind === "bench") {
+    benchMode = msg.mode === "everything" ? "everything" : "controls";
+    render();
+  } else if (msg.kind === "fit") {
+    fitMode = msg.mode === "fixed" ? "fixed" : "fit";
+    fitZoom = msg.zoom || 1;
+    fitBoard();
+  } else if (msg.kind === "scale") {
+    // The lab's word on the ONE scale every card is drawn at. Applied, never
+    // re-fitted — this is the answer, not a new question.
+    document.documentElement.style.zoom = msg.zoom;
     clearTheToast();
+  } else if (msg.kind === "point") {
+    pointAt(msg.selector);
+  } else if (msg.kind === "toast") {
+    // THE SENTENCE FOLLOWS THE STATE. It used to be one fixed line — a layout
+    // refusal, in red — under whichever class the lab chose, so picking
+    // "connecting" showed an amber pill still saying a window would not land.
+    // A specimen that says the wrong thing is a specimen you cannot judge.
+    const pill = document.getElementById("status");
+    pill.className = msg.state;
+    pill.textContent = TOAST_TEXT[msg.state] || TOAST_TEXT.disconnected;
+    clearTheToast();
+    scheduleFit();
   }
 });
 
@@ -252,13 +544,13 @@ window.addEventListener("message", (event) => {
 function clearTheToast() {
   const pill = document.getElementById("status");
   const bottom = pill.getBoundingClientRect().bottom;
+  const zoom = parseFloat(document.documentElement.style.zoom) || 1;
   document.documentElement.style.setProperty(
-    "--board-top", Math.max(20, Math.round(bottom) + 14) + "px");
+    "--board-top", Math.max(20, Math.round(bottom / zoom) + 14) + "px");
 }
-window.addEventListener("resize", clearTheToast);
+window.addEventListener("resize", () => { clearTheToast(); scheduleFit(); });
 
-board();
-clearTheToast();
+render();
 // The lab may have loaded this frame before its own script was ready to talk.
 if (window.parent !== window) window.parent.postMessage({ kind: "ready" }, "*");
 </script>

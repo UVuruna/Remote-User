@@ -16,8 +16,10 @@
   <header id="side-head">
     <h1>Design lab</h1>
     <p id="side-sub">Every value the controls are made of, grouped by the job it
-      does. Drag one and the frames follow; Save writes it back into the file
-      it came from.</p>
+      does. Hover a row and the frames outline what it touches; drag it and they
+      follow; Save writes it back into the file it came from.</p>
+    <input id="find" type="text" placeholder="find a setting — try: shadow, radius, label, glow">
+    <p id="find-note"></p>
   </header>
 
   <div id="groups"><p class="muted">reading the sources…</p></div>
@@ -31,6 +33,10 @@
     <div id="report"></div>
   </footer>
 </aside>
+
+<!-- Drag it. The law's ladder for a column that cannot hold its content ends
+     in giving it the room, and he is the one who knows how much. -->
+<div id="splitter" role="separator" aria-orientation="vertical" title="drag to widen the panel"></div>
 
 <main id="stage">
   <div id="look-bar">
@@ -49,6 +55,17 @@
     <label>Fill
       <select id="fill"><option value="transparent">outlined</option><option value="full">full</option></select>
     </label>
+    <!-- How many D-pad groups are laid out. Eight cards on one screen is
+         eight small cards, and four full groups is what makes a card too tall
+         to read. Everything else — the wall of every set colour, the wheel,
+         the panel card, the ledger dots — is on the board either way, so a
+         row that points at one of them always has something to outline. -->
+    <label>Sets on the bench
+      <select id="bench">
+        <option value="controls">two (one dark ink, one light)</option>
+        <option value="everything">all four</option>
+      </select>
+    </label>
     <label>PC screen behind
       <select id="backdrop">
         <option value="none">nothing (the page floor)</option>
@@ -65,10 +82,24 @@
         <option value="connected">connected (invisible by design)</option>
       </select>
     </label>
+    <!-- FIT is the default and the answer to "everything visible, nothing
+         scrolling": each card shrinks its own contents until the whole board
+         is inside it. The fixed sizes are for looking closely at one number,
+         and then the STAGE scrolls — one scrollbar, not eight. -->
+    <label>Size
+      <select id="zoom">
+        <option value="fit">fit — no card scrolls</option>
+        <option value="1">100% (phone pixels)</option>
+        <option value="1.25">125%</option>
+        <option value="1.5">150%</option>
+      </select>
+    </label>
   </div>
+  <p id="wall-note"></p>
   <div id="frames"></div>
 </main>
 
+<script src="/tools/design_pics.js"></script>
 <script src="/tools/design_lab.js"></script>
 </body>
 </html>

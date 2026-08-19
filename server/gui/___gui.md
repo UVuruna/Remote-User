@@ -12,6 +12,7 @@ client (see [Theme](__about/theme.md) for the verified overlap).
 | File | Tier | One line |
 |------|------|----------|
 | `main_window.py` | Algorithmic | window shell, tray, layout, wiring — [about](__about/main_window.md) · [flow](__flow/main_window.md) |
+| `developer_mode.py` | Standard | the doors that are not a new user's — Traffic is behind DEVELOPER TOOLS, opened by five clicks on the window's title; a class, not one button (owner 2026-08-19) — [about](__about/developer_mode.md) |
 | `theme.py` | Algorithmic | TWO palettes (dark + light), the QSS generated from the active one, effect helpers, and `apply_theme` — which styles the APPLICATION, so one call re-themes every window — [about](__about/theme.md) · [flow](__flow/theme.md) |
 | `switch.py` | Algorithmic | the sun/moon theme pill (smoothstep knob, ~600 ms) and the snapshot COVER the palette changes under, so the repaint cascade is never seen — [about](__about/switch.md) · [flow](__flow/switch.md) |
 | `offthread.py` | Standard | the window's blocking work, off the window's thread: one worker-thread helper, the pairing probe and the quit's shutdown — [about](__about/offthread.md) |

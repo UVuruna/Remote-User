@@ -1,14 +1,31 @@
 /* THE LAB'S OWN CHROME — and nothing else.
 
    Every colour in this file dresses the workshop: the sidebar, the sliders,
-   the frame captions. NOT ONE of them reaches a specimen. The specimens live
-   inside iframes (tools/preview.html) and wear client/theme.css, so there is
-   no cascade from here to there at all — which is the point: a bench that
-   tinted the thing on it would be lying about the thing on it.
+   the frame captions, the little diagrams. NOT ONE of them reaches a specimen.
+   The specimens live inside iframes (tools/preview.html) and wear
+   client/theme.css, so there is no cascade from here to there at all — which
+   is the point: a bench that tinted the thing on it would be lying about the
+   thing on it.
 
    Deliberately NEUTRAL, and deliberately unlike the product: a grey workshop
    around whatever is being looked at, so a colour on screen is never this
-   page's. */
+   page's.
+
+   ROUND 2 (owner, 2026-08-19) — three defects he photographed, and the rule
+   each one left behind:
+     · the sidebar cut its own text off. Nothing in here has a fixed width any
+       more except the controls that are genuinely fixed-size; every text box
+       that can grow sits on `min-width: 0` inside a flex parent, which is the
+       one thing that actually stops a flex child from refusing to shrink. The
+       column itself is now DRAGGABLE — the law's ladder (free space → reflow →
+       raised minimum) ends in "let him have the space", not in a number I
+       picked.
+     · the eight cards each scrolled, and the grid left two empty cells at the
+       bottom right. The grid is now sized from the COUNT (eight divides into
+       4x2 and 2x4, never 5+3) and each card fills its cell, with the specimen
+       board scaled to fit inside it (tools/preview.html).
+     · a knob with no sentence is a knob nobody turns. Every row is now a
+       picture, a title, a sentence and only then the control. */
 
 :root {
   --lab-bg: #14161c;
@@ -18,6 +35,10 @@
   --lab-dim: #99a0b0;
   --lab-hot: #7aa2ff;
   --lab-warn: #ffcf6b;
+  /* The sidebar's width, dragged by the splitter and remembered by the lab
+     for the next session (localStorage — the LAB's own preference, never a
+     product value: nothing in tools/ may write to what the phone reads). */
+  --side-w: 470px;
 }
 
 * { box-sizing: border-box; }
@@ -26,118 +47,197 @@ body {
   margin: 0;
   height: 100vh;
   display: grid;
-  grid-template-columns: 380px 1fr;
+  grid-template-columns: var(--side-w) 7px 1fr;
   background: var(--lab-bg);
   color: var(--lab-ink);
   font: 400 13px/1.45 system-ui, sans-serif;
 }
+body.dragging { cursor: col-resize; -webkit-user-select: none; user-select: none; }
+body.dragging iframe { pointer-events: none; }   /* the drag must not be eaten by a frame */
 
 /* ── the sidebar ─────────────────────────────────────────────────────── */
 #side {
   display: flex;
   flex-direction: column;
+  min-width: 0;
   min-height: 0;                 /* so the middle column may scroll */
   border-right: 1px solid var(--lab-line);
   background: var(--lab-panel);
 }
-#side-head { padding: 14px 16px 8px; border-bottom: 1px solid var(--lab-line); }
-#side-head h1 { margin: 0 0 4px; font-size: 16px; }
-#side-sub { margin: 0; color: var(--lab-dim); font-size: 12px; }
-#groups { flex: 1 1 auto; overflow-y: auto; padding: 8px 0 16px; }
+#side-head { padding: 12px 16px 10px; border-bottom: 1px solid var(--lab-line); }
+#side-head h1 { margin: 0 0 3px; font-size: 16px; }
+#side-sub { margin: 0 0 9px; color: var(--lab-dim); font-size: 11.5px; }
+#groups { flex: 1 1 auto; overflow-y: auto; overflow-x: hidden; padding: 4px 0 16px; }
+
+/* THE SPLITTER. The Space & Legibility law's ladder ends here: when a column
+   cannot hold what it must show, the last step is not a cleverer layout, it is
+   giving it the room — and the person who knows how much room is him. */
+#splitter {
+  cursor: col-resize;
+  background: var(--lab-line);
+  border: 0;
+  padding: 0;
+}
+#splitter:hover, body.dragging #splitter { background: var(--lab-hot); }
+
+/* The search box. He could not FIND the shadow colour; a list of eleven
+   groups is a list you scroll past. Typing "shadow" leaves only the rows that
+   say it, in their own groups, opened. */
+#find {
+  width: 100%;
+  min-height: 44px;
+  padding: 7px 10px;
+  border-radius: 7px;
+}
+#find-note { margin: 6px 0 0; font-size: 11px; color: var(--lab-dim); }
 
 .muted { color: var(--lab-dim); }
 
 .group { border-bottom: 1px solid var(--lab-line); }
 .group > summary {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
   cursor: pointer;
   padding: 10px 16px;
   font-weight: 600;
   list-style: none;
+  overflow-wrap: anywhere;      /* a long group title wraps, never clips */
 }
 .group > summary::-webkit-details-marker { display: none; }
 .group > summary::before { content: "▸ "; color: var(--lab-dim); }
 .group[open] > summary::before { content: "▾ "; }
+.group.hidden { display: none; }
 .group-note {
   margin: 0 16px 10px;
   color: var(--lab-dim);
   font-size: 11.5px;
-}
-
-.row {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 4px 10px;
-  align-items: center;
-  padding: 6px 16px 8px;
-}
-.row + .row { border-top: 1px dashed var(--lab-line); }
-.row-label { font-size: 12.5px; }
-/* The token's own name, always shown: a value he tunes here is a value he can
-   find in the file afterwards, and the name is how. */
-.row-token {
-  grid-column: 1 / -1;
-  font: 400 11px ui-monospace, monospace;
-  color: var(--lab-dim);
-  /* Never cut off — the whole point of the name is that it can be read and
-     searched for (rules/GUI.md, the Space & Legibility law). */
   overflow-wrap: anywhere;
 }
-.row-pin {
-  grid-column: 1 / -1;
+
+/* ── one row: a picture, a title, a sentence, then the control ────────── */
+.row { padding: 9px 16px 11px; }
+.row + .row { border-top: 1px dashed var(--lab-line); }
+.row.hidden { display: none; }
+.row.changed { background: rgb(122 162 255 / 0.10); }
+/* While the pointer is on a row, every element it reaches is outlined in all
+   eight frames at once (tools/preview.html — the `point` message). */
+.row:hover { background: rgb(122 162 255 / 0.06); }
+
+.row-top { display: flex; align-items: flex-start; gap: 10px; }
+.row-words { min-width: 0; flex: 1 1 auto; }   /* min-width:0 = the anti-clip */
+.row-label { font-size: 12.5px; font-weight: 600; overflow-wrap: anywhere; }
+.row-help {
+  margin-top: 2px;
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: var(--lab-dim);
+  overflow-wrap: anywhere;
+}
+.row-ctrl { display: flex; align-items: center; gap: 8px; margin-top: 7px; }
+.row-ctrl.stack { flex-direction: column; align-items: stretch; gap: 6px; }
+.row-ctrl .line { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.row-ctrl .line > input[type="text"] { flex: 1 1 auto; min-width: 0; }
+.row-ctrl input[type="range"] { flex: 1 1 auto; min-width: 0; }
+.row-note {
+  margin-top: 6px;
   font-size: 11px;
   color: var(--lab-warn);
   overflow-wrap: anywhere;
 }
-.row-why {
-  grid-column: 1 / -1;
-  font-size: 11px;
+/* The token's own name, always shown: a value he tunes here is a value he can
+   find in the file afterwards, and the name is how. */
+.row-meta { margin-top: 6px; }
+.row-token {
+  font: 400 10.5px/1.4 ui-monospace, monospace;
   color: var(--lab-dim);
+  overflow-wrap: anywhere;       /* never cut off — the name is what you search for */
+}
+.row-file { color: var(--lab-dim); opacity: 0.75; }
+.row-pin {
+  margin-top: 3px;
+  font-size: 10.5px;
+  line-height: 1.4;
+  color: var(--lab-warn);
   overflow-wrap: anywhere;
 }
-.row.changed { background: rgb(122 162 255 / 0.10); }
 
-/* THE TWO THEMES STACK, THEY DO NOT SHARE A LINE (found by looking at the
-   lab's own first photograph): side by side, each colour's text field was
-   clipped at the sidebar's edge and `rgb(30 41 59 / 0.20)` read as
-   `rgb(30 41 59 / 0.2`. A value you cannot read is a value you cannot tune. */
-.pair { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-.pair.stack { flex-direction: column; align-items: stretch; grid-column: 1 / -1; }
-.pair.stack > .pair { flex-wrap: nowrap; }
-.pair.stack > .pair input[type="text"] { flex: 1 1 auto; min-width: 0; }
-.pair span { font-size: 11px; color: var(--lab-dim); }
+/* ── the mini diagrams (tools/design_pics.js) ─────────────────────────── */
+.pic {
+  flex: 0 0 auto;
+  width: 46px;
+  height: 31px;
+  margin-top: 1px;
+  border-radius: 5px;
+  background: rgb(255 255 255 / 0.04);
+}
+.pic .base { fill: none; stroke: var(--lab-dim); stroke-width: 1.6; }
+.pic .hot { fill: none; stroke: var(--lab-hot); stroke-width: 1.8;
+            stroke-linecap: round; stroke-linejoin: round; }
+.pic .fill { fill: var(--lab-dim); stroke: none; }
+.pic .hotfill { fill: var(--lab-hot); stroke: none; }
+
+/* ── inputs ──────────────────────────────────────────────────────────── */
+/* EVERY HANDLE IS AT LEAST 44 px (rules/DESIGN.md, and the `web-desktop`
+   profile measures it). This is a mouse tool, so the rule could be argued
+   away — but it was measured and it was failing, and on the 4K screen this is
+   really operated at, a 24 px slider is a small target for a mouse too. The
+   rows got taller and the search box is what makes that cost nothing. */
 input[type="color"] {
-  width: 34px;
-  height: 26px;
+  flex: 0 0 auto;
+  width: 46px;
+  height: 44px;
   padding: 0;
   border: 1px solid var(--lab-line);
+  border-radius: 6px;
   background: none;
 }
 input[type="text"], input[type="number"], select {
+  min-height: 44px;
   background: var(--lab-bg);
   color: var(--lab-ink);
   border: 1px solid var(--lab-line);
   border-radius: 6px;
-  padding: 4px 6px;
-  font: 400 12px ui-monospace, monospace;
+  padding: 5px 8px;
+  font: 400 12.5px ui-monospace, monospace;
 }
-.row input[type="text"] { width: 100%; }
-input[type="range"] { width: 100%; grid-column: 1 / -1; }
-.num { width: 74px; text-align: right; }
+input[type="range"] { width: 100%; min-height: 44px; }
+.num { flex: 0 0 86px; width: 86px; text-align: right; }
+.tag { flex: 0 0 auto; font-size: 11px; color: var(--lab-dim); }
 
+/* ── the set palette ─────────────────────────────────────────────────── */
+/* One cell per set, and the NAME gets its own line. Two columns of
+   [swatch][name][hex] inside a 380px column was what turned "Claude Tools"
+   into "Clau / de" and "Navigate" into "Navig / ate" on his screenshot. */
 .sets-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 8px;
-  padding: 4px 16px 12px;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 10px;
+  padding: 4px 16px 14px;
 }
-.set-cell { display: flex; align-items: center; gap: 6px; }
-.set-cell label { font-size: 12px; flex: 1 1 auto; overflow-wrap: anywhere; }
+.set-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+  padding: 7px 8px;
+  border: 1px solid var(--lab-line);
+  border-radius: 8px;
+}
+.set-cell .set-name {
+  font-size: 12px;
+  font-weight: 600;
+  overflow-wrap: anywhere;       /* a long set name wraps inside its own cell */
+}
+.set-cell .line { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.set-cell input[type="text"] { flex: 1 1 auto; min-width: 0; }
 
 /* ── save ────────────────────────────────────────────────────────────── */
 #side-foot { border-top: 1px solid var(--lab-line); padding: 10px 16px 14px; }
 .foot-row { display: flex; gap: 8px; margin: 8px 0 0; }
 .lab-btn {
   flex: 1 1 auto;
+  min-height: 44px;
   padding: 9px 10px;
   border-radius: 8px;
   border: 1px solid var(--lab-line);
@@ -150,7 +250,7 @@ input[type="range"] { width: 100%; grid-column: 1 / -1; }
 .lab-btn:disabled { opacity: 0.45; cursor: default; }
 #report {
   margin-top: 8px;
-  max-height: 30vh;
+  max-height: 26vh;
   overflow-y: auto;
   font: 400 11.5px/1.5 ui-monospace, monospace;
   white-space: pre-wrap;          /* a report is READ, never elided */
@@ -160,12 +260,12 @@ input[type="range"] { width: 100%; grid-column: 1 / -1; }
 #report .bad { color: #ff9a8b; }
 
 /* ── the stage ───────────────────────────────────────────────────────── */
-#stage { display: flex; flex-direction: column; min-width: 0; }
+#stage { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 #look-bar {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px 18px;
-  padding: 10px 16px;
+  gap: 10px 18px;
+  padding: 8px 14px;
   border-bottom: 1px solid var(--lab-line);
   background: var(--lab-panel);
 }
@@ -176,30 +276,64 @@ input[type="range"] { width: 100%; grid-column: 1 / -1; }
   font-size: 11px;
   color: var(--lab-dim);
 }
+
+/* THE GRID FILLS THE STAGE. Columns and rows are set from JavaScript out of
+   the COUNT of frames and the shape of the stage — eight goes 4x2 or 2x4 and
+   never 5+3, so there is no half-empty last row. `minmax(0, 1fr)` on both axes
+   is what lets a cell be smaller than its content: without the 0 minimum a
+   grid track refuses to shrink and the whole thing overflows again. */
 #frames {
   flex: 1 1 auto;
   min-height: 0;
-  overflow: auto;
+  overflow: hidden;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(460px, 1fr));
-  gap: 14px;
-  padding: 14px;
-  align-content: start;
+  gap: 10px;
+  padding: 10px;
 }
-#frames.single { grid-template-columns: 1fr; }
+/* Fixed-zoom mode: the specimens are drawn at a size he chose, so the STAGE
+   scrolls rather than the cards — one scrollbar for the whole wall instead of
+   eight, which is what made the first shape unusable. */
+#frames.fixed { overflow: auto; }
 .look {
   display: flex;
   flex-direction: column;
+  min-width: 0;
+  min-height: 0;
   border: 1px solid var(--lab-line);
   border-radius: 10px;
   overflow: hidden;
   background: var(--lab-panel);
 }
 .look-name {
-  padding: 6px 10px;
-  font: 600 11.5px system-ui, sans-serif;
+  flex: 0 0 auto;
+  padding: 5px 9px;
+  font: 600 11px system-ui, sans-serif;
   color: var(--lab-dim);
   border-bottom: 1px solid var(--lab-line);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.look iframe { width: 100%; height: 620px; border: 0; display: block; }
-#frames.single .look iframe { height: calc(100vh - 140px); }
+.look iframe {
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 0;
+  border: 0;
+  display: block;
+}
+#frames.fixed .look { height: 660px; }
+
+/* THE WALL SCROLLS, NEVER A CARD. When the window is too small to hold eight
+   boards above the readable floor, every card is given the height its board
+   needs and this whole grid scrolls — one scrollbar for the wall instead of
+   eight inside it, which is the shape he asked for. `#wall-note` says why, so
+   a scrollbar is never a mystery. */
+#frames.spill { overflow: auto; }
+#frames.spill .look { height: var(--look-h, 660px); }
+#wall-note {
+  padding: 0 14px 8px;
+  font-size: 11.5px;
+  color: var(--lab-warn);
+  overflow-wrap: anywhere;
+}
+#wall-note:empty { display: none; }

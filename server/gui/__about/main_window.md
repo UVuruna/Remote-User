@@ -15,8 +15,8 @@ window itself — its computed minimum, its layout builders, the actions, the
 refresh loop and its window behaviour.
 
 The one desktop window plus the system tray icon: status, in-window pairing
-QR, Start/Stop, Tailscale helper, the three doors (Controls, Traffic,
-Settings) and the self-update button. A single column of soft-shadowed cards
+QR, Start/Stop, Tailscale helper, the row of doors (Controls and Settings,
+plus Traffic when developer tools are on) and the self-update button. A single column of soft-shadowed cards
 (DESIGN.md bento style). The window never blocks — server start/stop/restart
 run on worker threads, and a 1 s `QTimer` pulls state from the
 `ServerController` and repaints. Closing the window hides it to the tray; the
@@ -30,7 +30,17 @@ switch moved to the [Settings window](settings_window.md); what is left is one
 job, plus one row of doors to the three windows that do the rest. The measured
 minimum fell from **503 × 937** to **404 × 703**.
 
-Those three doors are **icon buttons** now, on a row of their own, sharing it
+**Which doors, since 2026-08-19** (owner request). `DOORS` is one row per
+button with a `dev` column: Controls and Settings are every user's, **Traffic
+is the owner's own instrument** and is the first of a class he named ("and some
+other later options"), so it is behind DEVELOPER TOOLS — five clicks on this
+window's title, see [developer_mode.md](developer_mode.md). A fresh install
+shows two doors; the row is still MEASURED against all three captions, because
+the law measures the fullest real content and not the state that happens to be
+on screen. `_build_window_row` builds the container once and `_fill_window_row`
+refills it whenever the switch moves.
+
+Those doors are **icon buttons**, on a row of their own, sharing it
 equally, without the trailing "…" (a dialog is what a button does, not
 something its label has to apologise for). Five heterogeneous buttons in one
 line was what made the old row — and therefore the whole window — wide. The

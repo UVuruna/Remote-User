@@ -71,7 +71,7 @@ def apply_save(payload: dict) -> dict:
     changed: list = []
     touched: dict = {}
 
-    for source_id in ("dark", "light", "shape", "sets"):
+    for source_id in ("dark", "light", "shape", "sets", "js"):
         values = payload.get(source_id) or {}
         if values:
             touched[source_id] = values
@@ -164,6 +164,8 @@ def print_tokens() -> None:
             token = row["token"]
             if row["kind"] == "shape":
                 value = snapshot["values"]["shape"].get(token, "?")
+            elif row["kind"] == "jscolor":
+                value = "rgb(" + snapshot["values"]["js"].get(token, "?") + ")"
             elif row["kind"] == "derived":
                 value = "(computed)"
             else:

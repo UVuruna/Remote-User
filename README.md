@@ -208,4 +208,4 @@ The CLI prints the pairing URL and a QR (console + image viewer). Dev note: H.26
 - [Android (folder)](android/___android.md) — the phone app (shell around the client)
 - [Tests (folder)](tests/___tests.md) — end-to-end input gate (run fail-closed by the build)
 - [Setup (folder)](setup/___setup.md) — build pipeline, installer, APK
-- [Tools (folder)](tools/___tools.md) — the design lab: every look of every control on one page, with Save writing the tuned value back into the source
+- [Tools (folder)](tools/___tools.md) — the design lab: every look of every control on one page, each setting with a sentence and a diagram, and Save writing the tuned value back into the source

@@ -40,16 +40,77 @@ def _rows(kinds):
 def test_every_offered_token_exists_in_its_source():
     values = {sid: tokens.read_source(sid) for sid in tokens.SOURCES}
     missing = []
-    for group_id, row in _rows({"theme", "alpha"}):
+    for group_id, row in _rows({"theme", "shadow"}):
         for theme in ("dark", "light"):
             if row["token"] not in values[theme]:
                 missing.append(f"{group_id}: {row['token']} not in the {theme} block")
     for group_id, row in _rows({"shape"}):
         if row["token"] not in values["shape"]:
             missing.append(f"{group_id}: {row['token']} not in client/style.css :root")
+    for group_id, row in _rows({"jscolor"}):
+        if row["token"] not in values["js"]:
+            missing.append(f"{group_id}: {row['token']} is not a const in client/theme.js")
     assert not missing, (
         "the design lab offers knobs that no longer exist — a renamed token is "
         "a knob that silently does nothing:\n  " + "\n  ".join(missing))
+
+
+def test_the_shadow_colours_are_offered_at_all():
+    """THE ROUND-2 DEFECT, as a check. He went looking for the white shadow
+    drawn under black letters, and it was not in the list at ANY quality of
+    grouping: the round that made the shadow colour a rule left the rule
+    itself untunable, so the page could only offer the strength of a colour
+    nobody could choose. The two constants `client/theme.js` decides between
+    are rows now, and this is what stops the next rule from disappearing the
+    same way."""
+    offered = {row["token"] for _, row in _rows({"jscolor"})}
+    assert offered == {"SHADOW_DARK", "SHADOW_LIGHT"}, offered
+
+
+def test_every_row_says_what_it_does_and_shows_a_picture():
+    """His round-2 sentence, as a gate: a knob with no sentence is a knob
+    nobody turns. Every row carries `help` (or, for the two computed ones,
+    `why`) and names a diagram that `tools/design_pics.js` really draws — a
+    `pic` naming a picture that does not exist is a row with a blank space
+    where its explanation should be."""
+    drawn = set(re.findall(r"^\s*'?([a-z-]+)'?:\s*'",
+                           (PROJECT / "tools" / "design_pics.js")
+                           .read_text(encoding="utf-8"), re.M))
+    dumb, unpainted = [], []
+    for group in tokens.GROUPS:
+        for row in group["rows"]:
+            where = group["id"] + "/" + row.get("token", row["kind"])
+            if not (row.get("help") or row.get("why")):
+                dumb.append(where)
+            if row.get("pic") not in drawn:
+                unpainted.append(where + " -> " + str(row.get("pic")))
+    assert not dumb, "rows with no sentence:\n  " + "\n  ".join(dumb)
+    assert not unpainted, ("rows naming a diagram design_pics.js does not "
+                           "draw:\n  " + "\n  ".join(unpainted))
+
+
+def test_every_group_and_row_is_pointed_somewhere():
+    """`demo` is what lets the page POINT at what a value touches instead of
+    describing it. Two of the selectors are the board's own — `:dark-ink` and
+    `:light-ink` are answered from what `paintSet` really produced — and the
+    rest are plain CSS. A row with no `demo` is allowed; a row with a `demo`
+    the board cannot possibly answer is not."""
+    board = (PROJECT / "tools" / "preview.html").read_text(encoding="utf-8")
+    unknown = []
+    for group in tokens.GROUPS:
+        for row in group["rows"]:
+            for part in [p.strip() for p in (row.get("demo") or "").split(",")]:
+                if not part or part in (":dark-ink", ":light-ink"):
+                    continue
+                # The class or id the selector is built on has to be a word the
+                # board actually writes; the shapes themselves are checked in
+                # the browser below.
+                head = re.split(r"[ >]", part)[-1]
+                token = re.sub(r"^[.#]", "", head).split(".")[0].split(":")[0]
+                if token and token not in ("body", "svg") and token not in board:
+                    unknown.append(group["id"] + ": " + part)
+    assert not unknown, ("rows pointing at something the specimen board never "
+                         "draws:\n  " + "\n  ".join(unknown))
 
 
 def test_a_derived_value_is_never_offered_as_a_knob():
@@ -86,6 +147,7 @@ def test_a_round_trip_leaves_the_file_byte_identical():
         ("light", "--accent", "#654321"),
         ("shape", "--ctl-radius", "19px"),
         ("sets", "Mouse", "#123456"),
+        ("js", "SHADOW_LIGHT", "254 253 252"),
     ]
     before = {}
     for source_id, _, _ in cases:
@@ -113,6 +175,11 @@ def test_the_writer_refuses_what_it_does_not_know():
         ("shape", "--not-a-token", "4px"),
         ("dark", "--accent", "#fff; } body { display: none"),
         ("sets", "No Such Set", "#ffffff"),
+        # A shadow colour is interpolated straight into `rgb(… / a)` by
+        # client/theme.js, so anything that is not an `r g b` triple would be
+        # a stylesheet that silently draws nothing.
+        ("js", "SHADOW_DARK", "#000000"),
+        ("js", "SHADOW_DARK", '0 0 0"; alert(1); //'),
     ):
         try:
             tokens.write_source(source_id, {name: value})
@@ -158,14 +225,16 @@ def test_the_lab_serves_only_its_own_two_folders():
     assert design_lab.SERVE_DIRS == ("tools", "client")
 
 
-# ═══════════════════ 4. A KNOB REALLY MOVES THE FRAMES ═══════════════════
-# The three checks above prove the WRITER. This one proves the other half —
-# that a turn of a knob reaches the specimen — and it proves it the only way
-# that means anything: in a real browser, reading the computed style off a
-# real button inside the preview frame. Artefact evidence is not behaviour
-# evidence; a page that built its sidebar and pushed nothing would pass every
-# check above.
-def test_a_knob_moves_the_real_button():
+# ═══════════════════ 4. IN A REAL BROWSER ═══════════════════
+# The checks above prove the WRITER. These prove the other half — that the page
+# does on screen what it says — and they prove it the only way that means
+# anything: a real browser, reading computed style off a real button inside a
+# real preview frame. Artefact evidence is not behaviour evidence; a page that
+# built its sidebar and pushed nothing would pass every check above.
+#
+# ONE browser for all of it: launching chromium is most of the cost, and a
+# gate that takes two minutes is a gate that gets skipped.
+def test_the_page_does_on_screen_what_it_says():
     import pytest
     pytest.importorskip("playwright.sync_api")
     import threading
@@ -178,34 +247,133 @@ def test_a_knob_moves_the_real_button():
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     url = "http://127.0.0.1:%d/" % server.server_address[1]
+    found = {}
     try:
         with sync_playwright() as play:
             browser = play.chromium.launch()
-            page = browser.new_page(viewport={"width": 1500, "height": 900})
+            page = browser.new_page(viewport={"width": 1920, "height": 1080})
             page.goto(url)
             page.wait_for_selector(".look iframe")
+            page.wait_for_timeout(1500)          # eight frames, each fitting itself
             frame = page.frames[1]
             frame.wait_for_selector(".ctl")
-            before = frame.eval_on_selector(
+            found["before"] = frame.eval_on_selector(
                 ".ctl", "el => getComputedStyle(el).borderTopLeftRadius")
 
-            # The knob for --ctl-radius, driven the way a finger drives it.
-            page.click("summary:text('Control shape')")
-            row = page.locator(".row[data-token='--ctl-radius']")
-            row.locator("input[type=number]").fill("31")
-            row.locator("input[type=number]").dispatch_event("input")
-            page.wait_for_timeout(250)
+            # (a) HIS SECOND COMPLAINT: no card scrolls, and no cell is empty.
+            found["wall"] = page.evaluate(WALL_JS)
 
-            after = frame.eval_on_selector(
+            # (b) HIS THIRD: the value he could not find is findable, and every
+            #     row is pointed at something the board really draws.
+            page.fill("#find", "shadow")
+            page.wait_for_timeout(200)
+            found["shadow_visible"] = page.locator(
+                ".row[data-token='SHADOW_LIGHT']").is_visible()
+            page.fill("#find", "")
+
+            # (c) THE POINTER really outlines something, in the look where the
+            #     question is asked. `#colored` and `#fill` only decide
+            #     anything once ONE look is shown — with all eight up they are
+            #     the axes themselves — so the wall is narrowed first, to the
+            #     one rendering where black ink exists at all.
+            page.select_option("#which", "one")
+            page.select_option("#theme", "dark")
+            page.select_option("#colored", "true")
+            page.select_option("#fill", "full")
+            page.wait_for_timeout(1500)
+            found["pointed"] = page.evaluate(POINT_JS)
+
+            # (d) A knob still reaches the specimen, driven the way a finger
+            #     drives it.
+            page.fill("#find", "corner radius")
+            page.wait_for_timeout(200)
+            knob = page.locator(".row[data-token='--ctl-radius'] input[type=number]")
+            knob.fill("31")
+            knob.dispatch_event("input")
+            page.wait_for_timeout(300)
+            found["after"] = page.frames[1].eval_on_selector(
                 ".ctl", "el => getComputedStyle(el).borderTopLeftRadius")
             browser.close()
     finally:
         server.shutdown()
 
-    assert after == "31px", (
+    wall = found["wall"]
+    assert wall["cells"] == wall["cards"], (
+        "the wall left empty cells — eight looks must divide into full rows: "
+        + str(wall))
+    assert not wall["scrolling"], (
+        "cards still scroll inside themselves: " + str(wall["scrolling"]))
+    assert found["shadow_visible"], (
+        "typing `shadow` does not surface the colour he went looking for")
+    assert found["pointed"]["checked"] >= 40, (
+        "almost every row names what it points at, so a page that stopped "
+        "writing `data-demo` would make the next check pass by having nothing "
+        "to check — only " + str(found["pointed"]["checked"]) + " rows carried one")
+    assert found["pointed"]["missed"] == [], (
+        "rows pointing at nothing the board draws: "
+        + str(found["pointed"]["missed"]))
+    assert found["pointed"]["darkInk"] > 0, (
+        "no specimen came out with black ink in the coloured filled look, so "
+        "the white-shadow row is pointing at an empty set — the palette or the "
+        "board changed under this check")
+    assert found["after"] == "31px", (
         "the knob did not reach the specimen: the button's radius read "
-        + after + " (it was " + before + ")")
-    assert before != after
+        + found["after"] + " (it was " + found["before"] + ")")
+    assert found["before"] != found["after"]
+
+
+# Every card measured against ITS OWN frame. `documentElement.scrollHeight`
+# is not the question: `#screen` is `position: fixed; inset: 0` and is
+# therefore always exactly one viewport tall, and under `zoom` that height and
+# the board's own live in different coordinate spaces. The board's bottom edge
+# against `innerWidth/innerHeight` is the one honest comparison — the same
+# lesson tools/preview.html carries in `boardBottom`.
+WALL_JS = """
+() => {
+  const host = document.getElementById("frames");
+  const cs = getComputedStyle(host);
+  const cards = [...host.querySelectorAll(".look iframe")];
+  const scrolling = [];
+  cards.forEach((f, i) => {
+    const board = f.contentDocument.getElementById("board");
+    if (!board) { scrolling.push("frame " + i + ": no board"); return; }
+    const over = board.getBoundingClientRect().bottom - f.contentWindow.innerHeight;
+    if (over > 2) scrolling.push("frame " + i + " overflows by " + Math.round(over));
+  });
+  return {
+    cells: cs.gridTemplateColumns.split(" ").length *
+           cs.gridTemplateRows.split(" ").length,
+    cards: cards.length,
+    scrolling,
+  };
+}
+"""
+
+# The `demo` selector of every row, run inside a real frame. `:dark-ink` and
+# `:light-ink` are the board's own (answered from what `paintSet` produced), so
+# they are asked as the board answers them.
+POINT_JS = """
+() => {
+  const doc = document.querySelector(".look iframe").contentDocument;
+  const missed = [];
+  let darkInk = doc.querySelectorAll('[data-ink="dark"]').length;
+  let checked = 0;
+  document.querySelectorAll(".row").forEach((row) => {
+    const token = row.dataset.token || "(row)";
+    const demo = row.dataset.demo;
+    if (!demo) return;
+    checked++;
+    let hit = 0;
+    demo.split(",").map((s) => s.trim()).filter(Boolean).forEach((part) => {
+      if (part === ":dark-ink") hit += doc.querySelectorAll('[data-ink="dark"]').length;
+      else if (part === ":light-ink") hit += doc.querySelectorAll('[data-ink="light"]').length;
+      else { try { hit += doc.querySelectorAll(part).length; } catch (e) { /* below */ } }
+    });
+    if (!hit) missed.push(token + " -> " + demo);
+  });
+  return { missed, darkInk, checked };
+}
+"""
 
 
 if __name__ == "__main__":

@@ -11,11 +11,18 @@ WHAT THIS WINDOW IS *NOT*, since round R2 (owner 2026-08-07). It had become
 two things at once: the thing you open to PAIR a phone, and the thing you open
 to CONFIGURE a PC. The stream form and the notify switch moved out to
 [gui/settings_window.py]; what is left is one job — get a phone connected to
-this PC and say whether it worked — plus one row of doors to the three windows
-that do the rest (Controls, Traffic, Settings). Those three are ICON buttons
-with real SVG icons and no trailing "…": drawn assets, never a font glyph, for
-the same reason the phone's Move handle is drawn (owner 2026-08-05 — a glyph
-came out a blunt cross on his device).
+this PC and say whether it worked — plus one row of doors to the windows that
+do the rest. Those are ICON buttons with real SVG icons and no trailing "…":
+drawn assets, never a font glyph, for the same reason the phone's Move handle
+is drawn (owner 2026-08-05 — a glyph came out a blunt cross on his device).
+
+WHICH DOORS, since 2026-08-19 (owner request). Controls and Settings are every
+user's; Traffic is the owner's own instrument and is the first of a class he
+named — "i jos neke naknadne opcije" — so it is behind DEVELOPER TOOLS, opened
+by clicking this window's title five times (gui/developer_mode.py). A fresh
+install therefore shows two doors, and the row is still measured against all
+three, because the law measures the fullest real content and not the state
+that happens to be on screen.
 """
 
 import logging
@@ -39,6 +46,7 @@ from gui.main_window_updates import (
     UPDATE_FAILED_TEXT, UPDATE_HANDOVER_TEXT, UpdateFlow,
 )
 from gui.controls_editor import ControlsEditor
+from gui.developer_mode import OFF_TEXT, ON_TEXT, TitleTap, is_on as dev_tools_on
 from gui.settings_window import SettingsWindow
 from gui.sizing import settle_minimum
 from gui.switch import TRACK_W as THEME_SWITCH_W, ThemeSwitch, choose_theme
@@ -68,6 +76,25 @@ ICON_PX = 17   # icon height on the three window buttons, next to 13px text
 
 PILL_TEXT = {"running": "RUNNING", "starting": "STARTING…",
              "stopped": "STOPPED", "failed": "FAILED"}
+
+# THE ROW OF DOORS, and which of them are the developer's (owner 2026-08-19).
+# `dev` is the whole difference between "a thing every user needs" and "a thing
+# the owner needs", and it is a COLUMN in this table rather than an `if` in the
+# builder because he asked for more of them: "i jos neke naknadne opcije".
+# A new developer door is a row here with `dev=True` and nothing else.
+DOORS = (
+    ("Controls", "icon-controls", "_edit_controls", False),
+    ("Traffic", "icon-traffic", "_show_traffic", True),
+    ("Settings", "icon-settings", "_show_settings", False),
+)
+
+# Shown under the row while the developer doors are open, and the ONLY place
+# in the product the gesture is written down. A tray balloon is not a promise —
+# Focus assist, Do-not-disturb or notifications turned off for this app all
+# swallow it — and without this line an accidental ON is a mystery button with
+# no way back.
+DEV_NOTE_TEXT = ("Developer tools are on. Click the title above five times to "
+                 "hide them again.")
 
 # The three guided states under the QR, in one place: the refresh loop shows
 # them, and the window's COMPUTED minimum size measures them (THE SPACE &
@@ -142,7 +169,8 @@ class MainWindow(ServerControl, UpdateFlow, QMainWindow):
         root.addLayout(self._build_header())
         root.addWidget(self._build_qr_card())
         root.addLayout(self._build_power_row())
-        root.addLayout(self._build_window_row())
+        root.addWidget(self._build_window_row())
+        root.addWidget(self._build_dev_note())
         root.addWidget(self._build_update_button())
         root.addWidget(self._build_footer())
 
@@ -203,6 +231,7 @@ class MainWindow(ServerControl, UpdateFlow, QMainWindow):
         """
         return (self.update_btn.isHidden(), self.update_btn.text(),
                 self.update_progress.isHidden(),
+                self.dev_note.isHidden(),
                 self.reach_label.text(), self.qr_label.text())
 
     def _resettle(self) -> None:
@@ -242,6 +271,11 @@ class MainWindow(ServerControl, UpdateFlow, QMainWindow):
                      + widest(("Set up Tailscale", "Sign in to Tailscale",
                                "Install Tailscale"))
                      + 2 * button_pad + spacing)
+        # ALL THREE, even though a fresh install shows two: Traffic is behind
+        # the developer switch (DOORS, 2026-08-19) and the law measures the
+        # FULLEST real content, not the state that happens to be on screen. A
+        # floor taken from two buttons would be a floor the row outgrows the
+        # moment he clicks the title five times.
         window_row = (widest(("Controls",)) + widest(("Traffic",))
                       + widest(("Settings",))
                       + 3 * (button_pad + ICON_PX + 6)   # icon + its 6px gap
@@ -307,6 +341,28 @@ class MainWindow(ServerControl, UpdateFlow, QMainWindow):
         titles.addWidget(title)
         titles.addWidget(sub)
 
+        # FIVE CLICKS ON THE TITLE open the developer doors (his request of
+        # 2026-08-19, and Android's own build-number gesture). The logo and
+        # both lines count as one target, because that is what he circled in
+        # his picture. Nothing about the header changes: it is not a button, it
+        # does not look pressable, and a user who never taps it five times in
+        # three seconds never learns there is anything here — which is the
+        # whole point of hiding the row rather than removing it.
+        self.title_area = QWidget()
+        area = QHBoxLayout(self.title_area)
+        area.setContentsMargins(0, 0, 0, 0)
+        area.setSpacing(10)
+        area.addWidget(logo)
+        area.addLayout(titles)
+        # ONE INSTALL, ON THE CONTAINER. A QLabel ignores a mouse press, so Qt
+        # propagates it up to this widget by itself — which is why the filter
+        # reaches every click on the logo and both lines without being
+        # installed on any of them, and why installing it on them as well made
+        # each click count TWICE (a grader measured three clicks opening the
+        # door; see gui/developer_mode.py).
+        self._title_tap = TitleTap(self._developer_tools_changed)
+        self.title_area.installEventFilter(self._title_tap)
+
         self.pill = QLabel(PILL_TEXT["stopped"])
         self.pill.setObjectName("pill")
         self.pill.setProperty("state", "stopped")
@@ -319,9 +375,7 @@ class MainWindow(ServerControl, UpdateFlow, QMainWindow):
         self.theme_switch.set_theme_name(SETTINGS.ui_theme)
         self.theme_switch.picked.connect(choose_theme)
 
-        row.addWidget(logo)
-        row.addSpacing(10)
-        row.addLayout(titles)
+        row.addWidget(self.title_area)
         row.addStretch()
         row.addWidget(self.pill)
         row.addSpacing(10)
@@ -375,8 +429,8 @@ class MainWindow(ServerControl, UpdateFlow, QMainWindow):
         row.addWidget(self.tailscale_btn)
         return row
 
-    def _build_window_row(self) -> QHBoxLayout:
-        """The three doors, as one row of equals (round R2).
+    def _build_window_row(self) -> QWidget:
+        """The doors, as one row of equals (round R2).
 
         They used to sit between the power button and the Tailscale button,
         which put five unrelated buttons in one line and made that line the
@@ -384,12 +438,60 @@ class MainWindow(ServerControl, UpdateFlow, QMainWindow):
         their own they share it equally, they carry their SVG icon, and they
         lost the trailing "…" — a dialog is what a button does, not something
         its label has to apologise for.
+
+        A WIDGET and not a bare layout since 2026-08-19: the row is rebuilt
+        when the developer doors are opened or closed, and a layout with no
+        widget of its own has nothing to empty.
         """
-        row = QHBoxLayout()
-        for label, name, handler in (
-                ("Controls", "icon-controls", self._edit_controls),
-                ("Traffic", "icon-traffic", self._show_traffic),
-                ("Settings", "icon-settings", self._show_settings)):
+        self.window_row = QWidget()
+        box = QHBoxLayout(self.window_row)
+        box.setContentsMargins(0, 0, 0, 0)
+        box.setSpacing(8)
+        self._fill_window_row()
+        return self.window_row
+
+    def _build_dev_note(self) -> QWidget:
+        """THE ROUTE BACK, in the window itself.
+
+        The tray balloon that announces the switch is the only thing that says
+        how to turn it off, and a tray balloon is not a promise: Focus assist,
+        Do-not-disturb, or notifications turned off for this app all swallow
+        it. A grader put it plainly — an accidental ON would then be a mystery
+        button with no way back, since nothing else in the product reports
+        `developer_tools` or clears it.
+
+        So the row itself carries the sentence, for as long as the state
+        lasts. It costs one line, only in the state that needs it, and it is
+        also the only place the gesture is written down anywhere in the app.
+        """
+        self.dev_note = QLabel(DEV_NOTE_TEXT)
+        self.dev_note.setObjectName("caption")
+        self.dev_note.setWordWrap(True)
+        self.dev_note.setVisible(dev_tools_on())
+        return self.dev_note
+
+    def _fill_window_row(self) -> None:
+        """Whichever doors are currently the user's. Traffic is the developer's
+        (DOORS), so a fresh install shows Controls and Settings and nothing
+        else — his request of 2026-08-19."""
+        box = self.window_row.layout()
+        while box.count():
+            old = box.takeAt(0).widget()
+            if old is not None:
+                # HIDE, then unparent, then queue the delete — in that order.
+                # `deleteLater` alone leaves the widget a visible child at its
+                # old geometry until the event loop runs (a rebuilt row drawn
+                # over the old one for one paint), and `setParent(None)` alone
+                # makes it a top-level WINDOW: a button briefly floating in the
+                # middle of his screen. tests/test_widget_orphan.py is the gate
+                # that caught exactly that here.
+                old.hide()
+                old.setParent(None)
+                old.deleteLater()
+        show_dev = dev_tools_on()
+        for label, name, handler, dev in DOORS:
+            if dev and not show_dev:
+                continue
             button = QPushButton(themed_icon(name), f"  {label}")
             # The palette is BAKED into the SVG source (Qt's renderer ignores
             # `currentColor`), so an icon built once is a picture in the old
@@ -397,9 +499,32 @@ class MainWindow(ServerControl, UpdateFlow, QMainWindow):
             # lets `theme.apply_theme` rebuild it — round R3.
             button.setProperty("iconName", name)
             button.setIconSize(QSize(ICON_PX, ICON_PX))
-            button.clicked.connect(handler)
-            row.addWidget(button, 1)
-        return row
+            button.clicked.connect(getattr(self, handler))
+            box.addWidget(button, 1)
+
+    def _developer_tools_changed(self, on: bool) -> None:
+        """Five clicks landed on the title. Rebuild the row, say so twice —
+        once in the tray and once in the window, because the tray balloon may
+        never be shown — and close the room whose door has just gone.
+
+        A window that silently grew a button would read as a glitch, and a
+        user who turned it on by accident has to be told how to turn it off.
+        """
+        self._fill_window_row()
+        self.dev_note.setVisible(on)
+        # HIDE THE ROOM WITH THE DOOR. Turning the tools off is what he does
+        # before handing the machine to somebody else; leaving the Traffic
+        # chart standing on the desktop with no door to it is the same defect
+        # as a chip about a window that has closed.
+        if not on and self._traffic is not None and self._traffic.isVisible():
+            self._traffic.hide()
+        # The row's WIDTH floor is not re-measured — it is already taken from
+        # the fullest real row (all three captions, `_computed_minimum`). The
+        # HEIGHT is, because the note is a line the window did not have a
+        # moment ago and `_content_signature` now carries it.
+        self._resettle()
+        self.tray.showMessage("Vibe Coder", ON_TEXT if on else OFF_TEXT,
+                              QSystemTrayIcon.MessageIcon.Information, 4000)
 
     def _edit_controls(self) -> None:
         """The Controls editor (ROADMAP Phase G1): create custom sets, choose

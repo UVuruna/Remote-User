@@ -88,6 +88,9 @@ USER_ADJUSTABLE = {
     # place in this set so a hand-edited settings.json can still move the
     # default a new phone starts from.
     "ui_theme", "phone_theme", "phone_colored", "phone_fill",
+    # Developer tools (2026-08-19) — the five-tap switch writes it, and a
+    # hand-edited settings.json is the same answer by the same door.
+    "developer_tools",
 }
 
 
@@ -512,6 +515,13 @@ class Settings:
     phone_theme: str = "dark"
     phone_colored: bool = False
     phone_fill: str = "transparent"
+
+    # DEVELOPER TOOLS (owner request 2026-08-19) — whether the desktop window
+    # shows the doors that are the owner's rather than a new user's (Traffic
+    # today, and he named more to come). Five clicks on the window's title
+    # toggle it; the whole reasoning, and the fact that this is clutter-hiding
+    # and never a lock, is in `gui/developer_mode.py`.
+    developer_tools: bool = False
 
 
 # ═══════════════════════════ APPEARANCE — THE PHONE'S SET COLOURS ═══════════════════════════
