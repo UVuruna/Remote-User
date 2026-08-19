@@ -368,10 +368,19 @@ body[data-colored="true"][data-fill="full"] .wheel-item {
    outranked `.ctl.active`'s own shadow, so the switched-on button ended up
    wearing a halo in the SAME hue as the button underneath it: 1.35:1 against
    its OFF sibling, measured. ON now owns exactly one rule, in style.css, for
-   all eight looks. */
+   all eight looks.
+
+   THE TWO SIZES ARE TOKENS NOW (owner 2026-08-19). They were literals —
+   3px and 22px — and this selector (one attribute, two classes) outranks
+   `.ctl.held` in style.css, so the design lab's two sliders moved the four
+   PLAIN looks and stopped dead here, with nothing on the page saying so. It
+   reads its OWN pair rather than the plain one on his ruling: a coloured
+   press may want different numbers than a plain one, and forcing them to
+   share would answer a question he did not ask. Same values as before —
+   nothing about the look changed, only who can reach it. */
 body[data-colored="true"] .ctl.held {
-  box-shadow: 0 0 0 3px var(--set-glow, var(--accent-glow)),
-              0 0 22px var(--set-glow, var(--accent-glow));
+  box-shadow: 0 0 0 var(--held-ring-colored) var(--set-glow, var(--accent-glow)),
+              0 0 var(--held-glow-colored) var(--set-glow, var(--accent-glow));
 }
 
 /* THE SET'S IDENTITY SURVIVES THE FLIP. On a coloured page the ink on the ON

@@ -61,9 +61,20 @@
   --on-glow-blur: 20px;
   --on-scale: 1.06;
   /* A finger holding the button down — a HUE and an inward scale, never a
-     luminance event: a momentary press must not be mistaken for a switch. */
+     luminance event: a momentary press must not be mistaken for a switch.
+
+     TWO PAIRS, NOT ONE (owner 2026-08-19). A coloured control's press is
+     drawn by a rule of its own in client/theme.css — it glows in the SET's
+     colour rather than the one accent — and that rule used to carry its two
+     sizes as literals, so these sliders reached four of the eight looks and
+     silently stopped. His ruling was not "make them share": the coloured
+     press may want different numbers for a reason, so it gets its OWN pair
+     and both are on the bench. The values below are exactly what each look
+     was already drawing — this round moved a number nowhere. */
   --held-ring: 2px;
   --held-glow: 14px;
+  --held-ring-colored: 3px;    /* the COLOURED looks — theme.css reads these */
+  --held-glow-colored: 22px;
   --held-scale: 0.94;
   --held-on-scale: 0.98;       /* switched ON *and* held */
   /* The category wheel's circles */

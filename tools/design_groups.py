@@ -338,24 +338,48 @@ GROUPS = [
         "note": "The moment of touch, and nothing more: it lasts as long as "
                 "the finger does. It must never be mistakable for the ON "
                 "state, which is why this one stays a hue and shrinks INWARD "
-                "while that one flips its face and grows. THE TWO SIZES BELOW "
-                "MOVE THE PLAIN LOOKS ONLY — a coloured control's press is "
-                "drawn by a rule of its own in client/theme.css that outranks "
-                "them and carries its own 3 px ring and 22 px halo.",
+                "while that one flips its face and grows. THE RING AND THE "
+                "HALO COME IN TWO PAIRS (owner 2026-08-19): a coloured "
+                "control's press is drawn by a rule of its own — it glows in "
+                "the SET's colour, not in the one accent — and it has its own "
+                "two sliders rather than sharing the plain ones, because the "
+                "two may honestly want different numbers. Move a plain "
+                "slider and watch the four plain frames; move a coloured one "
+                "and watch the other four.",
         "rows": [
             {"kind": "theme", "token": "--accent-glow", "label": "Halo colour",
              "help": "The colour of the halo under the finger on a plain "
                      "control (a coloured one uses its set's own). The same "
                      "colour marks a focused field elsewhere on the page.",
              "pic": "glow", "demo": ".ctl.held"},
-            {"kind": "shape", "token": "--held-ring", "label": "Ring",
-             "help": "How thick the ring drawn while the finger is down is. "
-                     "Plain looks only — see the note above.",
+            {"kind": "shape", "token": "--held-ring", "label": "Ring — PLAIN looks",
+             "help": "How thick the ring drawn while the finger is down is, "
+                     "on a control that is not coloured. The four coloured "
+                     "looks have their own slider, two rows down.",
              "pic": "ring", "demo": ".ctl.held",
              "min": 0, "max": 8, "step": 1, "unit": "px"},
-            {"kind": "shape", "token": "--held-glow", "label": "Glow size",
-             "help": "How far the halo under the finger spreads. Plain looks "
-                     "only — see the note above.",
+            {"kind": "shape", "token": "--held-glow", "label": "Glow size — PLAIN looks",
+             "help": "How far the halo under the finger spreads, on a control "
+                     "that is not coloured. The four coloured looks have "
+                     "their own slider, two rows down.",
+             "pic": "glow", "demo": ".ctl.held",
+             "min": 0, "max": 48, "step": 1, "unit": "px"},
+            {"kind": "shape", "token": "--held-ring-colored",
+             "label": "Ring — COLOURED looks",
+             "help": "The same ring, on a COLOURED control — where it is "
+                     "drawn in the set's own colour instead of the one "
+                     "accent. It is a slider of its own on his 2026-08-19 "
+                     "ruling: a coloured press may want a different thickness "
+                     "than a plain one, and it used to be a number written "
+                     "into client/theme.css that no knob could reach.",
+             "pic": "ring", "demo": ".ctl.held",
+             "min": 0, "max": 8, "step": 1, "unit": "px"},
+            {"kind": "shape", "token": "--held-glow-colored",
+             "label": "Glow size — COLOURED looks",
+             "help": "The same halo, on a COLOURED control. Its own slider "
+                     "for the same reason as the ring above — and the two "
+                     "start where each look already was, 3 px and 22 px "
+                     "here against 2 px and 14 px on the plain side.",
              "pic": "glow", "demo": ".ctl.held",
              "min": 0, "max": 48, "step": 1, "unit": "px"},
             {"kind": "shape", "token": "--held-scale", "label": "Shrinks to",

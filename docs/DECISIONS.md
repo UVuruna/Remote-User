@@ -459,3 +459,56 @@ same page and fails if *that* comes out whole, so the other six cannot pass
 vacuously; making `chordFace` the identity function turns the first red,
 removing `pre-line` the fourth. `client/controls.js` stands at 992 lines after
 it — the next thing added there splits the file.
+
+### 42. A PRESSED CONTROL HAS TWO PAIRS OF NUMBERS, NOT ONE — and the stamp on the box moves every time the box does
+
+**Owner ruling 2026-08-19,** on the finding round 41 put to him:
+<!-- lang-ok-begin: owner ruling -->
+*"može da ima svoje posebne klizače samo navedi, ubaci ih tamo u settings — ne
+mora da ima iste klizače kao ta 2; ako on iz nekog razloga treba da ima
+drugačije vrednosti, samo dodaj kao još 1 opciju u settingsu."*
+<!-- lang-ok-end -->
+
+**The finding.** A control under a finger wears a ring and a halo. Two tokens
+in `client/style.css` name their sizes — `--held-ring` (2px) and `--held-glow`
+(14px) — and the design lab offers both as sliders. But a COLOURED control's
+press is drawn by a rule of its own in `client/theme.css`, because it glows in
+the SET's colour rather than in the one accent, and that rule carried **3px and
+22px as literals**. Being one attribute and two classes it outranks
+`.ctl.held`, so both sliders reached four of the eight looks and stopped dead
+— with nothing on the page saying so, which is the part that made it a defect
+rather than a choice.
+
+**The ruling was NOT "make them share".** The obvious fix — point the coloured
+rule at the same two tokens — answers a question he was never asked: whether a
+coloured press *should* look like a plain one. He said the opposite: give it
+its own pair, because it may honestly want different numbers. So
+`--held-ring-colored` and `--held-glow-colored` live beside their plain
+siblings in the same `design-lab` block, the coloured rule reads them, and the
+lab's Pressed group now carries four sliders labelled by the half of the wall
+each one reaches. **No value moved this round**: each pair starts at exactly
+what its own half was already drawing, 3/22 against 2/14. This entry changes
+who can reach a number, never the number.
+
+Gate: `test_the_pressed_look_has_a_knob_in_every_one_of_the_eight` in
+`tests/test_design_lab.py` — neither pressed rule may hold a literal `px`
+again, and all four tokens must be on the bench. Proven by planting: putting
+`3px` back in the coloured rule turns it red. Measured on the real cascade in
+a browser, all four claims at once: the coloured knob moves the coloured look
+(3px → 7px) and leaves the plain one alone; the plain knob moves the plain
+look (2px → 6px) and leaves the coloured one alone. The reading is taken after
+the `.ctl` box-shadow transition has settled — read immediately, computed
+style still answers with the value the transition started from, which is a
+measurement of the past.
+
+**AND THE STAMP.** He built and ran the app and saw **v0.0.311** in the corner,
+unchanged, and said so plainly: *"opet nema bild"*. Two separate things were
+true at once and neither was a lie about the other. `setup/build.py` really
+had produced a signed `dist/VibeCoder_Setup.exe` — but a built installer is a
+FILE, and nothing on this PC installs it; the running app stays the one that
+was installed last. And worse, `setup/app_info.json` had stood at `0.0.312`
+since git `0.0.312`, forty rounds earlier, so every build since had stamped
+the same number on a different package. **A build he cannot tell apart from
+the last one is a build he is right to call missing.** The stamp is bumped
+with the shipping commit from here on, which is what its own commit subjects
+("The stamp matches the tag this release carries") always said it was for.

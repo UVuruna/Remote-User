@@ -234,6 +234,50 @@ def test_the_lab_serves_only_its_own_two_folders():
 #
 # ONE browser for all of it: launching chromium is most of the cost, and a
 # gate that takes two minutes is a gate that gets skipped.
+def test_the_pressed_look_has_a_knob_in_every_one_of_the_eight():
+    """THE PRESSED RING AND HALO REACH ALL EIGHT LOOKS (owner 2026-08-19).
+
+    A coloured control's press is drawn by `body[data-colored="true"]
+    .ctl.held` in client/theme.css — one attribute and two classes, which
+    outranks `.ctl.held` in style.css — and it used to carry its two sizes as
+    LITERALS. So the lab's two sliders moved four of the eight frames and
+    stopped dead, with nothing on the page saying so. His ruling was NOT to
+    make them share: the coloured press may want different numbers, so it has
+    its OWN pair. What must stay true is that neither rule holds a number a
+    knob cannot reach.
+
+    Source-level on purpose, and cheap: the browser check below drives the
+    coloured knob and reads the computed shadow back off a real button, which
+    is where "the value is really used" is proven. This one is the other half
+    — that no LITERAL crept back into either rule — and it is the half that
+    catches a revert in a diff rather than in a screenshot."""
+    css = (PROJECT / "client" / "theme.css").read_text(encoding="utf-8")
+    rule = re.search(r'body\[data-colored="true"\] \.ctl\.held \{(.*?)\}',
+                     css, re.S)
+    assert rule, "client/theme.css no longer has a coloured `.ctl.held` rule"
+    body = rule.group(1)
+    for token in ("--held-ring-colored", "--held-glow-colored"):
+        assert token in body, (
+            "the coloured pressed rule does not read %s — a slider that "
+            "cannot reach four of the eight looks is a slider that lies "
+            "about its reach" % token)
+    assert not re.search(r"\b\d+px\b", body), (
+        "a hard-coded size is back in the coloured pressed rule: %r" % body)
+
+    plain = re.search(r"^\.ctl\.held \{(.*?)^\}",
+                      (PROJECT / "client" / "style.css").read_text(encoding="utf-8"),
+                      re.S | re.M)
+    assert plain and not re.search(r"\b\d+px\b", plain.group(1)), (
+        "the plain pressed rule grew a hard-coded size")
+
+    # And all four are really offered, each with its own sentence, so nobody
+    # has to guess which pair reaches which half of the wall.
+    offered = {row.get("token") for group in tokens.GROUPS
+               for row in group["rows"]}
+    for token in ("--held-ring", "--held-glow",
+                  "--held-ring-colored", "--held-glow-colored"):
+        assert token in offered, "%s is not on the bench" % token
+
 def test_the_page_does_on_screen_what_it_says():
     import pytest
     pytest.importorskip("playwright.sync_api")
