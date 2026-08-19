@@ -39,7 +39,7 @@ from 2026-07-22 is the reason releases matter here: the owner tests and
 updates ONLY through the official GitHub release, never the dev server from
 VS Code and never the local `dist/` - an unreleased fix is a fix he cannot
 see, which is why a session that changed server, client or android code
-ends with `## BUILD & RELEASE?` and the exact command.
+ends with `## BUILD & RELEASE?` and the exact command. **Superseded 2026-08-19** — see the Release Law in `rules/BUILD.md`: nobody raises the build before he does, and his word means build AND release, in one go.
 
 ## Guidance lives in the apps, never in chat or manuals
 
