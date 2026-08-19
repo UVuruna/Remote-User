@@ -39,6 +39,7 @@ a rule about which question a tap answers cannot be proven in Python.
 Run:  .venv\\Scripts\\python tests/test_window_offer_queue.py
 """
 
+import asyncio
 import json
 import shutil
 import subprocess
@@ -100,6 +101,113 @@ def check_one_window_is_never_asked_about_twice():
     return for_popup[0].get("act") != "layout_new"
 
 
+def check_the_sweep_getting_there_first_still_leaves_one_question():
+    """HIS 12:45:05 OF 2026-08-19 — the same defect from the other side. The
+    popup sweep saw the Chrome window one tick before the birth scan did,
+    offered it (rule 4, his click) and JUDGED it; the scan's "can the focused
+    layout claim it" test is `_attribute`, which answers "" for a judged
+    window — so the birth chip went out behind the sweep's, he said yes to
+    both, and two identical layouts were built around one hwnd.
+
+    Defect planted: deleting the `popup_asked` test in `scan` puts the second
+    chip back, exactly as his log shows."""
+    reg, conn = popup_gate.desk(
+        fg=popup_gate.MEMBER_A,
+        alive=(popup_gate.MEMBER_A, popup_gate.MEMBER_B, popup_gate.CLICKED))
+    conn["birth_seen"] = {popup_gate.MEMBER_A, popup_gate.MEMBER_B}
+    layout_popup.wm.list_windows = lambda exclude=None: [
+        {"hwnd": popup_gate.CLICKED, "title": "Claude Artifact - Google Chrome",
+         "process": "chrome.exe", "icon": None}]
+    layout_birth.note_click(conn)
+    layout_popup.sweep(reg, conn)            # the sweep first — its chip is out
+    layout_birth.scan(reg, conn)             # …and the scan one tick later
+    chips = [m for m in popup_gate.offers(conn)
+             if m.get("type") == "window_offer" and m.get("hwnd") == popup_gate.CLICKED]
+    if len(chips) != 1:
+        print(f"  DETAIL one window, {len(chips)} chips: "
+              f"{[m.get('act', 'layout') for m in chips]}")
+        return False
+    return chips[0].get("act") != "layout_new"
+
+
+def check_a_question_about_a_window_a_layout_now_holds_is_withdrawn():
+    """His second yes landed because the birth chip was still standing for a
+    window the first yes had just made a MEMBER. The question's subject is an
+    UNPLACED window; placed, it is withdrawn like a dead one — cancel frame
+    and all — and a stale tap on it is refused.
+
+    Defect planted: `withdraw_moot` without `layouts` (the old `withdraw_dead`)
+    leaves the chip up and the tap honoured."""
+    conn, _fake, sent = _desk_with_one_new_window()
+    conn["popup_send"].clear()               # the chip is on the phone
+    reg = popup_gate.layout_with([popup_gate.MEMBER_A, popup_gate.MEMBER_B])
+    reg.layouts.append(popup_gate.window_manager.Layout(
+        "Agent report", "chrome.exe", [popup_gate.STRANGER], None, "portrait", 0.5))
+    withdrawn = offer_withdraw.withdraw_moot(conn, reg)
+    if len(sent) != 1 or withdrawn != sent:
+        print(f"  DETAIL asked {sent}, withdrew {withdrawn}")
+        return False
+    cancels = [m["id"] for m in popup_gate.offers(conn)
+               if m.get("type") == "window_offer_cancel"]
+    if cancels != sent:
+        print(f"  DETAIL cancel frames {cancels}, expected {sent}")
+        return False
+    if popup_gate.STRANGER in conn.get("birth_asked", ()):
+        print("  DETAIL the window is still marked as asked")
+        return False
+    return popup_offers.pick(sent[0], "layout_new") is False
+
+
+def check_creation_refuses_a_window_a_layout_already_holds():
+    """THE LAST LINE OF DEFENCE, and the one that would have saved him the
+    closing-one-closes-both: `layout_create` on a window that is already a
+    member builds nothing, says so, and shows the layout that has it.
+
+    Driven through the REAL dispatcher with only Windows faked (the
+    test_app_set_wheel harness)."""
+    import test_app_set_wheel as wheel
+    import layout_api
+    import uia
+    # `install_windows` fakes module globals and never restores them; the
+    # checks after this one read the same modules, so what it touches is put
+    # back whole — or a living window reads as dead two checks later.
+    saved = [(mod, dict(vars(mod))) for mod in (popup_gate.window_manager, layout_api, uia)]
+    try:
+        return _creation_refuses_a_held_window(wheel, layout_api)
+    finally:
+        for mod, state in saved:
+            vars(mod).clear()
+            vars(mod).update(state)
+
+
+def _creation_refuses_a_held_window(wheel, layout_api):
+    titles = {wheel.SOURCE_HWND: "Tri odluke - Google Chrome",
+              wheel.EXTRACTED_HWND: "Another - Google Chrome"}
+    alive = {wheel.SOURCE_HWND, wheel.EXTRACTED_HWND}
+    wheel.install_windows(titles, alive, None)
+    layouts = popup_gate.window_manager.LayoutRegistry()
+    ws, conn = wheel.FakeWs(), {"ratio": 9 / 16, "active": None, "region": None}
+    slot = {"hwnd": wheel.SOURCE_HWND, "x": 0.3, "y": 0.02, "tab": None}
+    asyncio.run(layout_api.layout_create(ws, layouts, wheel.FakeStream(), conn, {
+        "mode": "solo", "orient": "portrait", "slots": [slot]}))
+    if len(layouts.layouts) != 1:
+        print(f"  DETAIL the first creation made {len(layouts.layouts)} layouts")
+        return False
+    ws.sent.clear()
+    asyncio.run(layout_api.layout_create(ws, layouts, wheel.FakeStream(), conn, {
+        "mode": "solo", "orient": "portrait", "slots": [slot]}))
+    if len(layouts.layouts) != 1:
+        print(f"  DETAIL a second layout was built around the same window: "
+              f"{[l.members for l in layouts.layouts]}")
+        return False
+    toasts = [m.get("text", "") for m in ws.sent if m.get("type") == "toast"]
+    if not any("lready in layout" in t for t in toasts):
+        print(f"  DETAIL he was not told: {ws.sent}")
+        return False
+    # …and the layout that holds it is the one shown.
+    return conn.get("active") == 0
+
+
 def check_the_desktop_still_gets_the_birth_question():
     """The guard above may not cost task 185 its own commonest case — he
     double-clicks an .xlsx at the DESKTOP, where no layout can claim it."""
@@ -155,12 +263,12 @@ def check_a_chip_whose_window_closed_is_withdrawn():
     """The PC must take the question back — the phone cannot know the window
     is gone, and a question he cannot answer is one he still has to tap away.
 
-    Defect planted: dropping the `withdraw_dead` call leaves the offer in
+    Defect planted: dropping the `withdraw_moot` call leaves the offer in
     `_OFFERS` and nothing at all on the wire for the phone."""
     conn, fake, sent = _desk_with_one_new_window()
     conn["popup_send"].clear()           # the flush: the chip is on the phone
     fake.alive.discard(popup_gate.STRANGER)   # …and the agent closed it
-    withdrawn = offer_withdraw.withdraw_dead(conn)
+    withdrawn = offer_withdraw.withdraw_moot(conn)
     if len(sent) != 1 or withdrawn != sent:
         print(f"  DETAIL asked {sent}, withdrew {withdrawn}")
         return False
@@ -180,7 +288,7 @@ def check_a_chip_that_never_went_out_is_simply_dropped():
     dropped where it stands, and no cancel is owed for a chip nobody saw."""
     conn, fake, sent = _desk_with_one_new_window()
     fake.alive.discard(popup_gate.STRANGER)   # closed before the flush
-    offer_withdraw.withdraw_dead(conn)
+    offer_withdraw.withdraw_moot(conn)
     if not sent:
         print("  DETAIL nothing was ever offered")
         return False
@@ -193,7 +301,7 @@ def check_a_living_window_keeps_its_question():
     conn, _fake, sent = _desk_with_one_new_window()
     conn["popup_send"].clear()
     for _ in range(4):                   # a second of the watcher's poll
-        if offer_withdraw.withdraw_dead(conn):
+        if offer_withdraw.withdraw_moot(conn):
             print("  DETAIL a standing window's chip was withdrawn")
             return False
     return bool(sent) and popup_gate.offers(conn) == []
@@ -382,6 +490,12 @@ def check_the_withdrawal_does_not_eat_the_next_question():
 CHECKS = [
     ("one window is never asked about twice",
      check_one_window_is_never_asked_about_twice),
+    ("the sweep getting there first still leaves one question",
+     check_the_sweep_getting_there_first_still_leaves_one_question),
+    ("a question about a window a layout now holds is withdrawn",
+     check_a_question_about_a_window_a_layout_now_holds_is_withdrawn),
+    ("creation refuses a window a layout already holds",
+     check_creation_refuses_a_window_a_layout_already_holds),
     ("the desktop still gets the birth question",
      check_the_desktop_still_gets_the_birth_question),
     ("a standing chip is not replaced under his finger",

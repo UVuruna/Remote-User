@@ -69,6 +69,7 @@ import logging
 import threading
 import time
 
+import dialog_center
 import focus_hook
 import layout_birth
 import popup_offers
@@ -595,8 +596,18 @@ async def watch(layouts, conn: dict, injector=None) -> None:
                 # still had to tap away, one by one. Beside the two sweeps and
                 # ahead of the flush, so a chip that died before it was ever
                 # sent is dropped rather than delivered (layout_popup.py).
-                await asyncio.to_thread(offer_withdraw.withdraw_dead, conn)
+                await asyncio.to_thread(offer_withdraw.withdraw_moot, conn, layouts)
+                # IS A DIALOG STANDING OFF ITS PARENT? (owner report 2026-08-19,
+                # a repeat of constraint 19 one layout over.) Beside the birth
+                # scan and not inside the `_defending` gate, because the parent
+                # may be in ANY layout or in none, and the phone may be at the
+                # desktop — the dialog belongs in the middle of its parent in
+                # every one of those (server/dialog_center.py). It moves the
+                # dialog and nothing else; what it wants to TELL him goes out
+                # with the chips, below.
+                await asyncio.to_thread(dialog_center.sweep, layouts, conn)
                 await popup_offers.flush_offers(conn)
+                await dialog_center.flush_notices(conn)
             if not _defending(conn):
                 continue
             await asyncio.to_thread(_defend, layouts, conn, announced)

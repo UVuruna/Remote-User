@@ -507,6 +507,33 @@ async def layout_create(ws, layouts, stream, conn: dict, msg: dict) -> None:
         await toast(ws, "Those windows are gone — layout not created")
         await send_layout_state(ws, layouts, conn)
         return
+    # A WINDOW A LAYOUT ALREADY HOLDS IS NOT BUILT A SECOND ONE (owner report
+    # 2026-08-19): two chips for one Chrome window, his yes to each, and the
+    # second yes ran this very path on a window that was by then a MEMBER —
+    # two identical layouts around one hwnd, and closing one closed both. The
+    # creation panel hides members (`member_hwnds`), so the only way a held
+    # window reaches here is a stale seed; the answer is the layout that has
+    # it, shown, and no new one. A held window in a LATER slot is simply left
+    # out of this one, and he is told how many were.
+    held = await asyncio.to_thread(layouts.member_hwnds)
+    if resolved[0][0] in held:
+        owner = next((i for i, lay in enumerate(layouts.layouts)
+                      if resolved[0][0] in lay.members), None)
+        logger.info("Layout not created: %#x is already in layout %s",
+                    resolved[0][0], owner)
+        if owner is None:
+            await toast(ws, "That window is already in a layout")
+            await send_layout_state(ws, layouts, conn)
+            return
+        await toast(ws, f"Already in layout '{layouts.layouts[owner].name}' "
+                        "— showing it")
+        await layout_focus(ws, layouts, stream, conn, owner)
+        return
+    if any(h in held for h, _, _ in resolved[1:]):
+        left_out = sum(1 for h, _, _ in resolved[1:] if h in held)
+        resolved = [resolved[0]] + [r for r in resolved[1:] if r[0] not in held]
+        await toast(ws, f"{left_out} window{'s' if left_out > 1 else ''} already "
+                        "in a layout — left out")
     target, name, _ = resolved[0]
     # EVERY SLOT'S SOURCE, NOT ONLY THE FIRST (task 173, 2026-08-09). The
     # triple's third value is the window a tab was torn OUT of, and only

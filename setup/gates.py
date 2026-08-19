@@ -954,6 +954,17 @@ def input_gate(step, run) -> None:
          "checks hold (tests/test_apk_update.py)")
     run([sys.executable, str(PROJECT_DIR / "tests" / "test_apk_update.py")])
 
+    # OWNER REPORT 2026-08-19, a repeat of constraint 19 one layout over: his
+    # UVuruna VS Code raised its "open this link?" box while the phone showed
+    # another layout, the box was offered as a new window and he built a
+    # layout around a 625x189 dialog. A dialog opens in the middle of ITS
+    # parent — whichever layout the parent is in, and even in none — he is
+    # told once where, and it is never a chip.
+    step("0b33/6  DIALOG CENTER GATE — a dialog opens in the middle of its "
+         "parent, wherever the parent is, and is never offered as a window "
+         "(tests/test_dialog_center.py)")
+    run([sys.executable, str(PROJECT_DIR / "tests" / "test_dialog_center.py")])
+
     # THE USE-LOG GATES — the record the app keeps of its own run, split into
     # their own module by RESPONSIBILITY on 2026-08-17 (see setup/gates_log.py):
     # everything above proves something about the wire and the phone, those

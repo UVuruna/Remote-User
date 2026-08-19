@@ -187,10 +187,37 @@ def check_a_window_nobody_placed_is_offered_with_no_click_at_all() -> bool:
 def check_a_dialog_is_never_offered() -> bool:
     """"Only NEW top-level windows, never dialogs" — his own scoping. A Save-As
     box is owned by the window that raised it, cannot be a layout member, and
-    is gone before he could answer."""
-    reg, conn, _ = desk([MEMBER_A, MEMBER_B, OLD, DIALOG2],
-                        owner={DIALOG2: NEWWIN})
-    layout_birth.scan(reg, conn)
+    is gone before he could answer.
+
+    Since 2026-08-19 the dialog test is `window_manager.is_dialog`, asked by
+    `is_listable` — ONE definition for the creation list and every chip path
+    (his VS Code "open this link?" box had reached a chip through a path that
+    did not ask). So this check drives the REAL filter: the fake desk answers
+    the owner chain and visibility, the rest of `is_listable`'s questions are
+    answered the way a real titled window answers them, and the listing the
+    scan reads is whatever the real filter lets through."""
+    reg, conn, fake = desk([MEMBER_A, MEMBER_B, OLD, DIALOG2],
+                           owner={DIALOG2: NEWWIN})
+    fake.IsWindowVisible = lambda hwnd: 1 if hwnd in fake.alive else 0
+    real = (window_manager._title, window_manager._is_cloaked,
+            window_manager._class_name)
+    window_manager._title = lambda hwnd: TITLES.get(hwnd, f"w{hwnd:x}")
+    window_manager._is_cloaked = lambda hwnd: False
+    window_manager._class_name = lambda hwnd: "Chrome_WidgetWin_1"
+    try:
+        if not window_manager.is_dialog(DIALOG2) or window_manager.is_dialog(NEWWIN):
+            print("  DETAIL is_dialog does not read the owner chain")
+            return False
+        if window_manager.is_listable(DIALOG2) or not window_manager.is_listable(NEWWIN):
+            print("  DETAIL is_listable does not refuse the dialog (or refuses the window)")
+            return False
+        window_manager.list_windows = lambda exclude=None: listing(
+            *[h for h in (MEMBER_A, MEMBER_B, OLD, DIALOG2)
+              if window_manager.is_listable(h)])
+        layout_birth.scan(reg, conn)
+    finally:
+        (window_manager._title, window_manager._is_cloaked,
+         window_manager._class_name) = real
     if chips(conn):
         print(f"  DETAIL a dialog was offered: {chips(conn)}")
         return False

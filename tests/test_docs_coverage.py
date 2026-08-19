@@ -187,6 +187,11 @@ STANDARD = {
     # follows a yes. No state machine and no geometry — the __about doc reads
     # the four steps straight off the code.
     "server/offer_withdraw.py",
+    # New 2026-08-19 (his repeat of constraint 19 one layout over — a VS Code
+    # dialog offered as a new layout). Standard: one pass over the desk asking
+    # two measured questions (is it a dialog, whose is the root), one centred
+    # move, one notice. The ladder with geometry stays in popup_contain.py.
+    "server/dialog_center.py",
     # New 2026-08-11 (task 184 — a layout from a window that is not open yet).
     # Standard: three READS of places other apps keep their own recent lists,
     # plus a launch and a wait. The one rule with teeth — only a handle that

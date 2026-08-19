@@ -195,6 +195,11 @@ def baseline(conn: dict) -> None:
     # look at a window would make it old for the other feature. Same baseline,
     # separate bookkeeping.
     conn["birth_seen"] = set(known)
+    # …and a THIRD, for the same reason once more: the dialog pass
+    # ([Dialog Center](dialog_center.py), 2026-08-19) asks "which dialogs are
+    # NEW since the desk was last watched", and it may neither make a window
+    # old for the two above nor be made blind by their judgements.
+    conn["dialog_seen"] = set(known)
 
 
 def _is_new(conn: dict, hwnd: int) -> bool:
@@ -287,9 +292,11 @@ def handle(lay, hwnd: int, root: int, conn: dict) -> str:
         # back out of the region, and a note of a placement is not a placement.
         popup_contain.contain(lay, hwnd, conn)
         return "a window this layout already holds"
-    if hwnd in conn.get("popup_declined", ()) or hwnd in conn.get("popup_asked", ()):
-        # He said desktop, or he has been asked and has not answered. Either
-        # way nothing here may move it — and it must not be re-offered on the
+    if hwnd in conn.get("popup_declined", ()) or hwnd in conn.get("popup_asked", ())             or hwnd in conn.get("birth_asked", ()):
+        # He said desktop, or he has been asked and has not answered — by this
+        # module or by the birth one (one window, one question, constraint
+        # 18; the birth chip was the missing case, 2026-08-19). Either way
+        # nothing here may move it — and it must not be re-offered on the
         # next of four polls a second.
         return ""
 
@@ -436,7 +443,16 @@ def sweep(layouts, conn: dict) -> None:
             continue
         if hwnd in lay.members or hwnd in lay.adopted:
             continue
-        if hwnd in asked or hwnd in declined or _is_ours(hwnd):
+        # A WINDOW ANY LAYOUT HOLDS IS NOBODY'S QUESTION (owner report
+        # 2026-08-19). This used to exempt only the FOCUSED layout's windows,
+        # so a dialog another layout had adopted — its VS Code's own "open
+        # this link?" box — still ran the process rule below against the
+        # focused layout, whose VS Code shares the exe, and was offered as a
+        # new window. `held` is read fresh one screen above for the catch-all
+        # rule; it is the same fact, asked first.
+        if held is not None and hwnd in held:
+            continue
+        if hwnd in asked or hwnd in declined or hwnd in conn.get("birth_asked", ())                 or _is_ours(hwnd):
             continue
         root = _owner_root(hwnd)
         reason = _attribute(lay, hwnd, root, conn)

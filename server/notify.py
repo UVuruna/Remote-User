@@ -73,6 +73,9 @@ EVENT_WORDS = {
     # he answers. It gets its own word so the phone says which of the two it
     # is without him having to look.
     "asking": "is asking you",
+    # A DIALOG IS WAITING in a layout he is not looking at (2026-08-19,
+    # server/dialog_center.py): its parent's own box, centred on it there.
+    "dialog": "has a dialog waiting",
 }
 
 # --- The phone's own voices (round R2, owner 2026-08-07) ---------------------
@@ -140,6 +143,43 @@ def compose(agent: str, event: str, text: str) -> tuple[str, str]:
     """
     word = EVENT_WORDS.get(event, event)
     return f"{agent} {word}".strip(), text
+
+
+def make_notice(agent: str, event: str, text: str, speak_text: str,
+                speak: bool = True, where: dict | None = None) -> dict:
+    """ONE `notify` frame — the shape every notice carrier and the phone
+    agree on — built here and nowhere else. The HTTP route below feeds it an
+    agent's hook; [Dialog Center](dialog_center.py) feeds it a dialog waiting
+    in a layout (2026-08-19). `where` is the layout jump, when there honestly
+    is one."""
+    title, body = compose(agent, event, text)
+    notice = {
+        "type": "notify",
+        "agent": agent,
+        "event": event,
+        "title": title,
+        "text": body,
+        # WHAT THE VOICE SAYS, kept apart from what the banner SHOWS
+        # (owner order, v0.0.107 screenshots: the banner text is fine,
+        # the spoken line must be short — project + conversation name,
+        # never the body). See speak_summary() below.
+        "speak_text": speak_text,
+        # HOW the phone says it is the DESKTOP's decision (Settings
+        # window, round R2). "Speak it out loud" off sends speak:false and
+        # nothing more — the Android banner still appears, so a notice is
+        # never lost by muting one of its three carriers. The voice name
+        # and the rate ride along on every frame instead of being pushed
+        # to the phone separately: there is then no state on the phone to
+        # go stale, and a reconnect cannot leave it speaking in last
+        # week's voice.
+        "speak": bool(speak) and SETTINGS.notify_speak,
+        "voice": SETTINGS.notify_voice,
+        "rate": SETTINGS.notify_rate,
+        "at": time.time(),
+    }
+    if where:
+        notice["layout"] = where
+    return notice
 
 
 def speak_summary(project, agent: str) -> str:
@@ -217,34 +257,10 @@ def register(app, token: str, active_client: dict, layouts=None) -> None:
         agent = clean(data.get("agent"), MAX_AGENT, "Agent")
         event = clean(data.get("event"), 24, "finished")
         text = clean(data.get("text"), MAX_TEXT)
-        title, body = compose(agent, event, text)
-        logger.info("Notify: %s | %s", title, body or "-")
         speak_text = speak_summary(data.get("project"), agent)
-
-        notice = {
-            "type": "notify",
-            "agent": agent,
-            "event": event,
-            "title": title,
-            "text": body,
-            # WHAT THE VOICE SAYS, kept apart from what the banner SHOWS
-            # (owner order, v0.0.107 screenshots: the banner text is fine,
-            # the spoken line must be short — project + conversation name,
-            # never the body). See speak_summary() below.
-            "speak_text": speak_text,
-            # HOW the phone says it is the DESKTOP's decision (Settings
-            # window, round R2). "Speak it out loud" off sends speak:false and
-            # nothing more — the Android banner still appears, so a notice is
-            # never lost by muting one of its three carriers. The voice name
-            # and the rate ride along on every frame instead of being pushed
-            # to the phone separately: there is then no state on the phone to
-            # go stale, and a reconnect cannot leave it speaking in last
-            # week's voice.
-            "speak": bool(data.get("speak", True)) and SETTINGS.notify_speak,
-            "voice": SETTINGS.notify_voice,
-            "rate": SETTINGS.notify_rate,
-            "at": time.time(),
-        }
+        notice = make_notice(agent, event, text, speak_text,
+                             speak=bool(data.get("speak", True)))
+        logger.info("Notify: %s | %s", notice["title"], notice["text"] or "-")
         # WHERE it happened, when we can say so honestly (task 110). Resolved
         # at SEND time, not at tap time: this is the moment the agent told us
         # its project, and the layout list is a live thing. Absent whenever

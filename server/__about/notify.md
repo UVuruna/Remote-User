@@ -113,8 +113,13 @@ that does it.
 - `clean(value, limit, fallback)` — one incoming field: string, trimmed,
   length-capped. Nothing from a POST body reaches a notification unclamped.
 - `compose(agent, event, text) -> (title, body)` — the AGENT leads, the event
-  is the verb (`EVENT_WORDS`: finished / needs you / failed), free text is the
-  second line. An unknown event is shown as-is rather than swallowed.
+  is the verb (`EVENT_WORDS`: finished / needs you / failed / is asking you /
+  has a dialog waiting), free text is the second line. An unknown event is
+  shown as-is rather than swallowed.
+- `make_notice(agent, event, text, speak_text, speak=True, where=None) -> dict`
+  — THE ONE `notify` frame builder (2026-08-19): the `/notify` route feeds it
+  an agent's hook, [Dialog Center](dialog_center.md) feeds it a dialog waiting
+  in a layout the phone is not showing; `where` is the `{index, name}` jump.
 - `deliver(notice) -> "page" | "waiting" | "held"` — the carrier decision, and
   the reason a notice can never arrive twice ON ONE DEVICE. The `waiting`
   branch fans out to every waiting device, once each.

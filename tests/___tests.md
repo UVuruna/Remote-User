@@ -2855,6 +2855,41 @@ Run: `.venv\Scripts\python tests/test_apk_update.py`
 
 ---
 
+### `test_dialog_center.py` — Dialog Center Gate
+
+Owner report 2026-08-19, a REPEAT of constraint 19 one layout over: his
+UVuruna VS Code raised its "open this link in Chrome?" box while the phone was
+showing ANOTHER layout; the box (625×189, owned by that VS Code) was offered
+to him as a new window, he said yes, and a layout was built around a dialog
+that cannot take a rect. `server/dialog_center.py` is the answer; this gate
+holds his three sentences.
+
+Ten checks on the fake desk of `test_layout_popup.py` extended by a second
+layout (UVuruna) and a lone application, each proven by planting its own
+defect: another layout's dialog is centred on ITS parent and adopted THERE
+(home remembered, never the topmost band); it is never offered as a new window
+(the `held`-by-any-layout rule in `layout_popup.sweep`); he is told ONCE and
+the `notify` frame carries the jump to that layout — including for a dialog
+that refuses its rect and is looked at again every second; a second sweep
+moves nothing again; a dialog of a window in NO layout is centred silently (no
+adoption, no notice, no topmost); the focused layout's own dialog is left to
+constraint 19's placer; a window that is not a dialog is never moved; a
+refusing dialog is tried `MAX_CONTAIN_TRIES` times and then left; nothing
+moves while he is away or before a baseline; and the watcher runs the pass
+beside the birth scan, outside the defending gate, flushing the notices from
+the same loop.
+
+The dialog DEFINITION (`window_manager.is_dialog`, asked by `is_listable`) is
+proven through the real filter in `test_layout_birth.py`; the same round added
+three checks to `test_window_offer_queue.py` — the sweep getting there first
+still leaves one question, a question about a window a layout now holds is
+withdrawn, and creation refuses a window a layout already holds.
+
+Run: `.venv\Scripts\python tests/test_dialog_center.py` — also a fail-closed
+build step (`0b33/6`, setup/gates.py).
+
+---
+
 ## Instruments a person runs by hand — [tests/manual/](manual/___manual.md)
 
 Everything above is a GATE: it runs unattended, it fails the build, and each

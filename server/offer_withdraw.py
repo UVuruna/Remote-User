@@ -1,4 +1,5 @@
-"""A QUESTION ABOUT A WINDOW THAT NO LONGER EXISTS IS TAKEN BACK.
+"""A QUESTION WHOSE SUBJECT IS GONE IS TAKEN BACK — the window closed, or a
+layout holds it now.
 
 Owner report 2026-08-18, with a screenshot of his phone: *"agenti kad rade …
 otvaraju i zatvaraju gomilu prozora i onda meni kada koristim telefon moram
@@ -52,15 +53,32 @@ logger = logging.getLogger(__name__)
 _ASKED_KEYS = ("popup_asked", "birth_asked", "lost_asked")
 
 
-def withdraw_dead(conn: dict) -> list[str]:
-    """Drop every offer of this connection whose window is gone; returns the
-    ids withdrawn, with their cancel frames queued for the next
-    `popup_offers.flush_offers`.
+def _held_by(layouts, hwnd: int):
+    """The layout that holds this window — member or adopted — or None."""
+    for lay in getattr(layouts, "layouts", None) or ():
+        if hwnd in lay.members or hwnd in getattr(lay, "adopted", ()):
+            return lay
+    return None
 
-    "Gone" is `window_manager.is_alive` — the same three questions the sweeps
-    themselves are built on (a handle that still exists, visible, not cloaked),
-    so a window this module calls dead is exactly one the passes next door
-    would no longer offer.
+
+def withdraw_moot(conn: dict, layouts=None) -> list[str]:
+    """Drop every offer of this connection whose question no longer has a
+    subject; returns the ids withdrawn, with their cancel frames queued for
+    the next `popup_offers.flush_offers`.
+
+    Two ways a question loses its subject, and both are MEASURED:
+
+    * the window is GONE — `window_manager.is_alive`, the same three questions
+      the sweeps themselves are built on (a handle that still exists, visible,
+      not cloaked), so a window this module calls dead is exactly one the
+      passes next door would no longer offer;
+    * the window is HELD by a layout now (owner report 2026-08-19): "make a
+      layout with it?" was asked about an UNPLACED window, and the moment he
+      placed it — through the other chip, through the panel, through anything
+      — the question describes nothing. Left standing, it was answered again
+      with a yes, and a second layout was built around a window the first
+      already held; closing one closed both. `layouts` is the live registry,
+      and None (a caller without one) keeps this half silent.
 
     Blocking Win32, a handful of calls per open offer — the watcher runs it on
     a worker thread like every other pass."""
@@ -69,14 +87,19 @@ def withdraw_dead(conn: dict) -> list[str]:
         if offer.get("conn") is not conn:
             continue
         hwnd = offer["hwnd"]
-        if wm.is_alive(hwnd):
+        holder = _held_by(layouts, hwnd) if layouts is not None else None
+        if wm.is_alive(hwnd) and holder is None:
             continue
         popup_offers.drop_offer(key)
         for asked in _ASKED_KEYS:
             conn.get(asked, set()).discard(hwnd)
         gone.append(key)
-        logger.info("Offer %s withdrawn — %s has closed", key,
-                    popup_contain.describe(hwnd))
+        if holder is None:
+            logger.info("Offer %s withdrawn — %s has closed", key,
+                        popup_contain.describe(hwnd))
+        else:
+            logger.info("Offer %s withdrawn — %s is in layout %r now", key,
+                        popup_contain.describe(hwnd), holder.name)
     if not gone:
         return gone
     pending = conn.get("popup_send") or []

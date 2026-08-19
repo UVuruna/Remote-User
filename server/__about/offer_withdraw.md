@@ -1,4 +1,4 @@
-# Offer Withdraw — a question about a window that is gone
+# Offer Withdraw — a question whose subject is gone
 
 Source: [`server/offer_withdraw.py`](../offer_withdraw.py) ·
 Registry and chip: [Layout Popup](layout_popup.md) ·
@@ -22,12 +22,18 @@ question.**
 
 ## What it does
 
-Once per watcher tick, for the connection's own offers only:
+Once per watcher tick, for the connection's own offers only (`withdraw_moot`):
 
 1. Ask `window_manager.is_alive(hwnd)` — the same three questions the sweeps
    themselves stand on (the handle exists, it is visible, it is not cloaked).
    A window this module calls dead is exactly one the passes next door would no
-   longer offer.
+   longer offer. **And** ask the live registry whether a layout now HOLDS the
+   window, member or adopted (owner report 2026-08-19): "make a layout with
+   it?" was asked about an UNPLACED window, and the moment he placed it —
+   through the other chip, through the panel — the question describes
+   nothing; left standing it was answered yes a second time and a second
+   layout was built around a window the first already held, so closing one
+   closed both.
 2. Drop the offer from the registry, so a stale tap on a dead handle can never
    be honoured.
 3. Forget the hwnd in `popup_asked` / `birth_asked` / `lost_asked`.

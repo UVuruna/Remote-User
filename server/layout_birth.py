@@ -11,9 +11,10 @@ rule below rather than a hope:
   [Focus Guard](focus_guard.py)'s watcher, which exists per connection, and it
   stands down while the phone is away — those windows belong to his desk again.
 * **Only NEW top-level windows, never dialogs.** `window_manager.list_windows`
-  drops tool windows, cloaked windows, shell chrome, untitled windows and our
-  own process; an OWNED window (`GW_OWNER`) is a dialog of something else and is
-  dropped here. A layout member cannot hold a dialog anyway.
+  drops tool windows, cloaked windows, shell chrome, untitled windows, our
+  own process — and, since 2026-08-19, every DIALOG (`window_manager.is_dialog`:
+  a window owned by a visible one), which is the one definition every chip
+  path shares. A layout member cannot hold a dialog anyway.
 * **Correlated with an injected DOUBLE-CLICK.** This is the load-bearing one.
   This PC is never quiet — background agents launch GUI apps all day
   (constraint 11) — so "a window appeared" is not evidence of anything. What
@@ -59,7 +60,6 @@ DOUBLE_CLICK_S = 0.7
 # starts are slow (Excel on a busy machine), and the correlation is only ever
 # used to decide whether to ASK.
 BIRTH_AFTER_CLICK_S = 15.0
-GW_OWNER = 4
 
 
 def note_click(conn: dict) -> None:
@@ -140,9 +140,22 @@ def scan(layouts, conn: dict) -> None:
         if hwnd in seen:
             continue
         seen.add(hwnd)          # judged once, whatever the answer
-        if wm.user32.GetWindow(hwnd, GW_OWNER):
-            continue            # a dialog of something else, never a member
+        # (A dialog of something else never reaches this loop: `list_windows`
+        # refuses it through `window_manager.is_dialog` — ONE definition of
+        # "a dialog", since 2026-08-19, shared with every chip path.)
         if hwnd in members or hwnd in conn.get("birth_asked", ()):
+            continue
+        # THE SWEEP GOT THERE FIRST (owner report 2026-08-19 — two chips, two
+        # identical layouts, and closing one closed both). The rule below asks
+        # `_attribute` whether the focused layout can claim the window — but
+        # `_attribute` answers "" for any window the sweep has already JUDGED,
+        # because `_judged` makes it old. So whenever the sweep saw the window
+        # one tick before this pass did (a window visible a moment before it
+        # was listable, a hook wake between two passes), its chip was already
+        # out and this pass put a second one behind it. A chip the sweep has
+        # out, or an answer he has already given it, is the one-window-one-
+        # question rule's own bookkeeping — read it, and stand down.
+        if hwnd in conn.get("popup_asked", ()) or hwnd in conn.get("popup_declined", ()):
             continue
         # A WINDOW WE MADE OURSELVES IS NOT A WINDOW HE OPENED (owner report
         # 2026-08-13, his point 4A). Creating a layout from a TAP inside a

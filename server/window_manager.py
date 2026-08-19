@@ -37,6 +37,8 @@ dwmapi = ctypes.windll.dwmapi
 kernel32 = ctypes.windll.kernel32
 
 GA_ROOT = 2
+GA_ROOTOWNER = 3
+GW_OWNER = 4
 GWL_EXSTYLE = -20
 WS_EX_TOOLWINDOW = 0x00000080
 DWMWA_CLOAKED = 14
@@ -134,6 +136,24 @@ def is_alive(hwnd: int) -> bool:
         and not _is_cloaked(hwnd)
 
 
+def is_dialog(hwnd: int) -> bool:
+    """Is this a DIALOG — a window owned by another, VISIBLE window?
+
+    A layout member cannot hold a dialog (the birth scan said so from its
+    first day), and a dialog is never a layout's question either: it belongs
+    in the middle of the window that raised it (constraint 19, and his repeat
+    of 2026-08-19 — a VS Code "open this link?" box, 625x189, was offered to
+    him as a new layout and he made one). So the owner chain is read HERE,
+    once, and `is_listable` refuses what it finds — which keeps a dialog out
+    of the creation list and off every chip in the same breath.
+
+    VISIBLE owner, deliberately: an app whose main form is owned by a hidden
+    message window (the VCL pattern) is a real window with nothing to be
+    centred on, and must stay listable."""
+    owner = int(user32.GetWindow(hwnd, GW_OWNER) or 0)
+    return bool(owner) and owner != hwnd and bool(user32.IsWindowVisible(owner))
+
+
 def is_listable(hwnd: int) -> bool:
     """Is this a window a layout could actually hold?
 
@@ -155,6 +175,8 @@ def is_listable(hwnd: int) -> bool:
     if not _title(hwnd) or _is_cloaked(hwnd):
         return False
     if _class_name(hwnd) in _SHELL_CLASSES:
+        return False
+    if is_dialog(hwnd):
         return False
     pid = wintypes.DWORD()
     user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
@@ -191,6 +213,11 @@ def window_at(mon_rect: tuple[int, int, int, int], nx: float, ny: float) -> dict
     if not hwnd:
         return None
     root = user32.GetAncestor(hwnd, GA_ROOT)
+    if root and is_dialog(root):
+        # A TAP ON A DIALOG IS A TAP ON ITS PARENT (2026-08-19): a dialog is
+        # not a window a layout could hold, but the application that raised it
+        # is — and it is the one his finger meant.
+        root = user32.GetAncestor(hwnd, GA_ROOTOWNER) or root
     if not root or not is_alive(root):
         return None
     # THE SAME ANSWER THE CREATION LIST GIVES, never a weaker copy of it
