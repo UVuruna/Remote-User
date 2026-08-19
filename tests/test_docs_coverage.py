@@ -32,6 +32,25 @@ TRIVIAL = {
 
 # Standard: ordinary module. Needs __about/{name}.md only.
 STANDARD = {
+    # THE DESIGN LAB, new 2026-08-19 — the workshop page where every look of
+    # every control is on screen at once and Save writes a tuned value back
+    # into the file it came from. The server and the page script share
+    # __about/design_lab.md (the layouts.js / layouts.css precedent — one doc
+    # per JOB, not per file); the specimen board and the registry each carry
+    # their own, because "what is on the bench" and "which values are tunable
+    # and why is each grouped where it is" are the two questions a reader
+    # actually arrives with.
+    # The markup and the chrome share that doc too, and are listed here rather
+    # than as Trivial for a mechanical reason worth writing down: the tier
+    # table maps a file to `__about/{basename}.md`, so a Trivial file whose
+    # basename matches a Standard one reads as a STRAY doc on that name. Four
+    # files, one job, one doc — the layouts.js / layouts.css precedent.
+    "tools/design_lab.py",
+    "tools/design_lab.js",
+    "tools/design_lab.html",
+    "tools/design_lab.css",
+    "tools/preview.html",
+    "tools/design_tokens.py",
     # New 2026-08-16 (the owner's blue-screen report): a bounded three-rung
     # ladder (abandon -> reopen -> re-enumerate) plus one guard thread that
     # judges a single fact (did a frame arrive). No branching state machine

@@ -36,6 +36,7 @@ installable: yes
 ```
 python server/gui_main.py            desktop app (GUI + tray) — what the EXE runs
 python server/main.py                headless CLI server
+python tools/design_lab.py           the design lab (PC workshop, never shipped)
 ```
 
 ## How to test
@@ -61,6 +62,7 @@ python u:/Coding/UVuruna/rules/tools/uv.py shot --all    every Qt window × prof
 | `client/index.html` | the page the phone loads |
 | `android/app/` | the Kotlin shell |
 | `setup/build.py`, `setup/build_apk.py` | installer and APK (owner's word only) |
+| `tools/design_lab.py` | the design lab — every control look on one page, Save writes back |
 | `.claude/uv_windows.py` | window registry for `uv shot` |
 
 ## Project laws (tighter or extra)
@@ -104,6 +106,6 @@ the entry before arguing with the rule.
 - `ROADMAP.md` — phases and status · `docs/GUIDE.md` — the user's setup flow ·
   `docs/VERIFICATION.md` — the owner's live checklist
 - Folder docs: `server/___server.md`, `client/___client.md`,
-  `android/___android.md`, `tests/___tests.md`, `setup/___setup.md` → `__about/`,
-  `__flow/`
+  `android/___android.md`, `tests/___tests.md`, `setup/___setup.md`,
+  `tools/___tools.md` → `__about/`, `__flow/`
 - `UV/` — the owner's inbox: read it, never edit or delete it

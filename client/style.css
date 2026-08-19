@@ -14,6 +14,65 @@
   --radius-pill: 999px;
   --space-s: 8px;
   --space-m: 16px;
+
+  /* ══ CONTROL GEOMETRY — every tunable number of a control's shape ═══════
+     THE CONFIG SECTION LAW, arriving through the design lab (tools/). Until
+     this block every number below sat INLINE in the rule that used it — 16px
+     on `.ctl`, `0 1px 1px` inside two shadow functions, `2px / 5px / 20px`
+     spread across the ON state's three-stop ring — so tuning any of them
+     meant editing a RULE, and a tool that edits rules is a tool that can
+     break the page. Named here, in one place, the rules read them and a
+     tuner may only ever rewrite `--name: value;`.
+
+     Nothing moved and nothing changed value in the move: every number here is
+     the one that was inline, and the ones that carry an owner verdict say so.
+     `tools/design_lab.py` rewrites ONLY between the two markers below.
+
+     design-lab: begin */
+  /* The control's own face */
+  --ctl-radius: 16px;
+  --ctl-icon: 23px;
+  --ctl-gap: 3px;              /* icon ↔ label */
+  --ctl-label: 9px;
+  --ctl-label-max: 54px;
+  --ctl-label-text: 13px;      /* a chord button, whose label IS the face */
+  --cat-size: 42px;            /* the smaller set-switcher beside a group */
+  --cat-radius: 12px;
+  --cat-icon: 18px;
+  --cat-label: 8px;
+  /* The two shadows that keep icon and label legible over the PC's own
+     screen. OWNER'S NUMBERS, settled 2026-08-15 on his ballot's sliders: a
+     3D lift (offset 0 / 1 px, blur 1 px), never a glow — the 2 px blur it
+     replaced is what he photographed and called "blury". Their COLOUR is a
+     theme token (client/theme.css → --ink-shadow / --lbl-shadow) and their
+     alphas are his too; changing any of the six is re-opening a question he
+     has answered, and tests/test_ink_shadow.py says so out loud. */
+  --ink-shadow-x: 0;
+  --ink-shadow-y: 1px;
+  --ink-shadow-blur: 1px;
+  --lbl-shadow-x: 0;
+  --lbl-shadow-y: 1px;
+  --lbl-shadow-blur: 1px;
+  /* THE ON STATE — a luminance event (owner 2026-08-09, task 179). The ring
+     is three stops: gap, face, glow. Colour lives in theme.css. */
+  --on-border: 3px;
+  --on-ring-gap: 2px;
+  --on-ring-face: 5px;
+  --on-glow-blur: 20px;
+  --on-scale: 1.06;
+  /* A finger holding the button down — a HUE and an inward scale, never a
+     luminance event: a momentary press must not be mistaken for a switch. */
+  --held-ring: 2px;
+  --held-glow: 14px;
+  --held-scale: 0.94;
+  --held-on-scale: 0.98;       /* switched ON *and* held */
+  /* The category wheel's circles */
+  --wheel-icon: 22px;
+  --wheel-gap: 4px;
+  --wheel-label: 12px;
+  --wheel-ring: 2px;
+  --wheel-glow: 22px;
+  /* design-lab: end */
 }
 
 * {
@@ -179,7 +238,7 @@ html, body {
 .ctl {
   width: var(--corner);
   height: var(--corner);
-  border-radius: 16px;
+  border-radius: var(--ctl-radius);
   background: var(--glass-fill);
   border: 1px solid var(--border);
   color: var(--text-primary);
@@ -187,7 +246,7 @@ html, body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 3px;
+  gap: var(--ctl-gap);
   touch-action: none;
   -webkit-tap-highlight-color: transparent;
   transition: box-shadow 0.15s ease-out, color 0.15s ease-out, transform 0.15s ease-out;
@@ -199,10 +258,11 @@ html, body {
    read as "blury" once the colour question was answered (the alphas and the
    always-black rule live with the tokens, client/theme.css). */
 .ctl svg {
-  width: 23px;
-  height: 23px;
+  width: var(--ctl-icon);
+  height: var(--ctl-icon);
   pointer-events: none;
-  filter: drop-shadow(0 1px 1px var(--ink-shadow));
+  filter: drop-shadow(var(--ink-shadow-x) var(--ink-shadow-y)
+                      var(--ink-shadow-blur) var(--ink-shadow));
 }
 
 /* A pool's reserve commands carry longer names than the shipped four
@@ -210,19 +270,20 @@ html, body {
    row instead of eliding — THE SPACE & LEGIBILITY LAW: nothing the user must
    read is ever cut off (owner 2026-08-05). */
 .ctl .lbl {
-  font: 600 9px/1.15 system-ui, sans-serif;
+  font: 600 var(--ctl-label)/1.15 system-ui, sans-serif;
   letter-spacing: 0.02em;
   color: var(--text-primary);
-  text-shadow: 0 1px 1px var(--lbl-shadow);
+  text-shadow: var(--lbl-shadow-x) var(--lbl-shadow-y)
+               var(--lbl-shadow-blur) var(--lbl-shadow);
   pointer-events: none;
-  max-width: 54px;
+  max-width: var(--ctl-label-max);
   text-align: center;
   white-space: normal;
   overflow-wrap: anywhere;
 }
 
 /* Chord buttons carry no icon — the label is the whole face */
-.ctl.text .lbl { font-size: 13px; }
+.ctl.text .lbl { font-size: var(--ctl-label-text); }
 
 /* ON IS A LUMINANCE EVENT, IN ALL EIGHT LOOKS (owner 2026-08-09, task 179,
    ROUND TWO, with a screenshot of the Mic switched on in the COLOURED look).
@@ -277,7 +338,7 @@ html, body {
   --ink-shadow: transparent;
   --lbl-shadow: transparent;
   color: var(--on-ink);
-  border-width: 3px;
+  border-width: var(--on-border);
   /* The face is painted TWICE, on both background channels. `--glass-fill`
      above is what every existing rule reads; this image layer is painted over
      whatever COLOUR wins, so a rule that repaints `background-color` alone —
@@ -287,9 +348,10 @@ html, body {
      carries the face: two independent guarantees, neither of which needs to
      win a specificity contest. */
   background-image: linear-gradient(var(--on-face), var(--on-face));
-  box-shadow: 0 0 0 2px var(--on-gap), 0 0 0 5px var(--on-face),
-              0 0 20px var(--on-glow);
-  transform: scale(1.06);
+  box-shadow: 0 0 0 var(--on-ring-gap) var(--on-gap),
+              0 0 0 var(--on-ring-face) var(--on-face),
+              0 0 var(--on-glow-blur) var(--on-glow);
+  transform: scale(var(--on-scale));
 }
 
 /* A CLICK/HOLD mouse button while the finger keeps it pressed — the PC
@@ -298,8 +360,9 @@ html, body {
    event, and a momentary press must never be mistaken for a switch. */
 .ctl.held {
   color: var(--accent);
-  box-shadow: 0 0 0 2px var(--accent-glow), 0 0 14px var(--accent-glow);
-  transform: scale(0.94);
+  box-shadow: 0 0 0 var(--held-ring) var(--accent-glow),
+              0 0 var(--held-glow) var(--accent-glow);
+  transform: scale(var(--held-scale));
 }
 
 /* Switched ON *and* under a finger (a pad button held on a toggle — see
@@ -309,7 +372,7 @@ html, body {
    unreadable for as long as the finger is down. */
 .ctl.active.held {
   color: var(--on-ink);
-  transform: scale(0.98);
+  transform: scale(var(--held-on-scale));
 }
 
 /* The category button is smaller — used only when switching presets.
@@ -323,13 +386,13 @@ html, body {
    smaller size and the DASHED border already say "this one is the switcher,
    not an action", and they say it without spending legibility. */
 .ctl.cat {
-  width: 42px;
-  height: 42px;
-  border-radius: 12px;
+  width: var(--cat-size);
+  height: var(--cat-size);
+  border-radius: var(--cat-radius);
   border-style: dashed;
 }
-.ctl.cat svg { width: 18px; height: 18px; }
-.ctl.cat .lbl { font-size: 8px; }
+.ctl.cat svg { width: var(--cat-icon); height: var(--cat-icon); }
+.ctl.cat .lbl { font-size: var(--cat-label); }
 
 /* Corners — pinned to the visible top, above the keyboard */
 .corner {
@@ -467,13 +530,14 @@ body.wheel-open::before {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-  font: 600 12px system-ui, sans-serif;
+  gap: var(--wheel-gap);
+  font: 600 var(--wheel-label) system-ui, sans-serif;
 }
-.wheel-item svg { width: 22px; height: 22px; }
+.wheel-item svg { width: var(--wheel-icon); height: var(--wheel-icon); }
 .wheel-item.current {
   border-color: var(--accent);
-  box-shadow: 0 0 0 2px var(--accent-glow), 0 0 22px var(--accent-glow);
+  box-shadow: 0 0 0 var(--wheel-ring) var(--accent-glow),
+              0 0 var(--wheel-glow) var(--accent-glow);
   color: var(--accent);
 }
 /* A one-line label keeps the label centred, unchanged from before. A

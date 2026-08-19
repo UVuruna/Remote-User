@@ -1,0 +1,266 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<!-- THE SPECIMEN BOARD — one look, drawn with the PRODUCT's own files.
+
+     The lab loads eight of these, one per rendering (dark/light x
+     plain/coloured x outlined/filled). Everything a specimen wears comes from
+     the four stylesheets below and from client/theme.js: this page owns no
+     colour, no radius and no shadow of its own. Its only stylesheet rule is
+     the BOARD — where a specimen sits — because a lab bench is not a product.
+
+     WHY THE REAL theme.js AND NOT A COPY OF ITS ARITHMETIC. Half of what a
+     coloured control looks like is computed at paint time: the ink walked in
+     lightness until it reads on the surface it really lands on, the fill
+     nudged when neither black nor white clears AA on the raw hue, and the
+     shadow taken as the ink's opposite. A lab that re-implemented any of that
+     would be showing him a second opinion of his own page. -->
+<link rel="stylesheet" href="/client/theme.css">
+<link rel="stylesheet" href="/client/style.css">
+<link rel="stylesheet" href="/client/panels.css">
+<link rel="stylesheet" href="/client/ledger-panel.css">
+<style>
+  /* The bench. Positions only — nothing here names a colour, a radius or a
+     shadow, and nothing overrides a product rule. */
+  html, body { overflow: auto; }
+  /* THE PC's OWN SCREEN. On the phone this element is the canvas the stream
+     is drawn into, and every control floats over it — which is the whole
+     reason an icon carries a shadow at all. Here it wears a picture chosen in
+     the lab instead of a video frame; the element, and everything drawn over
+     it, is the product's. Only `position` is the bench's business (in the
+     product the controls are `fixed` and this is the base they sit on). */
+  #screen { position: fixed; inset: 0; background-size: cover; }
+  .board {
+    position: relative;
+    /* ONE BENCH PER ROW. Side by side (the first shape this had) the wheel's
+       74px circles and the panel card fought for a frame barely 460px wide,
+       and the ring came out half off the edge. A specimen that has to be
+       guessed at is not a specimen. */
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 18px;
+    /* The pill is `position: fixed` in the product and stays that way here,
+       so the board starts below the band it lands in: NOTHING MAY OVERLAP
+       ANYTHING, in the lab as on the phone. MEASURED, never a constant — the
+       toast's height depends on its wording and on how narrow the frame is,
+       and a hand-picked 78px let it sit on the first row of buttons the first
+       time this page was photographed. `--board-top` is written from the
+       pill's real bottom edge (see `clearTheToast`). */
+    padding: var(--board-top, 90px) 14px 18px;
+  }
+  .bench { display: flex; flex-direction: column; gap: 8px; }
+  .bench-name {
+    font: 600 10px/1.2 system-ui, sans-serif;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+  }
+  /* WRAPS. A frame is as narrow as the lab's grid cell, and a row of six
+     specimens that cannot wrap would run off the right edge — the first thing
+     the law forbids. */
+  .bench-row { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 10px; }
+  .bench-col { display: flex; flex-direction: column; gap: 10px; }
+  /* A wheel circle is `position: absolute` in the product — the ring's
+     geometry is computed by client/controls.js when the wheel opens, and on a
+     bench with no wheel every circle lands on the same spot. Only its
+     POSITION is neutralised here, which is the one thing the bench owns; the
+     size, the fill, the border and the ink stay exactly the product's. */
+  .bench-row .wheel-item { position: static; transform: none; }
+  .ldg-line { display: flex; align-items: center; gap: 6px; }
+  .ldg-line span { font: 500 12px system-ui, sans-serif; color: var(--text-primary); }
+</style>
+</head>
+<body>
+
+<!-- The one real toast. Its own id, its own rules, its own fixed position —
+     a second copy dressed by a lab-local class would be a second opinion. -->
+<div id="status" class="disconnected">Layout refused: a window would not land where it was commanded</div>
+
+<div id="screen"></div>
+<div class="board" id="board"></div>
+
+<script src="/client/icons.js"></script>
+<script>
+// ── WHAT theme.js EXPECTS TO FIND ────────────────────────────────────────
+// It runs on load (restoreUi) and paints on every applyUi. These are the four
+// things it reaches for that only the real page has: a preference store, the
+// canvas backdrop hook, and the three set lists. Stubs, deliberately empty —
+// a lab that remembered a look between reloads would be showing a look the
+// PC never sent.
+function prefGet() { return null; }
+function prefSet() {}
+function setCanvasBackdrop() {}
+const categories = [], customSets = [], appSets = [];
+</script>
+<script src="/client/theme.js"></script>
+<script>
+"use strict";
+
+// The icon wrapper is `svg()` from client/controls.js — the same one line,
+// because loading controls.js whole would drag the entire input layer (and
+// its socket) into a page that draws nothing.
+function svg(name) {
+  return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+         'stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+         (ICONS[name] || "") + "</svg>";
+}
+
+function ctl(icon, label, cls) {
+  const el = document.createElement("button");
+  el.className = "ctl" + (cls ? " " + cls : "");
+  el.innerHTML = svg(icon) + '<span class="lbl">' + label + "</span>";
+  return el;
+}
+
+function wheelItem(icon, label, cls) {
+  const el = document.createElement("div");
+  el.className = "wheel-item" + (cls ? " " + cls : "");
+  el.innerHTML = svg(icon) +
+    '<span class="wheel-label">' + label + "</span>";
+  return el;
+}
+
+function bench(name, nodes, column) {
+  const box = document.createElement("div");
+  box.className = "bench";
+  const title = document.createElement("div");
+  title.className = "bench-name";
+  title.textContent = name;
+  const row = document.createElement("div");
+  row.className = column ? "bench-col" : "bench-row";
+  nodes.forEach((n) => row.appendChild(n));
+  box.appendChild(title);
+  box.appendChild(row);
+  return box;
+}
+
+// ── THE SPECIMENS ────────────────────────────────────────────────────────
+// Every STATE a control can be in, and the two elements a set colour reaches:
+// the D-pad group and the wheel circle. A group is what `paintSet` paints, so
+// the specimens are grouped exactly as the real page groups them — the colour
+// is inherited by the buttons, never written per button.
+const SETS = ["Mouse", "Claude", "Attach", "Input"];
+
+function board() {
+  const root = document.getElementById("board");
+  root.textContent = "";
+
+  // One D-pad group per set, so every state is seen in a colour the palette
+  // really holds — including the light fills that need black ink.
+  SETS.forEach((name, index) => {
+    // NOT `class="group"` — that class is the D-pad's own fixed cross
+    // (client/style.css) and would pin five specimens to the bottom of the
+    // frame. `paintSet` needs an OWNER element, not a positioned one: what it
+    // writes are custom properties the buttons inherit.
+    const group = document.createElement("div");
+    group.className = "bench-row";
+    group.appendChild(ctl("mouse", "Click"));
+    group.appendChild(ctl("mic", index === 0 ? "Mic" : "Dictate", "active"));
+    group.appendChild(ctl("drag", "Drag", "held"));
+    group.appendChild(ctl("scroll", "Scroll lock", "active held"));
+    const chord = ctl("", "Ctrl+Shift+P", "text");
+    group.appendChild(chord);
+    const cat = ctl("mouse", name, "cat");
+    group.appendChild(cat);
+    paintSet(group, name, "--glass-fill");
+    root.appendChild(bench(name + " — off / on / held / on+held / chord / switcher",
+                           [group]));
+  });
+
+  // The wheel: one circle per set, one of them current.
+  const ring = [];
+  SETS.forEach((name, index) => {
+    const item = wheelItem("mouse", name, index === 1 ? "current" : "");
+    paintSet(item, name, "--glass-strong");
+    ring.push(item);
+  });
+  root.appendChild(bench("Wheel — the ring of sets", ring));
+
+  // A panel card: the surface every chooser, every setting and every notice
+  // is drawn on, with the ink that lands on it.
+  const card = document.createElement("div");
+  card.className = "sets-card";
+  card.innerHTML =
+    '<button class="sets-row choice chosen">Layouts' +
+    '<span class="sets-hint">saved</span></button>' +
+    '<button class="sets-row choice">Windows</button>';
+  root.appendChild(bench("Panel card — surface, row, chosen edge", [card]));
+
+  // The ledger's five state dots — the one place five colours must be told
+  // apart from each other on one row list.
+  const dots = ["red", "orange", "yellow", "blue", "green"].map((colour, i) => {
+    const line = document.createElement("div");
+    line.className = "ldg-line";
+    const dot = document.createElement("span");
+    dot.className = "ldg-dot ldg-" + colour;
+    line.appendChild(dot);
+    const word = document.createElement("span");
+    word.textContent = ["not started", "in progress", "waiting", "done", "proven"][i];
+    line.appendChild(word);
+    return line;
+  });
+  root.appendChild(bench("Ledger state dots", dots, true));
+}
+
+// ── WHAT THE LAB TELLS THIS FRAME ────────────────────────────────────────
+// Three kinds of message, and each is applied where the cascade puts it:
+//   look    — the three axes, through theme.js itself (never by writing the
+//             body attributes here: applyUi is the one door, and it also
+//             resets the set-colour cache).
+//   shape   — client/style.css :root tokens -> the document element.
+//   colour  — a theme token -> the BODY's own inline style, because the light
+//             theme declares its values on `body[data-theme="light"]` and an
+//             override on :root would lose to it. Inline on body wins in
+//             both themes, which is the only place one write can serve.
+let look = { theme: "dark", colored: false, fill: "transparent", colors: {} };
+
+window.addEventListener("message", (event) => {
+  const msg = event.data || {};
+  if (msg.kind === "look") {
+    look = Object.assign({}, look, msg.look);
+    applyUi(look);
+    board();
+  } else if (msg.kind === "shape") {
+    for (const [token, value] of Object.entries(msg.values)) {
+      document.documentElement.style.setProperty(token, value);
+    }
+  } else if (msg.kind === "colour") {
+    for (const [token, value] of Object.entries(msg.values)) {
+      document.body.style.setProperty(token, value);
+    }
+    board();  // the per-set inks are computed FROM these surfaces
+  } else if (msg.kind === "sets") {
+    look = Object.assign({}, look, { colors: msg.colors });
+    applyUi(look);
+    board();
+  } else if (msg.kind === "backdrop") {
+    // The PC screen behind the controls. `background` as a whole, so a flat
+    // colour, a gradient and a picture are all one message.
+    document.getElementById("screen").style.background = msg.css;
+    document.getElementById("screen").style.backgroundSize = "cover";
+  } else if (msg.kind === "toast") {
+    document.getElementById("status").className = msg.state;
+    clearTheToast();
+  }
+});
+
+/** The board starts below the toast, whatever the toast turned out to be.
+ *  Re-measured on every resize and after every repaint, because the wording
+ *  and the frame width both change its height. */
+function clearTheToast() {
+  const pill = document.getElementById("status");
+  const bottom = pill.getBoundingClientRect().bottom;
+  document.documentElement.style.setProperty(
+    "--board-top", Math.max(20, Math.round(bottom) + 14) + "px");
+}
+window.addEventListener("resize", clearTheToast);
+
+board();
+clearTheToast();
+// The lab may have loaded this frame before its own script was ready to talk.
+if (window.parent !== window) window.parent.postMessage({ kind: "ready" }, "*");
+</script>
+</body>
+</html>

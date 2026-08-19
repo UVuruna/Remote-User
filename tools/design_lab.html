@@ -1,0 +1,74 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Design lab — Vibe Coder</title>
+<!-- The workshop bench. The KNOBS live here; what they move is drawn in the
+     frames on the right, each of which loads the product's own files
+     (tools/preview.html). Nothing on this page dresses a control — if a
+     colour or a radius appears in tools/design_lab.css it belongs to the lab's
+     own chrome, never to a specimen. See tools/__about/design_lab.md. -->
+<link rel="stylesheet" href="/tools/design_lab.css">
+</head>
+<body>
+
+<aside id="side">
+  <header id="side-head">
+    <h1>Design lab</h1>
+    <p id="side-sub">Every value the controls are made of, grouped by the job it
+      does. Drag one and the frames follow; Save writes it back into the file
+      it came from.</p>
+  </header>
+
+  <div id="groups"><p class="muted">reading the sources…</p></div>
+
+  <footer id="side-foot">
+    <div id="dirty" class="muted">nothing changed yet</div>
+    <div class="foot-row">
+      <button id="revert" class="lab-btn">Revert</button>
+      <button id="save" class="lab-btn primary">Save to source</button>
+    </div>
+    <div id="report"></div>
+  </footer>
+</aside>
+
+<main id="stage">
+  <div id="look-bar">
+    <label>Show
+      <select id="which">
+        <option value="all">all eight looks</option>
+        <option value="one">one look</option>
+      </select>
+    </label>
+    <label>Theme
+      <select id="theme"><option value="dark">dark</option><option value="light">light</option></select>
+    </label>
+    <label>Controls
+      <select id="colored"><option value="false">plain</option><option value="true">coloured</option></select>
+    </label>
+    <label>Fill
+      <select id="fill"><option value="transparent">outlined</option><option value="full">full</option></select>
+    </label>
+    <label>PC screen behind
+      <select id="backdrop">
+        <option value="none">nothing (the page floor)</option>
+        <option value="grey">mid grey</option>
+        <option value="white">a white document</option>
+        <option value="ide">a dark editor</option>
+        <option value="busy">a busy, colourful window</option>
+      </select>
+    </label>
+    <label>Toast
+      <select id="toast">
+        <option value="disconnected">disconnected</option>
+        <option value="connecting">connecting</option>
+        <option value="connected">connected (invisible by design)</option>
+      </select>
+    </label>
+  </div>
+  <div id="frames"></div>
+</main>
+
+<script src="/tools/design_lab.js"></script>
+</body>
+</html>

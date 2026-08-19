@@ -277,10 +277,13 @@ def check_the_coloured_looks_repoint_the_shadow_tokens() -> bool:
         r'--ink-shadow:\s*var\(--set-ink-shadow[^}]*?'
         r'--lbl-shadow:\s*var\(--set-ink-lbl-shadow', css, re.S)
     # …and the icon and the label must still be the ONLY things drawing them,
-    # from the one place they have always been drawn.
+    # from the one place they have always been drawn. The GEOMETRY moved into
+    # named tokens on 2026-08-19 (the design lab's config block) — what is
+    # under test here is that these two variables are still what gets drawn,
+    # so the check names the draw site, not the numbers (those are check 6).
     style = STYLE_CSS.read_text(encoding="utf-8")
-    drawn = ("drop-shadow(0 1px 1px var(--ink-shadow))" in style
-             and "text-shadow: 0 1px 1px var(--lbl-shadow)" in style)
+    drawn = ("var(--ink-shadow-blur) var(--ink-shadow))" in style
+             and "var(--lbl-shadow-blur) var(--lbl-shadow);" in style)
     return bool(outlined) and bool(filled) and drawn
 
 
@@ -314,8 +317,17 @@ def check_the_geometry_and_the_alphas_are_untouched() -> bool:
     be re-opening a question he has answered, and it was a 2 px blur that made
     the original report."""
     style = STYLE_CSS.read_text(encoding="utf-8")
-    if ("drop-shadow(0 1px 1px var(--ink-shadow))" not in style
-            or "text-shadow: 0 1px 1px var(--lbl-shadow)" not in style):
+    # The six numbers now have names (client/style.css → the CONTROL GEOMETRY
+    # config block, 2026-08-19) so the design lab can offer them without
+    # editing a rule. THE NUMBERS ARE UNCHANGED and this still pins them —
+    # only where it reads them from moved. A tuner that saves a different
+    # offset or blur lands here, loudly, which is the point: it is his verdict
+    # to re-open, and docs/DECISIONS.md is updated in the same round.
+    geometry = {m.group(1): m.group(2).strip() for m in re.finditer(
+        r"(--(?:ink|lbl)-shadow-(?:x|y|blur)):\s*([^;]+);", style)}
+    if geometry != {"--ink-shadow-x": "0", "--ink-shadow-y": "1px",
+                    "--ink-shadow-blur": "1px", "--lbl-shadow-x": "0",
+                    "--lbl-shadow-y": "1px", "--lbl-shadow-blur": "1px"}:
         return False
     dark = _theme_tokens(":root {")
     light = _theme_tokens('body[data-theme="light"] {')
