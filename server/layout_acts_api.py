@@ -29,7 +29,7 @@ import logging
 
 import focus_guard
 import layout_acts as layout_acts_mod
-from layout_api import focused, toast
+from layout_api import focused, layout_focus, toast
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +60,7 @@ async def layout_acts(ws, layouts, conn: dict) -> None:
     }))
 
 
-async def layout_act(ws, layouts, conn: dict, injector, msg: dict) -> None:
+async def layout_act(ws, layouts, stream, conn: dict, injector, msg: dict) -> None:
     """Run one of them, or say why it was refused — in which case NOTHING was
     injected (`layout_acts.run`, whose first act is the fence check).
 
@@ -97,7 +97,8 @@ async def layout_act(ws, layouts, conn: dict, injector, msg: dict) -> None:
         return
     asyncio.create_task(_run_act(
         ws, str(msg.get("id", "")), injector,
-        focus_guard.typist(layouts, conn)))
+        focus_guard.typist(layouts, conn),
+        layouts, stream, conn, int(conn["active"])))
 
 
 async def _act_finished(ws) -> None:
@@ -115,20 +116,63 @@ async def _act_finished(ws) -> None:
         pass
 
 
-async def _run_act(ws, act_id: str, injector, guard) -> None:
+async def _run_act(ws, act_id: str, injector, guard,
+                   layouts, stream, conn: dict, index: int) -> None:
     """One act, off the receive loop. See `layout_act` for why it is a task.
 
     An unexpected failure is REPORTED rather than swallowed into a silent
     overlay: this is a task now, so nothing above it is left to notice that it
     raised — the traceback would land in asyncio's own handler and the phone
     would sit under a veil waiting for an answer that no longer has anybody to
-    send it."""
+    send it.
+
+    A WINDOW AN ACT OPENS JOINS THE LAYOUT IT WAS OPENED FROM (owner decree
+    2026-08-20, constraint 43). `layout_acts` hands the handle up through its
+    `opened` callback — that module still knows nothing about layouts — and
+    the growing happens HERE, through `LayoutRegistry.add_member`, the same
+    call the ⚙ sheet's "add a member" makes. The callback only WRITES the
+    handle down: it runs on `to_thread`'s worker, and touching the registry
+    from there would race the event loop that owns it.
+
+    `index` is the layout the row was drawn for, read at the moment of the tap
+    and not when the act finishes: opening a window takes seconds, he can turn
+    the layout bar in the meantime, and the window belongs to the layout he
+    ASKED from."""
+    made: list[int] = []
     try:
         problem = await asyncio.to_thread(
-            layout_acts_mod.run, act_id, injector, guard)
+            layout_acts_mod.run, act_id, injector, guard,
+            None, made.append)
     except Exception:
         logger.exception("Layout act %s failed", act_id)
         problem = "Nothing was sent — the PC could not run that"
     if problem:
         await toast(ws, problem)
+    elif made:
+        await _join_layout(ws, layouts, stream, conn, index, made[0])
     await _act_finished(ws)
+
+
+async def _join_layout(ws, layouts, stream, conn: dict,
+                       index: int, hwnd: int) -> None:
+    """Put the window we just opened into the layout it was opened from.
+
+    Every ending is a SENTENCE he can act on rather than a silence: a layout
+    that is already four windows is the one honest refusal this can meet, and
+    the window is still standing on the desk when it comes — nothing is
+    destroyed, and the ordinary rescue/offer machinery still owns it from
+    there. `layout_focus` is what re-places the whole layout around the
+    newcomer and what puts it on the topmost ledger, exactly as it does for a
+    member added from the ⚙ sheet — never a second placement path here."""
+    outcome = await asyncio.to_thread(layouts.add_member, index, hwnd)
+    if outcome == "added":
+        await layout_focus(ws, layouts, stream, conn, index)
+        return
+    if outcome == "full":
+        await toast(ws, "The window is open, but this layout already has four")
+    elif outcome == "gone":
+        await toast(ws, "The window is open, but that layout is gone")
+    elif outcome == "duplicate":
+        await toast(ws, "The window is open and already in a layout")
+    logger.info("Layout act's window %#x did not join layout %d: %s",
+                hwnd, index, outcome)

@@ -413,6 +413,32 @@ def entries() -> list[dict]:
 
 
 # ═══════════════════════════ OPENING ONE ═══════════════════════════
+# WHAT A LAUNCH MUST NOT INHERIT (found 2026-08-20, and found the hard way —
+# it silently invalidated a measurement before it was noticed).
+#
+# `Code.exe` is an Electron binary. With `ELECTRON_RUN_AS_NODE=1` in the
+# environment it does not start VS Code at all: it runs as a bare node and
+# answers `Code.exe: bad option: -n` on stderr, exit code 9. No window can
+# ever appear, and nothing in the log says why — the launch "succeeded".
+#
+# That variable, and the whole `VSCODE_*` block beside it, is exported by VS
+# Code into every terminal and every extension host it owns. So a server
+# started from a VS Code integrated terminal — which is how anyone developing
+# against this app starts it — poisons every VS Code launch this module makes,
+# and every row of the New panel dies mutely. The environment a launcher hands
+# a program is part of the launch, not of the room it was started in.
+_POISON = ("ELECTRON_RUN_AS_NODE",)
+_POISON_PREFIX = "VSCODE_"
+
+
+def launch_env() -> dict[str, str]:
+    """The environment a program WE start should see — this process's own,
+    minus the variables that would make it something other than itself.
+    Shared with `layout_acts`, which launches the same executable."""
+    return {k: v for k, v in os.environ.items()
+            if k not in _POISON and not k.startswith(_POISON_PREFIX)}
+
+
 def _command(app: str, kind: str, target: str) -> list[str] | None:
     exe = app_exe(app)
     if not exe:
@@ -477,7 +503,7 @@ def open_entry(entry_id: str) -> dict:
         # No shell, no console, and NO foreground call of our own: the app
         # raises its own window, which is what he asked for, and nothing here
         # ever reaches for SetForegroundWindow (constraint 11).
-        subprocess.Popen(cmd, close_fds=True)
+        subprocess.Popen(cmd, close_fds=True, env=launch_env())
     except OSError as e:
         logger.error("Could not start %s: %s", cmd[0], e)
         return {"error": f"Could not start {os.path.basename(cmd[0])}"}

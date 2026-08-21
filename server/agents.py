@@ -338,11 +338,31 @@ def live_agents() -> dict[str, set[str]]:
     return value
 
 
+# WHAT VS CODE APPENDS WHEN THE WINDOW HOLDS A WORKSPACE RATHER THAN A BARE
+# FOLDER — `VibeCoder (Workspace) - Visual Studio Code`. MEASURED on this PC
+# 2026-08-20 while building the second-window act, which opens a project a
+# second time through a saved `.code-workspace` (see `layout_acts.py`): VS
+# Code allows exactly one window per FOLDER, so a workspace is the only
+# identity a second window can wear.
+#
+# It is stripped HERE and nowhere else, because every reader of a VS Code
+# title comes through this one function: the Claude wheel, the layout's own
+# name, and the New source's "already open" dimming all decide off it, and a
+# project that answered `vibecoder` in one window and `vibecoder (workspace)`
+# in the other would be two projects to all three of them.
+VSCODE_WORKSPACE_TAIL = " (workspace)"
+
+
 # ═══════════════════════════ WINDOW → AGENT ═══════════════════════════
 def title_folder(title: str) -> str:
     """The project folder a VS Code window title names, lowercased, or ""."""
     match = VSCODE_TITLE_RE.search(title or "")
-    return match.group(1).strip().lower() if match else ""
+    if not match:
+        return ""
+    folder = match.group(1).strip().lower()
+    if folder.endswith(VSCODE_WORKSPACE_TAIL):
+        folder = folder[: -len(VSCODE_WORKSPACE_TAIL)].strip()
+    return folder
 
 
 def tab_title_of(title: str) -> str:

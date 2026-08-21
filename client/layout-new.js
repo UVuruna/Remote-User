@@ -11,7 +11,7 @@
 //
 // Loads immediately AFTER layout-create.js and uses its vocabulary — `creating`,
 // `newCreation`, `refreshNewlayButton`, `renderCreationPanel`, `cancelCreation`,
-// `keepRowTap`, and layouts.js's panel markup (`layPanel`, `layChip`,
+// `keepRowTap`, `twoLineRow`, and layouts.js's panel markup (`layPanel`, `layChip`,
 // `.lay-item` rows). connection.js calls `handleLayoutActs`.
 // See client/__about/layouts.md.
 "use strict";
@@ -106,7 +106,13 @@ function renderRecentsPanel(list, acts) {
   h.textContent = "Open a window";
   const sub = document.createElement("p");
   sub.className = "lay-sub";
-  sub.textContent = "It opens on the PC and becomes part of the layout.";
+  // ONE SENTENCE MAY NOT STAND OVER TWO GROUPS THAT BEHAVE OPPOSITELY (owner
+  // report 2026-08-19). It used to read "It opens on the PC and becomes part
+  // of the layout", which was true of the recent rows below (they become a
+  // creation slot) and false of the acts above — a new conversation and a new
+  // tab open no window at all. Every row now says what IT does on its own
+  // second line, so this one says only what is true of all of them.
+  sub.textContent = "What opens as a window joins this layout.";
   scrollWrap.append(h, sub);
 
   const rows = document.createElement("div");
@@ -145,6 +151,23 @@ function renderRecentsPanel(list, acts) {
   layPanel.appendChild(card);
 }
 
+// EVERY ROW OF THIS PANEL IS TWO LINES — THE NAME, THEN WHAT IT IS (owner
+// decree 2026-08-20, with his screenshot: `Ne…`, `UVu…`, `Vib…`). A row here
+// carries a NAME and a fact about it (a folder's whole path, or the sentence
+// saying what an act does), and on a 412 px phone those two never shared one
+// line: the ladder's step 1 was walked on the row's own children (task 233,
+// the 96 px cap) and it kept the row one line tall by starving the only thing
+// he actually reads. His ruling ends that: *"ili ide sve u jedan red ili sve u
+// 2 reda"* (lang-ok: owner quote) — so the whole panel goes to two.
+//
+// THE KIN RULE OF TASK 163 IS NOT BROKEN BY THIS, and that was checked before
+// it was written: that rule says rows of one group are the SAME height and a
+// long name is cut rather than wrapped to an unpredictable number of lines.
+// Here every row of the panel gains the same second line, so they stay equal
+// — and both lines are still single-line-with-ellipsis, so no row can grow to
+// three. The name gets the room it never had; the path, whose beginning is
+// what tells two `src` projects apart, gets the whole width of line two.
+
 // A row of the New list. It wears its APP's drawn face (icons.js) rather than
 // the process icon the other two lists show — nothing has been opened yet, so
 // there is no window whose icon this could be, and drawing one would claim a
@@ -157,15 +180,13 @@ function recentRow(e) {
   main.type = "button";
   main.className = "lay-item-main";
   main.innerHTML = svg(APP_ICON[e.app] || "newwin");
-  const name = document.createElement("span");
-  name.textContent = e.label;
-  main.appendChild(name);
-  if (e.sub) {
-    const note = document.createElement("small");
-    note.className = "lc-note";
-    note.textContent = e.sub;
-    main.appendChild(note);
+  let why = null;
+  if (e.open) {
+    why = document.createElement("small");
+    why.className = "lc-why";
+    why.textContent = e.why || "already open";
   }
+  twoLineRow(main, e.label, e.sub || "", why);
   // ALREADY OPEN = DIMMED AND UNTAPPABLE (his report 2026-08-13, picture 1).
   // The tap used to launch the app, the app answered by raising the window it
   // already held, no new window ever came into being, and he watched the
@@ -180,10 +201,6 @@ function recentRow(e) {
   if (e.open) {
     row.classList.add("lc-busy");
     main.disabled = true;
-    const why = document.createElement("small");
-    why.className = "lc-why";
-    why.textContent = e.why || "already open";
-    main.appendChild(why);
   } else {
     keepRowTap(main, () => openRecentEntry(e));
   }
@@ -196,11 +213,20 @@ function recentRow(e) {
 // behind the focus fence and answers with a toast only when it refused.
 //
 // The panel CLOSES on the tap and the creation session is cancelled silently:
-// none of these acts produces a slot (a new conversation, a tab, a folder), so
-// leaving the wizard standing would promise a Create button that has nothing
-// to create. The one act that does open a window — VS Code's "New window" —
-// still does not join the layout by itself: that is his tap on the ordinary
-// window offer, never ours (constraint 18/19).
+// none of these acts produces a CREATION SLOT (a new conversation, a tab, a
+// folder), so leaving the wizard standing would promise a Create button that
+// has nothing to create. The one act that opens a WINDOW — VS Code's "New
+// window, same folder" — needs no slot either: the PC puts that window into
+// this layout itself (owner decree 2026-08-20, constraint 43), so there is
+// nothing left here for him to answer.
+//
+// THE SENTENCE THAT STOOD HERE WAS WRONG AND IT COST HIM THE FEATURE: "that
+// is his tap on the ordinary window offer, never ours (constraint 18/19)".
+// Neither of those constraints says anything of the kind — 18 is one window,
+// one question; 19 is a dialog opening in the middle of its parent — and the
+// chip it deferred to is silenced by constraint 33 precisely because the
+// window is ours on his tap. So the window opened and nothing on earth
+// placed it. See server/layout_acts.py.
 function actRow(e, app) {
   const row = document.createElement("div");
   row.className = "lay-item lc-row lc-kid";
@@ -208,20 +234,7 @@ function actRow(e, app) {
   main.type = "button";
   main.className = "lay-item-main";
   main.innerHTML = svg(APP_ICON[app] || "newwin");
-  const name = document.createElement("span");
-  name.textContent = e.label;
-  main.appendChild(name);
-  if (e.sub) {
-    const note = document.createElement("small");
-    // `lc-act-note`, not the plain `lc-note`: a recent row's note is a PATH
-    // whose width the name may take back (the 96 px cap in layout-create.css),
-    // while this one is the only sentence saying what the act does — capping
-    // it cut "a new conversation in this window" to "a new conversati…",
-    // which is the explanation, not a detail.
-    note.className = "lc-note lc-act-note";
-    note.textContent = e.sub;
-    main.appendChild(note);
-  }
+  twoLineRow(main, e.label, e.sub || "", null);
   keepRowTap(main, () => {
     send({ type: "layout_act", id: e.id });
     cancelCreation(true);

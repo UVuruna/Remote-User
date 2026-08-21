@@ -195,16 +195,82 @@ body .lay-card.lc-new { width: 100%; max-width: 100%; }
    233 walked it for the Recent row: the NOTE (a path he can already read in
    full on the row above) gives its width back, and the name — which project
    this is, the only thing he must read here — keeps its room. */
-/* EVERY row of this panel, not only the busy ones — the first version capped
-   only `.lc-busy` and the audit then clipped a plain row by 12 px the moment
-   its path was a real Windows path with its backslashes (the fixture had been
-   eating them, which is its own lesson: a staged shot must show the string the
-   product really produces). */
-.lc-new .lc-note:not(.lc-act-note) {
-  max-width: 96px;
-  overflow: hidden;
-  text-overflow: ellipsis; /* layout-law: exempt - the deliberate fix itself: this note abbreviates ON PURPOSE so the project NAME beside it is never the thing that starves */
+/* ───────────── THE NEW PANEL'S ROW IS TWO LINES ─────────────
+   OWNER DECREE 2026-08-20, with his screenshot of `Ne…`, `UVu…`, `Vib…` —
+   three rows whose NAME had been eaten down to three characters so that a
+   path and a pill could share one line with it. His ruling was the whole
+   specification and it is a rule about the GROUP, not about a row:
+
+       lang-ok: owner quote
+       "ili ide sve u jedan red ili sve u 2 reda"
+
+   THE 96 px CAP THIS REPLACES WAS NOT WRONG, IT WAS THE WRONG RUNG. It came
+   from walking the space ladder inside a row that had already been decided to
+   be one line tall (task 163's kin rule), so the only move left was to starve
+   one of the two children — and the audit correctly refused wrapping ONE row
+   beside one-line siblings. Moving the WHOLE panel to two lines is the same
+   ladder one rung further out: the rows stay equal to each other, which is
+   all the kin rule ever asked, and the name stops paying for the path.
+
+   NOTHING HERE CAN GROW TO A THIRD LINE. Both lines are `nowrap` with their
+   own ellipsis, so a 63-character VS Code title and a deep Windows path each
+   abbreviate on their own line instead of reflowing the row — the property
+   the kin rule is really protecting.
+
+   `.lc-note` / `.lc-act-note` are gone from this panel: one row shape needs
+   one rule, and the two classes existed only to give a PATH and a SENTENCE
+   different widths on a line neither of them fits on. */
+.lc-new .lc-lines,
+.lc-history .lc-lines {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
+/* Line one: the name takes the room, the pill takes only its own. */
+.lc-new .lc-head,
+.lc-history .lc-head {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.lc-new .lc-head > span,
+.lc-history .lc-head > span {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis; /* layout-law: exempt - owner 2026-08-09 (task 163) and 2026-08-20: kin rows stay equal, so a name longer than the row abbreviates rather than reflowing it; the full name is one tap away in the rename card, which wraps it */
+}
+/* Line two: the path or the sentence, across the WHOLE width of the row —
+   it competes with nothing, which is the entire point of the second line. */
+.lc-new .lc-sub-line,
+.lc-history .lc-sub-line {
+  display: block;
+  min-width: 0;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--text-secondary);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis; /* layout-law: exempt - owner 2026-08-20: the path's BEGINNING is what tells two same-named projects apart and the project's own name is already whole on line one, so a path deeper than the row abbreviates at its tail */
+}
+.lc-new .lay-item-main,
+.lc-history .lay-item-main { align-items: center; }
+
+/* THE RECENT-LAYOUTS CARD TAKES THE WIDTH IT IS GIVEN (measured 2026-08-20,
+   the round that made its rows two lines — constraint 44). Photographed at
+   915x412 the card hid 15 CSS px of rows behind its own scroll while 139 px
+   of screen sat idle beside it, which is rung 1 of THE SPACE & LEGIBILITY LAW
+   read exactly the wrong way round: free space goes to the starving element
+   BEFORE anything scrolls. The identical measurement, and the identical rule,
+   is written above `.lc-new` — that card learned it in 2026-08-13. This one
+   was never in the audit's own catalogue until this round, which is why it
+   went on being the one list nobody had measured. */
+body .lay-card.lc-history { width: 100%; max-width: 100%; }
 .lc-why {
   flex: none;
   font-size: 11px;

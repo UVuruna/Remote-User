@@ -361,7 +361,10 @@ async def _layout_acts(w: Wire) -> None:
 @on("layout_act")
 async def _layout_act(w: Wire) -> None:
     ws, injector, layouts, conn, msg = w.ws, w.injector, w.layouts, w.conn, w.msg
-    await layout_acts_api.layout_act(ws, layouts, conn, injector, msg)
+    # `stream` rides along since 2026-08-20 (constraint 43): the one act that
+    # opens a WINDOW now grows the layout it was opened from, and re-placing a
+    # layout is `layout_focus`, which needs the stream like every other caller.
+    await layout_acts_api.layout_act(ws, layouts, w.stream, conn, injector, msg)
 
 
 @on("layout_recent")

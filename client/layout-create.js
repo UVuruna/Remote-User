@@ -201,7 +201,10 @@ function renderRecentHistoryPanel(entries) {
   layPanel.innerHTML = "";
   layPanel.hidden = false;
   const card = document.createElement("div");
-  card.className = "lay-card card-columns lc-panel";
+  // `lc-history` is what the two-line row rules in layout-create.css hang
+  // off (constraint 44) — a rule written for one card must be able to name
+  // that card, the same lesson `.lc-new` was given next door.
+  card.className = "lay-card card-columns lc-panel lc-history";
   const scrollWrap = document.createElement("div");
   scrollWrap.className = "lc-scrollwrap";
   card.appendChild(scrollWrap);
@@ -224,9 +227,59 @@ function renderRecentHistoryPanel(entries) {
   layPanel.appendChild(card);
 }
 
+// A ROW THAT CARRIES A NAME AND WHERE-IT-IS IS TWO LINES (owner decree
+// 2026-08-20, constraint 44, with his screenshot of `Ne…`, `UVu…`, `Vib…`):
+//
+//     lang-ok: owner quote
+//     "ili ide sve u jedan red ili sve u 2 reda"
+//
+// Shared by the two lists whose rows have that shape — this file's Recent
+// layouts (a layout's name, then the project it was made of) and
+// layout-new.js's Open a window (a project's name, then its whole path). It
+// lives HERE and not there because layout-new.js loads after this file and
+// borrows its vocabulary, never the other way round.
+//
+// It is NOT used by the rows whose trailing fact is a single state word
+// ("minimized", a ratio): those lists are one line throughout and stay that
+// way, which is the same rule read the other way — a list is all one line or
+// all two, never mixed.
+//
+// NOTHING BUILT HERE CAN REACH A THIRD LINE: both lines are `nowrap` with
+// their own ellipsis (layout-create.css), so task 163's kin rule — rows of one
+// group are the same height — holds exactly as before, one line taller.
+function twoLineRow(main, label, note, trailing) {
+  const lines = document.createElement("span");
+  lines.className = "lc-lines";
+  const head = document.createElement("span");
+  head.className = "lc-head";
+  const name = document.createElement("span");
+  name.textContent = label;
+  head.appendChild(name);
+  // A pill rides on line ONE beside the name — it is a fact about the row,
+  // not about the path — and takes its room from the name, never from line
+  // two, which is the whole width of the row under both of them.
+  if (trailing) head.appendChild(trailing);
+  lines.appendChild(head);
+  if (note) {
+    const second = document.createElement("small");
+    second.className = "lc-sub-line";
+    second.textContent = note;
+    lines.appendChild(second);
+  }
+  main.appendChild(lines);
+}
+
 // One row per history entry. `keepRowTap` (task 227b), not `keepFocus` — this
 // list scrolls exactly like the other two creation lists and must not steal
 // that scroll either.
+//
+// TWO LINES SINCE 2026-08-20 (constraint 44). Task 233 capped the project name
+// at 84 px so a long "used 5 days ago" could not eat the layout's own name;
+// that was the space ladder walked INSIDE the one-line decision, and the only
+// move it left was to starve one of the two. A layout's name here is a VS Code
+// window title — 63 characters is the real length he screenshotted — so on a
+// phone the name was elided even with the note capped. Now it has the line to
+// itself and the project sits under it.
 function recentHistoryRow(e) {
   const row = document.createElement("div");
   row.className = "lay-item lc-row";
@@ -234,20 +287,7 @@ function recentHistoryRow(e) {
   main.type = "button";
   main.className = "lay-item-main";
   main.innerHTML = svg("recentwin");
-  const name = document.createElement("span");
-  name.textContent = e.name;
-  main.appendChild(name);
-  if (e.project) {
-    const note = document.createElement("small");
-    // Task 233 (grader flag c): `.lc-recent-note` caps the trailing fact's
-    // own width and ellipses IT instead of letting an unbounded note (e.g.
-    // "used 5 days ago") eat the room a real project/window name needs —
-    // `.lay-item-main span` already shrinks the name first, so a long note
-    // was squeezing the one thing he actually reads off this row.
-    note.className = "lc-note lc-recent-note";
-    note.textContent = e.project;
-    main.appendChild(note);
-  }
+  twoLineRow(main, e.name, e.project || "", null);
   keepRowTap(main, () => useRecentHistory(e));
   row.appendChild(main);
   return row;

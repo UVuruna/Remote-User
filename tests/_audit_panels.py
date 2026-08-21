@@ -25,6 +25,10 @@ Nothing here imports anything: every value is a plain string or a plain table
 of strings the audit hands to the live page or reads to name a file.
 """
 
+from _audit_create import (  # where a layout comes from — its own module
+    NEW_SOURCE_CLOSE_JS, NEW_SOURCE_STAGE_JS,
+    RECENT_HISTORY_CLOSE_JS, RECENT_HISTORY_STAGE_JS,
+)
 from _audit_lang import (  # the language cards' own module
     DICT_OPEN_STAGE_JS, DICT_STAGE_JS, NOTIFY_VOICE_OPEN_STAGE_JS,
     NOTIFY_VOICE_STAGE_JS,
@@ -315,47 +319,6 @@ CREATION_GROUPS_STAGE_JS = (
 )
 
 
-# THE NEW SOURCE, OPENED FROM INSIDE A LAYOUT (owner ballot 2026-08-13, T28 +
-# T29). Staged in its FULLEST state, which is also the one that can starve:
-# the layout's own act group under its own heading, then the standard list —
-# and in it a row that is ALREADY OPEN, wearing both a long path and the
-# "already open" pill on the same line. That row is the whole of his picture-1
-# fix, and the one thing it must never do is squeeze the project's NAME out of
-# legibility: knowing WHICH project he is looking at is the point of keeping
-# the row instead of dropping it. Photographed rather than reasoned about,
-# because a dimmed row plus a pill plus an elided path is exactly the
-# combination this project keeps getting wrong on a 412 px phone.
-NEW_SOURCE_STAGE_JS = (
-    "creating = newCreation('new');"
-    "renderRecentsPanel(["
-    " {app:'vscode', kind:'new', target:'', label:'New window', sub:'',"
-    "  id:'vscode|new|', open:false, why:''},"
-    # THE PATHS ARE REAL WINDOWS PATHS, backslashes and all. The first version
-    # of this stage lost them to escaping and the screenshot read
-    # "U:CodingUVuruna…" — a picture of a string this product never produces,
-    # which is the one thing a staged shot may never be. `String.raw` on the JS
-    # side and a raw Python literal on this one, so neither layer eats them.
-    r" {app:'vscode', kind:'recent', target:'U:/Coding/UVuruna/Applications/"
-    r"VibeCoder', label:'VibeCoder',"
-    r" sub:String.raw`U:\Coding\UVuruna\Applications\VibeCoder`,"
-    r" id:'vscode|recent|1', open:true, why:'already open'},"
-    r" {app:'vscode', kind:'recent', target:'U:/Coding/UVuruna/Gadgets/"
-    r"PromptPainter', label:'PromptPainter',"
-    r" sub:String.raw`U:\Coding\UVuruna\Gadgets\PromptPainter`,"
-    r" id:'vscode|recent|2', open:false, why:''},"
-    " {app:'chrome', kind:'new', target:'', label:'New window', sub:'',"
-    "  id:'chrome|new|', open:false, why:''},"
-    r" {app:'explorer', kind:'recent', target:'D:/Downloads',"
-    r" label:'Downloads', sub:String.raw`D:\Downloads`,"
-    r" id:'explorer|recent|3', open:true, why:'already open'}"
-    "], {in_layout:true, app:'vscode', name:'VS Code', entries:["
-    " {id:'vscode|claude', label:'New Claude Code',"
-    "  sub:'a new conversation, in its own tab'},"
-    " {id:'vscode|window', label:'New window, same folder',"
-    "  sub:'a second VS Code on this project', opens:true}]})"
-)
-NEW_SOURCE_CLOSE_JS = "cancelCreation(true)"
-
 # The model the audit's own User-Agent carries — the card must READ it and say
 # it. A device name the page silently fails to find is exactly the failure the
 # owner reported (a card that describes one phone while he uses two), so the
@@ -486,6 +449,8 @@ PANELS = (
      "#dictation-panel .sets-card"),
     ("New source, from inside a layout", NEW_SOURCE_STAGE_JS,
      NEW_SOURCE_CLOSE_JS, "#layout-panel .lay-card"),
+    ("Recent layouts", RECENT_HISTORY_STAGE_JS,
+     RECENT_HISTORY_CLOSE_JS, "#layout-panel .lay-card"),
     ("Tap-pick armed, inside a layout", LAYOUT_CLAIM_ARM_STAGE_JS,
      LAYOUT_CLAIM_ARM_CLOSE_JS, "#btn-newlay.active"),
     ("Notification voice card", NOTIFY_VOICE_STAGE_JS,

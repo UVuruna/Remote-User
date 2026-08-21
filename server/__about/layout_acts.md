@@ -52,7 +52,7 @@ standing over nothing.
 | App | Act | How it is done | The honest cost |
 |-----|-----|----------------|-----------------|
 | VS Code | New Claude Code | palette `Claude Code: Open in New Tab` | lands in the SAME window — a conversation in its own editor tab, not a member, and the row says so |
-| VS Code | New window, same folder | palette `Duplicate As Workspace in New Window` | the new window is an untitled WORKSPACE on the same folder — VS Code's own wording, not ours |
+| VS Code | New window, same folder | a NAMED `.code-workspace` we write, opened with `Code.exe -n` | VS Code allows one window per FOLDER, so the second window wears a workspace identity — its title reads `<project> (Workspace)`, which `agents.VSCODE_WORKSPACE_TAIL` strips for every reader downstream |
 | Chrome | New tab | `Ctrl+T` | nothing new appears on the desk — deliberate, and the row says so |
 | Chrome | Reopen the closed tab | `Ctrl+Shift+T` | — |
 | Chrome | New tab from the clipboard | `Ctrl+T` + paste + Enter | an empty clipboard is a refusal, not an empty tab |
@@ -98,9 +98,17 @@ the wrong folder of that name" went with the launcher.
 further out, in [Layout Acts API](layout_acts_api.md), which is also where the
 25 seconds of silence that ended his session are written down.
 
-It never creates, removes or re-places a layout, and it never puts a window
-INTO one. A window an act of ours opens (VS Code's new window) is marked
-`layout_popup.mine()` the moment it appears — the same statement
-[Recents](recents.md) and tab extraction make, and for the same reason (his
-report 2026-08-13, picture 2: the phone asked him about a window he had just
-asked us to open). Whether it joins the layout is his tap, never ours.
+It never creates, removes or re-places a layout **itself**. A window an act of
+ours opens is marked `layout_popup.mine()` the moment it appears — the same
+statement [Recents](recents.md) and tab extraction make, and for the same
+reason (his report 2026-08-13, picture 2: the phone asked him about a window
+he had just asked us to open) — and its HANDLE is handed up through `run()`'s
+`opened` callback.
+
+**The window then joins the layout it was opened from** (owner decree
+2026-08-20, constraint 43). The growing happens one door out, in
+[Layout Acts API](layout_acts_api.md), through `LayoutRegistry.add_member` —
+the same call the ⚙ sheet's "add a member" makes, never a second placement
+path. The sentence that used to stand here — *"whether it joins the layout is
+his tap, never ours"* — cited constraints 18 and 19, and neither of them says
+anything of the kind; read the constraint before arguing with the rule.

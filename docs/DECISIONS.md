@@ -512,3 +512,98 @@ the same number on a different package. **A build he cannot tell apart from
 the last one is a build he is right to call missing.** The stamp is bumped
 with the shipping commit from here on, which is what its own commit subjects
 ("The stamp matches the tag this release carries") always said it was for.
+
+### 43. A WINDOW WE OPEN ON HIS TAP JOINS THE LAYOUT HE TAPPED FROM — and the rule that said otherwise cited two constraints that say nothing of the kind
+
+**A window we open on his tap joins the layout he tapped from** (owner decree
+2026-08-20, and his own sentence is the whole specification:
+
+    lang-ok: owner quote
+    "pa kako drugačije radimo nego što sam program ubacuje u layout"
+
+— *how else do we work, if not that the program itself puts it into the
+layout*). He tapped **New window, same folder** inside a layout, twice; two VS
+Code windows appeared somewhere on the desk, no layout took either of them,
+and the phone never asked. From where he sat the button did nothing at all.
+
+**THE PROHIBITION WAS INVENTED AND IT WORE SOMEBODY ELSE'S NUMBER.**
+`server/layout_acts.py` closed its own docstring with *"whether it joins the
+layout is his tap, never ours"*, and its `actRow` comment in
+`client/layout-new.js` justified it as *"(constraint 18/19)"*. Constraint 18
+is one window asking ONE question and a chip that may not change under his
+finger. Constraint 19 is a member's own dialog opening in the MIDDLE OF ITS
+PARENT. Neither is about whether a window we were asked to open may be placed.
+This is the SECOND time this exact failure mode has been found in this
+codebase — constraint 34 caught `client/__about/window-offer.md` inventing a
+decision and citing constraint 18 for it, corrected that one file, and left
+the identical sentence standing two modules over.
+
+**IT ONLY BECAME A DEAD BUTTON WHEN TWO RULES MET, WHICH IS WHY NOBODY READ
+IT.** The invented rule deferred the placing to the popup chip; constraint 33
+silences that chip for exactly *"a window WE made on his own tap"* — and marks
+it so BEFORE the act, through `window_claim.expect()`. Each rule alone is
+readable and neither says "do nothing"; their intersection is the only
+behaviour the product ever had.
+
+**And the act could not have delivered its promise anyway.** `Duplicate As
+Workspace in New Window` (constraint 31's replacement for a launch that could
+never work) produces an **untitled** workspace: root reads `UNTITLED
+(WORKSPACE)`, it opens on Welcome, closing it nags to save a file he never
+asked for, and its title carries no project name — so `agents.title_folder`
+reads nothing, which is what the Claude wheel, a layout's own name and the New
+source's "already open" dimming all decide off. **Four routes were measured on
+his PC before one was chosen** (`Code.exe -n <folder already open>`: no window
+in 25.2 s · `Code.exe -n` with no path: a window in 0.5 s, the control that
+makes the others trustworthy · `Code.exe -r <folder>` into that empty window:
+never landed · the palette's own *Open Recent* / *Open Folder* in that window:
+never landed). **VS Code allows exactly one window per FOLDER**, so a second
+window can only wear a different identity: we write a NAMED `.code-workspace`
+into our own user folder and open that — measured, a window in 0.6 s titled
+`VibeCoder (Workspace) - Visual Studio Code`, same instance, same extensions,
+same Claude Code sign-in, nothing to save. `agents.VSCODE_WORKSPACE_TAIL`
+strips the one word we added, so every reader downstream sees the same project
+as the first window.
+
+**Two further defects were fixed in the same round because they are the same
+sentence read twice.** The fence asserted only that the target runs
+`code.exe`, so with two VS Code windows on the desk a row drawn for one
+project could act on another; the folder is now read off the very handle the
+fence returned (`layout_acts._folder_path`), and two projects sharing a folder
+name are REFUSED by name rather than resolved by picking the first. And the
+panel's own subtitle — *"It opens on the PC and becomes part of the layout"* —
+stood over two groups that behaved oppositely; every row now says what IT does
+on its own second line, and the subtitle says only what is true of all of
+them.
+
+**The launcher's ENVIRONMENT is part of the launch** (found in the same
+round). `recents` starts `Code.exe` with this process's environment, and under
+`ELECTRON_RUN_AS_NODE=1` — which VS Code exports into every terminal and
+extension host it owns — that executable is not VS Code at all: it answers
+`bad option: -n` and no window can ever appear. A server started from a VS
+Code terminal had every row of the New panel dying mutely. `recents.
+launch_env()` strips it and the `VSCODE_*` block beside it.
+
+### 44. A ROW OF THE NEW PANEL IS TWO LINES — the name, then the path
+
+**A row of the New panel is two lines** (owner decree 2026-08-20, with his
+screenshot of `Ne…`, `UVu…`, `Vib…`):
+
+    lang-ok: owner quote
+    "ili ide sve u jedan red ili sve u 2 reda"
+
+A row here carries a NAME and a fact about it — a folder's whole path, or the
+sentence saying what an act does — and on a 412 px phone the two never shared
+one line. Task 233's answer was to cap the fact at 96 px so the name kept its
+room, which is the space ladder walked INSIDE a decision (task 163: a row is
+one line) rather than on it; when the pill joined them there was nothing left
+to give and the NAME started disappearing instead.
+
+**The kin rule is not broken by this and that was checked before it was
+written.** Task 163 says rows of one group are the same height and a long name
+is cut rather than reflowed to an unpredictable number of lines. Every row of
+this panel gains the same second line, so they stay equal to each other; both
+lines are `nowrap` with their own ellipsis, so no row can ever reach a third.
+The name gets the room it never had, and the path gets the whole width of line
+two, where it competes with nothing. `.lc-note` / `.lc-act-note` are gone from
+this panel — they existed only to give a PATH and a SENTENCE different widths
+on a line neither of them fitted on.

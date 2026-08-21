@@ -48,25 +48,47 @@ new Claude Code for a VS Code layout, and a new TAB for Chrome and Explorer.
   opening a second Explorer, which is the other of the two possible things to
   do with the list the New source already reads.
 
-## What this module may NOT do
+## A window this module opens JOINS the layout it was opened FROM
 
-It never creates, removes or re-places a layout, and it never opens a window
-into one. A window an act of ours opens (VS Code's new window) is handed to
-Windows and to the ordinary popup machinery exactly like any other — it is
-marked `layout_popup.mine()` at the moment it appears, for the same reason the
-New source marks its own (his report 2026-08-13, picture 2), and whether it
-joins the layout is his tap, never ours.
+**Owner decree 2026-08-20, and it REVERSES what stood here** (constraint 43).
+The sentence that used to close this docstring — *"whether it joins the layout
+is his tap, never ours"* — cited constraints 18 and 19, and NEITHER of them
+says any such thing: 18 is about one window asking one question, 19 about a
+dialog opening in the middle of its parent. It was an invented prohibition
+wearing somebody else's number, and together with constraint 33 (which
+silences the chip for *"a window WE made on his own tap"*) it produced the one
+outcome nobody ever wrote down: he taps **New window, same folder**, a window
+opens somewhere on the desk, no layout takes it, and no chip asks about it.
+In his own words, the whole specification:
+    lang-ok: owner quote
+    "pa kako drugačije radimo nego što sam program ubacuje u layout"
+
+So: the tap on this row IS the answer. `run()` reports the handle it opened
+through its `opened` callback, and [Layout Acts API](layout_acts_api.py) adds
+it to the layout the row was drawn for. `layout_popup.mine()` is still called
+— for the reason it was always called, so the sweep does not ALSO ask about a
+window that is already being placed.
+
+This module still never creates, removes or re-places a layout **itself**: it
+opens the window and names it. The layout is grown one door up, through
+`LayoutRegistry.add_member`, the same call the ⚙ sheet's "add a member" uses.
 """
 
+import json
 import logging
+import os
+import subprocess
 import time
+from pathlib import Path
 
+import agents
 import clipboard_sync
 import content
 import focus_guard
 import layout_popup
 import recents
 import window_manager as wm
+from config import USER_DIR
 
 logger = logging.getLogger(__name__)
 
@@ -91,24 +113,38 @@ logger = logging.getLogger(__name__)
 # could ever have caught.
 CLAUDE_NEW_COMMAND = "Claude Code: Open in New Tab"
 
-# The VS Code core command that puts a SECOND window on the folder this one
-# already holds. Read from the installed VS Code's own workbench bundle on
-# 2026-08-17 (`workbench.action.duplicateWorkspaceInNewWindow`), the same
-# standard every other palette name here is held to.
+# ═══════ A SECOND WINDOW ON A PROJECT VS CODE ALREADY HOLDS ═══════
+# VS CODE ALLOWS EXACTLY ONE WINDOW PER FOLDER, and that is not an opinion —
+# it is what FOUR routes measured on this PC on 2026-08-20 all ran into:
 #
-# IT REPLACES A LAUNCH THAT COULD NEVER HAVE WORKED (owner report 2026-08-17,
-# and MEASURED before it was believed). The act used to run
-# `Code.exe -n <path>`, and `-n` on a folder VS Code ALREADY HAS OPEN does not
-# open a second window — it focuses the existing one. The layout's folder is by
-# definition already open, so this row was unsatisfiable from the day it
-# shipped: his own log says so twice in one minute ("code.exe opened no window
-# within 25s"), and a controlled run on his PC confirmed both halves — the same
-# call against a folder that was NOT open produced a window immediately.
+#   Code.exe -n <folder already open>   no window at all in 25.2 s
+#   Code.exe -n            (no path)    a window in 0.5 s   <- the control
+#   Code.exe -r <folder>  into that new empty window        folder never landed
+#   palette File: Open Recent / Open Folder in that window  folder never landed
 #
-# The palette route needs no path at all, which retires the whole
-# title-to-path recovery this act used to depend on: nothing is looked up, so
-# nothing can be looked up wrongly.
-VSCODE_DUPLICATE_COMMAND = "Duplicate As Workspace in New Window"
+# Every route funnels the folder back into the window that already holds it.
+# The control line is what makes the other three trustworthy: the launcher
+# itself works, so "no window" is VS Code's answer and not our failure.
+#
+# THE ONE IDENTITY A SECOND WINDOW CAN WEAR IS A WORKSPACE. The act shipped
+# 2026-08-17 had found that too, through the palette's
+# `Duplicate As Workspace in New Window` — and it produced an **untitled**
+# workspace, which is a different thing and the defect the owner reported
+# (2026-08-19, his pictures 1-2): the root reads `UNTITLED (WORKSPACE)`, the
+# window opens on Welcome, closing it nags to save a workspace file he never
+# asked for, and — the half that breaks US — the title carries no project name
+# at all, so `agents.title_folder` cannot read it, which is what the Claude
+# wheel, the layout's own name and the "already open" dimming all decide off.
+#
+# So we write the workspace file OURSELVES, with the project's own name, and
+# open it with `-n`. Measured the same day: a window in 0.6 s titled
+# `VibeCoder (Workspace) - Visual Studio Code` — the project IS in the title,
+# there is nothing to save, and `agents.VSCODE_WORKSPACE_TAIL` strips the one
+# word we added so every reader downstream sees the same project as the first
+# window. Same VS Code instance, so the same extensions, the same settings and
+# the same Claude Code sign-in as the window it was opened from.
+WORKSPACE_DIR_NAME = "workspaces"
+WORKSPACE_SUFFIX = ".code-workspace"
 
 # How long a window an act LAUNCHES may take to appear before we stop watching
 # for it. Only used to mark it as ours (see the module docstring) — nothing is
@@ -210,15 +246,60 @@ def _secured(app: str, guard, process_of=None) -> tuple[int, str]:
     return target, ""
 
 
-# A PATH IS NO LONGER RECOVERED HERE, AND THAT IS THE POINT (2026-08-17).
-# `_vscode_folder_path` used to match a window title's folder NAME against VS
-# Code's own recent list to find where the project lives on disk, because the
-# act launched `Code.exe -n <path>`. That launch could not do what the row
-# promised (see `VSCODE_DUPLICATE_COMMAND`), and VS Code duplicating its own
-# window needs no path at all — so the lookup, its refusal sentence, and the
-# whole class of "we guessed the wrong folder" went with it. The two projects
-# sharing one folder NAME that the New source still has to live with
-# (constraint 26) simply cannot arise on this path any more.
+# ═══════ WHICH PROJECT, READ OFF THE WINDOW THE ACT REALLY RAN AGAINST ═══════
+# THE PATH IS RECOVERED FROM `target`, NEVER FROM THE LAYOUT (2026-08-20), and
+# that is a fix and not a detail. The panel draws its rows for the FOCUSED
+# layout, while `run()` re-asks the fence which window really holds the
+# keyboard at the moment of the tap — and `_secured` used to assert only that
+# the answer runs `code.exe`. With two VS Code windows on the desk, both
+# answers pass and they can be different windows, so a row drawn for one
+# project could act on another. Reading the folder off the very handle the
+# fence returned makes that mismatch impossible to express.
+#
+# A title carries a folder's NAME and never its path, so the path comes from
+# VS Code's own recent list. Two projects sharing one folder name (constraint
+# 26's honest limit) are REFUSED with a sentence naming both, never resolved
+# by picking the first — this act opens a window somewhere, and the wrong
+# somewhere is worse than a refusal he can act on.
+def _folder_path(hwnd: int) -> tuple[str, str]:
+    """`(path, "")` for the project this VS Code window holds, or
+    `(", sentence)`."""
+    title = ""
+    for win in wm.list_windows():
+        if win["hwnd"] == hwnd:
+            title = win.get("title") or ""
+            break
+    name = agents.title_folder(title)
+    if not name:
+        return "", ("Nothing was opened — that VS Code window does not name a "
+                    "project in its title")
+    hits = {rec["target"] for rec in recents.vscode_recents()
+            if (Path(rec["target"]).name or "").lower() == name}
+    if not hits:
+        return "", (f"Nothing was opened — the PC could not find where "
+                    f"{name} lives on disk")
+    if len(hits) > 1:
+        return "", (f"Nothing was opened — {len(hits)} different projects on "
+                    f"this PC are called {name}")
+    return hits.pop(), ""
+
+
+def _workspace_file(path: str) -> str:
+    """The `.code-workspace` that lets VS Code open `path` a SECOND time, in
+    our own user folder and named after the project (see the block above
+    `WORKSPACE_DIR_NAME` for why a workspace is the only identity a second
+    window can wear).
+
+    Rewritten on every act rather than reused blindly: the file is machinery,
+    it is tiny, and a stale one pointing at a folder that has moved would open
+    a window on nothing. Nothing of his is written — it lives beside our own
+    settings, never in his project."""
+    home = USER_DIR / WORKSPACE_DIR_NAME
+    home.mkdir(parents=True, exist_ok=True)
+    target = home / ((Path(path).name or "project") + WORKSPACE_SUFFIX)
+    target.write_text(
+        json.dumps({"folders": [{"path": path}]}, indent=2), encoding="utf-8")
+    return str(target)
 
 
 def _pasted(injector, text: str, guard) -> str:
@@ -239,14 +320,20 @@ def _pasted(injector, text: str, guard) -> str:
     return focus_guard.loss_notice(lost) if lost else ""
 
 
-def _watch_and_claim(process: str, before: set[int]) -> None:
-    """Mark the window our own launch produced as OURS (`layout_popup.mine`).
+def _watch_and_claim(process: str, before: set[int]) -> int:
+    """Mark the window our own launch produced as OURS (`layout_popup.mine`)
+    and RETURN its handle — 0 if none ever came.
 
     Blocking — every caller of `run` is already on a worker thread. Same
     newness rule as `recents.open_entry`: a handle that was not standing before
     the launch and whose process is the one we started. Without it the sweep
     meets a brand-new top-level window of a known app and asks him about a
-    window he just asked US to open (his report 2026-08-13, picture 2)."""
+    window he just asked US to open (his report 2026-08-13, picture 2).
+
+    THE HANDLE IS THE RETURN VALUE SINCE 2026-08-20 (constraint 43): the
+    layout this window joins is grown from it one door up, and the only
+    statement in this codebase that a given handle is the window we just made
+    is the one this function is already holding."""
     deadline = time.monotonic() + LAUNCH_WATCH_S
     while time.monotonic() < deadline:
         for win in wm.list_windows():
@@ -256,13 +343,14 @@ def _watch_and_claim(process: str, before: set[int]) -> None:
             layout_popup.mine(hwnd)
             logger.info("Layout act opened %s as %s",
                         process, (win.get("title") or "")[:60])
-            return
+            return hwnd
         time.sleep(recents.OPEN_POLL_S)
     logger.warning("Layout act: %s opened no window within %.0fs",
                    process, LAUNCH_WATCH_S)
+    return 0
 
 
-def run(act_id: str, injector, guard=None, process_of=None) -> str:
+def run(act_id: str, injector, guard=None, process_of=None, opened=None) -> str:
     """Do it. `""` = it was done; anything else is the sentence for the phone,
     and in every refusal NOTHING was injected.
 
@@ -270,11 +358,13 @@ def run(act_id: str, injector, guard=None, process_of=None) -> str:
     injecting path in this project: the fence check, the chord and the paste
     have to happen in that order.
 
-    IT TAKES NO `folder` SINCE 2026-08-17. It used to, for the one act that
-    opened a second VS Code on the layout's project BY PATH; that act is a
-    palette command now and asks VS Code to duplicate the window it is already
-    standing in, so the project is never named — by us, or by anything of ours
-    that could name it wrongly."""
+    `opened(hwnd)` is called ONCE, by the one act that makes a window, with
+    the handle it made (constraint 43, owner decree 2026-08-20). It is a
+    callback and not a return value because every other ending of this
+    function is a SENTENCE, and a function whose answer is sometimes a
+    complaint and sometimes a handle is a function every caller has to
+    disambiguate. Whoever passes it decides what a new window is for — this
+    module still knows nothing about layouts."""
     app, _, rest = act_id.partition("|")
     act, _, target_path = rest.partition("|")
     if app not in PROCESS_OF_APP:
@@ -284,7 +374,7 @@ def run(act_id: str, injector, guard=None, process_of=None) -> str:
     # the point of the assertion is that the layout he is watching really is
     # the app this row was drawn for, and that is as true of opening a second
     # window on its project as it is of a chord.
-    _, refusal = _secured(app, guard, process_of)
+    target, refusal = _secured(app, guard, process_of)
     if refusal:
         return refusal
 
@@ -296,27 +386,40 @@ def run(act_id: str, injector, guard=None, process_of=None) -> str:
             wrong_app=_refuse("vscode", ""), what="New Claude Code")
 
     if app == "vscode" and act == "window":
-        # VS Code duplicating its OWN window needs no path and no launcher —
-        # see `VSCODE_DUPLICATE_COMMAND` for why the launcher could never have
-        # worked here. The window list is taken BEFORE the command goes out, so
-        # the watcher's newness rule cannot race the window it is waiting for.
+        # THE PROJECT IS READ OFF `target` — the window the fence just proved
+        # we are standing in — and never off the layout (see `_folder_path`).
+        path, problem = _folder_path(target)
+        if problem:
+            return problem
+        exe = recents.app_exe("vscode")
+        if not exe:
+            return "Nothing was opened — VS Code is not installed on the PC"
+        # The window list is taken BEFORE the launch, so the watcher's newness
+        # rule cannot race the window it is waiting for.
         before = {w["hwnd"] for w in wm.list_windows()}
         # ARMED BEFORE THE ACT, never after (owner report 2026-08-17). VS Code
-        # can raise the duplicate the instant the palette's Enter lands, while
-        # `_watch_and_claim` below cannot start looking until this call
-        # RETURNS — and the popup sweep runs every second on its own thread
+        # can raise the window the instant the launch lands, while
+        # `_watch_and_claim` below cannot start looking until `Popen` has
+        # RETURNED — and the popup sweep runs every second on its own thread
         # with no grace at all for a window it can tie to a member. The claim
         # closes that gap structurally instead of hoping to win the race; the
         # exact handle is still marked by `_watch_and_claim`, which is what
         # outlives the claim's short life. See server/window_claim.py.
         layout_popup.expect(PROCESS_OF_APP["vscode"])
-        problem = content.palette_command(
-            injector, VSCODE_DUPLICATE_COMMAND, guard, PROCESS_OF_APP["vscode"],
-            process_of=process_of,
-            wrong_app=_refuse("vscode", ""), what="New VS Code window")
-        if problem:
-            return problem
-        _watch_and_claim(PROCESS_OF_APP["vscode"], before)
+        try:
+            # `launch_env()` and not the bare environment: under
+            # ELECTRON_RUN_AS_NODE this executable is not VS Code at all and
+            # no window can ever appear (see `recents.launch_env`).
+            subprocess.Popen([exe, "-n", _workspace_file(path)],
+                             close_fds=True, env=recents.launch_env())
+        except OSError as error:
+            logger.error("Could not start %s: %s", exe, error)
+            return f"Nothing was opened — could not start {os.path.basename(exe)}"
+        hwnd = _watch_and_claim(PROCESS_OF_APP["vscode"], before)
+        if not hwnd:
+            return "The window never appeared — is VS Code still starting?"
+        if opened:
+            opened(hwnd)
         return ""
 
     if act in _CHORDS.get(app, {}):

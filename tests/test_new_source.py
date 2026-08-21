@@ -46,6 +46,7 @@ Run:  .venv\\Scripts\\python tests/test_new_source.py
 """
 
 import asyncio
+import subprocess
 import sys
 import threading
 import time
@@ -327,28 +328,33 @@ def check_the_three_apps_each_offer_their_own_acts() -> bool:
             and {"explorer|tab", "explorer|up"} <= set(ids["explorer"]))
 
 
-def check_the_second_window_act_asks_vs_code_to_duplicate_its_own() -> bool:
-    """IT MAY NEVER GO BACK TO A LAUNCHER (owner report 2026-08-17, MEASURED on
-    his PC before it was believed).
+def check_the_second_window_act_opens_a_named_workspace() -> bool:
+    """THE ROW MUST DELIVER A WINDOW THAT NAMES THE PROJECT (owner report
+    2026-08-19, his pictures 1-2; constraint 43) — and this asserts the
+    MECHANISM rather than the outcome, because every wrong answer this row has
+    ever given also produced *a* window.
 
-    The act used to run `Code.exe -n <path>`, and `-n` on a folder VS Code
-    ALREADY HAS OPEN does not open a second window — it focuses the existing
-    one. A layout's folder is always already open, so the row could never have
-    worked: his log says "code.exe opened no window within 25s" twice in one
-    minute, and a controlled run reproduced it exactly (the same call against a
-    folder that was NOT open produced a window at once).
+    Two routes shipped before this one and both are pinned here as losers.
+    `Code.exe -n <path>` cannot work at all: VS Code allows one window per
+    FOLDER and a layout's folder is by definition already open (measured
+    2026-08-20 — no window in 25.2 s, against a 0.5 s control with no path).
+    The palette's `Duplicate As Workspace in New Window` does open a window,
+    and it is an UNTITLED workspace whose title carries no project — so
+    `agents.title_folder` reads nothing, and the Claude wheel, a layout's own
+    name and the "already open" dimming all decide off that.
 
-    So this asserts the MECHANISM and not merely the outcome: the act asks VS
-    Code, through its own palette, to duplicate the window the fence has just
-    proved we are standing in. A path is never looked up, which is why the act
-    now takes no folder at all — the whole class of "we guessed the wrong
-    project" is gone rather than guarded."""
+    So the act writes a NAMED `.code-workspace` and opens THAT: the only
+    identity a second window on an open project can wear, and one whose title
+    still says which project it is."""
     injector = Injector()
-    seen = []
-    real_palette, real_list = content.palette_command, wm.list_windows
-    content.palette_command = (
-        lambda inj, command, guard=None, want=None, **k:
-        seen.append((command, want)) or "")
+    launched, written = [], []
+    real_popen, real_list = subprocess.Popen, wm.list_windows
+    real_ws, real_palette = layout_acts._workspace_file, content.palette_command
+    real_folder = layout_acts._folder_path
+    content.palette_command = lambda *a, **k: written.append("PALETTE") or ""
+    layout_acts._folder_path = lambda hwnd: (r"U:\Coding\UVuruna\X", "")
+    layout_acts._workspace_file = lambda path: written.append(path) or "WS"
+    subprocess.Popen = lambda cmd, **k: launched.append((cmd, k)) or None
     wm.list_windows = lambda: []          # nothing new ever appears; give up
     real_watch = layout_acts.LAUNCH_WATCH_S
     layout_acts.LAUNCH_WATCH_S = 0.05     # the give-up point, not a wait
@@ -357,13 +363,91 @@ def check_the_second_window_act_asks_vs_code_to_duplicate_its_own() -> bool:
             "vscode|window", injector, guard_for(0x77),
             process_of=process_of({0x77: "code.exe"}))
     finally:
-        content.palette_command, wm.list_windows = real_palette, real_list
+        subprocess.Popen, wm.list_windows = real_popen, real_list
+        layout_acts._workspace_file = real_ws
+        content.palette_command = real_palette
+        layout_acts._folder_path = real_folder
         layout_acts.LAUNCH_WATCH_S = real_watch
-    return (problem == ""
-            and seen == [(layout_acts.VSCODE_DUPLICATE_COMMAND, "code.exe")]
-            # Nothing of ours may type the command by hand: the palette drive
-            # is content.py's, one copy, and a second one would drift.
-            and injector.total == 0)
+    if not launched:
+        return False
+    cmd, kwargs = launched[0]
+    return (
+        # No window ever appeared, so the phone is TOLD — never a silent "".
+        problem != ""
+        # The workspace file was written for the folder the FENCE named, and
+        # it is what was opened. `-n` is right here: a workspace is not the
+        # folder, so VS Code has no window of its own to raise instead. And
+        # the palette was never touched — this act types nothing at all now.
+        and written == [r"U:\Coding\UVuruna\X"]
+        and cmd[1:] == ["-n", "WS"]
+        # THE ENVIRONMENT IS PART OF THE LAUNCH (2026-08-20): under
+        # ELECTRON_RUN_AS_NODE this executable is not VS Code and answers
+        # `bad option: -n`, so a launch inheriting this process's own
+        # environment dies mutely on every machine that carries it.
+        and "ELECTRON_RUN_AS_NODE" not in (kwargs.get("env") or {})
+        and injector.total == 0)
+
+
+def check_a_window_the_act_opens_is_reported_to_its_caller() -> bool:
+    """CONSTRAINT 43, the half that was missing for this row's whole life: he
+    taps "New window, same folder", a window opens, and NOTHING places it.
+    `layout_acts` still knows nothing about layouts — it reports the handle it
+    made through `opened`, and the wire grows the layout.
+
+    A callback and not a return value, because every other ending of `run` is
+    a SENTENCE for the phone; a function answering sometimes with a complaint
+    and sometimes with a handle is one every caller has to disambiguate."""
+    injector = Injector()
+    got = []
+    real_popen, real_list = subprocess.Popen, wm.list_windows
+    real_ws, real_folder = layout_acts._workspace_file, layout_acts._folder_path
+    layout_acts._folder_path = lambda hwnd: (r"U:\X", "")
+    layout_acts._workspace_file = lambda path: "WS"
+    # THE DESK IS EMPTY UNTIL THE LAUNCH AND THE WINDOW ARRIVES AFTER IT —
+    # a fixture where the window is already standing would be refused by
+    # `_watch_and_claim`'s newness rule, which is the very thing that makes
+    # the reported handle trustworthy, and the check would prove nothing.
+    # Keyed off the LAUNCH itself rather than off a call count: several
+    # things read the desk before the act does, and a counter would be a
+    # fixture that only holds while nothing else ever looks.
+    launched = []
+    born = [{"hwnd": 0xABC, "process": "Code.exe",
+             "title": "X (Workspace) - Visual Studio Code"}]
+    subprocess.Popen = lambda cmd, **k: launched.append(1)
+    wm.list_windows = lambda: (born if launched else [])
+    try:
+        problem = layout_acts.run(
+            "vscode|window", injector, guard_for(0x77),
+            process_of=process_of({0x77: "code.exe"}),
+            opened=got.append)
+    finally:
+        subprocess.Popen, wm.list_windows = real_popen, real_list
+        layout_acts._workspace_file = real_ws
+        layout_acts._folder_path = real_folder
+    return problem == "" and got == [0xABC]
+
+
+def check_two_projects_of_one_name_are_refused_and_never_guessed() -> bool:
+    """CONSTRAINT 26'S HONEST LIMIT, MET RATHER THAN SHRUGGED AT. A window
+    title carries a folder's NAME and never its path, so two projects both
+    called `src` are one name to us. This act opens a window SOMEWHERE, and
+    the wrong somewhere is worse than a refusal he can act on — so it says how
+    many it found and launches nothing.
+
+    It also pins WHERE the project is read from: the handle the fence
+    returned, never the layout. `_secured` asserts a process, and with two VS
+    Code windows on the desk both of them pass it."""
+    real_list, real_recents = wm.list_windows, recents.vscode_recents
+    wm.list_windows = lambda: [{"hwnd": 0x77, "process": "Code.exe",
+                                "title": "x - src - Visual Studio Code"}]
+    recents.vscode_recents = lambda: [
+        {"target": r"U:\a\src", "label": "src", "sub": r"U:\a\src"},
+        {"target": r"U:\b\src", "label": "src", "sub": r"U:\b\src"}]
+    try:
+        path, problem = layout_acts._folder_path(0x77)
+    finally:
+        wm.list_windows, recents.vscode_recents = real_list, real_recents
+    return path == "" and "2 different projects" in problem and "src" in problem
 
 
 def check_the_claude_act_opens_a_tab_and_not_the_side_bar() -> bool:
@@ -637,8 +721,12 @@ CHECKS = [
      check_an_app_with_no_acts_offers_no_group),
     ("each of the three apps offers its own acts",
      check_the_three_apps_each_offer_their_own_acts),
-    ("the second-window act asks VS Code to duplicate its own",
-     check_the_second_window_act_asks_vs_code_to_duplicate_its_own),
+    ("the second-window act opens a NAMED workspace, never a launcher",
+     check_the_second_window_act_opens_a_named_workspace),
+    ("a window the act opens is reported to its caller",
+     check_a_window_the_act_opens_is_reported_to_its_caller),
+    ("two projects of one name are refused, never guessed",
+     check_two_projects_of_one_name_are_refused_and_never_guessed),
     ("the Claude act opens a tab and not the side bar",
      check_the_claude_act_opens_a_tab_and_not_the_side_bar),
     ("the window act says it opens one",
