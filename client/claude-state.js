@@ -151,11 +151,13 @@ function claudeSavedModel(saved) {
 const CLAUDE_STAR_PATH =
   "M12 2.6l2.9 6 6.6.9-4.8 4.6 1.2 6.5L12 17.5 6.1 20.6l1.2-6.5L2.5 9.5l6.6-.9z";
 
-/** `n` capability stars as ONE inline SVG string, or "" for none (Default).
- *  Pure string building — the gate runs it and asserts no font glyph ever
- *  leaves this function. */
-function claudeStarsSvg(n) {
-  const count = Math.max(0, Math.min(4, n | 0));
+/** `n` stars as ONE inline SVG string, or "" for none. Pure string building —
+ *  the gate runs it and asserts no font glyph ever leaves this function.
+ *  `max` defaults to the capability scale's own 4; the ledger panel's 1-5
+ *  complexity strip (2026-08-21) passes 5 — same drawing, same rule, one
+ *  function (ONE KIND, ONE CLASS). */
+function claudeStarsSvg(n, max = 4) {
+  const count = Math.max(0, Math.min(max, n | 0));
   if (!count) return "";
   const body = [];
   for (let i = 0; i < count; i++) {

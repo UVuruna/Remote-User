@@ -150,11 +150,13 @@ function ledgerTaskEl(task, depth) {
 
   if (task.stars) {
     // The 1-5 star complexity from the task line's trailing tag (2026-08-21
-    // TASK-schema revision). Drawn stars, capped at 5 by the server's own
-    // parser — the row never has to defend against a wider value.
+    // TASK-schema revision). DRAWN, never typed — claudeStarsSvg's paths
+    // (claude-state.js, loaded earlier), the same house rule its own gate
+    // enforces across every client file: a font glyph renders in whatever
+    // the device's emoji font decides.
     const stars = document.createElement("span");
     stars.className = "ldg-stars";
-    stars.textContent = "★".repeat(task.stars);
+    stars.innerHTML = claudeStarsSvg(task.stars, 5);
     stars.setAttribute("role", "img");
     stars.setAttribute("aria-label", `complexity ${task.stars} of 5`);
     row.appendChild(stars);

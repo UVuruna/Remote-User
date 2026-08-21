@@ -74,17 +74,19 @@
   letter-spacing: 0.02em;
 }
 
-/* The 1-5 star complexity tag (2026-08-21). The row's own muted ink, same
-   as the state word and the @model chip beside it — the first cut used
-   --ledger-yellow and the audit failed it on every LIGHT look (2.71:1 as
-   small text; the same yellow is fine as the 12px dot's FILL). The star
-   glyph carries the meaning; the ink only has to be readable. */
+/* The 1-5 star complexity tag (2026-08-21) — claudeStarsSvg's DRAWN paths
+   (`.cl-stars` inside, sized in em by panels.css), in the row's own muted
+   ink like the state word and @model chip beside it. The first cut typed a
+   font star in --ledger-yellow: the panels gate refused the glyph (the ✥
+   lesson — a dingbat renders as the device pleases) and the audit refused
+   the yellow on every LIGHT look (2.71:1 as small text; that yellow is a
+   12px dot FILL, not a text ink). */
 .ldg-stars {
   flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
   color: var(--text-secondary);
   font-size: 0.72em;
-  letter-spacing: 1px;
-  white-space: nowrap;
 }
 
 /* The state WORD beside the dot (grader finding 2026-08-17): colour alone is

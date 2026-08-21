@@ -28,10 +28,12 @@ description / question+answer / evidence / children).
 ## The 2026-08-21 tags (TASK-schema revision)
 
 The wire's tasks now carry `stars` (0–5) and `feature` (slug, `""`), and the
-frame a `category` line. The ROW shows the stars (drawn `★` in the row's own
-muted ink — the first cut wore `--ledger-yellow` and the audit failed it at
-2.71:1 on every light look: a colour that works as a 12px dot FILL is not a
-colour for small text); the `#feature`
+frame a `category` line. The ROW shows the stars — `claudeStarsSvg(n, 5)`
+([claude-state.js](claude-state.md)'s own drawn paths, ONE KIND ONE CLASS),
+in the row's muted ink. The first cut typed a font star in `--ledger-yellow`
+and was refused twice: the panels gate on the glyph (a dingbat renders as
+the device pleases) and the audit on the colour (2.71:1 on every light look
+— a 12px dot FILL is not a text ink); the `#feature`
 slug sits in the expanded BODY, not on the row — a 412 px row already carries
 dot, state word, title, stars and `@model`, and the feature is context he
 opens a row for, while scanning BY feature is the desktop Work history's job
