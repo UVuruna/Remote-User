@@ -18,7 +18,7 @@ import session_ledger
 
 EMPTY = {
     "type": "ledger_state", "session_id": "", "updated": 0,
-    "title": "", "project": "", "tasks": [],
+    "title": "", "project": "", "category": "", "tasks": [],
 }
 
 
@@ -41,5 +41,5 @@ async def send_ledger(ws, layouts, conn: dict) -> None:
     await ws.send_text(json.dumps({
         "type": "ledger_state", "session_id": session_id, "updated": updated,
         "title": parsed["title"], "project": parsed["project"],
-        "tasks": parsed["tasks"],
+        "category": parsed["category"], "tasks": parsed["tasks"],
     }))

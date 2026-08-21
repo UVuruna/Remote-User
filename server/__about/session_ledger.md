@@ -11,7 +11,8 @@ session, created by the `UserPromptSubmit` hook (`setup/ledger_hook.py`).
 ```
 # <MAIN TITLE>
 project: <absolute cwd>
-- [ ] T1 Task title @fable
+category: FEATURE + GUI            (optional — the session's work kind)
+- [ ] T1 Task title @fable #layouts *3
   > free description (optional)
   ? question for the human (required when state is [?])
   ! evidence: test/log/screenshot/commit (required for [x])
@@ -21,6 +22,17 @@ project: <absolute cwd>
 
 Indent is 2 spaces per nesting level, both for a child task and for that
 task's own `>`/`?`/`!` lines.
+
+**Trailing tags** (owner's TASK-schema revision, 2026-08-21): a task line may
+END with up to three tags in any order — `@model` (who works it),
+`#feature-slug` (the entry of `docs/FEATURES.md` it serves; slug regex
+`[a-z0-9][a-z0-9-]*`) and a 1–5 star complexity written `***` or `*3`
+(`★★★`/`★3` equal). Tags are peeled word-by-word off the END of the line and
+the first non-tag word stops the peeling, so a `#`/`@` inside the title is
+never eaten; six stars or `*7` are not a tag and stay in the title. All
+optional and all backward-compatible — a pre-tag ledger parses exactly as it
+always did (`feature: ""`, `stars: 0`, `category: ""`). The desktop Work
+history (`work_history.py`) filters and cross-links on all three.
 
 ## States and colors
 
@@ -42,9 +54,9 @@ let that turn end quietly (see below).
 ## Server (piece A)
 
 - `server/session_ledger.py` — pure parser + file lookup:
-  - `parse(text: str) -> dict` — `{title, project, tasks: [...]}`, each task
-    `{id, title, model, state, desc, question, evidence, children}`. Never
-    raises; an unrecognized line is skipped.
+  - `parse(text: str) -> dict` — `{title, project, category, tasks: [...]}`,
+    each task `{id, title, model, state, feature, stars, desc, question,
+    evidence, children}`. Never raises; an unrecognized line is skipped.
   - `sessions_dir() -> Path` — `config.USER_DIR / "sessions"`.
   - `ledger_for_project(folder: str) -> tuple[session_id, Path, dict] | None`
     — the newest ledger whose `project:` line matches `folder`

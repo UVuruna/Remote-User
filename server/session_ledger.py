@@ -6,7 +6,8 @@ exactly that grammar and nothing more:
 
     # <MAIN TITLE>
     project: <absolute cwd>
-    - [ ] T1 Task title @fable
+    category: FEATURE + GUI            (optional — the session's work kind)
+    - [ ] T1 Task title @fable #layouts ***
       > free description (optional)
       ? question for the human (required when state is [?])
       ! evidence: test/log/screenshot/commit (required for [x])
@@ -17,6 +18,13 @@ exactly that grammar and nothing more:
 States: `[ ]` red · `[>]` orange · `[?]` yellow · `[~]` blue · `[x]` green.
 Indent is 2 spaces per nesting level, both for a child task and for its own
 `>`/`?`/`!` annotation lines (one level deeper than the task itself).
+
+A task line may end with up to three TRAILING TAGS in any order (2026-08-21,
+the owner's TASK-schema revision): `@model` (who works it), `#feature-slug`
+(which entry of `docs/FEATURES.md` it serves) and a complexity of one to five
+stars, written `***` or `*3` (`★★★`/`★3` accepted equally — an agent under a
+console font types ASCII). Every tag is optional; a ledger written before the
+tags existed parses exactly as it always did.
 
 Pure module — no I/O in `parse()`, so its gate can run it whole against
 hand-written text. The two functions that DO touch disk (`sessions_dir`,
@@ -33,30 +41,60 @@ STATE_COLORS = {" ": "red", ">": "orange", "?": "yellow", "~": "blue", "x": "gre
 
 _TITLE_RE = re.compile(r"^#\s+(.*)$")
 _PROJECT_RE = re.compile(r"^project:\s*(.*)$")
+_CATEGORY_RE = re.compile(r"^category:\s*(.*)$")
 _TASK_RE = re.compile(r"^( *)- \[([ x>?~])\]\s*(.*)$")
 _ANNOTATION_RE = re.compile(r"^( *)([>?!])\s?(.*)$")
-_MODEL_RE = re.compile(r"^(.*?)\s+@(\S+)$")
 _ID_RE = re.compile(r"^(T\d+[a-z]*)\s+(.*)$")
 
+# The three trailing tags a task line may carry, matched token by token off
+# the END of the line so they may come in any order: `@model`, `#feature-slug`
+# and the star complexity (`***`/`*3`, `★` accepted as `*`'s equal).
+_MODEL_TAG_RE = re.compile(r"^@(\S+)$")
+_FEATURE_TAG_RE = re.compile(r"^#([a-z0-9][a-z0-9-]*)$")
+_STARS_TAG_RE = re.compile(r"^(?:([*★]{1,5})|[*★]([1-5]))$")
 
-def _split_task_text(rest: str) -> tuple[str, str, str]:
-    """`"T1 Task title @fable"` -> (id, title, model). Any piece may be
-    absent — a task line needs none of them to be valid, only the checkbox."""
+
+def _split_task_text(rest: str) -> tuple[str, str, str, str, int]:
+    """`"T1 Task title @fable #layouts ***"` -> (id, title, model, feature,
+    stars). Any piece may be absent — a task line needs none of them to be
+    valid, only the checkbox. Tags are peeled off the end in any order; the
+    first word that is NOT a tag ends the peeling, so a `#` or `@` inside the
+    title itself is never eaten."""
     model = ""
-    m = _MODEL_RE.match(rest)
-    if m:
-        rest, model = m.group(1).rstrip(), m.group(2)
+    feature = ""
+    stars = 0
+    words = rest.split()
+    while words:
+        word = words[-1]
+        m = _MODEL_TAG_RE.match(word)
+        if m and not model:
+            model = m.group(1)
+            words.pop()
+            continue
+        m = _FEATURE_TAG_RE.match(word)
+        if m and not feature:
+            feature = m.group(1)
+            words.pop()
+            continue
+        m = _STARS_TAG_RE.match(word)
+        if m and not stars:
+            stars = len(m.group(1)) if m.group(1) else int(m.group(2))
+            words.pop()
+            continue
+        break
+    rest = " ".join(words)
     task_id = ""
     m = _ID_RE.match(rest)
     if m:
         task_id, rest = m.group(1), m.group(2)
-    return task_id, rest.strip(), model
+    return task_id, rest.strip(), model, feature, stars
 
 
 def _new_task(indent: str, state: str, rest: str) -> dict:
-    task_id, title, model = _split_task_text(rest)
+    task_id, title, model, feature, stars = _split_task_text(rest)
     return {
         "id": task_id, "title": title, "model": model, "state": state,
+        "feature": feature, "stars": stars,
         "desc": "", "question": "", "evidence": "", "children": [],
         "_indent": len(indent),
     }
@@ -86,6 +124,7 @@ def parse(text: str) -> dict:
     all."""
     title = ""
     project = ""
+    category = ""
     roots: list[dict] = []
     stack: list[dict] = []  # tasks currently open, outermost first
 
@@ -99,6 +138,11 @@ def parse(text: str) -> dict:
             m = _PROJECT_RE.match(raw_line)
             if m:
                 project = m.group(1).strip()
+                continue
+        if not category:
+            m = _CATEGORY_RE.match(raw_line)
+            if m:
+                category = m.group(1).strip()
                 continue
 
         m = _TASK_RE.match(raw_line)
@@ -134,7 +178,8 @@ def parse(text: str) -> dict:
             current["evidence"] = text_part
 
     tasks = [_finalize(t) for t in roots]
-    return {"title": title, "project": project, "tasks": tasks}
+    return {"title": title, "project": project, "category": category,
+            "tasks": tasks}
 
 
 def sessions_dir() -> Path:

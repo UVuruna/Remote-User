@@ -34,7 +34,9 @@ Server → client, one frame per request:
  "updated": 1755417600,          // the ledger file's own mtime, seconds
  "title": "Fix the mouse ghosting",
  "project": "U:\\Coding\\...\\VibeCoder",
- "tasks": [ /* the parsed tree — see session_ledger.md */ ]}
+ "category": "FEATURE + GUI",    // the ledger's optional category: line, "" when absent
+ "tasks": [ /* the parsed tree — see session_ledger.md; each task also
+              carries feature (slug, "") and stars (0-5) since 2026-08-21 */ ]}
 ```
 
 `EMPTY` is the same shape with every string blank and `tasks: []` — a panel that reads either shape the same way never has to special-case "no answer yet" against "an empty ledger".

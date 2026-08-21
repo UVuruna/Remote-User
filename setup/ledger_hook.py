@@ -55,7 +55,8 @@ Session ledger grammar (this file, `{path}`):
 
   # <MAIN TITLE — one line, you may rewrite it>
   project: <absolute cwd>
-  - [ ] T1 Task title @fable
+  category: FEATURE + GUI            (optional — FEATURE/BUGFIX/REFACTOR/GUI/DOCS/PLAN/BUILD)
+  - [ ] T1 Task title @fable #layouts *3
     > free description (optional)
     ? question for the human (REQUIRED when the state is [?])
     ! evidence: test/log/screenshot/commit (REQUIRED for [x])
@@ -66,6 +67,11 @@ States: [ ] not started (red) · [>] in progress (orange) · [?] waits for the
 human (yellow, needs a `?` line) · [~] done, no evidence (blue) · [x] done
 WITH evidence (green — a [x] without a `!` line reads as blue, not green).
 Indent is 2 spaces per level.
+
+A task line may END with up to three optional tags, any order: @model (who
+works it), #feature-slug (the entry of docs/FEATURES.md it serves) and a
+complexity of 1-5 stars written *** or *3. Tag every task you can — the
+desktop Work history filters on them.
 
 Update this file before you end the turn — an unchanged or malformed ledger
 blocks the turn from ending quietly.

@@ -46,12 +46,27 @@ DEFECTS = {
         "trade places",
     "[x] without ! downgrades to blue, [x] with ! stays green":
         "short-circuit the downgrade rule in _finalize (`if False and ...`)",
+    "category: line": "break _CATEGORY_RE so `category:` never matches",
+    "task tags: @model/#feature/stars in ANY order, both star forms":
+        "turn each `continue` in the peel loop into a `break` — only the "
+        "LAST trailing tag is ever recognized, so any order but the one "
+        "sample already uses loses the other two",
+    "stars stay 1–5 only": "widen _STARS_TAG_RE past its 1–5 ceiling — *7 "
+        "and six stars start counting as a stars tag",
+    "an untagged ledger parses exactly as before":
+        "make the `#` optional in _FEATURE_TAG_RE — a plain trailing "
+        "lowercase word starts looking like a feature slug",
+    "a mid-title #word/@word is never stripped":
+        "replace the end-anchored, break-on-first-miss peel with a naive "
+        "scan that strips a tag-shaped word wherever it sits in the title",
     "ledger_for_project: newest match wins, case/slash-insensitive, None otherwise":
         "make _normalized the identity function (drop casefold + Path "
         "normalization) — case/slash-insensitive matching breaks",
-    "send_ledger: focused layout's project arrives, desktop focus never crashes":
+    "send_ledger: focused layout's project (incl. category) arrives, desktop "
+    "focus never crashes":
         "drop the `index is not None` bounds guard in send_ledger — a "
-        "desktop conn (`active: None`) raises instead of answering empty",
+        "desktop conn (`active: None`) raises instead of answering empty; "
+        "separately, drop `category` from EMPTY and the frame it builds",
     "hook prompt mode: creates the file once, never overwrites":
         "drop the `if not md_path.exists()` guard in cmd_prompt — a second "
         "prompt overwrites the agent's own edits",
@@ -187,6 +202,194 @@ def check_downgrade_rule() -> bool:
     return True
 
 
+def check_category_line() -> bool:
+    text = ("# Category ledger\nproject: U:/Coding/Demo\n"
+            "category: FEATURE + GUI\n- [ ] T1 Task one @fable\n")
+    parsed = session_ledger.parse(text)
+    if parsed["category"] != "FEATURE + GUI":
+        print(f"    category: {parsed['category']!r}")
+        return False
+
+    # A ledger written before the `category:` line existed (SAMPLE has none)
+    # must default to "" rather than crash or misread the next line as it.
+    absent = session_ledger.parse(SAMPLE)
+    if absent["category"] != "":
+        print(f"    category with no such line present: {absent['category']!r}")
+        return False
+
+    patched = _load_patched(
+        LEDGER_PY,
+        [(r'_CATEGORY_RE = re.compile(r"^category:\s*(.*)$")',
+          r'_CATEGORY_RE = re.compile(r"^categoryX:\s*(.*)$")')],
+        "session_ledger_plant_category")
+    broken = patched.parse(text)
+    if broken["category"] == "FEATURE + GUI":
+        print("    plant did not break category parsing — check proves nothing")
+        return False
+    return True
+
+
+_PEEL_LOOP = (
+    '    words = rest.split()\n'
+    '    while words:\n'
+    '        word = words[-1]\n'
+    '        m = _MODEL_TAG_RE.match(word)\n'
+    '        if m and not model:\n'
+    '            model = m.group(1)\n'
+    '            words.pop()\n'
+    '            continue\n'
+    '        m = _FEATURE_TAG_RE.match(word)\n'
+    '        if m and not feature:\n'
+    '            feature = m.group(1)\n'
+    '            words.pop()\n'
+    '            continue\n'
+    '        m = _STARS_TAG_RE.match(word)\n'
+    '        if m and not stars:\n'
+    '            stars = len(m.group(1)) if m.group(1) else int(m.group(2))\n'
+    '            words.pop()\n'
+    '            continue\n'
+    '        break\n'
+)
+
+
+def check_tag_order_and_star_forms() -> bool:
+    """`@model`, `#feature-slug` and the star complexity ride in ANY order,
+    and the star complexity may be written either as repeated `*`/`★` or as
+    `*N`/`★N` — a console-font agent typing `***` and one typing `*3` must
+    mean the same thing."""
+    cases = [
+        ("- [ ] T1 Ship the release @fable #layouts ***\n",
+         "fable", "layouts", 3, "Ship the release"),
+        ("- [ ] T2 Ship the release #layouts *3 @fable\n",
+         "fable", "layouts", 3, "Ship the release"),
+        ("- [ ] T3 Ship the release ★★★ @sonnet #kluc\n",
+         "sonnet", "kluc", 3, "Ship the release"),
+        ("- [ ] T4 Ship the release ★3 @opus #zub\n",
+         "opus", "zub", 3, "Ship the release"),
+        ("- [ ] T5 Ship the release *3 #zub @haiku\n",
+         "haiku", "zub", 3, "Ship the release"),
+    ]
+    for line, model, feature, stars, title in cases:
+        task = session_ledger.parse(f"# T\nproject: p\n{line}")["tasks"][0]
+        got = (task["model"], task["feature"], task["stars"], task["title"])
+        if got != (model, feature, stars, title):
+            print(f"    {line!r} -> {got}, wanted {(model, feature, stars, title)}")
+            return False
+
+    # Prove the plant matters: turning each `continue` into a `break` only
+    # ever recognizes the SINGLE trailing tag, so a line naming all three in
+    # an order other than the one check_parse_grammar already uses loses two
+    # of them.
+    patched = _load_patched(
+        LEDGER_PY,
+        [(_PEEL_LOOP, _PEEL_LOOP.replace("continue\n", "break\n"))],
+        "session_ledger_plant_peel_once")
+    broken = patched.parse(
+        "# T\nproject: p\n- [ ] T2 Ship the release #layouts *3 @fable\n")["tasks"][0]
+    if (broken["model"], broken["feature"], broken["stars"]) == ("fable", "layouts", 3):
+        print("    plant did not break multi-tag peeling — check proves nothing")
+        return False
+    return True
+
+
+def check_stars_value_range() -> bool:
+    """Only 1–5 stars is a stars tag — `*7` and six stars are not, so they
+    stay put as ordinary trailing words in the title."""
+    text = ("# T\nproject: p\n- [ ] T1 Ship the release *7\n"
+            "- [ ] T2 Ship the release ******\n")
+    t1, t2 = session_ledger.parse(text)["tasks"]
+    if (t1["stars"], t1["title"]) != (0, "Ship the release *7"):
+        print(f"    *7 should not be a stars tag: {t1}")
+        return False
+    if (t2["stars"], t2["title"]) != (0, "Ship the release ******"):
+        print(f"    six stars should not be a stars tag: {t2}")
+        return False
+
+    patched = _load_patched(
+        LEDGER_PY,
+        [(r'_STARS_TAG_RE = re.compile(r"^(?:([*★]{1,5})|[*★]([1-5]))$")',
+          r'_STARS_TAG_RE = re.compile(r"^(?:([*★]{1,6})|[*★]([1-9]))$")')],
+        "session_ledger_plant_stars_range")
+    broken = patched.parse(text)["tasks"]
+    if broken[0]["stars"] == 0 and broken[1]["stars"] == 0:
+        print("    plant did not widen the stars range — check proves nothing")
+        return False
+    return True
+
+
+def check_notag_ledger_unchanged() -> bool:
+    """A ledger written before any of these tags existed (SAMPLE has none)
+    parses exactly as it always did: feature "", stars 0, titles untouched."""
+    parsed = session_ledger.parse(SAMPLE)
+    for task in parsed["tasks"]:
+        if task["feature"] != "" or task["stars"] != 0:
+            print(f"    an untagged task should have feature='' stars=0: {task}")
+            return False
+    titles = [t["title"] for t in parsed["tasks"]]
+    wanted = ["Not started", "In progress", "Waiting on the human",
+              "Done, no evidence", "Done with evidence"]
+    if titles != wanted:
+        print(f"    titles changed: {titles}, wanted {wanted}")
+        return False
+
+    # Prove the plant matters: make '#' optional in the feature regex, so a
+    # plain trailing lowercase word (no tag character at all) starts reading
+    # as a feature slug — the exact regression an old ledger must be immune to.
+    patched = _load_patched(
+        LEDGER_PY,
+        [(r'_FEATURE_TAG_RE = re.compile(r"^#([a-z0-9][a-z0-9-]*)$")',
+          r'_FEATURE_TAG_RE = re.compile(r"^#?([a-z0-9][a-z0-9-]*)$")')],
+        "session_ledger_plant_feature_optional_hash")
+    broken = patched.parse(SAMPLE)["tasks"]
+    if all(t["feature"] == "" for t in broken):
+        print("    plant did not make a bare word look like a feature — check proves nothing")
+        return False
+    return True
+
+
+def check_midtitle_tag_words_untouched() -> bool:
+    """A `#`/`@` word in the MIDDLE of a title (not trailing) is never eaten
+    — the peel loop stops at the first word, counted from the end, that is
+    not a recognized tag."""
+    text = "# T\nproject: p\n- [ ] T1 Fix the #123 bug for @home users\n"
+    task = session_ledger.parse(text)["tasks"][0]
+    wanted = ("", "", 0, "Fix the #123 bug for @home users")
+    got = (task["model"], task["feature"], task["stars"], task["title"])
+    if got != wanted:
+        print(f"    a mid-title #/@ word was touched: {got}, wanted {wanted}")
+        return False
+
+    # Prove the plant matters: a naive rewrite that scans EVERY word (not
+    # just from the end, stopping at the first non-tag) strips a tag-shaped
+    # word wherever it sits — exactly the bug the end-anchored design exists
+    # to avoid.
+    naive = (
+        '    words = rest.split()\n'
+        '    kept = []\n'
+        '    for word in words:\n'
+        '        m = _MODEL_TAG_RE.match(word)\n'
+        '        if m and not model:\n'
+        '            model = m.group(1)\n'
+        '            continue\n'
+        '        m = _FEATURE_TAG_RE.match(word)\n'
+        '        if m and not feature:\n'
+        '            feature = m.group(1)\n'
+        '            continue\n'
+        '        m = _STARS_TAG_RE.match(word)\n'
+        '        if m and not stars:\n'
+        '            stars = len(m.group(1)) if m.group(1) else int(m.group(2))\n'
+        '            continue\n'
+        '        kept.append(word)\n'
+        '    words = kept\n'
+    )
+    patched = _load_patched(LEDGER_PY, [(_PEEL_LOOP, naive)], "session_ledger_plant_naive_scan")
+    broken = patched.parse(text)["tasks"][0]
+    if "#123" in broken["title"] and "@home" in broken["title"]:
+        print("    plant did not eat the mid-title tags — check proves nothing")
+        return False
+    return True
+
+
 def check_ledger_for_project() -> bool:
     tmp = Path(tempfile.mkdtemp(prefix="ru_ledger_"))
     saved_dir = session_ledger.sessions_dir
@@ -294,8 +497,12 @@ def check_send_ledger_end_to_end() -> bool:
         session_ledger.sessions_dir = lambda: tmp
         f = tmp / "sess1.md"
         f.write_text(
-            "# Demo session\nproject: U:/Coding/Demo\n"
+            "# Demo session\nproject: U:/Coding/Demo\ncategory: FEATURE + GUI\n"
             "- [>] T1 Working on it @fable\n", encoding="utf-8")
+
+        if ledger_api.EMPTY["category"] != "":
+            print(f"    EMPTY should default category to '': {ledger_api.EMPTY}")
+            return False
 
         ws = FakeWs()
         # What a REAL `Layout.project()` hands `send_ledger`: the lowercased
@@ -317,12 +524,15 @@ def check_send_ledger_end_to_end() -> bool:
         if focused["type"] != "ledger_state" or focused["title"] != "Demo session":
             print(f"    focused frame: {focused}")
             return False
+        if focused["category"] != "FEATURE + GUI":
+            print(f"    focused frame's category: {focused.get('category')!r}")
+            return False
         if len(focused["tasks"]) != 1 or focused["tasks"][0]["title"] != "Working on it":
             print(f"    focused tasks: {focused['tasks']}")
             return False
         for frame in (desktop, stale):
-            if frame["tasks"] != [] or frame["type"] != "ledger_state":
-                print(f"    layout-less frame should be empty: {frame}")
+            if frame["tasks"] != [] or frame["type"] != "ledger_state" or frame["category"] != "":
+                print(f"    layout-less frame should be empty (incl. category): {frame}")
                 return False
     finally:
         session_ledger.sessions_dir = saved_dir
@@ -356,6 +566,51 @@ def check_send_ledger_end_to_end() -> bool:
     finally:
         import shutil
         shutil.rmtree(tmp2, ignore_errors=True)
+
+    # Prove `category` matters on its own: drop it from EMPTY and from the
+    # frame send_ledger builds — a phone reading `frame.category` would
+    # silently get `undefined` on a defect an in-memory dict check alone
+    # would miss.
+    patched2 = _load_patched(
+        LEDGER_API_PY,
+        [('EMPTY = {\n'
+          '    "type": "ledger_state", "session_id": "", "updated": 0,\n'
+          '    "title": "", "project": "", "category": "", "tasks": [],\n'
+          '}',
+          'EMPTY = {\n'
+          '    "type": "ledger_state", "session_id": "", "updated": 0,\n'
+          '    "title": "", "project": "", "tasks": [],\n'
+          '}'),
+         ('    await ws.send_text(json.dumps({\n'
+          '        "type": "ledger_state", "session_id": session_id, "updated": updated,\n'
+          '        "title": parsed["title"], "project": parsed["project"],\n'
+          '        "category": parsed["category"], "tasks": parsed["tasks"],\n'
+          '    }))',
+          '    await ws.send_text(json.dumps({\n'
+          '        "type": "ledger_state", "session_id": session_id, "updated": updated,\n'
+          '        "title": parsed["title"], "project": parsed["project"],\n'
+          '        "tasks": parsed["tasks"],\n'
+          '    }))')],
+        "ledger_api_plant_no_category")
+    if "category" in patched2.EMPTY:
+        print("    plant did not drop category from EMPTY — check proves nothing")
+        return False
+    tmp3 = Path(tempfile.mkdtemp(prefix="ru_ledger_send_cat_plant_"))
+    try:
+        patched2.session_ledger.sessions_dir = lambda: tmp3
+        f3 = tmp3 / "sess1.md"
+        f3.write_text(
+            "# Demo session\nproject: U:/Coding/Demo\ncategory: FEATURE\n"
+            "- [>] T1 Working on it @fable\n", encoding="utf-8")
+        ws3 = FakeWs()
+        layouts3 = FakeLayouts("demo")
+        asyncio.run(patched2.send_ledger(ws3, layouts3, {"active": 0}))
+        if "category" in ws3.sent[0]:
+            print("    plant did not drop category from the frame — check proves nothing")
+            return False
+    finally:
+        import shutil
+        shutil.rmtree(tmp3, ignore_errors=True)
     return True
 
 
@@ -510,9 +765,16 @@ def check_hook_stop_mode() -> bool:
 CHECKS = [
     ("parse: title/project/states/model/annotations/nesting", check_parse_grammar),
     ("[x] without ! downgrades to blue, [x] with ! stays green", check_downgrade_rule),
+    ("category: line", check_category_line),
+    ("task tags: @model/#feature/stars in ANY order, both star forms",
+     check_tag_order_and_star_forms),
+    ("stars stay 1–5 only", check_stars_value_range),
+    ("an untagged ledger parses exactly as before", check_notag_ledger_unchanged),
+    ("a mid-title #word/@word is never stripped", check_midtitle_tag_words_untouched),
     ("ledger_for_project: newest match wins, case/slash-insensitive, None otherwise",
      check_ledger_for_project),
-    ("send_ledger: focused layout's project arrives, desktop focus never crashes",
+    ("send_ledger: focused layout's project (incl. category) arrives, desktop "
+     "focus never crashes",
      check_send_ledger_end_to_end),
     ("hook prompt mode: creates the file once, never overwrites", check_hook_prompt_mode),
     ("hook stop mode: blocks unchanged/malformed, never blocks stop_hook_active",
