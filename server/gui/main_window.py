@@ -673,11 +673,14 @@ class MainWindow(ServerControl, UpdateFlow, QMainWindow):
         menu = QMenu()
         open_action = QAction("Open Vibe Coder", menu)
         open_action.triggered.connect(self._show_window)
+        history_action = QAction("Work history", menu)
+        history_action.triggered.connect(self._open_history)
         self.tray_toggle = QAction("Stop server", menu)
         self.tray_toggle.triggered.connect(self._toggle_server)
         quit_action = QAction("Quit", menu)
         quit_action.triggered.connect(self._quit)
         menu.addAction(open_action)
+        menu.addAction(history_action)
         menu.addAction(self.tray_toggle)
         menu.addSeparator()
         menu.addAction(quit_action)
@@ -701,6 +704,14 @@ class MainWindow(ServerControl, UpdateFlow, QMainWindow):
         info = self.controller.info
         if info:
             webbrowser.open(f"http://127.0.0.1:{info.port}/?token={info.token}")
+
+    def _open_history(self) -> None:
+        """The desktop Work history page (`server/work_history.py`) — loopback
+        only, no token, exactly like `_open_browser` above but for the page
+        the phone never sees."""
+        info = self.controller.info
+        if info:
+            webbrowser.open(f"http://127.0.0.1:{info.port}/history")
 
     def _setup_tailscale(self) -> None:
         """One button, whatever the state needs next: sign in when installed,

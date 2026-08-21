@@ -64,6 +64,7 @@ import traffic_stream
 import upload_api
 import ws_commands
 import window_manager
+import work_history
 from config import SETTINGS
 from config_api import send_config as _send_config
 from cursor_api import send_cursor as _send_cursor
@@ -187,6 +188,11 @@ def create_app(stream, hub: FrameHub | None, injector: InputInjector, token: str
     # at the structure law's wall by responsibility — this file's subject is
     # the live socket, and an upload never touches it.
     upload_api.register(app, token, injector)
+
+    # The desktop-only Work history page (`server/work_history.py`) — its own
+    # loopback gate, no token: it is opened from THIS PC's tray, never the
+    # phone, and registers itself the same way the route above just did.
+    work_history.register(app)
 
     app.mount("/static", StaticFiles(directory=SETTINGS.client_dir), name="static")
 

@@ -164,6 +164,12 @@ away.
 - `_toggle_server()` / `_run_worker()` / `_guarded()` — start/stop dispatch
   onto a daemon thread; `_busy` is cleared in a `finally` so a crashing worker
   can never wedge the buttons permanently
+- `_open_history()` (2026-08-21) — the tray's "Work history" action, between
+  "Open Vibe Coder" and "Stop server". Mirrors `_open_browser` exactly:
+  `webbrowser.open(f"http://127.0.0.1:{info.port}/history")`, a silent no-op
+  when `self.controller.info` is `None`. The page itself is
+  [Work History](../../__about/work_history.md) — loopback-gated, no token,
+  never reachable from the phone
 - `_refresh()` — the 1 s tick: pill text/color, QR re-render on change,
   reachability hint text (three Tailscale states), tray tooltip, button
   enable/disable

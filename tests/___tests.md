@@ -2756,6 +2756,46 @@ exactly as Claude Code itself would invoke it:
 Run: `.venv\Scripts\python tests/test_session_ledger.py` — also a fail-closed
 step in `build.py` (0b22/6).
 
+### `test_work_history.py` — Work History Gate
+
+The desktop "Work history" page (`server/work_history.py`, 2026-08-21): every
+session ledger, across every project, day and session, re-scanned and
+re-parsed FRESH on every request — no cache, no database, no generated file.
+`session_ledger.sessions_dir()` reads `config.USER_DIR` directly and does not
+honor `VIBECODER_SESSIONS_DIR` (only `setup/ledger_hook.py`'s own standalone
+copy does), so this gate stages a temp directory by monkeypatching
+`session_ledger.sessions_dir` in memory, `test_session_ledger.py`'s own
+technique — never touching server code for testability and never touching
+the real user directory.
+
+Five checks, each proven by planting its own defect (the `_load_patched`
+technique: the real module's source text is patched and reloaded under a
+scratch module name, shown to break the check, then discarded):
+
+1. **grouping and order** — PROJECT (alphabetical) → DAY (newest first) →
+   SESSION (newest mtime first within a day) → the task tree, two levels of
+   nesting included; a file with no title AND no tasks is skipped entirely.
+   Plant: sort the days ascending instead of descending.
+2. **the loopback gate** — `127.0.0.1` and `::1` render the page; any other
+   host, or a request with no client at all, gets 403. Driven directly
+   against the registered route's own endpoint function (a fake `Request`
+   exposing only `.client.host`), no real socket needed. Plant: disable the
+   `host not in LOOPBACK_HOSTS` check — a LAN/phone request would then reach
+   this PC-only page.
+3. **feature anchors + backlinks** — a task's `#slug` links to its project's
+   `docs/FEATURES.md` heading (hand-parsed: `### Name · `slug`` + its first
+   paragraph), and the feature's own block lists a backlink to every task
+   that tagged it; a project with no `FEATURES.md` gets no Features block.
+   Plant: drop the backlink lookup so every feature reports no tasks tagged.
+4. **escaping** — a task titled `<script>alert(1)</script>` never reaches the
+   page unescaped (ledger text is untrusted, same as `session_ledger.parse`
+   already treats it). Plant: skip `html.escape` on the task title.
+5. **tag rendering** — `@model` chips and `***`/`*N` star counts render
+   exactly (three vs. five stars distinguished, an untagged task gets no
+   stars chip at all). Plant: disable the stars condition.
+
+Run: `.venv\Scripts\python tests/test_work_history.py`
+
 ### `test_log_wiring.py` — Log Wiring Gate
 
 T113 (2026-08-17). `session_log.py`, `log_shipper.py`, `log_summary.py` and

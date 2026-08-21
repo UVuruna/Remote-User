@@ -193,6 +193,12 @@ STANDARD = {
     # the code (DOCS.md's own test for the flow tier), so Standard, not
     # Algorithmic — matching this file's own doc, which carries no Flow link.
     "server/session_ledger.py",
+    # New 2026-08-21 (the desktop Work history page). Standard: one scan +
+    # group pass over every session ledger (project -> day -> session -> task
+    # tree) plus a hand-parse of docs/FEATURES.md's one heading shape — no
+    # state machine, no geometry, and __about/work_history.md already narrates
+    # the grouping and cross-link rules straight off the code.
+    "server/work_history.py",
     # New 2026-08-18 (his "I have to press No a thousand times" report, and
     # THE STRUCTURE LAW — layout_popup.py stood at the 1,000-line wall again).
     # Standard, not Algorithmic: one pass over the open offers asking a single
