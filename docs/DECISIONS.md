@@ -607,3 +607,30 @@ The name gets the room it never had, and the path gets the whole width of line
 two, where it competes with nothing. `.lc-note` / `.lc-act-note` are gone from
 this panel — they existed only to give a PATH and a SENTENCE different widths
 on a line neither of them fitted on.
+
+### 45. TASKS IS ITS OWN FEATURE, AND THE WORK IS A CATALOGUE AWAY
+
+**The TASKS mechanic is agent-agnostic, and every task names the feature it
+serves** (owner verdict 2026-08-21). Three rulings in one revision:
+
+- **TASKS stands outside the Claude companion.** The ledger is OUR file
+  contract — a Markdown file, a parser, a hook — not any assistant's plugin.
+  Claude Code writes it today; Codex, Cursor or any future assistant plugs
+  into the same file unchanged. Nothing in the tracking layer may import or
+  assume one assistant.
+- **A task carries its context on its own line.** Project (the `project:`
+  line), session (the file), id and title were already there; the revision
+  adds an optional `category:` header and the optional trailing tags
+  `@model`, `#feature-slug` and 1–5 stars of complexity. The `#slug` must
+  name an entry of `docs/FEATURES.md` — the catalogue every project keeps at
+  README level from now on, describing what the product does, grouped by
+  kinship.
+- **The history is read, never stored twice.** The desktop Work history is a
+  live HTML page the server renders from the session files on every request —
+  loopback-only, filterable (project / state / category / feature / stars),
+  cross-linked with the feature catalogue in both directions. No database:
+  the .md files ARE the store, small enough to parse in milliseconds, and a
+  second store (SQL was considered) would only introduce a copy that can go
+  stale — the exact thing "measured, never remembered" exists to forbid. If
+  the file count ever makes this slow, the sanctioned path is a rebuildable
+  cache derived from the files, never a second source of truth.

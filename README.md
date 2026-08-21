@@ -135,6 +135,7 @@ The CLI prints the pairing URL and a QR (console + image viewer). Dev note: H.26
 📁 Vibe Coder/
   📝 README.md         ← You are here
   📁 docs/             ← Long-form documents that are CONTENT, not index
+    📝 FEATURES.md     ← The feature catalogue — what the product does, slug per feature
     📝 GUIDE.md        ← Step-by-step setup guide (mirrored by the in-app guidance)
     📝 DECISIONS.md    ← Architecture constraints and owner decrees, dated
     📝 PROTOCOL.md     ← Wire frames, streaming, controls, keyboard, panels
@@ -196,6 +197,7 @@ The CLI prints the pairing URL and a QR (console + image viewer). Dev note: H.26
 
 ## 📚 Documentation
 
+- [Features](docs/FEATURES.md) — the feature catalogue: what the product does, one slug per feature, cross-linked from every session task
 - [Setup Guide](docs/GUIDE.md) — step-by-step install & pairing (the in-app guidance mirrors it)
 - [Roadmap](ROADMAP.md) — development phases, current status, future ideas
 - [Verification](docs/VERIFICATION.md) — the owner's live checklist: everything delivered on 2026-08-11 and every point he verifies
