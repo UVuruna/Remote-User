@@ -2,8 +2,8 @@
    Reuses the whole overlay/card vocabulary from panels.css (.sets-card,
    .sets-row, .sets-body, .sets-list, .sets-done, .card-split's narrow-screen
    reflow) exactly as the Claude panels do; this file styles only what is NEW:
-   the state dot, the row anatomy (title/@model/chevron) and the expanded
-   body (desc/question/evidence/children).
+   the state dot, the row anatomy (title/stars/@model/chevron) and the
+   expanded body (feature/desc/question/evidence/children).
 
    `#ledger-panel` must join panels.css's three shared selector lists
    (overlay position/scrim, [hidden]) — done there, not here, since that
@@ -74,6 +74,19 @@
   letter-spacing: 0.02em;
 }
 
+/* The 1-5 star complexity tag (2026-08-21). The row's own muted ink, same
+   as the state word and the @model chip beside it — the first cut used
+   --ledger-yellow and the audit failed it on every LIGHT look (2.71:1 as
+   small text; the same yellow is fine as the 12px dot's FILL). The star
+   glyph carries the meaning; the ink only has to be readable. */
+.ldg-stars {
+  flex: 0 0 auto;
+  color: var(--text-secondary);
+  font-size: 0.72em;
+  letter-spacing: 1px;
+  white-space: nowrap;
+}
+
 /* The state WORD beside the dot (grader finding 2026-08-17): colour alone is
    not a legend for a stranger reading this panel for the first time. Muted,
    small, never competing with the title for the row's attention. */
@@ -116,6 +129,22 @@
   color: var(--text-secondary);
   font: 400 13px/1.4 system-ui, sans-serif;
   white-space: pre-wrap;
+}
+
+/* Which FEATURES.md entry the task serves — in the body, accent-coloured
+   like a link-shaped thing, though it links nowhere on the phone (walking
+   the catalogue is the desktop Work history's job). */
+.ldg-feature {
+  margin: 0;
+  color: var(--accent);
+  font: 500 12px/1.3 ui-monospace, "SFMono-Regular", Consolas, monospace;
+}
+
+/* The session's category: line under the card title — same muted small line
+   vocabulary as .ldg-project below it. */
+.ldg-category {
+  font-size: 12px;
+  letter-spacing: 0.03em;
 }
 
 .ldg-question { display: flex; flex-direction: column; gap: 6px; }

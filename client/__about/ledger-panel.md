@@ -22,8 +22,22 @@ falls out for free: both files share the basename `ledger-panel`.
 `ledger-panel.css` styles only what is NEW beyond `panels.css`'s shared
 `.sets-card`/`.sets-row`/`.sets-body`/`.sets-list`/`.sets-done` vocabulary —
 the state dot, the row anatomy (branch glyph / dot / state word / title /
-`@model` chip / chevron) and the expanded body (description / question+
-answer / evidence / children).
+`★` stars / `@model` chip / chevron) and the expanded body (`#feature` /
+description / question+answer / evidence / children).
+
+## The 2026-08-21 tags (TASK-schema revision)
+
+The wire's tasks now carry `stars` (0–5) and `feature` (slug, `""`), and the
+frame a `category` line. The ROW shows the stars (drawn `★` in the row's own
+muted ink — the first cut wore `--ledger-yellow` and the audit failed it at
+2.71:1 on every light look: a colour that works as a 12px dot FILL is not a
+colour for small text); the `#feature`
+slug sits in the expanded BODY, not on the row — a 412 px row already carries
+dot, state word, title, stars and `@model`, and the feature is context he
+opens a row for, while scanning BY feature is the desktop Work history's job
+(`server/__about/work_history.md`). The session's `category:` renders as one
+muted line under the card title, above the project path. All three absent →
+nothing is drawn, the pre-tag look exactly.
 
 ## Reading the tree
 

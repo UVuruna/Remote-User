@@ -62,6 +62,7 @@ function onLedgerState(msg) {
   ledgerState = {
     title: msg.title || "",
     project: msg.project || "",
+    category: msg.category || "",
     tasks: Array.isArray(msg.tasks) ? msg.tasks : [],
   };
   renderLedgerPanel();
@@ -147,6 +148,18 @@ function ledgerTaskEl(task, depth) {
   title.textContent = task.title || "(untitled)";
   row.appendChild(title);
 
+  if (task.stars) {
+    // The 1-5 star complexity from the task line's trailing tag (2026-08-21
+    // TASK-schema revision). Drawn stars, capped at 5 by the server's own
+    // parser — the row never has to defend against a wider value.
+    const stars = document.createElement("span");
+    stars.className = "ldg-stars";
+    stars.textContent = "★".repeat(task.stars);
+    stars.setAttribute("role", "img");
+    stars.setAttribute("aria-label", `complexity ${task.stars} of 5`);
+    row.appendChild(stars);
+  }
+
   if (task.model) {
     const chip = document.createElement("span");
     chip.className = "ldg-model";
@@ -177,6 +190,17 @@ function ledgerTaskEl(task, depth) {
   if (expanded) {
     const body = document.createElement("div");
     body.className = "ldg-body";
+    if (task.feature) {
+      // Which docs/FEATURES.md entry this task serves (`#slug`). In the
+      // BODY, not on the row — a 412px row already carries dot, state word,
+      // title, stars and @model, and the feature is context he opens the
+      // row for, not something he scans the list by (that is the desktop
+      // Work history's job).
+      const feat = document.createElement("p");
+      feat.className = "ldg-feature";
+      feat.textContent = "#" + task.feature;
+      body.appendChild(feat);
+    }
     if (task.desc) {
       const desc = document.createElement("p");
       desc.className = "ldg-desc";
@@ -247,6 +271,14 @@ function renderLedgerPanel() {
       : "Tasks";
   body.appendChild(head);
 
+  if (ledgerState && ledgerState.category && ledgerState.tasks.length) {
+    // The session's own `category:` line (FEATURE / BUGFIX / …) — what KIND
+    // of work this ledger is, one muted line under the title.
+    const cat = document.createElement("p");
+    cat.className = "sets-sub ldg-category";
+    cat.textContent = ledgerState.category;
+    body.appendChild(cat);
+  }
   if (ledgerState && ledgerState.project) {
     const sub = document.createElement("p");
     sub.className = "sets-sub ldg-project";

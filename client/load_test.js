@@ -69,6 +69,9 @@ global.window = { addEventListener() {}, innerWidth: 1280, innerHeight: 800 };
 // 0.0.166) — the stub was missing this and the load test was failing on
 // HEAD too (found 2026-08-05).
 global.matchMedia = () => ({ matches: false, addEventListener() {} });
+// chrome.js reads `--corner` through getComputedStyle at load (MINI_FACE,
+// 2026-08-15); an empty answer makes every token fall back to its default.
+global.getComputedStyle = () => ({ getPropertyValue: () => "" });
 global.devicePixelRatio = 2;
 global.location = { search: "?token=test", host: "test:1" };
 global.WebSocket = class WebSocket {

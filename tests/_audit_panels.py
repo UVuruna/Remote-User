@@ -524,11 +524,12 @@ PANELS = (
     # other stage in this file follows.
     ("Session Ledger panel",
      "ledgerState = {title: 'Session Ledger', project: 'C:\\\\Users\\\\owner"
-     "\\\\Projects\\\\VibeCoder', tasks: ["
+     "\\\\Projects\\\\VibeCoder', category: 'FEATURE + GUI', tasks: ["
      "{id:'T1', title:'Wire the client panel', model:'sonnet', state:'green',"
+     " feature:'session-tasks', stars:3,"
      " desc:'', question:'', evidence:'tests/test_x.py 12/12', children:[]},"
      "{id:'T2', title:'Decide the question wording for the ledger card',"
-     " model:'opus', state:'yellow',"
+     " model:'opus', state:'yellow', feature:'session-tasks', stars:5,"
      " desc:'The panel needs one line explaining what a yellow dot means.',"
      " question:'Should the wording say \\'waits for you\\' or \\'blocked\\'?',"
      " evidence:'', children:["
